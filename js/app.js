@@ -34,6 +34,23 @@
   let aiThinking = false;
   let squares = [];           // 64 DOM cells, index = board index
 
+  // AI runs in a Web Worker so deep searches never freeze the board;
+  // falls back to a synchronous call where workers are unavailable.
+  let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
+  let aiWorker = null;
+  try {
+    aiWorker = new Worker('js/ai-worker.js');
+    aiWorker.onmessage = function (e) {
+      if (e.data.id !== aiRequestId || !aiThinking) return;
+      applyAiMove(e.data.move);
+    };
+  } catch (e) { aiWorker = null; }
+
+  function cancelAi() {
+    aiRequestId++;
+    aiThinking = false;
+  }
+
   // ---- Setup board DOM (64 cells, order = board index a8..h1) ----
   function buildBoard() {
     boardEl.innerHTML = '';
@@ -199,20 +216,31 @@
     if (state.turn !== aiColor() || Chess.gameStatus(state).over) return;
     aiThinking = true;
     render();
-    // Yield to the browser so the "thinking" status paints before the search.
-    setTimeout(function () {
-      const depth = Number(difficultyEl.value);
-      const move = ChessAI.bestMove(state, depth);
-      aiThinking = false;
-      if (move) {
-        state = Chess.playMove(state, move);
-        render();
-        const status = Chess.gameStatus(state);
-        if (status.over) showGameOver(status);
-      } else {
-        render();
-      }
-    }, AI_DELAY_MS);
+    const depth = Number(difficultyEl.value);
+    const id = ++aiRequestId;
+    if (aiWorker) {
+      aiWorker.postMessage({ id: id, fen: Chess.toFen(state), depth: depth });
+    } else {
+      // Fallback: yield so the "thinking" status paints before the search.
+      setTimeout(function () {
+        if (id !== aiRequestId || !aiThinking) return;
+        applyAiMove(ChessAI.bestMove(state, depth));
+      }, AI_DELAY_MS);
+    }
+  }
+
+  function applyAiMove(move) {
+    aiThinking = false;
+    // Re-resolve against this state's legal moves (the worker's move object
+    // came from a FEN round-trip; also guards against any state drift).
+    const local = move && Chess.legalMoves(state).find(function (m) {
+      return m.from === move.from && m.to === move.to && m.promotion === move.promotion;
+    });
+    if (!local) { render(); return; }
+    state = Chess.playMove(state, local);
+    render();
+    const status = Chess.gameStatus(state);
+    if (status.over) showGameOver(status);
   }
 
   function showGameOver(status) {
@@ -226,9 +254,9 @@
 
   // ---- Controls ----
   document.getElementById('newGame').addEventListener('click', function () {
+    cancelAi();
     state = Chess.newGameState();
     selected = null;
-    aiThinking = false;
     flipped = modeEl.value === 'ai-w'; // playing Black: show Black at bottom
     render();
     maybeAiMove();
@@ -255,6 +283,7 @@
   });
 
   modeEl.addEventListener('change', function () {
+    cancelAi();
     save();
     maybeAiMove();
   });

@@ -103,34 +103,41 @@
 
   const MATE = 1000000;
 
+  // Alpha-beta over pseudo-legal moves: each move is applied exactly once and
+  // legality is checked by attack lookup on the mover's king (much cheaper
+  // than generating fully-legal move lists at every node).
   function search(state, depth, alpha, beta) {
-    const moves = Chess.legalMoves(state);
-    if (moves.length === 0) {
-      if (Chess.inCheck(state, state.turn)) {
-        return state.turn === 'w' ? -MATE - depth : MATE + depth;
+    if (state.halfmove >= 100) return 0;
+    const turn = state.turn;
+    const enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    const maximizing = turn === 'w';
+    let best = maximizing ? -Infinity : Infinity;
+    let anyLegal = false;
+
+    for (const m of orderMoves(Chess.pseudoMoves(state))) {
+      const next = Chess.applyMove(state, m);
+      const ks = m.piece[1] === 'K' ? m.to : kingSq;
+      if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
+      anyLegal = true;
+      const score = depth <= 1 ? evaluate(next.board) : search(next, depth - 1, alpha, beta);
+      if (maximizing) {
+        if (score > best) best = score;
+        if (best > alpha) alpha = best;
+      } else {
+        if (score < best) best = score;
+        if (best < beta) beta = best;
+      }
+      if (beta <= alpha) break;
+    }
+
+    if (!anyLegal) {
+      if (Chess.isAttacked(state.board, kingSq, enemy)) {
+        return maximizing ? -MATE - depth : MATE + depth; // checkmated (prefer faster mates)
       }
       return 0; // stalemate
     }
-    if (state.halfmove >= 100) return 0;
-    if (depth === 0) return evaluate(state.board);
-
-    if (state.turn === 'w') {
-      let best = -Infinity;
-      for (const m of orderMoves(moves)) {
-        best = Math.max(best, search(Chess.applyMove(state, m), depth - 1, alpha, beta));
-        alpha = Math.max(alpha, best);
-        if (beta <= alpha) break;
-      }
-      return best;
-    } else {
-      let best = Infinity;
-      for (const m of orderMoves(moves)) {
-        best = Math.min(best, search(Chess.applyMove(state, m), depth - 1, alpha, beta));
-        beta = Math.min(beta, best);
-        if (beta <= alpha) break;
-      }
-      return best;
-    }
+    return best;
   }
 
   // Pick the best move for the side to move. Returns null if game over.
@@ -138,26 +145,25 @@
     const moves = Chess.legalMoves(state);
     if (moves.length === 0) return null;
     const maximizing = state.turn === 'w';
-    let best = null;
     let bestScore = maximizing ? -Infinity : Infinity;
+    let alpha = -Infinity, beta = Infinity;
     const candidates = [];
 
     for (const m of orderMoves(moves)) {
       const next = Chess.applyMove(state, m);
-      // Avoid walking into threefold repetition when clearly ahead is out of
-      // scope for this small AI; just search.
-      const score = search(next, depth - 1, -Infinity, Infinity);
+      const score = depth <= 1 ? evaluate(next.board) : search(next, depth - 1, alpha, beta);
       if (maximizing ? score > bestScore : score < bestScore) {
         bestScore = score;
-        best = m;
         candidates.length = 0;
         candidates.push(m);
       } else if (score === bestScore) {
         candidates.push(m);
       }
+      if (maximizing) { if (bestScore > alpha) alpha = bestScore; }
+      else { if (bestScore < beta) beta = bestScore; }
     }
     // Tie-break randomly among equal-best moves so games vary.
-    return candidates[Math.floor(Math.random() * candidates.length)] || best;
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
   global.ChessAI = { bestMove: bestMove, evaluate: evaluate };

@@ -157,5 +157,14 @@ const hangingQueen = Chess.parseFen('k7/8/8/3q4/8/8/3Q4/K7 w - - 0 1');
 const capture = ChessAI.bestMove(hangingQueen, 2);
 assertEqual(Chess.sqName(capture.to), 'd5', 'AI captures hanging queen');
 
+// Expert depth: force a two-rook ladder mate in two (mate is at ply 3, so
+// only a deeper search sees it as forced; play both sides and require mate).
+let ladder = Chess.newGameState('7k/8/8/7p/8/8/8/RR4K1 w - - 0 1');
+for (let ply = 0; ply < 4 && !Chess.gameStatus(ladder).over; ply++) {
+  ladder = Chess.playMove(ladder, ChessAI.bestMove(ladder, 5));
+}
+assertEqual(Chess.gameStatus(ladder).reason, 'checkmate', 'depth-5 AI forces mate in two');
+assertEqual(Chess.gameStatus(ladder).result, '1-0', 'ladder mate: White wins');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
