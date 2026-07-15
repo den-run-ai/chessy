@@ -3,6 +3,9 @@
 A completely offline, installable chess web app. Zero dependencies, zero
 network requests, zero build step — plain HTML, CSS, and vanilla JavaScript.
 
+**▶ Play it: <https://den-run-ai.github.io/chessy/>** (works offline and is
+installable once loaded — deployed automatically from `main` by GitHub Actions.)
+
 ## Features
 
 - **Complete chess rules** — legal move generation with castling, en passant,
