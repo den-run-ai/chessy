@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Chessy — a completely offline chess PWA. Two-player or vs computer.">
+  <meta name="theme-color" content="#312e2b">
+  <title>Chessy — Offline Chess</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1 class="brand">♞ Chessy</h1>
+      <div class="status" id="status" role="status" aria-live="polite">White to move</div>
+    </header>
+
+    <main class="layout">
+      <section class="board-wrap">
+        <div class="board" id="board" role="grid" aria-label="Chess board"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="controls">
+          <label class="control">
+            <span>Mode</span>
+            <select id="mode">
+              <option value="pvp">Two players</option>
+              <option value="ai-b" selected>Play White vs computer</option>
+              <option value="ai-w">Play Black vs computer</option>
+            </select>
+          </label>
+          <label class="control">
+            <span>Difficulty</span>
+            <select id="difficulty">
+              <option value="1">Easy</option>
+              <option value="2" selected>Medium</option>
+              <option value="3">Hard</option>
+            </select>
+          </label>
+          <div class="buttons">
+            <button id="newGame" class="btn primary">New game</button>
+            <button id="undo" class="btn">Undo</button>
+            <button id="flip" class="btn">Flip board</button>
+          </div>
+        </div>
+
+        <div class="captured" id="capturedByWhite" aria-label="Pieces captured by White"></div>
+        <ol class="moves" id="moveList" aria-label="Move list"></ol>
+        <div class="captured" id="capturedByBlack" aria-label="Pieces captured by Black"></div>
+
+        <div class="offline-note" id="installNote">
+          Fully offline — installable as an app.
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="promotionDialog" class="promotion" aria-label="Choose promotion piece">
+    <div class="promotion-choices" id="promotionChoices"></div>
+  </dialog>
+
+  <dialog id="gameOverDialog" class="gameover">
+    <h2 id="gameOverTitle"></h2>
+    <p id="gameOverDetail"></p>
+    <button id="gameOverClose" class="btn primary">OK</button>
+  </dialog>
+
+  <script src="js/engine.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
+</body>
+</html>
