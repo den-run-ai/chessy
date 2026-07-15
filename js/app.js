@@ -6,9 +6,13 @@
 
   // Filled glyph set for both colors (colored via CSS) — the outline set
   // renders inconsistently across platforms and is hard to read when small.
+  // U+FE0E forces text presentation: iOS otherwise renders the pawn (which,
+  // unlike the other pieces, has an emoji form) as a full-color emoji that
+  // ignores CSS color, so White's pawns show up black.
+  const TXT = '︎';
   const GLYPHS = {
-    wK: '♚', wQ: '♛', wR: '♜', wB: '♝', wN: '♞', wP: '♟',
-    bK: '♚', bQ: '♛', bR: '♜', bB: '♝', bN: '♞', bP: '♟'
+    wK: '♚' + TXT, wQ: '♛' + TXT, wR: '♜' + TXT, wB: '♝' + TXT, wN: '♞' + TXT, wP: '♟' + TXT,
+    bK: '♚' + TXT, bQ: '♛' + TXT, bR: '♜' + TXT, bB: '♝' + TXT, bN: '♞' + TXT, bP: '♟' + TXT
   };
   const STORAGE_KEY = 'chessy-game-v1';
   const AI_DELAY_MS = 250;

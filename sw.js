@@ -1,6 +1,6 @@
 /* Chessy service worker — precache everything, serve cache-first.
  * After the first load the app is fully functional offline. */
-const CACHE = 'chessy-v1';
+const CACHE = 'chessy-v2';
 const ASSETS = [
   './',
   './index.html',
