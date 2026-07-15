@@ -75,7 +75,20 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js');
+        navigator.serviceWorker.register('sw.js').then(function (reg) {
+          // Re-check for updates whenever the app is brought back into view
+          // (helps installed/home-screen PWAs that keep running).
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') reg.update();
+          });
+        });
+        // When an updated service worker takes control, reload once so the
+        // new version applies immediately (game state is in localStorage).
+        var hadController = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (hadController) location.reload();
+          hadController = true;
+        });
       });
     }
   </script>

@@ -1,6 +1,15 @@
-/* Chessy service worker — precache everything, serve cache-first.
- * After the first load the app is fully functional offline. */
-const CACHE = 'chessy-v2';
+/* Chessy service worker.
+ *
+ * Update strategy (reliable updates, still fully offline):
+ * - Navigations are network-first: online visits always get the newest app
+ *   shell; offline falls back to the cached copy.
+ * - Assets are stale-while-revalidate: served instantly from cache, refreshed
+ *   in the background so the next load is current even if the cache name
+ *   wasn't bumped.
+ * - The page auto-reloads once when a new service worker takes over (see
+ *   index.html); game state survives via localStorage.
+ */
+const CACHE = 'chessy-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -30,17 +39,38 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Navigations: network-first so an online visit always gets the newest
+  // HTML (which also triggers the service-worker update check).
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          return response;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  if (new URL(event.request.url).origin !== self.location.origin) return;
+
+  // Assets: stale-while-revalidate — instant from cache, refreshed in the
+  // background; falls back to network when not cached, to cache when offline.
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache same-origin responses fetched at runtime as a safety net.
-        if (response.ok && new URL(event.request.url).origin === self.location.origin) {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      });
+      const refresh = fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || refresh;
     })
   );
 });
