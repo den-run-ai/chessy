@@ -12,8 +12,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   and promotion; check, checkmate, and stalemate detection; draws by the
   50-move rule, threefold repetition, and insufficient material.
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
-  (minimax with alpha-beta pruning and piece-square tables; three difficulty
-  levels) as either color.
+  (minimax with alpha-beta pruning and piece-square tables; four difficulty
+  levels from Easy to Expert, searching up to 5 plies in a Web Worker so the
+  UI never blocks) as either color.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker.
@@ -56,6 +57,7 @@ node test/engine.test.js
 | `index.html` | App shell |
 | `js/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
 | `js/ai.js` | Minimax + alpha-beta computer opponent |
+| `js/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `js/app.js` | Board UI, game flow, persistence |
 | `css/style.css` | Styling |
 | `sw.js` | Service worker (precache, cache-first) |

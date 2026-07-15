@@ -375,6 +375,8 @@
     sqIndex: sqIndex,
     legalMoves: legalMoves,
     legalMovesFrom: legalMovesFrom,
+    pseudoMoves: pseudoMoves,
+    isAttacked: isAttacked,
     applyMove: applyMove,
     playMove: playMove,
     undoMove: undoMove,
