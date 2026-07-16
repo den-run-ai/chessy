@@ -37,6 +37,7 @@
   // AI runs in a Web Worker so deep searches never freeze the board;
   // falls back to a synchronous call where workers are unavailable.
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
+  let aiPending = null;       // {depth, quiesce, started} for the in-flight search (PGN log)
   let aiWorker = null;
   try {
     aiWorker = new Worker('js/ai-worker.js');
@@ -226,6 +227,7 @@
     render();
     const cfg = aiConfig();
     const id = ++aiRequestId;
+    aiPending = { depth: cfg.depth, quiesce: cfg.quiesce, started: Date.now() };
     if (aiWorker) {
       aiWorker.postMessage({ id: id, fen: Chess.toFen(state), depth: cfg.depth, quiesce: cfg.quiesce });
     } else {
@@ -246,6 +248,15 @@
     });
     if (!local) { render(); return; }
     state = Chess.playMove(state, local);
+    if (aiPending) {
+      // Record engine settings + think time on the move for PGN debug export.
+      state.history[state.history.length - 1].ai = {
+        depth: aiPending.depth,
+        quiesce: aiPending.quiesce,
+        ms: Date.now() - aiPending.started
+      };
+      aiPending = null;
+    }
     render();
     const status = Chess.gameStatus(state);
     if (status.over) showGameOver(status);
@@ -289,6 +300,34 @@
   document.getElementById('gameOverClose').addEventListener('click', function () {
     gameOverDialog.close();
   });
+
+  // ---- PGN export (standard format; optional per-move debug log) ----
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function downloadPgn(withLog) {
+    const level = difficultyEl.options[difficultyEl.selectedIndex].text;
+    const ai = 'Chessy AI (' + level + ')';
+    const names = modeEl.value === 'ai-b' ? { White: 'Human', Black: ai } :
+                  modeEl.value === 'ai-w' ? { White: ai, Black: 'Human' } :
+                  { White: 'Human', Black: 'Human' };
+    const now = new Date();
+    const tags = Object.assign({
+      Date: now.getFullYear() + '.' + pad2(now.getMonth() + 1) + '.' + pad2(now.getDate())
+    }, names);
+    const pgn = Chess.toPgn(state, tags, withLog);
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([pgn], { type: 'application/x-chess-pgn' }));
+    a.download = 'chessy-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) +
+                 '-' + pad2(now.getHours()) + pad2(now.getMinutes()) +
+                 (withLog ? '-debug' : '') + '.pgn';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  document.getElementById('exportPgn').addEventListener('click', function () { downloadPgn(false); });
+  document.getElementById('exportPgnLog').addEventListener('click', function () { downloadPgn(true); });
 
   modeEl.addEventListener('change', function () {
     cancelAi();

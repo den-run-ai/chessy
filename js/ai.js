@@ -191,34 +191,45 @@
     return best;
   }
 
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
   // Pick the best move for the side to move. Returns null if game over.
   // useQuiesce extends horizon nodes with a capture-resolution search.
+  //
+  // With a pruned root window, a move that fails low returns a BOUND that can
+  // exactly equal the best score, so "equal scores" at the root are NOT real
+  // ties — collecting them and picking randomly plays near-random moves.
+  // Instead, variety comes from shuffling before the (stable) ordering sort,
+  // and only a STRICTLY better score replaces the best move: with an open
+  // far window, any strictly better score is exact.
   function bestMove(state, depth, useQuiesce) {
     const moves = Chess.legalMoves(state);
     if (moves.length === 0) return null;
     const maximizing = state.turn === 'w';
+    let best = null;
     let bestScore = maximizing ? -Infinity : Infinity;
     let alpha = -Infinity, beta = Infinity;
-    const candidates = [];
 
-    for (const m of orderMoves(moves)) {
+    for (const m of orderMoves(shuffle(moves))) {
       const next = Chess.applyMove(state, m);
       const score = depth <= 1
         ? (useQuiesce ? quiesce(next, alpha, beta) : evaluate(next.board))
         : search(next, depth - 1, alpha, beta, useQuiesce);
-      if (maximizing ? score > bestScore : score < bestScore) {
+      if (best === null || (maximizing ? score > bestScore : score < bestScore)) {
         bestScore = score;
-        candidates.length = 0;
-        candidates.push(m);
-      } else if (score === bestScore) {
-        candidates.push(m);
+        best = m;
       }
       if (maximizing) { if (bestScore > alpha) alpha = bestScore; }
       else { if (bestScore < beta) beta = bestScore; }
     }
-    // Tie-break randomly among equal-best moves so games vary.
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return best;
   }
 
-  global.ChessAI = { bestMove: bestMove, evaluate: evaluate };
+  global.ChessAI = { bestMove: bestMove, evaluate: evaluate, search: search };
 })(typeof window !== 'undefined' ? window : globalThis);
