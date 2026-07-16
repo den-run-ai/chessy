@@ -166,5 +166,18 @@ for (let ply = 0; ply < 4 && !Chess.gameStatus(ladder).over; ply++) {
 assertEqual(Chess.gameStatus(ladder).reason, 'checkmate', 'depth-5 AI forces mate in two');
 assertEqual(Chess.gameStatus(ladder).result, '1-0', 'ladder mate: White wins');
 
+// Quiescence (Master): a pawn on e5 is defended by the d6 pawn. A fixed-depth
+// search at its horizon grabs it; quiescence resolves the recapture and declines.
+const poisoned = Chess.parseFen('6k1/8/3p4/4p2Q/8/8/8/6K1 w - - 0 1');
+assertEqual(Chess.sqName(ChessAI.bestMove(poisoned, 1, false).to), 'e5',
+  'plain search at horizon takes the poisoned pawn');
+assertEqual(Chess.sqName(ChessAI.bestMove(poisoned, 1, true).to) !== 'e5', true,
+  'quiescent search declines the poisoned pawn');
+
+// Quiescence must still handle in-check positions (evasion search).
+const mustEvade = Chess.parseFen('6k1/5ppp/8/8/8/8/6PP/r5K1 w - - 0 1');
+const evasion = ChessAI.bestMove(mustEvade, 3, true);
+assertEqual(Chess.sqName(evasion.to), 'f2', 'quiescent search evades check (Kf2)');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

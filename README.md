@@ -12,9 +12,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   and promotion; check, checkmate, and stalemate detection; draws by the
   50-move rule, threefold repetition, and insufficient material.
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
-  (minimax with alpha-beta pruning and piece-square tables; four difficulty
-  levels from Easy to Expert, searching up to 5 plies in a Web Worker so the
-  UI never blocks) as either color.
+  as either color. Minimax with alpha-beta pruning and piece-square tables,
+  running in a Web Worker so the UI never blocks. Five difficulty levels:
+  Easy/Medium/Hard/Expert are increasing search depths (1/2/3/5 plies);
+  **Master** adds quiescence search with delta pruning on top of Expert, so
+  captures are resolved past the horizon and it stops falling for exchange
+  tricks.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker.

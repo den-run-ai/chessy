@@ -103,10 +103,59 @@
 
   const MATE = 1000000;
 
+  // Quiescence search: at the horizon, keep resolving captures/promotions
+  // (and check evasions) until the position is quiet, so the evaluation never
+  // stops in the middle of an exchange (the "horizon effect").
+  function quiesce(state, alpha, beta) {
+    const turn = state.turn;
+    const enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    const maximizing = turn === 'w';
+    const inChk = Chess.isAttacked(state.board, kingSq, enemy);
+
+    let best, standPat = 0;
+    if (inChk) {
+      best = maximizing ? -Infinity : Infinity; // must evade — no stand-pat
+    } else {
+      best = standPat = evaluate(state.board); // stand pat: may decline all captures
+      if (maximizing) { if (best >= beta) return best; if (best > alpha) alpha = best; }
+      else { if (best <= alpha) return best; if (best < beta) beta = best; }
+    }
+
+    const DELTA = 200; // delta pruning margin
+    let moves = Chess.pseudoMoves(state);
+    if (!inChk) moves = moves.filter(function (m) { return m.captured || m.promotion; });
+
+    let anyLegal = false;
+    for (const m of orderMoves(moves)) {
+      // Delta pruning: even winning this capture outright can't affect the
+      // window, so don't bother searching it.
+      if (!inChk && !m.promotion) {
+        const gain = VALUES[m.captured[1]] + DELTA;
+        if (maximizing ? standPat + gain <= alpha : standPat - gain >= beta) continue;
+      }
+      const next = Chess.applyMove(state, m);
+      const ks = m.piece[1] === 'K' ? m.to : kingSq;
+      if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      anyLegal = true;
+      const score = quiesce(next, alpha, beta);
+      if (maximizing) {
+        if (score > best) best = score;
+        if (best > alpha) alpha = best;
+      } else {
+        if (score < best) best = score;
+        if (best < beta) beta = best;
+      }
+      if (beta <= alpha) break;
+    }
+    if (inChk && !anyLegal) return maximizing ? -MATE : MATE; // checkmated
+    return best;
+  }
+
   // Alpha-beta over pseudo-legal moves: each move is applied exactly once and
   // legality is checked by attack lookup on the mover's king (much cheaper
   // than generating fully-legal move lists at every node).
-  function search(state, depth, alpha, beta) {
+  function search(state, depth, alpha, beta, useQuiesce) {
     if (state.halfmove >= 100) return 0;
     const turn = state.turn;
     const enemy = turn === 'w' ? 'b' : 'w';
@@ -120,7 +169,9 @@
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
       anyLegal = true;
-      const score = depth <= 1 ? evaluate(next.board) : search(next, depth - 1, alpha, beta);
+      const score = depth <= 1
+        ? (useQuiesce ? quiesce(next, alpha, beta) : evaluate(next.board))
+        : search(next, depth - 1, alpha, beta, useQuiesce);
       if (maximizing) {
         if (score > best) best = score;
         if (best > alpha) alpha = best;
@@ -141,7 +192,8 @@
   }
 
   // Pick the best move for the side to move. Returns null if game over.
-  function bestMove(state, depth) {
+  // useQuiesce extends horizon nodes with a capture-resolution search.
+  function bestMove(state, depth, useQuiesce) {
     const moves = Chess.legalMoves(state);
     if (moves.length === 0) return null;
     const maximizing = state.turn === 'w';
@@ -151,7 +203,9 @@
 
     for (const m of orderMoves(moves)) {
       const next = Chess.applyMove(state, m);
-      const score = depth <= 1 ? evaluate(next.board) : search(next, depth - 1, alpha, beta);
+      const score = depth <= 1
+        ? (useQuiesce ? quiesce(next, alpha, beta) : evaluate(next.board))
+        : search(next, depth - 1, alpha, beta, useQuiesce);
       if (maximizing ? score > bestScore : score < bestScore) {
         bestScore = score;
         candidates.length = 0;
