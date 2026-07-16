@@ -354,6 +354,49 @@
     return next;
   }
 
+  // Export the game as PGN (standard Portable Game Notation). `tags` override
+  // the seven-tag roster; `withLog` embeds a debug comment per move (engine
+  // settings and think time for AI moves, plus the FEN before the move).
+  function toPgn(state, tags, withLog) {
+    const status = gameStatus(state);
+    const roster = {
+      Event: 'Chessy game',
+      Site: 'Chessy offline PWA',
+      Date: '????.??.??',
+      Round: '-',
+      White: 'White',
+      Black: 'Black',
+      Result: status.over ? status.result : '*'
+    };
+    Object.assign(roster, tags || {});
+    let head = '';
+    for (const k of Object.keys(roster)) head += '[' + k + ' "' + roster[k] + '"]\n';
+
+    const parts = [];
+    state.history.forEach(function (entry, i) {
+      if (i % 2 === 0) parts.push((i / 2 + 1) + '.');
+      parts.push(entry.san);
+      if (withLog) {
+        let note = 'before: ' + entry.fen;
+        if (entry.ai) {
+          note = 'engine depth ' + entry.ai.depth + (entry.ai.quiesce ? '+quiescence' : '') +
+                 ', ' + entry.ai.ms + ' ms; ' + note;
+        }
+        parts.push('{' + note + '}');
+      }
+    });
+    if (status.over) parts.push('{' + status.reason + '}');
+    parts.push(roster.Result);
+
+    // Wrap the movetext at ~80 characters per PGN convention.
+    let text = '', line = '';
+    for (const p of parts) {
+      if (line && line.length + 1 + p.length > 80) { text += line + '\n'; line = p; }
+      else line += (line ? ' ' : '') + p;
+    }
+    return head + '\n' + text + line + '\n';
+  }
+
   function undoMove(state) {
     if (!state.history.length) return state;
     const prevEntry = state.history[state.history.length - 1];
@@ -381,6 +424,7 @@
     playMove: playMove,
     undoMove: undoMove,
     toSan: toSan,
+    toPgn: toPgn,
     inCheck: inCheck,
     gameStatus: gameStatus
   };

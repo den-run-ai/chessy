@@ -23,6 +23,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   promotion picker.
 - **Persistence** — the game is saved to `localStorage`, so it survives
   reloads and app restarts.
+- **PGN export** — save the game in standard PGN, plain or with an embedded
+  debug log (engine depth/quiescence, think time, and the FEN before every
+  move) for troubleshooting.
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest.

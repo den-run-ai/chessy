@@ -179,5 +179,41 @@ const mustEvade = Chess.parseFen('6k1/5ppp/8/8/8/8/6PP/r5K1 w - - 0 1');
 const evasion = ChessAI.bestMove(mustEvade, 3, true);
 assertEqual(Chess.sqName(evasion.to), 'f2', 'quiescent search evades check (Kf2)');
 
+// Root-pruning regression (bug shipped with the depth speedup): with a
+// narrowed root window, fail-low moves return BOUNDS that can equal the best
+// score; treating them as ties made the AI pick near-random moves. bestMove
+// must always return a move whose exact full-window score is optimal.
+console.log('root move selection');
+const openPos = Chess.parseFen('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2');
+const refScores = {};
+let refBest = Infinity; // Black to move minimizes
+for (const m of Chess.legalMoves(openPos)) {
+  const sc = ChessAI.search(Chess.applyMove(openPos, m), 2, -Infinity, Infinity, false);
+  refScores[m.from + '-' + m.to] = sc;
+  if (sc < refBest) refBest = sc;
+}
+let optimalPicks = 0;
+for (let i = 0; i < 12; i++) {
+  const m = ChessAI.bestMove(openPos, 3, false);
+  if (refScores[m.from + '-' + m.to] === refBest) optimalPicks++;
+}
+assertEqual(optimalPicks, 12, 'bestMove always returns a truly-optimal root move (12/12)');
+
+// --- PGN export ---
+console.log('PGN export');
+const pgnGame = playSans(['f3', 'e5', 'g4', 'Qh4']);
+pgnGame.history[3].ai = { depth: 5, quiesce: true, ms: 123 };
+const pgn = Chess.toPgn(pgnGame, { White: 'Human', Black: 'Chessy AI (Master)', Date: '2026.07.15' });
+assertEqual(pgn.includes('[Result "0-1"]'), true, 'PGN result tag');
+assertEqual(pgn.includes('[White "Human"]'), true, 'PGN custom tag override');
+assertEqual(pgn.includes('1. f3 e5 2. g4 Qh4# {checkmate} 0-1'), true, 'PGN movetext with result');
+assertEqual(pgn.includes('{engine'), false, 'clean PGN has no log comments');
+const pgnLog = Chess.toPgn(pgnGame, {}, true);
+assertEqual(pgnLog.includes('{engine depth 5+quiescence, 123 ms; before: '), true,
+  'debug PGN embeds engine info + FEN comments');
+assertEqual(pgnLog.includes('before: ' + Chess.START_FEN), true, 'debug PGN logs starting FEN');
+const pgnOngoing = Chess.toPgn(playSans(['e4']), {});
+assertEqual(pgnOngoing.includes('[Result "*"]'), true, 'ongoing game marked *');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
