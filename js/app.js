@@ -212,19 +212,27 @@
     maybeAiMove();
   }
 
+  // Difficulty select values are search depths, except the named top level:
+  // Master searches like Expert but adds quiescence (captures are resolved
+  // past the horizon, eliminating exchange blunders).
+  function aiConfig() {
+    if (difficultyEl.value === 'master') return { depth: 5, quiesce: true };
+    return { depth: Number(difficultyEl.value), quiesce: false };
+  }
+
   function maybeAiMove() {
     if (state.turn !== aiColor() || Chess.gameStatus(state).over) return;
     aiThinking = true;
     render();
-    const depth = Number(difficultyEl.value);
+    const cfg = aiConfig();
     const id = ++aiRequestId;
     if (aiWorker) {
-      aiWorker.postMessage({ id: id, fen: Chess.toFen(state), depth: depth });
+      aiWorker.postMessage({ id: id, fen: Chess.toFen(state), depth: cfg.depth, quiesce: cfg.quiesce });
     } else {
       // Fallback: yield so the "thinking" status paints before the search.
       setTimeout(function () {
         if (id !== aiRequestId || !aiThinking) return;
-        applyAiMove(ChessAI.bestMove(state, depth));
+        applyAiMove(ChessAI.bestMove(state, cfg.depth, cfg.quiesce));
       }, AI_DELAY_MS);
     }
   }
