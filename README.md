@@ -16,12 +16,14 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   threefold and 50-move draws are applied automatically instead of FIDE's
   claim-based procedure (automatic would be five-fold/75 moves).
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
-  as either color. Minimax with alpha-beta pruning and piece-square tables,
-  running in a Web Worker so the UI never blocks. Five difficulty levels:
-  Easy/Medium/Hard/Expert are increasing search depths (1/2/3/5 plies);
-  **Master** adds quiescence search with delta pruning on top of Expert, so
-  captures are resolved past the horizon and it stops falling for exchange
-  tricks.
+  as either color. Iterative-deepening minimax with alpha-beta pruning, a
+  Zobrist-keyed transposition table, hash/killer/history move ordering, and
+  piece-square tables, running in a Web Worker so the UI never blocks. Five
+  difficulty levels: Easy/Medium/Hard/Expert are increasing search depths
+  (1/2/3/5 plies); **Master** adds quiescence search with delta pruning
+  (captures are resolved past the horizon, so it stops falling for exchange
+  tricks) and thinks on a 2-second-per-move budget, deepening as far as the
+  clock allows — typically well beyond Expert's fixed depth.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker.
@@ -66,7 +68,7 @@ node test/engine.test.js
 | --- | --- |
 | `index.html` | App shell |
 | `js/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
-| `js/ai.js` | Minimax + alpha-beta computer opponent |
+| `js/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
 | `js/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `js/app.js` | Board UI, game flow, persistence |
 | `css/style.css` | Styling |

@@ -1,9 +1,14 @@
-/* AI Web Worker: runs the minimax search off the main thread so the UI
- * never freezes while the computer thinks. */
+/* AI Web Worker: runs the search off the main thread so the UI never
+ * freezes while the computer thinks. */
 importScripts('engine.js', 'ai.js');
 
 self.onmessage = function (e) {
   const state = Chess.parseFen(e.data.fen);
-  const move = ChessAI.bestMove(state, e.data.depth, e.data.quiesce, e.data.positions);
-  self.postMessage({ id: e.data.id, move: move });
+  const result = ChessAI.think(state, {
+    maxDepth: e.data.maxDepth,
+    timeMs: e.data.timeMs,
+    quiesce: e.data.quiesce,
+    positions: e.data.positions
+  });
+  self.postMessage({ id: e.data.id, move: result.move, depth: result.depth });
 };
