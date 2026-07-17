@@ -156,11 +156,14 @@
   // legality is checked by attack lookup on the mover's king (much cheaper
   // than generating fully-legal move lists at every node).
   function search(state, depth, alpha, beta, useQuiesce) {
-    if (state.halfmove >= 100) return 0;
     const turn = state.turn;
     const enemy = turn === 'w' ? 'b' : 'w';
     const kingSq = state.board.indexOf(turn + 'K');
     const maximizing = turn === 'w';
+    // 50-move rule — but checkmate takes precedence: a mate delivered on the
+    // 100th halfmove wins, so when in check we must first look for evasions.
+    const fifty = state.halfmove >= 100;
+    if (fifty && !Chess.isAttacked(state.board, kingSq, enemy)) return 0;
     let best = maximizing ? -Infinity : Infinity;
     let anyLegal = false;
 
@@ -188,7 +191,19 @@
       }
       return 0; // stalemate
     }
+    if (fifty) return 0; // in check but escapable: the 50-move draw stands
     return best;
+  }
+
+  // Terminal-aware evaluation of the position after a root move — needed at
+  // depth 1 (Easy), where a bare evaluate() can't tell a mate from a
+  // stalemate and would happily stalemate a won game.
+  function rootLeafScore(next, useQuiesce, alpha, beta) {
+    if (Chess.legalMoves(next).length === 0) {
+      return Chess.inCheck(next, next.turn) ? (next.turn === 'w' ? -MATE : MATE) : 0;
+    }
+    if (next.halfmove >= 100) return 0;
+    return useQuiesce ? quiesce(next, alpha, beta) : evaluate(next.board);
   }
 
   function shuffle(arr) {
@@ -201,6 +216,9 @@
 
   // Pick the best move for the side to move. Returns null if game over.
   // useQuiesce extends horizon nodes with a capture-resolution search.
+  // positions (optional) is the game's repetition table: a root move that
+  // immediately triggers threefold repetition is scored as the draw it is, so
+  // the AI avoids repeating when winning and heads for it when losing.
   //
   // With a pruned root window, a move that fails low returns a BOUND that can
   // exactly equal the best score, so "equal scores" at the root are NOT real
@@ -208,7 +226,7 @@
   // Instead, variety comes from shuffling before the (stable) ordering sort,
   // and only a STRICTLY better score replaces the best move: with an open
   // far window, any strictly better score is exact.
-  function bestMove(state, depth, useQuiesce) {
+  function bestMove(state, depth, useQuiesce, positions) {
     const moves = Chess.legalMoves(state);
     if (moves.length === 0) return null;
     const maximizing = state.turn === 'w';
@@ -218,9 +236,11 @@
 
     for (const m of orderMoves(shuffle(moves))) {
       const next = Chess.applyMove(state, m);
-      const score = depth <= 1
-        ? (useQuiesce ? quiesce(next, alpha, beta) : evaluate(next.board))
-        : search(next, depth - 1, alpha, beta, useQuiesce);
+      const score = (positions && (positions[Chess.positionKey(next)] || 0) >= 2)
+        ? 0 // this move makes the position's third occurrence: a draw
+        : depth <= 1
+          ? rootLeafScore(next, useQuiesce, alpha, beta)
+          : search(next, depth - 1, alpha, beta, useQuiesce);
       if (best === null || (maximizing ? score > bestScore : score < bestScore)) {
         bestScore = score;
         best = m;

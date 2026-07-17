@@ -38,18 +38,36 @@
   // falls back to a synchronous call where workers are unavailable.
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // {depth, quiesce, started} for the in-flight search (PGN log)
-  let aiWorker = null;
-  try {
-    aiWorker = new Worker('js/ai-worker.js');
-    aiWorker.onmessage = function (e) {
-      if (e.data.id !== aiRequestId || !aiThinking) return;
-      applyAiMove(e.data.move);
-    };
-  } catch (e) { aiWorker = null; }
+
+  function createAiWorker() {
+    if (typeof Worker === 'undefined') return null;
+    try {
+      const w = new Worker('js/ai-worker.js');
+      w.onmessage = function (e) {
+        if (e.data.id !== aiRequestId || !aiThinking) return;
+        applyAiMove(e.data.move);
+      };
+      w.onerror = function () {
+        // Broken worker: fall back to the synchronous path so the app is
+        // never stuck on "thinking".
+        aiWorker = null;
+        if (aiThinking) { aiThinking = false; maybeAiMove(); }
+      };
+      return w;
+    } catch (e) { return null; }
+  }
+  let aiWorker = createAiWorker();
 
   function cancelAi() {
+    // Actually stop an abandoned search — a terminated slow search would
+    // otherwise keep burning CPU and delay the next request.
+    if (aiThinking && aiWorker) {
+      aiWorker.terminate();
+      aiWorker = createAiWorker();
+    }
     aiRequestId++;
     aiThinking = false;
+    aiPending = null;
   }
 
   // ---- Setup board DOM (64 cells, order = board index a8..h1) ----
@@ -142,12 +160,19 @@
   }
 
   function renderMoves() {
+    // textContent only — history is restored from origin-shared localStorage,
+    // so it must never be interpreted as HTML.
     moveListEl.innerHTML = '';
     for (let i = 0; i < state.history.length; i += 2) {
       const li = document.createElement('li');
-      const white = state.history[i].san;
-      const black = state.history[i + 1] ? state.history[i + 1].san : '';
-      li.innerHTML = '<span class="ply">' + white + '</span><span class="ply">' + black + '</span>';
+      const white = document.createElement('span');
+      white.className = 'ply';
+      white.textContent = state.history[i].san;
+      const black = document.createElement('span');
+      black.className = 'ply';
+      black.textContent = state.history[i + 1] ? state.history[i + 1].san : '';
+      li.appendChild(white);
+      li.appendChild(black);
       moveListEl.appendChild(li);
     }
     moveListEl.scrollTop = moveListEl.scrollHeight;
@@ -229,12 +254,15 @@
     const id = ++aiRequestId;
     aiPending = { depth: cfg.depth, quiesce: cfg.quiesce, started: Date.now() };
     if (aiWorker) {
-      aiWorker.postMessage({ id: id, fen: Chess.toFen(state), depth: cfg.depth, quiesce: cfg.quiesce });
+      aiWorker.postMessage({
+        id: id, fen: Chess.toFen(state), depth: cfg.depth, quiesce: cfg.quiesce,
+        positions: state.positions
+      });
     } else {
       // Fallback: yield so the "thinking" status paints before the search.
       setTimeout(function () {
         if (id !== aiRequestId || !aiThinking) return;
-        applyAiMove(ChessAI.bestMove(state, cfg.depth, cfg.quiesce));
+        applyAiMove(ChessAI.bestMove(state, cfg.depth, cfg.quiesce, state.positions));
       }, AI_DELAY_MS);
     }
   }
@@ -290,6 +318,9 @@
     }
     selected = null;
     render();
+    // If undo landed on the AI's turn (e.g. undoing the computer's opening
+    // move while playing Black), let it move again instead of deadlocking.
+    maybeAiMove();
   });
 
   document.getElementById('flip').addEventListener('click', function () {

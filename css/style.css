@@ -56,7 +56,9 @@ body {
   flex: 1;
 }
 
-@media (max-width: 760px) {
+/* Stack before the board column gets narrower than the board wants to be —
+   tablets in portrait were overlapping at the old 760px breakpoint. */
+@media (max-width: 950px) {
   .layout { grid-template-columns: 1fr; }
 }
 
@@ -67,11 +69,14 @@ body {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   width: min(92vw, 640px, calc(100vh - 180px));
+  width: min(92vw, 640px, calc(100dvh - 180px));
+  max-width: 100%;
   aspect-ratio: 1;
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   user-select: none;
+  container-type: inline-size;
 }
 
 .board.flipped { transform: rotate(180deg); }
@@ -94,6 +99,9 @@ body {
 
 .square .piece {
   font-size: min(9vw, 3.2rem);
+  /* Size glyphs relative to the board itself so a height-limited board
+     (phone landscape) never overflows its squares. 1cqw = 1% board width. */
+  font-size: 9.5cqw;
   line-height: 1;
   pointer-events: none;
 }

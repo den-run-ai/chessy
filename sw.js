@@ -9,7 +9,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v6';
+const CACHE = 'chessy-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -33,7 +33,11 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Delete only our own old caches — the github.io origin is shared with
+      // sibling GitHub Pages apps whose caches we must not touch.
+      .then((keys) => Promise.all(
+        keys.filter((k) => k.startsWith('chessy-') && k !== CACHE).map((k) => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
   );
 });
@@ -47,8 +51,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          // Never cache error pages — they would poison the offline shell.
+          if (response.ok) {
+            const copy = response.clone();
+            event.waitUntil(caches.open(CACHE).then((cache) => cache.put('./index.html', copy)));
+          }
           return response;
         })
         .catch(() => caches.match('./index.html'))
@@ -66,11 +73,13 @@ self.addEventListener('fetch', (event) => {
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)));
           }
           return response;
         })
         .catch(() => cached);
+      // Keep the SW alive until the background refresh settles.
+      event.waitUntil(refresh.then(() => undefined, () => undefined));
       return cached || refresh;
     })
   );
