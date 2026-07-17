@@ -388,6 +388,14 @@
           note = 'engine depth ' + entry.ai.depth + (entry.ai.quiesce ? '+quiescence' : '') +
                  ', ' + entry.ai.ms + ' ms; ' + note;
         }
+        // Standard %clk command: the mover's remaining time after the move.
+        if (entry.clock) {
+          const ms = i % 2 === 0 ? entry.clock.wMs : entry.clock.bMs;
+          const sec = Math.max(0, Math.round(ms / 1000));
+          note = '[%clk ' + Math.floor(sec / 3600) + ':' +
+                 String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' +
+                 String(sec % 60).padStart(2, '0') + '] ' + note;
+        }
         parts.push('{' + note + '}');
       }
     });

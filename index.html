@@ -37,6 +37,10 @@
           </div>
         </div>
 
+        <div class="clocks" id="clocks" hidden>
+          <div class="clock" id="clockWhite" aria-label="White clock"><span>White</span><b>--:--</b></div>
+          <div class="clock" id="clockBlack" aria-label="Black clock"><span>Black</span><b>--:--</b></div>
+        </div>
         <div class="captured" id="capturedByWhite" aria-label="Pieces captured by White"></div>
         <div class="buttons replay-nav" role="group" aria-label="Replay navigation">
           <button id="replayStart" class="btn" aria-label="Go to start position" title="Start position (Home)">⏮</button>
@@ -70,6 +74,15 @@
         <option value="3">Hard</option>
         <option value="5">Expert</option>
         <option value="master">Master</option>
+      </select>
+    </label>
+    <label class="control">
+      <span>Time control</span>
+      <select id="timeControl">
+        <option value="none" selected>No clocks</option>
+        <option value="300+3">Blitz 5+3</option>
+        <option value="900+10">Rapid 15+10</option>
+        <option value="1800+20">Classical 30+20</option>
       </select>
     </label>
     <div class="buttons setup-actions">

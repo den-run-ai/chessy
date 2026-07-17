@@ -43,9 +43,17 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   piece and state (selected, legal move, capture available, in check,
   last move) to assistive technology.
 - **Game setup** — a New Game dialog chooses opponent (two players, or the
-  computer as either color) and difficulty; settings apply only when Start is
-  pressed, so browsing the dialog never disturbs the running game, and
-  starting over always goes through an explicit confirmation.
+  computer as either color), difficulty, and time control; settings apply
+  only when Start is pressed, so browsing the dialog never disturbs the
+  running game, and starting over always goes through an explicit
+  confirmation.
+- **Chess clocks** — optional Fischer time controls (5+3, 15+10, 30+20) for
+  both players including the computer. Flag falls end the game, with the
+  FIDE 6.9 nuance that a flag against a side that could never be checkmated
+  (helpmate test) is a draw, not a loss. Every move records its think time
+  and both remaining clocks, so replay shows the clocks as they stood, undo
+  rewinds them, and the debug PGN embeds standard `[%clk h:mm:ss]` comments
+  plus a `TimeControl` tag.
 - **Persistence** — the game is saved to `localStorage` and survives reloads
   and app restarts. Restores are validated by replaying every recorded move
   through the rules engine and checking the final position — a corrupted or
