@@ -94,6 +94,21 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 node test/engine.test.js
 ```
 
+Browser suites drive the real app in headless Chromium via Playwright —
+replay/review, board accessibility (ARIA grid + keyboard), New Game
+setup + validated restore + offline status, and chess clocks (including a
+real flag fall). Each suite gets a fresh web origin so service-worker and
+localStorage state never leak between them:
+
+```sh
+npm install --no-save playwright
+npx playwright install chromium
+node test/browser/all.js
+```
+
+(With `playwright-core` instead, point `CHROMIUM_PATH` at a Chromium
+binary.) Both test layers run on every pull request via GitHub Actions.
+
 ## Structure
 
 | Path | Purpose |
