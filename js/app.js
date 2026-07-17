@@ -27,12 +27,29 @@
   const promotionDialog = document.getElementById('promotionDialog');
   const promotionChoices = document.getElementById('promotionChoices');
   const gameOverDialog = document.getElementById('gameOverDialog');
+  const replayStartEl = document.getElementById('replayStart');
+  const replayBackEl = document.getElementById('replayBack');
+  const replayFwdEl = document.getElementById('replayFwd');
+  const replayLiveEl = document.getElementById('replayLive');
 
   let state = Chess.newGameState();
   let selected = null;        // selected square index
   let flipped = false;
   let aiThinking = false;
   let squares = [];           // 64 DOM cells, index = board index
+
+  // Replay: number of plies currently shown (0 = start position), or null
+  // for the live game. Purely a view — the live game state is untouched, so
+  // browsing is always safe, even while the AI is thinking.
+  let viewPly = null;
+
+  function isViewing() { return viewPly !== null && viewPly < state.history.length; }
+
+  function setViewPly(k) {
+    viewPly = (k === null || k >= state.history.length) ? null : Math.max(0, k);
+    selected = null;
+    render();
+  }
 
   // AI runs in a Web Worker so deep searches never freeze the board;
   // falls back to a synchronous call where workers are unavailable.
@@ -118,26 +135,38 @@
 
   function render() {
     const status = Chess.gameStatus(state);
-    const lastEntry = state.history[state.history.length - 1];
-    const legal = selected !== null ? Chess.legalMovesFrom(state, selected) : [];
-    const kingInCheck = status.check || status.reason === 'checkmate'
-      ? state.board.indexOf(state.turn + 'K') : -1;
+    const viewing = isViewing();
+    // The displayed position: a historical one while browsing, else live
+    // (history[k].fen is the position BEFORE move k = after k plies).
+    const vs = viewing ? Chess.parseFen(state.history[viewPly].fen) : state;
+    const shown = viewing ? viewPly : state.history.length;
+    const lastMove = shown > 0 ? state.history[shown - 1].move : null;
+    const legal = !viewing && selected !== null ? Chess.legalMovesFrom(state, selected) : [];
+    const inChk = viewing ? Chess.inCheck(vs, vs.turn)
+                          : (status.check || status.reason === 'checkmate');
+    const kingInCheck = inChk ? vs.board.indexOf(vs.turn + 'K') : -1;
 
     for (let i = 0; i < 64; i++) {
       const cell = squares[i];
-      const p = state.board[i];
+      const p = vs.board[i];
       cell.querySelector('.piece').textContent = p ? GLYPHS[p] : '';
       cell.classList.toggle('white-piece', !!p && p[0] === 'w');
       cell.classList.toggle('black-piece', !!p && p[0] === 'b');
-      cell.classList.toggle('selected', i === selected);
+      cell.classList.toggle('selected', !viewing && i === selected);
       cell.classList.toggle('last-move',
-        !!lastEntry && (i === lastEntry.move.from || i === lastEntry.move.to));
+        !!lastMove && (i === lastMove.from || i === lastMove.to));
       cell.classList.toggle('check', i === kingInCheck);
       const target = legal.find(function (m) { return m.to === i; });
       cell.classList.toggle('hint', !!target && !state.board[i]);
       cell.classList.toggle('hint-capture', !!target && !!state.board[i]);
     }
     boardEl.classList.toggle('flipped', flipped);
+
+    const n = state.history.length;
+    replayStartEl.disabled = shown === 0;
+    replayBackEl.disabled = shown === 0;
+    replayFwdEl.disabled = shown >= n;
+    replayLiveEl.disabled = !viewing;
 
     renderStatus(status);
     renderMoves();
@@ -146,6 +175,13 @@
   }
 
   function renderStatus(status) {
+    if (isViewing()) {
+      const label = viewPly === 0 ? 'start position'
+        : (Math.floor((viewPly - 1) / 2) + 1) + ((viewPly - 1) % 2 === 0 ? '. ' : '… ') +
+          state.history[viewPly - 1].san;
+      statusEl.textContent = 'Reviewing ' + label + ' (' + viewPly + '/' + state.history.length + ')';
+      return;
+    }
     if (status.over) {
       const winner = status.result === '1-0' ? 'White wins' :
                      status.result === '0-1' ? 'Black wins' : 'Draw';
@@ -163,26 +199,33 @@
     // textContent only — history is restored from origin-shared localStorage,
     // so it must never be interpreted as HTML.
     moveListEl.innerHTML = '';
+    const shown = isViewing() ? viewPly : state.history.length;
     for (let i = 0; i < state.history.length; i += 2) {
       const li = document.createElement('li');
-      const white = document.createElement('span');
-      white.className = 'ply';
-      white.textContent = state.history[i].san;
-      const black = document.createElement('span');
-      black.className = 'ply';
-      black.textContent = state.history[i + 1] ? state.history[i + 1].san : '';
-      li.appendChild(white);
-      li.appendChild(black);
+      for (const j of [i, i + 1]) {
+        const entry = state.history[j];
+        if (!entry) { li.appendChild(document.createElement('span')); continue; }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ply' + (j === shown - 1 ? ' current' : '');
+        btn.textContent = entry.san;
+        btn.addEventListener('click', function () { setViewPly(j + 1); });
+        li.appendChild(btn);
+      }
       moveListEl.appendChild(li);
     }
-    moveListEl.scrollTop = moveListEl.scrollHeight;
+    const current = moveListEl.querySelector('.current');
+    if (current) current.scrollIntoView({ block: 'nearest' });
+    else moveListEl.scrollTop = moveListEl.scrollHeight;
   }
 
   function renderCaptured() {
     const byWhite = [], byBlack = [];
-    for (const entry of state.history) {
-      if (!entry.move.captured) continue;
-      (entry.move.captured[0] === 'b' ? byWhite : byBlack).push(GLYPHS[entry.move.captured]);
+    const upto = isViewing() ? viewPly : state.history.length;
+    for (let i = 0; i < upto; i++) {
+      const cap = state.history[i].move.captured;
+      if (!cap) continue;
+      (cap[0] === 'b' ? byWhite : byBlack).push(GLYPHS[cap]);
     }
     capturedByWhiteEl.textContent = byWhite.join(' ');
     capturedByBlackEl.textContent = byBlack.join(' ');
@@ -190,6 +233,8 @@
 
   // ---- Interaction ----
   function onSquareClick(i) {
+    // While reviewing, a board tap returns to the live position.
+    if (isViewing()) { setViewPly(null); return; }
     if (aiThinking || Chess.gameStatus(state).over) return;
     if (!humanColors().includes(state.turn)) return;
 
@@ -232,6 +277,7 @@
   function commitMove(move) {
     state = Chess.playMove(state, move);
     selected = null;
+    viewPly = null;
     render();
     const status = Chess.gameStatus(state);
     if (status.over) { showGameOver(status); return; }
@@ -275,6 +321,7 @@
 
   function applyAiMove(move, reachedDepth) {
     aiThinking = false;
+    viewPly = null;
     // Re-resolve against this state's legal moves (the worker's move object
     // came from a FEN round-trip; also guards against any state drift).
     const local = move && Chess.legalMoves(state).find(function (m) {
@@ -308,17 +355,23 @@
   }
 
   // ---- Controls ----
-  document.getElementById('newGame').addEventListener('click', function () {
+  function startNewGame() {
     cancelAi();
     state = Chess.newGameState();
     selected = null;
+    viewPly = null;
     flipped = modeEl.value === 'ai-w'; // playing Black: show Black at bottom
     render();
     maybeAiMove();
-  });
+  }
+
+  document.getElementById('newGame').addEventListener('click', startNewGame);
 
   document.getElementById('undo').addEventListener('click', function () {
-    if (aiThinking) return;
+    // Undo while the AI is thinking cancels the search and takes back the
+    // human move that triggered it (it used to silently do nothing).
+    if (aiThinking) cancelAi();
+    viewPly = null;
     // Against the AI, undo the AI reply too so it's the human's turn again.
     state = Chess.undoMove(state);
     if (aiColor() && state.turn === aiColor() && state.history.length) {
@@ -338,6 +391,39 @@
 
   document.getElementById('gameOverClose').addEventListener('click', function () {
     gameOverDialog.close();
+  });
+
+  document.getElementById('gameOverReview').addEventListener('click', function () {
+    gameOverDialog.close();
+    setViewPly(0); // start reviewing from the first position
+  });
+
+  document.getElementById('gameOverRematch').addEventListener('click', function () {
+    gameOverDialog.close();
+    startNewGame();
+  });
+
+  // ---- Replay navigation ----
+  function stepView(delta) {
+    const n = state.history.length;
+    const cur = isViewing() ? viewPly : n;
+    setViewPly(Math.min(n, Math.max(0, cur + delta)));
+  }
+
+  replayStartEl.addEventListener('click', function () { setViewPly(0); });
+  replayBackEl.addEventListener('click', function () { stepView(-1); });
+  replayFwdEl.addEventListener('click', function () { stepView(1); });
+  replayLiveEl.addEventListener('click', function () { setViewPly(null); });
+
+  document.addEventListener('keydown', function (e) {
+    if (promotionDialog.open || gameOverDialog.open) return;
+    const t = e.target;
+    if (t && (t.tagName === 'SELECT' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (!state.history.length) return;
+    if (e.key === 'ArrowLeft') { stepView(-1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { stepView(1); e.preventDefault(); }
+    else if (e.key === 'Home') { setViewPly(0); e.preventDefault(); }
+    else if (e.key === 'End') { setViewPly(null); e.preventDefault(); }
   });
 
   // ---- PGN export (standard format; optional per-move debug log) ----

@@ -31,7 +31,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   deepening as far as the clock allows.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
-  promotion picker.
+  promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,
+  arrow/Home/End keys) to review earlier positions — browsing is read-only
+  and never disturbs the live game; after a game ends, "Review game" starts
+  the replay and "Rematch" starts over. Undo during an AI search cancels the
+  search and takes back the triggering move.
 - **Persistence** — the game is saved to `localStorage`, so it survives
   reloads and app restarts.
 - **PGN export** — save the game in standard PGN, plain or with an embedded
