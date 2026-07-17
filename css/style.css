@@ -310,3 +310,16 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .gameover h2 { margin-bottom: 0.4rem; }
 .gameover p { color: var(--muted); margin-bottom: 1rem; }
 .gameover-actions { justify-content: center; }
+
+.setup { min-width: 260px; text-align: left; }
+.setup h2 { margin-bottom: 0.8rem; text-align: center; }
+.setup .control { margin-bottom: 0.7rem; }
+.setup .control select { flex: 1; }
+.setup-actions { justify-content: center; margin-top: 0.9rem; }
+
+.setup-summary {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
