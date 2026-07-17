@@ -18,11 +18,18 @@
   const AI_DELAY_MS = 250;
   const PIECE_NAMES = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king' };
 
+  const DIFF_LABELS = { 1: 'Easy', 2: 'Medium', 3: 'Hard', 5: 'Expert', master: 'Master' };
+  const MODE_LABELS = {
+    pvp: 'Two players', 'ai-b': 'White vs computer', 'ai-w': 'Black vs computer'
+  };
+
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
   const moveListEl = document.getElementById('moveList');
   const modeEl = document.getElementById('mode');
   const difficultyEl = document.getElementById('difficulty');
+  const setupSummaryEl = document.getElementById('setupSummary');
+  const newGameDialog = document.getElementById('newGameDialog');
   const capturedByWhiteEl = document.getElementById('capturedByWhite');
   const capturedByBlackEl = document.getElementById('capturedByBlack');
   const promotionDialog = document.getElementById('promotionDialog');
@@ -38,6 +45,11 @@
   let flipped = false;
   let aiThinking = false;
   let squares = [];           // 64 DOM cells, index = board index
+
+  // Game settings are chosen in the New Game dialog and fixed for the game's
+  // lifetime — the dialog's selects are just an edit buffer, so opening and
+  // cancelling it never affects the running game.
+  const settings = { mode: 'ai-b', difficulty: '2' };
 
   // Replay: number of plies currently shown (0 = start position), or null
   // for the live game. Purely a view — the live game state is untouched, so
@@ -143,7 +155,7 @@
   }
 
   function humanColors() {
-    switch (modeEl.value) {
+    switch (settings.mode) {
       case 'ai-b': return ['w'];       // human plays White, AI plays Black
       case 'ai-w': return ['b'];
       default: return ['w', 'b'];
@@ -151,8 +163,8 @@
   }
 
   function aiColor() {
-    if (modeEl.value === 'ai-b') return 'b';
-    if (modeEl.value === 'ai-w') return 'w';
+    if (settings.mode === 'ai-b') return 'b';
+    if (settings.mode === 'ai-w') return 'w';
     return null;
   }
 
@@ -200,6 +212,9 @@
     replayBackEl.disabled = shown === 0;
     replayFwdEl.disabled = shown >= n;
     replayLiveEl.disabled = !viewing;
+
+    setupSummaryEl.textContent = MODE_LABELS[settings.mode] +
+      (aiColor() ? ' · ' + DIFF_LABELS[settings.difficulty] : '');
 
     renderStatus(status);
     renderMoves();
@@ -346,8 +361,8 @@
   // deepening as far as the clock allows. The fixed-depth levels carry a
   // generous budget purely as a safety net for pathological positions.
   function aiConfig() {
-    if (difficultyEl.value === 'master') return { maxDepth: 30, timeMs: 2000, quiesce: true };
-    return { maxDepth: Number(difficultyEl.value), timeMs: 10000, quiesce: false };
+    if (settings.difficulty === 'master') return { maxDepth: 30, timeMs: 2000, quiesce: true };
+    return { maxDepth: Number(settings.difficulty), timeMs: 10000, quiesce: false };
   }
 
   function maybeAiMove() {
@@ -416,12 +431,30 @@
     state = Chess.newGameState();
     selected = null;
     viewPly = null;
-    flipped = modeEl.value === 'ai-w'; // playing Black: show Black at bottom
+    flipped = settings.mode === 'ai-w'; // playing Black: show Black at bottom
     render();
     maybeAiMove();
   }
 
-  document.getElementById('newGame').addEventListener('click', startNewGame);
+  // "New game" opens a setup dialog (which doubles as the restart
+  // confirmation): settings only apply when Start is pressed, so changing
+  // them and cancelling never affects the running game.
+  document.getElementById('newGame').addEventListener('click', function () {
+    modeEl.value = settings.mode;
+    difficultyEl.value = settings.difficulty;
+    newGameDialog.showModal();
+  });
+
+  document.getElementById('newGameStart').addEventListener('click', function () {
+    settings.mode = modeEl.value;
+    settings.difficulty = difficultyEl.value;
+    newGameDialog.close();
+    startNewGame();
+  });
+
+  document.getElementById('newGameCancel').addEventListener('click', function () {
+    newGameDialog.close();
+  });
 
   document.getElementById('undo').addEventListener('click', function () {
     // Undo while the AI is thinking cancels the search and takes back the
@@ -475,7 +508,7 @@
   replayLiveEl.addEventListener('click', function () { setViewPly(null); });
 
   document.addEventListener('keydown', function (e) {
-    if (promotionDialog.open || gameOverDialog.open) return;
+    if (promotionDialog.open || gameOverDialog.open || newGameDialog.open) return;
     const t = e.target;
     if (t && (t.tagName === 'SELECT' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (!state.history.length) return;
@@ -489,10 +522,9 @@
   function pad2(n) { return String(n).padStart(2, '0'); }
 
   function downloadPgn(withLog) {
-    const level = difficultyEl.options[difficultyEl.selectedIndex].text;
-    const ai = 'Chessy AI (' + level + ')';
-    const names = modeEl.value === 'ai-b' ? { White: 'Human', Black: ai } :
-                  modeEl.value === 'ai-w' ? { White: ai, Black: 'Human' } :
+    const ai = 'Chessy AI (' + DIFF_LABELS[settings.difficulty] + ')';
+    const names = settings.mode === 'ai-b' ? { White: 'Human', Black: ai } :
+                  settings.mode === 'ai-w' ? { White: ai, Black: 'Human' } :
                   { White: 'Human', Black: 'Human' };
     const now = new Date();
     const tags = Object.assign({
@@ -513,13 +545,6 @@
   document.getElementById('exportPgn').addEventListener('click', function () { downloadPgn(false); });
   document.getElementById('exportPgnLog').addEventListener('click', function () { downloadPgn(true); });
 
-  modeEl.addEventListener('change', function () {
-    cancelAi();
-    save();
-    maybeAiMove();
-  });
-  difficultyEl.addEventListener('change', save);
-
   // ---- Persistence ----
   function save() {
     try {
@@ -527,27 +552,46 @@
         fen: Chess.toFen(state),
         history: state.history,
         positions: state.positions,
-        mode: modeEl.value,
-        difficulty: difficultyEl.value,
+        mode: settings.mode,
+        difficulty: settings.difficulty,
         flipped: flipped
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
 
+  // Restore a saved game by REPLAYING it through the engine rather than
+  // trusting the stored blob: every recorded move must be legal from the
+  // start position and the final FEN must match, or the save is rejected.
+  // This validates the whole schema in one stroke, rebuilds the repetition
+  // table and SANs from scratch, and migrates any stale derived data.
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       const data = JSON.parse(raw);
-      const restored = Chess.parseFen(data.fen);
-      restored.history = data.history || [];
-      restored.positions = data.positions || {};
-      if (!restored.positions[Chess.positionKey(restored)]) {
-        restored.positions[Chess.positionKey(restored)] = 1;
+      if (typeof data.fen !== 'string' || !Array.isArray(data.history)) return false;
+      let s = Chess.newGameState();
+      for (const entry of data.history) {
+        if (!entry || typeof entry !== 'object' || !entry.move) return false;
+        const legal = Chess.legalMoves(s);
+        const m = legal.find(function (x) {
+          return x.from === entry.move.from && x.to === entry.move.to &&
+                 (x.promotion || null) === (entry.move.promotion || null);
+        });
+        if (!m) return false;
+        s = Chess.playMove(s, m);
+        if (entry.ai && typeof entry.ai === 'object') {
+          s.history[s.history.length - 1].ai = {
+            depth: Number(entry.ai.depth) || 0,
+            quiesce: !!entry.ai.quiesce,
+            ms: Number(entry.ai.ms) || 0
+          };
+        }
       }
-      state = restored;
-      modeEl.value = data.mode || 'ai-b';
-      difficultyEl.value = data.difficulty || '2';
+      if (Chess.toFen(s) !== data.fen) return false;
+      state = s;
+      settings.mode = MODE_LABELS[data.mode] ? data.mode : 'ai-b';
+      settings.difficulty = DIFF_LABELS[data.difficulty] ? String(data.difficulty) : '2';
       flipped = !!data.flipped;
       return true;
     } catch (e) {

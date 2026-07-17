@@ -25,24 +25,7 @@
 
       <aside class="panel">
         <div class="controls">
-          <label class="control">
-            <span>Mode</span>
-            <select id="mode">
-              <option value="pvp">Two players</option>
-              <option value="ai-b" selected>Play White vs computer</option>
-              <option value="ai-w">Play Black vs computer</option>
-            </select>
-          </label>
-          <label class="control">
-            <span>Difficulty</span>
-            <select id="difficulty">
-              <option value="1">Easy</option>
-              <option value="2" selected>Medium</option>
-              <option value="3">Hard</option>
-              <option value="5">Expert</option>
-              <option value="master">Master</option>
-            </select>
-          </label>
+          <div class="setup-summary" id="setupSummary" aria-live="polite"></div>
           <div class="buttons">
             <button id="newGame" class="btn primary">New game</button>
             <button id="undo" class="btn">Undo</button>
@@ -64,12 +47,36 @@
         <ol class="moves" id="moveList" aria-label="Move list"></ol>
         <div class="captured" id="capturedByBlack" aria-label="Pieces captured by Black"></div>
 
-        <div class="offline-note" id="installNote">
-          Fully offline — installable as an app.
-        </div>
+        <div class="offline-note" id="installNote" role="status">Preparing offline mode…</div>
       </aside>
     </main>
   </div>
+
+  <dialog id="newGameDialog" class="setup" aria-labelledby="newGameTitle">
+    <h2 id="newGameTitle">New game</h2>
+    <label class="control">
+      <span>Opponent</span>
+      <select id="mode">
+        <option value="pvp">Two players</option>
+        <option value="ai-b" selected>Play White vs computer</option>
+        <option value="ai-w">Play Black vs computer</option>
+      </select>
+    </label>
+    <label class="control">
+      <span>Difficulty</span>
+      <select id="difficulty">
+        <option value="1">Easy</option>
+        <option value="2" selected>Medium</option>
+        <option value="3">Hard</option>
+        <option value="5">Expert</option>
+        <option value="master">Master</option>
+      </select>
+    </label>
+    <div class="buttons setup-actions">
+      <button id="newGameStart" class="btn primary">Start game</button>
+      <button id="newGameCancel" class="btn">Cancel</button>
+    </div>
+  </dialog>
 
   <dialog id="promotionDialog" class="promotion" aria-label="Choose promotion piece">
     <div class="promotion-choices" id="promotionChoices"></div>
@@ -89,14 +96,45 @@
   <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
   <script>
-    if ('serviceWorker' in navigator) {
+    // Offline status: show the actual service-worker state instead of an
+    // unconditional "fully offline" claim.
+    (function () {
+      var note = document.getElementById('installNote');
+      function setNote(text) { note.textContent = text; }
+
+      if (!('serviceWorker' in navigator)) {
+        setNote('Offline mode not supported here — the game still works online.');
+        return;
+      }
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').then(function (reg) {
+          if (navigator.serviceWorker.controller) {
+            setNote('Ready offline — installable as an app.');
+          } else if (reg.installing) {
+            setNote('Caching for offline use…');
+          }
+          function watch(sw, firstInstall) {
+            if (!sw) return;
+            sw.addEventListener('statechange', function () {
+              if (sw.state === 'installed') {
+                setNote(firstInstall ? 'Ready offline — installable as an app.'
+                                     : 'Updating to the latest version…');
+              } else if (sw.state === 'redundant' && !navigator.serviceWorker.controller) {
+                setNote('Offline setup failed — playing online only.');
+              }
+            });
+          }
+          watch(reg.installing, !navigator.serviceWorker.controller);
+          reg.addEventListener('updatefound', function () {
+            watch(reg.installing, !navigator.serviceWorker.controller);
+          });
           // Re-check for updates whenever the app is brought back into view
           // (helps installed/home-screen PWAs that keep running).
           document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') reg.update();
           });
+        }).catch(function () {
+          setNote('Offline setup failed — playing online only.');
         });
         // When an updated service worker takes control, reload once so the
         // new version applies immediately (game state is in localStorage).
@@ -106,7 +144,7 @@
           hadController = true;
         });
       });
-    }
+    })();
   </script>
 </body>
 </html>
