@@ -403,5 +403,12 @@ assertEqual(pgnLog.includes('before: ' + Chess.START_FEN), true, 'debug PGN logs
 const pgnOngoing = Chess.toPgn(playSans(['e4']), {});
 assertEqual(pgnOngoing.includes('[Result "*"]'), true, 'ongoing game marked *');
 
+// Clock metadata: the debug PGN embeds the mover's remaining time as a
+// standard %clk command (history[3] is Black's move, so bMs is shown).
+pgnGame.history[3].clock = { thinkMs: 2000, wMs: 305000, bMs: 298000 };
+const pgnClk = Chess.toPgn(pgnGame, { TimeControl: '300+3' }, true);
+assertEqual(pgnClk.includes('[TimeControl "300+3"]'), true, 'PGN TimeControl tag');
+assertEqual(pgnClk.includes('[%clk 0:04:58]'), true, 'debug PGN embeds %clk remaining time');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

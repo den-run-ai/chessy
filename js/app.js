@@ -22,6 +22,7 @@
   const MODE_LABELS = {
     pvp: 'Two players', 'ai-b': 'White vs computer', 'ai-w': 'Black vs computer'
   };
+  const TC_LABELS = { '300+3': '5+3', '900+10': '15+10', '1800+20': '30+20' };
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
@@ -30,6 +31,10 @@
   const difficultyEl = document.getElementById('difficulty');
   const setupSummaryEl = document.getElementById('setupSummary');
   const newGameDialog = document.getElementById('newGameDialog');
+  const timeControlEl = document.getElementById('timeControl');
+  const clocksEl = document.getElementById('clocks');
+  const clockWhiteEl = document.getElementById('clockWhite');
+  const clockBlackEl = document.getElementById('clockBlack');
   const capturedByWhiteEl = document.getElementById('capturedByWhite');
   const capturedByBlackEl = document.getElementById('capturedByBlack');
   const promotionDialog = document.getElementById('promotionDialog');
@@ -49,7 +54,90 @@
   // Game settings are chosen in the New Game dialog and fixed for the game's
   // lifetime — the dialog's selects are just an edit buffer, so opening and
   // cancelling it never affects the running game.
-  const settings = { mode: 'ai-b', difficulty: '2' };
+  const settings = { mode: 'ai-b', difficulty: '2', timeControl: 'none' };
+  const TIME_CONTROLS = { none: true, '300+3': true, '900+10': true, '1800+20': true };
+
+  // ---- Chess clocks (Fischer increment) ----
+  // clocks.wMs/bMs hold the remaining time as of the LAST completed move;
+  // the running side's display subtracts the time since turnStartedAt. Each
+  // move records {thinkMs, wMs, bMs} on its history entry, so think times
+  // survive undo/restore and feed the PGN %clk log.
+  const clocks = { wMs: null, bMs: null };   // null = untimed game
+  let turnStartedAt = null;
+  let timeForfeit = null;                    // color that overstepped, or null
+  let clockTicker = null;
+
+  function tcParts() {
+    if (settings.timeControl === 'none') return null;
+    const p = settings.timeControl.split('+');
+    return { baseMs: Number(p[0]) * 1000, incMs: Number(p[1]) * 1000 };
+  }
+
+  function resetClocks() {
+    const tc = tcParts();
+    clocks.wMs = tc ? tc.baseMs : null;
+    clocks.bMs = tc ? tc.baseMs : null;
+    timeForfeit = null;
+    turnStartedAt = Date.now();
+    if (clockTicker) { clearInterval(clockTicker); clockTicker = null; }
+    if (tc) clockTicker = setInterval(tickClock, 200);
+  }
+
+  // Record think time and remaining clocks on the entry for the move that
+  // was just played (state has already advanced, so the mover is the side
+  // NOT to move now).
+  function punchClock() {
+    if (clocks.wMs === null) return;
+    const now = Date.now();
+    const key = state.turn === 'w' ? 'bMs' : 'wMs';
+    const elapsed = Math.max(0, now - turnStartedAt);
+    clocks[key] = Math.max(0, clocks[key] - elapsed) + tcParts().incMs;
+    turnStartedAt = now;
+    state.history[state.history.length - 1].clock =
+      { thinkMs: elapsed, wMs: clocks.wMs, bMs: clocks.bMs };
+  }
+
+  // A flag falls: the opponent wins if any legal sequence could let them
+  // checkmate (same helpmate test as dead positions, with the flagger
+  // reduced to a bare king); otherwise the game is drawn (FIDE 6.9).
+  function flag(color) {
+    const board = state.board.map(function (p) {
+      return p && p[0] === color && p[1] !== 'K' ? null : p;
+    });
+    timeForfeit = { color: color, draw: Chess.insufficientMaterial(board) };
+    clocks[color === 'w' ? 'wMs' : 'bMs'] = 0;
+    if (aiThinking) cancelAi();
+    selected = null;
+    render();
+    showGameOver(fullStatus());
+  }
+
+  function tickClock() {
+    if (clocks.wMs === null || timeForfeit || Chess.gameStatus(state).over) return;
+    const remaining = liveRemaining(state.turn);
+    if (remaining <= 0) flag(state.turn);
+    else renderClocks();
+  }
+
+  function liveRemaining(color) {
+    const stored = color === 'w' ? clocks.wMs : clocks.bMs;
+    if (stored === null) return null;
+    if (timeForfeit || Chess.gameStatus(state).over || color !== state.turn) return stored;
+    return stored - Math.max(0, Date.now() - turnStartedAt);
+  }
+
+  // Game status including app-level time forfeit (the rules engine itself
+  // knows nothing about clocks).
+  function fullStatus() {
+    if (timeForfeit) {
+      return {
+        over: true,
+        result: timeForfeit.draw ? '1/2-1/2' : (timeForfeit.color === 'w' ? '0-1' : '1-0'),
+        reason: timeForfeit.draw ? 'time forfeit (no mating material)' : 'time forfeit'
+      };
+    }
+    return Chess.gameStatus(state);
+  }
 
   // Replay: number of plies currently shown (0 = start position), or null
   // for the live game. Purely a view — the live game state is untouched, so
@@ -169,7 +257,7 @@
   }
 
   function render() {
-    const status = Chess.gameStatus(state);
+    const status = fullStatus();
     const viewing = isViewing();
     // The displayed position: a historical one while browsing, else live
     // (history[k].fen is the position BEFORE move k = after k plies).
@@ -214,12 +302,45 @@
     replayLiveEl.disabled = !viewing;
 
     setupSummaryEl.textContent = MODE_LABELS[settings.mode] +
-      (aiColor() ? ' · ' + DIFF_LABELS[settings.difficulty] : '');
+      (aiColor() ? ' · ' + DIFF_LABELS[settings.difficulty] : '') +
+      (TC_LABELS[settings.timeControl] ? ' · ' + TC_LABELS[settings.timeControl] : '');
 
     renderStatus(status);
+    renderClocks();
     renderMoves();
     renderCaptured();
     save();
+  }
+
+  function fmtClock(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  // The ticker calls this alone (not render()) so the 5 Hz tick never
+  // rebuilds the move list or rewrites localStorage.
+  function renderClocks() {
+    const timed = clocks.wMs !== null;
+    clocksEl.hidden = !timed;
+    if (!timed) return;
+    let w, b;
+    if (isViewing()) {
+      // Replay shows the clocks as they stood after the viewed move.
+      const snap = viewPly > 0 ? state.history[viewPly - 1].clock : null;
+      const base = tcParts().baseMs;
+      w = snap ? snap.wMs : base;
+      b = snap ? snap.bMs : base;
+    } else {
+      w = liveRemaining('w');
+      b = liveRemaining('b');
+    }
+    const running = !isViewing() && !timeForfeit && !Chess.gameStatus(state).over;
+    clockWhiteEl.querySelector('b').textContent = fmtClock(w);
+    clockBlackEl.querySelector('b').textContent = fmtClock(b);
+    clockWhiteEl.classList.toggle('active', running && state.turn === 'w');
+    clockBlackEl.classList.toggle('active', running && state.turn === 'b');
+    clockWhiteEl.classList.toggle('low', w < 20000);
+    clockBlackEl.classList.toggle('low', b < 20000);
   }
 
   function renderStatus(status) {
@@ -306,7 +427,7 @@
     setFocusSquare(i); // keep the roving tab stop on the last-touched square
     // While reviewing, a board tap returns to the live position.
     if (isViewing()) { setViewPly(null); return; }
-    if (aiThinking || Chess.gameStatus(state).over) return;
+    if (aiThinking || fullStatus().over) return;
     if (!humanColors().includes(state.turn)) return;
 
     const p = state.board[i];
@@ -347,10 +468,11 @@
 
   function commitMove(move) {
     state = Chess.playMove(state, move);
+    punchClock();
     selected = null;
     viewPly = null;
     render();
-    const status = Chess.gameStatus(state);
+    const status = fullStatus();
     if (status.over) { showGameOver(status); return; }
     maybeAiMove();
   }
@@ -366,7 +488,7 @@
   }
 
   function maybeAiMove() {
-    if (state.turn !== aiColor() || Chess.gameStatus(state).over) return;
+    if (state.turn !== aiColor() || fullStatus().over) return;
     aiThinking = true;
     render();
     const cfg = aiConfig();
@@ -400,6 +522,7 @@
     });
     if (!local) { render(); return; }
     state = Chess.playMove(state, local);
+    punchClock();
     if (aiPending) {
       // Record engine settings + think time on the move for PGN debug export.
       // Depth is the deepest COMPLETED iteration, which under a time budget
@@ -412,7 +535,7 @@
       aiPending = null;
     }
     render();
-    const status = Chess.gameStatus(state);
+    const status = fullStatus();
     if (status.over) showGameOver(status);
   }
 
@@ -432,6 +555,7 @@
     selected = null;
     viewPly = null;
     flipped = settings.mode === 'ai-w'; // playing Black: show Black at bottom
+    resetClocks();
     render();
     maybeAiMove();
   }
@@ -442,12 +566,14 @@
   document.getElementById('newGame').addEventListener('click', function () {
     modeEl.value = settings.mode;
     difficultyEl.value = settings.difficulty;
+    timeControlEl.value = settings.timeControl;
     newGameDialog.showModal();
   });
 
   document.getElementById('newGameStart').addEventListener('click', function () {
     settings.mode = modeEl.value;
     settings.difficulty = difficultyEl.value;
+    settings.timeControl = timeControlEl.value;
     newGameDialog.close();
     startNewGame();
   });
@@ -465,6 +591,16 @@
     state = Chess.undoMove(state);
     if (aiColor() && state.turn === aiColor() && state.history.length) {
       state = Chess.undoMove(state);
+    }
+    // Clocks rewind to their recorded state after the new last move (a time
+    // forfeit is undone with the move that preceded it).
+    if (clocks.wMs !== null) {
+      const last = state.history[state.history.length - 1];
+      const base = tcParts().baseMs;
+      clocks.wMs = last && last.clock ? last.clock.wMs : base;
+      clocks.bMs = last && last.clock ? last.clock.bMs : base;
+      timeForfeit = null;
+      turnStartedAt = Date.now();
     }
     selected = null;
     render();
@@ -528,7 +664,8 @@
                   { White: 'Human', Black: 'Human' };
     const now = new Date();
     const tags = Object.assign({
-      Date: now.getFullYear() + '.' + pad2(now.getMonth() + 1) + '.' + pad2(now.getDate())
+      Date: now.getFullYear() + '.' + pad2(now.getMonth() + 1) + '.' + pad2(now.getDate()),
+      TimeControl: settings.timeControl === 'none' ? '-' : settings.timeControl
     }, names);
     const pgn = Chess.toPgn(state, tags, withLog);
 
@@ -554,6 +691,10 @@
         positions: state.positions,
         mode: settings.mode,
         difficulty: settings.difficulty,
+        timeControl: settings.timeControl,
+        clocks: clocks.wMs !== null
+          ? { wMs: liveRemaining('w'), bMs: liveRemaining('b') } : null,
+        timeForfeit: timeForfeit,
         flipped: flipped
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
@@ -587,11 +728,34 @@
             ms: Number(entry.ai.ms) || 0
           };
         }
+        if (entry.clock && typeof entry.clock === 'object') {
+          s.history[s.history.length - 1].clock = {
+            thinkMs: Number(entry.clock.thinkMs) || 0,
+            wMs: Number(entry.clock.wMs) || 0,
+            bMs: Number(entry.clock.bMs) || 0
+          };
+        }
       }
       if (Chess.toFen(s) !== data.fen) return false;
       state = s;
       settings.mode = MODE_LABELS[data.mode] ? data.mode : 'ai-b';
       settings.difficulty = DIFF_LABELS[data.difficulty] ? String(data.difficulty) : '2';
+      settings.timeControl = TIME_CONTROLS[data.timeControl] ? data.timeControl : 'none';
+      const tc = tcParts();
+      if (tc) {
+        clocks.wMs = data.clocks && isFinite(data.clocks.wMs)
+          ? Math.max(0, Number(data.clocks.wMs)) : tc.baseMs;
+        clocks.bMs = data.clocks && isFinite(data.clocks.bMs)
+          ? Math.max(0, Number(data.clocks.bMs)) : tc.baseMs;
+        timeForfeit = data.timeForfeit &&
+          (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b')
+          ? { color: data.timeForfeit.color, draw: !!data.timeForfeit.draw } : null;
+        turnStartedAt = Date.now(); // time away from the app is not charged
+        clockTicker = setInterval(tickClock, 200);
+      } else {
+        clocks.wMs = null;
+        clocks.bMs = null;
+      }
       flipped = !!data.flipped;
       return true;
     } catch (e) {

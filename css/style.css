@@ -225,6 +225,27 @@ body {
   color: var(--muted);
 }
 
+/* ---- Chess clocks ---- */
+.clocks { display: flex; gap: 0.5rem; }
+.clocks[hidden] { display: none; }
+
+.clock {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg);
+  border: 1px solid #4a4642;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.clock span { font-size: 0.8rem; color: var(--muted); }
+.clock b { font-size: 1.05rem; }
+.clock.active { border-color: var(--accent); }
+.clock.active span { color: var(--accent); }
+.clock.low b { color: #e05252; }
+
 .moves {
   flex: 1;
   overflow-y: auto;
