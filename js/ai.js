@@ -80,22 +80,155 @@
     ]
   };
 
+  // Endgame piece-square tables where the endgame wants different placement
+  // than the midgame: the king centralizes instead of hiding, pawns race for
+  // promotion. Other piece types use the same table in both phases.
+  const PST_EG = {
+    P: [
+       0,  0,  0,  0,  0,  0,  0,  0,
+      80, 80, 80, 80, 80, 80, 80, 80,
+      50, 50, 50, 50, 50, 50, 50, 50,
+      30, 30, 30, 30, 30, 30, 30, 30,
+      15, 15, 15, 15, 15, 15, 15, 15,
+       5,  5,  5,  5,  5,  5,  5,  5,
+       0,  0,  0,  0,  0,  0,  0,  0,
+       0,  0,  0,  0,  0,  0,  0,  0
+    ],
+    N: PST.N,
+    B: PST.B,
+    R: PST.R,
+    Q: PST.Q,
+    K: [
+      -50,-40,-30,-20,-20,-30,-40,-50,
+      -30,-20,-10,  0,  0,-10,-20,-30,
+      -30,-10, 20, 30, 30, 20,-10,-30,
+      -30,-10, 30, 40, 40, 30,-10,-30,
+      -30,-10, 30, 40, 40, 30,-10,-30,
+      -30,-10, 20, 30, 30, 20,-10,-30,
+      -30,-30,  0,  0,  0,  0,-30,-30,
+      -50,-30,-30,-30,-30,-30,-30,-50
+    ]
+  };
+
+  // Game phase from non-pawn material: 24 = full midgame, 0 = pawn endgame.
+  const PHASE = { P: 0, N: 1, B: 1, R: 2, Q: 4, K: 0 };
+  const PHASE_MAX = 24;
+
+  const MOBILITY = { N: 3, B: 3, R: 2, Q: 1 };  // centipawns per reachable square
+  const DOUBLED = 12, ISOLATED = 12, SHIELD = 8;
+  const PASSED_MG = [0, 5, 10, 20, 35, 60, 80];   // by ranks advanced from home
+  const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
+
+  const DIAG = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  const ORTHO = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  const ALL_DIRS = DIAG.concat(ORTHO);
+  const N_JUMPS = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+
+  // Squares a piece can move to (empty or enemy-occupied). Pawns and kings
+  // are excluded: pawn play is scored by the structure terms, king freedom is
+  // not a middlegame asset.
+  function mobility(board, i, type, color) {
+    const r = Math.floor(i / 8), c = i % 8;
+    let count = 0;
+    if (type === 'N') {
+      for (const [dr, dc] of N_JUMPS) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
+        const p = board[nr * 8 + nc];
+        if (!p || p[0] !== color) count++;
+      }
+      return count;
+    }
+    const dirs = type === 'B' ? DIAG : type === 'R' ? ORTHO : ALL_DIRS;
+    for (const [dr, dc] of dirs) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const p = board[nr * 8 + nc];
+        if (p) { if (p[0] !== color) count++; break; }
+        count++;
+        nr += dr; nc += dc;
+      }
+    }
+    return count;
+  }
+
   // Evaluate from White's point of view (positive = good for White).
+  // Tapered: midgame and endgame scores are computed side by side and
+  // interpolated by remaining material, so the king hides while queens are
+  // on and centralizes when they come off, and passed pawns grow as the
+  // board empties. Terms: material + PST, mobility, doubled/isolated/passed
+  // pawns, and a midgame pawn shield in front of the king.
   function evaluate(board) {
-    let score = 0;
+    let mg = 0, eg = 0, phase = 0;
+    const pawnFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
+    const pawnSquares = { w: [], b: [] };
+    const kings = { w: -1, b: -1 };
+
     for (let i = 0; i < 64; i++) {
       const p = board[i];
       if (!p) continue;
-      const type = p[1];
-      if (p[0] === 'w') {
-        score += VALUES[type] + PST[type][i];
+      const color = p[0], type = p[1];
+      // Mirror the square vertically for Black.
+      const sq = color === 'w' ? i : (7 - Math.floor(i / 8)) * 8 + (i % 8);
+      phase += PHASE[type];
+      let m = VALUES[type] + PST[type][sq];
+      let e = VALUES[type] + PST_EG[type][sq];
+      if (type === 'P') {
+        pawnFiles[color][i % 8]++;
+        pawnSquares[color].push(i);
+      } else if (type === 'K') {
+        kings[color] = i;
       } else {
-        // Mirror the square vertically for Black.
-        const mirrored = (7 - Math.floor(i / 8)) * 8 + (i % 8);
-        score -= VALUES[type] + PST[type][mirrored];
+        const mob = mobility(board, i, type, color) * MOBILITY[type];
+        m += mob; e += mob;
+      }
+      if (color === 'w') { mg += m; eg += e; } else { mg -= m; eg -= e; }
+    }
+
+    for (const color of ['w', 'b']) {
+      const sign = color === 'w' ? 1 : -1;
+      const files = pawnFiles[color];
+      const enemyPawns = pawnSquares[color === 'w' ? 'b' : 'w'];
+      for (let f = 0; f < 8; f++) {
+        if (files[f] > 1) {
+          const extra = (files[f] - 1) * DOUBLED;
+          mg -= sign * extra; eg -= sign * extra;
+        }
+      }
+      for (const i of pawnSquares[color]) {
+        const f = i % 8, r = Math.floor(i / 8);
+        if (!(f > 0 && files[f - 1]) && !(f < 7 && files[f + 1])) {
+          mg -= sign * ISOLATED; eg -= sign * ISOLATED;
+        }
+        let passed = true;
+        for (const e2 of enemyPawns) {
+          const ef = e2 % 8, er = Math.floor(e2 / 8);
+          if (Math.abs(ef - f) <= 1 && (color === 'w' ? er < r : er > r)) {
+            passed = false;
+            break;
+          }
+        }
+        if (passed) {
+          const rr = Math.min(Math.max(color === 'w' ? 6 - r : r - 1, 0), 6);
+          mg += sign * PASSED_MG[rr]; eg += sign * PASSED_EG[rr];
+        }
+      }
+      // Pawn shield: friendly pawns directly in front of the king (midgame
+      // only — the tapering itself retires the term as material comes off).
+      const k = kings[color];
+      if (k >= 0) {
+        const kr = Math.floor(k / 8) + (color === 'w' ? -1 : 1), kc = k % 8;
+        if (kr >= 0 && kr < 8) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const cc = kc + dc;
+            if (cc >= 0 && cc < 8 && board[kr * 8 + cc] === color + 'P') mg += sign * SHIELD;
+          }
+        }
       }
     }
-    return score;
+
+    const ph = Math.min(phase, PHASE_MAX);
+    return Math.round((mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX);
   }
 
   // Mate scores are MATE minus the ply at which mate is delivered, so nearer
