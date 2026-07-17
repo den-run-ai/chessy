@@ -55,6 +55,12 @@
         </div>
 
         <div class="captured" id="capturedByWhite" aria-label="Pieces captured by White"></div>
+        <div class="buttons replay-nav" role="group" aria-label="Replay navigation">
+          <button id="replayStart" class="btn" aria-label="Go to start position" title="Start position (Home)">⏮</button>
+          <button id="replayBack" class="btn" aria-label="Previous move" title="Previous move (←)">◀</button>
+          <button id="replayFwd" class="btn" aria-label="Next move" title="Next move (→)">▶</button>
+          <button id="replayLive" class="btn" aria-label="Go to latest position" title="Latest position (End)">⏭</button>
+        </div>
         <ol class="moves" id="moveList" aria-label="Move list"></ol>
         <div class="captured" id="capturedByBlack" aria-label="Pieces captured by Black"></div>
 
@@ -72,7 +78,11 @@
   <dialog id="gameOverDialog" class="gameover">
     <h2 id="gameOverTitle"></h2>
     <p id="gameOverDetail"></p>
-    <button id="gameOverClose" class="btn primary">OK</button>
+    <div class="buttons gameover-actions">
+      <button id="gameOverReview" class="btn primary">Review game</button>
+      <button id="gameOverRematch" class="btn">Rematch</button>
+      <button id="gameOverClose" class="btn">Close</button>
+    </div>
   </dialog>
 
   <script src="js/engine.js"></script>

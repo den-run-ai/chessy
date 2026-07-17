@@ -9,7 +9,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v10';
+const CACHE = 'chessy-v11';
 const ASSETS = [
   './',
   './index.html',

@@ -233,13 +233,37 @@ body {
   counter-increment: move;
   display: grid;
   grid-template-columns: 2.2rem 1fr 1fr;
-  padding: 0.15rem 0.4rem;
+  align-items: center;
+  padding: 0.1rem 0.4rem;
 }
 .moves li::before {
   content: counter(move) '.';
   color: var(--muted);
 }
 .moves li:nth-child(odd) { background: rgba(255, 255, 255, 0.03); }
+
+/* Move-list plies are buttons: click one to review that position. */
+.moves .ply {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0.08rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.moves .ply:hover { background: rgba(255, 255, 255, 0.1); }
+.moves .ply.current { background: rgba(127, 166, 80, 0.45); font-weight: 700; }
+
+.replay-nav .btn {
+  flex: 1;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.replay-nav .btn:disabled { opacity: 0.35; cursor: default; }
+.replay-nav .btn:disabled:hover { background: #3d3936; }
 
 .offline-note {
   font-size: 0.78rem;
@@ -276,3 +300,4 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 
 .gameover h2 { margin-bottom: 0.4rem; }
 .gameover p { color: var(--muted); margin-bottom: 1rem; }
+.gameover-actions { justify-content: center; }
