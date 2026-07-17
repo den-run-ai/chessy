@@ -45,7 +45,7 @@
       const w = new Worker('js/ai-worker.js');
       w.onmessage = function (e) {
         if (e.data.id !== aiRequestId || !aiThinking) return;
-        applyAiMove(e.data.move);
+        applyAiMove(e.data.move, e.data.depth);
       };
       w.onerror = function () {
         // Broken worker: fall back to the synchronous path so the app is
@@ -239,11 +239,13 @@
   }
 
   // Difficulty select values are search depths, except the named top level:
-  // Master searches like Expert but adds quiescence (captures are resolved
-  // past the horizon, eliminating exchange blunders).
+  // Master searches with quiescence (captures are resolved past the horizon,
+  // eliminating exchange blunders) under a per-move time budget, iteratively
+  // deepening as far as the clock allows. The fixed-depth levels carry a
+  // generous budget purely as a safety net for pathological positions.
   function aiConfig() {
-    if (difficultyEl.value === 'master') return { depth: 5, quiesce: true };
-    return { depth: Number(difficultyEl.value), quiesce: false };
+    if (difficultyEl.value === 'master') return { maxDepth: 30, timeMs: 2000, quiesce: true };
+    return { maxDepth: Number(difficultyEl.value), timeMs: 10000, quiesce: false };
   }
 
   function maybeAiMove() {
@@ -252,22 +254,26 @@
     render();
     const cfg = aiConfig();
     const id = ++aiRequestId;
-    aiPending = { depth: cfg.depth, quiesce: cfg.quiesce, started: Date.now() };
+    aiPending = { depth: cfg.maxDepth, quiesce: cfg.quiesce, started: Date.now() };
     if (aiWorker) {
       aiWorker.postMessage({
-        id: id, fen: Chess.toFen(state), depth: cfg.depth, quiesce: cfg.quiesce,
-        positions: state.positions
+        id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
+        quiesce: cfg.quiesce, positions: state.positions
       });
     } else {
       // Fallback: yield so the "thinking" status paints before the search.
       setTimeout(function () {
         if (id !== aiRequestId || !aiThinking) return;
-        applyAiMove(ChessAI.bestMove(state, cfg.depth, cfg.quiesce, state.positions));
+        const result = ChessAI.think(state, {
+          maxDepth: cfg.maxDepth, timeMs: cfg.timeMs, quiesce: cfg.quiesce,
+          positions: state.positions
+        });
+        applyAiMove(result.move, result.depth);
       }, AI_DELAY_MS);
     }
   }
 
-  function applyAiMove(move) {
+  function applyAiMove(move, reachedDepth) {
     aiThinking = false;
     // Re-resolve against this state's legal moves (the worker's move object
     // came from a FEN round-trip; also guards against any state drift).
@@ -278,8 +284,10 @@
     state = Chess.playMove(state, local);
     if (aiPending) {
       // Record engine settings + think time on the move for PGN debug export.
+      // Depth is the deepest COMPLETED iteration, which under a time budget
+      // can be less than the configured maximum.
       state.history[state.history.length - 1].ai = {
-        depth: aiPending.depth,
+        depth: reachedDepth || aiPending.depth,
         quiesce: aiPending.quiesce,
         ms: Date.now() - aiPending.started
       };

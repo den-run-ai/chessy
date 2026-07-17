@@ -242,6 +242,50 @@ const sought = ChessAI.bestMove(losing, 2, false, escapeRep);
 assertEqual(sought.from === loseMoves[0].from && sought.to === loseMoves[0].to, true,
   'losing side heads for threefold repetition');
 
+// --- Zobrist hashing (transposition table keys) ---
+console.log('zobrist hashing');
+const viaA = playSans(['Nf3', 'Nf6', 'Nc3', 'Nc6']);
+const viaB = playSans(['Nc3', 'Nc6', 'Nf3', 'Nf6']);
+assertEqual(ChessAI.hashKey(viaA), ChessAI.hashKey(viaB), 'transpositions hash equal');
+assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(viaA), true,
+  'different positions hash differently');
+const plainPos = Chess.parseFen('rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 2');
+const epPos = Chess.parseFen('rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq e6 0 2');
+assertEqual(ChessAI.hashKey(plainPos) !== ChessAI.hashKey(epPos), true,
+  'en-passant square changes the hash');
+const noCastle = Chess.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1');
+assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(noCastle), true,
+  'castling rights change the hash');
+const blackTurn = Chess.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1');
+assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(blackTurn), true,
+  'side to move changes the hash');
+
+// --- Iterative deepening with a time budget ---
+console.log('iterative deepening');
+const midgame = Chess.parseFen('r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4');
+const thinkStart = Date.now();
+const timed = ChessAI.think(midgame, { maxDepth: 64, timeMs: 300, quiesce: true });
+const thinkMs = Date.now() - thinkStart;
+assertEqual(!!timed.move, true, 'timed think returns a move');
+assertEqual(timed.depth >= 2, true, 'timed think completes at least depth 2 (got ' + timed.depth + ')');
+assertEqual(timed.nodes > 0, true, 'timed think reports searched nodes');
+assertEqual(thinkMs < 1500, true, 'timed think respects its budget (took ' + thinkMs + ' ms)');
+
+// A timed search must still convert a win: play both sides of the two-rook
+// ladder under a per-move budget and require checkmate.
+let timedLadder = Chess.newGameState('7k/8/8/7p/8/8/8/RR4K1 w - - 0 1');
+for (let ply = 0; ply < 4 && !Chess.gameStatus(timedLadder).over; ply++) {
+  const r = ChessAI.think(timedLadder, {
+    maxDepth: 64, timeMs: 500, quiesce: true, positions: timedLadder.positions
+  });
+  timedLadder = Chess.playMove(timedLadder, r.move);
+}
+assertEqual(Chess.gameStatus(timedLadder).reason, 'checkmate', 'timed search forces the ladder mate');
+
+// Fixed-depth think (no budget) must reach exactly the requested depth.
+const fixed = ChessAI.think(midgame, { maxDepth: 3 });
+assertEqual(fixed.depth, 3, 'fixed-depth think completes the requested depth');
+
 // Root-pruning regression (bug shipped with the depth speedup): with a
 // narrowed root window, fail-low moves return BOUNDS that can equal the best
 // score; treating them as ties made the AI pick near-random moves. bestMove
