@@ -260,6 +260,24 @@ const blackTurn = Chess.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b 
 assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(blackTurn), true,
   'side to move changes the hash');
 
+// --- Draw awareness inside the search ---
+console.log('draw-aware search');
+// Black is "winning a rook" — but KxR leaves K vs K, a dead draw worth 0.
+const deadCap = Chess.parseFen('8/8/8/8/2k5/2R5/8/2K5 b - - 0 1');
+assertEqual(ChessAI.search(deadCap, 2, -Infinity, Infinity, false), 0,
+  'capturing the last piece into a dead position scores 0');
+assertEqual(ChessAI.search(deadCap, 4, -Infinity, Infinity, false), 0,
+  'dead-position draw holds at deeper drafts');
+// Perpetual check: White is down two rooks, but Qd8+ Kh7 Qh4+ Kg8 repeats
+// the root position. Depth 4 cannot see the cycle close; depth 5+ must
+// score the perpetual as the draw it is and play it.
+const perpetual = Chess.parseFen('6k1/p4pp1/8/5P2/7Q/8/rr6/6K1 w - - 0 1');
+const perpR = ChessAI.think(perpetual, { maxDepth: 6 });
+const perpSan = Chess.toSan(perpetual, Chess.legalMoves(perpetual).find(
+  (m) => m.from === perpR.move.from && m.to === perpR.move.to));
+assertEqual(perpSan, 'Qd8+', 'losing side heads for perpetual check');
+assertEqual(perpR.score, 0, 'perpetual check scores as a draw');
+
 // --- Iterative deepening with a time budget ---
 console.log('iterative deepening');
 const midgame = Chess.parseFen('r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4');

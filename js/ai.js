@@ -1,7 +1,8 @@
 /*
  * Chessy AI — iterative-deepening minimax with alpha-beta pruning over the
  * Chess engine, with a Zobrist-keyed transposition table, hash/killer/history
- * move ordering, piece-square evaluation, and (bounded) quiescence search.
+ * move ordering, draw awareness (repetitions against the game history and
+ * the search path, dead positions), and (bounded) quiescence search.
  *
  * Entry points:
  *   think(state, {maxDepth, timeMs, quiesce, positions}) — iterative
@@ -135,7 +136,12 @@
   const Z2 = zobristTable(0x85EBCA6B);
 
   // Module-level result slots so hashing allocates nothing per node.
-  let H1 = 0, H2 = 0;
+  // H1/H2 include the en-passant file (transposition table identity);
+  // R1/R2 exclude it (repetition identity): a position with an ep square was
+  // just created by a double push — an irreversible pawn move — so its
+  // placement can never have occurred before, and FIDE 9.2.3 says a phantom
+  // ep right must not distinguish otherwise-equal positions.
+  let H1 = 0, H2 = 0, R1 = 0, R2 = 0;
   function hashState(state) {
     let h1 = 0, h2 = 0;
     const board = state.board;
@@ -150,6 +156,7 @@
     if (state.castling.wQ) { h1 ^= Z1[Z_CASTLE + 1]; h2 ^= Z2[Z_CASTLE + 1]; }
     if (state.castling.bK) { h1 ^= Z1[Z_CASTLE + 2]; h2 ^= Z2[Z_CASTLE + 2]; }
     if (state.castling.bQ) { h1 ^= Z1[Z_CASTLE + 3]; h2 ^= Z2[Z_CASTLE + 3]; }
+    R1 = h1 >>> 0; R2 = h2 >>> 0;
     if (state.ep !== null) { const z = Z_EP + state.ep % 8; h1 ^= Z1[z]; h2 ^= Z2[z]; }
     H1 = h1 >>> 0; H2 = h2 >>> 0;
   }
@@ -185,7 +192,9 @@
       tt: new Map(),
       killers: [],                    // per-ply [primary, secondary] packed quiet moves
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
-      histB: new Int32Array(4096)
+      histB: new Int32Array(4096),
+      gameKeys: new Set(),            // repetition keys ("r1:r2") of every game position
+      path1: [], path2: []            // repetition keys of ancestors on the current search path
     };
   }
 
@@ -227,6 +236,7 @@
   // QMAX plies so pathological lines can't run away.
   function quiesceNode(state, alpha, beta, ply, qply, ctx) {
     checkTime(ctx);
+    if (Chess.insufficientMaterial(state.board)) return 0; // dead after captures
     const turn = state.turn;
     const enemy = turn === 'w' ? 'b' : 'w';
     const kingSq = state.board.indexOf(turn + 'K');
@@ -287,16 +297,34 @@
     const fifty = state.halfmove >= 100;
     if (fifty && !Chess.isAttacked(state.board, kingSq, enemy)) return 0;
 
+    // Dead position: no sequence of moves can produce mate, so the game is
+    // drawn regardless of material count — e.g. capturing a defended rook
+    // with the last piece is worth 0, not the rook.
+    if (Chess.insufficientMaterial(state.board)) return 0;
+
+    hashState(state);
+    const h1 = H1, h2 = H2, r1 = R1, r2 = R2;
+
+    // Repetition awareness: if this position already occurred in the actual
+    // game, or earlier on the current search path, score it as the draw the
+    // opponent can steer back into (this makes perpetual check a real
+    // resource for the losing side, and repetitions unattractive for the
+    // winning side). Like all engines, this trades a little path-dependence
+    // for draw safety: a first repetition scores 0 without proving threefold.
+    if (ctx.gameKeys.has(r1 + ':' + r2)) return 0;
+    for (let j = ctx.path1.length - 1; j >= 0; j--) {
+      if (ctx.path1[j] === r1 && ctx.path2[j] === r2) return 0;
+    }
+
     // Transposition table. The halfmove clock is not part of the hash, so the
     // table is bypassed near the 50-move horizon where the clock changes the
     // score. Scores are only trusted at the SAME draft (entry.depth === depth):
-    // depth-pure values keep the search exactly equivalent to plain minimax;
-    // the stored best move is useful for ordering at any draft.
+    // depth-pure values keep the search equivalent to plain minimax (up to
+    // path-dependent repetition draws inside subtrees); the stored best move
+    // is useful for ordering at any draft.
     const useTT = state.halfmove < 90;
-    let h1 = 0, h2 = 0, ttPk = 0;
+    let ttPk = 0;
     if (useTT) {
-      hashState(state);
-      h1 = H1; h2 = H2;
       const e = ctx.tt.get(h1);
       if (e && e.h2 === h2) {
         ttPk = e.move;
@@ -317,6 +345,7 @@
     let bestPk = 0;
     let anyLegal = false;
 
+    ctx.path1.push(r1); ctx.path2.push(r2);
     for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
@@ -336,6 +365,7 @@
         break;
       }
     }
+    ctx.path1.pop(); ctx.path2.pop();
 
     if (!anyLegal) {
       if (Chess.isAttacked(state.board, kingSq, enemy)) {
@@ -360,6 +390,7 @@
       return Chess.inCheck(next, next.turn) ? (next.turn === 'w' ? -(MATE - 1) : (MATE - 1)) : 0;
     }
     if (next.halfmove >= 100) return 0;
+    if (Chess.insufficientMaterial(next.board)) return 0;
     return ctx.quiesce ? quiesceNode(next, alpha, beta, 1, 0, ctx) : evaluate(next.board);
   }
 
@@ -396,6 +427,20 @@
     if (moves.length === 0) return { move: null, depth: 0, score: 0, nodes: 0 };
     const maximizing = state.turn === 'w';
     const ctx = makeCtx(opts.quiesce, deadline);
+
+    // Seed the repetition set with every position the game has actually
+    // visited (the keys of the game's repetition table are 4-field FENs) plus
+    // the current one, so the search treats any recurrence as a draw.
+    if (opts.positions) {
+      for (const key of Object.keys(opts.positions)) {
+        if (opts.positions[key] > 0) {
+          hashState(Chess.parseFen(key));
+          ctx.gameKeys.add(R1 + ':' + R2);
+        }
+      }
+    }
+    hashState(state);
+    ctx.gameKeys.add(R1 + ':' + R2);
 
     const items = orderMoves(shuffle(moves), 0, 0, ctx, state.turn).map(function (m) {
       const next = Chess.applyMove(state, m);
