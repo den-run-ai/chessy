@@ -82,6 +82,15 @@ body {
 .board.flipped { transform: rotate(180deg); }
 .board.flipped .square { transform: rotate(180deg); }
 
+/* ARIA rows are grouping-only: their cells stay direct CSS-grid items. */
+.board-row { display: contents; }
+
+.square:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  z-index: 1;
+}
+
 .square {
   position: relative;
   border: none;

@@ -36,6 +36,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   and never disturbs the live game; after a game ends, "Review game" starts
   the replay and "Rematch" starts over. Undo during an AI search cancels the
   search and takes back the triggering move.
+- **Accessibility** — the board is an ARIA grid (rows/gridcells) with a single
+  roving tab stop: Tab enters the board once, arrow keys move square to square
+  (directions follow the visual board, also when flipped), Home/End jump to
+  row edges, Enter/Space selects and moves. Every square announces its name,
+  piece and state (selected, legal move, capture available, in check,
+  last move) to assistive technology.
 - **Persistence** — the game is saved to `localStorage`, so it survives
   reloads and app restarts.
 - **PGN export** — save the game in standard PGN, plain or with an embedded

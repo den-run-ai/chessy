@@ -16,6 +16,7 @@
   };
   const STORAGE_KEY = 'chessy-game-v1';
   const AI_DELAY_MS = 250;
+  const PIECE_NAMES = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king' };
 
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
@@ -87,36 +88,58 @@
     aiPending = null;
   }
 
-  // ---- Setup board DOM (64 cells, order = board index a8..h1) ----
+  // ---- Setup board DOM (8 rows × 8 cells, order = board index a8..h1) ----
+  // ARIA grid pattern: the board is a role=grid of role=row/role=gridcell
+  // with a single roving tab stop — Tab enters the board once, arrow keys
+  // move within it (see the board keydown handler). Row wrappers use
+  // display:contents so the squares stay direct CSS-grid items.
+  let focusSquare = 52; // e2 — a natural first piece for White
+
   function buildBoard() {
     boardEl.innerHTML = '';
     squares = [];
-    for (let i = 0; i < 64; i++) {
-      const cell = document.createElement('button');
-      const r = Math.floor(i / 8), c = i % 8;
-      cell.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
-      cell.dataset.index = i;
-      cell.setAttribute('aria-label', Chess.sqName(i));
-      cell.addEventListener('click', function () { onSquareClick(i); });
-      // Coordinate labels on the edge squares.
-      if (c === 0) {
-        const rank = document.createElement('span');
-        rank.className = 'coord rank';
-        rank.textContent = 8 - r;
-        cell.appendChild(rank);
+    for (let r = 0; r < 8; r++) {
+      const row = document.createElement('div');
+      row.className = 'board-row';
+      row.setAttribute('role', 'row');
+      for (let c = 0; c < 8; c++) {
+        const i = r * 8 + c;
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+        cell.dataset.index = i;
+        cell.setAttribute('role', 'gridcell');
+        cell.setAttribute('aria-label', Chess.sqName(i));
+        cell.tabIndex = i === focusSquare ? 0 : -1;
+        cell.addEventListener('click', function () { onSquareClick(i); });
+        // Coordinate labels on the edge squares.
+        if (c === 0) {
+          const rank = document.createElement('span');
+          rank.className = 'coord rank';
+          rank.textContent = 8 - r;
+          cell.appendChild(rank);
+        }
+        if (r === 7) {
+          const file = document.createElement('span');
+          file.className = 'coord file';
+          file.textContent = 'abcdefgh'[c];
+          cell.appendChild(file);
+        }
+        const glyph = document.createElement('span');
+        glyph.className = 'piece';
+        cell.appendChild(glyph);
+        row.appendChild(cell);
+        squares.push(cell);
       }
-      if (r === 7) {
-        const file = document.createElement('span');
-        file.className = 'coord file';
-        file.textContent = 'abcdefgh'[c];
-        cell.appendChild(file);
-      }
-      const glyph = document.createElement('span');
-      glyph.className = 'piece';
-      cell.appendChild(glyph);
-      boardEl.appendChild(cell);
-      squares.push(cell);
+      boardEl.appendChild(row);
     }
+  }
+
+  function setFocusSquare(i, focus) {
+    squares[focusSquare].tabIndex = -1;
+    focusSquare = i;
+    squares[i].tabIndex = 0;
+    if (focus) squares[i].focus();
   }
 
   function humanColors() {
@@ -159,6 +182,16 @@
       const target = legal.find(function (m) { return m.to === i; });
       cell.classList.toggle('hint', !!target && !state.board[i]);
       cell.classList.toggle('hint-capture', !!target && !!state.board[i]);
+
+      // Announce square, piece, and interaction state to assistive tech.
+      let label = Chess.sqName(i);
+      label += p ? ', ' + (p[0] === 'w' ? 'white' : 'black') + ' ' + PIECE_NAMES[p[1]] : ', empty';
+      if (!viewing && i === selected) label += ', selected';
+      if (target) label += state.board[i] ? ', capture available' : ', legal move';
+      if (i === kingInCheck) label += ', in check';
+      if (lastMove && (i === lastMove.from || i === lastMove.to)) label += ', last move';
+      cell.setAttribute('aria-label', label);
+      cell.setAttribute('aria-selected', (!viewing && i === selected) ? 'true' : 'false');
     }
     boardEl.classList.toggle('flipped', flipped);
 
@@ -232,7 +265,30 @@
   }
 
   // ---- Interaction ----
+  // Arrow-key navigation within the board (WAI grid pattern): the roving tab
+  // stop follows the focused square, directions match the VISUAL board (so
+  // they invert when flipped), Home/End jump to the row edges. Handled keys
+  // stop propagating so the document-level replay bindings don't also fire.
+  boardEl.addEventListener('keydown', function (e) {
+    const t = e.target;
+    if (!t || !t.dataset || t.dataset.index === undefined) return;
+    const i = Number(t.dataset.index);
+    let r = Math.floor(i / 8), c = i % 8;
+    const dir = flipped ? -1 : 1;
+    if (e.key === 'ArrowUp') r -= dir;
+    else if (e.key === 'ArrowDown') r += dir;
+    else if (e.key === 'ArrowLeft') c -= dir;
+    else if (e.key === 'ArrowRight') c += dir;
+    else if (e.key === 'Home') c = flipped ? 7 : 0;
+    else if (e.key === 'End') c = flipped ? 0 : 7;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (r >= 0 && r < 8 && c >= 0 && c < 8) setFocusSquare(r * 8 + c, true);
+  });
+
   function onSquareClick(i) {
+    setFocusSquare(i); // keep the roving tab stop on the last-touched square
     // While reviewing, a board tap returns to the live position.
     if (isViewing()) { setViewPly(null); return; }
     if (aiThinking || Chess.gameStatus(state).over) return;
@@ -396,6 +452,9 @@
   document.getElementById('gameOverReview').addEventListener('click', function () {
     gameOverDialog.close();
     setViewPly(0); // start reviewing from the first position
+    // Move focus to the forward control so arrow keys drive the replay
+    // (the dialog would otherwise hand focus back to the last board square).
+    replayFwdEl.focus();
   });
 
   document.getElementById('gameOverRematch').addEventListener('click', function () {
