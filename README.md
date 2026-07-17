@@ -74,3 +74,7 @@ node test/engine.test.js
 | `manifest.webmanifest` | PWA manifest |
 | `icons/` | App icons (generated, no external assets) |
 | `test/engine.test.js` | Engine test suite |
+
+## License
+
+[MIT](LICENSE)
