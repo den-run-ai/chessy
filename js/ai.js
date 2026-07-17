@@ -242,7 +242,8 @@
   // ---- Zobrist hashing ----
   // Two independent 32-bit hashes per position: h1 keys the table, h2 guards
   // against collisions. The halfmove clock is NOT hashed — probing/storing is
-  // skipped near the 50-move horizon instead (see searchNode).
+  // skipped whenever the remaining search could cross the 100-halfmove
+  // boundary instead (see searchNode).
   const PIECE_IDX = {
     wP: 0, wN: 1, wB: 2, wR: 3, wQ: 4, wK: 5,
     bP: 6, bN: 7, bB: 8, bR: 9, bQ: 10, bK: 11
@@ -268,12 +269,37 @@
   const Z1 = zobristTable(0x9E3779B9);
   const Z2 = zobristTable(0x85EBCA6B);
 
+  // Is an en-passant capture actually legal here? Decides whether the ep
+  // right belongs to the position's repetition identity: FIDE 9.2.3 says a
+  // phantom ep square must not distinguish otherwise-equal positions, but a
+  // legally capturable one must. Mirrors Chess.positionKey()'s normalization
+  // with a targeted check (only the two adjacent pawns can ever capture).
+  function epLegalCapture(state) {
+    const e = state.ep;
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    const r = Math.floor(e / 8), c = e % 8;
+    const fromRow = turn === 'w' ? r + 1 : r - 1;
+    if (fromRow < 0 || fromRow > 7) return false;
+    const kingSq = state.board.indexOf(turn + 'K');
+    for (const dc of [-1, 1]) {
+      const fc = c + dc;
+      if (fc < 0 || fc > 7) continue;
+      const from = fromRow * 8 + fc;
+      if (state.board[from] !== turn + 'P') continue;
+      const next = Chess.applyMove(state, {
+        from: from, to: e, piece: turn + 'P', captured: enemy + 'P',
+        promotion: null, ep: true, castle: null, double: false
+      });
+      if (!Chess.isAttacked(next.board, kingSq, enemy)) return true;
+    }
+    return false;
+  }
+
   // Module-level result slots so hashing allocates nothing per node.
-  // H1/H2 include the en-passant file (transposition table identity);
-  // R1/R2 exclude it (repetition identity): a position with an ep square was
-  // just created by a double push — an irreversible pawn move — so its
-  // placement can never have occurred before, and FIDE 9.2.3 says a phantom
-  // ep right must not distinguish otherwise-equal positions.
+  // H1/H2 always include the en-passant file (transposition table identity —
+  // conservative: never merges positions that could differ). R1/R2 include it
+  // only when an ep capture is actually legal (repetition identity, matching
+  // Chess.positionKey() per FIDE 9.2.3).
   let H1 = 0, H2 = 0, R1 = 0, R2 = 0;
   function hashState(state) {
     let h1 = 0, h2 = 0;
@@ -289,14 +315,24 @@
     if (state.castling.wQ) { h1 ^= Z1[Z_CASTLE + 1]; h2 ^= Z2[Z_CASTLE + 1]; }
     if (state.castling.bK) { h1 ^= Z1[Z_CASTLE + 2]; h2 ^= Z2[Z_CASTLE + 2]; }
     if (state.castling.bQ) { h1 ^= Z1[Z_CASTLE + 3]; h2 ^= Z2[Z_CASTLE + 3]; }
+    if (state.ep !== null) {
+      const z = Z_EP + state.ep % 8;
+      H1 = (h1 ^ Z1[z]) >>> 0; H2 = (h2 ^ Z2[z]) >>> 0;
+      if (epLegalCapture(state)) { h1 ^= Z1[z]; h2 ^= Z2[z]; }
+    } else {
+      H1 = h1 >>> 0; H2 = h2 >>> 0;
+    }
     R1 = h1 >>> 0; R2 = h2 >>> 0;
-    if (state.ep !== null) { const z = Z_EP + state.ep % 8; h1 ^= Z1[z]; h2 ^= Z2[z]; }
-    H1 = h1 >>> 0; H2 = h2 >>> 0;
   }
 
   function hashKey(state) {
     hashState(state);
     return H1 + ':' + H2;
+  }
+
+  function repKey(state) {
+    hashState(state);
+    return R1 + ':' + R2;
   }
 
   // ---- Transposition table ----
@@ -326,9 +362,23 @@
       killers: [],                    // per-ply [primary, secondary] packed quiet moves
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
       histB: new Int32Array(4096),
-      gameKeys: new Set(),            // repetition keys ("r1:r2") of every game position
+      gameCounts: new Map(),          // repetition key ("r1:r2") -> occurrences in the actual game
       path1: [], path2: []            // repetition keys of ancestors on the current search path
     };
+  }
+
+  // Does the side to move have at least one legal move? Scans pseudo-legal
+  // moves and stops at the first that leaves the king safe — usually the very
+  // first one, so this is far cheaper than a full legalMoves().
+  function hasLegalMove(state, pseudo) {
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    for (const m of (pseudo || Chess.pseudoMoves(state))) {
+      const next = Chess.applyMove(state, m);
+      const ks = m.piece[1] === 'K' ? m.to : kingSq;
+      if (!Chess.isAttacked(next.board, ks, enemy)) return true;
+    }
+    return false;
   }
 
   function checkTime(ctx) {
@@ -374,8 +424,17 @@
     const enemy = turn === 'w' ? 'b' : 'w';
     const kingSq = state.board.indexOf(turn + 'K');
     const maximizing = turn === 'w';
-    if (qply >= QMAX) return evaluate(state.board);
     const inChk = Chess.isAttacked(state.board, kingSq, enemy);
+
+    // Terminal states outrank the static evaluation: a stalemate must not
+    // stand pat as if the material were live, and the 50-move draw stands
+    // unless the position is checkmate (mate takes precedence).
+    const pseudo = Chess.pseudoMoves(state);
+    if (!hasLegalMove(state, pseudo)) {
+      return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
+    }
+    if (state.halfmove >= 100) return 0;
+    if (qply >= QMAX) return evaluate(state.board);
 
     let best, standPat = 0;
     if (inChk) {
@@ -387,10 +446,8 @@
     }
 
     const DELTA = 200; // delta pruning margin
-    let moves = Chess.pseudoMoves(state);
-    if (!inChk) moves = moves.filter(function (m) { return m.captured || m.promotion; });
+    const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
 
-    let anyLegal = false;
     for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
       // Delta pruning: even winning this capture outright can't affect the
       // window, so don't bother searching it.
@@ -401,7 +458,6 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
-      anyLegal = true;
       const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx);
       if (maximizing) {
         if (score > best) best = score;
@@ -412,7 +468,6 @@
       }
       if (beta <= alpha) break;
     }
-    if (inChk && !anyLegal) return maximizing ? -(MATE - ply) : (MATE - ply); // checkmated
     return best;
   }
 
@@ -425,10 +480,11 @@
     const enemy = turn === 'w' ? 'b' : 'w';
     const kingSq = state.board.indexOf(turn + 'K');
     const maximizing = turn === 'w';
+    const inChk = Chess.isAttacked(state.board, kingSq, enemy);
     // 50-move rule — but checkmate takes precedence: a mate delivered on the
     // 100th halfmove wins, so when in check we must first look for evasions.
     const fifty = state.halfmove >= 100;
-    if (fifty && !Chess.isAttacked(state.board, kingSq, enemy)) return 0;
+    if (fifty && !inChk) return 0;
 
     // Dead position: no sequence of moves can produce mate, so the game is
     // drawn regardless of material count — e.g. capturing a defended rook
@@ -438,24 +494,37 @@
     hashState(state);
     const h1 = H1, h2 = H2, r1 = R1, r2 = R2;
 
-    // Repetition awareness: if this position already occurred in the actual
-    // game, or earlier on the current search path, score it as the draw the
-    // opponent can steer back into (this makes perpetual check a real
-    // resource for the losing side, and repetitions unattractive for the
-    // winning side). Like all engines, this trades a little path-dependence
-    // for draw safety: a first repetition scores 0 without proving threefold.
-    if (ctx.gameKeys.has(r1 + ':' + r2)) return 0;
+    // Repetition awareness. A position scores as a draw when the line makes
+    // it the third occurrence overall, or when it closes a cycle within the
+    // search itself (both occurrences inside the path — either side could
+    // then repeat a third time; this is what makes perpetual check a real
+    // resource). A single earlier occurrence in the game history alone is
+    // NOT a draw: the position would have to recur twice more.
     for (let j = ctx.path1.length - 1; j >= 0; j--) {
       if (ctx.path1[j] === r1 && ctx.path2[j] === r2) return 0;
     }
+    if ((ctx.gameCounts.get(r1 + ':' + r2) || 0) >= 2) return 0;
+
+    // Horizon: evaluate the leaf terminal-aware. A bare evaluate() cannot
+    // tell a checkmate from a quiet position or a stalemate from a won one,
+    // which let shallow searches walk into (or refuse) forced mates.
+    if (depth <= 0) {
+      if (ctx.quiesce) return quiesceNode(state, alpha, beta, ply, 0, ctx);
+      if (!hasLegalMove(state)) {
+        return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
+      }
+      if (fifty) return 0; // in check but escapable: the 50-move draw stands
+      return evaluate(state.board);
+    }
 
     // Transposition table. The halfmove clock is not part of the hash, so the
-    // table is bypassed near the 50-move horizon where the clock changes the
-    // score. Scores are only trusted at the SAME draft (entry.depth === depth):
-    // depth-pure values keep the search equivalent to plain minimax (up to
-    // path-dependent repetition draws inside subtrees); the stored best move
-    // is useful for ordering at any draft.
-    const useTT = state.halfmove < 90;
+    // table is bypassed whenever the remaining search (plus the quiescence
+    // bound) could cross the 100-halfmove boundary, where the clock changes
+    // the score. Scores are only trusted at the SAME draft (entry.depth ===
+    // depth): depth-pure values keep the search equivalent to plain minimax
+    // (up to path-dependent repetition draws inside subtrees); the stored
+    // best move is useful for ordering at any draft.
+    const useTT = state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
     let ttPk = 0;
     if (useTT) {
       const e = ctx.tt.get(h1);
@@ -484,9 +553,7 @@
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
       anyLegal = true;
-      const score = depth <= 1
-        ? (ctx.quiesce ? quiesceNode(next, alpha, beta, ply + 1, 0, ctx) : evaluate(next.board))
-        : searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+      const score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
       if (maximizing ? score > best : score < best) {
         best = score;
         bestPk = packMove(m);
@@ -501,7 +568,7 @@
     ctx.path1.pop(); ctx.path2.pop();
 
     if (!anyLegal) {
-      if (Chess.isAttacked(state.board, kingSq, enemy)) {
+      if (inChk) {
         return maximizing ? -(MATE - ply) : (MATE - ply); // checkmated (nearer mates score higher)
       }
       return 0; // stalemate
@@ -513,18 +580,6 @@
       ttStore(ctx, h1, h2, depth, ply, best, flag, bestPk);
     }
     return best;
-  }
-
-  // Terminal-aware evaluation of the position after a root move — needed at
-  // depth 1 (Easy), where a bare evaluate() can't tell a mate from a
-  // stalemate and would happily stalemate a won game.
-  function rootLeafScore(next, ctx, alpha, beta) {
-    if (Chess.legalMoves(next).length === 0) {
-      return Chess.inCheck(next, next.turn) ? (next.turn === 'w' ? -(MATE - 1) : (MATE - 1)) : 0;
-    }
-    if (next.halfmove >= 100) return 0;
-    if (Chess.insufficientMaterial(next.board)) return 0;
-    return ctx.quiesce ? quiesceNode(next, alpha, beta, 1, 0, ctx) : evaluate(next.board);
   }
 
   function shuffle(arr) {
@@ -561,19 +616,20 @@
     const maximizing = state.turn === 'w';
     const ctx = makeCtx(opts.quiesce, deadline);
 
-    // Seed the repetition set with every position the game has actually
-    // visited (the keys of the game's repetition table are 4-field FENs) plus
-    // the current one, so the search treats any recurrence as a draw.
+    // Seed the game's actual occurrence counts (the keys of the repetition
+    // table are 4-field FENs, already ep-normalized like our repetition
+    // hash), so the search knows which recurrences would be true threefolds.
     if (opts.positions) {
       for (const key of Object.keys(opts.positions)) {
         if (opts.positions[key] > 0) {
           hashState(Chess.parseFen(key));
-          ctx.gameKeys.add(R1 + ':' + R2);
+          ctx.gameCounts.set(R1 + ':' + R2, opts.positions[key]);
         }
       }
     }
     hashState(state);
-    ctx.gameKeys.add(R1 + ':' + R2);
+    const rootRep = R1 + ':' + R2;
+    if (!ctx.gameCounts.has(rootRep)) ctx.gameCounts.set(rootRep, 1);
 
     const items = orderMoves(shuffle(moves), 0, 0, ctx, state.turn).map(function (m) {
       const next = Chess.applyMove(state, m);
@@ -593,9 +649,7 @@
       for (const it of items) {
         let score;
         try {
-          score = it.repDraw ? 0
-            : d <= 1 ? rootLeafScore(it.next, ctx, alpha, beta)
-            : searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+          score = it.repDraw ? 0 : searchNode(it.next, d - 1, alpha, beta, 1, ctx);
         } catch (e) {
           if (e !== ABORT) throw e;
           aborted = true;
@@ -641,6 +695,7 @@
     think: think,
     evaluate: evaluate,
     search: search,
-    hashKey: hashKey
+    hashKey: hashKey,
+    repKey: repKey
   };
 })(typeof window !== 'undefined' ? window : globalThis);
