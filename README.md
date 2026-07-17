@@ -17,13 +17,18 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   claim-based procedure (automatic would be five-fold/75 moves).
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
   as either color. Iterative-deepening minimax with alpha-beta pruning, a
-  Zobrist-keyed transposition table, hash/killer/history move ordering, and
-  piece-square tables, running in a Web Worker so the UI never blocks. Five
-  difficulty levels: Easy/Medium/Hard/Expert are increasing search depths
-  (1/2/3/5 plies); **Master** adds quiescence search with delta pruning
-  (captures are resolved past the horizon, so it stops falling for exchange
-  tricks) and thinks on a 2-second-per-move budget, deepening as far as the
-  clock allows — typically well beyond Expert's fixed depth.
+  Zobrist-keyed transposition table, and hash/killer/history move ordering,
+  running in a Web Worker so the UI never blocks. The evaluation is tapered
+  between midgame and endgame (the king hides, then centralizes) and scores
+  mobility, doubled/isolated/passed pawns, and the king's pawn shield. The
+  search knows about draws: repetitions of game or search-path positions and
+  dead positions score 0, so it avoids repeating when winning, heads for
+  perpetual check when losing, and won't grab a last piece that kills its own
+  mating material. Five difficulty levels: Easy/Medium/Hard/Expert are
+  increasing search depths (1/2/3/5 plies); **Master** adds quiescence search
+  with delta pruning (captures are resolved past the horizon, so it stops
+  falling for exchange tricks) and thinks on a 2-second-per-move budget,
+  deepening as far as the clock allows.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker.

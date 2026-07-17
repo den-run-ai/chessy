@@ -260,6 +260,50 @@ const blackTurn = Chess.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b 
 assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(blackTurn), true,
   'side to move changes the hash');
 
+// --- Tapered evaluation ---
+console.log('tapered evaluation');
+assertEqual(ChessAI.evaluate(Chess.parseFen(Chess.START_FEN).board), 0,
+  'mirror-symmetric start position evaluates to 0');
+// Endgame king: with no material left the king should centralize — the
+// midgame table alone would score the central king NEGATIVE.
+const kCenter = Chess.parseFen('7k/8/8/3K4/8/8/8/8 w - - 0 1').board;
+const kCorner = Chess.parseFen('7k/8/8/8/8/8/8/K7 w - - 0 1').board;
+assertEqual(ChessAI.evaluate(kCenter) > ChessAI.evaluate(kCorner), true,
+  'endgame king centralization outweighs midgame king table');
+// Pawn structure: connected pawns beat doubled+isolated ones (same material).
+const doubledPawns = Chess.parseFen('4k3/8/8/8/8/3P4/3P4/4K3 w - - 0 1').board;
+const connectedPawns = Chess.parseFen('4k3/8/8/8/8/8/2PP4/4K3 w - - 0 1').board;
+assertEqual(ChessAI.evaluate(connectedPawns) > ChessAI.evaluate(doubledPawns), true,
+  'doubled+isolated pawns are penalized');
+// Passed pawn: an advanced passer scores clearly above a blockaded-file pawn.
+const passer = Chess.parseFen('4k3/8/8/3P4/8/8/8/4K3 w - - 0 1').board;
+const nonPasser = Chess.parseFen('4k3/3p4/8/3P4/8/8/8/4K3 w - - 0 1').board;
+assertEqual(ChessAI.evaluate(passer) - ChessAI.evaluate(nonPasser) > 100, true,
+  'passed pawn bonus (beyond the material difference)');
+// Mobility: identical material, but one rook is boxed in behind its pawns.
+const freeRook = Chess.parseFen('4k3/8/8/8/3R4/8/PP6/4K3 w - - 0 1').board;
+const boxedRook = Chess.parseFen('4k3/8/8/8/8/8/PP6/R3K3 w - - 0 1').board;
+assertEqual(ChessAI.evaluate(freeRook) > ChessAI.evaluate(boxedRook), true,
+  'active rook out-scores boxed-in rook via mobility');
+
+// --- Draw awareness inside the search ---
+console.log('draw-aware search');
+// Black is "winning a rook" — but KxR leaves K vs K, a dead draw worth 0.
+const deadCap = Chess.parseFen('8/8/8/8/2k5/2R5/8/2K5 b - - 0 1');
+assertEqual(ChessAI.search(deadCap, 2, -Infinity, Infinity, false), 0,
+  'capturing the last piece into a dead position scores 0');
+assertEqual(ChessAI.search(deadCap, 4, -Infinity, Infinity, false), 0,
+  'dead-position draw holds at deeper drafts');
+// Perpetual check: White is down two rooks, but Qd8+ Kh7 Qh4+ Kg8 repeats
+// the root position. Depth 4 cannot see the cycle close; depth 5+ must
+// score the perpetual as the draw it is and play it.
+const perpetual = Chess.parseFen('6k1/p4pp1/8/5P2/7Q/8/rr6/6K1 w - - 0 1');
+const perpR = ChessAI.think(perpetual, { maxDepth: 6 });
+const perpSan = Chess.toSan(perpetual, Chess.legalMoves(perpetual).find(
+  (m) => m.from === perpR.move.from && m.to === perpR.move.to));
+assertEqual(perpSan, 'Qd8+', 'losing side heads for perpetual check');
+assertEqual(perpR.score, 0, 'perpetual check scores as a draw');
+
 // --- Iterative deepening with a time budget ---
 console.log('iterative deepening');
 const midgame = Chess.parseFen('r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4');

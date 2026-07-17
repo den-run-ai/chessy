@@ -432,6 +432,7 @@
     toSan: toSan,
     toPgn: toPgn,
     inCheck: inCheck,
+    insufficientMaterial: insufficientMaterial,
     gameStatus: gameStatus
   };
 })(typeof window !== 'undefined' ? window : globalThis);
