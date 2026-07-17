@@ -80,8 +80,15 @@
   }
 
   // Position identity for threefold repetition: placement + turn + castling + ep.
+  // Per FIDE 9.2.3 the en-passant square only distinguishes positions when an
+  // en-passant capture is actually (legally) possible — otherwise a position
+  // reached after a harmless double push must equal its later recurrences.
   function positionKey(state) {
-    return toFen(state).split(' ').slice(0, 4).join(' ');
+    const parts = toFen(state).split(' ');
+    if (parts[3] !== '-' && !legalMoves(state).some(function (m) { return m.ep; })) {
+      parts[3] = '-';
+    }
+    return parts.slice(0, 4).join(' ');
   }
 
   const KNIGHT_STEPS = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
@@ -307,22 +314,21 @@
   }
 
   function insufficientMaterial(board) {
-    const minor = { w: [], b: [] };
+    const minors = [];
     for (let i = 0; i < 64; i++) {
       const p = board[i];
       if (!p || p[1] === 'K') continue;
-      if (p[1] === 'B' || p[1] === 'N') { minor[p[0]].push({ type: p[1], sq: i }); continue; }
+      if (p[1] === 'B' || p[1] === 'N') {
+        minors.push({ type: p[1], shade: (rowOf(i) + colOf(i)) % 2 });
+        continue;
+      }
       return false; // pawn, rook or queen on the board
     }
-    const all = minor.w.concat(minor.b);
-    if (all.length <= 1) return true;                    // K vs K, K+minor vs K
-    if (all.length === 2 && minor.w.length === 1 && minor.b.length === 1 &&
-        all[0].type === 'B' && all[1].type === 'B') {
-      // K+B vs K+B with bishops on same color squares
-      const shade = function (m) { return (rowOf(m.sq) + colOf(m.sq)) % 2; };
-      return shade(all[0]) === shade(all[1]);
-    }
-    return false;
+    if (minors.length <= 1) return true; // K vs K, K+minor vs K
+    // Any number of bishops (either side, incl. promoted ones) all confined to
+    // one square color can never deliver mate. Knights can (helpmates), so any
+    // knight in a multi-minor position keeps the game alive.
+    return minors.every(function (m) { return m.type === 'B' && m.shade === minors[0].shade; });
   }
 
   // Game status for a full game state (with repetition table).

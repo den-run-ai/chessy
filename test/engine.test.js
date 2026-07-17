@@ -96,8 +96,35 @@ const rookLeft = Chess.parseFen('7k/8/6K1/8/3R4/8/8/8 w - - 0 1');
 rookLeft.positions = {};
 assertEqual(Chess.gameStatus(rookLeft).over, false, 'K+R vs K is not a draw');
 
+const sameShadeBishops = Chess.parseFen('7k/8/6K1/8/2B5/8/4B3/8 w - - 0 1');
+sameShadeBishops.positions = {};
+assertEqual(Chess.gameStatus(sameShadeBishops).reason, 'insufficient material',
+  'multiple same-colored bishops vs bare king is dead');
+
+const oppShadeBishops = Chess.parseFen('7k/8/6K1/8/2B5/4B3/8/8 w - - 0 1');
+oppShadeBishops.positions = {};
+assertEqual(Chess.gameStatus(oppShadeBishops).over, false,
+  'opposite-colored bishops can still mate');
+
+const knightsAlive = Chess.parseFen('7k/8/6K1/8/3N4/3N4/8/8 w - - 0 1');
+knightsAlive.positions = {};
+assertEqual(Chess.gameStatus(knightsAlive).over, false, 'K+2N vs K is not dead (helpmate exists)');
+
 const repetition = playSans(['Nf3', 'Nf6', 'Ng1', 'Ng8', 'Nf3', 'Nf6', 'Ng1', 'Ng8']);
 assertEqual(Chess.gameStatus(repetition).reason, 'threefold repetition', 'threefold repetition detected');
+
+// FIDE 9.2.3: a phantom en-passant square (no legal ep capture) must not
+// distinguish positions. The post-a4 position recurs three times here even
+// though its first occurrence carries "a3" in the FEN.
+const epRep = playSans(['a4', 'Nf6', 'Nf3', 'Ng8', 'Ng1', 'Nf6', 'Nf3', 'Ng8', 'Ng1']);
+assertEqual(Chess.gameStatus(epRep).reason, 'threefold repetition',
+  'repetition counted across phantom ep rights');
+
+// ...but a REAL en-passant possibility must still distinguish the position.
+const epReal = Chess.parseFen('rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1');
+const epGone = Chess.parseFen('rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1');
+assertEqual(Chess.positionKey(epReal) !== Chess.positionKey(epGone), true,
+  'capturable ep square still distinguishes positions');
 
 const fifty = Chess.parseFen('7k/8/6K1/8/3R4/8/8/8 w - - 100 80');
 fifty.positions = {};
@@ -178,6 +205,42 @@ assertEqual(Chess.sqName(ChessAI.bestMove(poisoned, 1, true).to) !== 'e5', true,
 const mustEvade = Chess.parseFen('6k1/5ppp/8/8/8/8/6PP/r5K1 w - - 0 1');
 const evasion = ChessAI.bestMove(mustEvade, 3, true);
 assertEqual(Chess.sqName(evasion.to), 'f2', 'quiescent search evades check (Kf2)');
+
+// Easy (depth 1) must recognize terminal positions after its own move: here
+// Qa1 is mate, while most queen moves stalemate Black immediately.
+const easyMate = Chess.parseFen('k1K5/8/8/8/8/8/8/6Q1 w - - 0 1');
+const easyPick = ChessAI.bestMove(easyMate, 1, false);
+assertEqual(Chess.toSan(easyMate, easyPick), 'Qa1#', 'Easy finds mate and avoids stalemate');
+
+// Mate takes precedence over the 50-move rule: the mating move IS the 100th
+// halfmove, so a search that checks the clock first would refuse Ra8#.
+const mateOnClock = Chess.parseFen('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 99 1');
+for (const [d, q] of [[1, false], [3, false], [3, true]]) {
+  const m = ChessAI.bestMove(mateOnClock, d, q);
+  assertEqual(Chess.toSan(mateOnClock, m), 'Ra8#', 'mate on the 100th halfmove (depth ' + d + (q ? '+q' : '') + ')');
+}
+
+// Repetition-aware root: with the game's repetition table available, a move
+// that triggers threefold scores as a draw — the winning side must avoid it,
+// the losing side must head for it.
+const winning = Chess.parseFen('7k/8/5K2/8/8/8/8/3Q4 w - - 0 1');
+const winMoves = Chess.legalMoves(winning);
+const keep = winMoves.find(function (m) { return Chess.sqName(m.to) === 'd2'; });
+const repAll = {};
+for (const m of winMoves) {
+  if (m !== keep) repAll[Chess.positionKey(Chess.applyMove(winning, m))] = 2;
+}
+const avoided = ChessAI.bestMove(winning, 2, false, repAll);
+assertEqual(avoided.from === keep.from && avoided.to === keep.to, true,
+  'winning side avoids threefold repetition');
+
+const losing = Chess.parseFen('7k/8/5K2/8/8/8/8/3Q4 b - - 0 1');
+const loseMoves = Chess.legalMoves(losing);
+const escapeRep = {};
+escapeRep[Chess.positionKey(Chess.applyMove(losing, loseMoves[0]))] = 2;
+const sought = ChessAI.bestMove(losing, 2, false, escapeRep);
+assertEqual(sought.from === loseMoves[0].from && sought.to === loseMoves[0].to, true,
+  'losing side heads for threefold repetition');
 
 // Root-pruning regression (bug shipped with the depth speedup): with a
 // narrowed root window, fail-low moves return BOUNDS that can equal the best

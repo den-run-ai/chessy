@@ -8,9 +8,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 
 ## Features
 
-- **Complete chess rules** — legal move generation with castling, en passant,
-  and promotion; check, checkmate, and stalemate detection; draws by the
-  50-move rule, threefold repetition, and insufficient material.
+- **Chess rules** — legal move generation with castling, en passant, and
+  promotion; check, checkmate, and stalemate detection; draws by the 50-move
+  rule, threefold repetition (with FIDE 9.2.3 en-passant-rights
+  normalization), and dead positions (insufficient material, incl. any number
+  of same-colored bishops). One deliberate simplification for casual play:
+  threefold and 50-move draws are applied automatically instead of FIDE's
+  claim-based procedure (automatic would be five-fold/75 moves).
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
   as either color. Minimax with alpha-beta pruning and piece-square tables,
   running in a Web Worker so the UI never blocks. Five difficulty levels:
