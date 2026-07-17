@@ -9,7 +9,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v9';
+const CACHE = 'chessy-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -46,19 +46,25 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   // Navigations: network-first so an online visit always gets the newest
-  // HTML (which also triggers the service-worker update check).
+  // HTML (which also triggers the service-worker update check). Only the app
+  // shell itself may be stored as — or served instead of — index.html: a
+  // successful navigation to some other same-scope document (README.md,
+  // LICENSE, …) must never become the offline fallback.
   if (event.request.mode === 'navigate') {
+    const path = new URL(event.request.url).pathname;
+    const scope = new URL('./', self.location).pathname;
+    const isShell = path === scope || path === scope + 'index.html';
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           // Never cache error pages — they would poison the offline shell.
-          if (response.ok) {
+          if (response.ok && isShell) {
             const copy = response.clone();
             event.waitUntil(caches.open(CACHE).then((cache) => cache.put('./index.html', copy)));
           }
           return response;
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() => (isShell ? caches.match('./index.html') : caches.match(event.request)))
     );
     return;
   }

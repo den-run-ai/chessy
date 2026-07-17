@@ -220,6 +220,43 @@ for (const [d, q] of [[1, false], [3, false], [3, true]]) {
   assertEqual(Chess.toSan(mateOnClock, m), 'Ra8#', 'mate on the 100th halfmove (depth ' + d + (q ? '+q' : '') + ')');
 }
 
+// Terminal awareness at the search horizon (P0 regression): leaves used to
+// be evaluated statically, so a depth-2 search missed mates two plies out —
+// in this position Medium played Bxf3??, overlooking Qxd7#. Whatever move
+// the engine picks, the opponent must not have a mate in one.
+const horizon = Chess.parseFen('5bnr/1bppk1pp/np2Pp2/rN3P2/p1P3Pq/5N1P/PP1QP3/R1BK1B1R b - - 0 13');
+for (const [d, q] of [[2, false], [2, true]]) {
+  const hMove = ChessAI.bestMove(horizon, d, q);
+  const afterH = Chess.applyMove(horizon, hMove);
+  const allowsMate = Chess.legalMoves(afterH).some(function (m) {
+    const nn = Chess.applyMove(afterH, m);
+    return Chess.legalMoves(nn).length === 0 && Chess.inCheck(nn, nn.turn);
+  });
+  assertEqual(allowsMate, false,
+    'depth-' + d + (q ? '+quiescence' : '') + ' search sees mate threats at the horizon');
+}
+
+// Exact repetition counting: a position seen ONCE before (here: every reply
+// position, seeded with count 1) is not yet a draw. The old search scored
+// any recurrence as 0, which would hide this forced mate behind a "draw".
+const ladderRep = Chess.parseFen('7k/8/8/7p/8/8/8/RR4K1 w - - 0 1');
+const onceSeen = {};
+for (const m of Chess.legalMoves(ladderRep)) {
+  onceSeen[Chess.positionKey(Chess.applyMove(ladderRep, m))] = 1;
+}
+const ladderThink = ChessAI.think(ladderRep, { maxDepth: 5, positions: onceSeen });
+assertEqual(ladderThink.score > 999000, true,
+  'single prior occurrence of a position is not scored as a draw (mate still found)');
+
+// Repetition identity in the search hash mirrors Chess.positionKey():
+// capturable ep rights distinguish positions, phantom ones do not.
+assertEqual(ChessAI.repKey(epReal) !== ChessAI.repKey(epGone), true,
+  'legal ep capture distinguishes the repetition hash');
+const phantomA = Chess.parseFen('rnbqkbnr/pppppppp/8/8/P7/8/1PPPPPPP/RNBQKBNR b KQkq a3 0 1');
+const phantomB = Chess.parseFen('rnbqkbnr/pppppppp/8/8/P7/8/1PPPPPPP/RNBQKBNR b KQkq - 0 1');
+assertEqual(ChessAI.repKey(phantomA), ChessAI.repKey(phantomB),
+  'phantom ep right does not change the repetition hash');
+
 // Repetition-aware root: with the game's repetition table available, a move
 // that triggers threefold scores as a draw — the winning side must avoid it,
 // the losing side must head for it.
