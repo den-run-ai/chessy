@@ -364,6 +364,10 @@ assertEqual(ChessAI.think(repOver, { maxDepth: 3, positions: repOverTable }).mov
   'no move from a completed threefold repetition');
 assertEqual(!!ChessAI.think(repOver, { maxDepth: 2 }).move, true,
   'the same position without the repetition table still yields a move');
+// A full game state carries its own repetition table — think() must fall
+// back to it when opts.positions is not passed (codex review, PR #33).
+assertEqual(ChessAI.think(repetition, { maxDepth: 2 }).move, null,
+  'no move from a finished threefold recorded in state.positions alone');
 
 // --- Zobrist hashing (transposition table keys) ---
 console.log('zobrist hashing');

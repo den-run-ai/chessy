@@ -645,12 +645,15 @@
     opts = opts || {};
     const maxDepth = Math.max(1, opts.maxDepth || 3);
     const deadline = opts.timeMs ? Date.now() + opts.timeMs : Infinity;
+    // The game's repetition table: the explicit option wins, else a full
+    // game state carries its own (bare parseFen() states have neither).
+    const positions = opts.positions || state.positions || null;
     // A game that is already over — mate, stalemate, the 50-move rule, a
     // dead position, or a completed threefold — has no move to pick even
     // when legal moves exist. The UI never asks in that case, but analysis
     // callers must not get a "best move" from a finished game.
     const status = Chess.gameStatus(
-      Object.assign({}, state, { positions: opts.positions || {} }));
+      Object.assign({}, state, { positions: positions || {} }));
     if (status.over) return { move: null, depth: 0, score: 0, nodes: 0 };
     const moves = Chess.legalMoves(state);
     const maximizing = state.turn === 'w';
@@ -659,11 +662,11 @@
     // Seed the game's actual occurrence counts (the keys of the repetition
     // table are 4-field FENs, already ep-normalized like our repetition
     // hash), so the search knows which recurrences would be true threefolds.
-    if (opts.positions) {
-      for (const key of Object.keys(opts.positions)) {
-        if (opts.positions[key] > 0) {
+    if (positions) {
+      for (const key of Object.keys(positions)) {
+        if (positions[key] > 0) {
           hashState(Chess.parseFen(key));
-          ctx.gameCounts.set(R1 + ':' + R2, opts.positions[key]);
+          ctx.gameCounts.set(R1 + ':' + R2, positions[key]);
         }
       }
     }
@@ -682,7 +685,7 @@
       return {
         move: m,
         next: next,
-        repDraw: !!(opts.positions && (opts.positions[Chess.positionKey(next)] || 0) >= 2)
+        repDraw: !!(positions && (positions[Chess.positionKey(next)] || 0) >= 2)
       };
     });
 
