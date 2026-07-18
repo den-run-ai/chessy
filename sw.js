@@ -9,7 +9,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v16';
+const CACHE = 'chessy-v17';
 const ASSETS = [
   './',
   './index.html',
@@ -45,6 +45,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  // Every waitUntil() below is called SYNCHRONOUSLY inside this handler:
+  // async calls from promise continuations are spec-legal while the event
+  // is still extended, but older Safari threw InvalidStateError on them,
+  // which would reject respondWith() and break cached loads.
+
   // Navigations: network-first so an online visit always gets the newest
   // HTML (which also triggers the service-worker update check). Only the app
   // shell itself may be stored as — or served instead of — index.html: a
@@ -54,17 +59,16 @@ self.addEventListener('fetch', (event) => {
     const path = new URL(event.request.url).pathname;
     const scope = new URL('./', self.location).pathname;
     const isShell = path === scope || path === scope + 'index.html';
+    const network = fetch(event.request);
+    // Never cache error pages — they would poison the offline shell.
+    const store = network
+      .then((response) => (response.ok && isShell
+        ? caches.open(CACHE).then((cache) => cache.put('./index.html', response.clone()))
+        : undefined))
+      .catch(() => undefined);
+    event.waitUntil(store);
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Never cache error pages — they would poison the offline shell.
-          if (response.ok && isShell) {
-            const copy = response.clone();
-            event.waitUntil(caches.open(CACHE).then((cache) => cache.put('./index.html', copy)));
-          }
-          return response;
-        })
-        .catch(() => (isShell ? caches.match('./index.html') : caches.match(event.request)))
+      network.catch(() => (isShell ? caches.match('./index.html') : caches.match(event.request)))
     );
     return;
   }
@@ -73,20 +77,17 @@ self.addEventListener('fetch', (event) => {
 
   // Assets: stale-while-revalidate — instant from cache, refreshed in the
   // background; falls back to network when not cached, to cache when offline.
-  event.respondWith(
-    caches.match(event.request, { ignoreSearch: true }).then((cached) => {
-      const refresh = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      // Keep the SW alive until the background refresh settles.
-      event.waitUntil(refresh.then(() => undefined, () => undefined));
-      return cached || refresh;
-    })
-  );
+  const cachedPromise = caches.match(event.request, { ignoreSearch: true });
+  const refresh = cachedPromise.then((cached) =>
+    fetch(event.request)
+      .then((response) => {
+        if (!response.ok) return response;
+        return caches.open(CACHE)
+          .then((cache) => cache.put(event.request, response.clone()))
+          .then(() => response);
+      })
+      .catch(() => cached));
+  // Keep the SW alive until the background refresh (incl. cache write) settles.
+  event.waitUntil(refresh.then(() => undefined, () => undefined));
+  event.respondWith(cachedPromise.then((cached) => cached || refresh));
 });
