@@ -630,6 +630,12 @@
     hashState(state);
     const rootRep = R1 + ':' + R2;
     if (!ctx.gameCounts.has(rootRep)) ctx.gameCounts.set(rootRep, 1);
+    // The root is a permanent search-path ancestor: a line that returns to
+    // the current position closes a cycle and must score as the draw either
+    // side could then force (otherwise a perpetual that lands exactly on
+    // the root at the horizon is missed).
+    ctx.path1.push(R1);
+    ctx.path2.push(R2);
 
     const items = orderMoves(shuffle(moves), 0, 0, ctx, state.turn).map(function (m) {
       const next = Chess.applyMove(state, m);

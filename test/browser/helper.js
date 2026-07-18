@@ -28,9 +28,17 @@ function serve() {
   return http.createServer(function (req, res) {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p.endsWith('/')) p += 'index.html';
-    fs.readFile(path.join(ROOT, p), function (err, data) {
+    // Resolve and confine to the repo root: decoded ../ segments must not
+    // let the harness serve files outside the project.
+    const file = path.resolve(ROOT, '.' + p);
+    if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {
+      res.writeHead(403);
+      res.end();
+      return;
+    }
+    fs.readFile(file, function (err, data) {
       if (err) { res.writeHead(404); res.end(); return; }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream' });
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
       res.end(data);
     });
   });
@@ -44,7 +52,7 @@ function idx(name) {
 function run(name, suite) {
   (async function () {
     const server = serve();
-    await new Promise(function (r) { server.listen(0, r); });
+    await new Promise(function (r) { server.listen(0, '127.0.0.1', r); });
     const url = 'http://127.0.0.1:' + server.address().port + '/';
     const browser = await chromium().launch(
       process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});

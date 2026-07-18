@@ -82,4 +82,15 @@ require('./helper').run('replay', async function (t) {
   await page.waitForSelector('#gameOverDialog[open]');
   await page.click('#gameOverRematch');
   check(await page.locator('#moveList .ply').count() === 0, 'Rematch starts a fresh game');
+
+  // Phone-sized regression: playing moves must never scroll the PAGE (the
+  // move list sits below the fold; auto-revealing it yanked the board
+  // off-screen). Only the move list scrolls internally.
+  await page.setViewportSize({ width: 390, height: 700 });
+  await t.newGame({ mode: 'pvp' });
+  await mv('e2', 'e4'); await mv('e7', 'e5');
+  await mv('g1', 'f3'); await mv('b8', 'c6');
+  check(await page.evaluate(function () { return window.scrollY; }) === 0,
+    'playing moves never scrolls the page — the board stays put');
+  await page.setViewportSize({ width: 1280, height: 720 });
 });
