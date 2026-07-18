@@ -117,12 +117,20 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#verifyResult')).includes('Qxf7'),
     'engine verdict references the move');
 
-  // Save the lesson card.
+  // Save the lesson card — double-click on purpose: the button must
+  // disable before the async write, so only ONE card is created.
   await page.fill('#cardLesson', 'Look for forcing mates before anything else');
-  await page.click('#saveCard');
+  await page.evaluate(function () {
+    document.getElementById('saveCard').click();
+    document.getElementById('saveCard').click();
+  });
   await page.waitForSelector('#cardSaved:not([hidden])');
   check((await page.textContent('#cardSaved')).includes('due in Train'),
     'card saved and scheduled');
+  const cardCount = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (c) { return c.length; });
+  });
+  check(cardCount === 1, 'double-clicking Save creates exactly one card');
 
   // Train: the new card is due immediately; answer on the board.
   await page.click('#tabTrain');
@@ -136,11 +144,17 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#trainOutcome')).includes('✓'), 'correct answer recognized');
   check((await page.textContent('#trainLesson')).includes('Look for forcing mates'),
     'reveal repeats the saved lesson');
-  await page.click('#gradeGood');
+  // Grade with a double-click: the answer is consumed before the async
+  // write, so exactly one attempt is recorded and one rung climbed.
+  await page.evaluate(function () {
+    document.getElementById('gradeGood').click();
+    document.getElementById('gradeGood').click();
+  });
   await page.waitForSelector('#trainEmpty:not([hidden])');
   check(await page.locator('#trainCardBox').isHidden(), 'graded card leaves the due queue');
 
-  // The card is rescheduled onto the 1-day rung, with the attempt recorded.
+  // The card is rescheduled onto the 1-day rung, with the attempt recorded
+  // exactly once despite the double-click.
   const card = await page.evaluate(function () {
     return CoachStore.listCards().then(function (cards) { return cards[0]; });
   });

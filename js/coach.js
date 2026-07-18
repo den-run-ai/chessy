@@ -472,7 +472,10 @@
 
   $('saveCard').addEventListener('click', function () {
     const v = review.verdict;
-    if (!v) return;
+    if (!v || $('saveCard').disabled) return;
+    // Disable BEFORE the async write — a double-click (or a slow
+    // IndexedDB) must not create duplicate cards for the same moment.
+    $('saveCard').disabled = true;
     const now = Date.now();
     CoachStore.addCard({
       gameId: review.game.id,
@@ -496,9 +499,12 @@
       step: -1,        // -1 = not yet on the day ladder
       attempts: []
     }).then(function () {
-      $('saveCard').disabled = true;
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = 'Lesson card saved — it is due in Train now, then on the 1/3/7/14/30/90-day ladder.';
+    }).catch(function () {
+      $('saveCard').disabled = false; // failed write: let the user retry
+      $('cardSaved').hidden = false;
+      $('cardSaved').textContent = 'Could not save the card — storage unavailable.';
     });
   });
 
@@ -648,10 +654,13 @@
   function grade(g) {
     const t = train;
     if (!t || !t.card || !t.answered) return;
+    // Consume the answer BEFORE the async write: a double-click must not
+    // record two attempts or climb the ladder twice for one reveal.
+    t.answered = false;
     const now = Date.now();
     t.card.attempts.push({ at: now, grade: g, correct: !!t.lastCorrect });
     schedule(t.card, g, now);
-    CoachStore.updateCard(t.card).then(nextTrainCard);
+    CoachStore.updateCard(t.card).then(nextTrainCard, nextTrainCard);
   }
 
   $('gradeAgain').addEventListener('click', function () { grade('again'); });
