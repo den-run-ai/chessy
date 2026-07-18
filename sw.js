@@ -9,7 +9,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v18';
+const CACHE = 'chessy-v19';
 const ASSETS = [
   './',
   './index.html',
@@ -67,8 +67,15 @@ self.addEventListener('fetch', (event) => {
         : undefined))
       .catch(() => undefined);
     event.waitUntil(store);
+    // The cached shell also covers HTTP errors, not just rejected fetches:
+    // a transient 5xx from the host must not replace a working offline app
+    // with an error page. Non-shell documents keep their real status.
     event.respondWith(
-      network.catch(() => (isShell ? caches.match('./index.html') : caches.match(event.request)))
+      network
+        .then((response) => (isShell && !response.ok
+          ? caches.match('./index.html').then((cached) => cached || response)
+          : response))
+        .catch(() => (isShell ? caches.match('./index.html') : caches.match(event.request)))
     );
     return;
   }

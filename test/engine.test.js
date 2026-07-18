@@ -126,6 +126,43 @@ const epGone = Chess.parseFen('rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b 
 assertEqual(Chess.positionKey(epReal) !== Chess.positionKey(epGone), true,
   'capturable ep square still distinguishes positions');
 
+// FIDE 6.9 flag-fall: the opponent of the flagger wins unless NO series of
+// legal moves could let them checkmate. canMate() is that color-specific
+// test on the FULL position — the flagger's pieces stay on the board.
+console.log('canMate (FIDE 6.9 flag fall)');
+function canMateFen(fen, color) { return Chess.canMate(Chess.parseFen(fen).board, color); }
+// Regression: White (K+N) flags against Black (K+B). Removing the knight
+// would call K+B vs K a draw — but the knight can block its own king's
+// escape (…Kh2 Bf1 Kh1 Kg3 Ng1 Bg2#), so Black CAN mate and wins on time.
+assertEqual(canMateFen('8/8/8/8/8/5k1N/6b1/7K w - - 0 1', 'b'), true,
+  'K+B mates with help from an opposing knight (flagger keeps pieces)');
+assertEqual(canMateFen('8/8/8/8/8/5k2/6b1/7K w - - 0 1', 'b'), false,
+  'K+B vs bare K cannot mate');
+assertEqual(canMateFen('8/8/8/8/8/5k2/6n1/7K w - - 0 1', 'b'), false,
+  'K+N vs bare K cannot mate');
+assertEqual(canMateFen('8/8/8/8/8/5k2/6n1/6RK w - - 0 1', 'b'), true,
+  'K+N mates with an opposing rook to smother with');
+assertEqual(canMateFen('8/8/8/8/8/5k2/6n1/6QK w - - 0 1', 'b'), false,
+  'an opposing queen never enables the lone-knight helpmate');
+assertEqual(canMateFen('8/8/8/8/8/5k2/5nn1/7K b - - 0 1', 'b'), true,
+  'two knights can helpmate a bare king');
+assertEqual(canMateFen('8/8/8/8/8/5k2/8/6PK w - - 0 1', 'w'), true,
+  'a pawn can always mate (promotion)');
+assertEqual(canMateFen('8/8/8/8/8/5k2/8/6RK w - - 0 1', 'w'), true,
+  'a rook can always mate');
+assertEqual(canMateFen('8/8/8/8/2b5/5k2/4b3/7K b - - 0 1', 'b'), false,
+  'same-shade bishops cannot mate');
+assertEqual(canMateFen('8/8/8/8/2b5/4bk2/8/7K b - - 0 1', 'b'), true,
+  'opposite-shade bishops can mate');
+assertEqual(canMateFen('8/8/8/8/2b5/5k2/8/6BK w - - 0 1', 'b'), true,
+  'a light-square bishop mates with the OPPONENT dark-square bishop as blocker');
+assertEqual(canMateFen('8/8/8/8/8/5k2/8/7K w - - 0 1', 'w'), false,
+  'a bare king cannot mate');
+// A dead position is exactly "neither side can mate".
+assertEqual(canMateFen('7k/8/6K1/8/3N4/8/8/8 w - - 0 1', 'w') ||
+            canMateFen('7k/8/6K1/8/3N4/8/8/8 w - - 0 1', 'b'), false,
+  'K+N vs K: neither side can mate (consistent with the dead-position rule)');
+
 const fifty = Chess.parseFen('7k/8/6K1/8/3R4/8/8/8 w - - 100 80');
 fifty.positions = {};
 assertEqual(Chess.gameStatus(fifty).reason, 'fifty-move rule', '50-move rule detected');
@@ -285,6 +322,52 @@ escapeRep[Chess.positionKey(Chess.applyMove(losing, loseMoves[0]))] = 2;
 const sought = ChessAI.bestMove(losing, 2, false, escapeRep);
 assertEqual(sought.from === loseMoves[0].from && sought.to === loseMoves[0].to, true,
   'losing side heads for threefold repetition');
+
+// --- Repetition-safe transposition table ---
+// A score produced by a search-path repetition draw depends on the path's
+// ancestors, not on the position itself. It must never be cached and served
+// to a different path (P1 regression: the same position scored 0 with a
+// repetition ancestor, cached it, and kept returning the stale 0 after the
+// ancestor was gone).
+console.log('repetition-safe transposition table');
+const perpRoot = Chess.parseFen('6k1/p4pp1/8/5P2/7Q/8/rr6/6K1 w - - 0 1');
+let perpX = perpRoot; // after Qd8+ Kh7 Qh4+: Black in check, only ...Kg8
+for (const san of ['Qd8+', 'Kh7', 'Qh4+']) {
+  const legal = Chess.legalMoves(perpX);
+  perpX = Chess.applyMove(perpX, legal.find((m) => Chess.toSan(perpX, m, legal) === san));
+}
+const sharedCtx = ChessAI.makeCtx(false, Infinity);
+const withAncestor = ChessAI.search(perpX, 3, -Infinity, Infinity, false,
+  { ctx: sharedCtx, ancestors: [Chess.toFen(perpRoot)] });
+assertEqual(withAncestor, 0, 'forced return to a seeded path ancestor scores 0');
+const cleanScore = ChessAI.search(perpX, 3, -Infinity, Infinity, false, { ctx: sharedCtx });
+assertEqual(cleanScore < -300, true,
+  'same TT without the ancestor: path-dependent 0 was not cached (got ' + cleanScore + ')');
+// Sanity: a fresh context agrees with the shared-context clean search.
+assertEqual(ChessAI.search(perpX, 3, -Infinity, Infinity, false), cleanScore,
+  'clean shared-ctx score matches a fresh-ctx search');
+
+// think() must not return a "best move" from a game that is already over,
+// even when legal moves exist (the 50-move rule, dead positions and
+// completed threefolds end the game before the moves run out).
+console.log('think on finished games');
+const fiftyOver = Chess.parseFen('7k/8/6K1/8/3R4/8/8/8 w - - 100 80');
+assertEqual(ChessAI.think(fiftyOver, { maxDepth: 3 }).move, null,
+  'no move from a position drawn by the 50-move rule');
+const deadOver = Chess.parseFen('7k/8/6K1/8/3N4/8/8/8 w - - 0 1');
+assertEqual(ChessAI.think(deadOver, { maxDepth: 3 }).move, null,
+  'no move from a dead position');
+const repOver = Chess.parseFen('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');
+const repOverTable = {};
+repOverTable[Chess.positionKey(repOver)] = 3;
+assertEqual(ChessAI.think(repOver, { maxDepth: 3, positions: repOverTable }).move, null,
+  'no move from a completed threefold repetition');
+assertEqual(!!ChessAI.think(repOver, { maxDepth: 2 }).move, true,
+  'the same position without the repetition table still yields a move');
+// A full game state carries its own repetition table — think() must fall
+// back to it when opts.positions is not passed (codex review, PR #33).
+assertEqual(ChessAI.think(repetition, { maxDepth: 2 }).move, null,
+  'no move from a finished threefold recorded in state.positions alone');
 
 // --- Zobrist hashing (transposition table keys) ---
 console.log('zobrist hashing');

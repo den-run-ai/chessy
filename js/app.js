@@ -111,15 +111,14 @@
       { thinkMs: elapsed, wMs: clocks.wMs, bMs: clocks.bMs };
   }
 
-  // A flag falls: the opponent wins if any legal sequence could let them
-  // checkmate (same helpmate test as dead positions, with the flagger
-  // reduced to a bare king); otherwise the game is drawn (FIDE 6.9).
+  // A flag falls: the opponent wins if any legal sequence from the FULL
+  // current position could let them checkmate (a helpmate suffices — the
+  // flagger's own pieces may block escape squares, so they must NOT be
+  // removed before testing); otherwise the game is drawn (FIDE 6.9).
   // forfeit() only sets the state; flag() also presents the game end.
   function forfeit(color) {
-    const board = state.board.map(function (p) {
-      return p && p[0] === color && p[1] !== 'K' ? null : p;
-    });
-    timeForfeit = { color: color, draw: Chess.insufficientMaterial(board) };
+    const winner = color === 'w' ? 'b' : 'w';
+    timeForfeit = { color: color, draw: !Chess.canMate(state.board, winner) };
     clocks[color === 'w' ? 'wMs' : 'bMs'] = 0;
     if (aiThinking) cancelAi();
   }
@@ -298,15 +297,18 @@
       cell.classList.toggle('last-move',
         !!lastMove && (i === lastMove.from || i === lastMove.to));
       cell.classList.toggle('check', i === kingInCheck);
+      // A capture is a property of the MOVE, not of the destination square:
+      // en-passant captures land on an empty square and used to be shown
+      // (and announced) as quiet moves.
       const target = legal.find(function (m) { return m.to === i; });
-      cell.classList.toggle('hint', !!target && !state.board[i]);
-      cell.classList.toggle('hint-capture', !!target && !!state.board[i]);
+      cell.classList.toggle('hint', !!target && !target.captured);
+      cell.classList.toggle('hint-capture', !!target && !!target.captured);
 
       // Announce square, piece, and interaction state to assistive tech.
       let label = Chess.sqName(i);
       label += p ? ', ' + (p[0] === 'w' ? 'white' : 'black') + ' ' + PIECE_NAMES[p[1]] : ', empty';
       if (!viewing && i === selected) label += ', selected';
-      if (target) label += state.board[i] ? ', capture available' : ', legal move';
+      if (target) label += target.captured ? ', capture available' : ', legal move';
       if (i === kingInCheck) label += ', in check';
       if (lastMove && (i === lastMove.from || i === lastMove.to)) label += ', last move';
       cell.setAttribute('aria-label', label);
@@ -486,6 +488,10 @@
       const btn = document.createElement('button');
       btn.className = 'promo-btn ' + (color === 'w' ? 'white' : 'black');
       btn.textContent = GLYPHS[color + type];
+      // The glyph is the filled (visually "black") codepoint for both colors
+      // and colored via CSS, so a screen reader would announce the wrong
+      // piece color — name the action explicitly instead.
+      btn.setAttribute('aria-label', 'Promote to ' + PIECE_NAMES[type]);
       btn.addEventListener('click', function () {
         promotionDialog.close();
         cb(type);
@@ -715,6 +721,16 @@
 
   document.getElementById('exportPgn').addEventListener('click', function () { downloadPgn(false); });
   document.getElementById('exportPgnLog').addEventListener('click', function () { downloadPgn(true); });
+
+  // The 5 Hz clock tick deliberately never writes localStorage (see
+  // renderClocks), so the last full save can be many seconds stale. Persist
+  // the LIVE remaining time at the moments the page may go away — otherwise
+  // a reload refunds everything since the last render, and reloading
+  // becomes a way to win time back on a running clock.
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') save();
+  });
 
   // ---- Persistence ----
   function save() {

@@ -69,4 +69,35 @@ require('./helper').run('a11y', async function (t) {
   await mv('f2', 'f3'); await mv('e7', 'e5'); await mv('g2', 'g4'); await mv('d8', 'h4');
   const king = await page.locator(sq('e1')).getAttribute('aria-label');
   check(king.includes('white king') && king.includes('in check'), 'mated king announces "in check"');
+
+  // Game-over dialog carries an accessible name + description.
+  check(await page.locator('#gameOverDialog[aria-labelledby="gameOverTitle"]').count() === 1,
+    'game-over dialog is labelled by its title');
+  await page.click('#gameOverClose');
+
+  // En passant is announced (and highlighted) as the capture it is, even
+  // though the destination square is empty.
+  await t.newGame({});
+  await mv('e2', 'e4'); await mv('a7', 'a6'); await mv('e4', 'e5'); await mv('d7', 'd5');
+  await page.click(sq('e5'));
+  const epCell = page.locator(sq('d6'));
+  check((await epCell.getAttribute('aria-label')).includes('capture available'),
+    'en-passant destination announces "capture available"');
+  check((await epCell.getAttribute('class')).includes('hint-capture'),
+    'en-passant destination shows the capture highlight');
+
+  // Promotion buttons have explicit action names (the glyph codepoint is
+  // the "black" piece for both colors, so the text alone misleads).
+  await t.newGame({});
+  await mv('a2', 'a4'); await mv('b7', 'b5');
+  await mv('a4', 'b5'); await mv('a7', 'a6');
+  await mv('b5', 'a6'); await mv('e7', 'e6');
+  await mv('a6', 'a7'); await mv('e6', 'e5');
+  await mv('a7', 'b8'); // capture-promotion on b8
+  check(await page.locator('#promotionDialog[open]').count() === 1, 'promotion dialog opens');
+  check(await page.locator('#promotionChoices [aria-label="Promote to queen"]').count() === 1,
+    'promotion buttons are named ("Promote to queen")');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  check((await page.locator(sq('b8')).getAttribute('aria-label')).includes('white knight'),
+    'named promotion button promotes to the chosen piece');
 });
