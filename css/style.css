@@ -499,6 +499,29 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 
 .coach-side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
 
+.moment-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.moment-item {
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #4a4642;
+  border-left: 4px solid var(--highlight);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.moment-item:hover { border-color: var(--accent); }
+
 .coach-form {
   display: flex;
   flex-direction: column;

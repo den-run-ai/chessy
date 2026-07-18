@@ -41,6 +41,10 @@
   const LADDER_DAYS = [1, 3, 7, 14, 30, 90]; // fixed spaced-review ladder
   const AGAIN_DELAY = 10 * 60 * 1000;        // "Again" retries later today
   const MATE_ISH = 900000;                   // |score| above this reads as mate
+  // Score for a position that IS checkmate: the engine scores a mate found
+  // at ply p as 1000000 - p, so the delivered mate must sit at the ceiling —
+  // a smaller constant makes the mating move itself look like a huge loss.
+  const MATE_SCORE = 1000000;
 
   const $ = function (id) { return document.getElementById(id); };
 
@@ -111,13 +115,15 @@
 
   // ---- Analysis (own worker + watchdog, sync fallback) ----
   let anWorker = null, anPending = null, anId = 0;
-  const ANALYSIS = { maxDepth: 30, timeMs: 1200, quiesce: true };
+  const ANALYSIS = { maxDepth: 30, timeMs: 1200, quiesce: true }; // per-moment verification
+  const SCAN = { maxDepth: 30, timeMs: 300, quiesce: true };      // whole-game quick scan
 
-  function analyse(fen) {
+  function analyse(fen, cfg) {
+    cfg = cfg || ANALYSIS;
     return new Promise(function (resolve) {
       const id = ++anId;
       function fallback() {
-        resolve(ChessAI.think(Chess.parseFen(fen), ANALYSIS));
+        resolve(ChessAI.think(Chess.parseFen(fen), cfg));
       }
       if (typeof Worker === 'undefined') { setTimeout(fallback, 0); return; }
       if (!anWorker) {
@@ -147,11 +153,11 @@
         anPending = null;
         if (anWorker) { anWorker.terminate(); anWorker = null; }
         if (p) p.fallback();
-      }, ANALYSIS.timeMs + 4000);
+      }, cfg.timeMs + 4000);
       anPending = { id: id, resolve: resolve, fallback: fallback, watchdog: watchdog };
       anWorker.postMessage({
         id: id, fen: fen,
-        maxDepth: ANALYSIS.maxDepth, timeMs: ANALYSIS.timeMs, quiesce: ANALYSIS.quiesce
+        maxDepth: cfg.maxDepth, timeMs: cfg.timeMs, quiesce: cfg.quiesce
       });
     });
   }
@@ -243,11 +249,13 @@
       $('reviewEmpty').textContent = 'This archived game no longer replays: ' + e.message;
       return;
     }
+    scanToken++; // abandon any scan still running for the previous game
     const fens = gs.history.map(function (h) { return h.fen; });
     fens.push(Chess.toFen(gs));
     review = { game: game, gs: gs, fens: fens, ply: 0, flagged: null, verdict: null };
     $('gameListWrap').hidden = true;
     $('reviewFlow').hidden = false;
+    renderScan(review);
     renderReview();
   }
 
@@ -279,7 +287,118 @@
     renderReview();
   }
 
-  $('reviewBack').addEventListener('click', renderGameList);
+  // ---- Retroactive scan: analyse every decision, surface key moments ----
+  // The engine picks WHICH moments matter (the roadmap's "quick scan"),
+  // but stays quiet about WHY: the moment list shows the played move and
+  // what it cost — never the better move, which is revealed only after the
+  // reflection form, so the reflect-first rule holds even for scanned games.
+  let scanToken = 0;
+
+  function terminalScore(state) {
+    const s = Object.assign({}, state, { positions: {} });
+    const st = Chess.gameStatus(s);
+    if (!st.over) return null;
+    return st.result === '1-0' ? MATE_SCORE : st.result === '0-1' ? -MATE_SCORE : 0;
+  }
+
+  function runScan(r) {
+    const token = ++scanToken;
+    const n = r.gs.history.length;
+    const evals = new Array(n + 1);
+    const bestSans = new Array(n + 1);
+    $('scanGame').disabled = true;
+    $('momentList').innerHTML = '';
+    $('scanStatus').hidden = false;
+    let chain = Promise.resolve();
+    for (let k = 0; k <= n; k++) {
+      (function (k) {
+        chain = chain.then(function () {
+          if (token !== scanToken) return;
+          $('scanStatus').textContent = 'Scanning position ' + (k + 1) + '/' + (n + 1) + '…';
+          const st = Chess.parseFen(r.fens[k]);
+          const term = terminalScore(st);
+          if (term !== null) {
+            evals[k] = term;
+            bestSans[k] = null;
+            return;
+          }
+          return analyse(r.fens[k], SCAN).then(function (res) {
+            if (token !== scanToken) return;
+            evals[k] = res.score;
+            const legal = Chess.legalMoves(st);
+            const bm = res.move && legal.find(function (m) {
+              return m.from === res.move.from && m.to === res.move.to &&
+                     (m.promotion || null) === (res.move.promotion || null);
+            });
+            bestSans[k] = bm ? Chess.toSan(st, bm, legal) : null;
+          });
+        });
+      })(k);
+    }
+    chain.then(function () {
+      if (token !== scanToken) return;
+      const moments = [];
+      for (let k = 0; k < n; k++) {
+        const mover = k % 2 === 0 ? 'w' : 'b'; // games replay from the standard start
+        const loss = Math.max(0, Math.round((evals[k] - evals[k + 1]) * (mover === 'w' ? 1 : -1)));
+        if (loss >= 50) moments.push({ ply: k, loss: loss });
+      }
+      moments.sort(function (a, b) { return b.loss - a.loss; });
+      const top = moments.slice(0, 3).sort(function (a, b) { return a.ply - b.ply; });
+      r.game.scan = {
+        at: Date.now(),
+        settings: { maxDepth: SCAN.maxDepth, timeMs: SCAN.timeMs },
+        evals: evals,
+        bestSans: bestSans,
+        moments: top
+      };
+      CoachStore.updateGame(r.game).catch(function () { /* scan still usable this session */ });
+      renderScan(r);
+    });
+  }
+
+  function moveLabel(r, ply) {
+    return (Math.floor(ply / 2) + 1) + (ply % 2 === 0 ? '. ' : '… ') + r.gs.history[ply].san;
+  }
+
+  function describeLoss(loss) {
+    if (loss > MATE_ISH / 2) return 'a decisive swing — missed or allowed a mate';
+    return 'cost ≈ ' + (loss / 100).toFixed(1) + ' pawns';
+  }
+
+  function renderScan(r) {
+    const scan = r.game.scan;
+    const list = $('momentList');
+    list.innerHTML = '';
+    $('scanGame').disabled = false;
+    $('scanGame').textContent = scan ? 'Re-scan game' : 'Scan for key moments';
+    $('scanStatus').hidden = !scan;
+    if (!scan) return;
+    $('scanStatus').textContent = scan.moments.length
+      ? scan.moments.length + ' key moment' + (scan.moments.length > 1 ? 's' : '') +
+        ' found. Open one, then reflect — the engine explains after you answer.'
+      : 'Scanned — no significant swings found in this game.';
+    for (const m of scan.moments) {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'moment-item';
+      const side = m.ply % 2 === 0 ? 'White' : 'Black';
+      btn.textContent = moveLabel(r, m.ply) + ' (' + side + ') — ' + describeLoss(m.loss);
+      btn.addEventListener('click', function () { stepReview(m.ply); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    }
+  }
+
+  $('scanGame').addEventListener('click', function () {
+    if (review) runScan(review);
+  });
+
+  $('reviewBack').addEventListener('click', function () {
+    scanToken++; // abandon a running scan when leaving the game
+    renderGameList();
+  });
   $('revStart').addEventListener('click', function () { stepReview(0); });
   $('revPrev').addEventListener('click', function () { stepReview(review.ply - 1); });
   $('revNext').addEventListener('click', function () { stepReview(review.ply + 1); });
@@ -316,7 +435,7 @@
       afterState.positions = {};
       const st = Chess.gameStatus(afterState);
       const playedScoreP = st.over
-        ? Promise.resolve({ score: st.result === '1-0' ? MATE_ISH + 99 : st.result === '0-1' ? -(MATE_ISH + 99) : 0 })
+        ? Promise.resolve({ score: st.result === '1-0' ? MATE_SCORE : st.result === '0-1' ? -MATE_SCORE : 0 })
         : analyse(afterFen);
       return playedScoreP.then(function (after) {
         // Resolve the engine's move object back to a SAN on this board.

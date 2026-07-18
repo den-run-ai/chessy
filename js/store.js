@@ -64,6 +64,7 @@
   }
 
   function addGame(game) { return tx('games', 'readwrite', function (s) { return s.add(game); }); }
+  function updateGame(game) { return tx('games', 'readwrite', function (s) { return s.put(game); }); }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
 
   function listGames() {
@@ -140,6 +141,7 @@
 
   global.CoachStore = {
     addGame: addGame,
+    updateGame: updateGame,
     getGame: getGame,
     listGames: listGames,
     deleteGame: deleteGame,

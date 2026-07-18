@@ -63,6 +63,38 @@ require('./helper').run('coach', async function (t) {
   // Open the imported game (newest first) and browse to the last decision.
   await page.locator('.game-item').first().click();
   check((await page.textContent('#reviewStatus')).includes('Position 0/7'), 'review starts at ply 0');
+
+  // Retroactive scan: every decision analysed, biggest swings surfaced.
+  await page.click('#scanGame');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('scanStatus');
+    return !el.hidden && !el.textContent.includes('Scanning');
+  }, null, { timeout: 90000 });
+  check((await page.textContent('#scanStatus')).includes('key moment'), 'scan reports key moments');
+  const momentCount = await page.locator('.moment-item').count();
+  check(momentCount >= 1 && momentCount <= 3, 'between 1 and 3 key moments listed');
+  const momentText = await page.textContent('#momentList');
+  check(momentText.includes('Nf6'), 'the decisive blunder (3… Nf6) is a key moment');
+  check(!momentText.includes('Qxf7'),
+    'moment list withholds the better move until reflection');
+  check(await page.locator('#scanGame').textContent() === 'Re-scan game',
+    'scan button switches to re-scan');
+
+  // Clicking a moment jumps the browser to that decision.
+  await page.locator('.moment-item', { hasText: 'Nf6' }).click();
+  check((await page.textContent('#reviewStatus')).includes('played here: Nf6'),
+    'moment click jumps to the position before the blunder');
+
+  // The scan is persisted on the archived game record.
+  const scanned = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (games) {
+      const g = games[0];
+      return { hasScan: !!g.scan, moments: g.scan ? g.scan.moments.length : 0, evals: g.scan ? g.scan.evals.length : 0 };
+    });
+  });
+  check(scanned.hasScan && scanned.moments >= 1 && scanned.evals === 8,
+    'scan stored on the game (evals for all 8 positions)');
+
   await page.click('#revEnd');
   check((await page.textContent('#reviewStatus')).includes('end of game'), 'end position reached');
   check(await page.locator('#flagMoment').isDisabled(), 'cannot flag the end position (no move played)');
