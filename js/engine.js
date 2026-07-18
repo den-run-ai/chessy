@@ -468,6 +468,7 @@
 
     const games = [];
     let tags = {}, sans = [], result = null, inMovetext = false;
+    let depth = 0; // (variation) nesting — spans line breaks within a game
 
     function flush() {
       if (Object.keys(tags).length === 0 && sans.length === 0) return;
@@ -477,7 +478,7 @@
         result: result || tags.Result || '*',
         unsupported: tags.SetUp === '1' || !!tags.FEN
       });
-      tags = {}; sans = []; result = null; inMovetext = false;
+      tags = {}; sans = []; result = null; inMovetext = false; depth = 0;
     }
 
     for (const line of clean.split('\n')) {
@@ -487,7 +488,6 @@
         tags[tag[1]] = tag[2].replace(/\\(["\\])/g, '$1');
         continue;
       }
-      let depth = 0;
       for (const token of line.replace(/([()])/g, ' $1 ').split(/\s+/)) {
         if (!token) continue;
         if (token === '(') { depth++; continue; }

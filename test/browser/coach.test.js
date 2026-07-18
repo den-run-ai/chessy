@@ -9,8 +9,14 @@ require('./helper').run('coach', async function (t) {
   check(await page.locator('.tab').count() === 4, 'four section tabs');
   check(await page.getAttribute('#tabPlay', 'aria-current') === 'page', 'Play tab current at boot');
 
-  // A finished game is archived automatically (fool's mate, two players).
+  // A finished game is archived automatically (fool's mate, two players) —
+  // and playing the IDENTICAL game again via Rematch archives again (the
+  // dedupe keys on the game instance, not the move list).
   await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverRematch');
   await mv('f2', 'f3'); await mv('e7', 'e5');
   await mv('g2', 'g4'); await mv('d8', 'h4');
   await page.waitForSelector('#gameOverDialog[open]');
@@ -20,7 +26,8 @@ require('./helper').run('coach', async function (t) {
   check(await page.getAttribute('#tabReview', 'aria-current') === 'page', 'Review tab activates');
   check(await page.locator('#viewPlay').isHidden(), 'Play view hidden on Review tab');
   await page.waitForSelector('.game-item');
-  check(await page.locator('.game-item').count() === 1, 'finished game auto-archived');
+  check(await page.locator('.game-item').count() === 2,
+    'both finished games auto-archived (identical rematch is not deduped)');
   check((await page.textContent('.game-item')).includes('0-1'), 'archived game shows its result');
 
   // Import a PGN through the dialog; a bad PGN reports instead of breaking.
@@ -40,9 +47,9 @@ require('./helper').run('coach', async function (t) {
   await page.click('#importStart');
   await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
   await page.waitForFunction(function () {
-    return document.querySelectorAll('.game-item').length === 2;
+    return document.querySelectorAll('.game-item').length === 3;
   });
-  check(await page.locator('.game-item').count() === 2, 'imported game joins the archive');
+  check(await page.locator('.game-item').count() === 3, 'imported game joins the archive');
   check((await page.textContent('.game-item')).includes('Anna vs Ben'),
     'imported game labelled from its PGN tags');
 
@@ -51,7 +58,7 @@ require('./helper').run('coach', async function (t) {
   await page.waitForSelector('#board .square');
   await page.click('#tabReview');
   await page.waitForSelector('.game-item');
-  check(await page.locator('.game-item').count() === 2, 'archive survives reload');
+  check(await page.locator('.game-item').count() === 3, 'archive survives reload');
 
   // Open the imported game (newest first) and browse to the last decision.
   await page.locator('.game-item').first().click();
@@ -122,7 +129,7 @@ require('./helper').run('coach', async function (t) {
     dts.forEach(function (dt, i) { out[dt.textContent] = dds[i].textContent; });
     return out;
   });
-  check(stats['Games archived'] === '2', 'progress counts archived games');
+  check(stats['Games archived'] === '3', 'progress counts archived games');
   check(stats['Lesson cards'] === '1', 'progress counts lesson cards');
   check(stats['Cards due now'] === '0', 'progress counts due cards');
   check(stats['Reviews (30 days)'] === '1', 'progress counts recent reviews');
@@ -139,7 +146,7 @@ require('./helper').run('coach', async function (t) {
       });
     });
   });
-  check(roundTrip.exported === 2 && roundTrip.games === 4 && roundTrip.cards === 2,
+  check(roundTrip.exported === 3 && roundTrip.games === 6 && roundTrip.cards === 2,
     'export/import round-trip appends a full copy');
 
   page.once('dialog', function (d) { d.accept(); });

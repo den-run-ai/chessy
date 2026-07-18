@@ -170,12 +170,15 @@
   }
 
   // ---- Archive hook (called by app.js when a game ends) ----
+  // Dedupe is keyed on the game INSTANCE (app.js's gameSeq) plus the moves:
+  // the same ending re-displayed archives once, while an identical game
+  // legitimately replayed via New game/Rematch archives again.
   let lastArchiveSig = null;
 
-  function archiveGame(state, settings, status) {
+  function archiveGame(state, settings, status, gameSeq) {
     if (!state.history.length || !status.over) return Promise.resolve(null);
     const sans = state.history.map(function (h) { return h.san; });
-    const sig = sans.join(' ') + '|' + status.result;
+    const sig = (gameSeq || 0) + '|' + sans.join(' ') + '|' + status.result;
     if (sig === lastArchiveSig) return Promise.resolve(null); // re-shown end of the same game
     lastArchiveSig = sig;
     return CoachStore.addGame({

@@ -532,6 +532,12 @@ assertEqual(messy[0].sans.join(' '), 'e4 e5 Nf3 Nc6 Bc4 Bc5!? 0-0',
   'variations/NAGs/comments stripped, 0-0 kept as a token');
 assertEqual(!!Chess.replaySans(messy[0].sans), true, 'annotated SANs replay (suffixes normalized)');
 
+// Variations spanning line breaks stay variations (codex review, PR #38):
+// depth must carry across lines, or the continuation leaks into the game.
+const spanVar = Chess.parsePgn('[Event "Span"]\n\n1. e4 (1. d4\nd5 2. c4) e5 2. Nf3 *');
+assertEqual(spanVar[0].sans.join(' '), 'e4 e5 Nf3',
+  'multi-line variation fully skipped');
+
 // Multiple concatenated games split on the tag section after movetext.
 const multi = Chess.parsePgn('[Event "1"]\n\n1. e4 e5 1/2-1/2\n[Event "2"]\n\n1. d4 d5 *');
 assertEqual(multi.length, 2, 'two concatenated games parsed');

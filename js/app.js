@@ -576,8 +576,8 @@
 
   function showGameOver(status) {
     // Finished games feed the coaching archive (Review tab). Coach dedupes
-    // re-shown endings of the same game.
-    if (window.Coach) Coach.archiveGame(state, settings, status);
+    // re-shown endings of the same game instance (gameSeq).
+    if (window.Coach) Coach.archiveGame(state, settings, status, gameSeq);
     const title = status.result === '1-0' ? 'White wins!' :
                   status.result === '0-1' ? 'Black wins!' : 'Draw';
     document.getElementById('gameOverTitle').textContent = title;
@@ -587,7 +587,13 @@
   }
 
   // ---- Controls ----
+  // Increments on every New game/Rematch: the coaching archive dedupes
+  // re-shown endings by (instance, moves) — an identical game played twice
+  // is two archive entries, the same ending re-displayed is one.
+  let gameSeq = 0;
+
   function startNewGame() {
+    gameSeq++;
     cancelAi();
     state = Chess.newGameState();
     selected = null;
