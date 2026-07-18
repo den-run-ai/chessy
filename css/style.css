@@ -248,6 +248,7 @@ body {
 
 .moves {
   flex: 1;
+  position: relative; /* ply offsetTop is measured against the list itself */
   overflow-y: auto;
   max-height: 300px;
   list-style: none;

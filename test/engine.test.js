@@ -332,14 +332,17 @@ assertEqual(ChessAI.search(deadCap, 2, -Infinity, Infinity, false), 0,
 assertEqual(ChessAI.search(deadCap, 4, -Infinity, Infinity, false), 0,
   'dead-position draw holds at deeper drafts');
 // Perpetual check: White is down two rooks, but Qd8+ Kh7 Qh4+ Kg8 repeats
-// the root position. Depth 4 cannot see the cycle close; depth 5+ must
-// score the perpetual as the draw it is and play it.
+// the root position. The root counts as a search-path ancestor, so the
+// 4-ply line that lands exactly back on the root must already read as the
+// cycle it is — depth 4 AND deeper searches score the perpetual as a draw.
 const perpetual = Chess.parseFen('6k1/p4pp1/8/5P2/7Q/8/rr6/6K1 w - - 0 1');
-const perpR = ChessAI.think(perpetual, { maxDepth: 6 });
-const perpSan = Chess.toSan(perpetual, Chess.legalMoves(perpetual).find(
-  (m) => m.from === perpR.move.from && m.to === perpR.move.to));
-assertEqual(perpSan, 'Qd8+', 'losing side heads for perpetual check');
-assertEqual(perpR.score, 0, 'perpetual check scores as a draw');
+for (const d of [4, 6]) {
+  const perpR = ChessAI.think(perpetual, { maxDepth: d });
+  const perpSan = Chess.toSan(perpetual, Chess.legalMoves(perpetual).find(
+    (m) => m.from === perpR.move.from && m.to === perpR.move.to));
+  assertEqual(perpSan, 'Qd8+', 'losing side heads for perpetual check (depth ' + d + ')');
+  assertEqual(perpR.score, 0, 'perpetual check scores as a draw (depth ' + d + ')');
+}
 
 // --- Iterative deepening with a time budget ---
 console.log('iterative deepening');

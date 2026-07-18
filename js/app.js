@@ -92,14 +92,21 @@
 
   // Record think time and remaining clocks on the entry for the move that
   // was just played (state has already advanced, so the mover is the side
-  // NOT to move now).
+  // NOT to move now). If the flag had already fallen during the think —
+  // a suspended tab or the tick gap can delay detection — the move stands
+  // on the board but the game ends on time: no increment is awarded.
   function punchClock() {
     if (clocks.wMs === null) return;
     const now = Date.now();
-    const key = state.turn === 'w' ? 'bMs' : 'wMs';
+    const mover = state.turn === 'w' ? 'b' : 'w';
+    const key = mover + 'Ms';
     const elapsed = Math.max(0, now - turnStartedAt);
-    clocks[key] = Math.max(0, clocks[key] - elapsed) + tcParts().incMs;
     turnStartedAt = now;
+    if (elapsed >= clocks[key]) {
+      forfeit(mover); // zeroes the clock; caller's render/status flow shows it
+    } else {
+      clocks[key] = clocks[key] - elapsed + tcParts().incMs;
+    }
     state.history[state.history.length - 1].clock =
       { thinkMs: elapsed, wMs: clocks.wMs, bMs: clocks.bMs };
   }
@@ -107,13 +114,18 @@
   // A flag falls: the opponent wins if any legal sequence could let them
   // checkmate (same helpmate test as dead positions, with the flagger
   // reduced to a bare king); otherwise the game is drawn (FIDE 6.9).
-  function flag(color) {
+  // forfeit() only sets the state; flag() also presents the game end.
+  function forfeit(color) {
     const board = state.board.map(function (p) {
       return p && p[0] === color && p[1] !== 'K' ? null : p;
     });
     timeForfeit = { color: color, draw: Chess.insufficientMaterial(board) };
     clocks[color === 'w' ? 'wMs' : 'bMs'] = 0;
     if (aiThinking) cancelAi();
+  }
+
+  function flag(color) {
+    forfeit(color);
     selected = null;
     render();
     showGameOver(fullStatus());
@@ -390,9 +402,19 @@
       }
       moveListEl.appendChild(li);
     }
+    // Scroll only WITHIN the move list — scrollIntoView would also scroll
+    // every ancestor including the page, yanking the board off-screen on
+    // phones after every move.
     const current = moveListEl.querySelector('.current');
-    if (current) current.scrollIntoView({ block: 'nearest' });
-    else moveListEl.scrollTop = moveListEl.scrollHeight;
+    if (current) {
+      const top = current.offsetTop, bottom = top + current.offsetHeight;
+      if (top < moveListEl.scrollTop) moveListEl.scrollTop = top;
+      else if (bottom > moveListEl.scrollTop + moveListEl.clientHeight) {
+        moveListEl.scrollTop = bottom - moveListEl.clientHeight;
+      }
+    } else {
+      moveListEl.scrollTop = moveListEl.scrollHeight;
+    }
   }
 
   function renderCaptured() {
@@ -674,6 +696,11 @@
       Date: now.getFullYear() + '.' + pad2(now.getMonth() + 1) + '.' + pad2(now.getDate()),
       TimeControl: settings.timeControl === 'none' ? '-' : settings.timeControl
     }, names);
+    // The engine's PGN result only knows board-level endings; a time
+    // forfeit lives in the app, so pass the real result (and termination).
+    const st = fullStatus();
+    if (st.over) tags.Result = st.result;
+    if (timeForfeit) tags.Termination = 'time forfeit';
     const pgn = Chess.toPgn(state, tags, withLog);
 
     const a = document.createElement('a');
