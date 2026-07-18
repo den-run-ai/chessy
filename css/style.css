@@ -13,6 +13,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* The hidden attribute must always win — author display rules (flex/grid
+   panels) otherwise override the UA's [hidden] { display: none }. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
@@ -393,3 +397,152 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   color: var(--muted);
   text-align: center;
 }
+
+/* ---- App section tabs (Play / Review / Train / Progress) ---- */
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  padding-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab:hover { color: var(--text); border-color: #6a655f; }
+.tab[aria-current="page"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---- Coach views ---- */
+.coach {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.view-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.coach-note { font-size: 0.85rem; color: var(--muted); }
+.import-error { min-height: 1.2em; text-align: left; }
+
+.game-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.game-item {
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.game-item:hover { border-color: var(--accent); }
+
+.coach-board-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(240px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .coach-board-row { grid-template-columns: 1fr; }
+}
+
+.coach-board-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.board.small {
+  width: min(88vw, 380px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+/* Non-interactive review squares are divs, not buttons. */
+.board.small div.square { cursor: default; }
+
+.review-nav .btn { flex: 1; min-height: 44px; }
+.review-nav .btn:disabled { opacity: 0.35; cursor: default; }
+
+.coach-side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+
+.coach-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--bg);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  padding: 0.8rem;
+  font-size: 0.9rem;
+}
+.coach-form h3 { font-size: 1rem; }
+.coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
+
+.coach-form input[type="text"],
+.coach-form select,
+#importText {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #4a4642;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  min-height: 40px;
+}
+#importText {
+  width: 100%;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1rem;
+  font-size: 0.9rem;
+}
+.stats dt { color: var(--muted); }
+.stats dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.coach-subhead { font-size: 0.95rem; margin-top: 0.25rem; }
+
+.data-controls { margin-top: 0.5rem; }
+.btn.danger { background: #7a3a3a; color: #fff; }
+.btn.danger:hover { background: #8f4444; }

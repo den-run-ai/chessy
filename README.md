@@ -67,6 +67,19 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **PGN export** — save the game in standard PGN, plain or with an embedded
   debug log (engine depth/quiescence, think time, and the FEN before every
   move) for troubleshooting.
+- **Coaching (first slice)** — four sections: **Play · Review · Train ·
+  Progress**. Finished games are archived automatically to a versioned
+  IndexedDB store, and PGN games can be imported (tolerant parser: comments,
+  variations, NAGs, multi-game files). Review browses any archived game;
+  flagging a moment asks for your *own* reading first (threat, candidates,
+  evaluation — the engine's opinion stays hidden until you answer), then
+  verifies with the engine in a dedicated worker (best move, eval delta),
+  and saves an editable lesson card (cause + one-sentence lesson). Train
+  replays due cards on the board with a fixed 1/3/7/14/30/90-day spaced
+  ladder (Good climbs, Hard repeats, Again retries today). Progress shows
+  honest counts — cards, reviews, per-cause tallies — not a headline
+  "accuracy" number. Training data can be exported/imported as JSON and
+  deleted entirely.
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest.
@@ -99,9 +112,11 @@ node test/engine.test.js
 
 Browser suites drive the real app headless via Playwright — replay/review,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
-restore + offline status, and chess clocks (including a real flag fall and
-a reload-refund regression). Each suite gets a fresh web origin so
-service-worker and localStorage state never leak between them:
+restore + offline status, chess clocks (including a real flag fall and a
+reload-refund regression), and the coaching loop (archive, PGN import,
+reflection → verification → card, spaced review, backup round-trip). Each
+suite gets a fresh web origin so service-worker, localStorage and
+IndexedDB state never leak between them:
 
 ```sh
 npm install --no-save playwright
@@ -123,6 +138,8 @@ gated on the engine *and* browser suites.
 | `js/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
 | `js/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `js/app.js` | Board UI, game flow, persistence |
+| `js/store.js` | Versioned IndexedDB archive (games, lesson cards) |
+| `js/coach.js` | Review/Train/Progress: reflection, engine verification, spaced review |
 | `css/style.css` | Styling |
 | `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |

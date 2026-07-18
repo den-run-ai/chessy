@@ -496,6 +496,55 @@ assertEqual(pgnLog.includes('before: ' + Chess.START_FEN), true, 'debug PGN logs
 const pgnOngoing = Chess.toPgn(playSans(['e4']), {});
 assertEqual(pgnOngoing.includes('[Result "*"]'), true, 'ongoing game marked *');
 
+// --- PGN import (parsePgn + replaySans) ---
+console.log('PGN import');
+const pgnIn = Chess.parsePgn([
+  '[Event "Test"]',
+  '[White "A"]',
+  '[Black "B"]',
+  '[Result "0-1"]',
+  '',
+  '1. f3 e5 2. g4?? {a losing move} Qh4# 0-1'
+].join('\n'));
+assertEqual(pgnIn.length, 1, 'single game parsed');
+assertEqual(pgnIn[0].tags.White, 'A', 'tags parsed');
+assertEqual(pgnIn[0].sans.join(' '), 'f3 e5 g4?? Qh4#',
+  'movetext tokens (comments/numbers stripped; suffixes kept for replay to normalize)');
+assertEqual(pgnIn[0].result, '0-1', 'result parsed');
+const replayed = Chess.replaySans(pgnIn[0].sans);
+assertEqual(Chess.gameStatus(replayed).reason, 'checkmate', 'replayed game reaches checkmate');
+assertEqual(replayed.history.length, 4, 'replayed history length');
+
+// Round-trip: our own exporter parses back to the same moves.
+const rt = Chess.parsePgn(Chess.toPgn(playSans(['e4', 'e5', 'Nf3', 'Nc6']), {}));
+assertEqual(rt[0].sans.join(' '), 'e4 e5 Nf3 Nc6', 'toPgn output round-trips through parsePgn');
+
+// Messy real-world movetext: nested variations, NAGs, ; comments,
+// multi-line brace comments, 0-0 castling and suffix annotations.
+const messy = Chess.parsePgn([
+  '[Event "Messy"]',
+  '',
+  '1. e4 $1 e5 ; king pawn',
+  '2. Nf3 (2. f4 {the gambit} exf4 (2... d5)) Nc6 3. Bc4 {two',
+  'line comment} Bc5!? 4. 0-0 *'
+].join('\n'));
+assertEqual(messy[0].sans.join(' '), 'e4 e5 Nf3 Nc6 Bc4 Bc5!? 0-0',
+  'variations/NAGs/comments stripped, 0-0 kept as a token');
+assertEqual(!!Chess.replaySans(messy[0].sans), true, 'annotated SANs replay (suffixes normalized)');
+
+// Multiple concatenated games split on the tag section after movetext.
+const multi = Chess.parsePgn('[Event "1"]\n\n1. e4 e5 1/2-1/2\n[Event "2"]\n\n1. d4 d5 *');
+assertEqual(multi.length, 2, 'two concatenated games parsed');
+assertEqual(multi[1].sans.join(' '), 'd4 d5', 'second game movetext');
+assertEqual(multi[0].result, '1/2-1/2', 'first game result token');
+
+// SetUp/FEN games are flagged unsupported; illegal SANs throw.
+assertEqual(Chess.parsePgn('[SetUp "1"]\n[FEN "8/8/8/8/8/8/8/K6k w - - 0 1"]\n\n1. Ka2 *')[0].unsupported,
+  true, 'SetUp/FEN game flagged unsupported');
+let sanErr = null;
+try { Chess.replaySans(['e4', 'e4']); } catch (e) { sanErr = String(e); }
+assertEqual(sanErr !== null && sanErr.includes('ply 2'), true, 'illegal SAN reports its ply');
+
 // Clock metadata: the debug PGN embeds the mover's remaining time as a
 // standard %clk command (history[3] is Black's move, so bMs is shown).
 pgnGame.history[3].clock = { thinkMs: 2000, wMs: 305000, bMs: 298000 };

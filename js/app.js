@@ -575,6 +575,9 @@
   }
 
   function showGameOver(status) {
+    // Finished games feed the coaching archive (Review tab). Coach dedupes
+    // re-shown endings of the same game.
+    if (window.Coach) Coach.archiveGame(state, settings, status);
     const title = status.result === '1-0' ? 'White wins!' :
                   status.result === '0-1' ? 'Black wins!' : 'Draw';
     document.getElementById('gameOverTitle').textContent = title;
@@ -680,6 +683,8 @@
 
   document.addEventListener('keydown', function (e) {
     if (promotionDialog.open || gameOverDialog.open || newGameDialog.open) return;
+    // Replay keys drive the LIVE game board — not the coach views.
+    if (document.body.dataset.view && document.body.dataset.view !== 'play') return;
     const t = e.target;
     if (t && (t.tagName === 'SELECT' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (!state.history.length) return;

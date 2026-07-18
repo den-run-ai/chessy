@@ -451,6 +451,87 @@
     return head + '\n' + text + line + '\n';
   }
 
+  // Parse PGN text into games: [{ tags, sans, result }]. Tolerant of what
+  // real exports contain — brace comments (also spanning lines), `;` rest-of-
+  // line comments, nested (variations) (skipped), $n NAGs, !?/?? suffixes,
+  // move numbers, and multiple concatenated games. Games using a SetUp/FEN
+  // start position are not supported (replaySans starts from the standard
+  // initial position) and are flagged with `unsupported`.
+  function parsePgn(text) {
+    // Strip brace comments globally (they do not nest per the PGN spec) and
+    // ; comments per line, then pad parens so variations tokenize cleanly.
+    const clean = String(text)
+      .replace(/\{[^}]*\}/g, ' ')
+      .split('\n')
+      .map(function (line) { return /^\s*\[/.test(line) ? line : line.split(';')[0]; })
+      .join('\n');
+
+    const games = [];
+    let tags = {}, sans = [], result = null, inMovetext = false;
+
+    function flush() {
+      if (Object.keys(tags).length === 0 && sans.length === 0) return;
+      games.push({
+        tags: tags,
+        sans: sans,
+        result: result || tags.Result || '*',
+        unsupported: tags.SetUp === '1' || !!tags.FEN
+      });
+      tags = {}; sans = []; result = null; inMovetext = false;
+    }
+
+    for (const line of clean.split('\n')) {
+      const tag = line.match(/^\s*\[\s*(\w+)\s+"((?:[^"\\]|\\.)*)"\s*\]/);
+      if (tag) {
+        if (inMovetext) flush(); // a tag section after movetext starts the next game
+        tags[tag[1]] = tag[2].replace(/\\(["\\])/g, '$1');
+        continue;
+      }
+      let depth = 0;
+      for (const token of line.replace(/([()])/g, ' $1 ').split(/\s+/)) {
+        if (!token) continue;
+        if (token === '(') { depth++; continue; }
+        if (token === ')') { if (depth > 0) depth--; continue; }
+        if (depth > 0) continue;                          // inside a variation
+        inMovetext = true;
+        if (token === '1-0' || token === '0-1' || token === '1/2-1/2' || token === '*') {
+          result = token;
+          continue;
+        }
+        if (/^\$\d+$/.test(token)) continue;              // NAG
+        if (/^\d+\.*$/.test(token)) continue;             // move number
+        sans.push(token.replace(/^\d+\.+/, ''));          // "3.Nf3" glued form
+      }
+    }
+    flush();
+    return games;
+  }
+
+  // Normalize a SAN token for matching: engine SANs carry +/# but never
+  // !?/NAG suffixes; imports may use 0-0 castling or omit the '=' before a
+  // promotion piece.
+  function sanKey(san) {
+    return san
+      .replace(/^0-0-0/, 'O-O-O').replace(/^0-0/, 'O-O')
+      .replace(/[+#!?]+$/, '')
+      .replace(/([a-h][18])([QRBN])$/, '$1=$2');
+  }
+
+  // Replay SAN moves from the standard start position into a full game
+  // state (history + repetition table). Throws on the first move that is
+  // illegal or does not match any legal move.
+  function replaySans(sans) {
+    let s = newGameState();
+    for (let i = 0; i < sans.length; i++) {
+      const want = sanKey(sans[i]);
+      const legal = legalMoves(s);
+      const m = legal.find(function (mv) { return sanKey(toSan(s, mv, legal)) === want; });
+      if (!m) throw new Error('illegal or unknown SAN "' + sans[i] + '" at ply ' + (i + 1));
+      s = playMove(s, m);
+    }
+    return s;
+  }
+
   function undoMove(state) {
     if (!state.history.length) return state;
     const prevEntry = state.history[state.history.length - 1];
@@ -479,6 +560,8 @@
     undoMove: undoMove,
     toSan: toSan,
     toPgn: toPgn,
+    parsePgn: parsePgn,
+    replaySans: replaySans,
     inCheck: inCheck,
     insufficientMaterial: insufficientMaterial,
     canMate: canMate,
