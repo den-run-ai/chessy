@@ -56,35 +56,38 @@
     </main>
   </div>
 
+  <!-- Setup uses styled radio groups, NOT native selects: mobile browsers
+       render select menus as system popovers that can cover the browser
+       chrome and look detached from the dialog. -->
   <dialog id="newGameDialog" class="setup" aria-labelledby="newGameTitle">
     <h2 id="newGameTitle">New game</h2>
-    <label class="control">
-      <span>Opponent</span>
-      <select id="mode">
-        <option value="pvp">Two players</option>
-        <option value="ai-b" selected>Play White vs computer</option>
-        <option value="ai-w">Play Black vs computer</option>
-      </select>
-    </label>
-    <label class="control">
-      <span>Difficulty</span>
-      <select id="difficulty">
-        <option value="1">Easy</option>
-        <option value="2" selected>Medium</option>
-        <option value="3">Hard</option>
-        <option value="5">Expert</option>
-        <option value="master">Master</option>
-      </select>
-    </label>
-    <label class="control">
-      <span>Time control</span>
-      <select id="timeControl">
-        <option value="none" selected>No clocks</option>
-        <option value="300+3">Blitz 5+3</option>
-        <option value="900+10">Rapid 15+10</option>
-        <option value="1800+20">Classical 30+20</option>
-      </select>
-    </label>
+    <fieldset class="choice stack">
+      <legend>Opponent</legend>
+      <div class="choice-options">
+        <label><input type="radio" name="mode" value="pvp"><span>Two players</span></label>
+        <label><input type="radio" name="mode" value="ai-b" checked><span>White vs computer</span></label>
+        <label><input type="radio" name="mode" value="ai-w"><span>Black vs computer</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="choice">
+      <legend>Difficulty</legend>
+      <div class="choice-options">
+        <label><input type="radio" name="difficulty" value="1"><span>Easy</span></label>
+        <label><input type="radio" name="difficulty" value="2" checked><span>Medium</span></label>
+        <label><input type="radio" name="difficulty" value="3"><span>Hard</span></label>
+        <label><input type="radio" name="difficulty" value="5"><span>Expert</span></label>
+        <label><input type="radio" name="difficulty" value="master"><span>Master</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="choice">
+      <legend>Time control</legend>
+      <div class="choice-options">
+        <label><input type="radio" name="timeControl" value="none" checked><span>No clocks</span></label>
+        <label><input type="radio" name="timeControl" value="300+3"><span>5+3</span></label>
+        <label><input type="radio" name="timeControl" value="900+10"><span>15+10</span></label>
+        <label><input type="radio" name="timeControl" value="1800+20"><span>30+20</span></label>
+      </div>
+    </fieldset>
     <div class="buttons setup-actions">
       <button id="newGameStart" class="btn primary">Start game</button>
       <button id="newGameCancel" class="btn">Cancel</button>

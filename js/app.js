@@ -27,11 +27,8 @@
   const boardEl = document.getElementById('board');
   const statusEl = document.getElementById('status');
   const moveListEl = document.getElementById('moveList');
-  const modeEl = document.getElementById('mode');
-  const difficultyEl = document.getElementById('difficulty');
   const setupSummaryEl = document.getElementById('setupSummary');
   const newGameDialog = document.getElementById('newGameDialog');
-  const timeControlEl = document.getElementById('timeControl');
   const clocksEl = document.getElementById('clocks');
   const clockWhiteEl = document.getElementById('clockWhite');
   const clockBlackEl = document.getElementById('clockBlack');
@@ -52,9 +49,19 @@
   let squares = [];           // 64 DOM cells, index = board index
 
   // Game settings are chosen in the New Game dialog and fixed for the game's
-  // lifetime — the dialog's selects are just an edit buffer, so opening and
-  // cancelling it never affects the running game.
+  // lifetime — the dialog's radio groups are just an edit buffer, so opening
+  // and cancelling it never affects the running game.
   const settings = { mode: 'ai-b', difficulty: '2', timeControl: 'none' };
+
+  function getChoice(name) {
+    const el = newGameDialog.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : null;
+  }
+
+  function setChoice(name, value) {
+    const el = newGameDialog.querySelector('input[name="' + name + '"][value="' + value + '"]');
+    if (el) el.checked = true;
+  }
   const TIME_CONTROLS = { none: true, '300+3': true, '900+10': true, '1800+20': true };
 
   // ---- Chess clocks (Fischer increment) ----
@@ -564,16 +571,16 @@
   // confirmation): settings only apply when Start is pressed, so changing
   // them and cancelling never affects the running game.
   document.getElementById('newGame').addEventListener('click', function () {
-    modeEl.value = settings.mode;
-    difficultyEl.value = settings.difficulty;
-    timeControlEl.value = settings.timeControl;
+    setChoice('mode', settings.mode);
+    setChoice('difficulty', settings.difficulty);
+    setChoice('timeControl', settings.timeControl);
     newGameDialog.showModal();
   });
 
   document.getElementById('newGameStart').addEventListener('click', function () {
-    settings.mode = modeEl.value;
-    settings.difficulty = difficultyEl.value;
-    settings.timeControl = timeControlEl.value;
+    settings.mode = getChoice('mode') || settings.mode;
+    settings.difficulty = getChoice('difficulty') || settings.difficulty;
+    settings.timeControl = getChoice('timeControl') || settings.timeControl;
     newGameDialog.close();
     startNewGame();
   });
