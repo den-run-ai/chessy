@@ -449,15 +449,20 @@
     const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
 
     for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
-      // Delta pruning: even winning this capture outright can't affect the
-      // window, so don't bother searching it.
-      if (!inChk && !m.promotion) {
-        const gain = VALUES[m.captured[1]] + DELTA;
-        if (maximizing ? standPat + gain <= alpha : standPat - gain >= beta) continue;
-      }
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      // Delta pruning: even winning this capture outright can't affect the
+      // window, so don't bother searching it — UNLESS it gives check: a
+      // checking capture can be mate (e.g. Qxg7#) regardless of its
+      // material gain, so the score is not bounded by standPat + value.
+      if (!inChk && !m.promotion) {
+        const gain = VALUES[m.captured[1]] + DELTA;
+        if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
+            !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
+          continue;
+        }
+      }
       const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx);
       if (maximizing) {
         if (score > best) best = score;
