@@ -313,6 +313,46 @@
     return san;
   }
 
+  // Could `color` possibly deliver checkmate by ANY series of legal moves?
+  // The opponent may cooperate — a helpmate suffices. This is the FIDE 6.9
+  // flag-fall test: when `color`'s opponent oversteps the clock, `color`
+  // wins unless canMate() is false, in which case the game is drawn.
+  // Material-only analysis (piece positions are ignored, so an unreachable
+  // mate in a blocked fortress still counts as "possible" — conservative in
+  // the right direction: a win on time is only downgraded to a draw when NO
+  // arrangement of the material can produce mate):
+  //   - a pawn, rook or queen can always mate (pawns promote);
+  //   - a lone knight mates only with an opponent blocker that can seal the
+  //     escape square (their pawn/knight/bishop/rook — a queen can always
+  //     capture the checker or vacate, so it never enables the helpmate);
+  //   - two knights or knight+bishop can helpmate a bare king;
+  //   - bishops mate only if bishops (either side's) cover both square
+  //     colors, or a pawn/knight exists to block with;
+  //   - a bare king never mates.
+  function canMate(board, color) {
+    let ownMinors = 0, ownKnight = false, ownBishop = false;
+    let pawnOrKnight = false, oppBlocker = false;
+    let bishopShades = 0;
+    for (let i = 0; i < 64; i++) {
+      const p = board[i];
+      if (!p || p[1] === 'K') continue;
+      const own = p[0] === color, type = p[1];
+      if (own && (type === 'P' || type === 'R' || type === 'Q')) return true;
+      if (type === 'P' || type === 'N') pawnOrKnight = true;
+      if (type === 'B') bishopShades |= 1 << ((rowOf(i) + colOf(i)) % 2);
+      if (own) {
+        ownMinors++;
+        if (type === 'N') ownKnight = true;
+        if (type === 'B') ownBishop = true;
+      } else if (type !== 'Q') {
+        oppBlocker = true;
+      }
+    }
+    if (ownKnight) return ownMinors >= 2 || oppBlocker;
+    if (ownBishop) return bishopShades === 3 || pawnOrKnight;
+    return false;
+  }
+
   function insufficientMaterial(board) {
     const minors = [];
     for (let i = 0; i < 64; i++) {
@@ -441,6 +481,7 @@
     toPgn: toPgn,
     inCheck: inCheck,
     insufficientMaterial: insufficientMaterial,
+    canMate: canMate,
     gameStatus: gameStatus
   };
 })(typeof window !== 'undefined' ? window : globalThis);

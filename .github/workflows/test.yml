@@ -20,14 +20,22 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # WebKit runs alongside Chromium: the important historical failures
+        # (emoji pawns, page scroll, service-worker lifetime) were iOS/Safari.
+        engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install Playwright
-        run: npm install --no-save playwright
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run browser tests
+      - name: Install Playwright (pinned)
+        run: npm install --no-save playwright@1.61.1
+      - name: Install ${{ matrix.engine }}
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Run browser tests (${{ matrix.engine }})
         run: node test/browser/all.js
+        env:
+          BROWSER: ${{ matrix.engine }}

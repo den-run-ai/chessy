@@ -2,11 +2,13 @@
  * Shared harness for the browser test suites.
  *
  * Serves the repo over a throwaway local HTTP server (fresh origin per run,
- * so service-worker registrations never leak between suites), launches
- * headless Chromium via Playwright, and provides the common page helpers.
+ * so service-worker registrations never leak between suites), launches a
+ * headless browser via Playwright, and provides the common page helpers.
  *
- * Browser resolution: the full `playwright` package if installed (CI),
- * otherwise `playwright-core` with the executable named by $CHROMIUM_PATH.
+ * Engine selection: $BROWSER names the Playwright engine (chromium
+ * default, webkit, firefox). Package resolution: the full `playwright`
+ * package if installed (CI), otherwise `playwright-core` with the
+ * executable named by $CHROMIUM_PATH (chromium only).
  */
 'use strict';
 const http = require('http');
@@ -19,15 +21,31 @@ const MIME = {
   '.webmanifest': 'application/manifest+json', '.png': 'image/png'
 };
 
-function chromium() {
-  try { return require('playwright').chromium; }
-  catch (e) { return require('playwright-core').chromium; }
+const ENGINE = process.env.BROWSER || 'chromium';
+
+function browserType() {
+  let pw;
+  try { pw = require('playwright'); }
+  catch (e) { pw = require('playwright-core'); }
+  if (!pw[ENGINE]) throw new Error('unknown BROWSER engine: ' + ENGINE);
+  return pw[ENGINE];
 }
 
 function serve() {
   return http.createServer(function (req, res) {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p.endsWith('/')) p += 'index.html';
+    // Minimal same-origin page WITHOUT the app: tests park here to mutate
+    // localStorage (the app itself saves on pagehide, which would clobber
+    // in-place mutations before a reload could observe them).
+    if (p === '/blank') {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      // The icon link stops the browser requesting /favicon.ico (a 404
+      // there would trip the suites' no-console-errors check).
+      res.end('<!doctype html><title>blank</title>' +
+              '<link rel="icon" href="icons/icon-192.png">');
+      return;
+    }
     // Resolve and confine to the repo root: decoded ../ segments must not
     // let the harness serve files outside the project.
     const file = path.resolve(ROOT, '.' + p);
@@ -54,8 +72,9 @@ function run(name, suite) {
     const server = serve();
     await new Promise(function (r) { server.listen(0, '127.0.0.1', r); });
     const url = 'http://127.0.0.1:' + server.address().port + '/';
-    const browser = await chromium().launch(
-      process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+    const browser = await browserType().launch(
+      ENGINE === 'chromium' && process.env.CHROMIUM_PATH
+        ? { executablePath: process.env.CHROMIUM_PATH } : {});
     const page = await browser.newPage();
 
     const errors = [];
@@ -80,6 +99,16 @@ function run(name, suite) {
       // visually hidden; the label span is the tap target).
       pick: async function (name, value) {
         await page.click('input[name="' + name + '"][value="' + value + '"] + span');
+      },
+      // Rewrite the saved game from OUTSIDE the app, then boot it fresh.
+      // The app persists its live state on pagehide, so mutating
+      // localStorage and reloading in place would be clobbered by that
+      // save; park on the blank page, mutate, then load the app.
+      inject: async function (fn, arg) {
+        await page.goto(url + 'blank');
+        await page.evaluate(fn, arg);
+        await page.goto(url);
+        await page.waitForSelector('#board .square');
       },
       // Start a game through the New Game dialog; omitted options keep the
       // dialog's current values.

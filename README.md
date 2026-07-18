@@ -49,11 +49,14 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   confirmation.
 - **Chess clocks** — optional Fischer time controls (5+3, 15+10, 30+20) for
   both players including the computer. Flag falls end the game, with the
-  FIDE 6.9 nuance that a flag against a side that could never be checkmated
-  (helpmate test) is a draw, not a loss. Every move records its think time
-  and both remaining clocks, so replay shows the clocks as they stood, undo
-  rewinds them, and the debug PGN embeds standard `[%clk h:mm:ss]` comments
-  plus a `TimeControl` tag.
+  FIDE 6.9 nuance that the game is a draw — not a loss — when the flagging
+  player's opponent could not possibly checkmate by any series of legal
+  moves (a helpmate counts, tested on the full position with both sides'
+  pieces on the board). Every move records its think time and both
+  remaining clocks, so replay shows the clocks as they stood, undo rewinds
+  them, and the debug PGN embeds standard `[%clk h:mm:ss]` comments plus a
+  `TimeControl` tag. The live clock is persisted whenever the page is
+  hidden or closed, so reloading never refunds thinking time.
 - **Persistence** — the game is saved to `localStorage` and survives reloads
   and app restarts. Restores are validated by replaying every recorded move
   through the rules engine and checking the final position — a corrupted or
@@ -94,20 +97,22 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 node test/engine.test.js
 ```
 
-Browser suites drive the real app in headless Chromium via Playwright —
-replay/review, board accessibility (ARIA grid + keyboard), New Game
-setup + validated restore + offline status, and chess clocks (including a
-real flag fall). Each suite gets a fresh web origin so service-worker and
-localStorage state never leak between them:
+Browser suites drive the real app headless via Playwright — replay/review,
+board accessibility (ARIA grid + keyboard), New Game setup + validated
+restore + offline status, and chess clocks (including a real flag fall and
+a reload-refund regression). Each suite gets a fresh web origin so
+service-worker and localStorage state never leak between them:
 
 ```sh
 npm install --no-save playwright
 npx playwright install chromium
-node test/browser/all.js
+node test/browser/all.js            # BROWSER=webkit for the WebKit engine
 ```
 
 (With `playwright-core` instead, point `CHROMIUM_PATH` at a Chromium
-binary.) Both test layers run on every pull request via GitHub Actions.
+binary.) Both test layers run on every pull request via GitHub Actions —
+the browser suites on both Chromium and WebKit — and deploys to Pages are
+gated on the engine *and* browser suites.
 
 ## Structure
 
@@ -119,7 +124,7 @@ binary.) Both test layers run on every pull request via GitHub Actions.
 | `js/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `js/app.js` | Board UI, game flow, persistence |
 | `css/style.css` | Styling |
-| `sw.js` | Service worker (precache, cache-first) |
+| `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |
 | `icons/` | App icons (generated, no external assets) |
 | `test/engine.test.js` | Engine test suite |

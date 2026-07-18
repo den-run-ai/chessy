@@ -24,6 +24,12 @@ jobs:
           node-version: 22
       - name: Run engine tests
         run: node test/engine.test.js
+      - name: Install Playwright (pinned)
+        run: npm install --no-save playwright@1.61.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser tests
+        run: node test/browser/all.js
 
   deploy:
     needs: test

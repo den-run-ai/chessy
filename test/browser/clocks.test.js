@@ -41,13 +41,24 @@ require('./helper').run('clocks', async function (t) {
   const wRestored = secs(await clockText('#clockWhite'));
   check(wRestored > 295 && wRestored <= 303, 'white clock restored (' + wRestored + 's)');
 
+  // Regression: reload must not refund time that ticked since the last
+  // full render — the ticker never writes localStorage, so without the
+  // pagehide save a reload restored the stale value and handed the elapsed
+  // time back to the player.
+  const beforeWait = secs(await clockText('#clockWhite'));
+  await page.waitForTimeout(2500);
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  const afterReload = secs(await clockText('#clockWhite'));
+  check(afterReload <= beforeWait - 2,
+    'reload does not refund clock time (' + beforeWait + 's -> ' + afterReload + 's)');
+
   // Flag: give the side to move 700 ms and wait for the forfeit.
-  await page.evaluate(function () {
+  await t.inject(function () {
     const d = JSON.parse(localStorage.getItem('chessy-game-v1'));
     d.clocks.wMs = 700; // white to move after 1. e4 e5
     localStorage.setItem('chessy-game-v1', JSON.stringify(d));
   });
-  await page.reload();
   await page.waitForSelector('#gameOverDialog[open]', { timeout: 10000 });
   check((await page.textContent('#gameOverTitle')).includes('Black wins'), 'flag fall: black wins on time');
   check((await page.textContent('#gameOverDetail')).includes('time forfeit'), 'reason is time forfeit');

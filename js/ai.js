@@ -363,7 +363,8 @@
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
       histB: new Int32Array(4096),
       gameCounts: new Map(),          // repetition key ("r1:r2") -> occurrences in the actual game
-      path1: [], path2: []            // repetition keys of ancestors on the current search path
+      path1: [], path2: [],           // repetition keys of ancestors on the current search path
+      repPly: Infinity                // out-param: shallowest ancestor ply the last-searched subtree's score depended on
     };
   }
 
@@ -481,6 +482,10 @@
   // than generating fully-legal move lists at every node).
   function searchNode(state, depth, alpha, beta, ply, ctx) {
     checkTime(ctx);
+    // Repetition-dependency out-param (read by the PARENT after this call
+    // returns): the shallowest ancestor ply this node's score depended on.
+    // Infinity = the score is position-intrinsic and safe to cache.
+    ctx.repPly = Infinity;
     const turn = state.turn;
     const enemy = turn === 'w' ? 'b' : 'w';
     const kingSq = state.board.indexOf(turn + 'K');
@@ -500,14 +505,28 @@
     const h1 = H1, h2 = H2, r1 = R1, r2 = R2;
 
     // Repetition awareness. A position scores as a draw when the line makes
-    // it the third occurrence overall, or when it closes a cycle within the
-    // search itself (both occurrences inside the path — either side could
-    // then repeat a third time; this is what makes perpetual check a real
-    // resource). A single earlier occurrence in the game history alone is
-    // NOT a draw: the position would have to recur twice more.
+    // it the third occurrence against the ACTUAL game history, or when it
+    // closes a cycle within the search path. The cycle rule fires on the
+    // FIRST recurrence — the standard engine "twofold" heuristic, NOT exact
+    // threefold counting: if the line comes back around, the side preferring
+    // the draw can simply run the cycle again, and every node in between
+    // already gives the other side its chance to deviate. This is
+    // deliberately conservative (it can call a line a draw one cycle early)
+    // and is what makes perpetual check a real resource at shallow depths.
+    // A single earlier occurrence in the game history alone is NOT a draw:
+    // the position would have to recur twice more.
     for (let j = ctx.path1.length - 1; j >= 0; j--) {
-      if (ctx.path1[j] === r1 && ctx.path2[j] === r2) return 0;
+      if (ctx.path1[j] === r1 && ctx.path2[j] === r2) {
+        // This draw is a property of the PATH (the cycle closes on the
+        // ancestor at ply j), not of the position itself — flag it so no
+        // ancestor above j caches a score built on it (see ttStore below).
+        ctx.repPly = j;
+        return 0;
+      }
     }
+    // A true third occurrence against the actual game history is
+    // path-independent (the history is fixed for the whole search) and
+    // stays cacheable.
     if ((ctx.gameCounts.get(r1 + ':' + r2) || 0) >= 2) return 0;
 
     // Horizon: evaluate the leaf terminal-aware. A bare evaluate() cannot
@@ -551,6 +570,7 @@
     let best = maximizing ? -Infinity : Infinity;
     let bestPk = 0;
     let anyLegal = false;
+    let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
     ctx.path1.push(r1); ctx.path2.push(r2);
     for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn)) {
@@ -559,6 +579,7 @@
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
       anyLegal = true;
       const score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+      if (ctx.repPly < repMin) repMin = ctx.repPly;
       if (maximizing ? score > best : score < best) {
         best = score;
         bestPk = packMove(m);
@@ -571,6 +592,11 @@
       }
     }
     ctx.path1.pop(); ctx.path2.pop();
+    // Propagate the subtree's repetition dependency to the parent. A cycle
+    // whose top is at or below THIS node (repMin >= ply) is contained in the
+    // subtree — any path reaching this position again would contain the same
+    // cycle, so the score is still position-intrinsic here.
+    ctx.repPly = repMin;
 
     if (!anyLegal) {
       if (inChk) {
@@ -580,7 +606,10 @@
     }
     if (fifty) return 0; // in check but escapable: the 50-move draw stands
 
-    if (useTT) {
+    // Never cache a score that depended on ancestors ABOVE this node: a
+    // transposition reaching this position along a different path would
+    // inherit a draw (or bound) that its own history does not justify.
+    if (useTT && repMin >= ply) {
       const flag = best <= alphaOrig ? UPPER : best >= betaOrig ? LOWER : EXACT;
       ttStore(ctx, h1, h2, depth, ply, best, flag, bestPk);
     }
@@ -616,8 +645,14 @@
     opts = opts || {};
     const maxDepth = Math.max(1, opts.maxDepth || 3);
     const deadline = opts.timeMs ? Date.now() + opts.timeMs : Infinity;
+    // A game that is already over — mate, stalemate, the 50-move rule, a
+    // dead position, or a completed threefold — has no move to pick even
+    // when legal moves exist. The UI never asks in that case, but analysis
+    // callers must not get a "best move" from a finished game.
+    const status = Chess.gameStatus(
+      Object.assign({}, state, { positions: opts.positions || {} }));
+    if (status.over) return { move: null, depth: 0, score: 0, nodes: 0 };
     const moves = Chess.legalMoves(state);
-    if (moves.length === 0) return { move: null, depth: 0, score: 0, nodes: 0 };
     const maximizing = state.turn === 'w';
     const ctx = makeCtx(opts.quiesce, deadline);
 
@@ -697,8 +732,25 @@
     return think(state, { maxDepth: depth, quiesce: useQuiesce, positions: positions }).move;
   }
 
-  function search(state, depth, alpha, beta, useQuiesce) {
-    return searchNode(state, depth, alpha, beta, 0, makeCtx(useQuiesce, Infinity));
+  // Bare alpha-beta entry point. opts (mainly for tests):
+  //   ancestors — FENs seeded as search-path ancestors, so path-repetition
+  //     handling can be exercised deterministically;
+  //   ctx — reuse a context (and its transposition table) across calls.
+  function search(state, depth, alpha, beta, useQuiesce, opts) {
+    opts = opts || {};
+    const ctx = opts.ctx || makeCtx(useQuiesce, Infinity);
+    const seeded = opts.ancestors || [];
+    for (const fen of seeded) {
+      hashState(Chess.parseFen(fen));
+      ctx.path1.push(R1);
+      ctx.path2.push(R2);
+    }
+    try {
+      return searchNode(state, depth, alpha, beta, seeded.length, ctx);
+    } finally {
+      ctx.path1.length -= seeded.length;
+      ctx.path2.length -= seeded.length;
+    }
   }
 
   global.ChessAI = {
@@ -706,6 +758,7 @@
     think: think,
     evaluate: evaluate,
     search: search,
+    makeCtx: makeCtx,
     hashKey: hashKey,
     repKey: repKey
   };
