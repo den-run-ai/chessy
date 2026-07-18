@@ -113,52 +113,62 @@
     };
   }
 
-  // ---- Analysis (own worker + watchdog, sync fallback) ----
-  let anWorker = null, anPending = null, anId = 0;
+  // ---- Analysis (own worker; FIFO queue + watchdog, sync fallback) ----
+  // The worker handles ONE request at a time, so every analyse() call joins
+  // a queue — a reflection submitted while a game scan is mid-flight simply
+  // waits its turn instead of orphaning the scan's promise (which froze the
+  // UI on "Scanning…"). A watchdog terminates an alive-but-silent worker
+  // and answers synchronously, then the queue keeps draining.
+  let anWorker = null, anActive = null, anId = 0;
+  const anQueue = [];
   const ANALYSIS = { maxDepth: 30, timeMs: 1200, quiesce: true }; // per-moment verification
   const SCAN = { maxDepth: 30, timeMs: 300, quiesce: true };      // whole-game quick scan
 
   function analyse(fen, cfg) {
-    cfg = cfg || ANALYSIS;
     return new Promise(function (resolve) {
-      const id = ++anId;
-      function fallback() {
-        resolve(ChessAI.think(Chess.parseFen(fen), cfg));
-      }
-      if (typeof Worker === 'undefined') { setTimeout(fallback, 0); return; }
-      if (!anWorker) {
-        try { anWorker = new Worker('js/ai-worker.js'); } catch (e) { anWorker = null; }
-        if (anWorker) {
-          anWorker.onmessage = function (e) {
-            if (anPending && e.data.id === anPending.id) {
-              clearTimeout(anPending.watchdog);
-              const p = anPending;
-              anPending = null;
-              p.resolve(e.data);
-            }
-          };
-          anWorker.onerror = function () {
-            const p = anPending;
-            anPending = null;
-            if (anWorker) { anWorker.terminate(); anWorker = null; }
-            if (p) { clearTimeout(p.watchdog); p.fallback(); }
-          };
-        }
-      }
-      if (!anWorker) { setTimeout(fallback, 0); return; }
-      // Watchdog: a worker that stays alive but never replies must not hang
-      // the review flow — terminate it and answer synchronously.
-      const watchdog = setTimeout(function () {
-        const p = anPending;
-        anPending = null;
-        if (anWorker) { anWorker.terminate(); anWorker = null; }
-        if (p) p.fallback();
-      }, cfg.timeMs + 4000);
-      anPending = { id: id, resolve: resolve, fallback: fallback, watchdog: watchdog };
-      anWorker.postMessage({
-        id: id, fen: fen,
-        maxDepth: cfg.maxDepth, timeMs: cfg.timeMs, quiesce: cfg.quiesce
-      });
+      anQueue.push({ fen: fen, cfg: cfg || ANALYSIS, resolve: resolve });
+      pumpAnalysis();
+    });
+  }
+
+  function ensureWorker() {
+    if (anWorker || typeof Worker === 'undefined') return anWorker;
+    try { anWorker = new Worker('js/ai-worker.js'); } catch (e) { return null; }
+    anWorker.onmessage = function (e) {
+      if (anActive && e.data.id === anActive.id) settleActive(e.data);
+    };
+    anWorker.onerror = function () {
+      if (anWorker) { anWorker.terminate(); anWorker = null; }
+      if (anActive) anActive.fallback();
+    };
+    return anWorker;
+  }
+
+  function settleActive(result) {
+    const job = anActive;
+    anActive = null;
+    clearTimeout(job.watchdog);
+    job.resolve(result);
+    pumpAnalysis();
+  }
+
+  function pumpAnalysis() {
+    if (anActive || anQueue.length === 0) return;
+    const job = anQueue.shift();
+    anActive = job;
+    job.fallback = function () {
+      if (anActive !== job) return;
+      settleActive(ChessAI.think(Chess.parseFen(job.fen), job.cfg));
+    };
+    if (!ensureWorker()) { setTimeout(job.fallback, 0); return; }
+    job.id = ++anId;
+    job.watchdog = setTimeout(function () {
+      if (anWorker) { anWorker.terminate(); anWorker = null; }
+      job.fallback();
+    }, job.cfg.timeMs + 4000);
+    anWorker.postMessage({
+      id: job.id, fen: job.fen,
+      maxDepth: job.cfg.maxDepth, timeMs: job.cfg.timeMs, quiesce: job.cfg.quiesce
     });
   }
 
@@ -612,9 +622,35 @@
       trainBoard.render(t.state, {});
       return;
     }
-    // Promotions answer as a queen (a card's best move records its piece).
-    const attempt = candidates.find(function (m) { return !m.promotion || m.promotion === 'Q'; }) || candidates[0];
-    answerTrain(attempt);
+    if (candidates[0].promotion) {
+      // The player must choose the piece — auto-queening would make a card
+      // whose best move underpromotes impossible to answer correctly.
+      choosePromotion(t.state.turn, function (type) {
+        answerTrain(candidates.find(function (m) { return m.promotion === type; }));
+      });
+      return;
+    }
+    answerTrain(candidates[0]);
+  }
+
+  // Promotion picker for training answers, sharing the Play view's dialog
+  // element (each caller rebuilds the buttons, so there is no conflict).
+  function choosePromotion(color, cb) {
+    const dlg = $('promotionDialog');
+    const box = $('promotionChoices');
+    box.innerHTML = '';
+    ['Q', 'R', 'B', 'N'].forEach(function (type) {
+      const btn = document.createElement('button');
+      btn.className = 'promo-btn ' + (color === 'w' ? 'white' : 'black');
+      btn.textContent = GLYPHS[color + type];
+      btn.setAttribute('aria-label', 'Promote to ' + PIECE_NAMES[type]);
+      btn.addEventListener('click', function () {
+        dlg.close();
+        cb(type);
+      });
+      box.appendChild(btn);
+    });
+    dlg.showModal();
   }
 
   function answerTrain(attempt) {

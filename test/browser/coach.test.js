@@ -66,6 +66,17 @@ require('./helper').run('coach', async function (t) {
 
   // Retroactive scan: every decision analysed, biggest swings surfaced.
   await page.click('#scanGame');
+  // While the scan is mid-flight, flag a moment and verify it — analysis
+  // requests must queue behind each other (a second request used to orphan
+  // the scan's pending reply and freeze the UI on "Scanning…").
+  await page.click('#flagMoment'); // ply 0, played here: e4
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check((await page.textContent('#verifyResult')).includes('e4'),
+    'verification completes while a scan is running (queued, not clobbered)');
   await page.waitForFunction(function () {
     const el = document.getElementById('scanStatus');
     return !el.hidden && !el.textContent.includes('Scanning');
@@ -205,4 +216,28 @@ require('./helper').run('coach', async function (t) {
       .then(function (r) { return r[0].length + r[1].length; });
   });
   check(empty === 0, 'Delete all training data clears the archive');
+
+  // Underpromotion cards must be answerable: the promotion picker opens on
+  // a promoting answer instead of forcing the queen.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0,
+      fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'Check the underpromotion',
+      reflection: {}, createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('a7').click();
+  await tsq('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  check((await page.textContent('#trainOutcome')).includes('✓'),
+    'underpromotion card answered correctly via the promotion picker');
 });
