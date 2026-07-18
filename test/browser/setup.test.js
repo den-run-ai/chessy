@@ -9,8 +9,8 @@ require('./helper').run('setup', async function (t) {
   // Cancel must not change anything.
   await page.click('#newGame');
   check(await page.locator('#newGameDialog[open]').count() === 1, 'New game opens the setup dialog');
-  await page.selectOption('#mode', 'pvp');
-  await page.selectOption('#difficulty', 'master');
+  await t.pick('mode', 'pvp');
+  await t.pick('difficulty', 'master');
   await page.click('#newGameCancel');
   check((await page.textContent('#setupSummary')).includes('White vs computer · Medium'),
     'cancelling the dialog keeps the current settings');

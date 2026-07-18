@@ -68,14 +68,19 @@ function run(name, suite) {
         await page.click(t.sq(from));
         await page.click(t.sq(to));
       },
+      // Click a radio pill in the New Game dialog (the input itself is
+      // visually hidden; the label span is the tap target).
+      pick: async function (name, value) {
+        await page.click('input[name="' + name + '"][value="' + value + '"] + span');
+      },
       // Start a game through the New Game dialog; omitted options keep the
       // dialog's current values.
       newGame: async function (opts) {
         opts = opts || {};
         await page.click('#newGame');
-        if (opts.mode) await page.selectOption('#mode', opts.mode);
-        if (opts.difficulty) await page.selectOption('#difficulty', opts.difficulty);
-        if (opts.timeControl) await page.selectOption('#timeControl', opts.timeControl);
+        if (opts.mode) await t.pick('mode', opts.mode);
+        if (opts.difficulty) await t.pick('difficulty', opts.difficulty);
+        if (opts.timeControl) await t.pick('timeControl', opts.timeControl);
         await page.click('#newGameStart');
       }
     };

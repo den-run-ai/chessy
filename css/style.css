@@ -303,12 +303,22 @@ body {
 
 /* ---- Dialogs ---- */
 dialog {
-  border: none;
-  border-radius: 10px;
+  /* Explicit centering: some mobile browsers place open dialogs near the
+     top of the visual viewport, colliding with the browser chrome. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-width: calc(100vw - 2rem);
+  max-height: 85vh;
+  max-height: 85dvh;
+  overflow-y: auto;
+  border: 1px solid #4a4642;
+  border-radius: 12px;
   background: var(--panel);
   color: var(--text);
   padding: 1.2rem;
   text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 
@@ -332,11 +342,49 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .gameover p { color: var(--muted); margin-bottom: 1rem; }
 .gameover-actions { justify-content: center; }
 
-.setup { min-width: 260px; text-align: left; }
+.setup { width: min(92vw, 380px); text-align: left; }
 .setup h2 { margin-bottom: 0.8rem; text-align: center; }
-.setup .control { margin-bottom: 0.7rem; }
-.setup .control select { flex: 1; }
-.setup-actions { justify-content: center; margin-top: 0.9rem; }
+.setup-actions { justify-content: center; margin-top: 1rem; }
+.setup-actions .btn { min-height: 44px; flex: 1; }
+
+/* Radio groups styled as tap-friendly pills (44px targets). The inputs
+   stay in the tree (hidden, not display:none) so keyboard focus and
+   arrow-key group navigation keep working. */
+.choice { border: none; margin: 0 0 0.85rem; padding: 0; }
+.choice legend { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
+.choice-options { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.choice label { flex: 1 1 auto; display: block; }
+.choice.stack .choice-options { flex-direction: column; }
+.choice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.choice span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.8rem;
+  background: var(--bg);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.choice span:hover { border-color: #6a655f; }
+.choice input:checked + span {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.choice input:focus-visible + span {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .setup-summary {
   font-size: 0.85rem;
