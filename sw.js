@@ -9,7 +9,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v17';
+const CACHE = 'chessy-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -84,6 +84,9 @@ self.addEventListener('fetch', (event) => {
         if (!response.ok) return response;
         return caches.open(CACHE)
           .then((cache) => cache.put(event.request, response.clone()))
+          // A failed cache write (quota, unavailable storage) must not lose
+          // the good network response — only network failures fall back.
+          .catch(() => undefined)
           .then(() => response);
       })
       .catch(() => cached));

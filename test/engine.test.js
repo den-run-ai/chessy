@@ -206,6 +206,13 @@ const mustEvade = Chess.parseFen('6k1/5ppp/8/8/8/8/6PP/r5K1 w - - 0 1');
 const evasion = ChessAI.bestMove(mustEvade, 3, true);
 assertEqual(Chess.sqName(evasion.to), 'f2', 'quiescent search evades check (Kf2)');
 
+// Delta pruning must never prune a CHECKING capture: Qxg7# only wins a pawn,
+// so with a high alpha the prune condition holds — but it is mate. The
+// window is set so the old prune skipped the move and returned stand-pat.
+const checkCap = Chess.parseFen('r5k1/6p1/7Q/8/8/8/1B6/6K1 w - - 0 1');
+assertEqual(ChessAI.search(checkCap, 0, 100000, 100001, true) > 999000, true,
+  'delta pruning exempts checking captures (Qxg7# found)');
+
 // Easy (depth 1) must recognize terminal positions after its own move: here
 // Qa1 is mate, while most queen moves stalemate Black immediately.
 const easyMate = Chess.parseFen('k1K5/8/8/8/8/8/8/6Q1 w - - 0 1');
