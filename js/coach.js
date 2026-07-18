@@ -262,7 +262,16 @@
     scanToken++; // abandon any scan still running for the previous game
     const fens = gs.history.map(function (h) { return h.fen; });
     fens.push(Chess.toFen(gs));
-    review = { game: game, gs: gs, fens: fens, ply: 0, flagged: null, verdict: null };
+    // Full game states per ply (WITH repetition tables): terminal checks on
+    // "the position after move k" must see draws by threefold repetition,
+    // which a bare FEN cannot represent.
+    let s = Chess.newGameState();
+    const states = [s];
+    for (const h of gs.history) {
+      s = Chess.playMove(s, h.move);
+      states.push(s);
+    }
+    review = { game: game, gs: gs, fens: fens, states: states, ply: 0, flagged: null, verdict: null };
     $('gameListWrap').hidden = true;
     $('reviewFlow').hidden = false;
     renderScan(review);
@@ -304,9 +313,10 @@
   // reflection form, so the reflect-first rule holds even for scanned games.
   let scanToken = 0;
 
+  // `state` must be a FULL game state (repetition table included) so that
+  // draws by threefold repetition read as terminal too.
   function terminalScore(state) {
-    const s = Object.assign({}, state, { positions: {} });
-    const st = Chess.gameStatus(s);
+    const st = Chess.gameStatus(state);
     if (!st.over) return null;
     return st.result === '1-0' ? MATE_SCORE : st.result === '0-1' ? -MATE_SCORE : 0;
   }
@@ -325,8 +335,7 @@
         chain = chain.then(function () {
           if (token !== scanToken) return;
           $('scanStatus').textContent = 'Scanning position ' + (k + 1) + '/' + (n + 1) + '…';
-          const st = Chess.parseFen(r.fens[k]);
-          const term = terminalScore(st);
+          const term = terminalScore(r.states[k]);
           if (term !== null) {
             evals[k] = term;
             bestSans[k] = null;
@@ -335,6 +344,7 @@
           return analyse(r.fens[k], SCAN).then(function (res) {
             if (token !== scanToken) return;
             evals[k] = res.score;
+            const st = Chess.parseFen(r.fens[k]);
             const legal = Chess.legalMoves(st);
             const bm = res.move && legal.find(function (m) {
               return m.from === res.move.from && m.to === res.move.to &&
@@ -415,6 +425,7 @@
   $('revEnd').addEventListener('click', function () { stepReview(review.gs.history.length); });
 
   $('flagMoment').addEventListener('click', function () {
+    verifyToken++; // a new flag invalidates any in-flight verification
     review.flagged = review.ply;
     $('reflectThreat').value = '';
     $('reflectCandidates').value = '';
@@ -425,10 +436,16 @@
     $('reflectThreat').focus();
   });
 
+  // Verifications are tokenized: results landing after the user has moved
+  // to another moment (or another game) are discarded — a stale verdict
+  // must never re-enable Save and attach the wrong position to a card.
+  let verifyToken = 0;
+
   $('reflectForm').addEventListener('submit', function (e) {
     e.preventDefault();
     const r = review;
     if (r.flagged === null) return;
+    const token = ++verifyToken;
     const ply = r.flagged;
     const fenBefore = r.fens[ply];
     const entry = r.gs.history[ply];
@@ -439,15 +456,16 @@
 
     analyse(fenBefore).then(function (best) {
       // The played move's value = the value of the position it leads to.
-      // If that position is terminal the engine has nothing to search.
+      // If that position is terminal (mate, stalemate, dead, 50-move, or a
+      // COMPLETED threefold — hence the full prefix state, not a bare FEN)
+      // the engine has nothing to search.
       const afterFen = r.fens[ply + 1];
-      const afterState = Chess.parseFen(afterFen);
-      afterState.positions = {};
-      const st = Chess.gameStatus(afterState);
-      const playedScoreP = st.over
-        ? Promise.resolve({ score: st.result === '1-0' ? MATE_SCORE : st.result === '0-1' ? -MATE_SCORE : 0 })
+      const term = terminalScore(r.states[ply + 1]);
+      const playedScoreP = term !== null
+        ? Promise.resolve({ score: term })
         : analyse(afterFen);
       return playedScoreP.then(function (after) {
+        if (token !== verifyToken || review !== r || r.flagged !== ply) return; // stale
         // Resolve the engine's move object back to a SAN on this board.
         const legal = Chess.legalMoves(Chess.parseFen(fenBefore));
         const bm = best.move && legal.find(function (m) {

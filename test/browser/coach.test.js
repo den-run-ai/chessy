@@ -240,4 +240,56 @@ require('./helper').run('coach', async function (t) {
   await page.waitForSelector('#trainReveal:not([hidden])');
   check((await page.textContent('#trainOutcome')).includes('✓'),
     'underpromotion card answered correctly via the promotion picker');
+
+  // A move that COMPLETES a threefold repetition is a draw — verification
+  // must score it 0 from the prefix's repetition table, not analyse the
+  // bare FEN as an ongoing position.
+  await page.click('#tabReview');
+  await page.click('#importPgnBtn');
+  await page.fill('#importText', [
+    '[Event "Rep"]',
+    '',
+    '1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 1/2-1/2',
+    '[Event "Mate"]',
+    '[White "Anna"]',
+    '[Black "Ben"]',
+    '',
+    '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'
+  ].join('\n'));
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.locator('.game-item', { hasText: 'threefold' }).click();
+  await page.click('#revEnd');
+  await page.click('#revPrev'); // ply 7: ...Ng8 completes the threefold
+  await page.click('#flagMoment');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check((await page.textContent('#verifyResult')).indexOf('eval +0.0') !== -1 ||
+        (await page.textContent('#verifyResult')).includes('agrees'),
+    'move completing a threefold verifies against the drawn (0.0) value');
+
+  // Stale-verdict race: verify in game A, then switch to game B before the
+  // probes finish — the late result must be discarded, never re-enabling
+  // Save with the old position on the new game.
+  await page.click('#reviewBack');
+  await page.locator('.game-item', { hasText: 'threefold' }).click();
+  await page.click('#flagMoment'); // ply 0 of game A
+  await page.click('#reflectVerify');
+  await page.click('#reviewBack'); // leave immediately, probes still queued
+  await page.locator('.game-item', { hasText: 'Anna' }).click(); // game B
+  await page.click('#flagMoment');
+  await page.waitForTimeout(6000); // let game A's stale probes finish
+  check(await page.locator('#saveCard').isDisabled(),
+    'stale verification from the previous game is discarded (Save stays disabled)');
+  // ...and a fresh verification on game B still works after the discard.
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'a fresh verification after the discarded one enables Save normally');
 });
