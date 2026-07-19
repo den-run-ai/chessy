@@ -493,11 +493,16 @@
         if (token === '(') { depth++; continue; }
         if (token === ')') { if (depth > 0) depth--; continue; }
         if (depth > 0) continue;                          // inside a variation
-        inMovetext = true;
         if (token === '1-0' || token === '0-1' || token === '1/2-1/2' || token === '*') {
+          inMovetext = true;
           result = token;
           continue;
         }
+        // Movetext resuming AFTER a termination marker belongs to the NEXT
+        // game — tagless multi-game files have no tag section to trigger
+        // the flush, and without this the games merge into one.
+        if (result !== null) flush();
+        inMovetext = true;
         if (/^\$\d+$/.test(token)) continue;              // NAG
         if (/^\d+\.*$/.test(token)) continue;             // move number
         sans.push(token.replace(/^\d+\.+/, ''));          // "3.Nf3" glued form

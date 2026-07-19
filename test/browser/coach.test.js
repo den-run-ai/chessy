@@ -437,6 +437,28 @@ require('./helper').run('coach', async function (t) {
   });
   check(true, 'error card saved after cause + lesson provided');
 
+  // An imported game that CONTINUES past an engine-automatic draw (an
+  // unclaimed threefold) has moves played from positions the engine
+  // scores as over — those moments are not flaggable (analysis has no
+  // move to return; the card would be unanswerable in Train).
+  await page.click('#reviewBack');
+  await page.click('#importPgnBtn');
+  await page.fill('#importText',
+    '[White "Cont"]\n\n1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 5. Nf3 Nf6 *');
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.locator('.game-item', { hasText: 'Cont' }).click();
+  await page.click('#revEnd');
+  await page.click('#revPrev');
+  await page.click('#revPrev'); // ply 8: 5. Nf3 played FROM the completed threefold
+  check((await page.textContent('#reviewStatus')).includes('not flaggable'),
+    'status explains why a drawn-by-rule position cannot be flagged');
+  check(await page.locator('#flagMoment').isDisabled(),
+    'moves played from an engine-terminal position are not flaggable');
+  await page.click('#revPrev'); // ply 7: 4… Ng8 — position before it is NOT terminal
+  check(!(await page.locator('#flagMoment').isDisabled()),
+    'ordinary positions in the same game remain flaggable');
+
   // Archive dedupe retains EVERY ending signature per game instance:
   // finishing line A, undoing into line B, then reproducing A must not
   // archive A twice (the old single-slot dedupe only remembered B).
@@ -576,6 +598,47 @@ require('./helper').run('coach', async function (t) {
   check(await page.locator('#trainCardBox').isHidden(),
     'a cross-tab delete clears this tab’s active training card');
 
+  // A dueCards() read ALREADY IN FLIGHT when another tab deletes must be
+  // discarded — applying its pre-delete result after the reset would hand
+  // the deleted cards straight back to the grading flow. The read is
+  // artificially delayed so the delete deterministically lands inside it.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0,
+      fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now, step: -1, attempts: []
+    }).then(function () {
+      CoachStore.__realDueCards = CoachStore.dueCards;
+      CoachStore.dueCards = function (now) {
+        return CoachStore.__realDueCards(now).then(function (cards) {
+          return new Promise(function (res) {
+            setTimeout(function () { res(cards); }, 2000);
+          });
+        });
+      };
+    });
+  });
+  await page.click('#tabTrain'); // the slow read starts (resolves in ~2 s)
+  const page4 = await t.context.newPage();
+  await page4.goto(t.url);
+  await page4.waitForSelector('#board .square');
+  await page4.click('#tabProgress');
+  page4.once('dialog', function (d) { d.accept(); });
+  await page4.click('#deleteData'); // lands while the first tab's read is pending
+  await page4.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page4.close();
+  await page.waitForTimeout(2800); // the delayed read has resolved by now
+  check(await page.locator('#trainCardBox').isHidden(),
+    'a due-card read resolving after a cross-tab delete is discarded');
+  await page.evaluate(function () { CoachStore.dueCards = CoachStore.__realDueCards; });
+
   // Delete All must not be undone by a JSON restore whose file was picked
   // BEFORE the delete: the generation is captured when the file is chosen,
   // so a delete landing while the (possibly large) file is still being
@@ -651,6 +714,48 @@ require('./helper').run('coach', async function (t) {
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
 
+  // A card that is ALREADY overdue when the queue drains (it came due
+  // while the rest of the queue was being worked) reloads immediately —
+  // no timer, no tab round-trip.
+  await page.evaluate(function () {
+    const now = Date.now();
+    const mk = function (due) {
+      return {
+        gameId: null, ply: 0,
+        fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+        playedSan: 'a8=Q', bestSan: 'a8=N',
+        bestMove: { from: 8, to: 0, promotion: 'N' },
+        bestScore: 0, playedScore: 0, lossCp: 120,
+        cause: 'calculation', lesson: 'x', reflection: {},
+        createdAt: now, due: due, step: -1, attempts: []
+      };
+    };
+    return CoachStore.addCard(mk(now)).then(function () {
+      return CoachStore.addCard(mk(now + 2500)); // due while the first is reviewed
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])'); // first card due
+  await tsq2('a7').click();
+  await tsq2('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.waitForTimeout(3000);  // the second card comes due meanwhile
+  await page.click('#gradeGood');   // queue drains with it already overdue
+  await page.waitForFunction(function () {
+    return document.getElementById('trainReveal').hidden &&
+           !document.getElementById('trainCardBox').hidden;
+  }, null, { timeout: 5000 });
+  check(true, 'a card already overdue when the queue drains reloads immediately');
+  await tsq2('a7').click();
+  await tsq2('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+
   // "Review game" opens the game that JUST finished — the handoff awaits
   // the in-flight archive write instead of trusting a stale id.
   await page.click('#tabPlay');
@@ -700,4 +805,32 @@ require('./helper').run('coach', async function (t) {
   });
   check(gamesAfter === gamesBefore,
     'boot reconcile dedupes on the next reload (got ' + gamesAfter + ', want ' + gamesBefore + ')');
+
+  // Delete All must survive a reload: the live Play save still holds the
+  // finished game, and without a tombstone for its signature the boot
+  // reconciliation would archive the explicitly deleted record right back.
+  await page.click('#tabProgress');
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(800); // the boot reconcile window
+  const afterDeleteReload = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(afterDeleteReload === 0,
+    'a deleted finished game is not resurrected by boot reconciliation (got ' + afterDeleteReload + ')');
+  // …while a NEW game finished after the delete still archives normally.
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.waitForFunction(function () {
+    return CoachStore.listGames().then(function (g) { return g.length === 1; });
+  }, null, { timeout: 5000 });
+  check(true, 'the tombstone does not block games finished after the delete');
 });

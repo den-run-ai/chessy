@@ -249,12 +249,24 @@
   let coachGen = 0;
   const GEN_KEY = 'chessy-coach-gen-v1';
 
+  // Registered by app.js (on window load): returns the CURRENT Play game
+  // as { sans, result, gameSeq } when it is finished, else null. Needed by
+  // the delete path below.
+  let liveGameProvider = null;
+  function registerLiveGame(provider) { liveGameProvider = provider; }
+
   function invalidateCoachWork() {
     coachGen++;
     scanToken++;
     importToken++;
     verifyToken++;
     archivedSigs.clear();
+    // Tombstone the live game: the Play save may hold a FINISHED game
+    // whose record was just deleted — without its signature, boot
+    // reconciliation would deterministically archive the deleted game
+    // right back on the next reload.
+    const live = liveGameProvider && liveGameProvider();
+    if (live) archivedSigs.add(gameSig(live.sans, live.result, live.gameSeq));
     lastArchivePromise = null;
   }
 
@@ -288,8 +300,16 @@
       $('reviewEmpty').hidden = false;
     }
     if (view === 'train' || train) {
+      // Straight to the empty DOM, NOT via nextTrainCard(): its requeue
+      // lookup re-queries the store, which mid-clear can still see the
+      // pre-delete cards and reload one as "overdue".
       train = { queue: [], card: null, state: null, selected: null, answered: false };
-      nextTrainCard();
+      clearTimeout(trainTimer);
+      $('trainCount').textContent = '';
+      $('trainEmpty').textContent = 'No cards due. Flag moments in Review to create lesson cards.';
+      $('trainEmpty').hidden = false;
+      $('trainCardBox').hidden = true;
+      $('trainReveal').hidden = true;
     }
     if (view === 'progress') renderProgress();
   }
@@ -322,11 +342,15 @@
     } catch (e) { /* storage unavailable — session-level dedupe still applies */ }
   }
 
+  function gameSig(sans, result, gameSeq) {
+    return (gameSeq || 0) + '|' + sans.join(' ') + '|' + result;
+  }
+
   function archiveGame(state, settings, status, gameSeq) {
     if (!state.history.length || !status.over) return Promise.resolve(null);
     const gen = coachGen;
     const sans = state.history.map(function (h) { return h.san; });
-    const sig = (gameSeq || 0) + '|' + sans.join(' ') + '|' + status.result;
+    const sig = gameSig(sans, status.result, gameSeq);
     // A re-shown ending: already archived — point the handoff at the
     // EXISTING record. lastArchivePromise may be stale (an A→B→A ending
     // would otherwise open B) or null (after a reload the promise is gone
@@ -417,7 +441,9 @@
   function renderGameList() {
     $('reviewFlow').hidden = true;
     $('gameListWrap').hidden = false;
+    const gen = coachGen;
     CoachStore.listGames().then(function (games) {
+      if (gen !== coachGen) return; // deleted while the read was in flight
       const list = $('gameList');
       list.innerHTML = '';
       $('reviewEmpty').hidden = games.length > 0;
@@ -478,13 +504,19 @@
     reviewBoard.render(state, { lastMove: last });
     const side = state.turn === 'w' ? 'White' : 'Black';
     const played = r.ply < r.gs.history.length ? r.gs.history[r.ply] : null;
+    // An imported game can CONTINUE past a position the engine scores as
+    // over (an unclaimed threefold/fifty-move draw is automatic for
+    // Chessy's rules): the engine has no move to suggest there, so a card
+    // built from such a moment would be unanswerable — not flaggable.
+    const engineOver = !!played && terminalScore(r.states[r.ply]) !== null;
     $('reviewStatus').textContent = 'Position ' + r.ply + '/' + r.gs.history.length +
-      ' · ' + side + ' to move' + (played ? ' · played here: ' + played.san : ' · end of game');
+      ' · ' + side + ' to move' + (played ? ' · played here: ' + played.san : ' · end of game') +
+      (engineOver ? ' · already drawn by rule here — moment not flaggable' : '');
     $('revStart').disabled = r.ply === 0;
     $('revPrev').disabled = r.ply === 0;
     $('revNext').disabled = r.ply >= r.gs.history.length;
     $('revEnd').disabled = r.ply >= r.gs.history.length;
-    $('flagMoment').disabled = !played;
+    $('flagMoment').disabled = !played || engineOver;
     // Stepping away from a flagged moment abandons the (unsaved) reflection.
     if (r.flagged !== r.ply) {
       r.flagged = null;
@@ -559,6 +591,10 @@
       for (let k = 0; k < n; k++) {
         const mover = k % 2 === 0 ? 'w' : 'b'; // games replay from the standard start
         if (pc !== 'both' && mover !== pc) continue;
+        // Moves played FROM an engine-terminal position (imported games
+        // continuing past an unclaimed draw) are not flaggable — don't
+        // surface them as moments either.
+        if (terminalScore(r.states[k]) !== null) continue;
         const loss = Math.max(0, Math.round((evals[k] - evals[k + 1]) * (mover === 'w' ? 1 : -1)));
         if (loss >= 50) moments.push({ ply: k, loss: loss });
       }
@@ -867,7 +903,12 @@
   let train = null; // { queue, card, state, selected, answered }
 
   function loadTrain() {
+    // A cross-tab delete can land while this read is in flight: the reset
+    // clears the UI, and applying the pre-delete result afterwards would
+    // hand the deleted cards straight back to the grading flow.
+    const gen = coachGen;
     CoachStore.dueCards(Date.now()).then(function (cards) {
+      if (gen !== coachGen) return;
       train = { queue: cards, card: null, state: null, selected: null, answered: false };
       nextTrainCard();
     }).catch(function () {
@@ -887,10 +928,20 @@
   function scheduleTrainRequeue() {
     clearTimeout(trainTimer);
     $('trainEmpty').textContent = 'No cards due. Flag moments in Review to create lesson cards.';
+    const gen = coachGen;
     CoachStore.listCards().then(function (cards) {
+      if (gen !== coachGen) return; // deleted while the read was in flight
       const now = Date.now();
       let next = Infinity;
-      for (const c of cards) if (c.due > now) next = Math.min(next, c.due);
+      let overdue = false;
+      for (const c of cards) {
+        if (c.due <= now) overdue = true;
+        else next = Math.min(next, c.due);
+      }
+      // A card can come due WHILE the rest of the queue is worked (a long
+      // session after an "Again"): by the time the queue drains it is
+      // already overdue, so reload now instead of arming a timer for it.
+      if (overdue) { loadTrain(); return; }
       if (next - now > 3600000) return; // nothing near-term (ladder rungs are days away)
       $('trainEmpty').textContent = 'No cards due right now — the next retry unlocks at ' +
         new Date(next).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.';
@@ -1039,7 +1090,9 @@
   }
 
   function renderProgress() {
+    const gen = coachGen;
     Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+      if (gen !== coachGen) return; // deleted while the read was in flight
       const games = r[0], cards = r[1];
       const now = Date.now();
       const dl = $('progressStats');
@@ -1133,6 +1186,7 @@
   window.Coach = {
     archiveGame: archiveGame,
     openLatestArchived: openLatestArchived,
+    registerLiveGame: registerLiveGame,
     showView: showView
   };
 })();

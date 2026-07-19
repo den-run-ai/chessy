@@ -544,6 +544,15 @@ assertEqual(multi.length, 2, 'two concatenated games parsed');
 assertEqual(multi[1].sans.join(' '), 'd4 d5', 'second game movetext');
 assertEqual(multi[0].result, '1/2-1/2', 'first game result token');
 
+// TAGLESS multi-game files have no tag section to split on: movetext
+// resuming after a termination marker starts the next game.
+const tagless = Chess.parsePgn('1. e4 e5 1-0\n\n1. d4 d5 1/2-1/2');
+assertEqual(tagless.length, 2, 'tagless games split at the result marker');
+assertEqual(tagless[0].sans.join(' '), 'e4 e5', 'first tagless game movetext');
+assertEqual(tagless[0].result, '1-0', 'first tagless game result');
+assertEqual(tagless[1].sans.join(' '), 'd4 d5', 'second tagless game movetext');
+assertEqual(tagless[1].result, '1/2-1/2', 'second tagless game result');
+
 // SetUp/FEN games are flagged unsupported; illegal SANs throw.
 assertEqual(Chess.parsePgn('[SetUp "1"]\n[FEN "8/8/8/8/8/8/8/K6k w - - 0 1"]\n\n1. Ka2 *')[0].unsupported,
   true, 'SetUp/FEN game flagged unsupported');
