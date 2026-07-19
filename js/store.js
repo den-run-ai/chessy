@@ -157,14 +157,27 @@
         !g.sans.every(function (s) { return typeof s === 'string'; }) ||
         typeof g.result !== 'string';
     }
+    // A card position must be ANSWERABLE, not merely a string: a kingless
+    // or terminal FEN would render a board with no legal answer, leaving
+    // the card impossible to reveal or grade in Train. (Engine check is
+    // skipped only where the engine script isn't loaded, e.g. unit shims.)
+    function badFen(fen) {
+      if (typeof Chess === 'undefined') return false;
+      try {
+        const s = Chess.parseFen(fen);
+        return s.board.indexOf('wK') < 0 || s.board.indexOf('bK') < 0 ||
+          Chess.legalMoves(s).length === 0;
+      } catch (e) { return true; }
+    }
     function badCard(c) {
       return !c || typeof c !== 'object' ||
         typeof c.fenBefore !== 'string' || c.fenBefore === '' ||
+        badFen(c.fenBefore) ||
         typeof c.due !== 'number' || !isFinite(c.due) ||
         !Array.isArray(c.attempts) ||
-        !(c.bestMove === null || c.bestMove === undefined ||
-          (typeof c.bestMove === 'object' &&
-           typeof c.bestMove.from === 'number' && typeof c.bestMove.to === 'number'));
+        // Without a saved best move the card can never be matched in Train.
+        !(typeof c.bestMove === 'object' && c.bestMove !== null &&
+          typeof c.bestMove.from === 'number' && typeof c.bestMove.to === 'number');
     }
     if (data.games.some(badGame) || data.cards.some(badCard)) {
       return Promise.reject(new Error('backup contains invalid records'));

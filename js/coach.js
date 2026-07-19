@@ -451,10 +451,15 @@
     if (!lastArchivePromise) return false;
     // The handoff is asynchronous and the game-over dialog has already
     // closed, so focus must be MOVED into the view that opens — otherwise
-    // keyboard/screen-reader users are left on the stale Play board.
+    // keyboard/screen-reader users are left on the stale Play board. The
+    // reads are generation-guarded: a cross-tab delete landing while they
+    // are in flight must not reopen (and later re-scan) the deleted game.
+    const gen = coachGen;
     lastArchivePromise.then(function (id) {
+      if (gen !== coachGen) return null; // deleted while awaiting the archive
       if (id === null) { showView('review'); $('tabReview').focus(); return null; }
       return CoachStore.getGame(id).then(function (game) {
+        if (gen !== coachGen) return; // deleted while the read was in flight
         showView('review');
         if (game) {
           openReview(game);
@@ -795,8 +800,11 @@
         $('saveCard').disabled = false;
       });
     }).then(function () {
-      // This request settled (fresh or stale): allow the next submission.
-      $('reflectVerify').disabled = false;
+      // Only the request that still OWNS the token re-enables the shared
+      // control: a STALE request settling while a newer one is mid-flight
+      // would otherwise reopen the duplicate-submission window this guard
+      // exists for. (Flagging a new moment re-enables it directly.)
+      if (token === verifyToken) $('reflectVerify').disabled = false;
     });
   });
 
@@ -1202,18 +1210,35 @@
   });
 
   $('importData').addEventListener('click', function () { $('importFile').click(); });
+  // ONE restore at a time: while a large backup is still appending, a
+  // second selection of the same file would start another importAll under
+  // the same generation and append everything twice.
+  let restoreBusy = false;
+
   $('importFile').addEventListener('change', function () {
     const file = $('importFile').files[0];
     if (!file) return;
+    if (restoreBusy) { $('importFile').value = ''; return; }
+    restoreBusy = true;
+    $('importData').disabled = true;
+    function settleRestore() {
+      restoreBusy = false;
+      $('importData').disabled = false;
+    }
     // Capture the generation BEFORE the file read, not inside onload: a
     // "Delete all" clicked while a (large) backup is still being read
     // would otherwise be undone when the read completes and the restore
     // writes the deleted archive back.
     const gen = coachGen;
     const reader = new FileReader();
+    reader.onerror = function () {
+      $('importFile').value = '';
+      $('dataNote').textContent = 'Could not read the backup file.';
+      settleRestore();
+    };
     reader.onload = function () {
       $('importFile').value = '';
-      if (gen !== coachGen) return; // deleted while reading — drop the restore
+      if (gen !== coachGen) { settleRestore(); return; } // deleted while reading
       let data = null;
       try { data = JSON.parse(reader.result); } catch (e) { /* handled below */ }
       // The restore also checks the generation between records: a
@@ -1229,7 +1254,8 @@
         })
         .catch(function (e) {
           $('dataNote').textContent = 'Import failed: ' + (e.message || e);
-        });
+        })
+        .then(settleRestore);
     };
     reader.readAsText(file);
   });

@@ -289,7 +289,8 @@ require('./helper').run('coach', async function (t) {
       // Passes the schema validation but fails structured clone on put —
       // the mid-write failure path that the rollback exists for.
       cards: [{ id: 9, gameId: 7, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
-        playedSan: 'x', bestSan: 'x', bestMove: null, bestScore: 0, playedScore: 0,
+        playedSan: 'x', bestSan: 'x', bestMove: { from: 8, to: 0, promotion: 'N' },
+        bestScore: 0, playedScore: 0,
         lossCp: 0, cause: 'calculation', lesson: 'x', reflection: {},
         createdAt: 1, due: 1, step: -1, attempts: [], bad: function () {} }]
     };
@@ -335,6 +336,23 @@ require('./helper').run('coach', async function (t) {
         invalidBackup.msg.indexOf('invalid') !== -1,
     'a backup with malformed records is rejected before any write (' + invalidBackup.msg + ')');
 
+  // ...and a card whose position is UNUSABLE (kingless board — no legal
+  // answer exists) is rejected too, not just malformed shapes.
+  const kinglessBackup = await page.evaluate(function () {
+    const data = {
+      format: 'chessy-coach', version: 2,
+      games: [],
+      cards: [{ id: 1, gameId: null, fenBefore: '8/8/8/8/8/8/8/8 w - - 0 1',
+        playedSan: 'x', bestSan: 'x', bestMove: { from: 8, to: 0, promotion: null },
+        createdAt: 1, due: 1, step: -1, attempts: [] }]
+    };
+    return CoachStore.importAll(data).then(
+      function () { return 'accepted'; },
+      function (e) { return String(e && e.message); });
+  });
+  check(kinglessBackup.indexOf('invalid') !== -1,
+    'a backup card with an unanswerable position is rejected (' + kinglessBackup + ')');
+
   // "Correct on first try" counts each card's FIRST attempt only — a miss
   // followed by a correct retry is not a first-try success (it used to be
   // reported per-attempt, e.g. 1/2 for that card alone).
@@ -374,6 +392,41 @@ require('./helper').run('coach', async function (t) {
   check(stats2['Cards correct on first try (30 days)'] === '2/3',
     'first-try metric counts only each card’s first attempt (got ' +
     stats2['Cards correct on first try (30 days)'] + ')');
+
+  // Overlapping backup restores are blocked: while one (slowed) restore
+  // runs, the control is disabled and a second selection of the same file
+  // is ignored — otherwise both would append and duplicate everything.
+  const overlapBefore = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  const overlapBackup = await page.evaluate(function () {
+    CoachStore.__realImportAll = CoachStore.importAll;
+    CoachStore.importAll = function (d, c) {
+      return CoachStore.__realImportAll(d, c).then(function (r) {
+        return new Promise(function (res) { setTimeout(function () { res(r); }, 1500); });
+      });
+    };
+    return CoachStore.exportAll().then(function (d) { return JSON.stringify(d); });
+  });
+  await page.setInputFiles('#importFile', {
+    name: 'overlap.json', mimeType: 'application/json', buffer: Buffer.from(overlapBackup)
+  });
+  await page.waitForTimeout(300); // the first restore is now mid-append
+  check(await page.evaluate(function () { return document.getElementById('importData').disabled; }),
+    'Import backup disables while a restore is running');
+  await page.setInputFiles('#importFile', {
+    name: 'overlap.json', mimeType: 'application/json', buffer: Buffer.from(overlapBackup)
+  });
+  await page.waitForTimeout(2500); // both restores would have settled by now
+  const overlapAfter = await page.evaluate(function () {
+    CoachStore.importAll = CoachStore.__realImportAll;
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(overlapAfter === overlapBefore * 2,
+    'a second file selection during a restore is ignored (' +
+    overlapBefore + ' -> ' + overlapAfter + ')');
+  check(!(await page.evaluate(function () { return document.getElementById('importData').disabled; })),
+    'Import backup re-enables after the restore settles');
 
   page.once('dialog', function (d) { d.accept(); });
   await page.click('#deleteData');
@@ -490,6 +543,11 @@ require('./helper').run('coach', async function (t) {
   // the cause diagnosis becomes required before saving.
   await page.locator('.moment-item', { hasText: 'Nf6' }).click();
   await page.click('#flagMoment');
+  // Flagging a NEW moment resets every reflection field — including the
+  // evaluation select, which would otherwise carry a stale answer into
+  // the next card.
+  check(await page.evaluate(function () { return document.getElementById('reflectEval').value; }) === '',
+    'flagging a new moment clears the previous evaluation');
   await page.fill('#reflectThreat', 'Qxf7 mate threat');
   await page.fill('#reflectCandidates', 'Nf6, g6');
   await page.selectOption('#reflectEval', 'worse');
@@ -1111,4 +1169,34 @@ require('./helper').run('coach', async function (t) {
   await pageB.close();
   check(divergent === 0,
     'a receiving tab’s divergent finished game stays deleted after its reload (got ' + divergent + ')');
+
+  // Two tabs starting INDEPENDENT new games must get unique instance ids:
+  // a tab-local increment from the same restored save would produce the
+  // same signature for same-move games, and the unique DB index would
+  // silently drop one of two legitimately separate games.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  const pageC = await t.context.newPage();
+  await pageC.goto(t.url);
+  await pageC.waitForSelector('#board .square');
+  const sqC = function (name) { return '#board .square[data-index="' + idx(name) + '"]'; };
+  const mvC = async function (from, to) { await pageC.click(sqC(from)); await pageC.click(sqC(to)); };
+  await page.click('#newGame');
+  await page.click('#newGameStart');
+  await pageC.click('#newGame');
+  await pageC.click('#newGameStart');
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await mvC('f2', 'f3'); await mvC('e7', 'e5');
+  await mvC('g2', 'g4'); await mvC('d8', 'h4');
+  await pageC.waitForSelector('#gameOverDialog[open]');
+  await pageC.click('#gameOverClose');
+  await pageC.close();
+  const twoTabs = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(twoTabs === 2,
+    'independent same-move games in two tabs both archive (got ' + twoTabs + ')');
 });

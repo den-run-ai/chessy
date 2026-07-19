@@ -186,9 +186,11 @@
       };
       w.onerror = function () {
         // Broken worker: fall back to the synchronous path so the app is
-        // never stuck on "thinking".
+        // never stuck on "thinking" — then replace the worker so future
+        // moves leave the main thread again.
         aiWorker = null;
         if (aiThinking) { aiThinking = false; maybeAiMove(); }
+        aiWorker = createAiWorker();
       };
       return w;
     } catch (e) { return null; }
@@ -563,7 +565,12 @@
         if (id !== aiRequestId || !aiThinking) return;
         if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
         aiThinking = false;
+        // THIS move falls back synchronously (aiWorker is null while
+        // maybeAiMove picks its path); a fresh worker then serves later
+        // moves — without it, one transient hang would put every future
+        // AI turn on the main thread for the full search budget.
         maybeAiMove();
+        aiWorker = createAiWorker();
       }, cfg.timeMs + 3000);
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
@@ -623,13 +630,20 @@
   }
 
   // ---- Controls ----
-  // Increments on every New game/Rematch: the coaching archive dedupes
+  // A fresh id on every New game/Rematch: the coaching archive dedupes
   // re-shown endings by (instance, moves) — an identical game played twice
-  // is two archive entries, the same ending re-displayed is one.
+  // is two archive entries, the same ending re-displayed is one. The id
+  // must be CROSS-TAB unique: two tabs incrementing the same restored
+  // counter would collide in the archive's unique signature index and
+  // silently drop one of two legitimately separate games.
   let gameSeq = 0;
 
+  function newGameId() {
+    return Date.now() * 4096 + Math.floor(Math.random() * 4096);
+  }
+
   function startNewGame() {
-    gameSeq++;
+    gameSeq = newGameId();
     cancelAi();
     state = Chess.newGameState();
     selected = null;
@@ -870,7 +884,9 @@
 
   // ---- Boot ----
   buildBoard();
-  load();
+  // No saved game: the implicit first game needs its own unique instance
+  // id too — a fixed 0 would collide across tabs just like a counter.
+  if (!load()) gameSeq = newGameId();
   render();
   maybeAiMove();
 
