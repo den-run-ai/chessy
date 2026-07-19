@@ -292,4 +292,22 @@ require('./helper').run('coach', async function (t) {
   }, null, { timeout: 60000 });
   check(!(await page.locator('#saveCard').isDisabled()),
     'a fresh verification after the discarded one enables Save normally');
+
+  // Archive dedupe retains EVERY ending signature per game instance:
+  // finishing line A, undoing into line B, then reproducing A must not
+  // archive A twice (the old single-slot dedupe only remembered B).
+  const abaCount = await page.evaluate(function () {
+    const settings = { mode: 'pvp', difficulty: '2', timeControl: 'none' };
+    const status = { over: true, result: '1-0', reason: 'aba-test' };
+    const lineA = { history: [{ san: 'e4' }, { san: 'e5' }] };
+    const lineB = { history: [{ san: 'd4' }] };
+    return Coach.archiveGame(lineA, settings, status, 99)
+      .then(function () { return Coach.archiveGame(lineB, settings, status, 99); })
+      .then(function () { return Coach.archiveGame(lineA, settings, status, 99); })
+      .then(function () { return CoachStore.listGames(); })
+      .then(function (games) {
+        return games.filter(function (g) { return g.reason === 'aba-test'; }).length;
+      });
+  });
+  check(abaCount === 2, 'A-B-A endings in one game instance archive each line once (got ' + abaCount + ')');
 });

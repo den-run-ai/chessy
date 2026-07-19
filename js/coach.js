@@ -124,9 +124,13 @@
   const ANALYSIS = { maxDepth: 30, timeMs: 1200, quiesce: true }; // per-moment verification
   const SCAN = { maxDepth: 30, timeMs: 300, quiesce: true };      // whole-game quick scan
 
-  function analyse(fen, cfg) {
+  // `positions` is the game's repetition table up to this position — the
+  // engine needs it to score a root move that creates a third occurrence
+  // as the draw it is (otherwise the coach could recommend a "win" that
+  // the opponent escapes by repetition, or miss an available draw).
+  function analyse(fen, cfg, positions) {
     return new Promise(function (resolve) {
-      anQueue.push({ fen: fen, cfg: cfg || ANALYSIS, resolve: resolve });
+      anQueue.push({ fen: fen, cfg: cfg || ANALYSIS, positions: positions || null, resolve: resolve });
       pumpAnalysis();
     });
   }
@@ -158,7 +162,8 @@
     anActive = job;
     job.fallback = function () {
       if (anActive !== job) return;
-      settleActive(ChessAI.think(Chess.parseFen(job.fen), job.cfg));
+      settleActive(ChessAI.think(Chess.parseFen(job.fen),
+        Object.assign({}, job.cfg, { positions: job.positions || undefined })));
     };
     if (!ensureWorker()) { setTimeout(job.fallback, 0); return; }
     job.id = ++anId;
@@ -167,7 +172,7 @@
       job.fallback();
     }, job.cfg.timeMs + 4000);
     anWorker.postMessage({
-      id: job.id, fen: job.fen,
+      id: job.id, fen: job.fen, positions: job.positions || undefined,
       maxDepth: job.cfg.maxDepth, timeMs: job.cfg.timeMs, quiesce: job.cfg.quiesce
     });
   }
@@ -188,15 +193,17 @@
   // ---- Archive hook (called by app.js when a game ends) ----
   // Dedupe is keyed on the game INSTANCE (app.js's gameSeq) plus the moves:
   // the same ending re-displayed archives once, while an identical game
-  // legitimately replayed via New game/Rematch archives again.
-  let lastArchiveSig = null;
+  // legitimately replayed via New game/Rematch archives again. EVERY seen
+  // signature is retained (not just the last), so finishing line A, undoing
+  // into line B, then reproducing A within one instance still counts A once.
+  const archivedSigs = new Set();
 
   function archiveGame(state, settings, status, gameSeq) {
     if (!state.history.length || !status.over) return Promise.resolve(null);
     const sans = state.history.map(function (h) { return h.san; });
     const sig = (gameSeq || 0) + '|' + sans.join(' ') + '|' + status.result;
-    if (sig === lastArchiveSig) return Promise.resolve(null); // re-shown end of the same game
-    lastArchiveSig = sig;
+    if (archivedSigs.has(sig)) return Promise.resolve(null); // re-shown end of the same game
+    archivedSigs.add(sig);
     return CoachStore.addGame({
       source: 'play',
       tags: {},
@@ -341,7 +348,7 @@
             bestSans[k] = null;
             return;
           }
-          return analyse(r.fens[k], SCAN).then(function (res) {
+          return analyse(r.fens[k], SCAN, r.states[k].positions).then(function (res) {
             if (token !== scanToken) return;
             evals[k] = res.score;
             const st = Chess.parseFen(r.fens[k]);
@@ -454,7 +461,7 @@
     $('verifyResult').textContent = 'Analysing…';
     $('saveCard').disabled = true;
 
-    analyse(fenBefore).then(function (best) {
+    analyse(fenBefore, null, r.states[ply].positions).then(function (best) {
       // The played move's value = the value of the position it leads to.
       // If that position is terminal (mate, stalemate, dead, 50-move, or a
       // COMPLETED threefold — hence the full prefix state, not a bare FEN)
@@ -463,7 +470,7 @@
       const term = terminalScore(r.states[ply + 1]);
       const playedScoreP = term !== null
         ? Promise.resolve({ score: term })
-        : analyse(afterFen);
+        : analyse(afterFen, null, r.states[ply + 1].positions);
       return playedScoreP.then(function (after) {
         if (token !== verifyToken || review !== r || r.flagged !== ply) return; // stale
         // Resolve the engine's move object back to a SAN on this board.
