@@ -310,4 +310,44 @@ require('./helper').run('coach', async function (t) {
       });
   });
   check(abaCount === 2, 'A-B-A endings in one game instance archive each line once (got ' + abaCount + ')');
+
+  // Cancelling a running multi-game import stops the remaining writes: the
+  // chain imports one game at a time and Cancel bumps the batch token.
+  const beforeCancel = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  await page.click('#tabReview');
+  await page.click('#importPgnBtn');
+  const manyGames = Array.from({ length: 40 }, function (x, i) {
+    return '[Event "Bulk ' + i + '"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0';
+  }).join('\n');
+  await page.fill('#importText', manyGames);
+  await page.click('#importStart');
+  await page.click('#importCancel'); // cancel while the batch is writing
+  await page.waitForTimeout(1500);   // give any (wrongly) surviving chain time to run
+  const afterCancel = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(afterCancel - beforeCancel < 40,
+    'Cancel stops a running import (' + (afterCancel - beforeCancel) + '/40 written before cancel)');
+  check(!(await page.evaluate(function () { return document.getElementById('importStart').disabled; })),
+    'Import button re-enabled after a cancelled batch');
+
+  // Delete-all invalidates an active scan: a scan finishing after the wipe
+  // must not put() its game back into the cleared store. The 7-ply mate
+  // game scans for ~3s, leaving a real window for the wipe to land mid-scan.
+  await page.click('#tabReview'); // refresh the list
+  await page.locator('.game-item', { hasText: 'Anna' }).first().click();
+  await page.click('#scanGame');
+  await page.click('#tabProgress');
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page.waitForTimeout(6000); // the abandoned scan would have finished by now
+  const resurrected = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(resurrected === 0, 'delete-all is not undone by a scan finishing afterwards (got ' + resurrected + ' games)');
 });

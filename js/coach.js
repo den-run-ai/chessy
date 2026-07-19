@@ -544,20 +544,33 @@
   });
 
   // ---- Import PGN ----
+  // Multi-game imports write one game at a time; Cancel bumps the token so
+  // the remaining chain steps become no-ops instead of importing on behind
+  // a closed dialog.
+  let importToken = 0;
+
   $('importPgnBtn').addEventListener('click', function () {
     $('importText').value = '';
     $('importError').textContent = '';
+    $('importStart').disabled = false;
     $('importDialog').showModal();
   });
-  $('importCancel').addEventListener('click', function () { $('importDialog').close(); });
+  $('importCancel').addEventListener('click', function () {
+    importToken++; // abandon any batch still importing
+    $('importDialog').close();
+  });
 
   $('importStart').addEventListener('click', function () {
+    if ($('importStart').disabled) return;
+    $('importStart').disabled = true;
+    const token = ++importToken;
     const games = Chess.parsePgn($('importText').value);
     let ok = 0, failed = 0, firstError = null;
     let chain = Promise.resolve();
     for (const g of games) {
       if (g.sans.length === 0) continue;
       chain = chain.then(function () {
+        if (token !== importToken) return; // cancelled mid-batch
         if (g.unsupported) throw new Error('games from a set-up position are not supported');
         const gs = Chess.replaySans(g.sans); // throws on illegal moves
         const status = Chess.gameStatus(gs);
@@ -577,6 +590,8 @@
       });
     }
     chain.then(function () {
+      $('importStart').disabled = false;
+      if (token !== importToken) return; // cancelled: no completion UI
       if (ok === 0 && failed === 0) {
         $('importError').textContent = 'No games found in that text.';
         return;
@@ -805,6 +820,10 @@
 
   $('deleteData').addEventListener('click', function () {
     if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
+    // Invalidate in-flight coaching work FIRST: a scan finishing after the
+    // wipe would otherwise put() its game back into the cleared store.
+    scanToken++;
+    importToken++;
     CoachStore.deleteAll().then(function () {
       $('dataNote').textContent = 'All training data deleted.';
       renderProgress();
