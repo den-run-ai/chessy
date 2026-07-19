@@ -225,7 +225,29 @@
   // imports, JSON restore, archive and card writes. "Delete all training
   // data" bumps it first; each writer captures the generation when it
   // starts and abandons if it changed, so nothing writes deleted data back.
+  // The epoch is BROADCAST across open tabs/PWA windows via a localStorage
+  // marker: a delete in one instance invalidates the writers of every
+  // other instance too (storage events fire only in the OTHER contexts).
   let coachGen = 0;
+  const GEN_KEY = 'chessy-coach-gen-v1';
+
+  function invalidateCoachWork() {
+    coachGen++;
+    scanToken++;
+    importToken++;
+    verifyToken++;
+    archivedSigs.clear();
+    lastArchivePromise = null;
+  }
+
+  function broadcastGeneration() {
+    try { localStorage.setItem(GEN_KEY, Date.now() + ':' + coachGen); }
+    catch (e) { /* storage unavailable — same-tab invalidation still holds */ }
+  }
+
+  window.addEventListener('storage', function (e) {
+    if (e.key === GEN_KEY) invalidateCoachWork(); // another instance deleted the data
+  });
 
   // ---- Archive hook (called by app.js when a game ends) ----
   // Dedupe is keyed on the game INSTANCE (app.js's gameSeq, persisted with
@@ -238,7 +260,11 @@
   // write FAILS so a transient IndexedDB error does not suppress the retry.
   const SIGS_KEY = 'chessy-coach-sigs-v1';
   const archivedSigs = new Set(loadSigs());
-  let lastArchivedId = null;
+  // The CURRENT archive attempt (promise of the stored id, or null): the
+  // game-over Review handoff awaits it, so clicking "Review game" while
+  // the write is still in flight opens the game that just finished — never
+  // the previous one, and never anything at all if the write failed.
+  let lastArchivePromise = null;
 
   function loadSigs() {
     try { return JSON.parse(localStorage.getItem(SIGS_KEY)) || []; }
@@ -256,9 +282,11 @@
     const gen = coachGen;
     const sans = state.history.map(function (h) { return h.san; });
     const sig = (gameSeq || 0) + '|' + sans.join(' ') + '|' + status.result;
-    if (archivedSigs.has(sig)) return Promise.resolve(null); // re-shown end of the same game
+    // A re-shown ending: already archived — keep the existing attempt (it
+    // resolves to this very game) instead of overwriting it with null.
+    if (archivedSigs.has(sig)) return Promise.resolve(null);
     archivedSigs.add(sig);
-    return CoachStore.addGame({
+    const attempt = CoachStore.addGame({
       source: 'play',
       tags: {},
       sans: sans,
@@ -280,25 +308,29 @@
         CoachStore.deleteGame(id).catch(function () {});
         return null;
       }
-      lastArchivedId = id;
       persistSigs();
       return id;
     }).catch(function () {
       archivedSigs.delete(sig); // failed write: allow the retry
       return null;
     });
+    lastArchivePromise = attempt;
+    return attempt;
   }
 
-  // Game-over "Review game" hands off here: open the just-archived game in
-  // the coaching review. Returns false when there is nothing to open (the
-  // caller falls back to the on-board replay).
+  // Game-over "Review game" hands off here: AWAIT the current archive
+  // attempt, then open that game in the coaching review. Returns false when
+  // no attempt exists (the caller falls back to the on-board replay); a
+  // failed write lands on the game list instead of a wrong game.
   function openLatestArchived() {
-    if (lastArchivedId === null) return false;
-    CoachStore.getGame(lastArchivedId).then(function (game) {
-      if (!game) return;
-      showView('review');
-      openReview(game);
-    }).catch(function () { /* list view stays reachable via the tab */ });
+    if (!lastArchivePromise) return false;
+    lastArchivePromise.then(function (id) {
+      if (id === null) { showView('review'); return null; }
+      return CoachStore.getGame(id).then(function (game) {
+        showView('review');
+        if (game) openReview(game);
+      });
+    }).catch(function () { showView('review'); });
     return true;
   }
 
@@ -686,6 +718,13 @@
     importToken++; // abandon any batch still importing
     $('importDialog').close();
   });
+  // EVERY dismissal cancels a running batch — Escape closes a <dialog>
+  // through its native cancel/close path without touching the button
+  // handler, so the token is bumped on `close` too (harmless when the
+  // batch already finished).
+  $('importDialog').addEventListener('close', function () {
+    importToken++;
+  });
 
   $('importStart').addEventListener('click', function () {
     if ($('importStart').disabled) return;
@@ -975,14 +1014,11 @@
     if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
     // New data epoch FIRST: every asynchronous writer (scan, PGN import,
     // JSON restore, archive/card/grade writes) checks its captured
-    // generation and abandons instead of writing deleted data back.
-    coachGen++;
-    scanToken++;
-    importToken++;
-    verifyToken++;
-    archivedSigs.clear();
+    // generation and abandons instead of writing deleted data back — and
+    // the epoch is broadcast so OTHER open tabs invalidate theirs too.
+    invalidateCoachWork();
     persistSigs();
-    lastArchivedId = null;
+    broadcastGeneration();
     CoachStore.deleteAll().then(function () {
       $('dataNote').textContent = 'All training data deleted.';
       renderProgress();

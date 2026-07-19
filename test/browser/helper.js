@@ -75,7 +75,11 @@ function run(name, suite) {
     const browser = await browserType().launch(
       ENGINE === 'chromium' && process.env.CHROMIUM_PATH
         ? { executablePath: process.env.CHROMIUM_PATH } : {});
-    const page = await browser.newPage();
+    // An explicit context so suites can open EXTRA pages sharing the same
+    // storage (cross-tab tests) — browser.newPage()'s implicit context
+    // refuses further pages.
+    const context = await browser.newContext();
+    const page = await context.newPage();
 
     const errors = [];
     page.on('pageerror', function (e) { errors.push(String(e)); });
@@ -84,6 +88,7 @@ function run(name, suite) {
     let failed = 0;
     const t = {
       page: page,
+      context: context,
       url: url,
       idx: idx,
       check: function (cond, label) {

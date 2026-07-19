@@ -448,4 +448,65 @@ require('./helper').run('coach', async function (t) {
     return CoachStore.listGames().then(function (g) { return g.length; });
   });
   check(resurrected === 0, 'delete-all is not undone by a scan finishing afterwards (got ' + resurrected + ' games)');
+
+  // Escape (the native <dialog> cancel path) must cancel a running import
+  // batch just like the Cancel button does.
+  await page.click('#tabReview');
+  await page.click('#importPgnBtn');
+  await page.fill('#importText', manyGames);
+  await page.click('#importStart');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(1500);
+  const afterEsc = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(afterEsc < 40, 'Escape cancels a running import (' + afterEsc + '/40 written)');
+
+  // A delete in ANOTHER tab invalidates this tab's in-flight scan too:
+  // the coaching generation is broadcast via a storage event.
+  await page.click('#importPgnBtn');
+  await page.fill('#importText',
+    '[White "Solo"]\n[Black "Two"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0');
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.locator('.game-item', { hasText: 'Solo' }).click();
+  await page.click('#scanGame'); // ~3 s of probes ahead
+  const page2 = await t.context.newPage();
+  await page2.goto(t.url);
+  await page2.waitForSelector('#board .square');
+  await page2.click('#tabProgress');
+  page2.once('dialog', function (d) { d.accept(); });
+  await page2.click('#deleteData');
+  await page2.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page2.close();
+  await page.waitForTimeout(6000); // the first tab's abandoned scan window
+  const crossTab = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(crossTab === 0,
+    'a delete in another tab stops this tab’s scan from resurrecting data (got ' + crossTab + ')');
+
+  // "Review game" opens the game that JUST finished — the handoff awaits
+  // the in-flight archive write instead of trusting a stale id.
+  await page.click('#tabPlay');
+  await t.newGame({ mode: 'pvp' });
+  await mv('e2', 'e4'); await mv('e7', 'e5');
+  await mv('d1', 'h5'); await mv('b8', 'c6');
+  await mv('f1', 'c4'); await mv('g8', 'f6');
+  await mv('h5', 'f7'); // 7-ply scholar's mate
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await t.newGame({});
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4'); // 4-ply fool's mate
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview'); // immediately — the write may be in flight
+  await page.waitForSelector('#viewReview:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
+  });
+  check((await page.textContent('#reviewStatus')).includes('Position 0/4'),
+    'Review game opens the 4-ply game that just finished, not the earlier 7-ply one');
 });
