@@ -22,12 +22,21 @@ require('./helper').run('coach', async function (t) {
   await page.waitForSelector('#gameOverDialog[open]');
   await page.click('#gameOverClose');
 
+  // Reload → undo → reproduce the SAME ending: the persisted signatures
+  // (and gameSeq, saved with the game) still dedupe across the reload.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.click('#undo');
+  await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+
   await page.click('#tabReview');
   check(await page.getAttribute('#tabReview', 'aria-current') === 'page', 'Review tab activates');
   check(await page.locator('#viewPlay').isHidden(), 'Play view hidden on Review tab');
   await page.waitForSelector('.game-item');
   check(await page.locator('.game-item').count() === 2,
-    'both finished games auto-archived (identical rematch is not deduped)');
+    'rematch archives again; a reloaded, replayed ending does not (2 games)');
   check((await page.textContent('.game-item')).includes('0-1'), 'archived game shows its result');
 
   // Import a PGN through the dialog; a bad PGN reports instead of breaking.
@@ -70,6 +79,12 @@ require('./helper').run('coach', async function (t) {
   // requests must queue behind each other (a second request used to orphan
   // the scan's pending reply and freeze the UI on "Scanning…").
   await page.click('#flagMoment'); // ply 0, played here: e4
+  await page.click('#reflectVerify'); // EMPTY reflection: required fields block
+  check(await page.locator('#verifyBox').isHidden(),
+    'empty reflection cannot summon the engine (fields are required)');
+  await page.fill('#reflectThreat', 'nothing concrete yet');
+  await page.fill('#reflectCandidates', 'e4, d4');
+  await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await page.waitForFunction(function () {
     const el = document.getElementById('verifyResult');
@@ -88,6 +103,8 @@ require('./helper').run('coach', async function (t) {
   check(momentText.includes('Nf6'), 'the decisive blunder (3… Nf6) is a key moment');
   check(!momentText.includes('Qxf7'),
     'moment list withholds the better move until reflection');
+  check(!momentText.includes('pawns') && !momentText.includes('swing'),
+    'moment list withholds the loss magnitude until reflection');
   check(await page.locator('#scanGame').textContent() === 'Re-scan game',
     'scan button switches to re-scan');
 
@@ -128,6 +145,15 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#verifyResult')).includes('Qxf7'),
     'engine verdict references the move');
 
+  // The played mate IS Chessy's move: a positive PATTERN card — no cause
+  // diagnosis is asked for, but the lesson sentence is still required.
+  check(await page.locator('#causeLabel').isHidden(),
+    'cause picker hidden for a good-move (pattern) verdict');
+  await page.click('#saveCard'); // lesson still empty: validation blocks
+  await page.waitForSelector('#cardSaved:not([hidden])');
+  check((await page.textContent('#cardSaved')).includes('lesson'),
+    'saving requires a one-sentence lesson');
+
   // Save the lesson card — double-click on purpose: the button must
   // disable before the async write, so only ONE card is created.
   await page.fill('#cardLesson', 'Look for forcing mates before anything else');
@@ -135,7 +161,9 @@ require('./helper').run('coach', async function (t) {
     document.getElementById('saveCard').click();
     document.getElementById('saveCard').click();
   });
-  await page.waitForSelector('#cardSaved:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.includes('due in Train');
+  });
   check((await page.textContent('#cardSaved')).includes('due in Train'),
     'card saved and scheduled');
   const cardCount = await page.evaluate(function () {
@@ -149,6 +177,8 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#trainCount')).includes('1 due'), 'one card due');
   check((await page.textContent('#trainPrompt')).includes('White to move'),
     'training prompt names the side to move');
+  check(await page.locator('#trainBoard .square[tabindex="0"]').count() === 1,
+    'training board has a single roving tab stop');
   await tsq('h5').click(); // queen
   await tsq('f7').click(); // the mating capture
   await page.waitForSelector('#trainReveal:not([hidden])');
@@ -190,8 +220,8 @@ require('./helper').run('coach', async function (t) {
   check(stats['Lesson cards'] === '1', 'progress counts lesson cards');
   check(stats['Cards due now'] === '0', 'progress counts due cards');
   check(stats['Reviews (30 days)'] === '1', 'progress counts recent reviews');
-  check((await page.textContent('#causeStats')).includes('Missed a threat'),
-    'per-cause counts shown');
+  check((await page.textContent('#causeStats')).includes('Good move (pattern)'),
+    'pattern cards counted separately from error causes');
 
   // Backup round-trip through the real DB, then Delete All via the button.
   const roundTrip = await page.evaluate(function () {
@@ -205,6 +235,24 @@ require('./helper').run('coach', async function (t) {
   });
   check(roundTrip.exported === 3 && roundTrip.games === 6 && roundTrip.cards === 2,
     'export/import round-trip appends a full copy');
+
+  // A cancelled JSON restore stops before writing anything further.
+  const cancelledRestore = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (before) {
+      return CoachStore.exportAll().then(function (data) {
+        return CoachStore.importAll(data, function () { return true; })
+          .then(function () { return { result: 'completed' }; },
+                function (e) { return { result: String((e && e.message) || e) }; });
+      }).then(function (r) {
+        return CoachStore.listGames().then(function (after) {
+          r.unchanged = after.length === before.length;
+          return r;
+        });
+      });
+    });
+  });
+  check(cancelledRestore.result.indexOf('cancelled') !== -1 && cancelledRestore.unchanged,
+    'cancelled JSON restore writes nothing (' + cancelledRestore.result + ')');
 
   page.once('dialog', function (d) { d.accept(); });
   await page.click('#deleteData');
@@ -256,12 +304,16 @@ require('./helper').run('coach', async function (t) {
     '',
     '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'
   ].join('\n'));
+  await t.pick('importColor', 'b'); // "I played Black" — used by the scan below
   await page.click('#importStart');
   await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
   await page.locator('.game-item', { hasText: 'threefold' }).click();
   await page.click('#revEnd');
   await page.click('#revPrev'); // ply 7: ...Ng8 completes the threefold
   await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'nothing');
+  await page.fill('#reflectCandidates', 'Ng8, Nd5');
+  await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await page.waitForFunction(function () {
     const el = document.getElementById('verifyResult');
@@ -277,6 +329,9 @@ require('./helper').run('coach', async function (t) {
   await page.click('#reviewBack');
   await page.locator('.game-item', { hasText: 'threefold' }).click();
   await page.click('#flagMoment'); // ply 0 of game A
+  await page.fill('#reflectThreat', 'nothing');
+  await page.fill('#reflectCandidates', 'Nf3');
+  await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await page.click('#reviewBack'); // leave immediately, probes still queued
   await page.locator('.game-item', { hasText: 'Anna' }).click(); // game B
@@ -285,6 +340,9 @@ require('./helper').run('coach', async function (t) {
   check(await page.locator('#saveCard').isDisabled(),
     'stale verification from the previous game is discarded (Save stays disabled)');
   // ...and a fresh verification on game B still works after the discard.
+  await page.fill('#reflectThreat', 'nothing yet');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await page.waitForFunction(function () {
     const el = document.getElementById('verifyResult');
@@ -292,6 +350,46 @@ require('./helper').run('coach', async function (t) {
   }, null, { timeout: 60000 });
   check(!(await page.locator('#saveCard').isDisabled()),
     'a fresh verification after the discarded one enables Save normally');
+
+  // Color-aware scan: this game was imported as "I played Black", so only
+  // Black's decisions may become moments — the winner's moves are not the
+  // trainee's lesson material.
+  await page.click('#scanGame');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('scanStatus');
+    return !el.hidden && !el.textContent.includes('Scanning');
+  }, null, { timeout: 90000 });
+  const colorMoments = await page.textContent('#momentList');
+  check(colorMoments.includes('(Black)') && !colorMoments.includes('(White)'),
+    'scan surfaces only the trainee color’s decisions');
+  check((await page.textContent('#scanStatus')).includes('Black'),
+    'scan status names the coached side');
+
+  // Error card end to end: open the blunder moment, reflect, verify, and
+  // the cause diagnosis becomes required before saving.
+  await page.locator('.moment-item', { hasText: 'Nf6' }).click();
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'Qxf7 mate threat');
+  await page.fill('#reflectCandidates', 'Nf6, g6');
+  await page.selectOption('#reflectEval', 'worse');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check(!(await page.locator('#causeLabel').isHidden()),
+    'cause picker shown for an error verdict');
+  await page.fill('#cardLesson', 'Check every mate threat on f7 first');
+  await page.click('#saveCard'); // cause still unpicked: validation blocks
+  await page.waitForSelector('#cardSaved:not([hidden])');
+  check((await page.textContent('#cardSaved')).includes('cause'),
+    'error cards require a cause diagnosis');
+  await page.selectOption('#cardCause', 'threat-scan');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.includes('due in Train');
+  });
+  check(true, 'error card saved after cause + lesson provided');
 
   // Archive dedupe retains EVERY ending signature per game instance:
   // finishing line A, undoing into line B, then reproducing A must not

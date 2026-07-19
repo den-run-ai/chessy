@@ -664,6 +664,10 @@
 
   document.getElementById('gameOverReview').addEventListener('click', function () {
     gameOverDialog.close();
+    // Hand off to the coaching review of the just-archived game (Review
+    // tab): that is where reflection, verification and lesson cards live.
+    // Fall back to the on-board replay if the coach is unavailable.
+    if (window.Coach && Coach.openLatestArchived && Coach.openLatestArchived()) return;
     setViewPly(0); // start reviewing from the first position
     // Move focus to the forward control so arrow keys drive the replay
     // (the dialog would otherwise hand focus back to the last board square).
@@ -756,7 +760,10 @@
         clocks: clocks.wMs !== null
           ? { wMs: liveRemaining('w'), bMs: liveRemaining('b') } : null,
         timeForfeit: timeForfeit,
-        flipped: flipped
+        flipped: flipped,
+        // Persisted so the coach's archive dedupe survives reloads: a
+        // reload → undo → replayed ending is the SAME game instance.
+        gameSeq: gameSeq
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -818,6 +825,7 @@
         clocks.bMs = null;
       }
       flipped = !!data.flipped;
+      gameSeq = Number(data.gameSeq) || 0;
       return true;
     } catch (e) {
       return false;

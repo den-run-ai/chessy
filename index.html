@@ -97,15 +97,16 @@
             <form id="reflectForm" class="coach-form" hidden>
               <h3>Before the engine speaks…</h3>
               <label>What is the opponent threatening?
-                <input type="text" id="reflectThreat" autocomplete="off"></label>
+                <input type="text" id="reflectThreat" autocomplete="off" required></label>
               <label>Which candidate moves did you consider?
-                <input type="text" id="reflectCandidates" autocomplete="off"
+                <input type="text" id="reflectCandidates" autocomplete="off" required
                        placeholder="e.g. Nf3, d4, O-O"></label>
               <label>Your evaluation here:
-                <select id="reflectEval">
+                <select id="reflectEval" required>
+                  <option value="" selected disabled>Choose…</option>
                   <option value="winning">I'm winning</option>
                   <option value="better">I'm better</option>
-                  <option value="equal" selected>Equal</option>
+                  <option value="equal">Equal</option>
                   <option value="worse">I'm worse</option>
                   <option value="lost">I'm lost</option>
                 </select></label>
@@ -115,8 +116,9 @@
             <div id="verifyBox" class="coach-form" hidden>
               <h3>Engine verdict</h3>
               <p id="verifyResult" aria-live="polite"></p>
-              <label>Cause (your call — the engine only knows the score):
+              <label id="causeLabel">Cause (your call — the engine only knows the score):
                 <select id="cardCause">
+                  <option value="" selected disabled>Your call…</option>
                   <option value="threat-scan">Missed a threat</option>
                   <option value="candidates">Good move not among my candidates</option>
                   <option value="evaluation">Considered it but judged it wrong</option>
@@ -222,6 +224,14 @@
     <textarea id="importText" rows="9" spellcheck="false"
               placeholder="Paste one or more PGN games…"
               aria-label="PGN text"></textarea>
+    <fieldset class="choice">
+      <legend>You played</legend>
+      <div class="choice-options">
+        <label><input type="radio" name="importColor" value="w"><span>White</span></label>
+        <label><input type="radio" name="importColor" value="b"><span>Black</span></label>
+        <label><input type="radio" name="importColor" value="both" checked><span>Both / not sure</span></label>
+      </div>
+    </fieldset>
     <p class="coach-note import-error" id="importError" aria-live="polite"></p>
     <div class="buttons setup-actions">
       <button type="button" id="importStart" class="btn primary">Import</button>

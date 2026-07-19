@@ -68,18 +68,27 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   debug log (engine depth/quiescence, think time, and the FEN before every
   move) for troubleshooting.
 - **Coaching (first slice)** — four sections: **Play · Review · Train ·
-  Progress**. Finished games are archived automatically to a versioned
-  IndexedDB store, and PGN games can be imported (tolerant parser: comments,
-  variations, NAGs, multi-game files). Review browses any archived game;
-  flagging a moment asks for your *own* reading first (threat, candidates,
-  evaluation — the engine's opinion stays hidden until you answer), then
-  verifies with the engine in a dedicated worker (best move, eval delta),
-  and saves an editable lesson card (cause + one-sentence lesson). Train
-  replays due cards on the board with a fixed 1/3/7/14/30/90-day spaced
-  ladder (Good climbs, Hard repeats, Again retries today). Progress shows
-  honest counts — cards, reviews, per-cause tallies — not a headline
-  "accuracy" number. Training data can be exported/imported as JSON and
-  deleted entirely.
+  Progress**. Finished games are archived automatically (with per-move
+  clock/think evidence and which side you played) to a versioned IndexedDB
+  store, and PGN games can be imported with an "I played White/Black"
+  choice (tolerant parser: comments, variations, NAGs, multi-game files;
+  imports are cancellable mid-batch). "Review game" after a game ends
+  opens the archived game in the coaching review. **Scan for key moments**
+  runs a quick engine pass over *your* decisions only and lists them
+  without revealing severity — a deliberately *experimental Chessy
+  estimate* (single-line, sub-second probes), not authoritative analysis.
+  Flagging a moment requires your *own* reading first (threat, candidates,
+  evaluation — all required; the engine's verdict stays hidden until you
+  answer), then verifies in a dedicated worker and saves a validated
+  lesson card: error cards need your cause diagnosis, good moves become
+  positive *pattern* cards. Train replays due cards on the board with a
+  fixed 1/3/7/14/30/90-day spaced ladder (Good climbs, Hard repeats,
+  Again retries today); a different answer is reported as *differing from
+  Chessy's saved move*, not as wrong. Progress shows honest counts —
+  cards, reviews, per-cause tallies — not a headline "accuracy" number.
+  Training data can be exported/imported as JSON and deleted entirely;
+  every asynchronous write (scans, imports, restores, cards) respects the
+  deletion epoch, so nothing resurrects deleted data.
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest.

@@ -35,7 +35,8 @@
     evaluation: 'Judged it wrong',
     calculation: 'Line went wrong on the reply',
     efficiency: 'Right idea, too much time',
-    impulse: 'Moved too fast'
+    impulse: 'Moved too fast',
+    pattern: 'Good move (pattern)'
   };
   const DAY = 86400000;
   const LADDER_DAYS = [1, 3, 7, 14, 30, 90]; // fixed spaced-review ladder
@@ -78,11 +79,23 @@
   function makeBoard(el, onClick) {
     el.innerHTML = '';
     const squares = [];
+    let focusIdx = 52; // e2 — same roving-tab-stop model as the Play board
+    function setFocus(i, focus) {
+      squares[focusIdx].tabIndex = -1;
+      focusIdx = i;
+      squares[i].tabIndex = 0;
+      if (focus) squares[i].focus();
+    }
     for (let i = 0; i < 64; i++) {
       const cell = document.createElement(onClick ? 'button' : 'div');
       if (onClick) {
         cell.type = 'button';
-        cell.addEventListener('click', onClick.bind(null, i));
+        // Roving tab stop: one Tab stop for the whole board, arrows move
+        // within it (Enter/Space activate the button natively).
+        cell.tabIndex = i === focusIdx ? 0 : -1;
+        cell.addEventListener('click', (function (idx) {
+          return function () { setFocus(idx, false); onClick(idx); };
+        })(i));
       }
       cell.className = 'square ' + ((Math.floor(i / 8) + i) % 2 === 0 ? 'light' : 'dark');
       const glyph = document.createElement('span');
@@ -90,6 +103,23 @@
       cell.appendChild(glyph);
       el.appendChild(cell);
       squares.push(cell);
+    }
+    if (onClick) {
+      el.addEventListener('keydown', function (e) {
+        const idx = squares.indexOf(e.target);
+        if (idx < 0) return;
+        let r = Math.floor(idx / 8), c = idx % 8;
+        if (e.key === 'ArrowUp') r--;
+        else if (e.key === 'ArrowDown') r++;
+        else if (e.key === 'ArrowLeft') c--;
+        else if (e.key === 'ArrowRight') c++;
+        else if (e.key === 'Home') c = 0;
+        else if (e.key === 'End') c = 7;
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (r >= 0 && r < 8 && c >= 0 && c < 8) setFocus(r * 8 + c, true);
+      });
     }
     return {
       render: function (state, opts) {
@@ -190,16 +220,40 @@
     return 'fine';
   }
 
+  // ---- Coaching data generation ----
+  // ONE shared epoch for every asynchronous writer — game scans, PGN
+  // imports, JSON restore, archive and card writes. "Delete all training
+  // data" bumps it first; each writer captures the generation when it
+  // starts and abandons if it changed, so nothing writes deleted data back.
+  let coachGen = 0;
+
   // ---- Archive hook (called by app.js when a game ends) ----
-  // Dedupe is keyed on the game INSTANCE (app.js's gameSeq) plus the moves:
-  // the same ending re-displayed archives once, while an identical game
-  // legitimately replayed via New game/Rematch archives again. EVERY seen
-  // signature is retained (not just the last), so finishing line A, undoing
-  // into line B, then reproducing A within one instance still counts A once.
-  const archivedSigs = new Set();
+  // Dedupe is keyed on the game INSTANCE (app.js's gameSeq, persisted with
+  // the saved game) plus the moves: a re-shown ending — including a
+  // reload → undo → replay of the same finish — archives once, while an
+  // identical game legitimately replayed via New game/Rematch archives
+  // again. EVERY seen signature is retained (finish A, undo into B, then
+  // reproduce A still counts A once), signatures survive reloads via
+  // localStorage (bounded), and a signature is removed again when its
+  // write FAILS so a transient IndexedDB error does not suppress the retry.
+  const SIGS_KEY = 'chessy-coach-sigs-v1';
+  const archivedSigs = new Set(loadSigs());
+  let lastArchivedId = null;
+
+  function loadSigs() {
+    try { return JSON.parse(localStorage.getItem(SIGS_KEY)) || []; }
+    catch (e) { return []; }
+  }
+
+  function persistSigs() {
+    try {
+      localStorage.setItem(SIGS_KEY, JSON.stringify(Array.from(archivedSigs).slice(-100)));
+    } catch (e) { /* storage unavailable — session-level dedupe still applies */ }
+  }
 
   function archiveGame(state, settings, status, gameSeq) {
     if (!state.history.length || !status.over) return Promise.resolve(null);
+    const gen = coachGen;
     const sans = state.history.map(function (h) { return h.san; });
     const sig = (gameSeq || 0) + '|' + sans.join(' ') + '|' + status.result;
     if (archivedSigs.has(sig)) return Promise.resolve(null); // re-shown end of the same game
@@ -208,6 +262,11 @@
       source: 'play',
       tags: {},
       sans: sans,
+      // The side the human played — scans focus feedback on these moves.
+      playerColor: settings.mode === 'ai-b' ? 'w' : settings.mode === 'ai-w' ? 'b' : 'both',
+      // Per-move clock evidence ({thinkMs, wMs, bMs} or null): retained so
+      // efficiency/impulse diagnoses have data behind them.
+      clocks: state.history.map(function (h) { return h.clock || null; }),
       result: status.result,
       reason: status.reason,
       mode: settings.mode,
@@ -215,7 +274,32 @@
       timeControl: settings.timeControl,
       plies: sans.length,
       createdAt: Date.now()
-    }).catch(function () { return null; });
+    }).then(function (id) {
+      if (gen !== coachGen) {
+        // Delete-all won the race with this write: take the record back out.
+        CoachStore.deleteGame(id).catch(function () {});
+        return null;
+      }
+      lastArchivedId = id;
+      persistSigs();
+      return id;
+    }).catch(function () {
+      archivedSigs.delete(sig); // failed write: allow the retry
+      return null;
+    });
+  }
+
+  // Game-over "Review game" hands off here: open the just-archived game in
+  // the coaching review. Returns false when there is nothing to open (the
+  // caller falls back to the on-board replay).
+  function openLatestArchived() {
+    if (lastArchivedId === null) return false;
+    CoachStore.getGame(lastArchivedId).then(function (game) {
+      if (!game) return;
+      showView('review');
+      openReview(game);
+    }).catch(function () { /* list view stays reachable via the tab */ });
+    return true;
   }
 
   // ---- Review: game list ----
@@ -330,6 +414,7 @@
 
   function runScan(r) {
     const token = ++scanToken;
+    const gen = coachGen;
     const n = r.gs.history.length;
     const evals = new Array(n + 1);
     const bestSans = new Array(n + 1);
@@ -363,10 +448,15 @@
       })(k);
     }
     chain.then(function () {
-      if (token !== scanToken) return;
+      if (token !== scanToken || gen !== coachGen) return;
+      // Coach the TRAINEE only: an opponent's blunders are not the player's
+      // lesson material, and in an easy-AI game they would otherwise crowd
+      // out every slot.
+      const pc = r.game.playerColor || 'both';
       const moments = [];
       for (let k = 0; k < n; k++) {
         const mover = k % 2 === 0 ? 'w' : 'b'; // games replay from the standard start
+        if (pc !== 'both' && mover !== pc) continue;
         const loss = Math.max(0, Math.round((evals[k] - evals[k + 1]) * (mover === 'w' ? 1 : -1)));
         if (loss >= 50) moments.push({ ply: k, loss: loss });
       }
@@ -375,22 +465,21 @@
       r.game.scan = {
         at: Date.now(),
         settings: { maxDepth: SCAN.maxDepth, timeMs: SCAN.timeMs },
+        playerColor: pc,
         evals: evals,
         bestSans: bestSans,
         moments: top
       };
-      CoachStore.updateGame(r.game).catch(function () { /* scan still usable this session */ });
+      CoachStore.updateGame(r.game).then(function () {
+        // Delete-all racing this put() would resurrect the game — undo it.
+        if (gen !== coachGen) CoachStore.deleteGame(r.game.id).catch(function () {});
+      }).catch(function () { /* scan still usable this session */ });
       renderScan(r);
     });
   }
 
   function moveLabel(r, ply) {
     return (Math.floor(ply / 2) + 1) + (ply % 2 === 0 ? '. ' : '… ') + r.gs.history[ply].san;
-  }
-
-  function describeLoss(loss) {
-    if (loss > MATE_ISH / 2) return 'a decisive swing — missed or allowed a mate';
-    return 'cost ≈ ' + (loss / 100).toFixed(1) + ' pawns';
   }
 
   function renderScan(r) {
@@ -401,17 +490,22 @@
     $('scanGame').textContent = scan ? 'Re-scan game' : 'Scan for key moments';
     $('scanStatus').hidden = !scan;
     if (!scan) return;
+    const whose = scan.playerColor === 'w' ? 'your White moves'
+      : scan.playerColor === 'b' ? 'your Black moves' : 'this game';
     $('scanStatus').textContent = scan.moments.length
       ? scan.moments.length + ' key moment' + (scan.moments.length > 1 ? 's' : '') +
-        ' found. Open one, then reflect — the engine explains after you answer.'
-      : 'Scanned — no significant swings found in this game.';
+        ' in ' + whose + ' (Chessy estimate). Open one and reflect — details appear after you answer.'
+      : 'Scanned ' + whose + ' — no significant swings found (Chessy estimate).';
+    // Deliberately NO cost or severity here: revealing the magnitude before
+    // the reflection would leak the engine's judgement (roadmap #23's
+    // engine-hidden sequence). The moment's existence is the only hint.
     for (const m of scan.moments) {
       const li = document.createElement('li');
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'moment-item';
       const side = m.ply % 2 === 0 ? 'White' : 'Black';
-      btn.textContent = moveLabel(r, m.ply) + ' (' + side + ') — ' + describeLoss(m.loss);
+      btn.textContent = moveLabel(r, m.ply) + ' (' + side + ') — review this decision';
       btn.addEventListener('click', function () { stepReview(m.ply); });
       li.appendChild(btn);
       list.appendChild(li);
@@ -434,9 +528,13 @@
   $('flagMoment').addEventListener('click', function () {
     verifyToken++; // a new flag invalidates any in-flight verification
     review.flagged = review.ply;
+    // Fresh moment, fresh answers: reflection AND card fields reset, so a
+    // stale cause/lesson from the previous moment can never carry over.
     $('reflectThreat').value = '';
     $('reflectCandidates').value = '';
-    $('reflectEval').value = 'equal';
+    $('reflectEval').value = '';
+    $('cardCause').value = '';
+    $('cardLesson').value = '';
     $('reflectForm').hidden = false;
     $('verifyBox').hidden = true;
     $('cardSaved').hidden = true;
@@ -486,20 +584,26 @@
         // two probes can still differ (depth parity, terminal shortcuts).
         const lossCp = same ? 0 : Math.max(0,
           Math.round((best.score - after.score) * (mover === 'w' ? 1 : -1)));
+        // A moment where the played move held up is a positive PATTERN, not
+        // an error — it gets no cause diagnosis, just a lesson to keep.
+        const kind = (same || lossCp < 50) ? 'pattern' : 'error';
         review.verdict = {
           ply: ply, fenBefore: fenBefore, playedSan: entry.san,
           bestSan: bestSan,
           bestMove: bm ? { from: bm.from, to: bm.to, promotion: bm.promotion || null } : null,
           bestScore: best.score, playedScore: after.score, lossCp: lossCp,
+          kind: kind,
           depth: best.depth
         };
-        $('verifyResult').textContent = same
-          ? 'You played ' + entry.san + ' — the engine agrees (eval ' +
+        $('causeLabel').hidden = kind === 'pattern';
+        $('verifyResult').textContent = (same
+          ? 'You played ' + entry.san + ' — Chessy’s line agrees (eval ' +
             fmtScore(best.score) + ', depth ' + best.depth + ').'
           : 'You played ' + entry.san + ' (position eval ' + fmtScore(after.score) +
-            ') — engine best is ' + bestSan + ' (eval ' + fmtScore(best.score) +
+            ') — Chessy prefers ' + bestSan + ' (eval ' + fmtScore(best.score) +
             ', depth ' + best.depth + '). Cost ≈ ' + (lossCp / 100).toFixed(1) +
-            ' pawns: ' + lossLabel(lossCp) + '.';
+            ' pawns: ' + lossLabel(lossCp) + '.') +
+          ' Chessy estimate, not authoritative analysis.';
         $('saveCard').disabled = false;
       });
     });
@@ -508,6 +612,18 @@
   $('saveCard').addEventListener('click', function () {
     const v = review.verdict;
     if (!v || $('saveCard').disabled) return;
+    // Validation: every card needs a one-sentence lesson; error cards also
+    // need the player's cause diagnosis (pattern cards have no cause).
+    const lesson = $('cardLesson').value.trim();
+    const cause = v.kind === 'pattern' ? 'pattern' : $('cardCause').value;
+    if (!lesson || !cause) {
+      $('cardSaved').hidden = false;
+      $('cardSaved').textContent = v.kind === 'pattern'
+        ? 'Write a one-sentence lesson first.'
+        : 'Pick a cause and write a one-sentence lesson first.';
+      return;
+    }
+    const gen = coachGen;
     // Disable BEFORE the async write — a double-click (or a slow
     // IndexedDB) must not create duplicate cards for the same moment.
     $('saveCard').disabled = true;
@@ -522,8 +638,9 @@
       bestScore: v.bestScore,
       playedScore: v.playedScore,
       lossCp: v.lossCp,
-      cause: $('cardCause').value,
-      lesson: $('cardLesson').value.trim(),
+      kind: v.kind,
+      cause: cause,
+      lesson: lesson,
       reflection: {
         threat: $('reflectThreat').value.trim(),
         candidates: $('reflectCandidates').value.trim(),
@@ -533,7 +650,12 @@
       due: now,        // first review is immediate (the "learn" step)
       step: -1,        // -1 = not yet on the day ladder
       attempts: []
-    }).then(function () {
+    }).then(function (id) {
+      if (gen !== coachGen) {
+        // Delete-all won the race with this write: take the card back out.
+        CoachStore.deleteCard(id).catch(function () {});
+        return;
+      }
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = 'Lesson card saved — it is due in Train now, then on the 1/3/7/14/30/90-day ladder.';
     }).catch(function () {
@@ -548,6 +670,11 @@
   // the remaining chain steps become no-ops instead of importing on behind
   // a closed dialog.
   let importToken = 0;
+
+  function newGameChoice(name) {
+    const el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : null;
+  }
 
   $('importPgnBtn').addEventListener('click', function () {
     $('importText').value = '';
@@ -564,13 +691,15 @@
     if ($('importStart').disabled) return;
     $('importStart').disabled = true;
     const token = ++importToken;
+    const gen = coachGen;
+    const playerColor = (newGameChoice('importColor') || 'both');
     const games = Chess.parsePgn($('importText').value);
     let ok = 0, failed = 0, firstError = null;
     let chain = Promise.resolve();
     for (const g of games) {
       if (g.sans.length === 0) continue;
       chain = chain.then(function () {
-        if (token !== importToken) return; // cancelled mid-batch
+        if (token !== importToken || gen !== coachGen) return; // cancelled or deleted mid-batch
         if (g.unsupported) throw new Error('games from a set-up position are not supported');
         const gs = Chess.replaySans(g.sans); // throws on illegal moves
         const status = Chess.gameStatus(gs);
@@ -578,12 +707,20 @@
           source: 'import',
           tags: g.tags,
           sans: gs.history.map(function (h) { return h.san; }), // canonical SANs
+          playerColor: playerColor,
+          clocks: null, // PGN %clk import is a follow-up
           result: status.over ? status.result : g.result,
           reason: status.over ? status.reason : '',
           mode: null, difficulty: null, timeControl: (g.tags && g.tags.TimeControl) || null,
           plies: gs.history.length,
           createdAt: Date.now()
-        }).then(function () { ok++; });
+        }).then(function (id) {
+          if (token !== importToken || gen !== coachGen) {
+            CoachStore.deleteGame(id).catch(function () {}); // cancelled/deleted during the write
+            return;
+          }
+          ok++;
+        });
       }).catch(function (e) {
         failed++;
         if (!firstError) firstError = e.message || String(e);
@@ -641,7 +778,8 @@
     trainBoard.render(t.state, {});
     $('trainPrompt').textContent =
       (t.state.turn === 'w' ? 'White' : 'Black') +
-      ' to move — find the best move. (You played ' + t.card.playedSan + ' in the game.)';
+      ' to move — find the move Chessy saved for this moment. (You played ' +
+      t.card.playedSan + ' in the game.)';
   }
 
   function onTrainSquare(i) {
@@ -702,10 +840,14 @@
     const attemptSan = Chess.toSan(t.state, attempt);
     trainBoard.render(Chess.applyMove(t.state, attempt), { lastMove: attempt });
     $('trainReveal').hidden = false;
+    // Honest wording: a single-line 300/1200 ms engine saved ONE move — a
+    // different answer may be equally sound, so it "differs", it is not
+    // declared wrong. The player grades themselves accordingly.
     $('trainOutcome').textContent = correct
-      ? '✓ ' + attemptSan + ' — that is the engine move.'
-      : '✗ You answered ' + attemptSan + '; the engine move was ' + t.card.bestSan +
-        ' (in the game you played ' + t.card.playedSan + ').';
+      ? '✓ ' + attemptSan + ' — matches Chessy’s saved move.'
+      : '≠ ' + attemptSan + ' differs from Chessy’s saved move ' + t.card.bestSan +
+        ' (in the game you played ' + t.card.playedSan + '). Your move may still be' +
+        ' sound — grade yourself honestly.';
     $('trainLesson').textContent =
       (t.card.lesson ? 'Lesson: ' + t.card.lesson + ' · ' : '') +
       'Cause: ' + (CAUSE_LABELS[t.card.cause] || t.card.cause);
@@ -733,10 +875,15 @@
     // Consume the answer BEFORE the async write: a double-click must not
     // record two attempts or climb the ladder twice for one reveal.
     t.answered = false;
+    const gen = coachGen;
     const now = Date.now();
-    t.card.attempts.push({ at: now, grade: g, correct: !!t.lastCorrect });
-    schedule(t.card, g, now);
-    CoachStore.updateCard(t.card).then(nextTrainCard, nextTrainCard);
+    const card = t.card;
+    card.attempts.push({ at: now, grade: g, correct: !!t.lastCorrect });
+    schedule(card, g, now);
+    CoachStore.updateCard(card).then(function () {
+      // Delete-all racing this put() would resurrect the card — undo it.
+      if (gen !== coachGen) CoachStore.deleteCard(card.id).catch(function () {});
+    }).then(nextTrainCard, nextTrainCard);
   }
 
   $('gradeAgain').addEventListener('click', function () { grade('again'); });
@@ -804,9 +951,15 @@
     reader.onload = function () {
       let data = null;
       try { data = JSON.parse(reader.result); } catch (e) { /* handled below */ }
+      // The restore checks the coaching generation between records: a
+      // "Delete all" clicked mid-restore stops the remaining writes.
+      const gen = coachGen;
       Promise.resolve()
-        .then(function () { return CoachStore.importAll(data); })
+        .then(function () {
+          return CoachStore.importAll(data, function () { return gen !== coachGen; });
+        })
         .then(function (n) {
+          if (gen !== coachGen) return;
           $('dataNote').textContent = 'Imported ' + n.games + ' games and ' + n.cards + ' cards.';
           renderProgress();
         })
@@ -820,15 +973,25 @@
 
   $('deleteData').addEventListener('click', function () {
     if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
-    // Invalidate in-flight coaching work FIRST: a scan finishing after the
-    // wipe would otherwise put() its game back into the cleared store.
+    // New data epoch FIRST: every asynchronous writer (scan, PGN import,
+    // JSON restore, archive/card/grade writes) checks its captured
+    // generation and abandons instead of writing deleted data back.
+    coachGen++;
     scanToken++;
     importToken++;
+    verifyToken++;
+    archivedSigs.clear();
+    persistSigs();
+    lastArchivedId = null;
     CoachStore.deleteAll().then(function () {
       $('dataNote').textContent = 'All training data deleted.';
       renderProgress();
     });
   });
 
-  window.Coach = { archiveGame: archiveGame, showView: showView };
+  window.Coach = {
+    archiveGame: archiveGame,
+    openLatestArchived: openLatestArchived,
+    showView: showView
+  };
 })();

@@ -88,6 +88,7 @@
 
   function addCard(card) { return tx('cards', 'readwrite', function (s) { return s.add(card); }); }
   function updateCard(card) { return tx('cards', 'readwrite', function (s) { return s.put(card); }); }
+  function deleteCard(id) { return tx('cards', 'readwrite', function (s) { return s.delete(id); }); }
   function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
 
   function dueCards(now) {
@@ -105,16 +106,22 @@
 
   // Restore a snapshot by APPENDING: records get fresh ids and card→game
   // links are remapped, so importing into a non-empty archive never
-  // collides with (or overwrites) existing records.
-  function importAll(data) {
+  // collides with (or overwrites) existing records. `isCancelled` (optional)
+  // is consulted between records — a restore raced by "Delete all training
+  // data" stops instead of writing deleted data back.
+  function importAll(data, isCancelled) {
     if (!data || data.format !== 'chessy-coach' ||
         !Array.isArray(data.games) || !Array.isArray(data.cards)) {
       return Promise.reject(new Error('not a chessy-coach backup'));
+    }
+    function guard() {
+      if (isCancelled && isCancelled()) throw new Error('restore cancelled');
     }
     const idMap = new Map();
     let chain = Promise.resolve();
     data.games.forEach(function (g) {
       chain = chain.then(function () {
+        guard();
         const copy = Object.assign({}, g);
         const oldId = copy.id;
         delete copy.id;
@@ -123,6 +130,7 @@
     });
     data.cards.forEach(function (c) {
       chain = chain.then(function () {
+        guard();
         const copy = Object.assign({}, c);
         delete copy.id;
         copy.gameId = idMap.get(copy.gameId) || null;
@@ -147,6 +155,7 @@
     deleteGame: deleteGame,
     addCard: addCard,
     updateCard: updateCard,
+    deleteCard: deleteCard,
     listCards: listCards,
     dueCards: dueCards,
     exportAll: exportAll,
