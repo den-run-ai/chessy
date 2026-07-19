@@ -23,13 +23,24 @@ require('./helper').run('coach', async function (t) {
   await page.click('#gameOverClose');
 
   // Reload → undo → reproduce the SAME ending: the persisted signatures
-  // (and gameSeq, saved with the game) still dedupe across the reload.
+  // (and gameSeq, saved with the game) still dedupe across the reload —
+  // and "Review game" still opens the coaching review of THAT record (the
+  // dedupe path re-associates the handoff by lookup; it used to fall back
+  // to the Play replay because the archive promise died with the reload).
   await page.reload();
   await page.waitForSelector('#board .square');
   await page.click('#undo');
   await mv('d8', 'h4');
   await page.waitForSelector('#gameOverDialog[open]');
-  await page.click('#gameOverClose');
+  await page.click('#gameOverReview');
+  await page.waitForSelector('#viewReview:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
+  });
+  check((await page.textContent('#reviewStatus')).includes('Position 0/4'),
+    'a re-shown ending after reload hands off to the coaching review of its record');
+  check(await page.evaluate(function () { return document.activeElement.id; }) === 'reviewBack',
+    'the asynchronous handoff moves focus into the review flow');
 
   await page.click('#tabReview');
   check(await page.getAttribute('#tabReview', 'aria-current') === 'page', 'Review tab activates');
@@ -82,6 +93,14 @@ require('./helper').run('coach', async function (t) {
   await page.click('#reflectVerify'); // EMPTY reflection: required fields block
   check(await page.locator('#verifyBox').isHidden(),
     'empty reflection cannot summon the engine (fields are required)');
+  // Whitespace passes native `required` but is not reflection: the submit
+  // handler trims before re-validating, so spaces-only answers block too.
+  await page.fill('#reflectThreat', '   ');
+  await page.fill('#reflectCandidates', '  ');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  check(await page.locator('#verifyBox').isHidden(),
+    'whitespace-only reflection is rejected (trimmed before validation)');
   await page.fill('#reflectThreat', 'nothing concrete yet');
   await page.fill('#reflectCandidates', 'e4, d4');
   await page.selectOption('#reflectEval', 'equal');
@@ -409,6 +428,17 @@ require('./helper').run('coach', async function (t) {
   });
   check(abaCount === 2, 'A-B-A endings in one game instance archive each line once (got ' + abaCount + ')');
 
+  // ...and the dedupe path re-associates the handoff: after A→B→A the last
+  // archiveGame call was a dedupe hit for line A, so "Review game" must
+  // open line A's record (2 plies) — not line B's, the last one written.
+  await page.evaluate(function () { Coach.openLatestArchived(); });
+  await page.waitForSelector('#viewReview:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
+  });
+  check((await page.textContent('#reviewStatus')).includes('Position 0/2'),
+    'A-B-A: the handoff reopens line A (2 plies), not line B (1 ply)');
+
   // Cancelling a running multi-game import stops the remaining writes: the
   // chain imports one game at a time and Cancel bumps the batch token.
   const beforeCancel = await page.evaluate(function () {
@@ -487,6 +517,48 @@ require('./helper').run('coach', async function (t) {
   });
   check(crossTab === 0,
     'a delete in another tab stops this tab’s scan from resurrecting data (got ' + crossTab + ')');
+
+  // Delete All must not be undone by a JSON restore whose file was picked
+  // BEFORE the delete: the generation is captured when the file is chosen,
+  // so a delete landing while the (possibly large) file is still being
+  // read invalidates the restore before its first write. The FileReader is
+  // stubbed so the test controls exactly when the read completes.
+  const backupJson = JSON.stringify({
+    format: 'chessy-coach', version: 1, exportedAt: 1,
+    games: [{ id: 1, source: 'import', tags: {}, sans: ['e4'], playerColor: 'both',
+      clocks: null, result: '*', reason: '', mode: null, difficulty: null,
+      timeControl: null, plies: 1, createdAt: 1 }],
+    cards: []
+  });
+  await page.click('#tabProgress');
+  await page.evaluate(function () {
+    window.__RealFileReader = window.FileReader;
+    window.FileReader = function () {
+      window.__pendingReader = this;
+      this.readAsText = function () { /* completes only when the test fires onload */ };
+    };
+  });
+  await page.setInputFiles('#importFile', {
+    name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backupJson)
+  });
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData'); // delete while the "read" is in flight
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page.evaluate(function (json) {
+    const r = window.__pendingReader;
+    r.result = json;
+    r.onload(); // the read completes AFTER the delete
+    window.FileReader = window.__RealFileReader;
+  }, backupJson);
+  await page.waitForTimeout(500);
+  const readRace = await page.evaluate(function () {
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()])
+      .then(function (r) { return r[0].length + r[1].length; });
+  });
+  check(readRace === 0,
+    'Delete All is not undone by a restore whose file read finishes after it (got ' + readRace + ')');
 
   // "Review game" opens the game that JUST finished — the handoff awaits
   // the in-flight archive write instead of trusting a stale id.

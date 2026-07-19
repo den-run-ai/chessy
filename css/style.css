@@ -5,8 +5,13 @@
   --muted: #a09d9a;
   --light-sq: #ecdab9;
   --dark-sq: #ae8a68;
+  /* --accent is decorative only (borders, glows, text on dark panels).
+     White TEXT sits on --accent-dark (4.8:1, passes WCAG 1.4.3's 4.5:1);
+     --accent-darker is its hover (6.6:1). Never put white text on
+     --accent itself — that pairing is only 2.8:1. */
   --accent: #7fa650;
   --accent-dark: #5d7a3a;
+  --accent-darker: #4c6430;
   --highlight: rgba(255, 213, 79, 0.55);
   --check: rgba(224, 82, 82, 0.75);
 }
@@ -89,9 +94,14 @@ body {
 /* ARIA rows are grouping-only: their cells stay direct CSS-grid items. */
 .board-row { display: contents; }
 
+/* Two-tone focus ring: the green accent is only 1.1–2.1:1 against the
+   board squares. The dark outer ring clears 3:1 (WCAG 1.4.11) on BOTH
+   square colors; the white inner ring keeps it visible on the dark ring's
+   own worst case (highlight/check overlays). */
 .square:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid #14120f;
   outline-offset: -3px;
+  box-shadow: inset 0 0 0 6px #f5f2ec;
   z-index: 1;
 }
 
@@ -219,8 +229,8 @@ body {
   cursor: pointer;
 }
 .btn:hover { background: #4a4642; }
-.btn.primary { background: var(--accent); color: #fff; }
-.btn.primary:hover { background: var(--accent-dark); }
+.btn.primary { background: var(--accent-dark); color: #fff; }
+.btn.primary:hover { background: var(--accent-darker); }
 
 .captured {
   min-height: 1.4rem;
@@ -382,8 +392,8 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 .choice span:hover { border-color: #6a655f; }
 .choice input:checked + span {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
   color: #fff;
 }
 .choice input:focus-visible + span {
@@ -420,10 +430,28 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 .tab:hover { color: var(--text); border-color: #6a655f; }
 .tab[aria-current="page"] {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
   color: #fff;
 }
+
+/* Live timed-game banner: visible in coach views while Play's clocks run. */
+.live-note {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 0.75rem;
+  background: var(--accent-dark);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.live-note:hover { background: var(--accent-darker); }
 
 /* ---- Coach views ---- */
 .coach {
@@ -491,8 +519,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   width: min(88vw, 380px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
-/* Non-interactive review squares are divs, not buttons. */
-.board.small div.square { cursor: default; }
+/* Inspection-only boards (Review): squares are focusable for keyboard/AT
+   users but activating them does nothing — don't advertise a click. */
+.board.inspect .square { cursor: default; }
 
 .review-nav .btn { flex: 1; min-height: 44px; }
 .review-nav .btn:disabled { opacity: 0.35; cursor: default; }

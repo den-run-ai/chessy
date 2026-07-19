@@ -25,6 +25,10 @@
       <button type="button" class="tab" id="tabProgress" data-view="progress">Progress</button>
     </nav>
 
+    <!-- Shown only OUTSIDE Play while a timed game's clocks are running:
+         the live game must stay visible from Review/Train/Progress. -->
+    <button type="button" id="liveGameNote" class="live-note" hidden></button>
+
     <main class="layout view" id="viewPlay">
       <section class="board-wrap">
         <div class="board" id="board" role="grid" aria-label="Chess board"></div>

@@ -338,9 +338,30 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
+  // While the user is in a coach view (Review/Train/Progress), a running
+  // timed game's clocks keep ticking invisibly and can flag — surface them
+  // as a persistent banner that returns to Play. Untimed games need no
+  // banner: nothing in Play can end without the player acting there.
+  const liveNoteEl = document.getElementById('liveGameNote');
+
+  function updateLiveNote() {
+    const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
+    const running = clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over;
+    if (inPlay || !running) { liveNoteEl.hidden = true; return; }
+    liveNoteEl.hidden = false;
+    liveNoteEl.textContent = '⏱ Timed game running — White ' + fmtClock(liveRemaining('w')) +
+      ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
+  }
+
+  liveNoteEl.addEventListener('click', function () {
+    if (window.Coach) Coach.showView('play');
+  });
+  document.addEventListener('chessy:viewchange', updateLiveNote);
+
   // The ticker calls this alone (not render()) so the 5 Hz tick never
   // rebuilds the move list or rewrites localStorage.
   function renderClocks() {
+    updateLiveNote();
     const timed = clocks.wMs !== null;
     clocksEl.hidden = !timed;
     if (!timed) return;
