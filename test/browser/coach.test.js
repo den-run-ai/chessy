@@ -300,6 +300,46 @@ require('./helper').run('coach', async function (t) {
   check(rollback.failed && rollback.unchanged,
     'a failed restore rolls back its committed prefix (no partial import)');
 
+  // "Correct on first try" counts each card's FIRST attempt only — a miss
+  // followed by a correct retry is not a first-try success (it used to be
+  // reported per-attempt, e.g. 1/2 for that card alone).
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now + 86400000, step: 0,
+      attempts: [{ at: now - 1000, grade: 'again', correct: false },
+                 { at: now, grade: 'good', correct: true }]
+    });
+  });
+  await page.click('#tabPlay');
+  await page.click('#tabProgress');
+  // The re-render is asynchronous and the stats DOM already holds the
+  // previous visit's values — wait for the new attempt count to land.
+  await page.waitForFunction(function () {
+    const dts = document.querySelectorAll('#progressStats dt');
+    const dds = document.querySelectorAll('#progressStats dd');
+    for (let i = 0; i < dts.length; i++) {
+      if (dts[i].textContent === 'Reviews (30 days)') return dds[i].textContent === '4';
+    }
+    return false;
+  }, null, { timeout: 5000 });
+  const stats2 = await page.evaluate(function () {
+    const out = {};
+    const dl = document.getElementById('progressStats');
+    const dts = dl.querySelectorAll('dt'), dds = dl.querySelectorAll('dd');
+    dts.forEach(function (dt, i) { out[dt.textContent] = dds[i].textContent; });
+    return out;
+  });
+  check(stats2['Reviews (30 days)'] === '4', 'reviews count every attempt (got ' + stats2['Reviews (30 days)'] + ')');
+  check(stats2['Cards correct on first try (30 days)'] === '2/3',
+    'first-try metric counts only each card’s first attempt (got ' +
+    stats2['Cards correct on first try (30 days)'] + ')');
+
   page.once('dialog', function (d) { d.accept(); });
   await page.click('#deleteData');
   await page.waitForFunction(function () {
@@ -639,6 +679,41 @@ require('./helper').run('coach', async function (t) {
     'a due-card read resolving after a cross-tab delete is discarded');
   await page.evaluate(function () { CoachStore.dueCards = CoachStore.__realDueCards; });
 
+  // A cross-tab delete on the Progress view clears the counts DIRECTLY —
+  // re-rendering could read pre-delete data (the remote clear may not
+  // have committed) and leave stale counts on screen indefinitely.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabPlay');
+  await page.click('#tabProgress');
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#progressStats dt').length > 0;
+  });
+  const page5 = await t.context.newPage();
+  await page5.goto(t.url);
+  await page5.waitForSelector('#board .square');
+  await page5.click('#tabProgress');
+  page5.once('dialog', function (d) { d.accept(); });
+  await page5.click('#deleteData');
+  await page5.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page5.close();
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#progressStats dt').length === 0 &&
+           document.getElementById('dataNote').textContent.includes('another window');
+  }, null, { timeout: 5000 });
+  check(true, 'a cross-tab delete clears the Progress counts and says why');
+
   // Delete All must not be undone by a JSON restore whose file was picked
   // BEFORE the delete: the generation is captured when the file is chosen,
   // so a delete landing while the (possibly large) file is still being
@@ -833,4 +908,38 @@ require('./helper').run('coach', async function (t) {
     return CoachStore.listGames().then(function (g) { return g.length === 1; });
   }, null, { timeout: 5000 });
   check(true, 'the tombstone does not block games finished after the delete');
+
+  // Divergent live games across tabs: tab B finishes a DIFFERENT game
+  // instance than the one tab A holds, then tab A deletes all. Tab B's
+  // tombstone exists only in its memory unless the storage-event path
+  // MERGE-persists it — without that, tab B's reload resurrects its game.
+  const pageB = await t.context.newPage();
+  await pageB.goto(t.url);
+  await pageB.waitForSelector('#board .square');
+  await pageB.click('#newGame');
+  await pageB.click('#newGameStart'); // new instance (gameSeq+1) in tab B only
+  const sqB = function (name) { return '#board .square[data-index="' + idx(name) + '"]'; };
+  const mvB = async function (from, to) { await pageB.click(sqB(from)); await pageB.click(sqB(to)); };
+  await mvB('f2', 'f3'); await mvB('e7', 'e5');
+  await mvB('g2', 'g4'); await mvB('d8', 'h4');
+  await pageB.waitForSelector('#gameOverDialog[open]');
+  await pageB.click('#gameOverClose'); // tab B: finished game Y (archived)
+  // Tab A (still holding the OLD finished game X) deletes everything.
+  await page.click('#tabProgress');
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  // Tab B reloads: its saved game is Y — boot reconciliation must see
+  // Y's merge-persisted tombstone, not archive Y back.
+  await pageB.reload();
+  await pageB.waitForSelector('#board .square');
+  await pageB.waitForTimeout(800);
+  const divergent = await pageB.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  await pageB.close();
+  check(divergent === 0,
+    'a receiving tab’s divergent finished game stays deleted after its reload (got ' + divergent + ')');
 });

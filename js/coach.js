@@ -283,7 +283,16 @@
     // or re-scanning it afterwards would capture the NEW generation and
     // write the data back past the undo checks.
     invalidateCoachWork();
+    // MERGE-persist our tombstone: the deleting tab persisted only ITS
+    // live game's signature, and this tab's (possibly different) finished
+    // game would otherwise be resurrected by boot reconciliation after
+    // this tab saves and reloads.
+    for (const s of loadSigs()) archivedSigs.add(s);
+    persistSigs();
     resetCoachViews();
+    if (document.body.dataset.view === 'progress') {
+      $('dataNote').textContent = 'All training data was deleted in another window.';
+    }
   });
 
   function resetCoachViews() {
@@ -311,7 +320,14 @@
       $('trainCardBox').hidden = true;
       $('trainReveal').hidden = true;
     }
-    if (view === 'progress') renderProgress();
+    if (view === 'progress') {
+      // Clear the counts directly, same principle as above: an immediate
+      // re-render could read pre-delete data and leave stale counts on
+      // screen indefinitely. (The LOCAL delete path re-renders after its
+      // clear commits — see the deleteData handler.)
+      $('progressStats').innerHTML = '';
+      $('causeStats').innerHTML = '';
+    }
   }
 
   // ---- Archive hook (called by app.js when a game ends) ----
@@ -1100,13 +1116,21 @@
       stat(dl, 'Games archived', games.length);
       stat(dl, 'Lesson cards', cards.length);
       stat(dl, 'Cards due now', cards.filter(function (c) { return c.due <= now; }).length);
+      // "First try" means each card's FIRST attempt — counting every
+      // attempt would report per-attempt correctness (a miss followed by
+      // a correct retry is not a first-try success).
       const recent = [];
+      const firstTries = [];
       for (const c of cards) {
-        for (const a of c.attempts || []) if (now - a.at <= 30 * DAY) recent.push(a);
+        const attempts = c.attempts || [];
+        for (const a of attempts) if (now - a.at <= 30 * DAY) recent.push(a);
+        if (attempts.length && now - attempts[0].at <= 30 * DAY) firstTries.push(attempts[0]);
       }
       stat(dl, 'Reviews (30 days)', recent.length);
-      stat(dl, 'Correct on first try (30 days)',
-        recent.length ? recent.filter(function (a) { return a.correct; }).length + '/' + recent.length : '—');
+      stat(dl, 'Cards correct on first try (30 days)',
+        firstTries.length
+          ? firstTries.filter(function (a) { return a.correct; }).length + '/' + firstTries.length
+          : '—');
       const causes = $('causeStats');
       causes.innerHTML = '';
       const byCause = {};
