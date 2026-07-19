@@ -264,8 +264,35 @@
   }
 
   window.addEventListener('storage', function (e) {
-    if (e.key === GEN_KEY) invalidateCoachWork(); // another instance deleted the data
+    if (e.key !== GEN_KEY) return;
+    // Another instance deleted the data: invalidate every asynchronous
+    // writer AND drop the active review/train state — a due card left on
+    // screen (or an open review) refers to deleted records, and grading
+    // or re-scanning it afterwards would capture the NEW generation and
+    // write the data back past the undo checks.
+    invalidateCoachWork();
+    resetCoachViews();
   });
+
+  function resetCoachViews() {
+    review = null;
+    const view = document.body.dataset.view;
+    // Clear to the post-delete EMPTY state directly — re-querying the
+    // store here could still see pre-delete records (the other tab's
+    // clear may not have committed yet) and hand them back to the UI.
+    if (view === 'review') {
+      $('reviewFlow').hidden = true;
+      $('gameListWrap').hidden = false;
+      $('gameList').innerHTML = '';
+      $('reviewEmpty').textContent = 'No games archived yet — finish a game in Play, or import a PGN.';
+      $('reviewEmpty').hidden = false;
+    }
+    if (view === 'train' || train) {
+      train = { queue: [], card: null, state: null, selected: null, answered: false };
+      nextTrainCard();
+    }
+    if (view === 'progress') renderProgress();
+  }
 
   // ---- Archive hook (called by app.js when a game ends) ----
   // Dedupe is keyed on the game INSTANCE (app.js's gameSeq, persisted with
@@ -850,6 +877,29 @@
     });
   }
 
+  // A card graded "Again" comes due ten minutes later while the user may
+  // still be sitting in Train — the due query only runs when the view is
+  // entered, so without a timer the promised same-day retry never appears.
+  // When the queue drains, name the next near-term due time and requeue
+  // automatically when it arrives (only if no card is being answered).
+  let trainTimer = null;
+
+  function scheduleTrainRequeue() {
+    clearTimeout(trainTimer);
+    $('trainEmpty').textContent = 'No cards due. Flag moments in Review to create lesson cards.';
+    CoachStore.listCards().then(function (cards) {
+      const now = Date.now();
+      let next = Infinity;
+      for (const c of cards) if (c.due > now) next = Math.min(next, c.due);
+      if (next - now > 3600000) return; // nothing near-term (ladder rungs are days away)
+      $('trainEmpty').textContent = 'No cards due right now — the next retry unlocks at ' +
+        new Date(next).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.';
+      trainTimer = setTimeout(function () {
+        if (document.body.dataset.view === 'train' && (!train || !train.card)) loadTrain();
+      }, next - now + 250);
+    }).catch(function () { /* archive unavailable — keep the default note */ });
+  }
+
   function nextTrainCard() {
     const t = train;
     t.card = t.queue.shift() || null;
@@ -861,7 +911,7 @@
     $('trainEmpty').hidden = !!t.card;
     $('trainCardBox').hidden = !t.card;
     $('trainReveal').hidden = true;
-    if (!t.card) return;
+    if (!t.card) { scheduleTrainRequeue(); return; }
     t.state = Chess.parseFen(t.card.fenBefore);
     trainBoard.render(t.state, {});
     $('trainPrompt').textContent =
@@ -1071,6 +1121,7 @@
     // generation and abandons instead of writing deleted data back — and
     // the epoch is broadcast so OTHER open tabs invalidate theirs too.
     invalidateCoachWork();
+    resetCoachViews(); // same-tab hygiene: no stale review/train state either
     persistSigs();
     broadcastGeneration();
     CoachStore.deleteAll().then(function () {

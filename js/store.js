@@ -108,7 +108,10 @@
   // links are remapped, so importing into a non-empty archive never
   // collides with (or overwrites) existing records. `isCancelled` (optional)
   // is consulted between records — a restore raced by "Delete all training
-  // data" stops instead of writing deleted data back.
+  // data" stops instead of writing deleted data back. The per-record
+  // transactions cannot be atomic across the whole restore, so on ANY
+  // failure (quota, bad record, cancellation) the committed prefix is
+  // rolled back — a retry after fixing the cause must not duplicate it.
   function importAll(data, isCancelled) {
     if (!data || data.format !== 'chessy-coach' ||
         !Array.isArray(data.games) || !Array.isArray(data.cards)) {
@@ -118,6 +121,7 @@
       if (isCancelled && isCancelled()) throw new Error('restore cancelled');
     }
     const idMap = new Map();
+    const addedGames = [], addedCards = [];
     let chain = Promise.resolve();
     data.games.forEach(function (g) {
       chain = chain.then(function () {
@@ -125,7 +129,10 @@
         const copy = Object.assign({}, g);
         const oldId = copy.id;
         delete copy.id;
-        return addGame(copy).then(function (newId) { idMap.set(oldId, newId); });
+        return addGame(copy).then(function (newId) {
+          idMap.set(oldId, newId);
+          addedGames.push(newId);
+        });
       });
     });
     data.cards.forEach(function (c) {
@@ -134,11 +141,23 @@
         const copy = Object.assign({}, c);
         delete copy.id;
         copy.gameId = idMap.get(copy.gameId) || null;
-        return addCard(copy);
+        return addCard(copy).then(function (id) { addedCards.push(id); });
       });
     });
     return chain.then(function () {
       return { games: data.games.length, cards: data.cards.length };
+    }, function (e) {
+      let undo = Promise.resolve();
+      addedCards.forEach(function (id) {
+        undo = undo.then(function () { return deleteCard(id); })
+          .catch(function () { /* keep rolling back the rest */ });
+      });
+      addedGames.forEach(function (id) {
+        undo = undo.then(function () {
+          return tx('games', 'readwrite', function (s) { return s.delete(id); });
+        }).catch(function () { /* keep rolling back the rest */ });
+      });
+      return undo.then(function () { throw e; });
     });
   }
 

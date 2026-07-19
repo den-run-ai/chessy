@@ -858,4 +858,19 @@
   load();
   render();
   maybeAiMove();
+
+  // A game restored in a FINISHED state may have missed its archive write:
+  // the tab can die between the synchronous localStorage save and the
+  // asynchronous IndexedDB commit, and nothing on the next boot calls
+  // showGameOver() again. Re-offer the restored game to the coach — its
+  // persisted dedupe makes this a no-op when the archive already has it
+  // (and re-points the "Review game" handoff at the right record).
+  // On window load, NOT a zero timeout: coach.js is a later script tag and
+  // the parser may yield to timers while it is still being fetched.
+  window.addEventListener('load', function () {
+    const status = fullStatus();
+    if (window.Coach && status.over && state.history.length) {
+      Coach.archiveGame(state, settings, status, gameSeq);
+    }
+  });
 })();

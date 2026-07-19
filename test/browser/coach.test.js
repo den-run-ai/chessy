@@ -273,6 +273,33 @@ require('./helper').run('coach', async function (t) {
   check(cancelledRestore.result.indexOf('cancelled') !== -1 && cancelledRestore.unchanged,
     'cancelled JSON restore writes nothing (' + cancelledRestore.result + ')');
 
+  // A restore that FAILS mid-way (here: an uncloneable card record) rolls
+  // back its committed prefix — a retry must not duplicate the games that
+  // made it in before the failure.
+  const rollback = await page.evaluate(function () {
+    const data = {
+      format: 'chessy-coach', version: 1,
+      games: [{ id: 7, source: 'import', tags: {}, sans: ['e4'], playerColor: 'both',
+        clocks: null, result: '*', reason: '', mode: null, difficulty: null,
+        timeControl: null, plies: 1, createdAt: 1 }],
+      cards: [{ id: 9, gameId: 7, bad: function () {} }] // DataCloneError on put
+    };
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (before) {
+      return CoachStore.importAll(data).then(
+        function () { return { failed: false }; },
+        function () {
+          return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (after) {
+            return {
+              failed: true,
+              unchanged: after[0].length === before[0].length && after[1].length === before[1].length
+            };
+          });
+        });
+    });
+  });
+  check(rollback.failed && rollback.unchanged,
+    'a failed restore rolls back its committed prefix (no partial import)');
+
   page.once('dialog', function (d) { d.accept(); });
   await page.click('#deleteData');
   await page.waitForFunction(function () {
@@ -518,6 +545,37 @@ require('./helper').run('coach', async function (t) {
   check(crossTab === 0,
     'a delete in another tab stops this tab’s scan from resurrecting data (got ' + crossTab + ')');
 
+  // A cross-tab delete also clears THIS tab's active coaching UI: a due
+  // card left on screen could otherwise be graded afterwards, recreating
+  // it under the new generation (past the undo checks).
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0,
+      fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  const page3 = await t.context.newPage();
+  await page3.goto(t.url);
+  await page3.waitForSelector('#board .square');
+  await page3.click('#tabProgress');
+  page3.once('dialog', function (d) { d.accept(); });
+  await page3.click('#deleteData');
+  await page3.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page3.close();
+  await page.waitForSelector('#trainEmpty:not([hidden])', { timeout: 5000 });
+  check(await page.locator('#trainCardBox').isHidden(),
+    'a cross-tab delete clears this tab’s active training card');
+
   // Delete All must not be undone by a JSON restore whose file was picked
   // BEFORE the delete: the generation is captured when the file is chosen,
   // so a delete landing while the (possibly large) file is still being
@@ -560,6 +618,39 @@ require('./helper').run('coach', async function (t) {
   check(readRace === 0,
     'Delete All is not undone by a restore whose file read finishes after it (got ' + readRace + ')');
 
+  // A card that comes due while the user sits in Train (the "Again" retry
+  // path) requeues automatically — no tab round-trip required. The empty
+  // state names the unlock time while waiting.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0,
+      fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now + 1500, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('trainEmpty').textContent.includes('unlocks');
+  }, null, { timeout: 5000 });
+  check(true, 'Train names the next near-term due time while waiting');
+  await page.waitForSelector('#trainCardBox:not([hidden])', { timeout: 10000 });
+  check(true, 'a card coming due while in Train requeues automatically');
+  // Consume it so later checks see a clean slate.
+  const tsq2 = function (name) { return page.locator('#trainBoard .square').nth(idx(name)); };
+  await tsq2('a7').click();
+  await tsq2('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+
   // "Review game" opens the game that JUST finished — the handoff awaits
   // the in-flight archive write instead of trusting a stale id.
   await page.click('#tabPlay');
@@ -581,4 +672,32 @@ require('./helper').run('coach', async function (t) {
   });
   check((await page.textContent('#reviewStatus')).includes('Position 0/4'),
     'Review game opens the 4-ply game that just finished, not the earlier 7-ply one');
+
+  // A finished game whose archive write was LOST (tab died between the
+  // localStorage save and the IndexedDB commit) is reconciled on boot: the
+  // restored game re-offers itself and the persisted dedupe decides.
+  const gamesBefore = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-coach-sigs-v1'); // the "lost" write: no signature…
+    return CoachStore.listGames().then(function (games) {
+      return CoachStore.deleteGame(games[0].id);     // …and no record
+    });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForFunction(function (n) {
+    return CoachStore.listGames().then(function (g) { return g.length === n; });
+  }, gamesBefore, { timeout: 5000 });
+  check(true, 'boot re-archives a restored finished game whose write was lost');
+  // …and the reconcile is idempotent: another boot must not duplicate it.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(600);
+  const gamesAfter = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (g) { return g.length; });
+  });
+  check(gamesAfter === gamesBefore,
+    'boot reconcile dedupes on the next reload (got ' + gamesAfter + ', want ' + gamesBefore + ')');
 });
