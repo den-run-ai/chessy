@@ -174,6 +174,7 @@
   // falls back to a synchronous call where workers are unavailable.
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // {depth, quiesce, started} for the in-flight search (PGN log)
+  let aiWatchdog = null;      // guards against an alive-but-SILENT worker (see maybeAiMove)
 
   function createAiWorker() {
     if (typeof Worker === 'undefined') return null;
@@ -201,6 +202,7 @@
       aiWorker.terminate();
       aiWorker = createAiWorker();
     }
+    clearTimeout(aiWatchdog);
     aiRequestId++;
     aiThinking = false;
     aiPending = null;
@@ -551,6 +553,18 @@
     const id = ++aiRequestId;
     aiPending = { depth: cfg.maxDepth, quiesce: cfg.quiesce, started: Date.now() };
     if (aiWorker) {
+      // Watchdog for an alive-but-silent worker: onerror only covers
+      // workers that break LOUDLY — one that simply never replies would
+      // leave the game on "thinking" forever. After the search budget
+      // plus margin, replace it and let the synchronous fallback answer
+      // (the coach's analysis worker has the same protection).
+      clearTimeout(aiWatchdog);
+      aiWatchdog = setTimeout(function () {
+        if (id !== aiRequestId || !aiThinking) return;
+        if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+        aiThinking = false;
+        maybeAiMove();
+      }, cfg.timeMs + 3000);
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
         quiesce: cfg.quiesce, positions: state.positions
@@ -569,6 +583,7 @@
   }
 
   function applyAiMove(move, reachedDepth) {
+    clearTimeout(aiWatchdog);
     aiThinking = false;
     viewPly = null;
     // Re-resolve against this state's legal moves (the worker's move object

@@ -77,4 +77,24 @@ require('./helper').run('setup', async function (t) {
     return document.getElementById('installNote').textContent.includes('Ready offline');
   }, null, { timeout: 15000 });
   check(true, 'offline note reaches "Ready offline" after SW install');
+
+  // An AI worker that stays ALIVE but never replies must not leave the
+  // game stuck on "Computer is thinking…": the watchdog replaces it after
+  // the search budget and the synchronous fallback makes the move. The
+  // Worker stub swallows postMessage exactly like a wedged worker — and
+  // affects every later navigation, so this test must stay LAST.
+  await page.addInitScript(function () {
+    window.Worker = function () {
+      this.postMessage = function () {};
+      this.terminate = function () {};
+    };
+  });
+  await t.inject(function () { localStorage.removeItem('chessy-game-v1'); });
+  await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 20000 });
+  check(true, 'silent worker: the watchdog falls back and the computer still moves');
+  check(!(await page.textContent('#status')).includes('thinking'),
+    'status leaves "thinking" after the fallback move');
 });
