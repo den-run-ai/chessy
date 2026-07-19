@@ -1,6 +1,7 @@
 /*
  * Chessy coaching store — the versioned IndexedDB archive behind the
- * Review/Train/Progress views. Two object stores (schema v1):
+ * Review/Train/Progress views. Two object stores (schema v2 — v2 added
+ * the unique games.sig index):
  *
  *   games: { id (auto), source ('play'|'import'), tags, sans, result,
  *            reason, mode, difficulty, timeControl, plies, createdAt }
@@ -23,7 +24,12 @@
   'use strict';
 
   const DB_NAME = 'chessy-coach';
-  const DB_VERSION = 1;
+  // v2 adds a UNIQUE index on games.sig: each tab's in-memory dedupe is
+  // only a snapshot, so two tabs reconciling the same finished game could
+  // both pass their local check — the database itself must refuse the
+  // second insert. Records without a sig (imports, pre-v2 rows) are not
+  // indexed and carry no constraint.
+  const DB_VERSION = 2;
 
   let dbPromise = null;
 
@@ -33,8 +39,11 @@
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = function () {
           const db = req.result;
-          if (!db.objectStoreNames.contains('games')) {
-            db.createObjectStore('games', { keyPath: 'id', autoIncrement: true });
+          const games = db.objectStoreNames.contains('games')
+            ? req.transaction.objectStore('games')
+            : db.createObjectStore('games', { keyPath: 'id', autoIncrement: true });
+          if (!games.indexNames.contains('sig')) {
+            games.createIndex('sig', 'sig', { unique: true });
           }
           if (!db.objectStoreNames.contains('cards')) {
             const cards = db.createObjectStore('cards', { keyPath: 'id', autoIncrement: true });
@@ -57,8 +66,14 @@
         const t = db.transaction(storeName, mode);
         const req = fn(t.objectStore(storeName));
         t.oncomplete = function () { resolve(req ? req.result : undefined); };
-        t.onerror = function () { reject(t.error); };
-        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+        // Prefer the REQUEST's error: when a request fails (e.g. a
+        // ConstraintError from the unique sig index) transaction.error
+        // can still be null in the bubbled error/abort events, and
+        // callers need the real name to react to it.
+        t.onerror = function () { reject((req && req.error) || t.error); };
+        t.onabort = function () {
+          reject((req && req.error) || t.error || new Error('transaction aborted'));
+        };
       });
     });
   }
@@ -97,10 +112,26 @@
     }).then(function (cards) { return cards.sort(function (a, b) { return a.due - b.due; }); });
   }
 
-  // Whole-archive JSON snapshot for backup.
+  // Whole-archive JSON snapshot for backup. BOTH stores are read in ONE
+  // readonly transaction: two independent reads could observe different
+  // database moments when the export overlaps a delete or import, and a
+  // backup with orphaned cards cannot remap its gameIds on restore.
   function exportAll() {
-    return Promise.all([listGames(), listCards()]).then(function (r) {
-      return { format: 'chessy-coach', version: DB_VERSION, exportedAt: Date.now(), games: r[0], cards: r[1] };
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(['games', 'cards'], 'readonly');
+        const gReq = t.objectStore('games').getAll();
+        const cReq = t.objectStore('cards').getAll();
+        t.oncomplete = function () {
+          resolve({
+            format: 'chessy-coach', version: DB_VERSION, exportedAt: Date.now(),
+            games: gReq.result.sort(function (a, b) { return b.createdAt - a.createdAt; }),
+            cards: cReq.result
+          });
+        };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
     });
   }
 
@@ -117,6 +148,27 @@
         !Array.isArray(data.games) || !Array.isArray(data.cards)) {
       return Promise.reject(new Error('not a chessy-coach backup'));
     }
+    // Validate every record BEFORE the first write: a structurally broken
+    // backup (a card without a position, a non-numeric due time) would
+    // otherwise commit, report success, and then break Train/Review when
+    // the record is used. Rejecting up front leaves the archive unchanged.
+    function badGame(g) {
+      return !g || typeof g !== 'object' || !Array.isArray(g.sans) ||
+        !g.sans.every(function (s) { return typeof s === 'string'; }) ||
+        typeof g.result !== 'string';
+    }
+    function badCard(c) {
+      return !c || typeof c !== 'object' ||
+        typeof c.fenBefore !== 'string' || c.fenBefore === '' ||
+        typeof c.due !== 'number' || !isFinite(c.due) ||
+        !Array.isArray(c.attempts) ||
+        !(c.bestMove === null || c.bestMove === undefined ||
+          (typeof c.bestMove === 'object' &&
+           typeof c.bestMove.from === 'number' && typeof c.bestMove.to === 'number'));
+    }
+    if (data.games.some(badGame) || data.cards.some(badCard)) {
+      return Promise.reject(new Error('backup contains invalid records'));
+    }
     function guard() {
       if (isCancelled && isCancelled()) throw new Error('restore cancelled');
     }
@@ -129,6 +181,10 @@
         const copy = Object.assign({}, g);
         const oldId = copy.id;
         delete copy.id;
+        // A restored copy is a NEW record, not the original play-game
+        // instance: keeping the sig would trip the unique index (and
+        // wrongly claim the dedupe identity).
+        delete copy.sig;
         return addGame(copy).then(function (newId) {
           idMap.set(oldId, newId);
           addedGames.push(newId);

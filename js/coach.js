@@ -276,6 +276,13 @@
   }
 
   window.addEventListener('storage', function (e) {
+    if (e.key === SIGS_KEY) {
+      // Another tab archived (or tombstoned) a game: merge its signatures
+      // so this tab's dedupe snapshot stays current. The unique DB index
+      // is the hard backstop for truly simultaneous inserts.
+      for (const s of loadSigs()) archivedSigs.add(s);
+      return;
+    }
     if (e.key !== GEN_KEY) return;
     // Another instance deleted the data: invalidate every asynchronous
     // writer AND drop the active review/train state — a due card left on
@@ -362,6 +369,22 @@
     return (gameSeq || 0) + '|' + sans.join(' ') + '|' + result;
   }
 
+  // Locate the archived record for a signature (legacy records lack the
+  // stored sig — fall back to matching the parts). Used by the dedupe-hit
+  // handoff and by the ConstraintError adoption below.
+  function findArchived(sig, sans, result, seq) {
+    const key = sans.join(' ');
+    return CoachStore.listGames().then(function (games) {
+      const match = games.find(function (g) {
+        return g.source === 'play' && (g.sig === sig || (
+          g.result === result &&
+          (g.gameSeq === seq || g.gameSeq === undefined) &&
+          Array.isArray(g.sans) && g.sans.join(' ') === key));
+      });
+      return match ? match.id : null;
+    }).catch(function () { return null; });
+  }
+
   function archiveGame(state, settings, status, gameSeq) {
     if (!state.history.length || !status.over) return Promise.resolve(null);
     const gen = coachGen;
@@ -372,22 +395,17 @@
     // would otherwise open B) or null (after a reload the promise is gone
     // even though the signature persisted), so it is re-resolved by lookup.
     if (archivedSigs.has(sig)) {
-      const seq = gameSeq || 0;
-      const key = sans.join(' ');
-      lastArchivePromise = CoachStore.listGames().then(function (games) {
-        const match = games.find(function (g) {
-          return g.source === 'play' && g.result === status.result &&
-            (g.gameSeq === seq || g.gameSeq === undefined) &&
-            Array.isArray(g.sans) && g.sans.join(' ') === key;
-        });
-        return match ? match.id : null;
-      }).catch(function () { return null; });
+      lastArchivePromise = findArchived(sig, sans, status.result, gameSeq || 0);
       return lastArchivePromise;
     }
     archivedSigs.add(sig);
     const attempt = CoachStore.addGame({
       source: 'play',
       tags: {},
+      // The signature is STORED (backing a unique index): each tab's
+      // in-memory dedupe is only a snapshot, so the database must refuse
+      // a second tab's identical insert itself.
+      sig: sig,
       // The instance number backs the dedupe lookup above: a re-shown
       // ending must reopen ITS record, not an identical game's.
       gameSeq: gameSeq || 0,
@@ -412,7 +430,12 @@
       }
       persistSigs();
       return id;
-    }).catch(function () {
+    }).catch(function (err) {
+      // Unique-sig violation: another tab archived this exact game first
+      // (both passed their local snapshot check) — adopt its record.
+      if (err && err.name === 'ConstraintError') {
+        return findArchived(sig, sans, status.result, gameSeq || 0);
+      }
       archivedSigs.delete(sig); // failed write: allow the retry
       return null;
     });
@@ -690,6 +713,7 @@
     $('cardCause').value = '';
     $('cardLesson').value = '';
     $('reflectForm').hidden = false;
+    $('reflectVerify').disabled = false; // a fresh moment can be verified
     $('verifyBox').hidden = true;
     $('cardSaved').hidden = true;
     $('reflectThreat').focus();
@@ -718,6 +742,10 @@
     $('verifyBox').hidden = false;
     $('verifyResult').textContent = 'Analysing…';
     $('saveCard').disabled = true;
+    // In-flight guard: repeated submits would ENQUEUE duplicate probe
+    // pairs — the token discards their stale results, but the FIFO worker
+    // still has to burn through them, multiplying the "Analysing…" wait.
+    $('reflectVerify').disabled = true;
 
     analyse(fenBefore, null, r.states[ply].positions).then(function (best) {
       // The played move's value = the value of the position it leads to.
@@ -766,6 +794,9 @@
           ' Chessy estimate, not authoritative analysis.';
         $('saveCard').disabled = false;
       });
+    }).then(function () {
+      // This request settled (fresh or stale): allow the next submission.
+      $('reflectVerify').disabled = false;
     });
   });
 
@@ -894,8 +925,13 @@
       });
     }
     chain.then(function () {
-      $('importStart').disabled = false;
+      // Only the batch that still OWNS the token may touch the shared
+      // button: an obsolete cancelled chain settling late would otherwise
+      // re-enable Import while a newer batch is mid-write, letting a
+      // second click cancel and duplicate it. (Reopening the dialog is
+      // what re-enables the button after a cancel.)
       if (token !== importToken) return; // cancelled: no completion UI
+      $('importStart').disabled = false;
       if (ok === 0 && failed === 0) {
         $('importError').textContent = 'No games found in that text.';
         return;
@@ -1088,7 +1124,14 @@
     CoachStore.updateCard(card).then(function () {
       // Delete-all racing this put() would resurrect the card — undo it.
       if (gen !== coachGen) CoachStore.deleteCard(card.id).catch(function () {});
-    }).then(nextTrainCard, nextTrainCard);
+    }).then(function () {
+      // A cross-tab delete landed while the write was pending: the reset
+      // owns the UI now — advancing the queue would re-query the store,
+      // which mid-clear can still hand back pre-delete cards.
+      if (gen === coachGen) nextTrainCard();
+    }, function () {
+      if (gen === coachGen) nextTrainCard();
+    });
   }
 
   $('gradeAgain').addEventListener('click', function () { grade('again'); });

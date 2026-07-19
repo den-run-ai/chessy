@@ -105,12 +105,16 @@ require('./helper').run('coach', async function (t) {
   await page.fill('#reflectCandidates', 'e4, d4');
   await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
+  check(await page.locator('#reflectVerify').isDisabled(),
+    'Verify disables while analysis is in flight (no duplicate probe pairs)');
   await page.waitForFunction(function () {
     const el = document.getElementById('verifyResult');
     return el.textContent && !el.textContent.includes('Analysing');
   }, null, { timeout: 60000 });
   check((await page.textContent('#verifyResult')).includes('e4'),
     'verification completes while a scan is running (queued, not clobbered)');
+  check(!(await page.locator('#reflectVerify').isDisabled()),
+    'Verify re-enables once its request settles');
   await page.waitForFunction(function () {
     const el = document.getElementById('scanStatus');
     return !el.hidden && !el.textContent.includes('Scanning');
@@ -282,7 +286,12 @@ require('./helper').run('coach', async function (t) {
       games: [{ id: 7, source: 'import', tags: {}, sans: ['e4'], playerColor: 'both',
         clocks: null, result: '*', reason: '', mode: null, difficulty: null,
         timeControl: null, plies: 1, createdAt: 1 }],
-      cards: [{ id: 9, gameId: 7, bad: function () {} }] // DataCloneError on put
+      // Passes the schema validation but fails structured clone on put —
+      // the mid-write failure path that the rollback exists for.
+      cards: [{ id: 9, gameId: 7, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+        playedSan: 'x', bestSan: 'x', bestMove: null, bestScore: 0, playedScore: 0,
+        lossCp: 0, cause: 'calculation', lesson: 'x', reflection: {},
+        createdAt: 1, due: 1, step: -1, attempts: [], bad: function () {} }]
     };
     return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (before) {
       return CoachStore.importAll(data).then(
@@ -299,6 +308,32 @@ require('./helper').run('coach', async function (t) {
   });
   check(rollback.failed && rollback.unchanged,
     'a failed restore rolls back its committed prefix (no partial import)');
+
+  // A structurally broken backup (card without a position, non-numeric
+  // due) is rejected BEFORE any write — committing it would report
+  // success and then break Train when the record is used.
+  const invalidBackup = await page.evaluate(function () {
+    const data = {
+      format: 'chessy-coach', version: 2,
+      games: [],
+      cards: [{ id: 1, gameId: null, fenBefore: null, due: 'soon', attempts: [] }]
+    };
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (before) {
+      return CoachStore.importAll(data).then(
+        function () { return { rejected: false }; },
+        function (e) {
+          return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (after) {
+            return {
+              rejected: true, msg: String(e && e.message),
+              unchanged: after[0].length === before[0].length && after[1].length === before[1].length
+            };
+          });
+        });
+    });
+  });
+  check(invalidBackup.rejected && invalidBackup.unchanged &&
+        invalidBackup.msg.indexOf('invalid') !== -1,
+    'a backup with malformed records is rejected before any write (' + invalidBackup.msg + ')');
 
   // "Correct on first try" counts each card's FIRST attempt only — a miss
   // followed by a correct retry is not a first-try success (it used to be
@@ -528,6 +563,52 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#reviewStatus')).includes('Position 0/2'),
     'A-B-A: the handoff reopens line A (2 plies), not line B (1 ply)');
 
+  // Per-tab dedupe sets are only snapshots: the DATABASE refuses a second
+  // play record with the same signature (unique index on games.sig).
+  const dupName = await page.evaluate(function () {
+    const rec = {
+      source: 'play', sig: 'dup|test|sig', tags: {}, gameSeq: 4242,
+      sans: ['e4'], playerColor: 'both', clocks: null, result: '1-0',
+      reason: 'dup-test', mode: 'pvp', difficulty: null, timeControl: null,
+      plies: 1, createdAt: 1
+    };
+    return CoachStore.addGame(Object.assign({}, rec)).then(function (id) {
+      return CoachStore.addGame(Object.assign({}, rec)).then(
+        function () { return 'second insert allowed'; },
+        function (e) {
+          return CoachStore.deleteGame(id).then(function () { return e && e.name; });
+        });
+    });
+  });
+  check(dupName === 'ConstraintError',
+    'the unique sig index blocks duplicate play records (' + dupName + ')');
+
+  // ...and archiveGame ADOPTS the existing record on that violation (the
+  // simultaneous-tabs case: both passed their local snapshot check).
+  const adopt = await page.evaluate(function () {
+    return CoachStore.addGame({
+      source: 'play', sig: '777|e4|1-0', tags: {}, gameSeq: 777,
+      sans: ['e4'], playerColor: 'both', clocks: null, result: '1-0',
+      reason: 'adopt-test', mode: 'pvp', difficulty: null, timeControl: null,
+      plies: 1, createdAt: 1
+    }).then(function (id) {
+      // This "tab" has no snapshot of that signature, so archiveGame will
+      // try the insert and hit the constraint.
+      return Coach.archiveGame({ history: [{ san: 'e4' }] },
+        { mode: 'pvp' }, { over: true, result: '1-0', reason: 'adopt-test' }, 777
+      ).then(function (rid) {
+        return CoachStore.listGames().then(function (g) {
+          return {
+            same: rid === id,
+            count: g.filter(function (x) { return x.gameSeq === 777; }).length
+          };
+        });
+      });
+    });
+  });
+  check(adopt.same && adopt.count === 1,
+    'archiveGame adopts the existing record on a unique-sig violation (count ' + adopt.count + ')');
+
   // Cancelling a running multi-game import stops the remaining writes: the
   // chain imports one game at a time and Cancel bumps the batch token.
   const beforeCancel = await page.evaluate(function () {
@@ -547,8 +628,35 @@ require('./helper').run('coach', async function (t) {
   });
   check(afterCancel - beforeCancel < 40,
     'Cancel stops a running import (' + (afterCancel - beforeCancel) + '/40 written before cancel)');
+  await page.click('#importPgnBtn'); // reopening the dialog resets the button
   check(!(await page.evaluate(function () { return document.getElementById('importStart').disabled; })),
-    'Import button re-enabled after a cancelled batch');
+    'reopening the dialog after a cancelled batch re-enables Import');
+
+  // Ownership: cancel a batch and immediately start ANOTHER before the
+  // cancelled chain settles — the obsolete chain must not re-enable the
+  // shared button while batch 2 is mid-write (a second click would cancel
+  // and duplicate it). addGame is slowed for batch B so it is
+  // deterministically still writing when A's chain has settled.
+  await page.fill('#importText', manyGames);
+  await page.click('#importStart');   // batch A
+  await page.click('#importCancel');  // A cancelled; its chain settles shortly
+  await page.evaluate(function () {
+    CoachStore.__realAddGame = CoachStore.addGame;
+    CoachStore.addGame = function (g) {
+      return CoachStore.__realAddGame(g).then(function (id) {
+        return new Promise(function (res) { setTimeout(function () { res(id); }, 30); });
+      });
+    };
+  });
+  await page.click('#importPgnBtn');  // reopen (this is what resets the button)
+  await page.fill('#importText', manyGames);
+  await page.click('#importStart');   // batch B — owns the token; ≥1.2 s of writes
+  await page.waitForTimeout(400);     // A's chain has long settled; B still writing
+  check(await page.evaluate(function () { return document.getElementById('importStart').disabled; }),
+    'an obsolete cancelled batch does not re-enable Import for the running one');
+  await page.keyboard.press('Escape'); // stop batch B too
+  await page.waitForTimeout(1500);
+  await page.evaluate(function () { CoachStore.addGame = CoachStore.__realAddGame; });
 
   // Delete-all invalidates an active scan: a scan finishing after the wipe
   // must not put() its game back into the cleared store. The 7-ply mate
@@ -713,6 +821,67 @@ require('./helper').run('coach', async function (t) {
            document.getElementById('dataNote').textContent.includes('another window');
   }, null, { timeout: 5000 });
   check(true, 'a cross-tab delete clears the Progress counts and says why');
+
+  // A grade write PENDING across a cross-tab delete must not advance the
+  // queue when it settles — the requeue lookup could re-query mid-clear
+  // and reload pre-delete cards. The write is artificially delayed so the
+  // delete deterministically lands inside it; a listCards call counter
+  // proves the advancement was skipped entirely.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabPlay');
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  const tsq4 = function (name) { return page.locator('#trainBoard .square').nth(idx(name)); };
+  await tsq4('a7').click();
+  await tsq4('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () {
+    CoachStore.__realUpdateCard = CoachStore.updateCard;
+    CoachStore.updateCard = function (card) {
+      return CoachStore.__realUpdateCard(card).then(function (r) {
+        return new Promise(function (res) { setTimeout(function () { res(r); }, 2000); });
+      });
+    };
+    CoachStore.__listCalls = 0;
+    CoachStore.__realListCards = CoachStore.listCards;
+    CoachStore.listCards = function () {
+      CoachStore.__listCalls++;
+      return CoachStore.__realListCards();
+    };
+  });
+  await page.click('#gradeGood'); // the write is now pending ~2 s
+  const page6 = await t.context.newPage();
+  await page6.goto(t.url);
+  await page6.waitForSelector('#board .square');
+  await page6.click('#tabProgress');
+  page6.once('dialog', function (d) { d.accept(); });
+  await page6.click('#deleteData'); // lands while the grade write is pending
+  await page6.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page6.close();
+  await page.waitForTimeout(2800); // the delayed grade completion has settled
+  const gradeRace = await page.evaluate(function () {
+    const calls = CoachStore.__listCalls;
+    CoachStore.updateCard = CoachStore.__realUpdateCard;
+    CoachStore.listCards = CoachStore.__realListCards;
+    return { calls: calls, boxHidden: document.getElementById('trainCardBox').hidden };
+  });
+  check(gradeRace.boxHidden && gradeRace.calls === 0,
+    'a grade settling after a cross-tab delete does not advance the queue (' +
+    gradeRace.calls + ' lookups)');
 
   // Delete All must not be undone by a JSON restore whose file was picked
   // BEFORE the delete: the generation is captured when the file is chosen,
