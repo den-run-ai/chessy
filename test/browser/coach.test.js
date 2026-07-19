@@ -353,6 +353,36 @@ require('./helper').run('coach', async function (t) {
   check(kinglessBackup.indexOf('invalid') !== -1,
     'a backup card with an unanswerable position is rejected (' + kinglessBackup + ')');
 
+  // A backup game whose SANs cannot be REPLAYED is rejected too (it would
+  // restore "successfully" and then always fail in openReview) — and a
+  // card whose saved best move is illegal in its position likewise.
+  const deepInvalid = await page.evaluate(function () {
+    const badSans = {
+      format: 'chessy-coach', version: 2,
+      games: [{ id: 1, source: 'import', tags: {}, sans: ['not-a-move'], playerColor: 'both',
+        clocks: null, result: '*', reason: '', mode: null, difficulty: null,
+        timeControl: null, plies: 1, createdAt: 1 }],
+      cards: []
+    };
+    const badMove = {
+      format: 'chessy-coach', version: 2,
+      games: [],
+      cards: [{ id: 1, gameId: null, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+        playedSan: 'x', bestSan: 'x', bestMove: { from: 0, to: 0, promotion: null },
+        createdAt: 1, due: 1, step: -1, attempts: [] }]
+    };
+    return CoachStore.importAll(badSans).then(
+      function () { return { sans: 'accepted' }; },
+      function (e1) {
+        return CoachStore.importAll(badMove).then(
+          function () { return { sans: String(e1.message), move: 'accepted' }; },
+          function (e2) { return { sans: String(e1.message), move: String(e2.message) }; });
+      });
+  });
+  check(deepInvalid.sans.indexOf('invalid') !== -1 && deepInvalid.move.indexOf('invalid') !== -1,
+    'unreplayable games and illegal saved moves are rejected (' +
+    deepInvalid.sans + ' / ' + deepInvalid.move + ')');
+
   // "Correct on first try" counts each card's FIRST attempt only — a miss
   // followed by a correct retry is not a first-try success (it used to be
   // reported per-attempt, e.g. 1/2 for that card alone).
@@ -906,9 +936,9 @@ require('./helper').run('coach', async function (t) {
   await page.click('#promotionChoices [aria-label="Promote to knight"]');
   await page.waitForSelector('#trainReveal:not([hidden])');
   await page.evaluate(function () {
-    CoachStore.__realUpdateCard = CoachStore.updateCard;
-    CoachStore.updateCard = function (card) {
-      return CoachStore.__realUpdateCard(card).then(function (r) {
+    CoachStore.__realGradeCard = CoachStore.gradeCard;
+    CoachStore.gradeCard = function (id, fn) {
+      return CoachStore.__realGradeCard(id, fn).then(function (r) {
         return new Promise(function (res) { setTimeout(function () { res(r); }, 2000); });
       });
     };
@@ -933,7 +963,7 @@ require('./helper').run('coach', async function (t) {
   await page.waitForTimeout(2800); // the delayed grade completion has settled
   const gradeRace = await page.evaluate(function () {
     const calls = CoachStore.__listCalls;
-    CoachStore.updateCard = CoachStore.__realUpdateCard;
+    CoachStore.gradeCard = CoachStore.__realGradeCard;
     CoachStore.listCards = CoachStore.__realListCards;
     return { calls: calls, boxHidden: document.getElementById('trainCardBox').hidden };
   });
@@ -1057,6 +1087,106 @@ require('./helper').run('coach', async function (t) {
   await page.waitForSelector('#trainReveal:not([hidden])');
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
+
+  // A grade whose WRITE fails keeps the card on screen for retry and says
+  // so — silently advancing would drop the attempt and reschedule nothing.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabPlay');
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq2('a7').click();
+  await tsq2('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () {
+    CoachStore.__okGradeCard = CoachStore.gradeCard;
+    CoachStore.gradeCard = function () { return Promise.reject(new Error('quota')); };
+  });
+  await page.click('#gradeGood'); // write fails
+  await page.waitForFunction(function () {
+    return document.getElementById('trainOutcome').textContent.indexOf('Could not save') !== -1;
+  }, null, { timeout: 5000 });
+  check(!(await page.locator('#trainCardBox').isHidden()),
+    'a failed grade write keeps the card on screen');
+  await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__okGradeCard; });
+  await page.click('#gradeGood'); // retry succeeds
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check(true, 'the grade can be retried after the failure');
+
+  // Concurrent grades MERGE: gradeCard mutates the fresh stored record
+  // inside one transaction, so two parallel grades append two attempts
+  // instead of the later put() erasing the earlier one.
+  const mergedAttempts = await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now + 86400000, step: 0, attempts: []
+    }).then(function (id) {
+      return Promise.all([
+        CoachStore.gradeCard(id, function (c) { c.attempts.push({ at: 1 }); return c; }),
+        CoachStore.gradeCard(id, function (c) { c.attempts.push({ at: 2 }); return c; })
+      ]).then(function () {
+        return CoachStore.listCards().then(function (cards) {
+          const c = cards.find(function (x) { return x.id === id; });
+          const n = c.attempts.length;
+          return CoachStore.deleteCard(id).then(function () { return n; });
+        });
+      });
+    });
+  });
+  check(mergedAttempts === 2,
+    'concurrent grades merge attempts atomically (got ' + mergedAttempts + ')');
+
+  // A promotion picker left OPEN across a cross-tab delete dismisses
+  // quietly: the answer callback lands on a deleted card and must not
+  // throw (the suite-wide no-page-errors check enforces the "quietly").
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'x', reflection: {},
+      createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabPlay');
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq2('a7').click();
+  await tsq2('a8').click();
+  await page.waitForSelector('#promotionDialog[open]'); // picker open…
+  const page7 = await t.context.newPage();
+  await page7.goto(t.url);
+  await page7.waitForSelector('#board .square');
+  await page7.click('#tabProgress');
+  page7.once('dialog', function (d) { d.accept(); });
+  await page7.click('#deleteData'); // …when the delete lands
+  await page7.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted');
+  });
+  await page7.close();
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForTimeout(300);
+  check(await page.locator('#trainCardBox').isHidden(),
+    'a promotion answer landing on a deleted card dismisses without error');
 
   // "Review game" opens the game that JUST finished — the handoff awaits
   // the in-flight archive write instead of trusting a stale id.
@@ -1199,4 +1329,15 @@ require('./helper').run('coach', async function (t) {
   });
   check(twoTabs === 2,
     'independent same-move games in two tabs both archive (got ' + twoTabs + ')');
+
+  // A corrupted signature store (valid JSON, wrong shape) must not brick
+  // the coach at load — `new Set({})` would throw and kill every view.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-coach-sigs-v1', '{}');
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.click('#tabReview');
+  check(await page.locator('#viewReview').isVisible(),
+    'a corrupted signature store does not brick the coach views');
 });

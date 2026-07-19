@@ -898,20 +898,22 @@
   // (and re-points the "Review game" handoff at the right record).
   // On window load, NOT a zero timeout: coach.js is a later script tag and
   // the parser may yield to timers while it is still being fetched.
+  // The coach's Delete All tombstones the live game via this provider.
+  // Exposed at script PARSE time — before coach.js (a later script tag)
+  // installs the delete handler — so there is no interaction window where
+  // deletion can run without it; the values are read at CALL time.
+  window.chessyLiveGame = function () {
+    const st = fullStatus();
+    if (!st.over || !state.history.length) return null;
+    return {
+      sans: state.history.map(function (h) { return h.san; }),
+      result: st.result,
+      gameSeq: gameSeq
+    };
+  };
+
   window.addEventListener('load', function () {
     if (!window.Coach) return;
-    // The coach's Delete All tombstones the live game via this provider —
-    // otherwise the reconcile below would archive the deleted game right
-    // back on the next reload.
-    Coach.registerLiveGame(function () {
-      const st = fullStatus();
-      if (!st.over || !state.history.length) return null;
-      return {
-        sans: state.history.map(function (h) { return h.san; }),
-        result: st.result,
-        gameSeq: gameSeq
-      };
-    });
     const status = fullStatus();
     if (status.over && state.history.length) {
       Coach.archiveGame(state, settings, status, gameSeq);

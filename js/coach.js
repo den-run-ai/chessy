@@ -249,12 +249,6 @@
   let coachGen = 0;
   const GEN_KEY = 'chessy-coach-gen-v1';
 
-  // Registered by app.js (on window load): returns the CURRENT Play game
-  // as { sans, result, gameSeq } when it is finished, else null. Needed by
-  // the delete path below.
-  let liveGameProvider = null;
-  function registerLiveGame(provider) { liveGameProvider = provider; }
-
   function invalidateCoachWork() {
     coachGen++;
     scanToken++;
@@ -264,8 +258,10 @@
     // Tombstone the live game: the Play save may hold a FINISHED game
     // whose record was just deleted — without its signature, boot
     // reconciliation would deterministically archive the deleted game
-    // right back on the next reload.
-    const live = liveGameProvider && liveGameProvider();
+    // right back on the next reload. app.js exposes the provider at
+    // script PARSE time (before this file installs the delete handler),
+    // so there is no window where deletion runs without it.
+    const live = typeof window.chessyLiveGame === 'function' ? window.chessyLiveGame() : null;
     if (live) archivedSigs.add(gameSig(live.sans, live.result, live.gameSeq));
     lastArchivePromise = null;
   }
@@ -355,8 +351,15 @@
   let lastArchivePromise = null;
 
   function loadSigs() {
-    try { return JSON.parse(localStorage.getItem(SIGS_KEY)) || []; }
-    catch (e) { return []; }
+    // Any parsed value that is not an array of strings reads as empty: a
+    // corrupted (but valid-JSON) store like "{}" would otherwise make
+    // `new Set(loadSigs())` throw at load and brick every coach view.
+    try {
+      const v = JSON.parse(localStorage.getItem(SIGS_KEY));
+      return Array.isArray(v)
+        ? v.filter(function (s) { return typeof s === 'string'; })
+        : [];
+    } catch (e) { return []; }
   }
 
   function persistSigs() {
@@ -1082,6 +1085,9 @@
 
   function answerTrain(attempt) {
     const t = train;
+    // The promotion picker's callback can land AFTER a cross-tab delete
+    // reset the training state — the card is gone; dismiss quietly.
+    if (!t || !t.card) return;
     const best = t.card.bestMove;
     const correct = !!best && attempt.from === best.from && attempt.to === best.to &&
       (attempt.promotion || null) === (best.promotion || null);
@@ -1127,18 +1133,30 @@
     const gen = coachGen;
     const now = Date.now();
     const card = t.card;
-    card.attempts.push({ at: now, grade: g, correct: !!t.lastCorrect });
-    schedule(card, g, now);
-    CoachStore.updateCard(card).then(function () {
-      // Delete-all racing this put() would resurrect the card — undo it.
-      if (gen !== coachGen) CoachStore.deleteCard(card.id).catch(function () {});
-    }).then(function () {
-      // A cross-tab delete landed while the write was pending: the reset
-      // owns the UI now — advancing the queue would re-query the store,
-      // which mid-clear can still hand back pre-delete cards.
-      if (gen === coachGen) nextTrainCard();
+    const correct = !!t.lastCorrect;
+    // Atomic read-modify-write: another tab may have graded this card
+    // meanwhile — mutating OUR copy and put()ting it would erase that
+    // tab's appended attempt. The mutation runs on the fresh stored
+    // record inside one transaction.
+    CoachStore.gradeCard(card.id, function (fresh) {
+      fresh.attempts.push({ at: now, grade: g, correct: correct });
+      schedule(fresh, g, now);
+      return fresh;
+    }).then(function (updated) {
+      // Delete-all racing this write would resurrect the card — undo it.
+      if (gen !== coachGen) {
+        if (updated) CoachStore.deleteCard(card.id).catch(function () {});
+        return; // the reset owns the UI; advancing would re-query mid-clear
+      }
+      nextTrainCard();
     }, function () {
-      if (gen === coachGen) nextTrainCard();
+      if (gen !== coachGen) return;
+      // The grade was NOT saved (quota, storage failure): keep the card
+      // on screen and say so — silently advancing would drop the attempt
+      // and reschedule nothing.
+      t.answered = true;
+      $('trainOutcome').textContent =
+        '⚠ Could not save that grade (storage unavailable) — try again.';
     });
   }
 
@@ -1279,7 +1297,6 @@
   window.Coach = {
     archiveGame: archiveGame,
     openLatestArchived: openLatestArchived,
-    registerLiveGame: registerLiveGame,
     showView: showView
   };
 })();

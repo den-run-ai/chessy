@@ -51,7 +51,19 @@
             cards.createIndex('gameId', 'gameId');
           }
         };
-        req.onsuccess = function () { resolve(req.result); };
+        req.onsuccess = function () {
+          const db = req.result;
+          // Yield to FUTURE schema upgrades: without this handler an open
+          // connection blocks another context's upgrade indefinitely.
+          // Closing drops this connection; the next call reopens lazily at
+          // the new version. (v1 itself never shipped outside this PR, so
+          // no handler-less v1 clients exist in the wild.)
+          db.onversionchange = function () {
+            db.close();
+            dbPromise = null;
+          };
+          resolve(db);
+        };
         req.onerror = function () { dbPromise = null; reject(req.error); };
       });
     }
@@ -103,6 +115,31 @@
 
   function addCard(card) { return tx('cards', 'readwrite', function (s) { return s.add(card); }); }
   function updateCard(card) { return tx('cards', 'readwrite', function (s) { return s.put(card); }); }
+
+  // Atomic read-modify-write for grading: two tabs grading the same card
+  // would otherwise each put() a copy built from the same original
+  // attempts array, and the later write would erase the earlier attempt.
+  // `mutate` runs on the FRESH stored record inside the transaction.
+  // Resolves with the updated record, or null when the card is gone.
+  function gradeCard(id, mutate) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('cards', 'readwrite');
+        const s = t.objectStore('cards');
+        let updated = null;
+        const getReq = s.get(id);
+        getReq.onsuccess = function () {
+          const card = getReq.result;
+          if (!card) return; // deleted meanwhile — nothing to grade
+          updated = mutate(card) || card;
+          s.put(updated);
+        };
+        t.oncomplete = function () { resolve(updated); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
   function deleteCard(id) { return tx('cards', 'readwrite', function (s) { return s.delete(id); }); }
   function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
 
@@ -152,32 +189,43 @@
     // backup (a card without a position, a non-numeric due time) would
     // otherwise commit, report success, and then break Train/Review when
     // the record is used. Rejecting up front leaves the archive unchanged.
+    // Games must REPLAY, not merely be arrays of strings: a record with
+    // garbage SANs would restore "successfully" and then always fail in
+    // openReview. (Engine checks are skipped only where the engine script
+    // isn't loaded, e.g. unit shims.)
     function badGame(g) {
-      return !g || typeof g !== 'object' || !Array.isArray(g.sans) ||
-        !g.sans.every(function (s) { return typeof s === 'string'; }) ||
-        typeof g.result !== 'string';
+      if (!g || typeof g !== 'object' || !Array.isArray(g.sans) ||
+          !g.sans.every(function (s) { return typeof s === 'string'; }) ||
+          typeof g.result !== 'string') return true;
+      if (typeof Chess !== 'undefined') {
+        try { Chess.replaySans(g.sans); } catch (e) { return true; }
+      }
+      return false;
     }
-    // A card position must be ANSWERABLE, not merely a string: a kingless
-    // or terminal FEN would render a board with no legal answer, leaving
-    // the card impossible to reveal or grade in Train. (Engine check is
-    // skipped only where the engine script isn't loaded, e.g. unit shims.)
-    function badFen(fen) {
-      if (typeof Chess === 'undefined') return false;
-      try {
-        const s = Chess.parseFen(fen);
-        return s.board.indexOf('wK') < 0 || s.board.indexOf('bK') < 0 ||
-          Chess.legalMoves(s).length === 0;
-      } catch (e) { return true; }
-    }
+    // A card must be ANSWERABLE: the position parses, both kings exist,
+    // and the saved best move is LEGAL there — otherwise Train renders a
+    // card no answer can ever match.
     function badCard(c) {
-      return !c || typeof c !== 'object' ||
-        typeof c.fenBefore !== 'string' || c.fenBefore === '' ||
-        badFen(c.fenBefore) ||
-        typeof c.due !== 'number' || !isFinite(c.due) ||
-        !Array.isArray(c.attempts) ||
-        // Without a saved best move the card can never be matched in Train.
-        !(typeof c.bestMove === 'object' && c.bestMove !== null &&
-          typeof c.bestMove.from === 'number' && typeof c.bestMove.to === 'number');
+      if (!c || typeof c !== 'object' ||
+          typeof c.fenBefore !== 'string' || c.fenBefore === '' ||
+          typeof c.due !== 'number' || !isFinite(c.due) ||
+          !Array.isArray(c.attempts) ||
+          !(typeof c.bestMove === 'object' && c.bestMove !== null &&
+            typeof c.bestMove.from === 'number' && typeof c.bestMove.to === 'number')) {
+        return true;
+      }
+      if (typeof Chess !== 'undefined') {
+        try {
+          const s = Chess.parseFen(c.fenBefore);
+          if (s.board.indexOf('wK') < 0 || s.board.indexOf('bK') < 0) return true;
+          const legal = Chess.legalMoves(s).some(function (m) {
+            return m.from === c.bestMove.from && m.to === c.bestMove.to &&
+              (m.promotion || null) === (c.bestMove.promotion || null);
+          });
+          if (!legal) return true;
+        } catch (e) { return true; }
+      }
+      return false;
     }
     if (data.games.some(badGame) || data.cards.some(badCard)) {
       return Promise.reject(new Error('backup contains invalid records'));
@@ -230,9 +278,19 @@
     });
   }
 
+  // BOTH stores clear in ONE readwrite transaction: split clears exposed
+  // an intermediate no-games-but-old-cards state to a concurrent export.
   function deleteAll() {
-    return tx('games', 'readwrite', function (s) { return s.clear(); })
-      .then(function () { return tx('cards', 'readwrite', function (s) { return s.clear(); }); });
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(['games', 'cards'], 'readwrite');
+        t.objectStore('games').clear();
+        t.objectStore('cards').clear();
+        t.oncomplete = function () { resolve(); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
   }
 
   global.CoachStore = {
@@ -243,6 +301,7 @@
     deleteGame: deleteGame,
     addCard: addCard,
     updateCard: updateCard,
+    gradeCard: gradeCard,
     deleteCard: deleteCard,
     listCards: listCards,
     dueCards: dueCards,
