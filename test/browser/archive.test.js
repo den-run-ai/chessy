@@ -90,6 +90,13 @@ require('./helper').run('archive', async function (t) {
   check(Number.isFinite(savedGame.endedAt) && (await games())[0].createdAt === savedGame.endedAt,
     'the reconciled record keeps the persisted completion time, not the boot time');
 
+  // Undoing a finished game voids its completion time: a DIFFERENT finish
+  // reached after the undo must archive under its own time.
+  await page.click('#undo');
+  check((await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).endedAt;
+  })) === null, 'undo clears the persisted completion time');
+
   // A game can be over before the first move (time forfeit on the initial
   // position) — it is archived, not skipped.
   const zeroPlyId = await page.evaluate(function () {
@@ -147,6 +154,49 @@ require('./helper').run('archive', async function (t) {
   check(tabEdit.secondId === 'tab-edit-test' && tabEdit.sans === 'e4 c5' &&
         tabEdit.createdAt === 2222,
     'a same-tab replay edit overwrites the one record (revised ending, no fork)');
+
+  // Re-offering an ending never transfers ownership: another tab's boot
+  // reconcile of the same ending keeps the original writer's tab, so the
+  // reconciler cannot later overwrite the owner's game by diverging.
+  const ownership = await page.evaluate(function () {
+    const mk = function (sans, tab, createdAt) {
+      return { id: 'owner-test', source: 'play', tags: {}, sans: sans,
+        playerColor: 'both', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'checkmate', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab };
+    };
+    return CoachStore.archiveGame(mk(['e4'], 'TAB-A', 1000))
+      .then(function () { return CoachStore.archiveGame(mk(['e4'], 'TAB-B', 2000)); })
+      .then(function () { return CoachStore.getGame('owner-test'); })
+      .then(function (g) {
+        return CoachStore.archiveGame(mk(['d4'], 'TAB-B', 3000)).then(function (forkId) {
+          return { keptTab: g.tab, keptAt: g.createdAt, forkId: forkId };
+        });
+      });
+  });
+  await waitGameCount(6);
+  check(ownership.keptTab === 'TAB-A' && ownership.keptAt === 1000 &&
+        ownership.forkId !== 'owner-test',
+    "same-ending reconcile keeps the owner's tab — the reconciler's divergence forks");
+
+  // Durability slot: a record parked by a tab that died before its
+  // IndexedDB commit is recovered on the next boot, then cleared.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      id: 'parked-game', source: 'play', tags: {},
+      sans: ['e4', 'e5'], playerColor: 'both', clocks: [null, null],
+      result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+      timeControl: 'none', plies: 2, createdAt: 7777, tab: 'DEAD-TAB'
+    }));
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await waitGameCount(7);
+  check((await games()).some(function (g) { return g.id === 'parked-game' && g.createdAt === 7777; }),
+    'a parked record from a dead tab is recovered on boot');
+  check(await page.evaluate(function () {
+    return localStorage.getItem('chessy-pending-archive-v1') === null;
+  }), 'the recovered durability slot is cleared');
 
   // A FAILED archive write is surfaced in the game-over dialog.
   await page.evaluate(function () {
