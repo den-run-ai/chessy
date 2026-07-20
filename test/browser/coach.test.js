@@ -338,6 +338,30 @@ require('./helper').run('coach', async function (t) {
         !!savedCard.bestMove && savedCard.reflection.threat === 'mate on f7',
     'saved card carries the PRE-verdict reflection snapshot, verdict and immediate due');
 
+  // ONE card per moment: re-verifying and re-saving the SAME game+ply
+  // replaces the existing card instead of minting a duplicate to drill.
+  await page.fill('#reflectThreat', 'mate on f7, second look');
+  await page.fill('#reflectCandidates', 'Qxf7');
+  await page.selectOption('#reflectEval', 'winning');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  await page.fill('#cardLesson', 'Revised: forcing mates first, always');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.indexOf('Updated') !== -1;
+  });
+  const resaved = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      return { count: cards.length, lesson: cards[0].lesson, threat: cards[0].reflection.threat };
+    });
+  });
+  check(resaved.count === 1 && resaved.lesson === 'Revised: forcing mates first, always' &&
+        resaved.threat === 'mate on f7, second look',
+    're-saving the same moment updates its one card (no duplicates)');
+
   // A move that COMPLETES a threefold repetition is a draw — verification
   // must score it 0 from the prefix's repetition table, not analyse the
   // bare FEN as an ongoing position.

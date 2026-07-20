@@ -228,13 +228,6 @@
     return (s >= 0 ? '+' : '') + (s / 100).toFixed(1);
   }
 
-  function lossLabel(lossCp) {
-    if (lossCp >= 300) return 'a blunder';
-    if (lossCp >= 100) return 'a mistake';
-    if (lossCp >= 50) return 'an inaccuracy';
-    return 'fine';
-  }
-
   // ---- Archive hook (called by app.js when a game ends) ----
   // Dedupe is keyed on the game INSTANCE (app.js's gameSeq, persisted with
   // the saved game) plus the moves and result: a re-shown ending —
@@ -646,13 +639,19 @@
           reflection: reflection
         };
         $('causeLabel').hidden = kind === 'pattern';
+        // No blunder/mistake/inaccuracy grading: the two probes are
+        // TIME-bounded and can stop at different depths, so the cost is a
+        // rough estimate — naming severity tiers would claim a precision
+        // the numbers don't have. (kind above uses the 50 cp threshold
+        // only to decide whether to ask for a cause at all.)
         $('verifyResult').textContent = (same
           ? 'You played ' + entry.san + ' — Chessy’s line agrees (eval ' +
             fmtScore(best.score) + ', depth ' + best.depth + ').'
           : 'You played ' + entry.san + ' (position eval ' + fmtScore(after.score) +
+            (after.depth ? ', depth ' + after.depth : '') +
             ') — Chessy prefers ' + bestSan + ' (eval ' + fmtScore(best.score) +
             ', depth ' + best.depth + '). Cost ≈ ' + (lossCp / 100).toFixed(1) +
-            ' pawns: ' + lossLabel(lossCp) + '.') +
+            ' pawns — rough: the probes may reach different depths.') +
           ' Chessy estimate, not authoritative analysis.';
         $('saveCard').disabled = false;
       });
@@ -685,7 +684,7 @@
     // IndexedDB) must not create duplicate cards for the same moment.
     $('saveCard').disabled = true;
     const now = Date.now();
-    CoachStore.addCard({
+    const fields = {
       gameId: r.game.id,
       ply: v.ply,
       fenBefore: v.fenBefore,
@@ -701,14 +700,29 @@
       // The snapshot taken when verification was submitted — never the
       // fields' current contents (editable since the verdict appeared).
       reflection: v.reflection,
-      createdAt: now,
       due: now,        // first review is immediate (the "learn" step)
-      step: -1,        // -1 = not yet on the day ladder
-      attempts: []
-    }).then(function () {
+      step: -1         // -1 = not yet on the day ladder
+    };
+    // ONE card per moment (gameId + ply): re-saving a moment REPLACES its
+    // lesson, cause and verdict on the existing card (and puts it back on
+    // the immediate learning step), keeping its history — it never mints a
+    // duplicate the player would then be drilled on twice.
+    CoachStore.listCards().then(function (cards) {
+      const existing = cards.find(function (c) {
+        return c.gameId === r.game.id && c.ply === v.ply;
+      });
+      if (existing) {
+        return CoachStore.updateCard(Object.assign({}, existing, fields))
+          .then(function () { return 'updated'; });
+      }
+      return CoachStore.addCard(Object.assign({ createdAt: now, attempts: [] }, fields))
+        .then(function () { return 'saved'; });
+    }).then(function (outcome) {
       if (token !== saveToken || review !== r || r.verdict !== v || r.flagged !== v.ply) return;
       $('cardSaved').hidden = false;
-      $('cardSaved').textContent = 'Lesson card saved — spaced review (Train) lands in the next slice.';
+      $('cardSaved').textContent = outcome === 'updated'
+        ? 'Updated this moment’s existing card — spaced review (Train) lands in the next slice.'
+        : 'Lesson card saved — spaced review (Train) lands in the next slice.';
     }).catch(function () {
       if (token !== saveToken || review !== r || r.verdict !== v || r.flagged !== v.ply) return;
       $('saveCard').disabled = false; // failed write: let the user retry

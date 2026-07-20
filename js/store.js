@@ -116,6 +116,9 @@
   function addCard(card) {
     return tx('cards', 'readwrite', function (s) { return s.add(card); });
   }
+  function updateCard(card) {
+    return tx('cards', 'readwrite', function (s) { return s.put(card); });
+  }
   function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
 
   global.CoachStore = {
@@ -125,6 +128,7 @@
     getGameBySig: getGameBySig,
     listGames: listGames,
     addCard: addCard,
+    updateCard: updateCard,
     listCards: listCards
   };
 })(typeof window !== 'undefined' ? window : globalThis);
