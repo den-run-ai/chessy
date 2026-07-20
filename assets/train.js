@@ -173,7 +173,13 @@
       return fresh;
     }).then(function () {
       t.grading = false;
-      if (train === t) nextTrainCard(); // Refresh may have rebuilt the queue
+      if (train === t) {
+        nextTrainCard(); // Refresh may have rebuilt the queue
+        // Grading hid the reveal box — and the focused grade button with
+        // it. Move focus into what replaced it: the next card's board, or
+        // Refresh when the queue ran dry.
+        focusAfterAdvance();
+      }
     }, function () {
       // The grade was NOT saved (quota, storage failure): keep the card
       // on screen (still answered) and say so — silently advancing would
@@ -185,10 +191,27 @@
     });
   }
 
+  // Keyboard/screen-reader focus must never strand on a control the
+  // transition just hid (WCAG: the grade buttons after grading, the
+  // Refresh button once it finds a card).
+  function focusAfterAdvance() {
+    const t = train;
+    if (t && t.card) {
+      const sq = $('trainBoard').querySelector('[tabindex="0"]');
+      if (sq) { sq.focus(); return; }
+    }
+    $('trainRefresh').focus(); // empty queue: Refresh is visible again
+  }
+
   $('gradeAgain').addEventListener('click', function () { grade('again'); });
   $('gradeHard').addEventListener('click', function () { grade('hard'); });
   $('gradeGood').addEventListener('click', function () { grade('good'); });
-  $('trainRefresh').addEventListener('click', function () { loadTrain(); });
+  $('trainRefresh').addEventListener('click', function () {
+    loadTrain().then(function () {
+      // Finding a due card hides the (focused) Refresh button itself.
+      if (train && train.card) focusAfterAdvance();
+    });
+  });
 
   CoachReview.registerView('train', loadTrain);
 })();

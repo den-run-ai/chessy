@@ -61,6 +61,9 @@ require('./helper').run('train', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('trainCount').textContent.indexOf('1 due') !== -1;
   });
+  check(await page.evaluate(function () {
+    return document.getElementById('trainBoard').contains(document.activeElement);
+  }), 'grading moves focus onto the next card’s board (not left on a hidden button)');
 
   // Second card: underpromotion through the named picker; a queen answer
   // DIFFERS (honest wording), then Again reschedules for later today.
@@ -81,6 +84,8 @@ require('./helper').run('train', async function (t) {
   check((await page.textContent('#trainEmpty')).includes('Refresh') &&
         await page.locator('#trainRefresh').isVisible(),
     'an empty queue offers Refresh instead of arming background timers');
+  check(await page.evaluate(function () { return document.activeElement.id; }) === 'trainRefresh',
+    'grading the last card moves focus to the visible Refresh button');
 
   // Ladder state: Good climbed to step 0 (~1 day, one correct attempt);
   // Again dropped off the ladder (~10 min, one incorrect attempt).
@@ -115,6 +120,10 @@ require('./helper').run('train', async function (t) {
   await page.waitForSelector('#trainCardBox:not([hidden])');
   check((await page.textContent('#trainCount')).includes('1 due'),
     'Refresh reconsiders "Again" cards without background timers');
+  await page.waitForFunction(function () {
+    return document.getElementById('trainBoard').contains(document.activeElement);
+  });
+  check(true, 'Refresh finding a card moves focus onto the board (Refresh hid itself)');
 
   // A failed grade write keeps the card on screen and reports it.
   await tsq('a7').click();
