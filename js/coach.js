@@ -229,7 +229,7 @@
       const list = $('gameList');
       list.innerHTML = '';
       $('reviewEmpty').hidden = games.length > 0;
-      $('reviewEmpty').textContent = 'No games archived yet — finish a game in Play.';
+      $('reviewEmpty').textContent = 'No games archived yet — finish a game in Play, or import a PGN.';
       for (const g of games) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
@@ -288,6 +288,81 @@
     review.ply = Math.max(0, Math.min(review.gs.history.length, to));
     renderReview();
   }
+
+  // ---- Import PGN ----
+  // ONE batch at a time: Import disables while a batch is writing and the
+  // batch runs to completion (a paste is at most a few hundred games —
+  // seconds of work), so closing the dialog mid-batch neither cancels nor
+  // duplicates it; the list simply refreshes when the batch lands.
+  let importBusy = false;
+
+  function newGameChoice(name) {
+    const el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : null;
+  }
+
+  $('importPgnBtn').addEventListener('click', function () {
+    $('importText').value = '';
+    $('importError').textContent = '';
+    $('importDialog').showModal();
+  });
+  $('importCancel').addEventListener('click', function () {
+    $('importDialog').close();
+  });
+
+  $('importStart').addEventListener('click', function () {
+    if (importBusy) return;
+    importBusy = true;
+    $('importStart').disabled = true;
+    const playerColor = (newGameChoice('importColor') || 'both');
+    const games = Chess.parsePgn($('importText').value);
+    let ok = 0, failed = 0, firstError = null;
+    let chain = Promise.resolve();
+    for (const g of games) {
+      if (g.sans.length === 0) continue;
+      chain = chain.then(function () {
+        if (g.unsupported) throw new Error('games from a set-up position are not supported');
+        const gs = Chess.replaySans(g.sans); // throws on illegal moves
+        const status = Chess.gameStatus(gs);
+        return CoachStore.addGame({
+          source: 'import',
+          tags: g.tags,
+          sans: gs.history.map(function (h) { return h.san; }), // canonical SANs
+          // Which side the trainee played — later slices focus feedback
+          // on those moves. Applies to the whole pasted batch.
+          playerColor: playerColor,
+          clocks: null, // PGN %clk import is a follow-up
+          result: status.over ? status.result : g.result,
+          reason: status.over ? status.reason : '',
+          mode: null, difficulty: null, timeControl: (g.tags && g.tags.TimeControl) || null,
+          plies: gs.history.length,
+          createdAt: Date.now()
+        }).then(function () { ok++; });
+      }).catch(function (e) {
+        failed++;
+        if (!firstError) firstError = e.message || String(e);
+      });
+    }
+    chain.then(function () {
+      importBusy = false;
+      $('importStart').disabled = false;
+      if (ok === 0 && failed === 0) {
+        $('importError').textContent = 'No games found in that text.';
+        return;
+      }
+      if (failed > 0 && ok === 0) {
+        $('importError').textContent = 'Import failed: ' + firstError;
+        return;
+      }
+      if (failed > 0) {
+        $('importError').textContent = ok + ' imported, ' + failed + ' skipped (' + firstError + ').';
+        renderGameList();
+        return;
+      }
+      $('importDialog').close();
+      renderGameList();
+    });
+  });
 
   $('reviewBack').addEventListener('click', function () { renderGameList(); });
   $('revStart').addEventListener('click', function () { stepReview(0); });

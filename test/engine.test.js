@@ -496,6 +496,77 @@ assertEqual(pgnLog.includes('before: ' + Chess.START_FEN), true, 'debug PGN logs
 const pgnOngoing = Chess.toPgn(playSans(['e4']), {});
 assertEqual(pgnOngoing.includes('[Result "*"]'), true, 'ongoing game marked *');
 
+// --- PGN import (parsePgn) ---
+console.log('parsePgn');
+const pgnIn = Chess.parsePgn([
+  '[Event "Test"]',
+  '[White "A"]',
+  '[Black "B"]',
+  '[Result "0-1"]',
+  '',
+  '1. f3 e5 2. g4?? {a losing move} Qh4# 0-1'
+].join('\n'));
+assertEqual(pgnIn.length, 1, 'single game parsed');
+assertEqual(pgnIn[0].tags.White, 'A', 'tags parsed');
+assertEqual(pgnIn[0].sans.join(' '), 'f3 e5 g4?? Qh4#',
+  'movetext tokens (comments/numbers stripped; suffixes kept for replay to normalize)');
+assertEqual(pgnIn[0].result, '0-1', 'result parsed');
+assertEqual(Chess.gameStatus(Chess.replaySans(pgnIn[0].sans)).reason, 'checkmate',
+  'parsed game replays to checkmate');
+
+// Round-trip: our own exporter parses back to the same moves.
+const rt = Chess.parsePgn(Chess.toPgn(playSans(['e4', 'e5', 'Nf3', 'Nc6']), {}));
+assertEqual(rt[0].sans.join(' '), 'e4 e5 Nf3 Nc6', 'toPgn output round-trips through parsePgn');
+
+// Messy real-world movetext: nested variations, NAGs, ; comments,
+// multi-line brace comments, 0-0 castling and suffix annotations.
+const messy = Chess.parsePgn([
+  '[Event "Messy"]',
+  '',
+  '1. e4 $1 e5 ; king pawn',
+  '2. Nf3 (2. f4 {the gambit} exf4 (2... d5)) Nc6 3. Bc4 {two',
+  'line comment} Bc5!? 4. 0-0 *'
+].join('\n'));
+assertEqual(messy[0].sans.join(' '), 'e4 e5 Nf3 Nc6 Bc4 Bc5!? 0-0',
+  'variations/NAGs/comments stripped, 0-0 kept as a token');
+assertEqual(!!Chess.replaySans(messy[0].sans), true, 'annotated SANs replay (suffixes normalized)');
+
+// Some exporters spell out an en-passant capture with a standalone marker.
+// It is notation metadata, not another move.
+const annotatedEp = Chess.parsePgn('1. e4 a6 2. e5 d5 3. exd6 e.p. *');
+assertEqual(annotatedEp[0].sans.join(' '), 'e4 a6 e5 d5 exd6',
+  'standalone e.p. annotation stripped');
+assertEqual(Chess.replaySans(annotatedEp[0].sans).history.length, 5,
+  'PGN with standalone e.p. annotation replays');
+const annotatedEpPlain = Chess.parsePgn('1. e4 a6 2. e5 d5 3. exd6 ep *');
+assertEqual(annotatedEpPlain[0].sans.join(' '), 'e4 a6 e5 d5 exd6',
+  'standalone ep annotation stripped');
+
+// Variations spanning line breaks stay variations: depth must carry
+// across lines, or the continuation leaks into the game.
+const spanVar = Chess.parsePgn('[Event "Span"]\n\n1. e4 (1. d4\nd5 2. c4) e5 2. Nf3 *');
+assertEqual(spanVar[0].sans.join(' '), 'e4 e5 Nf3',
+  'multi-line variation fully skipped');
+
+// Multiple concatenated games split on the tag section after movetext.
+const multi = Chess.parsePgn('[Event "1"]\n\n1. e4 e5 1/2-1/2\n[Event "2"]\n\n1. d4 d5 *');
+assertEqual(multi.length, 2, 'two concatenated games parsed');
+assertEqual(multi[1].sans.join(' '), 'd4 d5', 'second game movetext');
+assertEqual(multi[0].result, '1/2-1/2', 'first game result token');
+
+// TAGLESS multi-game files have no tag section to split on: movetext
+// resuming after a termination marker starts the next game.
+const tagless = Chess.parsePgn('1. e4 e5 1-0\n\n1. d4 d5 1/2-1/2');
+assertEqual(tagless.length, 2, 'tagless games split at the result marker');
+assertEqual(tagless[0].sans.join(' '), 'e4 e5', 'first tagless game movetext');
+assertEqual(tagless[0].result, '1-0', 'first tagless game result');
+assertEqual(tagless[1].sans.join(' '), 'd4 d5', 'second tagless game movetext');
+assertEqual(tagless[1].result, '1/2-1/2', 'second tagless game result');
+
+// SetUp/FEN games are flagged unsupported.
+assertEqual(Chess.parsePgn('[SetUp "1"]\n[FEN "8/8/8/8/8/8/8/K6k w - - 0 1"]\n\n1. Ka2 *')[0].unsupported,
+  true, 'SetUp/FEN game flagged unsupported');
+
 // --- replaySans (the coaching archive replays stored SANs) ---
 console.log('replaySans');
 const replayed = Chess.replaySans(['f3', 'e5', 'g4', 'Qh4#']);

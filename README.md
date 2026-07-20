@@ -71,6 +71,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   Finished games are archived automatically to IndexedDB (with per-move
   clock/think evidence and which side you played), and "Review game" after
   a game ends opens the archived game in a position-by-position browser.
+  PGN games can be imported with an "I played White/Black" choice — the
+  parser tolerates real-world exports (comments, variations, NAGs, glued
+  move numbers, `0-0` castling, multi-game and tagless files) and every
+  imported game is replay-validated before it is stored.
   Reflection, engine verification, lesson cards and spaced review build on
   this archive (coaching roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23)). The archive

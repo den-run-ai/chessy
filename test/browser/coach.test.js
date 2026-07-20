@@ -106,6 +106,75 @@ require('./helper').run('coach', async function (t) {
   await page.waitForSelector('.game-item');
   check(await page.locator('#reviewFlow').isHidden(), 'Back returns to the game list');
 
+  // ---- PGN import ----
+  // A bad PGN reports instead of breaking.
+  await page.click('#importPgnBtn');
+  await page.fill('#importText', '1. e4 e5 2. zz9');
+  await page.click('#importStart');
+  await page.waitForFunction(function () {
+    return document.getElementById('importError').textContent.indexOf('Import failed') !== -1;
+  });
+  check((await page.textContent('#importError')).includes('illegal or unknown SAN'),
+    'illegal PGN reports an import error');
+
+  // SetUp/FEN games are out of scope for this slice and say so.
+  await page.fill('#importText', '[SetUp "1"]\n[FEN "8/8/8/8/8/8/8/K6k w - - 0 1"]\n\n1. Ka2 *');
+  await page.click('#importStart');
+  await page.waitForFunction(function () {
+    return document.getElementById('importError').textContent.indexOf('set-up position') !== -1;
+  });
+  check(true, 'SetUp/FEN games are reported as unsupported');
+
+  // Empty text is a distinct message.
+  await page.fill('#importText', '   ');
+  await page.click('#importStart');
+  await page.waitForFunction(function () {
+    return document.getElementById('importError').textContent.indexOf('No games found') !== -1;
+  });
+  check(true, 'empty import reports "no games found"');
+
+  // A real game imports, closes the dialog and joins the archive.
+  await page.fill('#importText', [
+    '[Event "Test import"]',
+    '[White "Anna"]',
+    '[Black "Ben"]',
+    '[Result "1-0"]',
+    '',
+    '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'
+  ].join('\n'));
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('.game-item').length === 3;
+  });
+  check(await page.locator('.game-item').count() === 3, 'imported game joins the archive');
+  check((await page.textContent('#gameList')).includes('Anna vs Ben'),
+    'imported game labelled from its PGN tags');
+
+  // A tagless multi-game paste imports every game.
+  await page.click('#importPgnBtn');
+  await page.fill('#importText', '1. e4 e5 1-0\n\n1. d4 d5 1/2-1/2');
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('.game-item').length === 5;
+  });
+  check(true, 'tagless multi-game paste imports both games');
+
+  // The imported archive survives a reload and replays in the browser.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.click('#tabReview');
+  await page.waitForSelector('.game-item');
+  check(await page.locator('.game-item').count() === 5, 'imported games survive reload');
+  await page.locator('.game-item', { hasText: 'Anna vs Ben' }).click();
+  check((await page.textContent('#reviewStatus')).includes('Position 0/7'),
+    'imported game opens in the position browser');
+  await page.click('#revEnd');
+  check((await page.textContent('#reviewStatus')).includes('end of game'),
+    'imported game replays to its end');
+  await page.click('#reviewBack');
+
   // Play is undisturbed by the excursion.
   await page.click('#tabPlay');
   check(await page.locator('#viewPlay').isVisible(), 'Play tab returns to the game');

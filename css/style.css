@@ -472,6 +472,20 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 
 .coach-note { font-size: 0.85rem; color: var(--muted); }
+.import-error { min-height: 1.2em; text-align: left; }
+
+#importText {
+  width: 100%;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #4a4642;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  text-align: left;
+}
 
 .game-list {
   list-style: none;

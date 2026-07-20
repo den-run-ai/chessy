@@ -69,9 +69,10 @@
     <section class="view coach" id="viewReview" hidden aria-labelledby="reviewTitle">
       <div class="view-head">
         <h2 id="reviewTitle">Review</h2>
+        <button type="button" id="importPgnBtn" class="btn">Import PGN</button>
       </div>
       <div id="gameListWrap">
-        <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
+        <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play, or import a PGN.</p>
         <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
       </div>
 
@@ -128,6 +129,26 @@
     <div class="buttons setup-actions">
       <button id="newGameStart" class="btn primary">Start game</button>
       <button id="newGameCancel" class="btn">Cancel</button>
+    </div>
+  </dialog>
+
+  <dialog id="importDialog" class="setup" aria-labelledby="importTitle">
+    <h2 id="importTitle">Import PGN</h2>
+    <textarea id="importText" rows="9" spellcheck="false"
+              placeholder="Paste one or more PGN games…"
+              aria-label="PGN text"></textarea>
+    <fieldset class="choice">
+      <legend>You played</legend>
+      <div class="choice-options">
+        <label><input type="radio" name="importColor" value="w"><span>White</span></label>
+        <label><input type="radio" name="importColor" value="b"><span>Black</span></label>
+        <label><input type="radio" name="importColor" value="both" checked><span>Both / not sure</span></label>
+      </div>
+    </fieldset>
+    <p class="coach-note import-error" id="importError" aria-live="polite"></p>
+    <div class="buttons setup-actions">
+      <button type="button" id="importStart" class="btn primary">Import</button>
+      <button type="button" id="importCancel" class="btn">Close</button>
     </div>
   </dialog>
 
