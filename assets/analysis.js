@@ -71,5 +71,14 @@
     });
   }
 
-  global.ChessyAnalysis = { analyse: analyse };
+  // Abandoning the reflection (leaving Review, leaving the game) kills an
+  // in-flight probe outright: the worker stops burning the search budget
+  // and the caller's promise resolves null so its guards discard it.
+  function cancel() {
+    if (!active) return;
+    if (worker) { worker.terminate(); worker = null; }
+    settle(active, null);
+  }
+
+  global.ChessyAnalysis = { analyse: analyse, cancel: cancel };
 })(typeof window !== 'undefined' ? window : globalThis);

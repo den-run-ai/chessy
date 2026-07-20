@@ -57,6 +57,9 @@
     review = null; // leaving a game abandons its (unsaved) reflection state
     $('reviewFlow').hidden = true;
     $('gameListWrap').hidden = false;
+    // Announce the abandonment: the reflection flow cancels any in-flight
+    // probe when it observes current() === null.
+    document.dispatchEvent(new CustomEvent('chessy:reviewrender'));
     return CoachStore.listGames().then(function (games) {
       const list = $('gameList');
       list.innerHTML = '';
@@ -108,6 +111,10 @@
     $('gameListWrap').hidden = true;
     $('reviewFlow').hidden = false;
     renderReview();
+    // Opening hides the list (often holding focus on the clicked item):
+    // move focus to the start of the region that replaced it — keyboard
+    // and screen-reader users must never be left on a hidden element.
+    $('reviewBack').focus();
   }
 
   function renderReview() {
@@ -132,7 +139,15 @@
     renderReview();
   }
 
-  $('reviewBack').addEventListener('click', function () { renderGameList(); });
+  // Back hides the flow (and the focused Back button itself): once the
+  // list is rebuilt, move focus onto it. Only this path moves focus —
+  // showView('review') from a tab click must leave focus on the tab.
+  $('reviewBack').addEventListener('click', function () {
+    renderGameList().then(function () {
+      const firstItem = $('gameList').querySelector('button');
+      (firstItem || $('tabReview')).focus();
+    });
+  });
   $('revStart').addEventListener('click', function () { stepReview(0); });
   $('revPrev').addEventListener('click', function () { stepReview(review.ply - 1); });
   $('revNext').addEventListener('click', function () { stepReview(review.ply + 1); });
@@ -148,12 +163,8 @@
   function openArchivedGame(gameId) {
     showView('review');
     return CoachStore.getGame(gameId).then(function (game) {
-      if (game) {
-        openReview(game);
-        $('reviewBack').focus();
-      } else {
-        $('tabReview').focus();
-      }
+      if (game) openReview(game); // openReview moves focus into the flow
+      else $('tabReview').focus();
     }).catch(function () { $('tabReview').focus(); });
   }
 
