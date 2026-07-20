@@ -148,13 +148,20 @@ function browserType() {
     'update in flight: the rB document executes only rB assets (' + b.total + ' checked)');
 
   // Offline after the update: the cached rB shell must request the cached
-  // rB assets — still zero cross-release loads.
-  await context.setOffline(true);
-  await page.reload();
-  const off = await stable(function (s) { return s.token === 'rB' && s.engine; }, 'offline reload');
-  check(off.mixed.length === 0, 'offline: cached shell and cached assets are the same release');
-  check(await page.locator('#board .square').count() === 64, 'offline app is functional');
-  await context.setOffline(false);
+  // rB assets — still zero cross-release loads. Chromium only: Playwright's
+  // WebKit cannot emulate an offline navigation served by a service worker
+  // (page.reload dies with an internal error), and the mechanism under test
+  // is engine-independent — the coherence assertions above already ran.
+  if ((process.env.BROWSER || 'chromium') === 'chromium') {
+    await context.setOffline(true);
+    await page.reload();
+    const off = await stable(function (s) { return s.token === 'rB' && s.engine; }, 'offline reload');
+    check(off.mixed.length === 0, 'offline: cached shell and cached assets are the same release');
+    check(await page.locator('#board .square').count() === 64, 'offline app is functional');
+    await context.setOffline(false);
+  } else {
+    console.log('  --  offline phase skipped (Playwright WebKit cannot emulate SW-served offline navigations)');
+  }
 
   check(errors.length === 0,
     'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
