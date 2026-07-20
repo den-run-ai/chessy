@@ -8,12 +8,14 @@
  *            timeControl, plies, createdAt }
  *   cards: { id (auto), gameId, ply, ... } — lesson cards (a later slice)
  *
- * The games keyPath is the app's own per-game UUID, so archiving is an
- * IDEMPOTENT put: a re-shown ending of the same game instance (reload,
- * undo → replay, reopened game-over dialog) overwrites its single record,
- * while New game/Rematch mint a new UUID and therefore a new record. No
- * dedupe sets, signatures, or constraint handling needed — in ANY number
- * of tabs.
+ * The games keyPath is the app's own per-game UUID: a re-shown ending of
+ * the same game instance (reload, undo → replay, reopened game-over
+ * dialog) overwrites its single record via archiveGame(), while New
+ * game/Rematch mint a new UUID and therefore a new record. archiveGame
+ * additionally keeps the original createdAt on overwrite and forks a
+ * fresh id when the existing record is a DIFFERENT completion of the same
+ * instance (cloned tabs that diverged) — atomically, so it stays correct
+ * in ANY number of tabs.
  *
  * Everything is promise-based; the DB opens lazily on first use so
  * browsers without IndexedDB (or private modes that block it) fail
@@ -90,6 +92,60 @@
   function putGame(game) {
     return tx('games', 'readwrite', function (s) { return s.put(game); });
   }
+
+  function newId() {
+    return (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+  }
+
+  // The same ENDING re-offered (reopened dialog, reload → replayed finish,
+  // boot reconcile) — as opposed to a different completion that happens to
+  // carry the same instance key (a cloned tab that played on divergently).
+  function sameEnding(a, b) {
+    return a.sans.length === b.sans.length &&
+      a.sans.every(function (san, i) { return san === b.sans[i]; }) &&
+      a.result === b.result && a.reason === b.reason;
+  }
+
+  // Archive a finished game; resolves with the id actually stored.
+  // Idempotent per game instance AND lossless across cloned tabs: the get
+  // and put run in ONE readwrite transaction (IndexedDB serializes those
+  // per store), so concurrent writers cannot interleave between the read
+  // and the write.
+  //   - no existing record         → stored as-is
+  //   - same ending re-offered     → overwritten, original createdAt kept
+  //     (listGames sorts by createdAt — a re-shown old game must not jump
+  //     to the top of the chronology)
+  //   - DIVERGENT completion (two tabs finished the same instance
+  //     differently) → stored under a fresh id so neither game is lost;
+  //     the caller adopts the returned id for its own re-shows.
+  function archiveGame(game) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('games', 'readwrite');
+        const s = t.objectStore('games');
+        const getReq = s.get(game.id);
+        let putReq = null;
+        let storedId = game.id;
+        getReq.onsuccess = function () {
+          const existing = getReq.result;
+          const record = Object.assign({}, game);
+          if (existing) {
+            if (sameEnding(existing, record)) record.createdAt = existing.createdAt;
+            else record.id = storedId = newId();
+          }
+          putReq = s.put(record);
+        };
+        t.oncomplete = function () { resolve(storedId); };
+        t.onerror = function () { reject((putReq && putReq.error) || getReq.error || t.error); };
+        t.onabort = function () {
+          reject((putReq && putReq.error) || getReq.error || t.error ||
+            new Error('transaction aborted'));
+        };
+      });
+    });
+  }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
 
   function listGames() {
@@ -99,6 +155,7 @@
 
   global.CoachStore = {
     putGame: putGame,
+    archiveGame: archiveGame,
     getGame: getGame,
     listGames: listGames
   };
