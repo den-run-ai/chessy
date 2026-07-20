@@ -33,9 +33,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,
   arrow/Home/End keys) to review earlier positions — browsing is read-only
-  and never disturbs the live game; after a game ends, "Review game" starts
-  the replay and "Rematch" starts over. Undo during an AI search cancels the
-  search and takes back the triggering move.
+  and never disturbs the live game; after a game ends, "Review game" opens
+  the archived record in the coaching Review view (falling back to the
+  on-board replay if Review is unavailable) and "Rematch" starts over. Undo
+  during an AI search cancels the search and takes back the triggering move.
 - **Accessibility** — the board is an ARIA grid (rows/gridcells) with a single
   roving tab stop: Tab enters the board once, arrow keys move square to square
   (directions follow the visual board, also when flipped), Home/End jump to
@@ -70,9 +71,14 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **Game archive (coaching foundation)** — finished games are recorded
   automatically to IndexedDB, keyed on a per-game UUID (idempotent
   re-archive; per-move clock/think evidence and the side you played are
-  retained). A failed write is reported in the game-over dialog. No UI
-  reads the archive yet — the Review browser, reflection, and spaced
-  review build on it in the next slices (roadmap
+  retained). A failed write is reported in the game-over dialog (or on a
+  page-level note once it has closed).
+- **Review (read-only)** — a Play/Review tab bar; Review lists the archived
+  games and browses any of them position by position on an accessible mini
+  board (same ARIA grid model as the Play board, inspection-only). A running
+  timed game stays visible from Review via a live-clock banner that returns
+  to Play. Reflection, lesson cards, and spaced review build on this in the
+  next slices (roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23)).
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
@@ -137,6 +143,8 @@ gated on the engine *and* browser suites.
 | `assets/app.js` | Board UI, game flow, persistence |
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards) |
 | `assets/archive.js` | Records finished games into the store |
+| `assets/mini-board.js` | Accessible read-only mini board for the coach views |
+| `assets/review.js` | Review view: tabs, archived-game list, position browser |
 | `assets/style.css` | Styling |
 | `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |

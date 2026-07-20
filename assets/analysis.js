@@ -56,10 +56,17 @@
       const job = { id: ++seq, resolve: resolve };
       active = job;
       job.fallback = function () {
+        // A canceled or superseded job must not burn the synchronous
+        // search budget on the main thread — its result would be
+        // discarded, and the freeze would hit whatever view the user
+        // moved on to.
+        if (active !== job) return;
         settle(job, ChessAI.think(Chess.parseFen(fen),
           Object.assign({}, CFG, { positions: positions || undefined })));
       };
-      if (!ensureWorker()) { setTimeout(job.fallback, 0); return; }
+      // The zero-delay fallback registers as the job's watchdog so a
+      // cancel/supersede clears the pending timer as well.
+      if (!ensureWorker()) { job.watchdog = setTimeout(job.fallback, 0); return; }
       job.watchdog = setTimeout(function () {
         if (worker) { worker.terminate(); worker = null; }
         job.fallback();

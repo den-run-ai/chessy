@@ -110,6 +110,23 @@ require('./helper').run('a11y', async function (t) {
   check(await page.locator('#reviewBoard button.square').count() === 64,
     'review board squares are focusable buttons (keyboard-inspectable)');
 
+  // ONE persistent main landmark wraps the switchable views: activating
+  // Review (which hides #viewPlay) must not leave the page without a
+  // main landmark containing the active content.
+  check(await page.evaluate(function () {
+    const mains = document.querySelectorAll('main');
+    return mains.length === 1 &&
+           mains[0].contains(document.getElementById('viewPlay')) &&
+           mains[0].contains(document.getElementById('viewReview'));
+  }), 'one persistent main landmark wraps both views');
+  await page.click('#tabReview');
+  check(await page.evaluate(function () {
+    const m = document.querySelector('main');
+    const review = document.getElementById('viewReview');
+    return !m.hidden && !review.hidden && m.contains(review);
+  }), 'the active Review content stays inside the main landmark');
+  await page.click('#tabPlay');
+
   // Active tab text contrast (white on --accent-dark must stay ≥ 4.5:1;
   // the app-wide contrast pass is #35's own PR).
   const tabRatio = await page.evaluate(function () {
