@@ -597,9 +597,36 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
+      // Principal variation search: the first legal move gets the full
+      // window; later moves get a null-window scout ("can this beat the
+      // bound at all?") and repeat at the full window only when the scout
+      // says yes. The bound is always finite by then (the first move set
+      // it), so the null window is well-formed. A child's repetition
+      // dependency is the MINIMUM over its scout and re-search — a path-
+      // dependent draw seen by either must reach the TT guard below.
+      let score, childRep;
+      if (!anyLegal) {
+        score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+        childRep = ctx.repPly;
+      } else if (maximizing) {
+        score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
+        childRep = ctx.repPly;
+        if (score > alpha && score < beta) {
+          ctx.researches++;
+          score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
+      } else {
+        score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
+        childRep = ctx.repPly;
+        if (score < beta && score > alpha) {
+          ctx.researches++;
+          score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
+      }
       anyLegal = true;
-      const score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
-      if (ctx.repPly < repMin) repMin = ctx.repPly;
+      if (childRep < repMin) repMin = childRep;
       if (maximizing ? score > best : score < best) {
         best = score;
         bestPk = packMove(m);
@@ -726,7 +753,24 @@
       for (const it of items) {
         let score;
         try {
-          score = it.repDraw ? 0 : searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+          // Root PVS mirrors searchNode: full window until some move has
+          // set a finite bound, then scout + re-search. A repDraw counts
+          // as a searched move (its 0 tightened the bound).
+          if (it.repDraw) score = 0;
+          else if (iterBest === null) score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+          else if (maximizing) {
+            score = searchNode(it.next, d - 1, alpha, alpha + 1, 1, ctx);
+            if (score > alpha && score < beta) {
+              ctx.researches++;
+              score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+            }
+          } else {
+            score = searchNode(it.next, d - 1, beta - 1, beta, 1, ctx);
+            if (score < beta && score > alpha) {
+              ctx.researches++;
+              score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+            }
+          }
         } catch (e) {
           if (e !== ABORT) throw e;
           aborted = true;
