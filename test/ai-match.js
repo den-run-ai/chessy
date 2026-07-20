@@ -33,6 +33,7 @@ const BASE = opt('base', 'origin/main');
 const NODES = Number(opt('nodes', 10000));
 const MAX_PLIES = Number(opt('plies', 180));
 const SEEDS = Number(opt('seeds', 4));
+const SEED_BASE = Number(opt('seedbase', 0)); // run seeds SEED_BASE..SEED_BASE+SEEDS-1 (shard a match across processes)
 const PAIRS_LIMIT = Number(opt('pairs', Infinity));
 
 // 25 balanced openings as SAN lines from the start position.
@@ -129,7 +130,7 @@ let w = 0, d = 0, l = 0, games = 0;
 const pairScores = []; // candidate score per (opening, seed) pair, in [0, 1]
 const t0 = Date.now();
 outer:
-for (let s = 0; s < SEEDS; s++) {
+for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
   for (let o = 0; o < OPENINGS.length; o++) {
     if (pairScores.length >= PAIRS_LIMIT) break outer;
     const seed = (o * 977 + s * 7919 + 1) | 0;
@@ -155,6 +156,7 @@ const sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) *
 const half = 1.96 * sd / Math.sqrt(n);
 const lo = mean - half, hi = mean + half;
 
+console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
 console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + NODES + ' nodes/move');
 console.log('W ' + w + ' / D ' + d + ' / L ' + l +
   '  score ' + (mean * 100).toFixed(1) + '%' +
