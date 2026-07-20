@@ -532,6 +532,19 @@ assertEqual(messy[0].sans.join(' '), 'e4 e5 Nf3 Nc6 Bc4 Bc5!? 0-0',
   'variations/NAGs/comments stripped, 0-0 kept as a token');
 assertEqual(!!Chess.replaySans(messy[0].sans), true, 'annotated SANs replay (suffixes normalized)');
 
+// Some exporters spell out an en-passant capture with a standalone marker.
+// It is notation metadata, not another move (codex review, PR #38).
+const annotatedEp = Chess.parsePgn('1. e4 a6 2. e5 d5 3. exd6 e.p. *');
+assertEqual(annotatedEp[0].sans.join(' '), 'e4 a6 e5 d5 exd6',
+  'standalone e.p. annotation stripped');
+assertEqual(Chess.replaySans(annotatedEp[0].sans).history.length, 5,
+  'PGN with standalone e.p. annotation replays');
+const annotatedEpPlain = Chess.parsePgn('1. e4 a6 2. e5 d5 3. exd6 ep *');
+assertEqual(annotatedEpPlain[0].sans.join(' '), 'e4 a6 e5 d5 exd6',
+  'standalone ep annotation stripped');
+assertEqual(Chess.replaySans(annotatedEpPlain[0].sans).history.length, 5,
+  'PGN with standalone ep annotation replays');
+
 // Variations spanning line breaks stay variations (codex review, PR #38):
 // depth must carry across lines, or the continuation leaks into the game.
 const spanVar = Chess.parsePgn('[Event "Span"]\n\n1. e4 (1. d4\nd5 2. c4) e5 2. Nf3 *');

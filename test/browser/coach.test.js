@@ -407,6 +407,106 @@ require('./helper').run('coach', async function (t) {
         invalidBackup.msg.indexOf('invalid') !== -1,
     'a backup with malformed records is rejected before any write (' + invalidBackup.msg + ')');
 
+  // Game-list sorting/rendering consumes createdAt and plies directly, and
+  // scanning uses playerColor to decide which moves belong to the trainee.
+  // Reject missing/unrenderable timestamps, non-integer or inconsistent ply
+  // counts, and unknown colors before any malformed game reaches the DB.
+  const invalidGameMetadata = await page.evaluate(function () {
+    function game() {
+      return {
+        id: 1, source: 'import', tags: {}, sans: ['e4'], playerColor: 'both',
+        clocks: null, result: '*', reason: '', mode: null, difficulty: null,
+        timeControl: null, plies: 1, createdAt: 1
+      };
+    }
+    const cases = [
+      function (g) { delete g.createdAt; },
+      function (g) { g.createdAt = Infinity; },
+      function (g) { g.createdAt = Number.MAX_VALUE; },
+      function (g) { delete g.plies; },
+      function (g) { g.plies = 1.5; },
+      function (g) { g.plies = 2; },
+      function (g) { g.playerColor = 'neither'; },
+      function (g) {
+        g.sans = ['e4', 'e5', 'Nf3', 'Nc6'];
+        g.plies = 4;
+        g.scan = {
+          at: 1, settings: { maxDepth: 3, timeMs: 50 }, playerColor: 'both',
+          evals: [0, 0, 0, 0, 0], bestSans: [null, null, null, null, null],
+          moments: [
+            { ply: 0, loss: 50 }, { ply: 1, loss: 200 },
+            { ply: 2, loss: 100 }, { ply: 3, loss: 75 }
+          ]
+        };
+      }
+    ];
+    return Promise.all(cases.map(function (mutate) {
+      const g = game();
+      mutate(g);
+      return CoachStore.importAll({
+        format: 'chessy-coach', version: 3, games: [g], cards: []
+      }).then(
+        function () { return 'accepted'; },
+        function (e) { return String(e && e.message); });
+    }));
+  });
+  check(invalidGameMetadata.every(function (msg) { return msg.indexOf('invalid') !== -1; }),
+    'backup games with malformed consumed metadata are rejected (' +
+    invalidGameMetadata.join(' / ') + ')');
+
+  // Schema-v1 games can predate playerColor, while later schema-v1 scans can
+  // carry color yet still retain three moments. Restore both generations,
+  // default the old game to "both sides", and normalize the scan to today's
+  // two-moment shape so the next export is self-contained.
+  const legacyGameMetadata = await page.evaluate(function () {
+    const reason = 'legacy-metadata-' + Date.now();
+    const early = {
+      id: 91, source: 'play', tags: {}, sans: ['e4', 'e5', 'Nf3'],
+      clocks: null, result: '*', reason: reason + '-early', mode: 'pvp', difficulty: null,
+      timeControl: null, plies: 3, createdAt: 1,
+      scan: {
+        at: 1, settings: { maxDepth: 3, timeMs: 50 },
+        evals: [0, 0, 0, 0], bestSans: [null, null, null, null],
+        moments: [{ ply: 0, loss: 50 }, { ply: 1, loss: 200 }, { ply: 2, loss: 100 }]
+      }
+    };
+    const colored = Object.assign({}, early, {
+      id: 92, reason: reason + '-colored', playerColor: 'w',
+      scan: Object.assign({}, early.scan, { playerColor: 'w' })
+    });
+    const data = {
+      format: 'chessy-coach', version: 1,
+      games: [early, colored],
+      cards: []
+    };
+    return CoachStore.importAll(data).then(function () {
+      return CoachStore.exportAll();
+    }).then(function (backup) {
+      function summary(suffix) {
+        const restored = backup.games.find(function (g) { return g.reason === reason + suffix; });
+        return restored ? {
+          id: restored.id,
+          gameColor: restored.playerColor,
+          scanColor: restored.scan && restored.scan.playerColor,
+          moments: restored.scan && restored.scan.moments.map(function (m) { return m.ply; })
+        } : null;
+      }
+      const result = { early: summary('-early'), colored: summary('-colored') };
+      return Promise.all([result.early, result.colored].filter(Boolean).map(function (g) {
+        return CoachStore.deleteGame(g.id);
+      })).then(function () { return result; });
+    });
+  });
+  check(legacyGameMetadata && legacyGameMetadata.early && legacyGameMetadata.colored &&
+        legacyGameMetadata.early.gameColor === 'both' &&
+        legacyGameMetadata.early.scanColor === 'both' &&
+        legacyGameMetadata.colored.gameColor === 'w' &&
+        legacyGameMetadata.colored.scanColor === 'w' &&
+        String(legacyGameMetadata.early.moments) === '1,2' &&
+        String(legacyGameMetadata.colored.moments) === '1,2',
+    'legacy backup games/scans normalize color and retain the top two moments (' +
+    JSON.stringify(legacyGameMetadata) + ')');
+
   // The scheduler can only consume the immediate learning step (-1) and
   // the six fixed day-ladder rungs (0..5). Missing or out-of-range steps
   // would make the next Good/Hard grade calculate an unusable due date.
@@ -492,7 +592,8 @@ require('./helper').run('coach', async function (t) {
     const badScan = {
       format: 'chessy-coach', version: 2,
       games: [{ id: 1, source: 'import', tags: {}, sans: ['e4'], result: '*',
-        createdAt: 1, scan: { moments: [{ ply: 99, loss: 100 }] } }],
+        playerColor: 'both', plies: 1, createdAt: 1,
+        scan: { moments: [{ ply: 99, loss: 100 }] } }],
       cards: []
     };
     return Promise.all([badAttempts, badScan].map(function (data) {

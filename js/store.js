@@ -257,17 +257,18 @@
     // openReview. (Engine checks are skipped only where the engine script
     // isn't loaded, e.g. unit shims.)
     function badScan(scan, plies) {
+      const missingPlayerColor = scan && scan.playerColor === undefined;
       if (!scan || typeof scan !== 'object' ||
           typeof scan.at !== 'number' || !isFinite(scan.at) ||
           !scan.settings || typeof scan.settings !== 'object' ||
           typeof scan.settings.maxDepth !== 'number' || !isFinite(scan.settings.maxDepth) ||
           typeof scan.settings.timeMs !== 'number' || !isFinite(scan.settings.timeMs) ||
-          ['w', 'b', 'both'].indexOf(scan.playerColor) < 0 ||
+          (!missingPlayerColor && ['w', 'b', 'both'].indexOf(scan.playerColor) < 0) ||
           !Array.isArray(scan.evals) || scan.evals.length !== plies + 1 ||
           !scan.evals.every(function (v) { return typeof v === 'number' && isFinite(v); }) ||
           !Array.isArray(scan.bestSans) || scan.bestSans.length !== plies + 1 ||
           !scan.bestSans.every(function (v) { return v === null || typeof v === 'string'; }) ||
-          !Array.isArray(scan.moments) || scan.moments.length > 2) {
+          !Array.isArray(scan.moments) || scan.moments.length > 3) {
         return true;
       }
       return !scan.moments.every(function (m) {
@@ -279,7 +280,12 @@
     function badGame(g) {
       if (!g || typeof g !== 'object' || !Array.isArray(g.sans) ||
           !g.sans.every(function (s) { return typeof s === 'string'; }) ||
-          typeof g.result !== 'string') return true;
+          typeof g.result !== 'string' ||
+          typeof g.createdAt !== 'number' || !isFinite(g.createdAt) ||
+          isNaN(new Date(g.createdAt).getTime()) ||
+          !Number.isInteger(g.plies) || g.plies !== g.sans.length ||
+          (g.playerColor !== undefined &&
+            ['w', 'b', 'both'].indexOf(g.playerColor) < 0)) return true;
       if (g.scan !== undefined && g.scan !== null && badScan(g.scan, g.sans.length)) return true;
       if (typeof Chess !== 'undefined') {
         try { Chess.replaySans(g.sans); } catch (e) { return true; }
@@ -338,6 +344,20 @@
         // instance: keeping the sig would trip the unique index (and
         // wrongly claim the dedupe identity).
         delete copy.sig;
+        // Schema-v1 games predate playerColor; preserve the scan path's
+        // legacy fallback while ensuring the restored record is canonical.
+        if (copy.playerColor === undefined) copy.playerColor = 'both';
+        if (copy.scan) {
+          copy.scan = Object.assign({}, copy.scan, {
+            playerColor: copy.scan.playerColor === undefined
+              ? copy.playerColor : copy.scan.playerColor,
+            // Schema-v1 scans retained three moments. Keep the current two
+            // highest-loss moments, then restore chronological display order.
+            moments: copy.scan.moments.slice().sort(function (a, b) {
+              return b.loss - a.loss;
+            }).slice(0, 2).sort(function (a, b) { return a.ply - b.ply; })
+          });
+        }
         return addGame(copy, fence).then(function (newId) {
           idMap.set(oldId, newId);
           addedGames.push(newId);

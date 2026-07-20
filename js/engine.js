@@ -493,6 +493,7 @@
         if (token === '(') { depth++; continue; }
         if (token === ')') { if (depth > 0) depth--; continue; }
         if (depth > 0) continue;                          // inside a variation
+        if (/^e\.?p\.?$/i.test(token)) continue;          // en-passant annotation
         if (token === '1-0' || token === '0-1' || token === '1/2-1/2' || token === '*') {
           inMovetext = true;
           result = token;
