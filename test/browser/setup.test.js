@@ -77,4 +77,47 @@ require('./helper').run('setup', async function (t) {
     return document.getElementById('installNote').textContent.includes('Ready offline');
   }, null, { timeout: 15000 });
   check(true, 'offline note reaches "Ready offline" after SW install');
+  // Worker failures retry the SAME AI move synchronously, so their recorded
+  // timing must include time already spent waiting for the worker. This
+  // controllable stub first fails loudly, then stays alive but silent; it
+  // affects every later navigation, so these tests must stay LAST.
+  await page.addInitScript(function () {
+    window.Worker = function () {
+      this.postMessage = function () {
+        const worker = this;
+        if (window.__chessyTestWorkerMode === 'error') {
+          setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 750);
+        }
+      };
+      this.terminate = function () {};
+    };
+    window.__chessyTestWorkerMode = 'error';
+  });
+  await t.inject(function () { localStorage.removeItem('chessy-game-v1'); });
+
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 5000 });
+  const failedAiMs = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return saved.history[0].ai.ms;
+  });
+  check(failedAiMs >= 700,
+    'failed worker: AI timing includes the pre-error wait (' + failedAiMs + 'ms)');
+
+  await page.evaluate(function () { window.__chessyTestWorkerMode = 'silent'; });
+  await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 20000 });
+  check(true, 'silent worker: the watchdog falls back and the computer still moves');
+  check(!(await page.textContent('#status')).includes('thinking'),
+    'status leaves "thinking" after the fallback move');
+  const stalledAiMs = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return saved.history[0].ai.ms;
+  });
+  check(stalledAiMs >= 4900,
+    'silent worker: AI timing includes the watchdog wait (' + stalledAiMs + 'ms)');
 });

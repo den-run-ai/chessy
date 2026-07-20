@@ -174,6 +174,7 @@
   // falls back to a synchronous call where workers are unavailable.
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // {depth, quiesce, started} for the in-flight search (PGN log)
+  let aiWatchdog = null;      // guards against an alive-but-SILENT worker (see maybeAiMove)
 
   function createAiWorker() {
     if (typeof Worker === 'undefined') return null;
@@ -185,9 +186,15 @@
       };
       w.onerror = function () {
         // Broken worker: fall back to the synchronous path so the app is
-        // never stuck on "thinking".
+        // never stuck on "thinking" — then replace the worker so future
+        // moves leave the main thread again.
         aiWorker = null;
-        if (aiThinking) { aiThinking = false; maybeAiMove(); }
+        if (aiThinking) {
+          const originalStartedAt = aiPending && aiPending.started;
+          aiThinking = false;
+          maybeAiMove(originalStartedAt);
+        }
+        aiWorker = createAiWorker();
       };
       return w;
     } catch (e) { return null; }
@@ -201,6 +208,7 @@
       aiWorker.terminate();
       aiWorker = createAiWorker();
     }
+    clearTimeout(aiWatchdog);
     aiRequestId++;
     aiThinking = false;
     aiPending = null;
@@ -522,14 +530,39 @@
     return { maxDepth: Number(settings.difficulty), timeMs: 10000, quiesce: false };
   }
 
-  function maybeAiMove() {
+  function maybeAiMove(startedAt) {
     if (state.turn !== aiColor() || fullStatus().over) return;
     aiThinking = true;
     render();
     const cfg = aiConfig();
     const id = ++aiRequestId;
-    aiPending = { depth: cfg.maxDepth, quiesce: cfg.quiesce, started: Date.now() };
+    aiPending = {
+      depth: cfg.maxDepth,
+      quiesce: cfg.quiesce,
+      // A worker-failure retry is still the same move attempt. Keep its
+      // original start so the debug PGN reports the worker wait as well as
+      // the synchronous fallback search.
+      started: Number.isFinite(startedAt) ? startedAt : Date.now()
+    };
     if (aiWorker) {
+      // Watchdog for an alive-but-silent worker: onerror only covers
+      // workers that break LOUDLY — one that simply never replies would
+      // leave the game on "Computer is thinking…" forever. After the
+      // search budget plus margin, replace it and let the synchronous
+      // fallback answer.
+      clearTimeout(aiWatchdog);
+      aiWatchdog = setTimeout(function () {
+        if (id !== aiRequestId || !aiThinking) return;
+        if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+        const originalStartedAt = aiPending && aiPending.started;
+        aiThinking = false;
+        // THIS move falls back synchronously (aiWorker is null while
+        // maybeAiMove picks its path); a fresh worker then serves later
+        // moves — without it, one transient hang would put every future
+        // AI turn on the main thread for the full search budget.
+        maybeAiMove(originalStartedAt);
+        aiWorker = createAiWorker();
+      }, cfg.timeMs + 3000);
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
         quiesce: cfg.quiesce, positions: state.positions
@@ -548,6 +581,7 @@
   }
 
   function applyAiMove(move, reachedDepth) {
+    clearTimeout(aiWatchdog);
     aiThinking = false;
     viewPly = null;
     // Re-resolve against this state's legal moves (the worker's move object
