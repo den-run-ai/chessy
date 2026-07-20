@@ -533,7 +533,10 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 
 .stats {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  /* minmax(0, max-content), NOT max-content: the label column must be
+     allowed to shrink below its one-line width on narrow phones so long
+     labels wrap instead of forcing horizontal page overflow. */
+  grid-template-columns: minmax(0, max-content) 1fr;
   gap: 0.3rem 1rem;
   font-size: 0.9rem;
 }

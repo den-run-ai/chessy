@@ -70,4 +70,15 @@ require('./helper').run('progress', async function (t) {
     return document.getElementById('progressStats').textContent.indexOf('Games archived2') !== -1;
   });
   check(true, 'entering the view re-renders fresh counts');
+
+  // Phone width: the long first-try stat label must WRAP, not force the
+  // page to scroll sideways.
+  await page.setViewportSize({ width: 360, height: 740 });
+  const overflow = await page.evaluate(function () {
+    const doc = document.documentElement;
+    return doc.scrollWidth - doc.clientWidth;
+  });
+  check(overflow <= 0,
+    'no horizontal overflow at phone width (long stat labels wrap; ' + overflow + 'px)');
+  await page.setViewportSize({ width: 1280, height: 720 });
 });
