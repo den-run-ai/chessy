@@ -1,23 +1,31 @@
 /* Chessy service worker.
  *
  * Update strategy (reliable updates, still fully offline):
+ * - RELEASE UNITS (#37): index.html references every executable asset with
+ *   this release's ?r= token, and those versioned URLs are cached as
+ *   distinct entries. A page therefore always executes the scripts of its
+ *   own release — the mixed state (new HTML + old cached scripts, or the
+ *   reverse) cannot occur, with or without an update in flight. The token
+ *   here and in index.html must agree; test/browser/sw-update.test.js
+ *   fails the build if they drift.
  * - Navigations are network-first: online visits always get the newest app
- *   shell; offline falls back to the cached copy.
- * - Assets are stale-while-revalidate: served instantly from cache, refreshed
- *   in the background so the next load is current even if the cache name
- *   wasn't bumped.
+ *   shell; offline falls back to the cached copy (which then requests its
+ *   own release's cached assets).
+ * - Assets are stale-while-revalidate: served instantly from cache,
+ *   refreshed in the background.
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v19';
+const RELEASE = 'r20';
+const CACHE = 'chessy-' + RELEASE;
 const ASSETS = [
   './',
   './index.html',
-  './css/style.css',
-  './js/engine.js',
-  './js/ai.js',
-  './js/ai-worker.js',
-  './js/app.js',
+  './css/style.css?r=' + RELEASE,
+  './js/engine.js?r=' + RELEASE,
+  './js/ai.js?r=' + RELEASE,
+  './js/ai-worker.js?r=' + RELEASE,
+  './js/app.js?r=' + RELEASE,
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -84,7 +92,10 @@ self.addEventListener('fetch', (event) => {
 
   // Assets: stale-while-revalidate — instant from cache, refreshed in the
   // background; falls back to network when not cached, to cache when offline.
-  const cachedPromise = caches.match(event.request, { ignoreSearch: true });
+  // The match is EXACT (no ignoreSearch): the ?r= release token is what
+  // keeps each release's assets distinct, so a request for one release must
+  // never be answered with another's cached copy.
+  const cachedPromise = caches.match(event.request);
   const refresh = cachedPromise.then((cached) =>
     fetch(event.request)
       .then((response) => {

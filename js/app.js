@@ -178,7 +178,11 @@
   function createAiWorker() {
     if (typeof Worker === 'undefined') return null;
     try {
-      const w = new Worker('js/ai-worker.js');
+      // The worker joins the page's release unit (#37): its URL carries the
+      // page's release token, and it forwards the token to importScripts, so
+      // a page never runs a worker (or engine) from another release.
+      const w = new Worker('js/ai-worker.js' +
+        (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : ''));
       w.onmessage = function (e) {
         if (e.data.id !== aiRequestId || !aiThinking) return;
         applyAiMove(e.data.move, e.data.depth);

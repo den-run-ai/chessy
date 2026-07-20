@@ -69,7 +69,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   move) for troubleshooting.
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
-  screen / desktop via the web app manifest.
+  screen / desktop via the web app manifest. Assets load as **release
+  units**: every executable asset URL carries the release token and is
+  cached per release, so a page always runs the scripts of its own release
+  — never new HTML with old cached scripts (or the reverse) during an
+  update. A browser test drives an old-worker → new-release transition
+  (online and offline) and gates the token's coherence across files.
 
 No fonts, images, or libraries are fetched from the network: pieces are
 Unicode glyphs, styling is system fonts, and the icons ship in the repo.

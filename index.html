@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?r=r20">
 </head>
 <body>
   <div class="app">
@@ -109,9 +109,18 @@
     </div>
   </dialog>
 
-  <script src="js/engine.js"></script>
-  <script src="js/ai.js"></script>
-  <script src="js/app.js"></script>
+  <!-- Release-unit loading (#37): every executable asset carries this
+       release token in its URL, and the service worker caches each release's
+       assets under distinct keys. HTML therefore always executes with the
+       scripts of ITS OWN release — online they come from the network, offline
+       the cached shell requests the cached same-release assets — never a mix
+       of old cached scripts under new HTML. The token below, the ?r= on each
+       tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
+       fails the build if they drift. -->
+  <script>window.CHESSY_RELEASE = 'r20';</script>
+  <script src="js/engine.js?r=r20"></script>
+  <script src="js/ai.js?r=r20"></script>
+  <script src="js/app.js?r=r20"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.
