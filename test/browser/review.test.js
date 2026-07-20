@@ -33,6 +33,13 @@ require('./helper').run('review', async function (t) {
   await page.click('#revEnd');
   check((await page.textContent('#reviewStatus')).includes('end of game'), 'End reaches the final position');
   check(await page.locator('#revNext').isDisabled(), 'Next disabled at the end');
+  // The final checkmate position keeps the Play board's check semantics:
+  // highlighted king, "in check" in its ARIA label, and the status line.
+  check((await page.textContent('#reviewStatus')).includes('(in check)'),
+    'the checkmate final position reports check in the status');
+  check(await page.locator('#reviewBoard .square.check').count() === 1 &&
+        (await page.getAttribute('#reviewBoard .square.check', 'aria-label')).includes('in check'),
+    'the review board highlights and announces the checked king');
   await page.click('#revPrev');
   check((await page.textContent('#reviewStatus')).includes('played here: Qh4'),
     'Prev steps back to the last decision');
@@ -98,6 +105,7 @@ require('./helper').run('review', async function (t) {
   await page.waitForSelector('#gameOverDialog[open]');
   await page.click('#gameOverReview');
   await page.waitForSelector('#viewReview:not([hidden])');
+  await page.waitForSelector('.game-item'); // the list is cleared during the refresh
   check(await page.locator('#gameListWrap').isVisible() &&
         await page.locator('#reviewFlow').isHidden(),
     'a failed replacement archive lands on the game list, not the stale record');
@@ -112,4 +120,124 @@ require('./helper').run('review', async function (t) {
 
   // Play is undisturbed.
   check(await page.locator('#viewPlay').isVisible(), 'Play tab returns to the game');
+
+  // A SLOW archive write must not let "Review game" yank the user away
+  // after they have moved on: a new game started while the write is in
+  // flight supersedes the queued handoff (the game stays reachable from
+  // the Review list).
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function (rec) {
+      return new Promise(function (resolve) {
+        window.__releaseArchive = function () {
+          resolve(CoachStore.__realArchiveGame(rec));
+        };
+      });
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview');        // handoff queued on the held write
+  await t.newGame({ mode: 'pvp' });           // the user moves on
+  await page.evaluate(function () { window.__releaseArchive(); });
+  await page.waitForTimeout(300);             // let the stale handoff settle
+  check(await page.locator('#viewPlay').isVisible() &&
+        await page.locator('#viewReview').isHidden(),
+    'a stale Review-game handoff does not override later navigation');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+
+  // Intervening NAVIGATION alone (Review → back to Play, no new game)
+  // also invalidates the queued handoff — landing back where the user
+  // just chose to be and then yanking them to Review would be the same
+  // surprise. (A generation counter, not a final-view check: the dialog
+  // can legitimately open outside Play when a timed game flags there.)
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function (rec) {
+      return new Promise(function (resolve) {
+        window.__releaseArchive = function () {
+          resolve(CoachStore.__realArchiveGame(rec));
+        };
+      });
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview');        // handoff queued on the held write
+  await page.click('#tabReview');             // the user looks around…
+  await page.click('#tabPlay');               // …and settles back in Play
+  await page.evaluate(function () { window.__releaseArchive(); });
+  await page.waitForTimeout(300);
+  check(await page.locator('#viewPlay').isVisible() &&
+        await page.locator('#viewReview').isHidden(),
+    'a Review → Play round trip while the write settles also drops the handoff');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+
+  // UNDO while the write settles also invalidates the handoff: the very
+  // ending it would open is being taken back — yanking the user to
+  // Review of the obsolete finish mid-edit would be worse than either
+  // navigation case (gameId is unchanged and no view change fires).
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function (rec) {
+      return new Promise(function (resolve) {
+        window.__releaseArchive = function () {
+          resolve(CoachStore.__realArchiveGame(rec));
+        };
+      });
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview');        // handoff queued on the held write
+  await page.click('#undo');                  // the ending is taken back
+  await page.evaluate(function () { window.__releaseArchive(); });
+  await page.waitForTimeout(300);
+  check(await page.locator('#viewPlay').isVisible() &&
+        await page.locator('#viewReview').isHidden(),
+    'Undo while the write settles drops the queued handoff');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+
+  // The page-level archive failure note lives OUTSIDE the view
+  // containers: a late failure shown after the user wandered into Review
+  // must stay visible there, not vanish with the hidden Play view.
+  await page.evaluate(function () {
+    const el = document.getElementById('archiveBootNote');
+    el.hidden = false;
+    el.textContent = 'This game could not be archived (storage unavailable).';
+  });
+  await page.click('#tabReview');
+  check(await page.locator('#archiveBootNote').isVisible(),
+    'the archive failure note stays visible in the Review view');
+  await page.click('#tabPlay');
+  await page.evaluate(function () { document.getElementById('archiveBootNote').hidden = true; });
+
+  // Entering Review clears the previous list SYNCHRONOUSLY: a revised
+  // game's old button captured the obsolete record and must not stay
+  // clickable while a slow archive read is in flight.
+  await page.click('#tabReview');
+  await page.waitForSelector('.game-item');   // a rendered list to go stale
+  await page.click('#tabPlay');
+  await page.evaluate(function () {
+    CoachStore.__realListGames = CoachStore.listGames;
+    CoachStore.listGames = function () {
+      return new Promise(function (resolve) {
+        window.__releaseList = function () { resolve(CoachStore.__realListGames()); };
+      });
+    };
+  });
+  await page.click('#tabReview');
+  check(await page.locator('.game-item').count() === 0,
+    'entering Review clears stale game buttons before the archive read');
+  await page.evaluate(function () { window.__releaseList(); });
+  await page.waitForSelector('.game-item');
+  check(true, 'the refreshed list arrives once the read settles');
+  await page.evaluate(function () { CoachStore.listGames = CoachStore.__realListGames; });
+  await page.click('#tabPlay');
 });
