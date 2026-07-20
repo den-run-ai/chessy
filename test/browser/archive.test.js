@@ -77,14 +77,18 @@ require('./helper').run('archive', async function (t) {
       req.onsuccess = req.onerror = req.onblocked = function () { resolve(); };
     });
   });
-  const savedId = await page.evaluate(function () {
-    return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
+  const savedGame = await page.evaluate(function () {
+    const s = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return { gameId: s.gameId, endedAt: s.endedAt };
   });
+  const savedId = savedGame.gameId;
   await page.reload();
   await page.waitForSelector('#board .square');
   await waitGameCount(1);
   check((await games())[0].id === savedId,
     'boot re-archives a finished game whose write was lost (same UUID)');
+  check(Number.isFinite(savedGame.endedAt) && (await games())[0].createdAt === savedGame.endedAt,
+    'the reconciled record keeps the persisted completion time, not the boot time');
 
   // A game can be over before the first move (time forfeit on the initial
   // position) — it is archived, not skipped.
@@ -117,6 +121,32 @@ require('./helper').run('archive', async function (t) {
         afterClone.some(function (g) { return g.id === savedId && g.sans[1] === 'e5'; }) &&
         afterClone.some(function (g) { return g.id === cloneStoredId && g.sans[1] === 'e6'; }),
     'a divergent completion from a cloned tab forks a fresh id — both games kept');
+
+  // A SAME-tab replay edit (close dialog → undo → different finish) is
+  // NOT a clone: it revises this instance's one record instead of adding
+  // a second game.
+  const tabEdit = await page.evaluate(function () {
+    const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
+    const over = { over: true, result: '0-1', reason: 'checkmate' };
+    const mk = function (sans) {
+      return { history: sans.map(function (s) { return { san: s }; }) };
+    };
+    return ChessyArchive.record(mk(['e4', 'e5']), cfg, over, 'tab-edit-test',
+      { tab: 'T1', endedAt: 1111 })
+      .then(function () {
+        return ChessyArchive.record(mk(['e4', 'c5']), cfg, over, 'tab-edit-test',
+          { tab: 'T1', endedAt: 2222 });
+      })
+      .then(function (secondId) {
+        return CoachStore.getGame('tab-edit-test').then(function (g) {
+          return { secondId: secondId, sans: g.sans.join(' '), createdAt: g.createdAt };
+        });
+      });
+  });
+  await waitGameCount(4);
+  check(tabEdit.secondId === 'tab-edit-test' && tabEdit.sans === 'e4 c5' &&
+        tabEdit.createdAt === 2222,
+    'a same-tab replay edit overwrites the one record (revised ending, no fork)');
 
   // A FAILED archive write is surfaced in the game-over dialog.
   await page.evaluate(function () {
