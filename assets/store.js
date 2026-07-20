@@ -136,8 +136,16 @@
           const record = Object.assign({}, game);
           if (existing) {
             const sameTab = !!existing.tab && !!record.tab && existing.tab === record.tab;
-            if (sameEnding(existing, record)) record.createdAt = existing.createdAt;
-            else if (!sameTab) record.id = storedId = newId();
+            if (sameEnding(existing, record)) {
+              // Re-offering an ending is not authorship: keep the original
+              // createdAt AND the original writer's tab, so a cloned tab's
+              // boot reconcile cannot take ownership and later overwrite
+              // the owner's game with its own divergent ending.
+              record.createdAt = existing.createdAt;
+              record.tab = existing.tab;
+            } else if (!sameTab) {
+              record.id = storedId = newId();
+            }
           }
           putReq = s.put(record);
         };
