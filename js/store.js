@@ -1,7 +1,7 @@
 /*
  * Chessy coaching store — the versioned IndexedDB archive behind the
- * Review/Train/Progress views. Two object stores (schema v2 — v2 added
- * the unique games.sig index):
+ * Review/Train/Progress views. Three object stores (schema v3 — v2 added
+ * the unique games.sig index; v3 added an atomic delete commit marker):
  *
  *   games: { id (auto), source ('play'|'import'), tags, sans, result,
  *            reason, mode, difficulty, timeControl, plies, createdAt }
@@ -9,6 +9,7 @@
  *            bestMove {from,to,promotion}, bestScore, playedScore, lossCp,
  *            cause, lesson, reflection, createdAt, due, step,
  *            attempts: [{ at, grade, correct }] }
+ *   meta:  { key, ... } (internal coordination state, not user content)
  *
  * `due` is a timestamp (ms); `step` indexes the fixed spaced-review ladder
  * (see Coach). Everything is promise-based; the DB opens lazily on first
@@ -29,7 +30,11 @@
   // both pass their local check — the database itself must refuse the
   // second insert. Records without a sig (imports, pre-v2 rows) are not
   // indexed and carry no constraint.
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
+  // Cards start at -1 (the immediate learning step), then advance through
+  // the six fixed 1/3/7/14/30/90-day rungs owned by Coach.
+  const MIN_CARD_STEP = -1;
+  const MAX_CARD_STEP = 5;
 
   let dbPromise = null;
 
@@ -49,6 +54,9 @@
             const cards = db.createObjectStore('cards', { keyPath: 'id', autoIncrement: true });
             cards.createIndex('due', 'due');
             cards.createIndex('gameId', 'gameId');
+          }
+          if (!db.objectStoreNames.contains('meta')) {
+            db.createObjectStore('meta', { keyPath: 'key' });
           }
         };
         req.onsuccess = function () {
@@ -72,12 +80,43 @@
 
   // Run `fn(objectStore)` in a transaction; resolves with the result of the
   // request `fn` returns (or undefined) once the transaction commits.
-  function tx(storeName, mode, fn) {
+  function staleWriteError() {
+    const e = new Error('training data changed while this write was pending');
+    e.name = 'StaleCoachWriteError';
+    return e;
+  }
+
+  function deleteToken(value) {
+    return value && typeof value.token === 'string' ? value.token : '';
+  }
+
+  // A fenced write includes `meta` in the SAME transaction and checks the
+  // delete epoch before touching content. Transaction serialization gives
+  // two safe orders: the write commits first and a later clear removes it,
+  // or the clear commits first and the mismatched writer becomes a no-op.
+  function tx(storeName, mode, fn, fence) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        const t = db.transaction(storeName, mode);
-        const req = fn(t.objectStore(storeName));
-        t.oncomplete = function () { resolve(req ? req.result : undefined); };
+        const guarded = mode === 'readwrite' && typeof fence === 'string';
+        const t = db.transaction(guarded ? [storeName, 'meta'] : storeName, mode);
+        let req = null;
+        let stale = false;
+        if (guarded) {
+          const gate = t.objectStore('meta').get('lastDelete');
+          gate.onsuccess = function () {
+            if (deleteToken(gate.result) !== fence) {
+              stale = true;
+              return;
+            }
+            req = fn(t.objectStore(storeName));
+          };
+        } else {
+          req = fn(t.objectStore(storeName));
+        }
+        t.oncomplete = function () {
+          if (stale) reject(staleWriteError());
+          else resolve(req ? req.result : undefined);
+        };
         // Prefer the REQUEST's error: when a request fails (e.g. a
         // ConstraintError from the unique sig index) transaction.error
         // can still be null in the bubbled error/abort events, and
@@ -90,8 +129,12 @@
     });
   }
 
-  function addGame(game) { return tx('games', 'readwrite', function (s) { return s.add(game); }); }
-  function updateGame(game) { return tx('games', 'readwrite', function (s) { return s.put(game); }); }
+  function addGame(game, fence) {
+    return tx('games', 'readwrite', function (s) { return s.add(game); }, fence);
+  }
+  function updateGame(game, fence) {
+    return tx('games', 'readwrite', function (s) { return s.put(game); }, fence);
+  }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
 
   function listGames() {
@@ -113,28 +156,48 @@
     });
   }
 
-  function addCard(card) { return tx('cards', 'readwrite', function (s) { return s.add(card); }); }
-  function updateCard(card) { return tx('cards', 'readwrite', function (s) { return s.put(card); }); }
+  function addCard(card, fence) {
+    return tx('cards', 'readwrite', function (s) { return s.add(card); }, fence);
+  }
+  function updateCard(card, fence) {
+    return tx('cards', 'readwrite', function (s) { return s.put(card); }, fence);
+  }
 
   // Atomic read-modify-write for grading: two tabs grading the same card
   // would otherwise each put() a copy built from the same original
   // attempts array, and the later write would erase the earlier attempt.
   // `mutate` runs on the FRESH stored record inside the transaction.
   // Resolves with the updated record, or null when the card is gone.
-  function gradeCard(id, mutate) {
+  function gradeCard(id, mutate, fence) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        const t = db.transaction('cards', 'readwrite');
+        const guarded = typeof fence === 'string';
+        const t = db.transaction(guarded ? ['cards', 'meta'] : 'cards', 'readwrite');
         const s = t.objectStore('cards');
         let updated = null;
-        const getReq = s.get(id);
-        getReq.onsuccess = function () {
-          const card = getReq.result;
-          if (!card) return; // deleted meanwhile — nothing to grade
-          updated = mutate(card) || card;
-          s.put(updated);
+        let stale = false;
+        function readCard() {
+          const getReq = s.get(id);
+          getReq.onsuccess = function () {
+            const card = getReq.result;
+            if (!card) return; // deleted meanwhile — nothing to grade
+            updated = mutate(card) || card;
+            s.put(updated);
+          };
+        }
+        if (guarded) {
+          const gate = t.objectStore('meta').get('lastDelete');
+          gate.onsuccess = function () {
+            if (deleteToken(gate.result) !== fence) stale = true;
+            else readCard();
+          };
+        } else {
+          readCard();
+        }
+        t.oncomplete = function () {
+          if (stale) reject(staleWriteError());
+          else resolve(updated);
         };
-        t.oncomplete = function () { resolve(updated); };
         t.onerror = function () { reject(t.error); };
         t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
       });
@@ -180,7 +243,7 @@
   // transactions cannot be atomic across the whole restore, so on ANY
   // failure (quota, bad record, cancellation) the committed prefix is
   // rolled back — a retry after fixing the cause must not duplicate it.
-  function importAll(data, isCancelled) {
+  function importAll(data, isCancelled, fence) {
     if (!data || data.format !== 'chessy-coach' ||
         !Array.isArray(data.games) || !Array.isArray(data.cards)) {
       return Promise.reject(new Error('not a chessy-coach backup'));
@@ -193,10 +256,31 @@
     // garbage SANs would restore "successfully" and then always fail in
     // openReview. (Engine checks are skipped only where the engine script
     // isn't loaded, e.g. unit shims.)
+    function badScan(scan, plies) {
+      if (!scan || typeof scan !== 'object' ||
+          typeof scan.at !== 'number' || !isFinite(scan.at) ||
+          !scan.settings || typeof scan.settings !== 'object' ||
+          typeof scan.settings.maxDepth !== 'number' || !isFinite(scan.settings.maxDepth) ||
+          typeof scan.settings.timeMs !== 'number' || !isFinite(scan.settings.timeMs) ||
+          ['w', 'b', 'both'].indexOf(scan.playerColor) < 0 ||
+          !Array.isArray(scan.evals) || scan.evals.length !== plies + 1 ||
+          !scan.evals.every(function (v) { return typeof v === 'number' && isFinite(v); }) ||
+          !Array.isArray(scan.bestSans) || scan.bestSans.length !== plies + 1 ||
+          !scan.bestSans.every(function (v) { return v === null || typeof v === 'string'; }) ||
+          !Array.isArray(scan.moments) || scan.moments.length > 2) {
+        return true;
+      }
+      return !scan.moments.every(function (m) {
+        return m && typeof m === 'object' && Number.isInteger(m.ply) &&
+          m.ply >= 0 && m.ply < plies &&
+          typeof m.loss === 'number' && isFinite(m.loss) && m.loss >= 0;
+      });
+    }
     function badGame(g) {
       if (!g || typeof g !== 'object' || !Array.isArray(g.sans) ||
           !g.sans.every(function (s) { return typeof s === 'string'; }) ||
           typeof g.result !== 'string') return true;
+      if (g.scan !== undefined && g.scan !== null && badScan(g.scan, g.sans.length)) return true;
       if (typeof Chess !== 'undefined') {
         try { Chess.replaySans(g.sans); } catch (e) { return true; }
       }
@@ -209,7 +293,15 @@
       if (!c || typeof c !== 'object' ||
           typeof c.fenBefore !== 'string' || c.fenBefore === '' ||
           typeof c.due !== 'number' || !isFinite(c.due) ||
+          !Number.isInteger(c.step) ||
+          c.step < MIN_CARD_STEP || c.step > MAX_CARD_STEP ||
           !Array.isArray(c.attempts) ||
+          !c.attempts.every(function (a) {
+            return a && typeof a === 'object' &&
+              typeof a.at === 'number' && isFinite(a.at) &&
+              ['again', 'hard', 'good'].indexOf(a.grade) >= 0 &&
+              typeof a.correct === 'boolean';
+          }) ||
           !(typeof c.bestMove === 'object' && c.bestMove !== null &&
             typeof c.bestMove.from === 'number' && typeof c.bestMove.to === 'number')) {
         return true;
@@ -246,7 +338,7 @@
         // instance: keeping the sig would trip the unique index (and
         // wrongly claim the dedupe identity).
         delete copy.sig;
-        return addGame(copy).then(function (newId) {
+        return addGame(copy, fence).then(function (newId) {
           idMap.set(oldId, newId);
           addedGames.push(newId);
         });
@@ -258,9 +350,13 @@
         const copy = Object.assign({}, c);
         delete copy.id;
         copy.gameId = idMap.get(copy.gameId) || null;
-        return addCard(copy).then(function (id) { addedCards.push(id); });
+        return addCard(copy, fence).then(function (id) { addedCards.push(id); });
       });
     });
+    // Cancellation can land during the FINAL record's transaction. Put the
+    // last guard into the chain so its rejection enters the common rollback
+    // handler below (throwing inside that handler's success arm would not).
+    chain = chain.then(function () { guard(); });
     return chain.then(function () {
       return { games: data.games.length, cards: data.cards.length };
     }, function (e) {
@@ -278,19 +374,52 @@
     });
   }
 
-  // BOTH stores clear in ONE readwrite transaction: split clears exposed
-  // an intermediate no-games-but-old-cards state to a concurrent export.
-  function deleteAll() {
+  // BOTH content stores clear in ONE readwrite transaction: split clears
+  // exposed an intermediate no-games-but-old-cards state to a concurrent
+  // export. The commit id is written to `meta` in that SAME transaction,
+  // so peers can distinguish a committed clear from a failed/abandoned one
+  // even if the initiating window closes before broadcasting its result.
+  function deleteAll(deleteId, tombstones) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        const t = db.transaction(['games', 'cards'], 'readwrite');
+        const t = db.transaction(['games', 'cards', 'meta'], 'readwrite');
+        let committed = null;
         t.objectStore('games').clear();
         t.objectStore('cards').clear();
-        t.oncomplete = function () { resolve(); };
+        if (typeof deleteId === 'string' && deleteId) {
+          const meta = t.objectStore('meta');
+          const getReq = meta.get('lastDelete');
+          getReq.onsuccess = function () {
+            const previous = getReq.result || {};
+            const ids = Array.isArray(previous.ids)
+              ? previous.ids.filter(function (id) { return typeof id === 'string'; })
+              : [];
+            if (ids.indexOf(deleteId) < 0) ids.push(deleteId);
+            const epoch = (Number(previous.epoch) || 0) + 1;
+            committed = {
+              key: 'lastDelete',
+              attemptId: deleteId,
+              epoch: epoch,
+              token: String(epoch).padStart(16, '0') + '|' + deleteId,
+              at: Math.max(Number(previous.at) || 0, Number(deleteId.slice(0, 13)) || 0),
+              ids: ids.slice(-32),
+              tombstones: Array.isArray(tombstones)
+                ? tombstones.filter(function (s) { return typeof s === 'string'; }).slice(-100)
+                : []
+            };
+            meta.put(committed);
+          };
+        }
+        t.oncomplete = function () { resolve(committed); };
         t.onerror = function () { reject(t.error); };
         t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
       });
     });
+  }
+
+  function getLastDelete() {
+    return tx('meta', 'readonly', function (s) { return s.get('lastDelete'); })
+      .then(function (value) { return value || null; });
   }
 
   global.CoachStore = {
@@ -307,6 +436,7 @@
     dueCards: dueCards,
     exportAll: exportAll,
     importAll: importAll,
-    deleteAll: deleteAll
+    deleteAll: deleteAll,
+    getLastDelete: getLastDelete
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -247,7 +247,28 @@
   // marker: a delete in one instance invalidates the writers of every
   // other instance too (storage events fire only in the OTHER contexts).
   let coachGen = 0;
-  const GEN_KEY = 'chessy-coach-gen-v1';
+  const DELETE_EVENT_KEY = 'chessy-coach-delete-v1';
+  const DELETE_COMMIT_KEY = 'chessy-coach-delete-commit-v1';
+  const activeDeleteIds = new Set();
+  const localDeleteIds = new Set();
+  const settledDeleteOutcomes = new Map();
+  const deleteAttemptTimers = new Map();
+  let deleteSigSnapshot = null;
+  let deleteTombstones = new Set();
+  let deleteGroupSucceeded = false;
+  let deleteGroupHadLocalSuccess = false;
+  let deleteFailureMessage = '';
+  let lastCommittedDeleteGen = -1;
+  let deleteStateToken = 0;
+  let deleteOutcomeWaiters = [];
+  let deleteBootSettled = false;
+  let deleteBootReady = Promise.resolve();
+  const DELETE_LEASE_MS = 5000;
+
+  function liveGameSignature() {
+    const live = typeof window.chessyLiveGame === 'function' ? window.chessyLiveGame() : null;
+    return live ? gameSig(live.sans, live.result, live.gameSeq) : null;
+  }
 
   function invalidateCoachWork() {
     coachGen++;
@@ -261,14 +282,252 @@
     // right back on the next reload. app.js exposes the provider at
     // script PARSE time (before this file installs the delete handler),
     // so there is no window where deletion runs without it.
-    const live = typeof window.chessyLiveGame === 'function' ? window.chessyLiveGame() : null;
-    if (live) archivedSigs.add(gameSig(live.sans, live.result, live.gameSeq));
+    const liveSig = liveGameSignature();
+    if (liveSig) archivedSigs.add(liveSig);
     lastArchivePromise = null;
   }
 
-  function broadcastGeneration() {
-    try { localStorage.setItem(GEN_KEY, Date.now() + ':' + coachGen); }
-    catch (e) { /* storage unavailable — same-tab invalidation still holds */ }
+  // Existing-record mutations (scan/grade) may settle after a delete START.
+  // They compensate only if some overlapping clear actually COMMITTED; an
+  // all-failed group leaves the original records intact.
+  function coachWorkInvalidated(gen, commit) {
+    return gen !== coachGen || readDeleteCommit() > commit;
+  }
+
+  function deleteCommittedAfter(gen, commit) {
+    // localStorage is synchronous across same-origin windows. Consulting
+    // the durable marker closes the gap before this tab's queued storage
+    // event runs: a writer that lands after a remote clear still sees that
+    // the clear committed and compensates its resurrected row.
+    if (readDeleteCommit() > commit) return Promise.resolve(true);
+    if (activeDeleteIds.size === 0) {
+      return Promise.resolve(lastCommittedDeleteGen > gen);
+    }
+    return new Promise(function (resolve) {
+      deleteOutcomeWaiters.push({ gen: gen, commit: commit, resolve: resolve });
+    });
+  }
+
+  function flushDeleteOutcomeWaiters() {
+    const waiters = deleteOutcomeWaiters;
+    deleteOutcomeWaiters = [];
+    for (const w of waiters) {
+      w.resolve(readDeleteCommit() > w.commit || lastCommittedDeleteGen > w.gen);
+    }
+  }
+
+  function addDeleteTombstones(values) {
+    if (!Array.isArray(values)) return;
+    for (const s of values) if (typeof s === 'string') deleteTombstones.add(s);
+  }
+
+  function rememberDeleteOutcome(id, succeeded) {
+    settledDeleteOutcomes.set(id, succeeded);
+    if (settledDeleteOutcomes.size > 64) {
+      settledDeleteOutcomes.delete(settledDeleteOutcomes.keys().next().value);
+    }
+  }
+
+  function advanceDeleteCommit(commit) {
+    let stored = '';
+    try { stored = localStorage.getItem(DELETE_COMMIT_KEY) || ''; }
+    catch (e) { /* keep the in-memory marker */ }
+    let current = knownDeleteCommit;
+    if (stored > current) current = stored;
+    if (commit > current) current = commit;
+    knownDeleteCommit = current;
+    try { localStorage.setItem(DELETE_COMMIT_KEY, current); }
+    catch (e) { /* in-memory fencing still protects this tab */ }
+  }
+
+  function broadcastDeleteEvent(id, phase, commit) {
+    try {
+      localStorage.setItem(DELETE_EVENT_KEY, JSON.stringify({
+        id: id, phase: phase, at: Date.now(), commit: commit || '',
+        tombstones: Array.from(deleteTombstones)
+      }));
+    } catch (e) { /* storage unavailable — the initiating tab still settles */ }
+  }
+
+  function beginDeleteAttempt(id, tombstones) {
+    if (!id || activeDeleteIds.has(id)) return;
+    if (settledDeleteOutcomes.has(id)) {
+      if (settledDeleteOutcomes.get(id)) {
+        if (Array.isArray(tombstones)) {
+          for (const s of tombstones) if (typeof s === 'string') archivedSigs.add(s);
+        }
+        persistSigs();
+      }
+      return;
+    }
+    if (activeDeleteIds.size === 0) {
+      // Snapshot THIS TAB before optimistic invalidation. Pending archive
+      // signatures are excluded: their generation-mismatch cleanup removes
+      // the just-written record, so restoring them would create a false
+      // dedupe hit with no corresponding archive row.
+      deleteSigSnapshot = Array.from(archivedSigs).filter(function (sig) {
+        return !pendingArchiveSigs.has(sig);
+      });
+      deleteTombstones = new Set();
+      deleteGroupSucceeded = false;
+      deleteGroupHadLocalSuccess = false;
+      deleteFailureMessage = '';
+    }
+    addDeleteTombstones(tombstones);
+    const liveSig = liveGameSignature();
+    if (liveSig) deleteTombstones.add(liveSig);
+    activeDeleteIds.add(id);
+    deleteStateToken++;
+    invalidateCoachWork();
+    resetCoachViews();
+    // Keep rollback snapshots separate from the tombstones a SUCCESSFUL
+    // delete needs. A concurrent rollback may republish old signatures;
+    // commits always normalize back to this tombstone-only collection.
+    for (const s of deleteTombstones) archivedSigs.add(s);
+    persistSigs();
+    $('deleteData').disabled = true;
+    deleteAttemptTimers.set(id, setTimeout(function () {
+      reconcileDeleteAttempt(id);
+    }, DELETE_LEASE_MS));
+  }
+
+  function reconcileDeleteAttempt(id) {
+    if (!activeDeleteIds.has(id)) return;
+    // The initiating tab may have closed after `start`. deleteAll writes
+    // this id to the meta store in the SAME transaction as both clears, so
+    // the marker is authoritative even when legitimate post-clear records
+    // now make the content stores non-empty again.
+    CoachStore.getLastDelete().then(function (marker) {
+      if (!activeDeleteIds.has(id)) return;
+      const startedAt = Number(id.slice(0, 13)) || 0;
+      const committed = !!marker && (
+        (Array.isArray(marker.ids) && marker.ids.indexOf(id) >= 0) ||
+        (typeof marker.at === 'number' && marker.at >= startedAt)
+      );
+      settleDeleteAttempt(id, committed,
+        committed ? '' : 'the deleting window closed before the clear completed',
+        committed && Array.isArray(marker.tombstones) ? marker.tombstones : null,
+        committed && typeof marker.token === 'string' ? marker.token : '');
+      broadcastDeleteEvent(id, committed ? 'commit' : 'rollback',
+        committed && typeof marker.token === 'string' ? marker.token : '');
+    }).catch(function () {
+      if (activeDeleteIds.has(id)) {
+        settleDeleteAttempt(id, false, 'the delete result could not be confirmed');
+        broadcastDeleteEvent(id, 'rollback');
+      }
+    });
+  }
+
+  function settleDeleteAttempt(id, succeeded, message, tombstones, commit) {
+    addDeleteTombstones(tombstones);
+    if (!activeDeleteIds.has(id)) {
+      const previous = settledDeleteOutcomes.get(id);
+      if (previous === true) {
+        if (succeeded) {
+          if (commit) advanceDeleteCommit(commit);
+          if (Array.isArray(tombstones)) {
+            for (const s of tombstones) if (typeof s === 'string') archivedSigs.add(s);
+          }
+          persistSigs();
+        }
+        return;
+      }
+      if (previous === false && !succeeded) return;
+      if (previous === false) settledDeleteOutcomes.delete(id);
+      if (succeeded && commit && commit <= knownDeleteCommit) {
+        rememberDeleteOutcome(id, true);
+        if (Array.isArray(tombstones)) {
+          for (const s of tombstones) if (typeof s === 'string') archivedSigs.add(s);
+        }
+        persistSigs();
+        return;
+      }
+      // A tab opened after the start marker can still receive the commit.
+      // Invalidate anything it loaded before the clear completed.
+      if (succeeded) {
+        beginDeleteAttempt(id, tombstones);
+      } else {
+        return;
+      }
+    }
+    clearTimeout(deleteAttemptTimers.get(id));
+    deleteAttemptTimers.delete(id);
+    const locallyInitiated = localDeleteIds.delete(id);
+    if (locallyInitiated) deleteBusy = false;
+    activeDeleteIds.delete(id);
+    rememberDeleteOutcome(id, succeeded);
+    if (succeeded) {
+      deleteGroupSucceeded = true;
+      lastCommittedDeleteGen = Math.max(lastCommittedDeleteGen, coachGen);
+      // Capture every signature observed during the clear (including a
+      // game that finished after START) before switching the shared fence.
+      for (const s of archivedSigs) deleteTombstones.add(s);
+      for (const s of pendingArchiveSigs) deleteTombstones.add(s);
+      const live = liveGameSignature();
+      if (live) deleteTombstones.add(live);
+      advanceDeleteCommit(commit || knownDeleteCommit);
+      // Persist immediately, even while another overlapping attempt is
+      // unresolved: a new/reloaded tab must never see the new fence paired
+      // with the old signature envelope.
+      archivedSigs.clear();
+      for (const s of deleteTombstones) archivedSigs.add(s);
+      persistSigs();
+      if (locallyInitiated) deleteGroupHadLocalSuccess = true;
+    }
+    else if (message) deleteFailureMessage = message;
+    // Simultaneous starts are one group: do not roll back one failed clear
+    // while another tab's clear can still commit. Recovery happens only if
+    // EVERY overlapping attempt has settled and none succeeded.
+    if (activeDeleteIds.size !== 0) return;
+
+    if (deleteGroupSucceeded) {
+      const token = ++deleteStateToken;
+      deleteSigSnapshot = null;
+      archivedSigs.clear();
+      for (const s of deleteTombstones) archivedSigs.add(s);
+      persistSigs();
+      // Preserve the established cross-tab UX: receivers stay in the
+      // directly-reset empty DOM (no mid-clear read), while the initiating
+      // Progress view renders committed zero counts.
+      const notice = deleteGroupHadLocalSuccess
+        ? 'All training data deleted.'
+        : 'All training data was deleted in another window.';
+      const refreshed = deleteGroupHadLocalSuccess ? refreshCoachView() : Promise.resolve();
+      Promise.resolve(refreshed).then(function () {
+        if (token === deleteStateToken && document.body.dataset.view === 'progress') {
+          $('dataNote').textContent = notice;
+        }
+      });
+    } else {
+      // Every clear aborted, so the atomic two-store transaction left the
+      // archive intact. Restore this tab's own pre-invalidation signatures,
+      // keeping current live-game tombstones at the tail of the bounded Set,
+      // and repopulate whichever view was optimistically emptied.
+      const token = ++deleteStateToken;
+      const snapshot = deleteSigSnapshot || [];
+      archivedSigs.clear();
+      for (const s of snapshot) archivedSigs.add(s);
+      persistSigs();
+      // Include any durable game written while the failed group was active,
+      // but never re-add attempt-only/pending tombstones with no DB row.
+      CoachStore.listGames().then(function (games) {
+        if (token !== deleteStateToken) return;
+        for (const g of games) if (typeof g.sig === 'string') archivedSigs.add(g.sig);
+        persistSigs();
+      }).catch(function () {});
+      const notice = deleteFailureMessage
+        ? 'Delete failed: ' + deleteFailureMessage + '. Training data was not deleted.'
+        : 'Delete failed in another window; training data is still available.';
+      $('dataNote').textContent = notice;
+      Promise.resolve(refreshCoachView()).then(function () {
+        // A failed store-open refresh reports "Archive unavailable" on its
+        // own; the more specific destructive-action result must win.
+        if (token === deleteStateToken) $('dataNote').textContent = notice;
+      });
+      deleteSigSnapshot = null;
+    }
+    flushDeleteOutcomeWaiters();
+    if (!deleteBusy) $('deleteData').disabled = false;
   }
 
   window.addEventListener('storage', function (e) {
@@ -276,27 +535,185 @@
       // Another tab archived (or tombstoned) a game: merge its signatures
       // so this tab's dedupe snapshot stays current. The unique DB index
       // is the hard backstop for truly simultaneous inserts.
-      for (const s of loadSigs()) archivedSigs.add(s);
+      // During deletion, correlated start/commit events carry tombstones;
+      // an uncorrelated SIGS write may be a concurrent rollback snapshot.
+      let storedCommit = null;
+      let storedSigs = [];
+      let storedDeletes = [];
+      try {
+        const stored = JSON.parse(e.newValue);
+        storedCommit = stored && !Array.isArray(stored) &&
+          typeof stored.commit === 'string' ? stored.commit : '';
+        if (Array.isArray(stored) && readDeleteCommit() === '') {
+          storedSigs = stored;
+        } else if (stored && storedCommit === readDeleteCommit() &&
+                   Array.isArray(stored.sigs)) {
+          storedSigs = stored.sigs;
+        }
+        if (stored && Array.isArray(stored.deletes)) {
+          storedDeletes = stored.deletes.filter(function (id) {
+            return typeof id === 'string';
+          });
+          // Contributions can intentionally carry the pre-commit fence.
+          if (Array.isArray(stored.sigs)) storedSigs = stored.sigs;
+        }
+      } catch (err) { /* malformed data contributes nothing */ }
+
+      const contribution = storedDeletes.some(function (id) {
+        return activeDeleteIds.has(id) || settledDeleteOutcomes.get(id) === true;
+      });
+      if (contribution) {
+        let added = false;
+        for (const s of storedSigs) {
+          if (typeof s !== 'string') continue;
+          if (!deleteTombstones.has(s)) { deleteTombstones.add(s); added = true; }
+          if (!archivedSigs.has(s)) { archivedSigs.add(s); added = true; }
+        }
+        if (added) persistSigs();
+        return;
+      }
+      if (storedDeletes.some(function (id) {
+        return settledDeleteOutcomes.get(id) === false;
+      })) {
+        // A delayed pre-rollback contribution is not ordinary archive
+        // state; republish the restored snapshot without adopting it.
+        persistSigs();
+        return;
+      }
+      if (activeDeleteIds.size !== 0) return;
+
+      const current = readDeleteCommit();
+      if (knownDeleteCommit === current && storedCommit !== current) {
+        // Repair a stale tab's late write with this tab's current fenced
+        // snapshot. Its old signatures must never become authoritative.
+        persistSigs();
+        return;
+      }
+      let changed = false;
+      for (const s of storedSigs) {
+        if (typeof s !== 'string') continue;
+        if (!archivedSigs.has(s)) {
+          archivedSigs.add(s);
+          changed = true;
+        }
+      }
+      // Same-fence snapshots from multiple passive tabs each contain that
+      // tab's live-game tombstone. Republish the union so the last write
+      // cannot discard another tab's deleted ending.
+      if (changed) persistSigs();
       return;
     }
-    if (e.key !== GEN_KEY) return;
-    // Another instance deleted the data: invalidate every asynchronous
-    // writer AND drop the active review/train state — a due card left on
-    // screen (or an open review) refers to deleted records, and grading
-    // or re-scanning it afterwards would capture the NEW generation and
-    // write the data back past the undo checks.
-    invalidateCoachWork();
-    // MERGE-persist our tombstone: the deleting tab persisted only ITS
-    // live game's signature, and this tab's (possibly different) finished
-    // game would otherwise be resurrected by boot reconciliation after
-    // this tab saves and reloads.
-    for (const s of loadSigs()) archivedSigs.add(s);
-    persistSigs();
-    resetCoachViews();
-    if (document.body.dataset.view === 'progress') {
-      $('dataNote').textContent = 'All training data was deleted in another window.';
+    if (e.key === DELETE_COMMIT_KEY && e.newValue) {
+      // The durable fence is also a fallback terminal signal. This closes
+      // split-brain when one peer's lease read fails or the correlated
+      // commit event is delayed/lost. Tokens encode their attempt id.
+      if (e.newValue < knownDeleteCommit) {
+        try { localStorage.setItem(DELETE_COMMIT_KEY, knownDeleteCommit); }
+        catch (err) { /* the in-memory fence remains authoritative here */ }
+        return;
+      }
+      const bar = e.newValue.indexOf('|');
+      if (bar >= 0) {
+        settleDeleteAttempt(e.newValue.slice(bar + 1), true, '', null, e.newValue);
+      }
+      return;
+    }
+    if (e.key !== DELETE_EVENT_KEY || !e.newValue) return;
+    let event = null;
+    try { event = JSON.parse(e.newValue); } catch (err) { return; }
+    if (!event || typeof event.id !== 'string') return;
+    if (event.phase === 'start') {
+      // Another instance is ABOUT to clear the data: invalidate every
+      // asynchronous writer and active view before its transaction begins.
+      beginDeleteAttempt(event.id, event.tombstones);
+      if (document.body.dataset.view === 'progress') {
+        $('dataNote').textContent = 'Deleting training data in another window…';
+      }
+    } else if (event.phase === 'commit') {
+      settleDeleteAttempt(event.id, true, '', event.tombstones, event.commit || '');
+    } else if (event.phase === 'rollback') {
+      settleDeleteAttempt(event.id, false, '', event.tombstones);
     }
   });
+
+  function storedDeleteTombstones(id) {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SIGS_KEY));
+      if (!stored || !Array.isArray(stored.deletes) ||
+          stored.deletes.indexOf(id) < 0 || !Array.isArray(stored.sigs)) return [];
+      return stored.sigs.filter(function (s) { return typeof s === 'string'; });
+    } catch (e) { return []; }
+  }
+
+  function resumeDeleteStateAtBoot() {
+    let event = null;
+    let rollbackRecovery = Promise.resolve();
+    try { event = JSON.parse(localStorage.getItem(DELETE_EVENT_KEY)); }
+    catch (e) { /* no usable persisted event */ }
+    if (event && typeof event.id === 'string') {
+      const tombstones = (Array.isArray(event.tombstones) ? event.tombstones : [])
+        .concat(storedDeleteTombstones(event.id));
+      if (event.phase === 'start') {
+        const commit = readDeleteCommit();
+        const bar = commit.indexOf('|');
+        if (bar >= 0 && commit.slice(bar + 1) === event.id) {
+          settleDeleteAttempt(event.id, true, '', tombstones, commit);
+        } else {
+          beginDeleteAttempt(event.id, tombstones);
+          if (Date.now() - Number(event.at || 0) >= DELETE_LEASE_MS) {
+            clearTimeout(deleteAttemptTimers.get(event.id));
+            reconcileDeleteAttempt(event.id);
+          }
+        }
+      } else if (event.phase === 'commit' && typeof event.commit === 'string') {
+        if (event.commit > knownDeleteCommit) {
+          settleDeleteAttempt(event.id, true, '', tombstones, event.commit);
+        } else if (event.commit === knownDeleteCommit) {
+          rememberDeleteOutcome(event.id, true);
+          for (const s of tombstones) if (typeof s === 'string') archivedSigs.add(s);
+          persistSigs();
+        }
+      } else if (event.phase === 'rollback') {
+        rememberDeleteOutcome(event.id, false);
+        if (storedDeleteTombstones(event.id).length) {
+          archivedSigs.clear();
+          persistSigs();
+          rollbackRecovery = CoachStore.listGames().then(function (games) {
+            for (const game of games) {
+              if (typeof game.sig === 'string') archivedSigs.add(game.sig);
+            }
+            persistSigs();
+          }).catch(function () {});
+        }
+      }
+    }
+
+    // IndexedDB is authoritative if every window disappeared after the
+    // atomic clear but before localStorage's terminal event/signature write.
+    return rollbackRecovery.then(function () { return CoachStore.getLastDelete(); })
+      .then(function (marker) {
+      if (!marker || typeof marker.token !== 'string') return;
+      if (Array.isArray(marker.ids)) {
+        for (const id of marker.ids) {
+          if (typeof id === 'string') rememberDeleteOutcome(id, true);
+        }
+      }
+      if (marker.token > knownDeleteCommit) {
+        const id = typeof marker.attemptId === 'string'
+          ? marker.attemptId : marker.token.slice(marker.token.indexOf('|') + 1);
+        const tombstones = (Array.isArray(marker.tombstones) ? marker.tombstones : [])
+          .concat(storedDeleteTombstones(id));
+        settleDeleteAttempt(id, true, '', tombstones, marker.token);
+      } else if (marker.token === knownDeleteCommit &&
+                 typeof marker.attemptId === 'string') {
+        rememberDeleteOutcome(marker.attemptId, true);
+        const tombstones = (Array.isArray(marker.tombstones) ? marker.tombstones : [])
+          .concat(storedDeleteTombstones(marker.attemptId));
+        for (const s of tombstones) if (typeof s === 'string') archivedSigs.add(s);
+        if (tombstones.length) persistSigs();
+      }
+    }).catch(function () { /* normal calls report storage failures in their own UI */ });
+  }
 
   function resetCoachViews() {
     review = null;
@@ -333,6 +750,14 @@
     }
   }
 
+  function refreshCoachView() {
+    const view = document.body.dataset.view;
+    if (view === 'review') return renderGameList();
+    if (view === 'train') return loadTrain();
+    if (view === 'progress') return renderProgress();
+    return Promise.resolve();
+  }
+
   // ---- Archive hook (called by app.js when a game ends) ----
   // Dedupe is keyed on the game INSTANCE (app.js's gameSeq, persisted with
   // the saved game) plus the moves: a re-shown ending — including a
@@ -343,7 +768,18 @@
   // localStorage (bounded), and a signature is removed again when its
   // write FAILS so a transient IndexedDB error does not suppress the retry.
   const SIGS_KEY = 'chessy-coach-sigs-v1';
+  function readDeleteCommit() {
+    try { return localStorage.getItem(DELETE_COMMIT_KEY) || ''; }
+    catch (e) { return ''; }
+  }
+
+  // Signature snapshots are tagged with the latest successful clear. A
+  // background tab that has not processed that clear yet may still publish
+  // its old in-memory Set, but the old tag prevents any current tab (or a
+  // later reload) from adopting those pre-delete signatures.
+  let knownDeleteCommit = readDeleteCommit();
   const archivedSigs = new Set(loadSigs());
+  const pendingArchiveSigs = new Set();
   // The CURRENT archive attempt (promise of the stored id, or null): the
   // game-over Review handoff awaits it, so clicking "Review game" while
   // the write is still in flight opens the game that just finished — never
@@ -351,20 +787,31 @@
   let lastArchivePromise = null;
 
   function loadSigs() {
-    // Any parsed value that is not an array of strings reads as empty: a
-    // corrupted (but valid-JSON) store like "{}" would otherwise make
-    // `new Set(loadSigs())` throw at load and brick every coach view.
+    // Legacy arrays remain readable until the first successful clear. After
+    // that, only a snapshot fenced by the CURRENT clear marker is trusted.
+    // Any other valid JSON (including a stale or corrupt object) reads empty.
     try {
       const v = JSON.parse(localStorage.getItem(SIGS_KEY));
-      return Array.isArray(v)
-        ? v.filter(function (s) { return typeof s === 'string'; })
-        : [];
+      const current = readDeleteCommit();
+      if (Array.isArray(v)) {
+        return current === ''
+          ? v.filter(function (s) { return typeof s === 'string'; })
+          : [];
+      }
+      if (!v || typeof v !== 'object' || v.commit !== current ||
+          !Array.isArray(v.sigs)) return [];
+      return v.sigs.filter(function (s) { return typeof s === 'string'; });
     } catch (e) { return []; }
   }
 
   function persistSigs() {
     try {
-      localStorage.setItem(SIGS_KEY, JSON.stringify(Array.from(archivedSigs).slice(-100)));
+      const snapshot = {
+        commit: knownDeleteCommit,
+        sigs: Array.from(archivedSigs).slice(-100)
+      };
+      if (activeDeleteIds.size) snapshot.deletes = Array.from(activeDeleteIds);
+      localStorage.setItem(SIGS_KEY, JSON.stringify(snapshot));
     } catch (e) { /* storage unavailable — session-level dedupe still applies */ }
   }
 
@@ -389,8 +836,14 @@
   }
 
   function archiveGame(state, settings, status, gameSeq) {
+    if (!deleteBootSettled) {
+      return deleteBootReady.then(function () {
+        return archiveGame(state, settings, status, gameSeq);
+      });
+    }
     if (!state.history.length || !status.over) return Promise.resolve(null);
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     const sans = state.history.map(function (h) { return h.san; });
     const sig = gameSig(sans, status.result, gameSeq);
     // A re-shown ending: already archived — point the handoff at the
@@ -402,6 +855,7 @@
       return lastArchivePromise;
     }
     archivedSigs.add(sig);
+    pendingArchiveSigs.add(sig);
     const attempt = CoachStore.addGame({
       source: 'play',
       tags: {},
@@ -425,19 +879,43 @@
       timeControl: settings.timeControl,
       plies: sans.length,
       createdAt: Date.now()
-    }).then(function (id) {
-      if (gen !== coachGen) {
-        // Delete-all won the race with this write: take the record back out.
-        CoachStore.deleteGame(id).catch(function () {});
-        return null;
+    }, commit).then(function (id) {
+      pendingArchiveSigs.delete(sig);
+      if (coachWorkInvalidated(gen, commit)) {
+        return deleteCommittedAfter(gen, commit).then(function (committed) {
+          if (committed) {
+            // A committed clear can be followed by this older transaction;
+            // take the resurrected row back out but retain its tombstone.
+            CoachStore.deleteGame(id).catch(function () {});
+            return null;
+          }
+          // Every clear failed: the archive row is durable and should remain
+          // visible/deduped, even though its old UI handoff was cancelled.
+          archivedSigs.add(sig);
+          persistSigs();
+          return id;
+        });
       }
       persistSigs();
       return id;
     }).catch(function (err) {
+      pendingArchiveSigs.delete(sig);
+      if (err && err.name === 'StaleCoachWriteError') return null;
       // Unique-sig violation: another tab archived this exact game first
       // (both passed their local snapshot check) — adopt its record.
       if (err && err.name === 'ConstraintError') {
         return findArchived(sig, sans, status.result, gameSeq || 0);
+      }
+      if (coachWorkInvalidated(gen, commit)) {
+        return deleteCommittedAfter(gen, commit).then(function (committed) {
+          // Successful deletion owns the live-game tombstone. If every
+          // clear failed, release this failed attempt so boot/replay retries.
+          if (!committed) {
+            archivedSigs.delete(sig);
+            persistSigs();
+          }
+          return null;
+        });
       }
       archivedSigs.delete(sig); // failed write: allow the retry
       return null;
@@ -458,11 +936,12 @@
     // reads are generation-guarded: a cross-tab delete landing while they
     // are in flight must not reopen (and later re-scan) the deleted game.
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     lastArchivePromise.then(function (id) {
-      if (gen !== coachGen) return null; // deleted while awaiting the archive
+      if (coachWorkInvalidated(gen, commit)) return null; // deleted while awaiting the archive
       if (id === null) { showView('review'); $('tabReview').focus(); return null; }
       return CoachStore.getGame(id).then(function (game) {
-        if (gen !== coachGen) return; // deleted while the read was in flight
+        if (coachWorkInvalidated(gen, commit)) return; // deleted while the read was in flight
         showView('review');
         if (game) {
           openReview(game);
@@ -489,8 +968,9 @@
     $('reviewFlow').hidden = true;
     $('gameListWrap').hidden = false;
     const gen = coachGen;
-    CoachStore.listGames().then(function (games) {
-      if (gen !== coachGen) return; // deleted while the read was in flight
+    const commit = knownDeleteCommit;
+    return CoachStore.listGames().then(function (games) {
+      if (coachWorkInvalidated(gen, commit)) return; // deleted while the read was in flight
       const list = $('gameList');
       list.innerHTML = '';
       $('reviewEmpty').hidden = games.length > 0;
@@ -596,6 +1076,7 @@
   function runScan(r) {
     const token = ++scanToken;
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     const n = r.gs.history.length;
     const evals = new Array(n + 1);
     const bestSans = new Array(n + 1);
@@ -629,7 +1110,7 @@
       })(k);
     }
     chain.then(function () {
-      if (token !== scanToken || gen !== coachGen) return;
+      if (token !== scanToken || coachWorkInvalidated(gen, commit)) return;
       // Coach the TRAINEE only: an opponent's blunders are not the player's
       // lesson material, and in an easy-AI game they would otherwise crowd
       // out every slot.
@@ -646,7 +1127,7 @@
         if (loss >= 50) moments.push({ ply: k, loss: loss });
       }
       moments.sort(function (a, b) { return b.loss - a.loss; });
-      const top = moments.slice(0, 3).sort(function (a, b) { return a.ply - b.ply; });
+      const top = moments.slice(0, 2).sort(function (a, b) { return a.ply - b.ply; });
       r.game.scan = {
         at: Date.now(),
         settings: { maxDepth: SCAN.maxDepth, timeMs: SCAN.timeMs },
@@ -655,9 +1136,15 @@
         bestSans: bestSans,
         moments: top
       };
-      CoachStore.updateGame(r.game).then(function () {
-        // Delete-all racing this put() would resurrect the game — undo it.
-        if (gen !== coachGen) CoachStore.deleteGame(r.game.id).catch(function () {});
+      CoachStore.updateGame(r.game, commit).then(function () {
+        if (coachWorkInvalidated(gen, commit)) {
+          // Undo a stale put only when a clear COMMITTED. On rollback this is
+          // still the original game record; deleting it would turn a failed
+          // destructive action into real data loss (including its cards).
+          deleteCommittedAfter(gen, commit).then(function (committed) {
+            if (committed) CoachStore.deleteGame(r.game.id).catch(function () {});
+          });
+        }
       }).catch(function () { /* scan still usable this session */ });
       renderScan(r);
     });
@@ -712,6 +1199,7 @@
 
   $('flagMoment').addEventListener('click', function () {
     verifyToken++; // a new flag invalidates any in-flight verification
+    saveToken++;   // and any lesson write that still owns the shared UI
     review.flagged = review.ply;
     // Fresh moment, fresh answers: reflection AND card fields reset, so a
     // stale cause/lesson from the previous moment can never carry over.
@@ -731,6 +1219,10 @@
   // to another moment (or another game) are discarded — a stale verdict
   // must never re-enable Save and attach the wrong position to a card.
   let verifyToken = 0;
+  // Lesson writes need their own ownership token. A fresh verification can
+  // enable Save for verdict B while verdict A's IndexedDB request is still
+  // pending; A must never repaint or re-enable B's shared controls.
+  let saveToken = 0;
 
   $('reflectForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -742,6 +1234,9 @@
     if (!$('reflectForm').reportValidity()) return;
     const r = review;
     if (r.flagged === null) return;
+    // A new verdict is taking ownership of the card controls immediately;
+    // an older save must not re-enable them while these probes are running.
+    saveToken++;
     const token = ++verifyToken;
     const ply = r.flagged;
     const fenBefore = r.fens[ply];
@@ -812,7 +1307,8 @@
   });
 
   $('saveCard').addEventListener('click', function () {
-    const v = review.verdict;
+    const r = review;
+    const v = r && r.verdict;
     if (!v || $('saveCard').disabled) return;
     // Validation: every card needs a one-sentence lesson; error cards also
     // need the player's cause diagnosis (pattern cards have no cause).
@@ -826,12 +1322,14 @@
       return;
     }
     const gen = coachGen;
+    const commit = knownDeleteCommit;
+    const token = ++saveToken;
     // Disable BEFORE the async write — a double-click (or a slow
     // IndexedDB) must not create duplicate cards for the same moment.
     $('saveCard').disabled = true;
     const now = Date.now();
     CoachStore.addCard({
-      gameId: review.game.id,
+      gameId: r.game.id,
       ply: v.ply,
       fenBefore: v.fenBefore,
       playedSan: v.playedSan,
@@ -852,15 +1350,21 @@
       due: now,        // first review is immediate (the "learn" step)
       step: -1,        // -1 = not yet on the day ladder
       attempts: []
-    }).then(function (id) {
-      if (gen !== coachGen) {
-        // Delete-all won the race with this write: take the card back out.
-        CoachStore.deleteCard(id).catch(function () {});
-        return;
+    }, commit).then(function (id) {
+      if (coachWorkInvalidated(gen, commit)) {
+        return deleteCommittedAfter(gen, commit).then(function (committed) {
+          // A committed clear owns the cancellation; if every clear failed,
+          // retaining the completed card avoids turning rollback into loss.
+          if (committed) CoachStore.deleteCard(id).catch(function () {});
+        });
       }
+      if (token !== saveToken || review !== r || r.verdict !== v || r.flagged !== v.ply) return;
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = 'Lesson card saved — it is due in Train now, then on the 1/3/7/14/30/90-day ladder.';
-    }).catch(function () {
+    }).catch(function (err) {
+      if (err && err.name === 'StaleCoachWriteError') return;
+      if (coachWorkInvalidated(gen, commit) || token !== saveToken || review !== r ||
+          r.verdict !== v || r.flagged !== v.ply) return;
       $('saveCard').disabled = false; // failed write: let the user retry
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = 'Could not save the card — storage unavailable.';
@@ -901,6 +1405,7 @@
     $('importStart').disabled = true;
     const token = ++importToken;
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     const playerColor = (newGameChoice('importColor') || 'both');
     const games = Chess.parsePgn($('importText').value);
     let ok = 0, failed = 0, firstError = null;
@@ -908,7 +1413,7 @@
     for (const g of games) {
       if (g.sans.length === 0) continue;
       chain = chain.then(function () {
-        if (token !== importToken || gen !== coachGen) return; // cancelled or deleted mid-batch
+        if (token !== importToken || coachWorkInvalidated(gen, commit)) return;
         if (g.unsupported) throw new Error('games from a set-up position are not supported');
         const gs = Chess.replaySans(g.sans); // throws on illegal moves
         const status = Chess.gameStatus(gs);
@@ -923,14 +1428,20 @@
           mode: null, difficulty: null, timeControl: (g.tags && g.tags.TimeControl) || null,
           plies: gs.history.length,
           createdAt: Date.now()
-        }).then(function (id) {
-          if (token !== importToken || gen !== coachGen) {
-            CoachStore.deleteGame(id).catch(function () {}); // cancelled/deleted during the write
+        }, commit).then(function (id) {
+          if (token !== importToken || coachWorkInvalidated(gen, commit)) {
+            if (coachWorkInvalidated(gen, commit)) {
+              return deleteCommittedAfter(gen, commit).then(function (committed) {
+                if (committed) CoachStore.deleteGame(id).catch(function () {});
+              });
+            }
+            CoachStore.deleteGame(id).catch(function () {}); // explicit Cancel during the write
             return;
           }
           ok++;
         });
       }).catch(function (e) {
+        if (e && e.name === 'StaleCoachWriteError') return;
         failed++;
         if (!firstError) firstError = e.message || String(e);
       });
@@ -970,8 +1481,9 @@
     // clears the UI, and applying the pre-delete result afterwards would
     // hand the deleted cards straight back to the grading flow.
     const gen = coachGen;
-    CoachStore.dueCards(Date.now()).then(function (cards) {
-      if (gen !== coachGen) return;
+    const commit = knownDeleteCommit;
+    return CoachStore.dueCards(Date.now()).then(function (cards) {
+      if (coachWorkInvalidated(gen, commit)) return;
       train = { queue: cards, card: null, state: null, selected: null, answered: false };
       nextTrainCard();
     }).catch(function () {
@@ -992,8 +1504,9 @@
     clearTimeout(trainTimer);
     $('trainEmpty').textContent = 'No cards due. Flag moments in Review to create lesson cards.';
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     CoachStore.listCards().then(function (cards) {
-      if (gen !== coachGen) return; // deleted while the read was in flight
+      if (coachWorkInvalidated(gen, commit)) return; // deleted while the read was in flight
       const now = Date.now();
       let next = Infinity;
       let overdue = false;
@@ -1055,7 +1568,12 @@
     if (candidates[0].promotion) {
       // The player must choose the piece — auto-queening would make a card
       // whose best move underpromotes impossible to answer correctly.
+      const owner = t;
+      const cardId = t.card.id;
       choosePromotion(t.state.turn, function (type) {
+        // Delete rollback can repopulate Train before the old dialog choice
+        // lands. Never apply that old move to the newly loaded card/object.
+        if (train !== owner || !owner.card || owner.card.id !== cardId) return;
         answerTrain(candidates.find(function (m) { return m.promotion === type; }));
       });
       return;
@@ -1131,6 +1649,7 @@
     // record two attempts or climb the ladder twice for one reveal.
     t.answered = false;
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     const now = Date.now();
     const card = t.card;
     const correct = !!t.lastCorrect;
@@ -1142,15 +1661,19 @@
       fresh.attempts.push({ at: now, grade: g, correct: correct });
       schedule(fresh, g, now);
       return fresh;
-    }).then(function (updated) {
+    }, commit).then(function (updated) {
       // Delete-all racing this write would resurrect the card — undo it.
-      if (gen !== coachGen) {
-        if (updated) CoachStore.deleteCard(card.id).catch(function () {});
-        return; // the reset owns the UI; advancing would re-query mid-clear
+      if (coachWorkInvalidated(gen, commit)) {
+        return deleteCommittedAfter(gen, commit).then(function (committed) {
+          // `gradeCard` mutates an EXISTING row. Only a committed clear may
+          // delete it; after rollback the saved grade/card remain intact.
+          if (committed && updated) CoachStore.deleteCard(card.id).catch(function () {});
+        }); // the reset/recovery owns the UI
       }
       nextTrainCard();
-    }, function () {
-      if (gen !== coachGen) return;
+    }, function (err) {
+      if (err && err.name === 'StaleCoachWriteError') return;
+      if (coachWorkInvalidated(gen, commit)) return;
       // The grade was NOT saved (quota, storage failure): keep the card
       // on screen and say so — silently advancing would drop the attempt
       // and reschedule nothing.
@@ -1176,8 +1699,9 @@
 
   function renderProgress() {
     const gen = coachGen;
-    Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
-      if (gen !== coachGen) return; // deleted while the read was in flight
+    const commit = knownDeleteCommit;
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+      if (coachWorkInvalidated(gen, commit)) return; // deleted while the read was in flight
       const games = r[0], cards = r[1];
       const now = Date.now();
       const dl = $('progressStats');
@@ -1196,7 +1720,10 @@
         if (attempts.length && now - attempts[0].at <= 30 * DAY) firstTries.push(attempts[0]);
       }
       stat(dl, 'Reviews (30 days)', recent.length);
-      stat(dl, 'Cards correct on first try (30 days)',
+      // `correct` records an exact match with the single saved engine move;
+      // Train explicitly allows the player to self-grade a different sound
+      // move, so do not mislabel this narrower signal as chess correctness.
+      stat(dl, 'Matched Chessy’s saved move on first try (30 days)',
         firstTries.length
           ? firstTries.filter(function (a) { return a.correct; }).length + '/' + firstTries.length
           : '—');
@@ -1224,6 +1751,8 @@
       a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
       $('dataNote').textContent = 'Exported ' + data.games.length + ' games and ' + data.cards.length + ' cards.';
+    }).catch(function (e) {
+      $('dataNote').textContent = 'Export failed: ' + (e && e.message ? e.message : e) + '.';
     });
   });
 
@@ -1248,29 +1777,36 @@
     // would otherwise be undone when the read completes and the restore
     // writes the deleted archive back.
     const gen = coachGen;
+    const commit = knownDeleteCommit;
     const reader = new FileReader();
     reader.onerror = function () {
       $('importFile').value = '';
-      $('dataNote').textContent = 'Could not read the backup file.';
+      if (!coachWorkInvalidated(gen, commit)) {
+        $('dataNote').textContent = 'Could not read the backup file.';
+      }
       settleRestore();
     };
     reader.onload = function () {
       $('importFile').value = '';
-      if (gen !== coachGen) { settleRestore(); return; } // deleted while reading
+      if (coachWorkInvalidated(gen, commit)) { settleRestore(); return; }
       let data = null;
       try { data = JSON.parse(reader.result); } catch (e) { /* handled below */ }
       // The restore also checks the generation between records: a
       // "Delete all" clicked mid-restore stops the remaining writes.
       Promise.resolve()
         .then(function () {
-          return CoachStore.importAll(data, function () { return gen !== coachGen; });
+          return CoachStore.importAll(data, function () {
+            return coachWorkInvalidated(gen, commit);
+          }, commit);
         })
         .then(function (n) {
-          if (gen !== coachGen) return;
+          if (coachWorkInvalidated(gen, commit)) return;
           $('dataNote').textContent = 'Imported ' + n.games + ' games and ' + n.cards + ' cards.';
           renderProgress();
         })
         .catch(function (e) {
+          if (e && e.name === 'StaleCoachWriteError') return;
+          if (coachWorkInvalidated(gen, commit)) return;
           $('dataNote').textContent = 'Import failed: ' + (e.message || e);
         })
         .then(settleRestore);
@@ -1278,20 +1814,37 @@
     reader.readAsText(file);
   });
 
+  let deleteBusy = false;
   $('deleteData').addEventListener('click', function () {
+    if (deleteBusy || activeDeleteIds.size !== 0) return;
     if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
+    deleteBusy = true;
+    const deleteId = String(Date.now()).padStart(13, '0') + '-' +
+      Math.random().toString(36).slice(2);
+    localDeleteIds.add(deleteId);
     // New data epoch FIRST: every asynchronous writer (scan, PGN import,
     // JSON restore, archive/card/grade writes) checks its captured
     // generation and abandons instead of writing deleted data back — and
     // the epoch is broadcast so OTHER open tabs invalidate theirs too.
-    invalidateCoachWork();
-    resetCoachViews(); // same-tab hygiene: no stale review/train state either
-    persistSigs();
-    broadcastGeneration();
-    CoachStore.deleteAll().then(function () {
-      $('dataNote').textContent = 'All training data deleted.';
-      renderProgress();
+    beginDeleteAttempt(deleteId, []);
+    broadcastDeleteEvent(deleteId, 'start');
+    CoachStore.deleteAll(deleteId, Array.from(deleteTombstones)).then(function (marker) {
+      const commit = marker && typeof marker.token === 'string' ? marker.token : '';
+      settleDeleteAttempt(deleteId, true, '', null, commit);
+      broadcastDeleteEvent(deleteId, 'commit', commit);
+    }, function (e) {
+      settleDeleteAttempt(deleteId, false, e && e.message ? e.message : String(e));
+      broadcastDeleteEvent(deleteId, 'rollback');
+    }).then(function () {
+      deleteBusy = false;
+      if (activeDeleteIds.size === 0) $('deleteData').disabled = false;
     });
+  });
+
+  deleteBootReady = resumeDeleteStateAtBoot().then(function () {
+    deleteBootSettled = true;
+  }, function () {
+    deleteBootSettled = true;
   });
 
   window.Coach = {

@@ -121,7 +121,7 @@ require('./helper').run('coach', async function (t) {
   }, null, { timeout: 90000 });
   check((await page.textContent('#scanStatus')).includes('key moment'), 'scan reports key moments');
   const momentCount = await page.locator('.moment-item').count();
-  check(momentCount >= 1 && momentCount <= 3, 'between 1 and 3 key moments listed');
+  check(momentCount >= 1 && momentCount <= 2, 'between 1 and 2 key moments listed');
   const momentText = await page.textContent('#momentList');
   check(momentText.includes('Nf6'), 'the decisive blunder (3… Nf6) is a key moment');
   check(!momentText.includes('Qxf7'),
@@ -194,6 +194,64 @@ require('./helper').run('coach', async function (t) {
   });
   check(cardCount === 1, 'double-clicking Save creates exactly one card');
 
+  // A stale save failure must not take ownership of a NEW verification's
+  // controls. Re-verify the same moment while save A is pending, start save
+  // B, then let A reject: B stays disabled/in flight and is written once.
+  await page.evaluate(function () {
+    document.getElementById('cardSaved').textContent = '';
+    window.__staleSaveRejected = false;
+    CoachStore.__realAddCard = CoachStore.addCard;
+    let calls = 0;
+    CoachStore.addCard = function (card) {
+      calls++;
+      if (calls === 1) {
+        return new Promise(function (resolve, reject) {
+          setTimeout(function () {
+            window.__staleSaveRejected = true;
+            reject(new Error('stale save failure'));
+          }, 5000);
+        });
+      }
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          CoachStore.__realAddCard(card).then(resolve, reject);
+        }, 5000);
+      });
+    };
+  });
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return !document.getElementById('verifyResult').textContent.includes('Analysing') &&
+      !document.getElementById('saveCard').disabled;
+  }, null, { timeout: 30000 });
+  await page.fill('#cardLesson', 'First pending save');
+  await page.click('#saveCard');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return !document.getElementById('verifyResult').textContent.includes('Analysing') &&
+      !document.getElementById('saveCard').disabled;
+  }, null, { timeout: 30000 });
+  await page.fill('#cardLesson', 'Second save owns the controls');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () { return window.__staleSaveRejected; });
+  check(await page.locator('#saveCard').isDisabled() &&
+        !(await page.textContent('#cardSaved')).includes('Could not save'),
+    'a stale save failure cannot re-enable or repaint a newer pending save');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.includes('due in Train');
+  }, null, { timeout: 10000 });
+  const saveRace = await page.evaluate(function () {
+    CoachStore.addCard = CoachStore.__realAddCard;
+    return CoachStore.listCards().then(function (cards) {
+      const added = cards.filter(function (c) {
+        return c.lesson === 'Second save owns the controls';
+      });
+      return Promise.all(added.map(function (c) { return CoachStore.deleteCard(c.id); }))
+        .then(function () { return added.length; });
+    });
+  });
+  check(saveRace === 1, 'the newer pending save creates exactly one card');
+
   // Train: the new card is due immediately; answer on the board.
   await page.click('#tabTrain');
   await page.waitForSelector('#trainCardBox:not([hidden])');
@@ -245,6 +303,19 @@ require('./helper').run('coach', async function (t) {
   check(stats['Reviews (30 days)'] === '1', 'progress counts recent reviews');
   check((await page.textContent('#causeStats')).includes('Good move (pattern)'),
     'pattern cards counted separately from error causes');
+
+  // Export failures are visible instead of becoming unhandled rejections.
+  await page.evaluate(function () {
+    CoachStore.__realExportAll = CoachStore.exportAll;
+    CoachStore.exportAll = function () { return Promise.reject(new Error('simulated export failure')); };
+  });
+  await page.click('#exportData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('Export failed');
+  });
+  check((await page.textContent('#dataNote')).includes('simulated export failure'),
+    'an export failure is reported to the user');
+  await page.evaluate(function () { CoachStore.exportAll = CoachStore.__realExportAll; });
 
   // Backup round-trip through the real DB, then Delete All via the button.
   const roundTrip = await page.evaluate(function () {
@@ -336,6 +407,30 @@ require('./helper').run('coach', async function (t) {
         invalidBackup.msg.indexOf('invalid') !== -1,
     'a backup with malformed records is rejected before any write (' + invalidBackup.msg + ')');
 
+  // The scheduler can only consume the immediate learning step (-1) and
+  // the six fixed day-ladder rungs (0..5). Missing or out-of-range steps
+  // would make the next Good/Hard grade calculate an unusable due date.
+  const invalidSteps = await page.evaluate(function () {
+    function backup(step, omit) {
+      const card = {
+        id: 1, gameId: null, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+        playedSan: 'a8=Q', bestSan: 'a8=N',
+        bestMove: { from: 8, to: 0, promotion: 'N' },
+        createdAt: 1, due: 1, step: step, attempts: []
+      };
+      if (omit) delete card.step;
+      return { format: 'chessy-coach', version: 2, games: [], cards: [card] };
+    }
+    return Promise.all([backup(-1, true), backup(6, false)].map(function (data) {
+      return CoachStore.importAll(data).then(
+        function () { return 'accepted'; },
+        function (e) { return String(e && e.message); });
+    }));
+  });
+  check(invalidSteps.every(function (msg) { return msg.indexOf('invalid') !== -1; }),
+    'backup cards with missing/out-of-range ladder steps are rejected (' +
+    invalidSteps.join(' / ') + ')');
+
   // ...and a card whose position is UNUSABLE (kingless board — no legal
   // answer exists) is rejected too, not just malformed shapes.
   const kinglessBackup = await page.evaluate(function () {
@@ -383,9 +478,36 @@ require('./helper').run('coach', async function (t) {
     'unreplayable games and illegal saved moves are rejected (' +
     deepInvalid.sans + ' / ' + deepInvalid.move + ')');
 
-  // "Correct on first try" counts each card's FIRST attempt only — a miss
-  // followed by a correct retry is not a first-try success (it used to be
-  // reported per-attempt, e.g. 1/2 for that card alone).
+  // Nested backup state is validated too: malformed attempts used to make
+  // Progress throw on `a.at`, while a bad persisted scan could make Review
+  // throw on `scan.moments.length` or index outside the replay.
+  const nestedInvalid = await page.evaluate(function () {
+    const badAttempts = {
+      format: 'chessy-coach', version: 2, games: [],
+      cards: [{ id: 1, gameId: null, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+        playedSan: 'a8=Q', bestSan: 'a8=N',
+        bestMove: { from: 8, to: 0, promotion: 'N' },
+        createdAt: 1, due: 1, step: -1, attempts: [null] }]
+    };
+    const badScan = {
+      format: 'chessy-coach', version: 2,
+      games: [{ id: 1, source: 'import', tags: {}, sans: ['e4'], result: '*',
+        createdAt: 1, scan: { moments: [{ ply: 99, loss: 100 }] } }],
+      cards: []
+    };
+    return Promise.all([badAttempts, badScan].map(function (data) {
+      return CoachStore.importAll(data).then(
+        function () { return 'accepted'; },
+        function (e) { return String(e && e.message); });
+    }));
+  });
+  check(nestedInvalid.every(function (msg) { return msg.indexOf('invalid') !== -1; }),
+    'malformed backup attempts and persisted scans are rejected (' +
+    nestedInvalid.join(' / ') + ')');
+
+  // Saved-move matching counts each card's FIRST attempt only — a miss
+  // followed by a match is not a first-try match (it used to be reported
+  // per-attempt, e.g. 1/2 for that card alone).
   await page.evaluate(function () {
     const now = Date.now();
     return CoachStore.addCard({
@@ -419,9 +541,9 @@ require('./helper').run('coach', async function (t) {
     return out;
   });
   check(stats2['Reviews (30 days)'] === '4', 'reviews count every attempt (got ' + stats2['Reviews (30 days)'] + ')');
-  check(stats2['Cards correct on first try (30 days)'] === '2/3',
+  check(stats2['Matched Chessy’s saved move on first try (30 days)'] === '2/3',
     'first-try metric counts only each card’s first attempt (got ' +
-    stats2['Cards correct on first try (30 days)'] + ')');
+    stats2['Matched Chessy’s saved move on first try (30 days)'] + ')');
 
   // Overlapping backup restores are blocked: while one (slowed) restore
   // runs, the control is disabled and a second selection of the same file
@@ -458,6 +580,269 @@ require('./helper').run('coach', async function (t) {
   check(!(await page.evaluate(function () { return document.getElementById('importData').disabled; })),
     'Import backup re-enables after the restore settles');
 
+  // Delete All invalidates every tab optimistically so no stale writer can
+  // race the clear. If IndexedDB then rejects the clear, the initiating tab
+  // must report that nothing was deleted and every invalidated tab must
+  // repopulate from the still-intact archive.
+  const deletePeer = await t.context.newPage();
+  await deletePeer.goto(t.url);
+  await deletePeer.waitForSelector('#board .square');
+  await deletePeer.click('#tabReview');
+  await deletePeer.waitForSelector('.game-item');
+  const peerGamesBefore = await deletePeer.locator('.game-item').count();
+  const sigsBeforeFailedDelete = await page.evaluate(function () {
+    const value = JSON.parse(localStorage.getItem('chessy-coach-sigs-v1') || '[]');
+    return Array.isArray(value) ? value : (Array.isArray(value.sigs) ? value.sigs : []);
+  });
+  // Start a grade on an EXISTING card and hold its completion across the
+  // failed delete. The rollback must not let stale compensation delete the
+  // original row. (The mutation itself commits before the held callback.)
+  const rollbackCardId = await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'rollback grade owner', reflection: {},
+      createdAt: now, due: now - 1000000, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('a7').click();
+  await tsq('a8').click();
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.evaluate(function () {
+    window.__rollbackGradeSettled = false;
+    CoachStore.__rollbackGradeCard = CoachStore.gradeCard;
+    CoachStore.gradeCard = function (id, mutate) {
+      return CoachStore.__rollbackGradeCard(id, mutate).then(function (updated) {
+        return new Promise(function (resolve) {
+          setTimeout(function () {
+            window.__rollbackGradeSettled = true;
+            resolve(updated);
+          }, 3000);
+        });
+      });
+    };
+  });
+  await page.click('#gradeGood');
+  await page.click('#tabProgress');
+  await page.evaluate(function () {
+    CoachStore.__realDeleteAll = CoachStore.deleteAll;
+    CoachStore.deleteAll = function () {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { reject(new Error('simulated clear failure')); }, 1200);
+      });
+    };
+    // A failed archive write that settles after rollback must release its
+    // pending signature so the same finished game can be retried.
+    CoachStore.__rollbackAddGame = CoachStore.addGame;
+    CoachStore.addGame = function (game) {
+      if (game.gameSeq !== 909090) return CoachStore.__rollbackAddGame(game);
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { reject(new Error('simulated archive failure')); }, 3000);
+      });
+    };
+    window.__pendingRollbackArchive = Coach.archiveGame(
+      { history: [{ san: 'e4', clock: null }] },
+      { mode: 'pvp', difficulty: null, timeControl: null },
+      { over: true, result: '1-0', reason: 'test' }, 909090);
+  });
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await deletePeer.waitForFunction(function () {
+    return document.querySelectorAll('.game-item').length === 0;
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('was not deleted');
+  });
+  await page.waitForFunction(function (n) {
+    const dts = document.querySelectorAll('#progressStats dt');
+    const dds = document.querySelectorAll('#progressStats dd');
+    for (let i = 0; i < dts.length; i++) {
+      if (dts[i].textContent === 'Games archived') return Number(dds[i].textContent) === n;
+    }
+    return false;
+  }, overlapAfter);
+  await deletePeer.waitForFunction(function (n) {
+    return document.querySelectorAll('.game-item').length === n;
+  }, peerGamesBefore);
+  await page.waitForFunction(function () { return window.__rollbackGradeSettled; });
+  const failedDelete = await page.evaluate(async function (rollbackId) {
+    await window.__pendingRollbackArchive;
+    CoachStore.gradeCard = CoachStore.__rollbackGradeCard;
+    CoachStore.addGame = CoachStore.__rollbackAddGame;
+    // Let the generation-mismatch callbacks observe the rollback outcome.
+    await new Promise(function (resolve) { setTimeout(resolve, 100); });
+    const retriedId = await Coach.archiveGame(
+      { history: [{ san: 'e4', clock: null }] },
+      { mode: 'pvp', difficulty: null, timeControl: null },
+      { over: true, result: '1-0', reason: 'test' }, 909090);
+    const cardsBeforeCleanup = await CoachStore.listCards();
+    const rollbackCard = cardsBeforeCleanup.find(function (c) { return c.id === rollbackId; });
+    if (retriedId !== null) await CoachStore.deleteGame(retriedId);
+    CoachStore.deleteAll = CoachStore.__realDeleteAll;
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+      return {
+        games: r[0].length,
+        cards: r[1].length,
+        rollbackCardKept: !!rollbackCard && rollbackCard.attempts.length === 1,
+        archiveRetryWorked: retriedId !== null,
+        sigs: (function () {
+          const value = JSON.parse(localStorage.getItem('chessy-coach-sigs-v1') || '[]');
+          return Array.isArray(value) ? value : (Array.isArray(value.sigs) ? value.sigs : []);
+        })(),
+        buttonEnabled: !document.getElementById('deleteData').disabled
+      };
+    });
+  }, rollbackCardId);
+  await deletePeer.close();
+  check(failedDelete.games === overlapAfter && failedDelete.cards > 0 &&
+        failedDelete.rollbackCardKept && failedDelete.archiveRetryWorked &&
+        failedDelete.buttonEnabled && sigsBeforeFailedDelete.every(function (sig) {
+          return failedDelete.sigs.indexOf(sig) >= 0;
+        }),
+    'a failed Delete All reports failure, preserves data, and re-enables retry');
+  check(peerGamesBefore === overlapAfter,
+    'a failed cross-tab Delete All repopulates the invalidated Review view');
+
+  // If the same store-open problem also makes recovery reads fail, the
+  // specific destructive-action result must still remain visible.
+  await page.evaluate(function () {
+    CoachStore.__noticeDeleteAll = CoachStore.deleteAll;
+    CoachStore.__noticeListGames = CoachStore.listGames;
+    CoachStore.__noticeListCards = CoachStore.listCards;
+    CoachStore.deleteAll = function () { return Promise.reject(new Error('open failed')); };
+    CoachStore.listGames = function () { return Promise.reject(new Error('open failed')); };
+    CoachStore.listCards = function () { return Promise.reject(new Error('open failed')); };
+  });
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await page.waitForTimeout(200);
+  check((await page.textContent('#dataNote')).includes('Delete failed: open failed') &&
+        (await page.textContent('#dataNote')).includes('was not deleted'),
+    'delete failure notice survives a failed recovery read');
+  await page.evaluate(function () {
+    CoachStore.deleteAll = CoachStore.__noticeDeleteAll;
+    CoachStore.listGames = CoachStore.__noticeListGames;
+    CoachStore.listCards = CoachStore.__noticeListCards;
+  });
+
+  // An old promotion picker must not answer the card Train reloads after a
+  // remote rollback, even when that durable card has the same position.
+  const rollbackPromotionId = await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0, fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      cause: 'calculation', lesson: 'rollback promotion owner', reflection: {},
+      createdAt: now, due: now - 2000000, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('a7').click();
+  await tsq('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  const rollbackPeer = await t.context.newPage();
+  await rollbackPeer.goto(t.url);
+  await rollbackPeer.waitForSelector('#board .square');
+  await rollbackPeer.click('#tabProgress');
+  await rollbackPeer.evaluate(function () {
+    CoachStore.deleteAll = function () {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { reject(new Error('peer clear failed')); }, 300);
+      });
+    };
+  });
+  rollbackPeer.once('dialog', function (d) { d.accept(); });
+  await rollbackPeer.click('#deleteData');
+  await rollbackPeer.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('was not deleted');
+  });
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  check(await page.locator('#trainReveal').isHidden(),
+    'a pre-rollback promotion callback cannot answer the reloaded card');
+  await rollbackPeer.close();
+  await page.evaluate(function (id) { return CoachStore.deleteCard(id); }, rollbackPromotionId);
+  await page.click('#tabProgress');
+
+  // If an initiating tab disappears without publishing commit/rollback,
+  // peers reconcile durable state after the delete lease instead of staying
+  // empty and disabled forever.
+  const orphanPeer = await t.context.newPage();
+  await orphanPeer.goto(t.url);
+  await orphanPeer.waitForSelector('#board .square');
+  await orphanPeer.click('#tabProgress');
+  await orphanPeer.evaluate(function () {
+    CoachStore.deleteAll = function () { return new Promise(function () {}); };
+  });
+  orphanPeer.once('dialog', function (d) { d.accept(); });
+  await orphanPeer.click('#deleteData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('Deleting');
+  });
+  await orphanPeer.close();
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('Delete failed') &&
+      !document.getElementById('deleteData').disabled;
+  }, null, { timeout: 12000 });
+  check((await page.textContent('#progressStats')).includes(String(overlapAfter)),
+    'an orphaned cross-tab delete reconciles and repopulates durable data');
+
+  // The inverse orphan case: the clear commits, but its window disappears
+  // before broadcasting the terminal event. A new post-clear row must not
+  // fool reconciliation into calling that committed clear a rollback.
+  const committedOrphan = await t.context.newPage();
+  await committedOrphan.goto(t.url);
+  await committedOrphan.waitForSelector('#board .square');
+  await committedOrphan.click('#tabProgress');
+  await committedOrphan.evaluate(function () {
+    CoachStore.__committedOrphanDelete = CoachStore.deleteAll;
+    CoachStore.deleteAll = function (id, tombstones) {
+      return CoachStore.__committedOrphanDelete(id, tombstones).then(function () {
+        return new Promise(function () {}); // suppress app-level commit broadcast
+      });
+    };
+  });
+  committedOrphan.once('dialog', function (d) { d.accept(); });
+  await committedOrphan.click('#deleteData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('Deleting');
+  });
+  await page.waitForFunction(function () {
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()])
+      .then(function (r) { return r[0].length === 0 && r[1].length === 0; });
+  });
+  await page.evaluate(function () {
+    return CoachStore.addGame({
+      source: 'import', tags: {}, sans: ['e4'], playerColor: 'both', clocks: null,
+      result: '*', reason: '', mode: null, difficulty: null, timeControl: null,
+      plies: 1, createdAt: Date.now()
+    });
+  });
+  await committedOrphan.close();
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('deleted') &&
+      !document.getElementById('deleteData').disabled;
+  }, null, { timeout: 12000 });
+  const committedOrphanResult = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (games) {
+      return {
+        games: games.length,
+        note: document.getElementById('dataNote').textContent
+      };
+    });
+  });
+  check(committedOrphanResult.games === 1 &&
+        committedOrphanResult.note.indexOf('Delete failed') === -1,
+    'an orphaned committed clear is recognized despite newer durable data');
+
   page.once('dialog', function (d) { d.accept(); });
   await page.click('#deleteData');
   await page.waitForFunction(function () {
@@ -468,6 +853,123 @@ require('./helper').run('coach', async function (t) {
       .then(function (r) { return r[0].length + r[1].length; });
   });
   check(empty === 0, 'Delete all training data clears the archive');
+
+  // A background writer may not have processed the storage event yet.
+  // Even so, the synchronous commit fence must make a row that lands after
+  // the clear compensate itself back out of IndexedDB.
+  const delayedWriter = await t.context.newPage();
+  await delayedWriter.addInitScript(function () {
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'chessy-coach-sigs-v1' ||
+          (e.key && e.key.indexOf('chessy-coach-delete') === 0)) {
+        e.stopImmediatePropagation();
+      }
+    }, true);
+  });
+  await delayedWriter.goto(t.url);
+  await delayedWriter.waitForSelector('#board .square');
+  await delayedWriter.evaluate(function () {
+    CoachStore.__delayedFenceAdd = CoachStore.addGame;
+    CoachStore.addGame = function (game, fence) {
+      return new Promise(function (resolve, reject) {
+        window.__releaseDelayedFence = function () {
+          CoachStore.__delayedFenceAdd(game, fence).then(resolve, reject);
+        };
+      });
+    };
+    window.__delayedFenceArchive = Coach.archiveGame(
+      { history: [{ san: 'e4', clock: null }] },
+      { mode: 'pvp', difficulty: null, timeControl: null },
+      { over: true, result: '1-0', reason: 'test' }, 808080);
+  });
+  const commitBeforeDelayedClear = await page.evaluate(function () {
+    return localStorage.getItem('chessy-coach-delete-commit-v1');
+  });
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await page.waitForFunction(function (oldCommit) {
+    return localStorage.getItem('chessy-coach-delete-commit-v1') !== oldCommit &&
+      !document.getElementById('deleteData').disabled;
+  }, commitBeforeDelayedClear);
+  const delayedFenceResult = await delayedWriter.evaluate(function () {
+    window.__releaseDelayedFence();
+    return window.__delayedFenceArchive;
+  });
+  await delayedWriter.waitForFunction(function () {
+    return CoachStore.listGames().then(function (games) { return games.length === 0; });
+  });
+  await delayedWriter.close();
+  check(delayedFenceResult === null,
+    'the atomic epoch rejects a post-clear write before its tab receives delete events');
+
+  // A terminal event can arrive again after lease reconciliation or key
+  // convergence. It must not start a second epoch and cancel work that was
+  // legitimately created after the already-processed clear.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  const duplicateCommit = await page.evaluate(function () {
+    const commit = localStorage.getItem('chessy-coach-delete-commit-v1');
+    CoachStore.__duplicateCommitAdd = CoachStore.addGame;
+    CoachStore.addGame = function (game, fence) {
+      return new Promise(function (resolve, reject) {
+        window.__releaseDuplicateCommit = function () {
+          CoachStore.__duplicateCommitAdd(game, fence).then(resolve, reject);
+        };
+      });
+    };
+    window.__duplicateCommitArchive = Coach.archiveGame(
+      { history: [{ san: 'd4', clock: null }] },
+      { mode: 'pvp', difficulty: null, timeControl: null },
+      { over: true, result: '1-0', reason: 'test' }, 818181);
+    return { commit: commit, id: commit.slice(commit.indexOf('|') + 1) };
+  });
+  const duplicateCommitPeer = await t.context.newPage();
+  await duplicateCommitPeer.goto(t.url);
+  await duplicateCommitPeer.waitForSelector('#board .square');
+  await duplicateCommitPeer.evaluate(function (value) {
+    localStorage.setItem('chessy-coach-delete-v1', JSON.stringify({
+      id: value.id, phase: 'commit', commit: value.commit,
+      at: Date.now(), tombstones: []
+    }));
+  }, duplicateCommit);
+  await page.waitForTimeout(100);
+  const duplicateCommitResult = await page.evaluate(async function () {
+    window.__releaseDuplicateCommit();
+    const id = await window.__duplicateCommitArchive;
+    CoachStore.addGame = CoachStore.__duplicateCommitAdd;
+    const games = await CoachStore.listGames();
+    if (id !== null) await CoachStore.deleteGame(id);
+    return { id: id, count: games.length };
+  });
+  await duplicateCommitPeer.close();
+  check(duplicateCommitResult.id !== null && duplicateCommitResult.count === 1,
+    'a duplicate late commit does not invalidate post-clear work');
+
+  // A background tab can publish its pre-clear signature snapshot after a
+  // successful clear. The clear marker fences that stale write, and a
+  // current tab repairs the shared snapshot instead of adopting old sigs.
+  const signatureFence = await page.evaluate(function () {
+    return {
+      commit: localStorage.getItem('chessy-coach-delete-commit-v1'),
+      staleSig: '707070|e4|1-0'
+    };
+  });
+  const staleSigPeer = await t.context.newPage();
+  await staleSigPeer.goto(t.url);
+  await staleSigPeer.waitForSelector('#board .square');
+  await staleSigPeer.evaluate(function (fence) {
+    localStorage.setItem('chessy-coach-sigs-v1', JSON.stringify({
+      commit: 'pre-clear-marker', sigs: [fence.staleSig]
+    }));
+  }, signatureFence);
+  await page.waitForFunction(function (fence) {
+    const value = JSON.parse(localStorage.getItem('chessy-coach-sigs-v1') || '{}');
+    return value.commit === fence.commit && Array.isArray(value.sigs) &&
+      value.sigs.indexOf(fence.staleSig) === -1;
+  }, signatureFence);
+  await staleSigPeer.close();
+  check(!!signatureFence.commit,
+    'a successful cross-tab clear fences and repairs stale signature snapshots');
 
   // Underpromotion cards must be answerable: the promotion picker opens on
   // a promoting answer instead of forcing the queen.
@@ -708,10 +1210,21 @@ require('./helper').run('coach', async function (t) {
     return '[Event "Bulk ' + i + '"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0';
   }).join('\n');
   await page.fill('#importText', manyGames);
+  await page.evaluate(function () {
+    CoachStore.__cancelAddGame = CoachStore.addGame;
+    CoachStore.addGame = function (game, fence) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          CoachStore.__cancelAddGame(game, fence).then(resolve, reject);
+        }, 25);
+      });
+    };
+  });
   await page.click('#importStart');
   await page.click('#importCancel'); // cancel while the batch is writing
   await page.waitForTimeout(1500);   // give any (wrongly) surviving chain time to run
   const afterCancel = await page.evaluate(function () {
+    CoachStore.addGame = CoachStore.__cancelAddGame;
     return CoachStore.listGames().then(function (g) { return g.length; });
   });
   check(afterCancel - beforeCancel < 40,
@@ -725,13 +1238,23 @@ require('./helper').run('coach', async function (t) {
   // shared button while batch 2 is mid-write (a second click would cancel
   // and duplicate it). addGame is slowed for batch B so it is
   // deterministically still writing when A's chain has settled.
+  await page.evaluate(function () {
+    CoachStore.__ownerBaseAdd = CoachStore.addGame;
+    CoachStore.addGame = function (game, fence) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          CoachStore.__ownerBaseAdd(game, fence).then(resolve, reject);
+        }, 25);
+      });
+    };
+  });
   await page.fill('#importText', manyGames);
   await page.click('#importStart');   // batch A
   await page.click('#importCancel');  // A cancelled; its chain settles shortly
   await page.evaluate(function () {
-    CoachStore.__realAddGame = CoachStore.addGame;
-    CoachStore.addGame = function (g) {
-      return CoachStore.__realAddGame(g).then(function (id) {
+    CoachStore.__realAddGame = CoachStore.__ownerBaseAdd;
+    CoachStore.addGame = function (g, fence) {
+      return CoachStore.__realAddGame(g, fence).then(function (id) {
         return new Promise(function (res) { setTimeout(function () { res(id); }, 30); });
       });
     };
@@ -1247,6 +1770,13 @@ require('./helper').run('coach', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('dataNote').textContent.includes('deleted');
   });
+  // Simulate every window disappearing after the atomic IndexedDB commit
+  // but before its localStorage terminal/signature writes survived.
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-coach-delete-commit-v1');
+    localStorage.removeItem('chessy-coach-delete-v1');
+    localStorage.removeItem('chessy-coach-sigs-v1');
+  });
   await page.reload();
   await page.waitForSelector('#board .square');
   await page.waitForTimeout(800); // the boot reconcile window
@@ -1281,6 +1811,25 @@ require('./helper').run('coach', async function (t) {
   await mvB('g2', 'g4'); await mvB('d8', 'h4');
   await pageB.waitForSelector('#gameOverDialog[open]');
   await pageB.click('#gameOverClose'); // tab B: finished game Y (archived)
+  const pageD = await t.context.newPage();
+  await pageD.goto(t.url);
+  await pageD.waitForSelector('#board .square');
+  await pageD.click('#newGame');
+  await pageD.click('#newGameStart'); // third distinct live game/tombstone
+  const sqD = function (name) { return '#board .square[data-index="' + idx(name) + '"]'; };
+  const mvD = async function (from, to) { await pageD.click(sqD(from)); await pageD.click(sqD(to)); };
+  await mvD('e2', 'e4'); await mvD('e7', 'e5');
+  await mvD('d1', 'h5'); await mvD('b8', 'c6');
+  await mvD('f1', 'c4'); await mvD('g8', 'f6');
+  await mvD('h5', 'f7');
+  await pageD.waitForSelector('#gameOverDialog[open]');
+  await pageD.click('#gameOverClose');
+  const passiveLiveSigs = await Promise.all([pageB, pageD].map(function (p) {
+    return p.evaluate(function () {
+      const live = window.chessyLiveGame();
+      return live.gameSeq + '|' + live.sans.join(' ') + '|' + live.result;
+    });
+  }));
   // Tab A (still holding the OLD finished game X) deletes everything.
   await page.click('#tabProgress');
   page.once('dialog', function (d) { d.accept(); });
@@ -1288,6 +1837,12 @@ require('./helper').run('coach', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('dataNote').textContent.includes('deleted');
   });
+  await page.waitForFunction(function (sigs) {
+    const value = JSON.parse(localStorage.getItem('chessy-coach-sigs-v1') || '{}');
+    return Array.isArray(value.sigs) && sigs.every(function (sig) {
+      return value.sigs.indexOf(sig) >= 0;
+    });
+  }, passiveLiveSigs);
   // Tab B reloads: its saved game is Y — boot reconciliation must see
   // Y's merge-persisted tombstone, not archive Y back.
   await pageB.reload();
@@ -1297,8 +1852,10 @@ require('./helper').run('coach', async function (t) {
     return CoachStore.listGames().then(function (g) { return g.length; });
   });
   await pageB.close();
+  await pageD.close();
   check(divergent === 0,
     'a receiving tab’s divergent finished game stays deleted after its reload (got ' + divergent + ')');
+  check(true, 'three-tab Delete All merge-persists every passive live-game tombstone');
 
   // Two tabs starting INDEPENDENT new games must get unique instance ids:
   // a tab-local increment from the same restored save would produce the
