@@ -105,12 +105,44 @@
   }
   function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
 
+  function dueCards(now) {
+    return tx('cards', 'readonly', function (s) {
+      return s.index('due').getAll(IDBKeyRange.upperBound(now));
+    }).then(function (cards) { return cards.sort(function (a, b) { return a.due - b.due; }); });
+  }
+
+  // Atomic read-modify-write for grading: `mutate` runs on the FRESH
+  // stored record inside one transaction, so a concurrent grade (another
+  // window, a double-fire) can never erase an appended attempt. Resolves
+  // with the updated record, or null when the card is gone.
+  function gradeCard(id, mutate) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('cards', 'readwrite');
+        const s = t.objectStore('cards');
+        let updated = null;
+        const getReq = s.get(id);
+        getReq.onsuccess = function () {
+          const card = getReq.result;
+          if (!card) return; // deleted meanwhile — nothing to grade
+          updated = mutate(card) || card;
+          s.put(updated);
+        };
+        t.oncomplete = function () { resolve(updated); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     getGame: getGame,
     listGames: listGames,
     addCard: addCard,
     updateCard: updateCard,
-    listCards: listCards
+    listCards: listCards,
+    dueCards: dueCards,
+    gradeCard: gradeCard
   };
 })(typeof window !== 'undefined' ? window : globalThis);
