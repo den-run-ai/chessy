@@ -39,6 +39,9 @@
     impulse: 'Moved too fast',
     pattern: 'Good move (pattern)'
   };
+  const DAY = 86400000;
+  const LADDER_DAYS = [1, 3, 7, 14, 30, 90]; // fixed spaced-review ladder
+  const AGAIN_DELAY = 10 * 60 * 1000;        // "Again" retries later today
   const MATE_ISH = 900000; // |score| above this reads as mate
   // Score for a position that IS checkmate: the engine scores a mate found
   // at ply p as 1000000 - p, so the delivered mate must sit at the ceiling —
@@ -48,9 +51,7 @@
   const $ = function (id) { return document.getElementById(id); };
 
   // ---- Views ----
-  // Later slices append to VIEWS (and add their tab + section markup);
-  // everything below iterates the array, so they change nothing here.
-  const VIEWS = ['play', 'review'];
+  const VIEWS = ['play', 'review', 'train', 'progress'];
 
   function showView(name) {
     document.body.dataset.view = name;
@@ -61,6 +62,8 @@
       else tab.removeAttribute('aria-current');
     }
     if (name === 'review') renderGameList();
+    if (name === 'train') loadTrain();
+    if (name === 'progress') renderProgress();
     // Play owns the live-game banner: leaving Play during a running timed
     // game must surface the still-ticking clocks (see app.js).
     document.dispatchEvent(new CustomEvent('chessy:viewchange'));
@@ -690,7 +693,7 @@
     }).then(function () {
       if (token !== saveToken || review !== r || r.verdict !== v || r.flagged !== v.ply) return;
       $('cardSaved').hidden = false;
-      $('cardSaved').textContent = 'Lesson card saved — spaced review (Train) lands in the next slice.';
+      $('cardSaved').textContent = 'Lesson card saved — it is due in Train now, then on the 1/3/7/14/30/90-day ladder.';
     }).catch(function () {
       if (token !== saveToken || review !== r || r.verdict !== v || r.flagged !== v.ply) return;
       $('saveCard').disabled = false; // failed write: let the user retry
@@ -782,6 +785,319 @@
   $('revPrev').addEventListener('click', function () { stepReview(review.ply - 1); });
   $('revNext').addEventListener('click', function () { stepReview(review.ply + 1); });
   $('revEnd').addEventListener('click', function () { stepReview(review.gs.history.length); });
+
+  // ---- Train ----
+  const trainBoard = makeBoard($('trainBoard'), onTrainSquare);
+  let train = null; // { queue, card, state, selected, answered }
+
+  function loadTrain() {
+    return CoachStore.dueCards(Date.now()).then(function (cards) {
+      train = { queue: cards, card: null, state: null, selected: null, answered: false };
+      nextTrainCard();
+    }).catch(function () {
+      $('trainEmpty').hidden = false;
+      $('trainEmpty').textContent = 'Archive unavailable in this browser.';
+      $('trainCardBox').hidden = true;
+    });
+  }
+
+  // A card graded "Again" comes due ten minutes later while the user may
+  // still be sitting in Train — the due query only runs when the view is
+  // entered, so without a timer the promised same-day retry never appears.
+  // When the queue drains, name the next near-term due time and requeue
+  // automatically when it arrives (only if no card is being answered).
+  let trainTimer = null;
+
+  function scheduleTrainRequeue() {
+    clearTimeout(trainTimer);
+    $('trainEmpty').textContent = 'No cards due. Flag moments in Review to create lesson cards.';
+    CoachStore.listCards().then(function (cards) {
+      const now = Date.now();
+      let next = Infinity;
+      let overdue = false;
+      for (const c of cards) {
+        if (c.due <= now) overdue = true;
+        else next = Math.min(next, c.due);
+      }
+      // A card can come due WHILE the rest of the queue is worked (a long
+      // session after an "Again"): by the time the queue drains it is
+      // already overdue, so reload now instead of arming a timer for it.
+      if (overdue) { loadTrain(); return; }
+      if (next - now > 3600000) return; // nothing near-term (ladder rungs are days away)
+      $('trainEmpty').textContent = 'No cards due right now — the next retry unlocks at ' +
+        new Date(next).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.';
+      trainTimer = setTimeout(function () {
+        if (document.body.dataset.view === 'train' && (!train || !train.card)) loadTrain();
+      }, next - now + 250);
+    }).catch(function () { /* archive unavailable — keep the default note */ });
+  }
+
+  function nextTrainCard() {
+    const t = train;
+    t.card = t.queue.shift() || null;
+    t.selected = null;
+    t.answered = false;
+    $('trainCount').textContent = t.card
+      ? (t.queue.length + 1) + ' due'
+      : '';
+    $('trainEmpty').hidden = !!t.card;
+    $('trainCardBox').hidden = !t.card;
+    $('trainReveal').hidden = true;
+    if (!t.card) { scheduleTrainRequeue(); return; }
+    t.state = Chess.parseFen(t.card.fenBefore);
+    trainBoard.render(t.state, {});
+    $('trainPrompt').textContent =
+      (t.state.turn === 'w' ? 'White' : 'Black') +
+      ' to move — find the move Chessy saved for this moment. (You played ' +
+      t.card.playedSan + ' in the game.)';
+  }
+
+  function onTrainSquare(i) {
+    const t = train;
+    if (!t || !t.card || t.answered) return;
+    const p = t.state.board[i];
+    if (t.selected === null || (p && p[0] === t.state.turn)) {
+      if (p && p[0] === t.state.turn) {
+        t.selected = i;
+        trainBoard.render(t.state, { selected: i, targets: Chess.legalMovesFrom(t.state, i) });
+      }
+      return;
+    }
+    const candidates = Chess.legalMovesFrom(t.state, t.selected)
+      .filter(function (m) { return m.to === i; });
+    if (candidates.length === 0) {
+      t.selected = null;
+      trainBoard.render(t.state, {});
+      return;
+    }
+    if (candidates[0].promotion) {
+      // The player must choose the piece — auto-queening would make a card
+      // whose best move underpromotes impossible to answer correctly.
+      const owner = t;
+      const cardId = t.card.id;
+      choosePromotion(t.state.turn, function (type) {
+        // The dialog choice is asynchronous: never apply it to a card that
+        // is no longer the one on the board.
+        if (train !== owner || !owner.card || owner.card.id !== cardId) return;
+        answerTrain(candidates.find(function (m) { return m.promotion === type; }));
+      });
+      return;
+    }
+    answerTrain(candidates[0]);
+  }
+
+  // Promotion picker for training answers, sharing the Play view's dialog
+  // element (each caller rebuilds the buttons, so there is no conflict).
+  function choosePromotion(color, cb) {
+    const dlg = $('promotionDialog');
+    const box = $('promotionChoices');
+    box.innerHTML = '';
+    ['Q', 'R', 'B', 'N'].forEach(function (type) {
+      const btn = document.createElement('button');
+      btn.className = 'promo-btn ' + (color === 'w' ? 'white' : 'black');
+      btn.textContent = GLYPHS[color + type];
+      btn.setAttribute('aria-label', 'Promote to ' + PIECE_NAMES[type]);
+      btn.addEventListener('click', function () {
+        dlg.close();
+        cb(type);
+      });
+      box.appendChild(btn);
+    });
+    dlg.showModal();
+  }
+
+  function answerTrain(attempt) {
+    const t = train;
+    if (!t || !t.card) return;
+    const best = t.card.bestMove;
+    const correct = !!best && attempt.from === best.from && attempt.to === best.to &&
+      (attempt.promotion || null) === (best.promotion || null);
+    t.answered = true;
+    const attemptSan = Chess.toSan(t.state, attempt);
+    trainBoard.render(Chess.applyMove(t.state, attempt), { lastMove: attempt });
+    $('trainReveal').hidden = false;
+    // Honest wording: a single-line 300/1200 ms engine saved ONE move — a
+    // different answer may be equally sound, so it "differs", it is not
+    // declared wrong. The player grades themselves accordingly.
+    $('trainOutcome').textContent = correct
+      ? '✓ ' + attemptSan + ' — matches Chessy’s saved move.'
+      : '≠ ' + attemptSan + ' differs from Chessy’s saved move ' + t.card.bestSan +
+        ' (in the game you played ' + t.card.playedSan + '). Your move may still be' +
+        ' sound — grade yourself honestly.';
+    $('trainLesson').textContent =
+      (t.card.lesson ? 'Lesson: ' + t.card.lesson + ' · ' : '') +
+      'Cause: ' + (CAUSE_LABELS[t.card.cause] || t.card.cause);
+    t.lastCorrect = correct;
+  }
+
+  // Fixed ladder scheduling. Good climbs, Hard repeats the current rung,
+  // Again drops off the ladder and retries later today.
+  function schedule(card, grade, now) {
+    if (grade === 'again') {
+      card.step = -1;
+      card.due = now + AGAIN_DELAY;
+    } else if (grade === 'hard') {
+      card.step = Math.max(card.step, 0);
+      card.due = now + LADDER_DAYS[Math.min(card.step, LADDER_DAYS.length - 1)] * DAY;
+    } else {
+      card.step = Math.min(card.step + 1, LADDER_DAYS.length - 1);
+      card.due = now + LADDER_DAYS[card.step] * DAY;
+    }
+  }
+
+  function grade(g) {
+    const t = train;
+    if (!t || !t.card || !t.answered) return;
+    // Consume the answer BEFORE the async write: a double-click must not
+    // record two attempts or climb the ladder twice for one reveal.
+    t.answered = false;
+    const now = Date.now();
+    // Write an updated COPY: if the write fails, the on-screen card is
+    // untouched and a retry cannot double-append the attempt.
+    const updated = Object.assign({}, t.card, {
+      attempts: (t.card.attempts || []).concat([{ at: now, grade: g, correct: !!t.lastCorrect }])
+    });
+    schedule(updated, g, now);
+    CoachStore.updateCard(updated).then(function () {
+      nextTrainCard();
+    }, function () {
+      // The grade was NOT saved (quota, storage failure): keep the card
+      // on screen and say so — silently advancing would drop the attempt
+      // and reschedule nothing.
+      t.answered = true;
+      $('trainOutcome').textContent =
+        '⚠ Could not save that grade (storage unavailable) — try again.';
+    });
+  }
+
+  $('gradeAgain').addEventListener('click', function () { grade('again'); });
+  $('gradeHard').addEventListener('click', function () { grade('hard'); });
+  $('gradeGood').addEventListener('click', function () { grade('good'); });
+
+  // ---- Progress ----
+  function stat(dl, label, value) {
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
+
+  function renderProgress() {
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+      const games = r[0], cards = r[1];
+      const now = Date.now();
+      const dl = $('progressStats');
+      dl.innerHTML = '';
+      stat(dl, 'Games archived', games.length);
+      stat(dl, 'Lesson cards', cards.length);
+      stat(dl, 'Cards due now', cards.filter(function (c) { return c.due <= now; }).length);
+      // "First try" means each card's FIRST attempt — counting every
+      // attempt would report per-attempt correctness (a miss followed by
+      // a correct retry is not a first-try success).
+      const recent = [];
+      const firstTries = [];
+      for (const c of cards) {
+        const attempts = c.attempts || [];
+        for (const a of attempts) if (now - a.at <= 30 * DAY) recent.push(a);
+        if (attempts.length && now - attempts[0].at <= 30 * DAY) firstTries.push(attempts[0]);
+      }
+      stat(dl, 'Reviews (30 days)', recent.length);
+      // `correct` records an exact match with the single saved engine move;
+      // Train explicitly allows the player to self-grade a different sound
+      // move, so do not mislabel this narrower signal as chess correctness.
+      stat(dl, 'Matched Chessy’s saved move on first try (30 days)',
+        firstTries.length
+          ? firstTries.filter(function (a) { return a.correct; }).length + '/' + firstTries.length
+          : '—');
+      const causes = $('causeStats');
+      causes.innerHTML = '';
+      const byCause = {};
+      for (const c of cards) byCause[c.cause] = (byCause[c.cause] || 0) + 1;
+      const keys = Object.keys(byCause);
+      if (keys.length === 0) stat(causes, 'No lesson cards yet', '—');
+      for (const k of keys) stat(causes, CAUSE_LABELS[k] || k, byCause[k]);
+    }).catch(function () {
+      $('dataNote').textContent = 'Archive unavailable in this browser.';
+    });
+  }
+
+  // ---- Data controls ----
+  $('exportData').addEventListener('click', function () {
+    CoachStore.exportAll().then(function (data) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      const d = new Date();
+      a.download = 'chessy-coach-' + d.getFullYear() +
+        String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      $('dataNote').textContent = 'Exported ' + data.games.length + ' games and ' + data.cards.length + ' cards.';
+    }).catch(function (e) {
+      $('dataNote').textContent = 'Export failed: ' + (e && e.message ? e.message : e) + '.';
+    });
+  });
+
+  $('importData').addEventListener('click', function () { $('importFile').click(); });
+  // ONE restore at a time: while a large backup is still appending, a
+  // second selection of the same file would append everything twice.
+  let restoreBusy = false;
+
+  $('importFile').addEventListener('change', function () {
+    const file = $('importFile').files[0];
+    if (!file) return;
+    if (restoreBusy) { $('importFile').value = ''; return; }
+    restoreBusy = true;
+    $('importData').disabled = true;
+    function settleRestore() {
+      restoreBusy = false;
+      $('importData').disabled = false;
+    }
+    const reader = new FileReader();
+    reader.onerror = function () {
+      $('importFile').value = '';
+      $('dataNote').textContent = 'Could not read the backup file.';
+      settleRestore();
+    };
+    reader.onload = function () {
+      $('importFile').value = '';
+      let data = null;
+      try { data = JSON.parse(reader.result); } catch (e) { /* handled below */ }
+      CoachStore.importAll(data)
+        .then(function (n) {
+          $('dataNote').textContent = 'Imported ' + n.games + ' games and ' + n.cards + ' cards.';
+          renderProgress();
+        })
+        .catch(function (e) {
+          $('dataNote').textContent = 'Import failed: ' + (e.message || e);
+        })
+        .then(settleRestore);
+    };
+    reader.readAsText(file);
+  });
+
+  $('deleteData').addEventListener('click', function () {
+    if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
+    $('deleteData').disabled = true;
+    // Abandon in-flight coach work first, so a scan or verification that
+    // settles after the clear cannot repaint (or re-save) deleted state.
+    // (One active tab is assumed — see js/store.js.)
+    scanToken++;
+    verifyToken++;
+    saveToken++;
+    review = null;
+    train = null;
+    clearTimeout(trainTimer);
+    CoachStore.deleteAll().then(function () {
+      $('dataNote').textContent = 'All training data deleted.';
+      return renderProgress();
+    }, function (e) {
+      $('dataNote').textContent = 'Delete failed: ' + (e && e.message ? e.message : e) +
+        '. Training data was not deleted.';
+    }).then(function () { $('deleteData').disabled = false; });
+  });
 
   window.Coach = {
     archiveGame: archiveGame,

@@ -21,6 +21,8 @@
     <nav class="tabs" aria-label="App sections">
       <button type="button" class="tab" id="tabPlay" data-view="play" aria-current="page">Play</button>
       <button type="button" class="tab" id="tabReview" data-view="review">Review</button>
+      <button type="button" class="tab" id="tabTrain" data-view="train">Train</button>
+      <button type="button" class="tab" id="tabProgress" data-view="progress">Progress</button>
     </nav>
 
     <!-- Shown only OUTSIDE Play while a timed game's clocks are running:
@@ -137,6 +139,49 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- Train: due lesson cards on the fixed 1/3/7/14/30/90-day ladder. -->
+    <section class="view coach" id="viewTrain" hidden aria-labelledby="trainTitle">
+      <div class="view-head">
+        <h2 id="trainTitle">Train</h2>
+        <span class="coach-note" id="trainCount"></span>
+      </div>
+      <p class="coach-note" id="trainEmpty" hidden>No cards due. Flag moments in Review to create lesson cards.</p>
+      <div id="trainCardBox" hidden>
+        <div class="coach-board-row">
+          <div class="coach-board-wrap">
+            <div class="board small" id="trainBoard" aria-label="Training board"></div>
+          </div>
+          <div class="coach-side">
+            <p id="trainPrompt"></p>
+            <div id="trainReveal" class="coach-form" hidden>
+              <p id="trainOutcome" aria-live="polite"></p>
+              <p id="trainLesson"></p>
+              <div class="buttons">
+                <button type="button" id="gradeAgain" class="btn">Again</button>
+                <button type="button" id="gradeHard" class="btn">Hard</button>
+                <button type="button" id="gradeGood" class="btn primary">Good</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progress: honest counts only — no headline "accuracy". -->
+    <section class="view coach" id="viewProgress" hidden aria-labelledby="progressTitle">
+      <div class="view-head"><h2 id="progressTitle">Progress</h2></div>
+      <dl class="stats" id="progressStats"></dl>
+      <h3 class="coach-subhead">Lesson causes</h3>
+      <dl class="stats" id="causeStats"></dl>
+      <div class="buttons data-controls">
+        <button type="button" id="exportData" class="btn">Export training data</button>
+        <button type="button" id="importData" class="btn">Import backup</button>
+        <button type="button" id="deleteData" class="btn danger">Delete all training data</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <p class="coach-note" id="dataNote" aria-live="polite"></p>
     </section>
   </div>
 

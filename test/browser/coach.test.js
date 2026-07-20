@@ -1,11 +1,11 @@
-/* Game archive: finished games are stored in IndexedDB, deduped per game
- * instance, and browsable position by position in the Review view. */
+/* Coaching loop: archive → PGN import → hidden reflection → engine
+ * verification → lesson card → spaced review → progress counts. */
 'use strict';
 require('./helper').run('coach', async function (t) {
-  const page = t.page, check = t.check, mv = t.mv;
+  const page = t.page, check = t.check, mv = t.mv, idx = t.idx;
 
   // Tabs exist; Play is current.
-  check(await page.locator('.tab').count() === 2, 'Play and Review section tabs');
+  check(await page.locator('.tab').count() === 4, 'four section tabs');
   check(await page.getAttribute('#tabPlay', 'aria-current') === 'page', 'Play tab current at boot');
 
   // A finished game is archived automatically (fool's mate, two players) —
@@ -417,6 +417,181 @@ require('./helper').run('coach', async function (t) {
   check(!(await page.locator('#flagMoment').isDisabled()),
     'ordinary positions in the same game remain flaggable');
   await page.click('#reviewBack');
+
+  // ---- Train: both saved cards are due immediately ----
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  check((await page.textContent('#trainCount')).includes('2 due'), 'both cards due');
+  // Queue is due-order: the pattern card (Anna's Qxf7#) was saved first.
+  check((await page.textContent('#trainPrompt')).includes('White to move'),
+    'training prompt names the side to move');
+  check((await page.textContent('#trainPrompt')).includes('You played Qxf7#'),
+    'training prompt recalls the move played in the game');
+  const tsq = function (name) { return page.locator('#trainBoard .square').nth(idx(name)); };
+  await tsq('h5').click(); // queen
+  await tsq('f7').click(); // the mating capture
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  check((await page.textContent('#trainOutcome')).includes('✓'), 'correct answer recognized');
+  check((await page.textContent('#trainLesson')).includes('Look for forcing mates'),
+    'reveal repeats the saved lesson');
+  // Grade with a double-click: the answer is consumed before the async
+  // write, so exactly one attempt is recorded and one rung climbed.
+  await page.evaluate(function () {
+    document.getElementById('gradeGood').click();
+    document.getElementById('gradeGood').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('trainCount').textContent.includes('1 due');
+  });
+
+  // Second card: the error card (Black to move before 3… Nf6). Repeat the
+  // game move — honest wording reports a DIFFERENT answer, not a wrong one.
+  await tsq('g8').click();
+  await tsq('f6').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  check((await page.textContent('#trainOutcome')).includes('≠') &&
+        (await page.textContent('#trainOutcome')).includes('grade yourself honestly'),
+    'a differing answer is reported honestly, not declared wrong');
+  check((await page.textContent('#trainLesson')).includes('Missed a threat'),
+    'reveal names the player-diagnosed cause');
+  await page.click('#gradeAgain');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check((await page.textContent('#trainEmpty')).includes('next retry unlocks at'),
+    'Again schedules a same-day retry and says when');
+
+  // Ladder state after grading: Good climbed to step 0 (~1 day), Again
+  // dropped to the pre-ladder step with a 10-minute due; one attempt each.
+  const graded = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const byKind = {};
+      for (const c of cards) byKind[c.kind] = c;
+      return {
+        goodStep: byKind.pattern.step, goodDue: byKind.pattern.due,
+        goodAttempts: byKind.pattern.attempts.length,
+        goodCorrect: byKind.pattern.attempts[0].correct,
+        againStep: byKind.error.step, againDue: byKind.error.due,
+        againAttempts: byKind.error.attempts.length,
+        againCorrect: byKind.error.attempts[0].correct
+      };
+    });
+  });
+  check(graded.goodStep === 0 && graded.goodDue > Date.now() + 20 * 3600 * 1000 &&
+        graded.goodAttempts === 1 && graded.goodCorrect === true,
+    'Good schedules the first 1-day rung with exactly one (correct) attempt');
+  check(graded.againStep === -1 && graded.againDue < Date.now() + 3600 * 1000 &&
+        graded.againAttempts === 1 && graded.againCorrect === false,
+    'Again drops off the ladder for a ten-minute retry (one incorrect attempt)');
+
+  // ---- Progress: honest counts ----
+  await page.click('#tabProgress');
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#progressStats dt').length > 0;
+  });
+  const stats = await page.evaluate(function () {
+    const out = {};
+    const dl = document.getElementById('progressStats');
+    const dts = dl.querySelectorAll('dt'), dds = dl.querySelectorAll('dd');
+    dts.forEach(function (dt, i) { out[dt.textContent] = dds[i].textContent; });
+    return out;
+  });
+  check(stats['Games archived'] === '8', 'progress counts archived games (got ' + stats['Games archived'] + ')');
+  check(stats['Lesson cards'] === '2', 'progress counts lesson cards');
+  check(stats['Cards due now'] === '0', 'progress counts due cards (both rescheduled)');
+  check(stats['Reviews (30 days)'] === '2', 'progress counts recent reviews');
+  check(stats['Matched Chessy’s saved move on first try (30 days)'] === '1/2',
+    'the narrow exact-match signal is labelled honestly and counts first tries only');
+  const causeText = await page.textContent('#causeStats');
+  check(causeText.includes('Good move (pattern)') && causeText.includes('Missed a threat'),
+    'pattern cards counted separately from error causes');
+
+  // ---- Data controls ----
+  // Export failures are visible instead of becoming unhandled rejections.
+  await page.evaluate(function () {
+    CoachStore.__realExportAll = CoachStore.exportAll;
+    CoachStore.exportAll = function () { return Promise.reject(new Error('simulated export failure')); };
+  });
+  await page.click('#exportData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('Export failed');
+  });
+  check((await page.textContent('#dataNote')).includes('simulated export failure'),
+    'an export failure is reported to the user');
+  await page.evaluate(function () { CoachStore.exportAll = CoachStore.__realExportAll; });
+
+  // Backup round-trip through the real DB: restore APPENDS with fresh ids
+  // and remapped card→game links.
+  const roundTrip = await page.evaluate(function () {
+    return CoachStore.exportAll().then(function (data) {
+      return CoachStore.importAll(data).then(function () {
+        return Promise.all([CoachStore.listGames(), CoachStore.listCards()]);
+      }).then(function (r) {
+        const orphans = r[1].filter(function (c) {
+          return c.gameId !== null && !r[0].some(function (g) { return g.id === c.gameId; });
+        });
+        return { games: r[0].length, cards: r[1].length, exported: data.games.length, orphans: orphans.length };
+      });
+    });
+  });
+  check(roundTrip.exported === 8 && roundTrip.games === 16 && roundTrip.cards === 4 &&
+        roundTrip.orphans === 0,
+    'backup round-trip appends every record with remapped game links');
+
+  // Invalid backups are rejected BEFORE the first write.
+  const invalids = await page.evaluate(function () {
+    function counts() {
+      return Promise.all([CoachStore.listGames(), CoachStore.listCards()])
+        .then(function (r) { return r[0].length + '/' + r[1].length; });
+    }
+    return counts().then(function (before) {
+      const cases = [
+        { note: 'not a backup', data: { format: 'nope' } },
+        { note: 'garbage sans', data: { format: 'chessy-coach', cards: [], games: [
+          { sans: ['zz9'], result: '*', createdAt: 1, plies: 1 }] } },
+        { note: 'illegal best move', data: { format: 'chessy-coach', games: [], cards: [
+          { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            bestMove: { from: 0, to: 63 }, due: 1, step: 0, attempts: [] }] } },
+        { note: 'step out of range', data: { format: 'chessy-coach', games: [], cards: [
+          { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            bestMove: { from: 52, to: 36 }, due: 1, step: 9, attempts: [] }] } }
+      ];
+      let chain = Promise.resolve([]);
+      for (const c of cases) {
+        chain = chain.then(function (out) {
+          return CoachStore.importAll(c.data).then(
+            function () { out.push(c.note + ': accepted'); return out; },
+            function (e) { out.push(c.note + ': ' + e.message); return out; });
+        });
+      }
+      return chain.then(function (out) {
+        return counts().then(function (after) {
+          return { results: out, unchanged: before === after };
+        });
+      });
+    });
+  });
+  check(invalids.results.every(function (r) { return r.indexOf('accepted') === -1; }) &&
+        invalids.unchanged,
+    'invalid backups are rejected with the archive unchanged (' + invalids.results.join(' | ') + ')');
+
+  // Delete All clears both stores and resets the coach views.
+  page.once('dialog', function (d) { d.accept(); });
+  await page.click('#deleteData');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.includes('All training data deleted');
+  });
+  const empty = await page.evaluate(function () {
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()])
+      .then(function (r) { return r[0].length + r[1].length; });
+  });
+  check(empty === 0, 'Delete all training data clears the archive');
+  check((await page.textContent('#progressStats')).includes('0'),
+    'Progress re-renders committed zero counts');
+  await page.click('#tabReview');
+  await page.waitForSelector('#reviewEmpty:not([hidden])');
+  check(await page.locator('.game-item').count() === 0, 'Review is empty after delete');
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check(await page.locator('#trainCardBox').isHidden(), 'Train is empty after delete');
 
   // Play is undisturbed by the excursion.
   await page.click('#tabPlay');

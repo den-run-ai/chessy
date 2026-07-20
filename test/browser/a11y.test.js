@@ -152,12 +152,53 @@ require('./helper').run('a11y', async function (t) {
     'square focus ring ≥ 3:1 against both square colors (' +
     ratios.ringLight.toFixed(2) + ', ' + ratios.ringDark.toFixed(2) + ')');
 
-  // ---- The Review board shares the Play board's grid semantics ----
-  check(await page.getAttribute('#reviewBoard', 'role') === 'grid', 'reviewBoard is an ARIA grid');
-  check(await page.locator('#reviewBoard [role="row"]').count() === 8, 'reviewBoard has 8 ARIA rows');
-  check(await page.locator('#reviewBoard [role="gridcell"]').count() === 64, 'reviewBoard has 64 gridcells');
-  check(await page.locator('#reviewBoard .square[tabindex="0"]').count() === 1,
-    'reviewBoard has a single roving tab stop');
+  // ---- Coach boards share the Play board's grid semantics ----
+  for (const id of ['reviewBoard', 'trainBoard']) {
+    check(await page.getAttribute('#' + id, 'role') === 'grid', id + ' is an ARIA grid');
+    check(await page.locator('#' + id + ' [role="row"]').count() === 8, id + ' has 8 ARIA rows');
+    check(await page.locator('#' + id + ' [role="gridcell"]').count() === 64, id + ' has 64 gridcells');
+    check(await page.locator('#' + id + ' .square[tabindex="0"]').count() === 1,
+      id + ' has a single roving tab stop');
+  }
   check(await page.locator('#reviewBoard button.square').count() === 64,
     'review board squares are focusable buttons (keyboard-inspectable)');
+
+  // Train board: arrow-key navigation + stateful announcements, driven on
+  // a real due card.
+  await page.evaluate(function () {
+    const now = Date.now();
+    return CoachStore.addCard({
+      gameId: null, ply: 0,
+      fenBefore: '8/P6k/8/8/8/8/6K1/8 w - - 0 1',
+      playedSan: 'a8=Q', bestSan: 'a8=N',
+      bestMove: { from: 8, to: 0, promotion: 'N' },
+      bestScore: 0, playedScore: 0, lossCp: 120,
+      kind: 'error', cause: 'calculation', lesson: 'Check the underpromotion',
+      reflection: {}, createdAt: now, due: now, step: -1, attempts: []
+    });
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  const tsq = function (name) { return page.locator('#trainBoard .square').nth(t.idx(name)); };
+  await tsq('a7').click();
+  check((await tsq('a7').getAttribute('aria-label')).includes('selected'),
+    'train board announces the selected piece');
+  check(await tsq('a7').getAttribute('aria-selected') === 'true',
+    'train board aria-selected tracks the selection');
+  check((await tsq('a8').getAttribute('aria-label')).includes('legal move'),
+    'train board announces legal-move targets');
+  await tsq('a7').focus();
+  await page.keyboard.press('ArrowUp');
+  const trainActive = await page.evaluate(function () {
+    return document.activeElement.getAttribute('aria-label') || '';
+  });
+  check(trainActive.indexOf('a8') === 0, 'arrow keys move focus on the train board (a8)');
+
+  // The named promotion picker answers the card (underpromotion).
+  await tsq('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  check((await page.textContent('#trainOutcome')).includes('✓'),
+    'underpromotion card answered correctly via the named promotion picker');
 });

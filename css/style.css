@@ -577,6 +577,21 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .coach-form h3 { font-size: 1rem; }
 .coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
 
+.stats {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1rem;
+  font-size: 0.9rem;
+}
+.stats dt { color: var(--muted); }
+.stats dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.coach-subhead { font-size: 0.95rem; margin-top: 0.25rem; }
+
+.data-controls { margin-top: 0.5rem; }
+.btn.danger { background: #7a3a3a; color: #fff; }
+.btn.danger:hover { background: #8f4444; }
+
 .coach-form input[type="text"],
 .coach-form select {
   background: var(--panel);

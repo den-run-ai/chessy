@@ -67,10 +67,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **PGN export** — save the game in standard PGN, plain or with an embedded
   debug log (engine depth/quiescence, think time, and the FEN before every
   move) for troubleshooting.
-- **Game archive (coaching foundation)** — two sections: **Play · Review**.
-  Finished games are archived automatically to IndexedDB (with per-move
-  clock/think evidence and which side you played), and "Review game" after
-  a game ends opens the archived game in a position-by-position browser.
+- **Coaching (first slice)** — four sections: **Play · Review · Train ·
+  Progress**. Finished games are archived automatically to IndexedDB (with
+  per-move clock/think evidence and which side you played), and "Review
+  game" after a game ends opens the archived game in a
+  position-by-position browser.
   PGN games can be imported with an "I played White/Black" choice — the
   parser tolerates real-world exports (comments, variations, NAGs, glued
   move numbers, `0-0` castling, multi-game and tagless files) and every
@@ -83,13 +84,17 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   engine's verdict stays hidden until you answer), then verifies in a
   dedicated worker (with a watchdog + synchronous fallback) and saves a
   lesson card: error cards need your cause diagnosis, good moves become
-  positive *pattern* cards.
-  Reflection, engine verification, lesson cards and spaced review build on
-  this archive (coaching roadmap
-  [#23](https://github.com/den-run-ai/chessy/issues/23)). The archive
-  assumes one active tab; a unique per-game signature makes the one real
-  cross-tab hazard (archiving the same finished game twice) safe at the
-  database level.
+  positive *pattern* cards. Train replays due cards on the board with a
+  fixed 1/3/7/14/30/90-day spaced ladder (Good climbs, Hard repeats,
+  Again retries today); a different answer is reported as *differing from
+  Chessy's saved move*, not as wrong. Progress shows honest counts —
+  cards, reviews, per-cause tallies — not a headline "accuracy" number.
+  Training data can be exported/imported as JSON (restores are validated
+  before the first write) and deleted entirely. The archive assumes one
+  active tab; the unique per-game signature makes the one real cross-tab
+  hazard (archiving the same finished game twice) safe at the database
+  level (coaching roadmap
+  [#23](https://github.com/den-run-ai/chessy/issues/23)).
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest.
@@ -123,9 +128,10 @@ node test/engine.test.js
 Browser suites drive the real app headless via Playwright — replay/review,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
 restore + offline status, chess clocks (including a real flag fall and a
-reload-refund regression), and the game archive (auto-archive, dedupe,
-review browsing). Each suite gets a fresh web origin so service-worker,
-localStorage and IndexedDB state never leak between them:
+reload-refund regression), and the coaching loop (archive, PGN import,
+reflection → verification → card, spaced review, backup round-trip). Each
+suite gets a fresh web origin so service-worker, localStorage and
+IndexedDB state never leak between them:
 
 ```sh
 npm install --no-save playwright
@@ -147,8 +153,8 @@ gated on the engine *and* browser suites.
 | `js/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
 | `js/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `js/app.js` | Board UI, game flow, persistence |
-| `js/store.js` | IndexedDB game archive (games, lesson cards) |
-| `js/coach.js` | Review: archived-game list + position browser |
+| `js/store.js` | IndexedDB archive (games, lesson cards, backup/restore) |
+| `js/coach.js` | Review/Train/Progress: reflection, engine verification, spaced review |
 | `css/style.css` | Styling |
 | `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |
