@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r20">
+  <link rel="stylesheet" href="assets/style.css?r=r21">
 </head>
 <body>
   <div class="app">
@@ -52,6 +52,9 @@
         <div class="captured" id="capturedByBlack" aria-label="Pieces captured by Black"></div>
 
         <div class="offline-note" id="installNote" role="status">Preparing offline mode…</div>
+        <!-- Shown only when the BOOT-TIME archive reconcile failed — the
+             game-over dialog (and its own note) is closed then. -->
+        <div class="offline-note" id="archiveBootNote" role="status" hidden></div>
       </aside>
     </main>
   </div>
@@ -102,6 +105,8 @@
           aria-describedby="gameOverDetail">
     <h2 id="gameOverTitle"></h2>
     <p id="gameOverDetail"></p>
+    <!-- Shown only when the coaching-archive write FAILED (assets/app.js). -->
+    <p class="offline-note" id="archiveNote" role="status" hidden></p>
     <div class="buttons gameover-actions">
       <button id="gameOverReview" class="btn primary">Review game</button>
       <button id="gameOverRematch" class="btn">Rematch</button>
@@ -117,10 +122,17 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r20';</script>
-  <script src="assets/engine.js?r=r20"></script>
-  <script src="assets/ai.js?r=r20"></script>
-  <script src="assets/app.js?r=r20"></script>
+  <script>window.CHESSY_RELEASE = 'r21';</script>
+  <script src="assets/engine.js?r=r21"></script>
+  <script src="assets/ai.js?r=r21"></script>
+  <!-- store.js and archive.js load BEFORE app.js: by the time the app
+       boots (starting a restored game's clock and AI), archive support has
+       either definitively loaded or definitively failed — a restored timer
+       expiring can never race a still-loading archive module into a false
+       "storage unavailable" verdict. -->
+  <script src="assets/store.js?r=r21"></script>
+  <script src="assets/archive.js?r=r21"></script>
+  <script src="assets/app.js?r=r21"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

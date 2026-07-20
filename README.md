@@ -67,6 +67,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **PGN export** — save the game in standard PGN, plain or with an embedded
   debug log (engine depth/quiescence, think time, and the FEN before every
   move) for troubleshooting.
+- **Game archive (coaching foundation)** — finished games are recorded
+  automatically to IndexedDB, keyed on a per-game UUID (idempotent
+  re-archive; per-move clock/think evidence and the side you played are
+  retained). A failed write is reported in the game-over dialog. No UI
+  reads the archive yet — the Review browser, reflection, and spaced
+  review build on it in the next slices (roadmap
+  [#23](https://github.com/den-run-ai/chessy/issues/23)).
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest. Assets load as **release
@@ -128,6 +135,8 @@ gated on the engine *and* browser suites.
 | `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
 | `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `assets/app.js` | Board UI, game flow, persistence |
+| `assets/store.js` | IndexedDB coaching store (games, lesson cards) |
+| `assets/archive.js` | Records finished games into the store |
 | `assets/style.css` | Styling |
 | `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |
