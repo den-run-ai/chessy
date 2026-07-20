@@ -531,6 +531,21 @@ assertEqual(messy[0].sans.join(' '), 'e4 e5 Nf3 Nc6 Bc4 Bc5!? 0-0',
   'variations/NAGs/comments stripped, 0-0 kept as a token');
 assertEqual(!!Chess.replaySans(messy[0].sans), true, 'annotated SANs replay (suffixes normalized)');
 
+// NAGs need no whitespace before them: "e4$1" is one token, and the glued
+// NAG must be stripped (leaving the SAN) rather than rejecting the game.
+const gluedNag = Chess.parsePgn('1. e4$1 e5$2$14 2. Nf3 *');
+assertEqual(gluedNag[0].sans.join(' '), 'e4 e5 Nf3', 'NAGs glued to SANs stripped');
+assertEqual(!!Chess.replaySans(gluedNag[0].sans), true, 'glued-NAG game replays');
+
+// A '%' in column one marks an escape line: the whole line is ignored.
+const escaped = Chess.parsePgn('%evd this is not movetext\n1. e4 e5 *');
+assertEqual(escaped[0].sans.join(' '), 'e4 e5', 'percent escape line ignored');
+
+// Braces inside a QUOTED TAG VALUE are literal text, not comments.
+const braceTag = Chess.parsePgn('[Event "Blitz {Final}"]\n\n1. e4 {real comment} e5 *');
+assertEqual(braceTag[0].tags.Event, 'Blitz {Final}', 'braces preserved inside tag strings');
+assertEqual(braceTag[0].sans.join(' '), 'e4 e5', 'movetext brace comment still stripped');
+
 // Some exporters spell out an en-passant capture with a standalone marker.
 // It is notation metadata, not another move.
 const annotatedEp = Chess.parsePgn('1. e4 a6 2. e5 d5 3. exd6 e.p. *');

@@ -295,6 +295,11 @@
   // seconds of work), so closing the dialog mid-batch neither cancels nor
   // duplicates it; the list simply refreshes when the batch lands.
   let importBusy = false;
+  // Each dialog OPEN starts a new session. A batch's completion may only
+  // touch the dialog it was started from — the user can close the dialog
+  // mid-batch and reopen it with a fresh paste, and the old batch landing
+  // must not close (and thereby discard) that new session.
+  let importSession = 0;
 
   function newGameChoice(name) {
     const el = document.querySelector('input[name="' + name + '"]:checked');
@@ -302,8 +307,12 @@
   }
 
   $('importPgnBtn').addEventListener('click', function () {
+    importSession++;
     $('importText').value = '';
-    $('importError').textContent = '';
+    $('importError').textContent = importBusy
+      ? 'A previous import is still finishing — Import unlocks when it lands.'
+      : '';
+    $('importStart').disabled = importBusy;
     $('importDialog').showModal();
   });
   $('importCancel').addEventListener('click', function () {
@@ -313,6 +322,7 @@
   $('importStart').addEventListener('click', function () {
     if (importBusy) return;
     importBusy = true;
+    const session = importSession;
     $('importStart').disabled = true;
     const playerColor = (newGameChoice('importColor') || 'both');
     const games = Chess.parsePgn($('importText').value);
@@ -323,7 +333,17 @@
       chain = chain.then(function () {
         if (g.unsupported) throw new Error('games from a set-up position are not supported');
         const gs = Chess.replaySans(g.sans); // throws on illegal moves
+        // Chessy's own rules auto-draw threefold/fifty (a casual-play
+        // simplification), but imported games were played under standard
+        // CLAIM-based rules — a player may legally play on, resign, or
+        // lose on time in a "claimable" position. Only forced outcomes
+        // may override the recorded result; an auto-draw reason is kept
+        // only when it agrees with what the PGN declares.
         const status = Chess.gameStatus(gs);
+        const forced = status.over &&
+          (status.reason === 'checkmate' || status.reason === 'stalemate' ||
+           status.reason === 'insufficient material');
+        const agrees = status.over && g.result === status.result;
         return CoachStore.addGame({
           source: 'import',
           tags: g.tags,
@@ -332,8 +352,8 @@
           // on those moves. Applies to the whole pasted batch.
           playerColor: playerColor,
           clocks: null, // PGN %clk import is a follow-up
-          result: status.over ? status.result : g.result,
-          reason: status.over ? status.reason : '',
+          result: forced ? status.result : agrees ? status.result : g.result,
+          reason: (forced || agrees) ? status.reason : '',
           mode: null, difficulty: null, timeControl: (g.tags && g.tags.TimeControl) || null,
           plies: gs.history.length,
           createdAt: Date.now()
@@ -346,6 +366,10 @@
     chain.then(function () {
       importBusy = false;
       $('importStart').disabled = false;
+      // The archive changed regardless of which dialog session survives.
+      if (ok > 0) renderGameList();
+      // Completion UI belongs to THIS batch's dialog session only.
+      if (session !== importSession) return;
       if (ok === 0 && failed === 0) {
         $('importError').textContent = 'No games found in that text.';
         return;
@@ -356,11 +380,9 @@
       }
       if (failed > 0) {
         $('importError').textContent = ok + ' imported, ' + failed + ' skipped (' + firstError + ').';
-        renderGameList();
         return;
       }
       $('importDialog').close();
-      renderGameList();
     });
   });
 

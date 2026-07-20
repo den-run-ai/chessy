@@ -458,13 +458,25 @@
   // start position are not supported (replaySans starts from the standard
   // initial position) and are flagged with `unsupported`.
   function parsePgn(text) {
-    // Strip brace comments globally (they do not nest per the PGN spec) and
-    // ; comments per line, then pad parens so variations tokenize cleanly.
-    const clean = String(text)
-      .replace(/\{[^}]*\}/g, ' ')
-      .split('\n')
-      .map(function (line) { return /^\s*\[/.test(line) ? line : line.split(';')[0]; })
-      .join('\n');
+    // Clean line by line, statefully: brace comments span lines but do NOT
+    // nest (per the PGN spec); braces inside a quoted tag value are literal
+    // text and must survive (`[Event "Blitz {Final}"]`); `%` in column one
+    // marks an escape line the whole of which is ignored; `;` comments run
+    // to end of line.
+    const cleaned = [];
+    let inBrace = false;
+    for (const raw of String(text).split('\n')) {
+      if (!inBrace && raw[0] === '%') continue;           // escape line
+      if (!inBrace && /^\s*\[/.test(raw)) { cleaned.push(raw); continue; }
+      let out = '';
+      for (const ch of raw) {
+        if (inBrace) { if (ch === '}') inBrace = false; continue; }
+        if (ch === '{') { inBrace = true; out += ' '; continue; }
+        if (ch === ';') break;                            // rest-of-line comment
+        out += ch;
+      }
+      cleaned.push(out);
+    }
 
     const games = [];
     let tags = {}, sans = [], result = null, inMovetext = false;
@@ -481,14 +493,14 @@
       tags = {}; sans = []; result = null; inMovetext = false; depth = 0;
     }
 
-    for (const line of clean.split('\n')) {
+    for (const line of cleaned) {
       const tag = line.match(/^\s*\[\s*(\w+)\s+"((?:[^"\\]|\\.)*)"\s*\]/);
       if (tag) {
         if (inMovetext) flush(); // a tag section after movetext starts the next game
         tags[tag[1]] = tag[2].replace(/\\(["\\])/g, '$1');
         continue;
       }
-      for (const token of line.replace(/([()])/g, ' $1 ').split(/\s+/)) {
+      for (let token of line.replace(/([()])/g, ' $1 ').split(/\s+/)) {
         if (!token) continue;
         if (token === '(') { depth++; continue; }
         if (token === ')') { if (depth > 0) depth--; continue; }
@@ -504,7 +516,10 @@
         // the flush, and without this the games merge into one.
         if (result !== null) flush();
         inMovetext = true;
-        if (/^\$\d+$/.test(token)) continue;              // NAG
+        // NAGs need no preceding whitespace, so "e4$1" is one token: strip
+        // glued NAGs off the tail before the standalone-NAG/move checks.
+        token = token.replace(/(\$\d+)+$/, '');
+        if (token === '') continue;                       // was a bare NAG
         if (/^\d+\.*$/.test(token)) continue;             // move number
         sans.push(token.replace(/^\d+\.+/, ''));          // "3.Nf3" glued form
       }
