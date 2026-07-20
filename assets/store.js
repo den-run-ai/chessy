@@ -65,6 +65,15 @@
           resolve(db);
         };
         req.onerror = function () { dbPromise = null; reject(req.error); };
+        // A pre-release (v1–v4) context without our onversionchange
+        // handler can BLOCK the upgrade indefinitely; without this the
+        // promise never settles, every archive call hangs, and no failure
+        // note ever appears. Reject so callers surface it; a later call
+        // retries once the blocking context is gone.
+        req.onblocked = function () {
+          dbPromise = null;
+          reject(new Error('database upgrade blocked by another open tab'));
+        };
       });
     }
     return dbPromise;
