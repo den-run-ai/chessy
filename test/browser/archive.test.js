@@ -19,6 +19,21 @@ require('./helper').run('archive', async function (t) {
     throw new Error('expected ' + n + ' archived games, got ' + (await games()).length);
   }
 
+  // The archive modules load BEFORE the app: a restored game's clock or
+  // AI can finish as soon as app.js boots, and by then archive support
+  // must have definitively loaded or definitively failed — never be
+  // still-fetching behind the app (a false "storage unavailable").
+  check(await page.evaluate(function () {
+    const srcs = Array.prototype.map.call(
+      document.querySelectorAll('script[src]'),
+      function (s) { return s.getAttribute('src'); });
+    const at = function (name) {
+      return srcs.findIndex(function (s) { return s.indexOf(name) !== -1; });
+    };
+    return at('store.js') !== -1 && at('archive.js') !== -1 &&
+           at('store.js') < at('archive.js') && at('archive.js') < at('app.js');
+  }), 'store.js and archive.js load before app.js');
+
   // A finished game is archived automatically.
   await t.newGame({ mode: 'pvp' });
   await mv('f2', 'f3'); await mv('e7', 'e5');
@@ -310,6 +325,143 @@ require('./helper').run('archive', async function (t) {
   await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
   await page.click('#gameOverClose');
 
+  // A failure routed to the PAGE note (the dialog had closed) is OWNED by
+  // its game: when a replacement attempt for the SAME game later
+  // succeeds, the note clears — the page must not keep claiming a game
+  // could not be archived when its record in fact exists.
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    let first = true;
+    CoachStore.archiveGame = function (rec) {
+      if (first) {
+        first = false;
+        return new Promise(function (resolve, reject) {
+          window.__failHeldArchive = function () { reject(new Error('quota')); };
+        });
+      }
+      return CoachStore.__realArchiveGame(rec);
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4'); // attempt 1: write held open
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.evaluate(function () { window.__failHeldArchive(); });
+  await page.waitForSelector('#archiveBootNote:not([hidden])');
+  await page.click('#undo');                  // void the failed ending…
+  await mv('d7', 'd6'); await mv('h2', 'h3');
+  await mv('d8', 'h4');                       // …and complete a REVISED one
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForSelector('#archiveBootNote[hidden]', { state: 'attached', timeout: 5000 });
+  check(await page.locator('#archiveBootNote').isHidden(),
+    "a successful replacement archive clears the same game's page failure note");
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+  await page.click('#gameOverClose');
+
+  // One failed queue entry must not cost ANOTHER game its reconcile: a
+  // poisoned entry stays parked and is surfaced, while the restored
+  // finished game — wiped from the store, no queue entry of its own — is
+  // still archived by the same boot chain.
+  const restoredId = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
+  });
+  await page.evaluate(function () {
+    return new Promise(function (resolve) {
+      const req = indexedDB.deleteDatabase('chessy-coach');
+      req.onsuccess = req.onerror = req.onblocked = function () { resolve(); };
+    });
+  });
+  await page.addInitScript(function () {
+    // Wrap CoachStore.archiveGame the moment store.js assigns it: the
+    // poisoned entry must already be failing during BOOT (a post-load
+    // patch would miss the drain).
+    let store;
+    Object.defineProperty(window, 'CoachStore', {
+      configurable: true,
+      get: function () { return store; },
+      set: function (v) {
+        const real = v.archiveGame;
+        v.archiveGame = function (rec) {
+          if (rec.id === 'poison-entry') return Promise.reject(new Error('quota'));
+          return real.apply(this, arguments);
+        };
+        store = v;
+      }
+    });
+  });
+  await page.evaluate(function () {
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || '{}');
+    map['poison-entry'] = {
+      w: 'w-dead-2',
+      rec: { id: 'poison-entry', source: 'play', tags: {}, sans: ['d4'],
+             playerColor: 'both', clocks: [null], result: '1-0',
+             reason: 'resignation', mode: 'pvp', difficulty: '2',
+             timeControl: 'none', plies: 1, createdAt: 8888 }
+    };
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify(map));
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForSelector('#archiveBootNote:not([hidden])', { timeout: 5000 });
+  let restoredRec = null;
+  for (let i = 0; i < 50 && !restoredRec; i++) {
+    restoredRec = await page.evaluate(function (id) {
+      return CoachStore.getGame(id);
+    }, restoredId);
+    if (!restoredRec) await page.waitForTimeout(100);
+  }
+  check(!!restoredRec && restoredRec.sans.length === 6,
+    'a failed queue entry does not block the restored game\'s boot reconcile');
+  check(await page.evaluate(function () {
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+    return !!(map && map['poison-entry']);
+  }), 'the poisoned entry stays parked for the next boot, and its failure is surfaced');
+
+  // While a SLOW drain holds the boot chain, the user can undo the
+  // restored finish and complete a REVISED ending. The live attempt owns
+  // the record: the stale boot snapshot must not overwrite the newer
+  // result when the drain finally settles.
+  await page.addInitScript(function () {
+    // Gate reconcilePending (only while the marker is set) the moment
+    // archive.js assigns the module, exposing the release to the test.
+    let mod;
+    Object.defineProperty(window, 'ChessyArchive', {
+      configurable: true,
+      get: function () { return mod; },
+      set: function (v) {
+        const real = v.reconcilePending;
+        v.reconcilePending = function () {
+          if (localStorage.getItem('test-hold-drain') === null) {
+            return real.apply(v, arguments);
+          }
+          return new Promise(function (resolve, reject) {
+            window.__releaseDrain = function () {
+              real.call(v).then(resolve, reject);
+            };
+          });
+        };
+        mod = v;
+      }
+    });
+  });
+  await page.evaluate(function () { localStorage.setItem('test-hold-drain', '1'); });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.click('#undo');                  // boot chain is still gated…
+  await mv('h7', 'h5'); await mv('g4', 'h5');
+  await mv('d8', 'h4');                       // …revised ending completes live
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.evaluate(function () { window.__releaseDrain(); });
+  await page.waitForTimeout(500);             // drain settles; snapshot window passes
+  const afterDrain = await page.evaluate(function (id) {
+    return CoachStore.getGame(id);
+  }, restoredId);
+  check(!!afterDrain && afterDrain.sans.join(' ') === 'f3 e5 g4 d6 h3 h5 gxh5 Qh4#',
+    'a stale boot snapshot does not overwrite a newer revised ending');
+  await page.evaluate(function () { localStorage.removeItem('test-hold-drain'); });
+
   // A MISSING archive module (partial cache eviction) is a failure to
   // surface, not silence — and it must show in the OPEN dialog (the
   // failure is synchronous, so the dialog opens first). Reset the note
@@ -342,10 +494,11 @@ require('./helper').run('archive', async function (t) {
   await page.waitForSelector('#archiveBootNote:not([hidden])', { timeout: 5000 });
   check((await page.textContent('#archiveBootNote')).includes('could not be archived'),
     'a boot-time reconcile failure is reported outside the closed dialog');
-  // A failed drain STOPS the boot chain: the state reconcile must not
-  // park over the slot and destroy the earlier game's only recoverable
-  // copy (the earlier failed-write section parked one).
+  // Failed work stays PARKED: the failed drain's entries keep their queue
+  // slots and the failed boot re-offer parks its own — every recoverable
+  // copy survives for the next boot. (The chain itself continues past the
+  // drain failure — the poisoned-entry section above covers that.)
   check(await page.evaluate(function () {
     return localStorage.getItem('chessy-pending-archive-v1') !== null;
-  }), 'a failed drain preserves the parked slot for the next boot');
+  }), 'a failed boot chain leaves the durability queue parked for the next boot');
 });
