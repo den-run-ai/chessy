@@ -229,4 +229,36 @@ require('./helper').run('reflection', async function (t) {
   });
   check(history.kept === 1 && history.afterChange === 0,
     'changing the canonical move resets attempt history; keeping it preserves it');
+
+  // Revising an archived ending IN PLACE (same-tab replay edit) removes
+  // the lesson cards flagged on the abandoned continuation — they refer
+  // to positions the game no longer contains — while cards on the shared
+  // move prefix survive.
+  const pruned = await page.evaluate(function () {
+    const mk = function (sans) {
+      return { id: 'prune-game', source: 'play', tags: {}, sans: sans,
+        playerColor: 'both', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'checkmate', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: 1, tab: 'T-PRUNE' };
+    };
+    return CoachStore.archiveGame(mk(['e4', 'e5', 'Nf3', 'Nc6']))
+      .then(function () {
+        return CoachStore.upsertCardByMoment(
+          { gameId: 'prune-game', ply: 1, lesson: 'keep' }, { createdAt: 1, attempts: [] });
+      })
+      .then(function () {
+        return CoachStore.upsertCardByMoment(
+          { gameId: 'prune-game', ply: 3, lesson: 'drop' }, { createdAt: 1, attempts: [] });
+      })
+      .then(function () { // revised ending diverging at ply 2, same tab
+        return CoachStore.archiveGame(mk(['e4', 'e5', 'Bc4', 'Bc5']));
+      })
+      .then(function () { return CoachStore.listCards(); })
+      .then(function (all) {
+        const mine = all.filter(function (c) { return c.gameId === 'prune-game'; });
+        return { count: mine.length, ply: mine.length === 1 ? mine[0].ply : -1 };
+      });
+  });
+  check(pruned.count === 1 && pruned.ply === 1,
+    'revising an ending prunes cards beyond the shared prefix (shared-prefix card survives)');
 });

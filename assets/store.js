@@ -135,11 +135,28 @@
   function archiveGame(game) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        const t = db.transaction('games', 'readwrite');
+        // Includes 'cards': revising an ending in place must ATOMICALLY
+        // remove the lesson cards flagged on the abandoned continuation.
+        const t = db.transaction(['games', 'cards'], 'readwrite');
         const s = t.objectStore('games');
         const getReq = s.get(game.id);
         let putReq = null;
         let storedId = game.id;
+        // A revised ending replaces the old one under the same id: cards
+        // flagged on plies BEYOND the moves the two endings share now
+        // reference positions this game no longer contains — remove them.
+        // Cards on the shared prefix stay valid.
+        function pruneCards(id, oldSans, newSans) {
+          let p = 0;
+          while (p < oldSans.length && p < newSans.length && oldSans[p] === newSans[p]) p++;
+          const cur = t.objectStore('cards').index('gameId').openCursor(IDBKeyRange.only(id));
+          cur.onsuccess = function () {
+            const c = cur.result;
+            if (!c) return;
+            if (c.value.ply >= p) c.delete();
+            c.continue();
+          };
+        }
         getReq.onsuccess = function () {
           const existing = getReq.result;
           const record = Object.assign({}, game);
@@ -166,10 +183,14 @@
                 if (fork && sameEnding(fork, record)) {
                   record.createdAt = fork.createdAt;
                   record.tab = fork.tab;
+                } else if (fork) {
+                  pruneCards(record.id, fork.sans, record.sans); // fork revised in place
                 }
                 putReq = s.put(record);
               };
               return;
+            } else {
+              pruneCards(game.id, existing.sans, record.sans); // same-tab replay edit
             }
           }
           putReq = s.put(record);
