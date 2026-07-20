@@ -100,4 +100,51 @@ require('./helper').run('a11y', async function (t) {
   await page.click('#promotionChoices [aria-label="Promote to knight"]');
   check((await page.locator(sq('b8')).getAttribute('aria-label')).includes('white knight'),
     'named promotion button promotes to the chosen piece');
+
+  // ---- The Review board shares the Play board's grid semantics ----
+  check(await page.getAttribute('#reviewBoard', 'role') === 'grid', 'reviewBoard is an ARIA grid');
+  check(await page.locator('#reviewBoard [role="row"]').count() === 8, 'reviewBoard has 8 ARIA rows');
+  check(await page.locator('#reviewBoard [role="gridcell"]').count() === 64, 'reviewBoard has 64 gridcells');
+  check(await page.locator('#reviewBoard .square[tabindex="0"]').count() === 1,
+    'reviewBoard has a single roving tab stop');
+  check(await page.locator('#reviewBoard button.square').count() === 64,
+    'review board squares are focusable buttons (keyboard-inspectable)');
+
+  // ONE persistent main landmark wraps the switchable views: activating
+  // Review (which hides #viewPlay) must not leave the page without a
+  // main landmark containing the active content.
+  check(await page.evaluate(function () {
+    const mains = document.querySelectorAll('main');
+    return mains.length === 1 &&
+           mains[0].contains(document.getElementById('viewPlay')) &&
+           mains[0].contains(document.getElementById('viewReview'));
+  }), 'one persistent main landmark wraps both views');
+  await page.click('#tabReview');
+  check(await page.evaluate(function () {
+    const m = document.querySelector('main');
+    const review = document.getElementById('viewReview');
+    return !m.hidden && !review.hidden && m.contains(review);
+  }), 'the active Review content stays inside the main landmark');
+  await page.click('#tabPlay');
+
+  // Active tab text contrast (white on --accent-dark must stay ≥ 4.5:1;
+  // the app-wide contrast pass is #35's own PR).
+  const tabRatio = await page.evaluate(function () {
+    function lum(css) {
+      const d = document.createElement('div');
+      d.style.color = css;
+      document.body.appendChild(d);
+      const m = getComputedStyle(d).color.match(/\d+(\.\d+)?/g).map(Number);
+      d.remove();
+      function f(v) {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      }
+      return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]);
+    }
+    const s = getComputedStyle(document.getElementById('tabPlay')); // aria-current at boot
+    const a = lum(s.color), b = lum(s.backgroundColor);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+  check(tabRatio >= 4.5, 'active tab text contrast ≥ 4.5:1 (' + tabRatio.toFixed(2) + ')');
 });

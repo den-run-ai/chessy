@@ -20,6 +20,23 @@ require('./helper').run('clocks', async function (t) {
   check(wAfter > 300 && wAfter <= 303, 'increment applied after the move (' + wAfter + 's)');
   check((await page.getAttribute('#clockBlack', 'class')).includes('active'), 'clock passes to black');
 
+  // Leaving Play while the clocks run surfaces the live-game banner in the
+  // coach views (the clock keeps ticking there and can flag); clicking it
+  // returns to Play, where the banner never shows.
+  check(await page.locator('#liveGameNote').isHidden(), 'no live-game banner while in Play');
+  await page.click('#tabReview');
+  await page.waitForSelector('#liveGameNote:not([hidden])');
+  const note = await page.textContent('#liveGameNote');
+  check(note.includes('Timed game running') && note.includes('White'),
+    'coach views show the running-clocks banner');
+  await page.click('#liveGameNote');
+  check(await page.locator('#viewPlay').isVisible(), 'the banner returns to Play');
+  check(await page.locator('#liveGameNote').isHidden(), 'banner hides back in Play');
+  check(await page.evaluate(function () {
+    return document.activeElement.classList.contains('square') &&
+           !!document.activeElement.closest('#board');
+  }), 'the banner hands focus to the Play board, not a now-hidden element');
+
   // Think time + remaining clocks recorded on the move.
   const rec = await page.evaluate(function () {
     return JSON.parse(localStorage.getItem('chessy-game-v1')).history[0].clock;

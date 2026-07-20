@@ -360,9 +360,42 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
+  // While the user is in a coach view (Review), a running timed game's
+  // clocks keep ticking invisibly and can flag — surface them as a
+  // persistent banner that returns to Play (#34). Untimed games need no
+  // banner: nothing in Play can end without the player acting there.
+  const liveNoteEl = document.getElementById('liveGameNote');
+
+  function updateLiveNote() {
+    const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
+    const running = clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over;
+    if (inPlay || !running) { liveNoteEl.hidden = true; return; }
+    liveNoteEl.hidden = false;
+    liveNoteEl.textContent = '⏱ Timed game running — White ' + fmtClock(liveRemaining('w')) +
+      ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
+  }
+
+  // Moved-on generation: bumped on every view change AND on Undo (a
+  // same-game mutation — it voids the very ending a queued handoff would
+  // open), so work parked behind a slow asynchronous settle (the
+  // game-over Review handoff) can tell whether the user moved on in the
+  // meantime. New game/Rematch are covered by the game id changing.
+  let movedOnSeq = 0;
+  document.addEventListener('chessy:viewchange', function () { movedOnSeq++; });
+
+  liveNoteEl.addEventListener('click', function () {
+    if (window.CoachReview) CoachReview.showView('play');
+    // Returning to Play hides this (focused) banner via updateLiveNote:
+    // hand focus to the board's roving tab stop instead of leaving it on
+    // a hidden element (keyboard users would drop to the document body).
+    setFocusSquare(focusSquare, true);
+  });
+  document.addEventListener('chessy:viewchange', updateLiveNote);
+
   // The ticker calls this alone (not render()) so the 5 Hz tick never
   // rebuilds the move list or rewrites localStorage.
   function renderClocks() {
+    updateLiveNote();
     const timed = clocks.wMs !== null;
     clocksEl.hidden = !timed;
     if (!timed) return;
@@ -672,23 +705,35 @@
     archiveBootNoteEl.hidden = true;
   }
 
+  // The CURRENT archive attempt: the game-over "Review game" handoff
+  // awaits it, so clicking the button while the write is still in flight
+  // opens the record that just landed — or the game list if it failed
+  // (it resolves null then).
+  let archiveAttempt = Promise.resolve(null);
+
   function archiveCurrentGame(status) {
     // A missing archive module (e.g. partial cache eviction took store.js
     // or archive.js) is a FAILURE, not silence — the game will not be
     // recorded. (Synchronous, so showGameOver opens the dialog FIRST.)
-    if (!window.ChessyArchive) { showArchiveFailure(archiveNoteEl, gameId); return; }
+    if (!window.ChessyArchive) {
+      showArchiveFailure(archiveNoteEl, gameId);
+      archiveAttempt = Promise.resolve(null);
+      return;
+    }
     // The dialog's note resets per presentation; the page note clears
     // only through ownership (see clearArchiveFailure).
     archiveNoteEl.hidden = true;
     const idAtCall = gameId;
     const seqAtCall = ++archiveSeq;
     archiveAttempts.set(idAtCall, seqAtCall);
-    ChessyArchive.record(state, settings, status, idAtCall, { endedAt: gameEndedAt })
-      .then(function () {
+    archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall,
+      { endedAt: gameEndedAt })
+      .then(function (storedId) {
         // The game's record exists now — withdraw any page-note blame for
         // it. Only as the game's LATEST attempt: a superseded attempt's
         // success says nothing about the revision that replaced it.
         if (archiveAttempts.get(idAtCall) === seqAtCall) clearArchiveFailure(idAtCall);
+        return storedId;
       }, function () {
         if (archiveAttempts.get(idAtCall) !== seqAtCall) {
           // A NEWER attempt superseded this one (undo → revised finish
@@ -706,6 +751,7 @@
         } else {
           showArchiveFailure(archiveNoteEl, idAtCall);
         }
+        return null;
       });
   }
 
@@ -770,6 +816,9 @@
   });
 
   document.getElementById('undo').addEventListener('click', function () {
+    // Editing the game voids any queued Review-game handoff: the ending
+    // it would open is being taken back (see movedOnSeq).
+    movedOnSeq++;
     // Undo while the AI is thinking cancels the search and takes back the
     // human move that triggered it (it used to silently do nothing).
     if (aiThinking) cancelAi();
@@ -811,6 +860,30 @@
 
   document.getElementById('gameOverReview').addEventListener('click', function () {
     gameOverDialog.close();
+    // Hand off to the coaching Review of this game's archived record —
+    // AFTER the archive attempt settles, so the record is there to open.
+    // Fall back to the on-board replay if Review is unavailable.
+    if (window.CoachReview) {
+      // The attempt resolves with the id ACTUALLY stored; a FAILED write
+      // resolves null and must land on the game list — falling back to
+      // gameId could open a PREVIOUS archived ending of this instance
+      // (undo → different finish whose replacement write failed), a
+      // wrong game.
+      const idAtClick = gameId;
+      const seqAtClick = movedOnSeq;
+      archiveAttempt.then(function (storedId) {
+        // The user may have MOVED ON while a slow write settled — started
+        // a new game, navigated between views, or undone the ending. ANY
+        // of these invalidates the handoff (checking the final view
+        // instead would both eat the handoff when the dialog opened
+        // outside Play — a timed game flagging in Review — and fire it
+        // despite a Review → Play round trip). The game stays one click
+        // away in the Review list.
+        if (gameId !== idAtClick || movedOnSeq !== seqAtClick) return;
+        CoachReview.openArchivedGame(storedId);
+      });
+      return;
+    }
     setViewPly(0); // start reviewing from the first position
     // Move focus to the forward control so arrow keys drive the replay
     // (the dialog would otherwise hand focus back to the last board square).
@@ -836,6 +909,8 @@
 
   document.addEventListener('keydown', function (e) {
     if (promotionDialog.open || gameOverDialog.open || newGameDialog.open) return;
+    // Replay keys drive the LIVE game board — not the coach views.
+    if (document.body.dataset.view && document.body.dataset.view !== 'play') return;
     const t = e.target;
     if (t && (t.tagName === 'SELECT' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (!state.history.length) return;

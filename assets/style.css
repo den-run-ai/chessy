@@ -31,6 +31,14 @@ body {
   flex-direction: column;
 }
 
+/* The persistent main landmark wrapping the switchable views —
+   layout-neutral: it stretches within .app exactly as the views did. */
+.app > main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 .topbar {
   display: flex;
   align-items: baseline;
@@ -393,3 +401,125 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   color: var(--muted);
   text-align: center;
 }
+
+/* The hidden attribute must always win — author display rules (flex/grid
+   panels) otherwise override the UA's [hidden] { display: none }. */
+[hidden] { display: none !important; }
+
+/* ---- App section tabs (Play / Review) ---- */
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  padding-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab:hover { color: var(--text); border-color: #6a655f; }
+/* White text sits on --accent-dark (4.8:1, WCAG 1.4.3) — never on
+   --accent itself (2.8:1); see #35 for the app-wide contrast pass. */
+.tab[aria-current="page"] {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+
+/* Live timed-game banner: visible in coach views while Play's clocks run. */
+.live-note {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 0.75rem;
+  background: var(--accent-dark);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* ---- Coach views ---- */
+.coach {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.view-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.coach-note { font-size: 0.85rem; color: var(--muted); }
+
+.game-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.game-item {
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.game-item:hover { border-color: var(--accent); }
+
+.coach-board-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(240px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .coach-board-row { grid-template-columns: 1fr; }
+}
+
+.coach-board-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.board.small {
+  width: min(88vw, 380px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+/* Inspection-only boards (Review): squares are focusable for keyboard/AT
+   users but activating them does nothing — don't advertise a click. */
+.board.inspect .square { cursor: default; }
+
+.review-nav .btn { flex: 1; min-height: 44px; }
+.review-nav .btn:disabled { opacity: 0.35; cursor: default; }

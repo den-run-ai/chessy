@@ -451,6 +451,22 @@
     return head + '\n' + text + line + '\n';
   }
 
+  // Replay SAN moves from the standard start position into a full game
+  // state (history + repetition table). Throws on the first move that is
+  // illegal or does not match any legal move. The SANs are expected in
+  // this engine's own notation (toSan output) — the coaching archive
+  // stores exactly that.
+  function replaySans(sans) {
+    let s = newGameState();
+    for (let i = 0; i < sans.length; i++) {
+      const legal = legalMoves(s);
+      const m = legal.find(function (mv) { return toSan(s, mv, legal) === sans[i]; });
+      if (!m) throw new Error('illegal or unknown SAN "' + sans[i] + '" at ply ' + (i + 1));
+      s = playMove(s, m);
+    }
+    return s;
+  }
+
   function undoMove(state) {
     if (!state.history.length) return state;
     const prevEntry = state.history[state.history.length - 1];
@@ -479,6 +495,7 @@
     undoMove: undoMove,
     toSan: toSan,
     toPgn: toPgn,
+    replaySans: replaySans,
     inCheck: inCheck,
     insufficientMaterial: insufficientMaterial,
     canMate: canMate,

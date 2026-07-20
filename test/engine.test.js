@@ -496,6 +496,20 @@ assertEqual(pgnLog.includes('before: ' + Chess.START_FEN), true, 'debug PGN logs
 const pgnOngoing = Chess.toPgn(playSans(['e4']), {});
 assertEqual(pgnOngoing.includes('[Result "*"]'), true, 'ongoing game marked *');
 
+// --- replaySans (the coaching archive replays stored SANs) ---
+console.log('replaySans');
+const replayed = Chess.replaySans(['f3', 'e5', 'g4', 'Qh4#']);
+assertEqual(Chess.gameStatus(replayed).reason, 'checkmate', 'replayed game reaches checkmate');
+assertEqual(replayed.history.length, 4, 'replayed history length');
+assertEqual(replayed.history[3].san, 'Qh4#', 'replayed SANs are canonical');
+// The repetition table is rebuilt too — a threefold sequence reads as one.
+const replayedRep = Chess.replaySans(['Nf3', 'Nf6', 'Ng1', 'Ng8', 'Nf3', 'Nf6', 'Ng1', 'Ng8']);
+assertEqual(Chess.gameStatus(replayedRep).reason, 'threefold repetition',
+  'replaySans rebuilds the repetition table');
+let sanErr = null;
+try { Chess.replaySans(['e4', 'e4']); } catch (e) { sanErr = String(e); }
+assertEqual(sanErr !== null && sanErr.includes('ply 2'), true, 'illegal SAN reports its ply');
+
 // Clock metadata: the debug PGN embeds the mover's remaining time as a
 // standard %clk command (history[3] is Black's move, so bMs is shown).
 pgnGame.history[3].clock = { thinkMs: 2000, wMs: 305000, bMs: 298000 };
