@@ -42,6 +42,11 @@
   function renderGameList() {
     $('reviewFlow').hidden = true;
     $('gameListWrap').hidden = false;
+    // Clear SYNCHRONOUSLY before the read: a revised game's old button
+    // captured the obsolete record at the previous render, and must not
+    // stay clickable while a slow listGames() is in flight.
+    $('gameList').innerHTML = '';
+    $('reviewEmpty').hidden = true;
     return CoachStore.listGames().then(function (games) {
       const list = $('gameList');
       list.innerHTML = '';

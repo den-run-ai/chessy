@@ -375,6 +375,12 @@
       ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
   }
 
+  // Navigation generation: every view change bumps it, so work queued
+  // behind a slow asynchronous settle (the game-over Review handoff) can
+  // tell whether the user navigated in the meantime.
+  let navSeq = 0;
+  document.addEventListener('chessy:viewchange', function () { navSeq++; });
+
   liveNoteEl.addEventListener('click', function () {
     if (window.CoachReview) CoachReview.showView('play');
     // Returning to Play hides this (focused) banner via updateLiveNote:
@@ -859,13 +865,16 @@
       // (undo → different finish whose replacement write failed), a
       // wrong game.
       const idAtClick = gameId;
+      const navAtClick = navSeq;
       archiveAttempt.then(function (storedId) {
         // The user may have MOVED ON while a slow write settled — started
-        // a new game, or navigated to another view themselves. A stale
-        // handoff must not yank them away; the game stays one click away
-        // in the Review list.
-        const view = document.body.dataset.view || 'play';
-        if (gameId !== idAtClick || view !== 'play') return;
+        // a new game, or navigated between views themselves. ANY
+        // intervening navigation invalidates the handoff (checking the
+        // final view instead would both eat the handoff when the dialog
+        // opened outside Play — a timed game flagging in Review — and
+        // fire it despite a Review → Play round trip). The game stays
+        // one click away in the Review list.
+        if (gameId !== idAtClick || navSeq !== navAtClick) return;
         CoachReview.openArchivedGame(storedId);
       });
       return;

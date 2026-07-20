@@ -33,7 +33,11 @@
          that a game was not stored. -->
     <div class="offline-note" id="archiveBootNote" role="status" hidden></div>
 
-    <main class="layout view" id="viewPlay">
+    <!-- ONE persistent main landmark wraps every switchable view: hiding
+         Play while a coach view is active must not leave the page without
+         a main landmark for screen-reader landmark navigation. -->
+    <main>
+    <div class="layout view" id="viewPlay">
       <section class="board-wrap">
         <div class="board" id="board" role="grid" aria-label="Chess board"></div>
       </section>
@@ -68,7 +72,7 @@
 
         <div class="offline-note" id="installNote" role="status">Preparing offline mode…</div>
       </aside>
-    </main>
+    </div>
 
     <!-- Review: READ-ONLY browsing of archived games. Reflection and
          lesson cards build on this in the next slice. -->
@@ -97,6 +101,7 @@
         </div>
       </div>
     </section>
+    </main>
   </div>
 
   <!-- Setup uses styled radio groups, NOT native selects: mobile browsers
