@@ -8,14 +8,12 @@
  *            timeControl, plies, createdAt }
  *   cards: { id (auto), gameId, ply, ... } — lesson cards (a later slice)
  *
- * The games keyPath is the app's own per-game UUID: a re-shown ending of
- * the same game instance (reload, undo → replay, reopened game-over
- * dialog) overwrites its single record via archiveGame(), while New
- * game/Rematch mint a new UUID and therefore a new record. archiveGame
- * additionally keeps the original createdAt on overwrite and forks a
- * fresh id when the existing record is a DIFFERENT completion of the same
- * instance (cloned tabs that diverged) — atomically, so it stays correct
- * in ANY number of tabs.
+ * The games keyPath is the app's own per-game UUID: a re-shown or revised
+ * ending of the same game instance (reload, undo → replay, reopened
+ * game-over dialog) overwrites its single record via archiveGame(), while
+ * New game/Rematch mint a new UUID and therefore a new record. The store
+ * assumes ONE ACTIVE TAB, like the rest of the app (the localStorage save
+ * is last-writer-wins); cross-tab semantics are deferred to #44.
  *
  * Everything is promise-based; the DB opens lazily on first use so
  * browsers without IndexedDB (or private modes that block it) fail
@@ -102,36 +100,27 @@
     return tx('games', 'readwrite', function (s) { return s.put(game); });
   }
 
-  function newId() {
-    return (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
-  }
-
   // The same ENDING re-offered (reopened dialog, reload → replayed finish,
-  // boot reconcile) — as opposed to a different completion that happens to
-  // carry the same instance key (a cloned tab that played on divergently).
+  // boot reconcile) — as opposed to a REVISED completion of the instance
+  // (close dialog → undo → different finish).
   function sameEnding(a, b) {
     return a.sans.length === b.sans.length &&
       a.sans.every(function (san, i) { return san === b.sans[i]; }) &&
       a.result === b.result && a.reason === b.reason;
   }
 
-  // Archive a finished game; resolves with the id actually stored.
-  // Idempotent per game instance AND lossless across cloned tabs: the get
-  // and put run in ONE readwrite transaction (IndexedDB serializes those
-  // per store), so concurrent writers cannot interleave between the read
-  // and the write.
-  //   - no existing record         → stored as-is
-  //   - same ending re-offered     → overwritten, original createdAt kept
-  //     (listGames sorts by createdAt — a re-shown old game must not jump
-  //     to the top of the chronology)
-  //   - different ending, SAME tab → overwritten: an ordinary replay edit
-  //     (close dialog → undo → different finish) revises this instance's
-  //     one record, it does not add a second game
-  //   - different ending from ANOTHER (or unknown) tab → stored under a
-  //     fresh id so neither tab's finished game is lost; the caller
-  //     adopts the returned id for its own re-shows.
+  // Archive a finished game; resolves with the stored id. The get and put
+  // run in ONE readwrite transaction, so a re-offer racing a write cannot
+  // interleave.
+  //   - no existing record     → stored as-is
+  //   - same ending re-offered → overwritten, keeping the EARLIEST known
+  //     completion time (listGames sorts by createdAt — a re-shown or
+  //     late-reconciled game must not jump the chronology)
+  //   - different ending       → overwritten: the instance was revised
+  //     (undo → different finish); one instance, one record.
+  // SINGLE-TAB model by design: the archive assumes one active tab, like
+  // the rest of the app (last-writer-wins localStorage save). Divergent
+  // cloned-tab completions are out of scope — tracked in #44.
   function archiveGame(game) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
@@ -139,42 +128,15 @@
         const s = t.objectStore('games');
         const getReq = s.get(game.id);
         let putReq = null;
-        let storedId = game.id;
         getReq.onsuccess = function () {
           const existing = getReq.result;
           const record = Object.assign({}, game);
-          if (existing) {
-            const sameTab = !!existing.tab && !!record.tab && existing.tab === record.tab;
-            if (sameEnding(existing, record)) {
-              // Re-offering an ending is not authorship: keep the original
-              // createdAt AND the original writer's tab, so a cloned tab's
-              // boot reconcile cannot take ownership and later overwrite
-              // the owner's game with its own divergent ending.
-              record.createdAt = existing.createdAt;
-              record.tab = existing.tab;
-            } else if (!sameTab) {
-              // Fork DETERMINISTICALLY per writer (original id + tab): the
-              // same divergent completion can be re-offered more than once
-              // (a boot's slot drain and its state reconcile both submit
-              // it), and every attempt must land on the SAME fork — a
-              // random UUID per attempt would duplicate the game. The fork
-              // gets the same-ending treatment as any record.
-              record.id = storedId = record.tab ? game.id + ':' + record.tab : newId();
-              const forkReq = s.get(record.id);
-              forkReq.onsuccess = function () {
-                const fork = forkReq.result;
-                if (fork && sameEnding(fork, record)) {
-                  record.createdAt = fork.createdAt;
-                  record.tab = fork.tab;
-                }
-                putReq = s.put(record);
-              };
-              return;
-            }
+          if (existing && sameEnding(existing, record)) {
+            record.createdAt = Math.min(existing.createdAt, record.createdAt);
           }
           putReq = s.put(record);
         };
-        t.oncomplete = function () { resolve(storedId); };
+        t.oncomplete = function () { resolve(game.id); };
         t.onerror = function () { reject((putReq && putReq.error) || getReq.error || t.error); };
         t.onabort = function () {
           reject((putReq && putReq.error) || getReq.error || t.error ||

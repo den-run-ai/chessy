@@ -8,49 +8,55 @@
  * game's UUID (minted at New game/Rematch in app.js and persisted with
  * the saved game), so re-offering the same ending — reopened game-over
  * dialog, reload → undo → replayed finish, the boot reconcile in app.js —
- * simply overwrites the one record (keeping its original createdAt). A
- * DIFFERENT completion under the same key (cloned tabs that diverged) is
- * stored under a fresh id instead, so no finished game is ever lost.
+ * overwrites the one record (keeping its earliest completion time), and a
+ * REVISED ending (undo → different finish) replaces it. SINGLE-TAB model
+ * by design, like the rest of the app; cross-tab semantics live in #44.
  */
 (function () {
   'use strict';
   if (typeof CoachStore === 'undefined' || typeof Chess === 'undefined') return;
 
-  // Resolves with the stored game id (which may differ from gameId when a
-  // cloned tab already archived a divergent completion — see
-  // CoachStore.archiveGame), or rejects when the write failed — the caller
-  // surfaces that (a training archive that silently drops games would
-  // corrupt every later statistic). A zero-ply game is still archived:
-  // a timed game can be forfeit on time before the first move.
-  // opts: { endedAt, tab } — endedAt is the persisted completion time (so
-  // a boot-time reconcile keeps the chronology instead of stamping the
-  // restart); tab is the writing tab's identity (same-tab replay edits
-  // overwrite, cloned-tab divergence forks).
-  // Durability slots: each record is parked in localStorage until its
+  // Durability slot: the record is parked in localStorage until its
   // IndexedDB commit settles. A Rematch can replace the MAIN save while
   // the write is still in flight, and a tab dying before the commit would
   // otherwise lose that finished game with nothing left to reconcile
-  // from. ONE SLOT PER WRITE — the key is tab nonce + write sequence, so
-  // no write ever shares a key with another: concurrent tabs cannot
-  // overwrite each other's parked records, and overlapping writes in ONE
-  // tab (undo → revised ending while the first write is in flight, which
-  // even share a gameId) each keep their own recoverable copy; a commit
-  // settling removes exactly its own slot. reconcilePending() sweeps
-  // every slot on the next boot.
-  const PENDING_PREFIX = 'chessy-pending-archive-v1:';
+  // from. ONE slot, holding the LATEST unarchived ending; each park gets
+  // its own token and only the commit holding the CURRENT token may clear
+  // the slot — an earlier write settling after a revision was parked
+  // (undo → different finish while the first write was in flight) must
+  // not discard the revision's recoverable copy. reconcilePending()
+  // drains the slot on the next boot.
+  const PENDING_KEY = 'chessy-pending-archive-v1';
   let writeSeq = 0;
 
-  function clearPending(key) {
-    try { localStorage.removeItem(key); } catch (e) { /* gone */ }
+  function parkToken() {
+    // Unique across reloads too: a stale slot must never token-match a
+    // fresh run's write.
+    return 'w' + Date.now().toString(36) + '-' + (++writeSeq);
   }
 
-  function commit(rec, key) {
+  function clearPendingIf(token) {
+    try {
+      const cur = JSON.parse(localStorage.getItem(PENDING_KEY));
+      if (cur && cur.w === token) localStorage.removeItem(PENDING_KEY);
+    } catch (e) {
+      try { localStorage.removeItem(PENDING_KEY); } catch (e2) { /* gone */ }
+    }
+  }
+
+  function commit(rec, token) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
-      if (key) clearPending(key);
+      if (token) clearPendingIf(token);
       return storedId;
     });
   }
 
+  // Resolves with the stored game id, or rejects when the write failed —
+  // the caller surfaces that (a training archive that silently drops
+  // games would corrupt every later statistic). A zero-ply game is still
+  // archived: a timed game can be forfeit on time before the first move.
+  // opts: { endedAt } — the persisted completion time, so a boot-time
+  // reconcile keeps the chronology instead of stamping the restart.
   function record(state, settings, status, gameId, opts) {
     if (!gameId || !status.over) {
       return Promise.resolve(null);
@@ -71,48 +77,27 @@
       difficulty: settings.difficulty,
       timeControl: settings.timeControl,
       plies: state.history.length,
-      createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now(),
-      tab: (opts && opts.tab) || null
+      createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now()
     };
-    let key = PENDING_PREFIX + (rec.tab || 'unknown') + ':' + (++writeSeq);
-    try { localStorage.setItem(key, JSON.stringify(rec)); } catch (e) { key = null; }
-    return commit(rec, key);
+    let token = parkToken();
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ w: token, rec: rec }));
+    } catch (e) { token = null; /* best effort */ }
+    return commit(rec, token);
   }
 
-  // Boot recovery: sweep EVERY parked slot whose commit never settled —
-  // dead tabs leave theirs behind, and cloned tabs each leave their own.
-  // Sequential, and rejects when a retry fails (the caller surfaces it);
-  // slots not yet reached are retried on the next boot. Resolves null
-  // when nothing was pending. Draining a LIVE tab's in-flight slot is
-  // harmless: the double archive is idempotent per tab+ending.
+  // Boot recovery for a parked record whose commit never settled (rejects
+  // when the retry fails too, so the caller can surface it). Resolves null
+  // when nothing was pending.
   function reconcilePending() {
-    const keys = [];
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.indexOf(PENDING_PREFIX) === 0) keys.push(k);
-      }
-    } catch (e) { return Promise.resolve(null); }
-    // WRITE ORDER, not enumeration order (which is user-agent-defined):
-    // a tab that parked several revisions of one game needs the later
-    // write to land last, or a stale ending would overwrite the final one.
-    keys.sort(function (a, b) {
-      const pa = a.lastIndexOf(':'), pb = b.lastIndexOf(':');
-      const ta = a.slice(0, pa), tb = b.slice(0, pb);
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      return Number(a.slice(pa + 1)) - Number(b.slice(pb + 1));
-    });
-    return keys.reduce(function (chain, key) {
-      return chain.then(function () {
-        let rec = null;
-        try { rec = JSON.parse(localStorage.getItem(key)); } catch (e) { /* corrupt */ }
-        if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) {
-          clearPending(key);
-          return null;
-        }
-        return commit(rec, key);
-      });
-    }, Promise.resolve(null));
+    let slot = null;
+    try { slot = JSON.parse(localStorage.getItem(PENDING_KEY)); } catch (e) { /* corrupt */ }
+    const rec = slot && slot.rec;
+    if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) {
+      try { localStorage.removeItem(PENDING_KEY); } catch (e) { /* gone */ }
+      return Promise.resolve(null);
+    }
+    return commit(rec, slot.w);
   }
 
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending };

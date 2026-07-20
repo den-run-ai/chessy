@@ -13,9 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: No committed merge-conflict markers
+        # Exact marker syntax only — "<<<<<<< ref" / ">>>>>>> ref" and a
+        # bare 7-char "=======" line — so legitimate ==== underlines or
+        # longer separator lines never false-positive.
         # git grep exits 1 when nothing matches, which is the pass case.
         run: |
-          if git grep -nE '^(<{7}|={7}|>{7})'; then
+          if git grep -nE '^(<{7} |>{7} |={7}$)'; then
             echo '::error::Committed merge-conflict markers found'
             exit 1
           fi

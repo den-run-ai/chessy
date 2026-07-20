@@ -644,63 +644,45 @@
   const archiveNoteEl = document.getElementById('archiveNote');
   const archiveBootNoteEl = document.getElementById('archiveBootNote');
 
-  function archiveCurrentGame(status, noteEl, asTab) {
-    if (!window.ChessyArchive) return;
+  function showArchiveFailure(noteEl) {
+    // The dialog may have CLOSED while the write was in flight (Close/
+    // Rematch clicked, or a slow first open): report where the user can
+    // still see it.
+    const el = (noteEl === archiveNoteEl && !gameOverDialog.open)
+      ? archiveBootNoteEl : noteEl;
+    el.hidden = false;
+    el.textContent = 'This game could not be archived (storage unavailable).';
+  }
+
+  function archiveCurrentGame(status, noteEl) {
     noteEl = noteEl || archiveNoteEl;
-    noteEl.hidden = true;
-    const idAtCall = gameId;
-    // asTab: the boot reconcile submits a RESTORED ending under the tab
-    // identity persisted with the save — the writer that produced it. With
-    // this tab's fresh nonce instead, the deterministic fork of an already
-    // recovered ending would land on a second fork id (duplicate game).
-    ChessyArchive.record(state, settings, status, idAtCall,
-      { endedAt: gameEndedAt, tab: asTab || tabNonce }).then(function (storedId) {
-      // A cloned tab's divergent completion is archived under a fresh id
-      // (CoachStore.archiveGame keeps both games); adopt it so this tab's
-      // re-shows and boot reconcile overwrite OUR record, not the other
-      // tab's — unless a new game already replaced gameId meanwhile.
-      if (storedId && storedId !== idAtCall && gameId === idAtCall) {
-        gameId = storedId;
-        save();
-      }
-    }).catch(function () {
-      // The dialog may have CLOSED while the write was in flight (Close/
-      // Rematch clicked, or a slow first open): report where the user can
-      // still see it.
-      const el = (noteEl === archiveNoteEl && !gameOverDialog.open)
-        ? archiveBootNoteEl : noteEl;
-      el.hidden = false;
-      el.textContent =
-        'This game could not be archived (storage unavailable).';
-    });
+    // A missing archive module (e.g. partial cache eviction took store.js
+    // or archive.js) is a FAILURE, not silence — the game will not be
+    // recorded.
+    if (!window.ChessyArchive) { showArchiveFailure(noteEl); return; }
+    // The boot note is sticky for the session: a drain failure already
+    // shown there must survive later attempts. The dialog's note resets
+    // per presentation.
+    if (noteEl !== archiveBootNoteEl) noteEl.hidden = true;
+    ChessyArchive.record(state, settings, status, gameId, { endedAt: gameEndedAt })
+      .catch(function () { showArchiveFailure(noteEl); });
   }
 
   // ---- Controls ----
   // A fresh UUID on every New game/Rematch: it is the archive record's KEY,
   // so an identical game played twice is two records, while the same ending
   // re-displayed (or replayed after reload + undo) overwrites one record.
-  // Random UUIDs stay unique across tabs with no coordination.
   let gameId = null;
   // When the game FIRST ended, persisted with the save: the archive's
   // createdAt must be the completion time even when the write is only
   // reconciled on a much later boot (chronology, not restart time).
   let gameEndedAt = null;
-  // The tab identity persisted with the restored save — the writer that
-  // produced a restored ending. Only the boot reconcile submits under it.
-  let savedGameTab = null;
 
   function newGameId() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
       : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
-
-  // This tab's identity for the archive: lets the store tell a same-tab
-  // replay edit (undo → different finish — overwrite the record) from a
-  // CLONED tab's divergent completion (fork, keep both). In-memory on
-  // purpose: any reload gets a new identity, which errs toward keeping
-  // games rather than overwriting another writer's.
-  const tabNonce = newGameId();
 
   function startNewGame() {
     gameId = newGameId();
@@ -872,13 +854,10 @@
         flipped: flipped,
         // Persisted so the archive's idempotent overwrite survives
         // reloads: a reload → undo → replayed ending is the SAME game
-        // instance and must keep its record key — its original completion
-        // time (a boot-time reconcile's createdAt), and its WRITER (the
-        // reconcile re-submits the ending under the identity that
-        // produced it, so recovery and reconcile land on one record).
+        // instance and must keep its record key — and its original
+        // completion time, for a boot-time reconcile's createdAt.
         gameId: gameId,
-        endedAt: gameEndedAt,
-        tab: tabNonce
+        endedAt: gameEndedAt
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -942,7 +921,6 @@
       flipped = !!data.flipped;
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
       gameEndedAt = Number.isFinite(data.endedAt) ? data.endedAt : null;
-      savedGameTab = typeof data.tab === 'string' && data.tab ? data.tab : null;
       return true;
     } catch (e) {
       return false;
@@ -967,23 +945,32 @@
   // On window load, NOT a zero timeout: archive.js is a later script tag
   // and the parser may yield to timers while it is still being fetched.
   window.addEventListener('load', function () {
-    // Drain the durability slots FIRST (a Rematch may have replaced the
-    // main save while a write was in flight; archive.js parks each record
-    // until its commit settles), THEN re-offer the restored game: run
-    // concurrently, both could submit the same record and race their
-    // forks against another tab's divergent ending. Forks are also
-    // deterministic per writer as a second guard, but the boot stays
-    // sequential regardless.
-    const drained = window.ChessyArchive
-      ? ChessyArchive.reconcilePending().catch(function () {
-          archiveBootNoteEl.hidden = false;
-          archiveBootNoteEl.textContent =
-            'This game could not be archived (storage unavailable).';
-        })
-      : Promise.resolve(null);
-    drained.then(function () {
-      const status = fullStatus();
-      if (status.over) archiveCurrentGame(status, archiveBootNoteEl, savedGameTab);
-    });
+    // SNAPSHOT the restored game NOW: the slot drain below is
+    // asynchronous, and the user may replace or undo this game before it
+    // settles — the reconcile must archive what was RESTORED, not
+    // whatever the globals hold later.
+    const bootStatus = fullStatus();
+    const bootState = state;
+    const bootId = gameId;
+    const bootEndedAt = gameEndedAt;
+    if (!window.ChessyArchive) {
+      // Partial cache eviction can lose store.js/archive.js while the
+      // game itself still runs — that is a failure to surface, not
+      // silence (the finished game will never be recorded).
+      if (bootStatus.over) showArchiveFailure(archiveBootNoteEl);
+      return;
+    }
+    // Drain the durability slot FIRST (a Rematch may have replaced the
+    // main save while a write was in flight), THEN re-offer the restored
+    // game — sequentially, so the two writes never race. The boot note is
+    // sticky: a drain failure stays visible even if the reconcile
+    // succeeds (that parked game is still unarchived).
+    ChessyArchive.reconcilePending()
+      .catch(function () { showArchiveFailure(archiveBootNoteEl); })
+      .then(function () {
+        if (!bootStatus.over) return;
+        ChessyArchive.record(bootState, settings, bootStatus, bootId, { endedAt: bootEndedAt })
+          .catch(function () { showArchiveFailure(archiveBootNoteEl); });
+      });
   });
 })();
