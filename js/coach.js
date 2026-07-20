@@ -247,10 +247,23 @@
   // while the write is still in flight opens the game that just finished.
   let lastArchivePromise = null;
 
+  // Delete All records the then-live finished game's signature here: that
+  // game's record was explicitly deleted, but the game itself still sits
+  // in Play's localStorage, and without this ONE suppressed signature the
+  // boot reconcile (app.js) would deterministically resurrect the deleted
+  // record on the next reload. A NEW game gets a new instance id, so only
+  // the exact deleted ending stays suppressed.
+  const SUPPRESS_KEY = 'chessy-coach-suppress-sig-v1';
+
+  function suppressedSig() {
+    try { return localStorage.getItem(SUPPRESS_KEY); } catch (e) { return null; }
+  }
+
   function archiveGame(state, settings, status, gameSeq) {
     if (!state.history.length || !status.over) return Promise.resolve(null);
     const sans = state.history.map(function (h) { return h.san; });
     const sig = gameSig(sans, status.result, gameSeq);
+    if (sig === suppressedSig()) return Promise.resolve(null); // deleted via Delete All
     lastArchivePromise = CoachStore.addGame({
       source: 'play',
       tags: {},
@@ -765,7 +778,7 @@
   });
 
   $('importStart').addEventListener('click', function () {
-    if (importBusy) return;
+    if (importBusy || deleteBusy) return;
     importBusy = true;
     const session = importSession;
     $('importStart').disabled = true;
@@ -1140,10 +1153,11 @@
   let deleteBusy = false;
   $('deleteData').addEventListener('click', function () {
     // Belt to the disabled-button suspenders: never clear while a restore
-    // is still appending (its remaining writes would repopulate the
-    // stores after "deleted" was reported).
-    if (restoreBusy || deleteBusy) {
-      $('dataNote').textContent = 'A backup restore is still running — wait for it to finish first.';
+    // OR a PGN import batch is still appending — either one's remaining
+    // writes would repopulate the stores after "deleted" was reported.
+    if (restoreBusy || importBusy || deleteBusy) {
+      $('dataNote').textContent =
+        'A backup restore or PGN import is still running — wait for it to finish first.';
       return;
     }
     if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
@@ -1159,6 +1173,13 @@
     train = null;
     clearTimeout(trainTimer);
     CoachStore.deleteAll().then(function () {
+      // Only after a COMMITTED clear: a failed delete must not suppress a
+      // game whose record is still in the archive.
+      try {
+        const live = typeof window.chessyLiveGame === 'function' ? window.chessyLiveGame() : null;
+        if (live) localStorage.setItem(SUPPRESS_KEY, gameSig(live.sans, live.result, live.gameSeq));
+        else localStorage.removeItem(SUPPRESS_KEY);
+      } catch (e) { /* suppression is best-effort */ }
       $('dataNote').textContent = 'All training data deleted.';
       return renderProgress();
     }, function (e) {

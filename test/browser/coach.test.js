@@ -506,8 +506,8 @@ require('./helper').run('coach', async function (t) {
   await tsq('f7').click(); // the mating capture
   await page.waitForSelector('#trainReveal:not([hidden])');
   check((await page.textContent('#trainOutcome')).includes('✓'), 'correct answer recognized');
-  check((await page.textContent('#trainLesson')).includes('Look for forcing mates'),
-    'reveal repeats the saved lesson');
+  check((await page.textContent('#trainLesson')).includes('Revised: forcing mates first'),
+    'reveal repeats the saved lesson (the re-saved card, not a duplicate)');
   // Grade with a double-click: the answer is consumed before the async
   // write, so exactly one attempt is recorded and one rung climbed.
   await page.evaluate(function () {
@@ -653,6 +653,37 @@ require('./helper').run('coach', async function (t) {
         invalids.unchanged,
     'invalid backups are rejected with the archive unchanged (' + invalids.results.join(' | ') + ')');
 
+  // Delete All is locked out while a PGN import batch is appending — the
+  // batch's remaining writes would otherwise repopulate stores that were
+  // just reported as deleted. (Import writes through CoachStore.addGame.)
+  await page.evaluate(function () {
+    CoachStore.__slowAdd = CoachStore.addGame;
+    CoachStore.addGame = function (g) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { CoachStore.__slowAdd(g).then(resolve, reject); }, 900);
+      });
+    };
+  });
+  await page.click('#tabReview');
+  await page.click('#importPgnBtn');
+  await page.fill('#importText', '1. e4 e5 *');
+  await page.click('#importStart');
+  await page.click('#importCancel'); // batch keeps writing in the background
+  await page.click('#tabProgress');
+  await page.click('#deleteData'); // guard answers BEFORE any confirm dialog
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.indexOf('still running') !== -1;
+  });
+  check(true, 'Delete All refuses to run while an import batch is writing');
+  await page.waitForFunction(function () {
+    return !document.getElementById('importStart').disabled;
+  }, null, { timeout: 15000 });
+  const importSurvived = await page.evaluate(function () {
+    CoachStore.addGame = CoachStore.__slowAdd;
+    return CoachStore.listGames().then(function (games) { return games.length; });
+  });
+  check(importSurvived > 0, 'the import batch landed intact (nothing was cleared under it)');
+
   // Delete All is locked out while a backup restore is appending — the
   // restore's remaining writes would otherwise repopulate stores that were
   // just reported as deleted.
@@ -701,6 +732,27 @@ require('./helper').run('coach', async function (t) {
   await page.click('#tabTrain');
   await page.waitForSelector('#trainEmpty:not([hidden])');
   check(await page.locator('#trainCardBox').isHidden(), 'Train is empty after delete');
+
+  // The finished game still sitting in Play must NOT be resurrected by the
+  // boot reconcile on the next reload — Delete All suppressed its signature.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.click('#tabReview');
+  await page.waitForSelector('#reviewEmpty:not([hidden])');
+  check(await page.locator('.game-item').count() === 0,
+    'boot after Delete All does not re-archive the deleted finished game');
+
+  // ...but a NEW finished game archives normally again.
+  await page.click('#tabPlay');
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.click('#tabReview');
+  await page.waitForSelector('.game-item');
+  check(await page.locator('.game-item').count() === 1,
+    'new games archive normally after Delete All');
 
   // Play is undisturbed by the excursion.
   await page.click('#tabPlay');

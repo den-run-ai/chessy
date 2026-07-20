@@ -876,6 +876,19 @@
   // record). On window load, NOT a zero timeout: coach.js is a later
   // script tag and the parser may yield to timers while it is still being
   // fetched.
+  // The coach's Delete All records the CURRENT finished game's signature
+  // through this provider, so the boot reconcile above cannot resurrect a
+  // record the user just deleted. Values are read at call time.
+  window.chessyLiveGame = function () {
+    const st = fullStatus();
+    if (!st.over || !state.history.length) return null;
+    return {
+      sans: state.history.map(function (h) { return h.san; }),
+      result: st.result,
+      gameSeq: gameSeq
+    };
+  };
+
   window.addEventListener('load', function () {
     if (!window.Coach) return;
     const status = fullStatus();
