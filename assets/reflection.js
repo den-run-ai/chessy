@@ -141,6 +141,9 @@
     const entry = r.gs.history[ply];
     $('verifyBox').hidden = false;
     $('verifyResult').textContent = 'Analysing…';
+    // A stale "saved/Updated" notice must not outlive the verdict it
+    // reported: edited answers are NOT persisted until saved again.
+    $('cardSaved').hidden = true;
     $('saveCard').disabled = true;
     $('reflectVerify').disabled = true; // one probe at a time
 

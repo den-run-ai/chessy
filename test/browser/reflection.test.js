@@ -93,6 +93,37 @@ require('./helper').run('reflection', async function (t) {
         resaved[0].reflection.threat === 'mate on h4, second look',
     're-saving the same moment updates its one card');
 
+  // A NEW probe hides the stale save notice: "Updated…" must not imply
+  // freshly edited answers are persisted while a new verdict is pending.
+  await page.click('#reflectVerify');
+  check(await page.locator('#cardSaved').isHidden(),
+    'starting a new probe clears the previous save notice');
+  await verifyDone();
+
+  // A canceled synchronous fallback (workers unavailable) never runs the
+  // search: the discarded result would freeze the view the user moved to.
+  const fallbackSkipped = await page.evaluate(function () {
+    const realWorker = window.Worker;
+    const realThink = ChessAI.think;
+    window.Worker = undefined;
+    let calls = 0;
+    ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
+    const p = ChessyAnalysis.analyse(
+      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+    ChessyAnalysis.cancel();
+    return p.then(function (res) {
+      return new Promise(function (r) {
+        setTimeout(function () {
+          window.Worker = realWorker;
+          ChessAI.think = realThink;
+          r({ res: res, calls: calls });
+        }, 100);
+      });
+    });
+  });
+  check(fallbackSkipped.res === null && fallbackSkipped.calls === 0,
+    'a canceled synchronous fallback never runs the search');
+
   // A DIFFERING move: the player owns the call, including "also sound".
   await page.click('#revStart'); // ply 0: f3 was played here
   check(await page.locator('#reflectForm').isHidden(),
