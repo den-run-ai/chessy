@@ -40,8 +40,12 @@
   }
 
   function renderGameList() {
+    review = null; // leaving a game abandons its (unsaved) reflection state
     $('reviewFlow').hidden = true;
     $('gameListWrap').hidden = false;
+    // Announce the abandonment: the reflection flow cancels any in-flight
+    // probe when it observes current() === null.
+    document.dispatchEvent(new CustomEvent('chessy:reviewrender'));
     // Clear SYNCHRONOUSLY before the read: a revised game's old button
     // captured the obsolete record at the previous render, and must not
     // stay clickable while a slow listGames() is in flight.
@@ -73,7 +77,7 @@
 
   // ---- Position browser ----
   const reviewBoard = ChessyMiniBoard.make($('reviewBoard'), null);
-  let review = null; // { game, gs, fens[], ply }
+  let review = null; // { game, gs, fens[], states[], ply }
 
   function openReview(game) {
     let gs;
@@ -85,7 +89,16 @@
     }
     const fens = gs.history.map(function (h) { return h.fen; });
     fens.push(Chess.toFen(gs));
-    review = { game: game, gs: gs, fens: fens, ply: 0 };
+    // Full game states per ply (WITH repetition tables): engine analysis
+    // of "the position before move k" needs the repetition counts a bare
+    // FEN cannot carry (assets/reflection.js).
+    let s = Chess.newGameState();
+    const states = [s];
+    for (const h of gs.history) {
+      s = Chess.playMove(s, h.move);
+      states.push(s);
+    }
+    review = { game: game, gs: gs, fens: fens, states: states, ply: 0 };
     $('gameListWrap').hidden = true;
     $('reviewFlow').hidden = false;
     renderReview();
@@ -113,6 +126,8 @@
     $('revPrev').disabled = r.ply === 0;
     $('revNext').disabled = r.ply >= r.gs.history.length;
     $('revEnd').disabled = r.ply >= r.gs.history.length;
+    // The reflection flow (assets/reflection.js) tracks the shown position.
+    document.dispatchEvent(new CustomEvent('chessy:reviewrender'));
   }
 
   function stepReview(to) {
@@ -157,6 +172,9 @@
 
   window.CoachReview = {
     showView: showView,
-    openArchivedGame: openArchivedGame
+    openArchivedGame: openArchivedGame,
+    // The currently open game and shown ply (null on the game list) — the
+    // reflection flow reads this instead of duplicating browser state.
+    current: function () { return review; }
   };
 })();

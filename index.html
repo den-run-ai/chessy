@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r22">
+  <link rel="stylesheet" href="assets/style.css?r=r23">
 </head>
 <body>
   <div class="app">
@@ -97,6 +97,50 @@
               <button type="button" id="revEnd" class="btn" aria-label="Go to final position">⏭</button>
             </div>
             <p class="coach-note" id="reviewStatus" aria-live="polite"></p>
+            <button type="button" id="flagMoment" class="btn primary">Flag this moment</button>
+          </div>
+
+          <div class="coach-side">
+            <!-- Engine output stays hidden until the player has answered. -->
+            <form id="reflectForm" class="coach-form" hidden>
+              <h3>Before the engine speaks…</h3>
+              <label>What is the opponent threatening?
+                <input type="text" id="reflectThreat" autocomplete="off" required></label>
+              <label>Which candidate moves did you consider?
+                <input type="text" id="reflectCandidates" autocomplete="off" required
+                       placeholder="e.g. Nf3, d4, O-O"></label>
+              <label>Your evaluation here:
+                <select id="reflectEval" required>
+                  <option value="" selected disabled>Choose…</option>
+                  <option value="winning">I'm winning</option>
+                  <option value="better">I'm better</option>
+                  <option value="equal">Equal</option>
+                  <option value="worse">I'm worse</option>
+                  <option value="lost">I'm lost</option>
+                </select></label>
+              <button type="submit" id="reflectVerify" class="btn primary">Ask Chessy (one probe)</button>
+            </form>
+
+            <div id="verifyBox" class="coach-form" hidden>
+              <h3>Chessy’s line</h3>
+              <p id="verifyResult" aria-live="polite"></p>
+              <label id="causeLabel">Cause (your call — the engine only offered one line):
+                <select id="cardCause">
+                  <option value="" selected disabled>Your call…</option>
+                  <option value="threat-scan">Missed a threat</option>
+                  <option value="candidates">Good move not among my candidates</option>
+                  <option value="evaluation">Considered it but judged it wrong</option>
+                  <option value="calculation">Line went wrong on the reply</option>
+                  <option value="efficiency">Right idea, too much time</option>
+                  <option value="impulse">Moved too fast</option>
+                  <option value="sound-alternative">My move was also sound</option>
+                </select></label>
+              <label>Lesson (one reusable sentence):
+                <input type="text" id="cardLesson" autocomplete="off"
+                       placeholder="e.g. Check every check before recapturing"></label>
+              <button type="button" id="saveCard" class="btn primary">Save lesson card</button>
+              <p class="coach-note" id="cardSaved" aria-live="polite" hidden></p>
+            </div>
           </div>
         </div>
       </div>
@@ -167,19 +211,21 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r22';</script>
-  <script src="assets/engine.js?r=r22"></script>
-  <script src="assets/ai.js?r=r22"></script>
+  <script>window.CHESSY_RELEASE = 'r23';</script>
+  <script src="assets/engine.js?r=r23"></script>
+  <script src="assets/ai.js?r=r23"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r22"></script>
-  <script src="assets/archive.js?r=r22"></script>
-  <script src="assets/app.js?r=r22"></script>
-  <script src="assets/mini-board.js?r=r22"></script>
-  <script src="assets/review.js?r=r22"></script>
+  <script src="assets/store.js?r=r23"></script>
+  <script src="assets/archive.js?r=r23"></script>
+  <script src="assets/app.js?r=r23"></script>
+  <script src="assets/mini-board.js?r=r23"></script>
+  <script src="assets/review.js?r=r23"></script>
+  <script src="assets/analysis.js?r=r23"></script>
+  <script src="assets/reflection.js?r=r23"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

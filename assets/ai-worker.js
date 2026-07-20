@@ -12,5 +12,5 @@ self.onmessage = function (e) {
     quiesce: e.data.quiesce,
     positions: e.data.positions
   });
-  self.postMessage({ id: e.data.id, move: result.move, depth: result.depth });
+  self.postMessage({ id: e.data.id, move: result.move, depth: result.depth, score: result.score });
 };

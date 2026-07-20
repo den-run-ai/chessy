@@ -124,15 +124,36 @@
   function archiveGame(game) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        const t = db.transaction('games', 'readwrite');
+        // Includes 'cards': revising an ending in place must ATOMICALLY
+        // remove the lesson cards flagged on the abandoned continuation.
+        const t = db.transaction(['games', 'cards'], 'readwrite');
         const s = t.objectStore('games');
         const getReq = s.get(game.id);
         let putReq = null;
+        // A revised ending replaces the old one under the same id: cards
+        // flagged on plies BEYOND the moves the two endings share now
+        // reference positions this game no longer contains — remove them.
+        // Cards on the shared prefix stay valid.
+        function pruneCards(id, oldSans, newSans) {
+          let p = 0;
+          while (p < oldSans.length && p < newSans.length && oldSans[p] === newSans[p]) p++;
+          const cur = t.objectStore('cards').index('gameId').openCursor(IDBKeyRange.only(id));
+          cur.onsuccess = function () {
+            const c = cur.result;
+            if (!c) return;
+            if (c.value.ply >= p) c.delete();
+            c.continue();
+          };
+        }
         getReq.onsuccess = function () {
           const existing = getReq.result;
           const record = Object.assign({}, game);
-          if (existing && sameEnding(existing, record)) {
-            record.createdAt = Math.min(existing.createdAt, record.createdAt);
+          if (existing) {
+            if (sameEnding(existing, record)) {
+              record.createdAt = Math.min(existing.createdAt, record.createdAt);
+            } else {
+              pruneCards(game.id, existing.sans, record.sans); // revised ending
+            }
           }
           putReq = s.put(record);
         };
@@ -152,10 +173,63 @@
       .then(function (games) { return games.sort(function (a, b) { return b.createdAt - a.createdAt; }); });
   }
 
+  function addCard(card) {
+    return tx('cards', 'readwrite', function (s) { return s.add(card); });
+  }
+  function updateCard(card) {
+    return tx('cards', 'readwrite', function (s) { return s.put(card); });
+  }
+  function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
+
+  // ONE card per moment (gameId + ply), enforced atomically: the index
+  // lookup and the write share a single readwrite transaction, so two
+  // saves racing on the same moment (double-fire, second tab) cannot mint
+  // two cards — the loser of the race updates the winner's card instead.
+  // Resolves 'updated' when a card for the moment existed, else 'saved'.
+  function upsertCardByMoment(fields, freshDefaults) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('cards', 'readwrite');
+        const s = t.objectStore('cards');
+        const cur = s.index('gameId').openCursor(IDBKeyRange.only(fields.gameId));
+        let outcome = 'saved';
+        cur.onsuccess = function () {
+          const c = cur.result;
+          if (c) {
+            if (c.value.ply !== fields.ply) { c.continue(); return; }
+            outcome = 'updated';
+            const merged = Object.assign({}, c.value, fields);
+            // Attempt history is only meaningful against the move it was
+            // graded on: if a re-save changed the card's canonical move,
+            // the old attempts' correct/incorrect flags would silently be
+            // read against the NEW move (Train, Progress). Start the
+            // history over.
+            const oldBest = c.value.bestMove || null;
+            const newBest = fields.bestMove || null;
+            const sameBest = (!oldBest && !newBest) || (!!oldBest && !!newBest &&
+              oldBest.from === newBest.from && oldBest.to === newBest.to &&
+              (oldBest.promotion || null) === (newBest.promotion || null));
+            if (!sameBest) merged.attempts = [];
+            s.put(merged);
+          } else {
+            s.add(Object.assign({}, freshDefaults, fields));
+          }
+        };
+        t.oncomplete = function () { resolve(outcome); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
     getGame: getGame,
-    listGames: listGames
+    listGames: listGames,
+    addCard: addCard,
+    updateCard: updateCard,
+    upsertCardByMoment: upsertCardByMoment,
+    listCards: listCards
   };
 })(typeof window !== 'undefined' ? window : globalThis);
