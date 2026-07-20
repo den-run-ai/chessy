@@ -647,43 +647,65 @@
   const archiveNoteEl = document.getElementById('archiveNote');
   const archiveBootNoteEl = document.getElementById('archiveBootNote');
 
-  function showArchiveFailure(noteEl) {
+  // The page-level note is sticky ("this game could not be archived") but
+  // OWNED: it remembers which game the latest-shown failure blames ('*'
+  // when no single game is attributable — a missing module, a multi-game
+  // drain failure). A later SUCCESSFUL write for the owning game clears
+  // the note — the record it warned about now exists — while a '*' owner
+  // keeps it sticky for the session.
+  let bootNoteOwner = null;
+
+  function showArchiveFailure(noteEl, ownerId) {
     // The dialog may have CLOSED while the write was in flight (Close/
     // Rematch clicked, or a slow first open): report where the user can
     // still see it.
     const el = (noteEl === archiveNoteEl && !gameOverDialog.open)
       ? archiveBootNoteEl : noteEl;
+    if (el === archiveBootNoteEl) bootNoteOwner = ownerId || '*';
     el.hidden = false;
     el.textContent = 'This game could not be archived (storage unavailable).';
   }
 
-  function archiveCurrentGame(status, noteEl) {
-    noteEl = noteEl || archiveNoteEl;
+  function clearArchiveFailure(ownerId) {
+    if (bootNoteOwner !== ownerId) return;
+    bootNoteOwner = null;
+    archiveBootNoteEl.hidden = true;
+  }
+
+  function archiveCurrentGame(status) {
     // A missing archive module (e.g. partial cache eviction took store.js
     // or archive.js) is a FAILURE, not silence — the game will not be
     // recorded. (Synchronous, so showGameOver opens the dialog FIRST.)
-    if (!window.ChessyArchive) { showArchiveFailure(noteEl); return; }
-    // The boot note is sticky for the session: a drain failure already
-    // shown there must survive later attempts. The dialog's note resets
-    // per presentation.
-    if (noteEl !== archiveBootNoteEl) noteEl.hidden = true;
+    if (!window.ChessyArchive) { showArchiveFailure(archiveNoteEl, gameId); return; }
+    // The dialog's note resets per presentation; the page note clears
+    // only through ownership (see clearArchiveFailure).
+    archiveNoteEl.hidden = true;
     const idAtCall = gameId;
     const seqAtCall = ++archiveSeq;
+    archiveAttempts.set(idAtCall, seqAtCall);
     ChessyArchive.record(state, settings, status, idAtCall, { endedAt: gameEndedAt })
-      .catch(function () {
+      .then(function () {
+        // The game's record exists now — withdraw any page-note blame for
+        // it. Only as the game's LATEST attempt: a superseded attempt's
+        // success says nothing about the revision that replaced it.
+        if (archiveAttempts.get(idAtCall) === seqAtCall) clearArchiveFailure(idAtCall);
+      }, function () {
+        if (archiveAttempts.get(idAtCall) !== seqAtCall) {
+          // A NEWER attempt superseded this one (undo → revised finish
+          // re-archived under the SAME game id). That attempt owns the
+          // outcome — reporting this stale failure would blame a dialog
+          // whose own (revised) record may have committed fine.
+          return;
+        }
         if (gameId !== idAtCall) {
           // A failure landing after a NEWER game replaced this one must
           // not show inside the newer game's dialog — that would blame
           // the wrong game. Route it to the page note (the record stays
           // parked for boot recovery either way).
-          showArchiveFailure(archiveBootNoteEl);
-        } else if (seqAtCall === archiveSeq) {
-          showArchiveFailure(noteEl);
+          showArchiveFailure(archiveBootNoteEl, idAtCall);
+        } else {
+          showArchiveFailure(archiveNoteEl, idAtCall);
         }
-        // else: same game but a NEWER attempt superseded this one (undo →
-        // revised finish while this write was in flight). That attempt
-        // owns the outcome — reporting this stale failure would blame a
-        // dialog whose own (revised) record may have committed fine.
       });
   }
 
@@ -696,10 +718,15 @@
   // createdAt must be the completion time even when the write is only
   // reconciled on a much later boot (chronology, not restart time).
   let gameEndedAt = null;
-  // Monotonic archive-attempt generation: a late failure whose attempt
-  // has been superseded (undo → revised finish re-archived under the SAME
-  // game id) must not report into the superseding ending's dialog.
+  // Monotonic archive-attempt generation plus, per game id, the seq of
+  // that game's LATEST attempt: a settlement (success or failure) may act
+  // only while its attempt is still the game's newest — a superseded
+  // attempt (undo → revised finish re-archived under the SAME game id)
+  // has handed the outcome to its successor. The boot reconcile also
+  // consults this map: a live attempt for the restored game supersedes
+  // the boot snapshot.
   let archiveSeq = 0;
+  const archiveAttempts = new Map(); // gameId → seq of the latest attempt
 
   function newGameId() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -954,8 +981,6 @@
   buildBoard();
   // No saved game: the implicit first game needs its own UUID too.
   if (!load()) gameId = newGameId();
-  render();
-  maybeAiMove();
 
   // A game restored in a FINISHED state may have missed its archive write:
   // the tab can die between the synchronous localStorage save and the
@@ -965,46 +990,68 @@
   // Zero-ply games too: a timed game can be forfeit before the first move.
   // The game-over dialog is CLOSED on boot, so a reconcile failure reports
   // to the always-visible page note instead of the dialog's.
-  // On window load, NOT a zero timeout: archive.js is a later script tag
-  // and the parser may yield to timers while it is still being fetched.
-  window.addEventListener('load', function () {
-    // SNAPSHOT the restored game NOW: the slot drain below is
-    // asynchronous, and the user may replace or undo this game before it
-    // settles — the reconcile must archive what was RESTORED, not
-    // whatever the globals hold later.
-    const bootStatus = fullStatus();
-    const bootState = state;
-    const bootId = gameId;
-    const bootEndedAt = gameEndedAt;
-    // settings is a shared mutable object — a New game started while the
-    // drain below is in flight must not relabel the restored record.
-    const bootSettings = Object.assign({}, settings);
-    if (!window.ChessyArchive) {
-      // Partial cache eviction can lose store.js/archive.js while the
-      // game itself still runs — that is a failure to surface, not
-      // silence: neither the restored finished game nor a parked slot
-      // from an earlier session can be recorded. (The slot key is
-      // archive.js's constant, read directly — the module that owns it
-      // is the thing that's missing.)
-      let pendingParked = false;
-      try {
-        pendingParked = localStorage.getItem('chessy-pending-archive-v1') !== null;
-      } catch (e) { /* storage unavailable */ }
-      if (bootStatus.over || pendingParked) showArchiveFailure(archiveBootNoteEl);
-      return;
-    }
-    // Drain the durability slot FIRST (a Rematch may have replaced the
+  //
+  // SNAPSHOT the restored game SYNCHRONOUSLY, before render() below makes
+  // any control usable: an Undo or New game click must never be able to
+  // replace the restored finish before it is captured. (archive.js is a
+  // PRECEDING script tag, so by now the module has definitively loaded or
+  // definitively failed — there is no "still fetching" window.)
+  const bootStatus = fullStatus();
+  const bootState = state;
+  const bootId = gameId;
+  const bootEndedAt = gameEndedAt;
+  // settings is a shared mutable object — a New game started while the
+  // drain below is in flight must not relabel the restored record.
+  const bootSettings = Object.assign({}, settings);
+
+  if (!window.ChessyArchive) {
+    // Partial cache eviction can lose store.js/archive.js while the game
+    // itself still runs — that is a failure to surface, not silence:
+    // neither the restored finished game nor parked queue entries from an
+    // earlier session can be recorded. (The queue key is archive.js's
+    // constant, read directly — the module that owns it is the thing
+    // that's missing.)
+    let pendingParked = false;
+    try {
+      pendingParked = localStorage.getItem('chessy-pending-archive-v1') !== null;
+    } catch (e) { /* storage unavailable */ }
+    if (bootStatus.over) showArchiveFailure(archiveBootNoteEl, bootId);
+    if (pendingParked) showArchiveFailure(archiveBootNoteEl);
+  } else {
+    // Drain the durability queue FIRST (a Rematch may have replaced the
     // main save while a write was in flight), THEN re-offer the restored
-    // game — sequentially, so the two writes never race. A FAILED drain
-    // stops the chain: the state reconcile would park over the single
-    // slot and destroy the earlier game's only recoverable copy; the next
-    // boot retries both. The boot note is sticky either way.
+    // game — SEQUENTIALLY, so two writes to the restored game's record
+    // never race, but INDEPENDENTLY: queue entries are per game, and one
+    // game failing to commit must not cost the restored game its
+    // reconcile (failed entries stay parked for the next boot).
     ChessyArchive.reconcilePending()
+      .then(null, function (err) {
+        // Blame the specific game where one is attributable, so a later
+        // successful replacement write can withdraw the note.
+        const ids = (err && err.failedGameIds) || [];
+        showArchiveFailure(archiveBootNoteEl, ids.length === 1 ? ids[0] : null);
+      })
       .then(function () {
         if (!bootStatus.over) return;
+        // A LIVE attempt for the restored game (undo → revised finish
+        // completed while the drain was slow) supersedes the boot
+        // snapshot: recording the snapshot now would overwrite the newer
+        // ending with the stale one.
+        if (archiveAttempts.has(bootId)) return;
+        const seqAtCall = ++archiveSeq;
+        archiveAttempts.set(bootId, seqAtCall);
         ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
           { endedAt: bootEndedAt })
-          .catch(function () { showArchiveFailure(archiveBootNoteEl); });
-      }, function () { showArchiveFailure(archiveBootNoteEl); });
-  });
+          .then(function () {
+            if (archiveAttempts.get(bootId) === seqAtCall) clearArchiveFailure(bootId);
+          }, function () {
+            if (archiveAttempts.get(bootId) === seqAtCall) {
+              showArchiveFailure(archiveBootNoteEl, bootId);
+            }
+          });
+      });
+  }
+
+  render();
+  maybeAiMove();
 })();
