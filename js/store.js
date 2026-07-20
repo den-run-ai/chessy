@@ -222,6 +222,22 @@
     if (data.games.some(badGame) || data.cards.some(badCard)) {
       return Promise.reject(new Error('backup contains invalid records'));
     }
+    // References must RESOLVE before the first write, or the append below
+    // would silently detach a card from its game (fail-before-write also
+    // covers the links, not just record shapes). Intentionally null
+    // gameIds are legitimate; a dangling or ambiguous one is not.
+    const gameIds = new Set();
+    for (const g of data.games) {
+      if (!Number.isInteger(g.id) || gameIds.has(g.id)) {
+        return Promise.reject(new Error('backup contains missing or duplicate game ids'));
+      }
+      gameIds.add(g.id);
+    }
+    if (data.cards.some(function (c) {
+      return c.gameId !== null && c.gameId !== undefined && !gameIds.has(c.gameId);
+    })) {
+      return Promise.reject(new Error('backup contains cards referencing missing games'));
+    }
     const idMap = new Map();
     let done = 0;
     let chain = Promise.resolve();
@@ -250,7 +266,9 @@
       chain = chain.then(function () {
         const copy = Object.assign({}, c);
         delete copy.id;
-        copy.gameId = idMap.get(copy.gameId) || null;
+        // Validated above: a non-null gameId always resolves in idMap.
+        copy.gameId = copy.gameId === null || copy.gameId === undefined
+          ? null : idMap.get(copy.gameId);
         return addCard(copy).then(function () { done++; });
       });
     });

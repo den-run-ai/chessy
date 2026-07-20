@@ -1088,12 +1088,17 @@
   $('importFile').addEventListener('change', function () {
     const file = $('importFile').files[0];
     if (!file) return;
-    if (restoreBusy) { $('importFile').value = ''; return; }
+    if (restoreBusy || deleteBusy) { $('importFile').value = ''; return; }
     restoreBusy = true;
     $('importData').disabled = true;
+    // Restore appends through many transactions: a Delete All clearing the
+    // stores mid-restore would be silently repopulated by the remaining
+    // appends — the two operations are mutually exclusive.
+    $('deleteData').disabled = true;
     function settleRestore() {
       restoreBusy = false;
       $('importData').disabled = false;
+      $('deleteData').disabled = false;
     }
     const reader = new FileReader();
     reader.onerror = function () {
@@ -1118,8 +1123,17 @@
     reader.readAsText(file);
   });
 
+  let deleteBusy = false;
   $('deleteData').addEventListener('click', function () {
+    // Belt to the disabled-button suspenders: never clear while a restore
+    // is still appending (its remaining writes would repopulate the
+    // stores after "deleted" was reported).
+    if (restoreBusy || deleteBusy) {
+      $('dataNote').textContent = 'A backup restore is still running — wait for it to finish first.';
+      return;
+    }
     if (!window.confirm('Delete ALL archived games, lesson cards and review history?')) return;
+    deleteBusy = true;
     $('deleteData').disabled = true;
     // Abandon in-flight coach work first, so a scan or verification that
     // settles after the clear cannot repaint (or re-save) deleted state.
@@ -1136,7 +1150,10 @@
     }, function (e) {
       $('dataNote').textContent = 'Delete failed: ' + (e && e.message ? e.message : e) +
         '. Training data was not deleted.';
-    }).then(function () { $('deleteData').disabled = false; });
+    }).then(function () {
+      deleteBusy = false;
+      $('deleteData').disabled = false;
+    });
   });
 
   window.Coach = {

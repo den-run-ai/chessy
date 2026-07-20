@@ -544,7 +544,7 @@ require('./helper').run('coach', async function (t) {
     dts.forEach(function (dt, i) { out[dt.textContent] = dds[i].textContent; });
     return out;
   });
-  check(stats['Games archived'] === '8', 'progress counts archived games (got ' + stats['Games archived'] + ')');
+  check(stats['Games archived'] === '11', 'progress counts archived games (got ' + stats['Games archived'] + ')');
   check(stats['Lesson cards'] === '2', 'progress counts lesson cards');
   check(stats['Cards due now'] === '0', 'progress counts due cards (both rescheduled)');
   check(stats['Reviews (30 days)'] === '2', 'progress counts recent reviews');
@@ -582,7 +582,7 @@ require('./helper').run('coach', async function (t) {
       });
     });
   });
-  check(roundTrip.exported === 8 && roundTrip.games === 16 && roundTrip.cards === 4 &&
+  check(roundTrip.exported === 11 && roundTrip.games === 22 && roundTrip.cards === 4 &&
         roundTrip.orphans === 0,
     'backup round-trip appends every record with remapped game links');
 
@@ -602,7 +602,13 @@ require('./helper').run('coach', async function (t) {
             bestMove: { from: 0, to: 63 }, due: 1, step: 0, attempts: [] }] } },
         { note: 'step out of range', data: { format: 'chessy-coach', games: [], cards: [
           { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-            bestMove: { from: 52, to: 36 }, due: 1, step: 9, attempts: [] }] } }
+            bestMove: { from: 52, to: 36 }, due: 1, step: 9, attempts: [] }] } },
+        { note: 'dangling card link', data: { format: 'chessy-coach', games: [], cards: [
+          { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            gameId: 12345, bestMove: { from: 52, to: 36 }, due: 1, step: 0, attempts: [] }] } },
+        { note: 'duplicate game ids', data: { format: 'chessy-coach', cards: [], games: [
+          { id: 7, sans: ['e4'], result: '*', createdAt: 1, plies: 1 },
+          { id: 7, sans: ['d4'], result: '*', createdAt: 1, plies: 1 }] } }
       ];
       let chain = Promise.resolve([]);
       for (const c of cases) {
@@ -622,6 +628,35 @@ require('./helper').run('coach', async function (t) {
   check(invalids.results.every(function (r) { return r.indexOf('accepted') === -1; }) &&
         invalids.unchanged,
     'invalid backups are rejected with the archive unchanged (' + invalids.results.join(' | ') + ')');
+
+  // Delete All is locked out while a backup restore is appending — the
+  // restore's remaining writes would otherwise repopulate stores that were
+  // just reported as deleted.
+  await page.evaluate(function () {
+    CoachStore.__realImportAll = CoachStore.importAll;
+    CoachStore.importAll = function (d) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { CoachStore.__realImportAll(d).then(resolve, reject); }, 900);
+      });
+    };
+  });
+  await page.setInputFiles('#importFile', {
+    name: 'mini.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({
+      format: 'chessy-coach', version: 4, exportedAt: 1,
+      games: [{ id: 1, sans: ['e4'], result: '*', createdAt: 1, plies: 1, tags: { White: 'Mini' } }],
+      cards: []
+    }))
+  });
+  await page.waitForFunction(function () { return document.getElementById('deleteData').disabled; });
+  check(true, 'Delete All is disabled while a restore is appending');
+  await page.click('#deleteData', { force: true }); // disabled button + handler guard: no confirm, no clear
+  await page.waitForFunction(function () {
+    return document.getElementById('dataNote').textContent.indexOf('Imported 1 games') !== -1;
+  }, null, { timeout: 15000 });
+  check(!(await page.evaluate(function () { return document.getElementById('deleteData').disabled; })),
+    'Delete All unlocks when the restore lands (and could not fire meanwhile)');
+  await page.evaluate(function () { CoachStore.importAll = CoachStore.__realImportAll; });
 
   // Delete All clears both stores and resets the coach views.
   page.once('dialog', function (d) { d.accept(); });
