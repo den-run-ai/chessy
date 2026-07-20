@@ -10,8 +10,10 @@
  * - Honest wording: a card stores Chessy's ONE saved move; a different
  *   answer "differs", it is not declared wrong — the player grades
  *   themselves.
- * - Grades are ATOMIC store-level read-modify-writes (CoachStore.gradeCard),
- *   so a double-fire can never record two attempts or climb two rungs.
+ * - Grades are ATOMIC store-level read-modify-writes (CoachStore.gradeCard)
+ *   PINNED to the presented card revision, so neither a double-fire nor a
+ *   concurrent grade from another window can record two attempts or climb
+ *   two rungs.
  */
 (function () {
   'use strict';
@@ -157,6 +159,16 @@
     }
   }
 
+  // Visibly disable the grade buttons while a write is in flight:
+  // enabled-looking controls whose clicks are silently discarded would
+  // let the user believe a LATER choice was accepted when the first one
+  // is what got stored.
+  function setGradeControls(disabled) {
+    $('gradeAgain').disabled = disabled;
+    $('gradeHard').disabled = disabled;
+    $('gradeGood').disabled = disabled;
+  }
+
   function grade(g) {
     const t = train;
     if (!t || !t.card || !t.answered || t.grading) return;
@@ -165,14 +177,22 @@
     // cannot accept a second answer meanwhile — resetting it here would
     // re-enable both until the async write settled.
     t.grading = true;
+    setGradeControls(true);
     const now = Date.now();
     const correct = !!t.lastCorrect;
-    CoachStore.gradeCard(t.card.id, function (fresh) {
+    // Pin the write to the revision the player actually graded: a
+    // concurrent grade of the same due card (another window) makes this
+    // one resolve 'stale' instead of double-recording.
+    const expect = { due: t.card.due, attempts: (t.card.attempts || []).length };
+    CoachStore.gradeCard(t.card.id, expect, function (fresh) {
       fresh.attempts = (fresh.attempts || []).concat([{ at: now, grade: g, correct: correct }]);
       schedule(fresh, g, now);
       return fresh;
     }).then(function () {
+      // 'stale' advances too: this revision of the card was already
+      // consumed by the concurrent grade that won the race.
       t.grading = false;
+      setGradeControls(false);
       if (train === t) {
         nextTrainCard(); // Refresh may have rebuilt the queue
         // Grading hid the reveal box — and the focused grade button with
@@ -182,9 +202,10 @@
       }
     }, function () {
       // The grade was NOT saved (quota, storage failure): keep the card
-      // on screen (still answered) and say so — silently advancing would
-      // drop the attempt and reschedule nothing.
+      // on screen (still answered), re-enable the controls, and say so —
+      // silently advancing would drop the attempt and reschedule nothing.
       t.grading = false;
+      setGradeControls(false);
       if (train !== t) return;
       $('trainOutcome').textContent =
         '⚠ Could not save that grade (storage unavailable) — try again.';

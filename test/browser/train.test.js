@@ -141,6 +141,8 @@ require('./helper').run('train', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('trainOutcome').textContent.indexOf('Could not save') !== -1;
   });
+  check(!(await page.locator('#gradeGood').isDisabled()),
+    'a failed grade re-enables the controls for the retry');
   await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__realGradeCard; });
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
@@ -171,16 +173,23 @@ require('./helper').run('train', async function (t) {
   await page.waitForSelector('#trainReveal:not([hidden])');
   await page.evaluate(function () {
     CoachStore.__realGradeCard = CoachStore.gradeCard;
-    CoachStore.gradeCard = function (id, mutate) {
+    CoachStore.gradeCard = function () {
+      const args = arguments;
       const real = CoachStore.__realGradeCard;
       return new Promise(function (resolve, reject) {
-        setTimeout(function () { real(id, mutate).then(resolve, reject); }, 600);
+        setTimeout(function () {
+          real.apply(CoachStore, args).then(resolve, reject);
+        }, 600);
       });
     };
   });
   await page.click('#gradeGood');
+  check(await page.locator('#gradeGood').isDisabled() &&
+        await page.locator('#gradeHard').isDisabled() &&
+        await page.locator('#gradeAgain').isDisabled(),
+    'grade buttons are visibly disabled while the write is in flight');
   await tsq('a7').click();        // second answer attempt while pending
-  await page.click('#gradeGood'); // second grade while pending
+  await page.click('#gradeGood', { force: true }); // second grade while pending
   await page.waitForSelector('#trainEmpty:not([hidden])', { timeout: 5000 });
   await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__realGradeCard; });
   const after = await page.evaluate(function () {
@@ -191,4 +200,35 @@ require('./helper').run('train', async function (t) {
   });
   check(after.attempts === before.attempts + 1 && after.step === before.step + 1,
     'a pending grade write blocks a second answer/grade (one attempt, one rung)');
+
+  // CONCURRENT grades of the same presented card (two windows showing
+  // the same due card): IndexedDB serializes the transactions, so the
+  // loser's mutate would otherwise run on the freshly updated card and
+  // double-record. The expected-revision pin rejects it as 'stale'.
+  const stale = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards[0];
+      const beforeCount = (c.attempts || []).length;
+      const expect = { due: c.due, attempts: beforeCount };
+      const mut = function (fresh) {
+        fresh.attempts = (fresh.attempts || []).concat([{ at: 1, grade: 'good', correct: true }]);
+        fresh.due = fresh.due + 60000;
+        return fresh;
+      };
+      return CoachStore.gradeCard(c.id, expect, mut).then(function (first) {
+        return CoachStore.gradeCard(c.id, expect, mut).then(function (second) {
+          return CoachStore.listCards().then(function (afterCards) {
+            const a = afterCards.find(function (x) { return x.id === c.id; });
+            return {
+              firstOk: !!first && first !== 'stale',
+              second: second,
+              added: (a.attempts || []).length - beforeCount
+            };
+          });
+        });
+      });
+    });
+  });
+  check(stale.firstOk && stale.second === 'stale' && stale.added === 1,
+    'a concurrent grade against the same presented revision is rejected as stale');
 });
