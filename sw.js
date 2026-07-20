@@ -104,16 +104,32 @@ self.addEventListener('fetch', (event) => {
   // NEVER revalidated. The host ignores the query string, so refreshing
   // ?r=rN after a later release deploys would store the newer file under
   // the old release's key — poisoning the isolation the token exists for.
-  // A miss (e.g. evicted entry) fetches the network and fills the cache.
+  // A cache miss consults the request's token (tokens are rN, ordered):
+  //   - own or NEWER release → the network currently serves those bytes
+  //     (a newer token means an update is in flight through this older
+  //     worker), so fetch and fill;
+  //   - OLDER release → this worker's activation deleted that release's
+  //     cache, and the network now serves DIFFERENT bytes under the same
+  //     URL. Refilling would hand an old page current code — the mixed
+  //     execution this design exists to prevent — so the miss FAILS
+  //     (503) instead; the app degrades (e.g. its AI worker falls back
+  //     to the synchronous path) until that stale page next navigates.
   if (reqUrl.searchParams.has('r')) {
-    const fill = caches.match(event.request).then((cached) => cached ||
-      fetch(event.request).then((response) => {
+    const reqNum = Number((/^r(\d+)$/.exec(reqUrl.searchParams.get('r')) || [])[1]);
+    const ownNum = Number((/^r(\d+)$/.exec(RELEASE) || [])[1]);
+    const fill = caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      if (!(reqNum >= ownNum)) {
+        return new Response('stale release', { status: 503, statusText: 'Service Unavailable' });
+      }
+      return fetch(event.request).then((response) => {
         if (!response.ok) return response;
         return caches.open(CACHE)
           .then((cache) => cache.put(event.request, response.clone()))
           .catch(() => undefined)
           .then(() => response);
-      }));
+      });
+    });
     event.waitUntil(fill.then(() => undefined, () => undefined));
     event.respondWith(fill);
     return;

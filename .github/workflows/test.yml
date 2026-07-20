@@ -8,6 +8,34 @@ permissions:
   contents: read
 
 jobs:
+  release-gate:
+    # Versioned cache entries are immutable: if executable content changes
+    # without a release-token bump, controlled clients keep serving the old
+    # cached bytes for the unchanged URL indefinitely. The in-tree token
+    # agreement is checked by test/browser/sw-update.test.js; comparing
+    # against the BASE revision requires CI.
+    if: github.base_ref
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Executable changes require a release-token bump
+        run: |
+          git fetch origin "$GITHUB_BASE_REF"
+          base=$(git merge-base "origin/$GITHUB_BASE_REF" HEAD)
+          if git diff --quiet "$base" HEAD -- assets/; then
+            echo "assets/ unchanged since $base — no bump required"
+            exit 0
+          fi
+          base_token=$(git show "$base:sw.js" | sed -n "s/^const RELEASE = '\(.*\)';$/\1/p")
+          head_token=$(sed -n "s/^const RELEASE = '\(.*\)';$/\1/p" sw.js)
+          echo "assets/ changed: base token '$base_token' → head token '$head_token'"
+          if [ "$base_token" = "$head_token" ]; then
+            echo "::error::assets/ changed but the RELEASE token was not bumped (sw.js + index.html)"
+            exit 1
+          fi
+
   engine:
     runs-on: ubuntu-latest
     steps:
