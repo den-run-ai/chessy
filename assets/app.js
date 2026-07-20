@@ -650,6 +650,10 @@
     document.getElementById('gameOverTitle').textContent = title;
     document.getElementById('gameOverDetail').textContent =
       'By ' + status.reason + ' · ' + status.result;
+    // Stamp (and persist) the completion time on the FIRST presentation:
+    // a re-shown ending keeps it, and a later boot's reconcile archives
+    // under this time, not the restart time.
+    if (!gameEndedAt) { gameEndedAt = Date.now(); save(); }
     archiveCurrentGame(status);
     gameOverDialog.showModal();
   }
@@ -673,7 +677,8 @@
     noteEl = noteEl || archiveNoteEl;
     noteEl.hidden = true;
     const idAtCall = gameId;
-    archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall).then(function (storedId) {
+    archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall,
+      { endedAt: gameEndedAt, tab: tabNonce }).then(function (storedId) {
       // Adopt a forked id (CoachStore.archiveGame keeps both tabs' games)
       // so this tab's re-shows and boot reconcile overwrite OUR record,
       // not the other tab's — unless a new game replaced gameId meanwhile.
@@ -696,6 +701,10 @@
   // re-displayed (or replayed after reload + undo) overwrites one record.
   // Random UUIDs stay unique across tabs with no coordination.
   let gameId = null;
+  // When the game FIRST ended, persisted with the save: the archive's
+  // createdAt must be the completion time even when the write is only
+  // reconciled on a much later boot (chronology, not restart time).
+  let gameEndedAt = null;
 
   function newGameId() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -703,8 +712,16 @@
       : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
 
+  // This tab's identity for the archive: lets the store tell a same-tab
+  // replay edit (undo → different finish — overwrite the record) from a
+  // CLONED tab's divergent completion (fork, keep both). In-memory on
+  // purpose: any reload gets a new identity, which errs toward keeping
+  // games rather than overwriting another writer's.
+  const tabNonce = newGameId();
+
   function startNewGame() {
     gameId = newGameId();
+    gameEndedAt = null;
     cancelAi();
     state = Chess.newGameState();
     selected = null;
@@ -882,8 +899,10 @@
         flipped: flipped,
         // Persisted so the archive's idempotent overwrite survives
         // reloads: a reload → undo → replayed ending is the SAME game
-        // instance and must keep its record key.
-        gameId: gameId
+        // instance and must keep its record key — and its original
+        // completion time, for a boot-time reconcile's createdAt.
+        gameId: gameId,
+        endedAt: gameEndedAt
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -946,6 +965,7 @@
       }
       flipped = !!data.flipped;
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
+      gameEndedAt = Number.isFinite(data.endedAt) ? data.endedAt : null;
       return true;
     } catch (e) {
       return false;
