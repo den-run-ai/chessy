@@ -188,7 +188,17 @@
         // Broken worker: fall back to the synchronous path so the app is
         // never stuck on "thinking" — then replace the worker so future
         // moves leave the main thread again.
-        aiWorker = null;
+        //
+        // Only a worker that FAILED WHILE SEARCHING earns a replacement.
+        // A persistently unloadable worker script fires onerror on every
+        // fresh instance without ever receiving a message; replacing those
+        // too would spawn workers in a loop, and each replacement's error
+        // would restart (and so forever postpone) the pending synchronous
+        // fallback. An idle startup failure instead drops to synchronous
+        // mode for the session — the pre-watchdog behavior.
+        const wasSearching = !!w.searching;
+        if (aiWorker === w) aiWorker = null;
+        if (!wasSearching) return;
         if (aiThinking) {
           const originalStartedAt = aiPending && aiPending.started;
           aiThinking = false;
@@ -563,6 +573,7 @@
         maybeAiMove(originalStartedAt);
         aiWorker = createAiWorker();
       }, cfg.timeMs + 3000);
+      aiWorker.searching = true; // this worker did real work (see onerror)
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
         quiesce: cfg.quiesce, positions: state.positions

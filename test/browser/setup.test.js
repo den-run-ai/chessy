@@ -82,16 +82,24 @@ require('./helper').run('setup', async function (t) {
   // controllable stub first fails loudly, then stays alive but silent; it
   // affects every later navigation, so these tests must stay LAST.
   await page.addInitScript(function () {
+    window.__chessyTestWorkerCount = 0;
     window.Worker = function () {
+      const worker = this;
+      window.__chessyTestWorkerCount++;
+      // 'birth-error' workers fail on LOAD, before any message — the
+      // persistently-unloadable-script case.
+      if (window.__chessyTestWorkerMode === 'birth-error') {
+        setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 50);
+      }
       this.postMessage = function () {
-        const worker = this;
         if (window.__chessyTestWorkerMode === 'error') {
           setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 750);
         }
       };
       this.terminate = function () {};
     };
-    window.__chessyTestWorkerMode = 'error';
+    // Survives reloads so a phase can exercise the boot-time worker.
+    window.__chessyTestWorkerMode = sessionStorage.getItem('chessy-test-worker-mode') || 'error';
   });
   await t.inject(function () { localStorage.removeItem('chessy-game-v1'); });
 
@@ -120,4 +128,25 @@ require('./helper').run('setup', async function (t) {
   });
   check(stalledAiMs >= 4900,
     'silent worker: AI timing includes the watchdog wait (' + stalledAiMs + 'ms)');
+
+  // A PERSISTENTLY unloadable worker script fires onerror on every fresh
+  // instance before any message. The app must drop to synchronous mode —
+  // not spawn replacements in a loop whose startup errors keep restarting
+  // (and so forever postponing) the pending synchronous fallback.
+  await page.evaluate(function () {
+    sessionStorage.setItem('chessy-test-worker-mode', 'birth-error');
+    localStorage.removeItem('chessy-game-v1');
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(300); // let the boot worker's startup error land
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 20000 });
+  check(!(await page.textContent('#status')).includes('thinking'),
+    'unloadable worker: the computer still moves via the synchronous path');
+  const spawned = await page.evaluate(function () { return window.__chessyTestWorkerCount; });
+  check(spawned <= 2,
+    'unloadable worker is not respawned in a loop (' + spawned + ' constructed)');
 });
