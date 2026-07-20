@@ -173,6 +173,249 @@ require('./helper').run('coach', async function (t) {
   await page.click('#revEnd');
   check((await page.textContent('#reviewStatus')).includes('end of game'),
     'imported game replays to its end');
+  await page.click('#revStart');
+
+  // ---- Retroactive scan + hidden reflection + lesson cards ----
+  // Start a scan, then flag a moment and verify it while the scan is
+  // mid-flight — analysis requests must queue behind each other (a second
+  // request used to orphan the scan's pending reply and freeze the UI).
+  await page.click('#scanGame');
+  await page.click('#flagMoment'); // ply 0, played here: e4
+  await page.click('#reflectVerify'); // EMPTY reflection: required fields block
+  check(await page.locator('#verifyBox').isHidden(),
+    'empty reflection cannot summon the engine (fields are required)');
+  // Whitespace passes native `required` but is not reflection: the submit
+  // handler trims before re-validating, so spaces-only answers block too.
+  await page.fill('#reflectThreat', '   ');
+  await page.fill('#reflectCandidates', '  ');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  check(await page.locator('#verifyBox').isHidden(),
+    'whitespace-only reflection is rejected (trimmed before validation)');
+  await page.fill('#reflectThreat', 'nothing concrete yet');
+  await page.fill('#reflectCandidates', 'e4, d4');
+  await page.click('#reflectVerify');
+  check(await page.locator('#reflectVerify').isDisabled(),
+    'Verify disables while analysis is in flight (no duplicate probe pairs)');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check((await page.textContent('#verifyResult')).includes('e4'),
+    'verification completes while a scan is running (queued, not clobbered)');
+  check(!(await page.locator('#reflectVerify').isDisabled()),
+    'Verify re-enables once its request settles');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('scanStatus');
+    return !el.hidden && !el.textContent.includes('Scanning');
+  }, null, { timeout: 90000 });
+  check((await page.textContent('#scanStatus')).includes('key moment'), 'scan reports key moments');
+  const momentCount = await page.locator('.moment-item').count();
+  check(momentCount >= 1 && momentCount <= 2, 'between 1 and 2 key moments listed');
+  const momentText = await page.textContent('#momentList');
+  check(momentText.includes('Nf6'), 'the decisive blunder (3… Nf6) is a key moment');
+  check(!momentText.includes('Qxf7'),
+    'moment list withholds the better move until reflection');
+  check(!momentText.includes('pawns') && !momentText.includes('swing'),
+    'moment list withholds the loss magnitude until reflection');
+  check(await page.locator('#scanGame').textContent() === 'Re-scan game',
+    'scan button switches to re-scan');
+
+  // Clicking a moment jumps the browser to that decision.
+  await page.locator('.moment-item', { hasText: 'Nf6' }).click();
+  check((await page.textContent('#reviewStatus')).includes('played here: Nf6'),
+    'moment click jumps to the position before the blunder');
+
+  // The scan is persisted on the archived game record.
+  const scanned = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (games) {
+      const g = games.find(function (x) { return x.tags && x.tags.White === 'Anna'; });
+      return { hasScan: !!g.scan, moments: g.scan ? g.scan.moments.length : 0, evals: g.scan ? g.scan.evals.length : 0 };
+    });
+  });
+  check(scanned.hasScan && scanned.moments >= 1 && scanned.evals === 8,
+    'scan stored on the game (evals for all 8 positions)');
+
+  await page.click('#revEnd');
+  check(await page.locator('#flagMoment').isDisabled(), 'cannot flag the end position (no move played)');
+  await page.click('#revPrev');
+  check((await page.textContent('#reviewStatus')).includes('played here: Qxf7#'),
+    'position browser shows the final decision');
+
+  // Hidden reflection gates the engine: no verdict before the form.
+  await page.click('#flagMoment');
+  check(await page.locator('#reflectForm').isVisible(), 'reflection form opens on flag');
+  check(await page.locator('#verifyBox').isHidden(), 'engine verdict hidden until reflection submitted');
+  await page.fill('#reflectThreat', 'mate on f7');
+  await page.fill('#reflectCandidates', 'Qxf7');
+  await page.selectOption('#reflectEval', 'winning');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check((await page.textContent('#verifyResult')).includes('Qxf7'),
+    'engine verdict references the move');
+
+  // The played mate IS Chessy's move: a positive PATTERN card — no cause
+  // diagnosis is asked for, but the lesson sentence is still required.
+  check(await page.locator('#causeLabel').isHidden(),
+    'cause picker hidden for a good-move (pattern) verdict');
+  await page.click('#saveCard'); // lesson still empty: validation blocks
+  await page.waitForSelector('#cardSaved:not([hidden])');
+  check((await page.textContent('#cardSaved')).includes('lesson'),
+    'saving requires a one-sentence lesson');
+
+  // Save the lesson card — double-click on purpose: the button must
+  // disable before the async write, so only ONE card is created.
+  await page.fill('#cardLesson', 'Look for forcing mates before anything else');
+  await page.evaluate(function () {
+    document.getElementById('saveCard').click();
+    document.getElementById('saveCard').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.includes('Lesson card saved');
+  });
+  const cardCount = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (c) { return c.length; });
+  });
+  check(cardCount === 1, 'double-clicking Save creates exactly one card');
+  const savedCard = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (c) { return c[0]; });
+  });
+  check(savedCard.kind === 'pattern' && savedCard.cause === 'pattern' &&
+        savedCard.step === -1 && savedCard.due <= Date.now() &&
+        !!savedCard.bestMove && savedCard.reflection.threat === 'mate on f7',
+    'saved card carries verdict, reflection and immediate-due scheduling');
+
+  // A move that COMPLETES a threefold repetition is a draw — verification
+  // must score it 0 from the prefix's repetition table, not analyse the
+  // bare FEN as an ongoing position.
+  await page.click('#reviewBack');
+  await page.click('#importPgnBtn');
+  await page.fill('#importText', [
+    '[Event "Rep"]',
+    '',
+    '1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 1/2-1/2',
+    '[Event "Mate"]',
+    '[White "Cara"]',
+    '[Black "Dan"]',
+    '',
+    '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'
+  ].join('\n'));
+  await t.pick('importColor', 'b'); // "I played Black" — used by the scan below
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.locator('.game-item', { hasText: 'threefold' }).click();
+  await page.click('#revEnd');
+  await page.click('#revPrev'); // ply 7: ...Ng8 completes the threefold
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'nothing');
+  await page.fill('#reflectCandidates', 'Ng8, Nd5');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check((await page.textContent('#verifyResult')).indexOf('eval +0.0') !== -1 ||
+        (await page.textContent('#verifyResult')).includes('agrees'),
+    'move completing a threefold verifies against the drawn (0.0) value');
+
+  // Stale-verdict race: verify in game A, then switch to game B before the
+  // probes finish — the late result must be discarded, never re-enabling
+  // Save with the old position on the new game.
+  await page.click('#reviewBack');
+  await page.locator('.game-item', { hasText: 'threefold' }).click();
+  await page.click('#flagMoment'); // ply 0 of game A
+  await page.fill('#reflectThreat', 'nothing');
+  await page.fill('#reflectCandidates', 'Nf3');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await page.click('#reviewBack'); // leave immediately, probes still queued
+  await page.locator('.game-item', { hasText: 'Cara' }).click(); // game B
+  await page.click('#flagMoment');
+  await page.waitForTimeout(6000); // let game A's stale probes finish
+  check(await page.locator('#saveCard').isDisabled(),
+    'stale verification from the previous game is discarded (Save stays disabled)');
+  // ...and a fresh verification on game B still works after the discard.
+  await page.fill('#reflectThreat', 'nothing yet');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'a fresh verification after the discarded one enables Save normally');
+
+  // Color-aware scan: this game was imported as "I played Black", so only
+  // Black's decisions may become moments — the winner's moves are not the
+  // trainee's lesson material.
+  await page.click('#scanGame');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('scanStatus');
+    return !el.hidden && !el.textContent.includes('Scanning');
+  }, null, { timeout: 90000 });
+  const colorMoments = await page.textContent('#momentList');
+  check(colorMoments.includes('(Black)') && !colorMoments.includes('(White)'),
+    'scan surfaces only the trainee color’s decisions');
+  check((await page.textContent('#scanStatus')).includes('Black'),
+    'scan status names the coached side');
+
+  // Error card end to end: open the blunder moment, reflect, verify, and
+  // the cause diagnosis becomes required before saving.
+  await page.locator('.moment-item', { hasText: 'Nf6' }).click();
+  await page.click('#flagMoment');
+  // Flagging a NEW moment resets every reflection field — including the
+  // evaluation select, which would otherwise carry a stale answer into
+  // the next card.
+  check(await page.evaluate(function () { return document.getElementById('reflectEval').value; }) === '',
+    'flagging a new moment clears the previous evaluation');
+  await page.fill('#reflectThreat', 'Qxf7 mate threat');
+  await page.fill('#reflectCandidates', 'Nf6, g6');
+  await page.selectOption('#reflectEval', 'worse');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    const el = document.getElementById('verifyResult');
+    return el.textContent && !el.textContent.includes('Analysing');
+  }, null, { timeout: 60000 });
+  check(!(await page.locator('#causeLabel').isHidden()),
+    'cause picker shown for an error verdict');
+  await page.fill('#cardLesson', 'Check every mate threat on f7 first');
+  await page.click('#saveCard'); // cause still unpicked: validation blocks
+  await page.waitForSelector('#cardSaved:not([hidden])');
+  check((await page.textContent('#cardSaved')).includes('cause'),
+    'error cards require a cause diagnosis');
+  await page.selectOption('#cardCause', 'threat-scan');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.includes('Lesson card saved');
+  });
+  check(true, 'error card saved after cause + lesson provided');
+
+  // An imported game that CONTINUES past an engine-automatic draw (an
+  // unclaimed threefold) has moves played from positions the engine
+  // scores as over — those moments are not flaggable (analysis has no
+  // move to return; the card would be unanswerable).
+  await page.click('#reviewBack');
+  await page.click('#importPgnBtn');
+  await page.fill('#importText',
+    '[White "Cont"]\n\n1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 5. Nf3 Nf6 *');
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  await page.locator('.game-item', { hasText: 'Cont' }).click();
+  await page.click('#revEnd');
+  await page.click('#revPrev');
+  await page.click('#revPrev'); // ply 8: 5. Nf3 played FROM the completed threefold
+  check((await page.textContent('#reviewStatus')).includes('not flaggable'),
+    'status explains why a drawn-by-rule position cannot be flagged');
+  check(await page.locator('#flagMoment').isDisabled(),
+    'moves played from an engine-terminal position are not flaggable');
+  await page.click('#revPrev'); // ply 7: 4… Ng8 — position before it is NOT terminal
+  check(!(await page.locator('#flagMoment').isDisabled()),
+    'ordinary positions in the same game remain flaggable');
   await page.click('#reviewBack');
 
   // Play is undisturbed by the excursion.

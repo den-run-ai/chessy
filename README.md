@@ -75,6 +75,15 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   parser tolerates real-world exports (comments, variations, NAGs, glued
   move numbers, `0-0` castling, multi-game and tagless files) and every
   imported game is replay-validated before it is stored.
+  **Scan for key moments** runs a quick engine pass over *your* decisions
+  only and lists up to two moments without revealing severity — a
+  deliberately *experimental Chessy estimate* (single-line, sub-second
+  probes), not authoritative analysis. Flagging a moment requires your
+  *own* reading first (threat, candidates, evaluation — all required; the
+  engine's verdict stays hidden until you answer), then verifies in a
+  dedicated worker (with a watchdog + synchronous fallback) and saves a
+  lesson card: error cards need your cause diagnosis, good moves become
+  positive *pattern* cards.
   Reflection, engine verification, lesson cards and spaced review build on
   this archive (coaching roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23)). The archive

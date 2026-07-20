@@ -88,6 +88,52 @@
               <button type="button" id="revEnd" class="btn" aria-label="Go to final position">⏭</button>
             </div>
             <p class="coach-note" id="reviewStatus" aria-live="polite"></p>
+            <button type="button" id="flagMoment" class="btn primary">Flag this moment</button>
+            <button type="button" id="scanGame" class="btn">Scan for key moments</button>
+            <p class="coach-note" id="scanStatus" aria-live="polite" hidden></p>
+            <ol class="moment-list" id="momentList" aria-label="Key moments"></ol>
+          </div>
+
+          <div class="coach-side">
+            <!-- Engine output stays hidden until the player has answered. -->
+            <form id="reflectForm" class="coach-form" hidden>
+              <h3>Before the engine speaks…</h3>
+              <label>What is the opponent threatening?
+                <input type="text" id="reflectThreat" autocomplete="off" required></label>
+              <label>Which candidate moves did you consider?
+                <input type="text" id="reflectCandidates" autocomplete="off" required
+                       placeholder="e.g. Nf3, d4, O-O"></label>
+              <label>Your evaluation here:
+                <select id="reflectEval" required>
+                  <option value="" selected disabled>Choose…</option>
+                  <option value="winning">I'm winning</option>
+                  <option value="better">I'm better</option>
+                  <option value="equal">Equal</option>
+                  <option value="worse">I'm worse</option>
+                  <option value="lost">I'm lost</option>
+                </select></label>
+              <button type="submit" id="reflectVerify" class="btn primary">Verify with engine</button>
+            </form>
+
+            <div id="verifyBox" class="coach-form" hidden>
+              <h3>Engine verdict</h3>
+              <p id="verifyResult" aria-live="polite"></p>
+              <label id="causeLabel">Cause (your call — the engine only knows the score):
+                <select id="cardCause">
+                  <option value="" selected disabled>Your call…</option>
+                  <option value="threat-scan">Missed a threat</option>
+                  <option value="candidates">Good move not among my candidates</option>
+                  <option value="evaluation">Considered it but judged it wrong</option>
+                  <option value="calculation">Line went wrong on the reply</option>
+                  <option value="efficiency">Right idea, too much time</option>
+                  <option value="impulse">Moved too fast</option>
+                </select></label>
+              <label>Lesson (one reusable sentence):
+                <input type="text" id="cardLesson" autocomplete="off"
+                       placeholder="e.g. Check every check before recapturing"></label>
+              <button type="button" id="saveCard" class="btn primary">Save lesson card</button>
+              <p class="coach-note" id="cardSaved" hidden></p>
+            </div>
           </div>
         </div>
       </div>

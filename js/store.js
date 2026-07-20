@@ -5,9 +5,12 @@
  *   games: { id (auto), sig (unique), source ('play'|'import'), tags,
  *            gameSeq, sans, playerColor, clocks, result, reason, mode,
  *            difficulty, timeControl, plies, createdAt }
- *   cards: { id (auto), gameId, ... } — lesson cards (created by the
- *            review flow; the store carries the schema from day one so
- *            adding the flow needs no version bump)
+ *   cards: { id (auto), gameId, ply, fenBefore, playedSan, bestSan,
+ *            bestMove {from,to,promotion}, bestScore, playedScore, lossCp,
+ *            kind, cause, lesson, reflection, createdAt, due, step,
+ *            attempts } — lesson cards saved by the review flow
+ *            (`due`/`step`/`attempts` drive the spaced review that lands
+ *            in the next slice)
  *
  * Everything is promise-based; the DB opens lazily on first use so
  * browsers without IndexedDB (or private modes that block it) fail
@@ -97,6 +100,9 @@
   function addGame(game) {
     return tx('games', 'readwrite', function (s) { return s.add(game); });
   }
+  function updateGame(game) {
+    return tx('games', 'readwrite', function (s) { return s.put(game); });
+  }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
   function getGameBySig(sig) {
     return tx('games', 'readonly', function (s) { return s.index('sig').get(sig); });
@@ -107,10 +113,18 @@
       .then(function (games) { return games.sort(function (a, b) { return b.createdAt - a.createdAt; }); });
   }
 
+  function addCard(card) {
+    return tx('cards', 'readwrite', function (s) { return s.add(card); });
+  }
+  function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
+
   global.CoachStore = {
     addGame: addGame,
+    updateGame: updateGame,
     getGame: getGame,
     getGameBySig: getGameBySig,
-    listGames: listGames
+    listGames: listGames,
+    addCard: addCard,
+    listCards: listCards
   };
 })(typeof window !== 'undefined' ? window : globalThis);
