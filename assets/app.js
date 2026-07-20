@@ -375,11 +375,13 @@
       ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
   }
 
-  // Navigation generation: every view change bumps it, so work queued
-  // behind a slow asynchronous settle (the game-over Review handoff) can
-  // tell whether the user navigated in the meantime.
-  let navSeq = 0;
-  document.addEventListener('chessy:viewchange', function () { navSeq++; });
+  // Moved-on generation: bumped on every view change AND on Undo (a
+  // same-game mutation — it voids the very ending a queued handoff would
+  // open), so work parked behind a slow asynchronous settle (the
+  // game-over Review handoff) can tell whether the user moved on in the
+  // meantime. New game/Rematch are covered by the game id changing.
+  let movedOnSeq = 0;
+  document.addEventListener('chessy:viewchange', function () { movedOnSeq++; });
 
   liveNoteEl.addEventListener('click', function () {
     if (window.CoachReview) CoachReview.showView('play');
@@ -814,6 +816,9 @@
   });
 
   document.getElementById('undo').addEventListener('click', function () {
+    // Editing the game voids any queued Review-game handoff: the ending
+    // it would open is being taken back (see movedOnSeq).
+    movedOnSeq++;
     // Undo while the AI is thinking cancels the search and takes back the
     // human move that triggered it (it used to silently do nothing).
     if (aiThinking) cancelAi();
@@ -865,16 +870,16 @@
       // (undo → different finish whose replacement write failed), a
       // wrong game.
       const idAtClick = gameId;
-      const navAtClick = navSeq;
+      const seqAtClick = movedOnSeq;
       archiveAttempt.then(function (storedId) {
         // The user may have MOVED ON while a slow write settled — started
-        // a new game, or navigated between views themselves. ANY
-        // intervening navigation invalidates the handoff (checking the
-        // final view instead would both eat the handoff when the dialog
-        // opened outside Play — a timed game flagging in Review — and
-        // fire it despite a Review → Play round trip). The game stays
-        // one click away in the Review list.
-        if (gameId !== idAtClick || navSeq !== navAtClick) return;
+        // a new game, navigated between views, or undone the ending. ANY
+        // of these invalidates the handoff (checking the final view
+        // instead would both eat the handoff when the dialog opened
+        // outside Play — a timed game flagging in Review — and fire it
+        // despite a Review → Play round trip). The game stays one click
+        // away in the Review list.
+        if (gameId !== idAtClick || movedOnSeq !== seqAtClick) return;
         CoachReview.openArchivedGame(storedId);
       });
       return;

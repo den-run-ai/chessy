@@ -177,6 +177,33 @@ require('./helper').run('review', async function (t) {
     'a Review → Play round trip while the write settles also drops the handoff');
   await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
 
+  // UNDO while the write settles also invalidates the handoff: the very
+  // ending it would open is being taken back — yanking the user to
+  // Review of the obsolete finish mid-edit would be worse than either
+  // navigation case (gameId is unchanged and no view change fires).
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function (rec) {
+      return new Promise(function (resolve) {
+        window.__releaseArchive = function () {
+          resolve(CoachStore.__realArchiveGame(rec));
+        };
+      });
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview');        // handoff queued on the held write
+  await page.click('#undo');                  // the ending is taken back
+  await page.evaluate(function () { window.__releaseArchive(); });
+  await page.waitForTimeout(300);
+  check(await page.locator('#viewPlay').isVisible() &&
+        await page.locator('#viewReview').isHidden(),
+    'Undo while the write settles drops the queued handoff');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+
   // The page-level archive failure note lives OUTSIDE the view
   // containers: a late failure shown after the user wandered into Review
   // must stay visible there, not vanish with the hidden Play view.
