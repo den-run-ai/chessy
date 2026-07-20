@@ -584,11 +584,41 @@
     document.getElementById('gameOverTitle').textContent = title;
     document.getElementById('gameOverDetail').textContent =
       'By ' + status.reason + ' · ' + status.result;
+    archiveCurrentGame(status);
     gameOverDialog.showModal();
   }
 
+  // Finished games feed the coaching archive (js/archive.js) — keyed on
+  // this game's UUID, so re-offering the same ending is an idempotent
+  // overwrite. A FAILED write is surfaced in the game-over dialog: an
+  // archive that silently drops games would corrupt every later statistic.
+  const archiveNoteEl = document.getElementById('archiveNote');
+
+  function archiveCurrentGame(status) {
+    if (!window.ChessyArchive) return;
+    archiveNoteEl.hidden = true;
+    ChessyArchive.record(state, settings, status, gameId).catch(function () {
+      archiveNoteEl.hidden = false;
+      archiveNoteEl.textContent =
+        'This game could not be archived (storage unavailable).';
+    });
+  }
+
   // ---- Controls ----
+  // A fresh UUID on every New game/Rematch: it is the archive record's KEY,
+  // so an identical game played twice is two records, while the same ending
+  // re-displayed (or replayed after reload + undo) overwrites one record.
+  // Random UUIDs stay unique across tabs with no coordination.
+  let gameId = null;
+
+  function newGameId() {
+    return (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+  }
+
   function startNewGame() {
+    gameId = newGameId();
     cancelAi();
     state = Chess.newGameState();
     selected = null;
@@ -749,7 +779,11 @@
         clocks: clocks.wMs !== null
           ? { wMs: liveRemaining('w'), bMs: liveRemaining('b') } : null,
         timeForfeit: timeForfeit,
-        flipped: flipped
+        flipped: flipped,
+        // Persisted so the archive's idempotent overwrite survives
+        // reloads: a reload → undo → replayed ending is the SAME game
+        // instance and must keep its record key.
+        gameId: gameId
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -811,6 +845,7 @@
         clocks.bMs = null;
       }
       flipped = !!data.flipped;
+      gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
       return true;
     } catch (e) {
       return false;
@@ -819,7 +854,20 @@
 
   // ---- Boot ----
   buildBoard();
-  load();
+  // No saved game: the implicit first game needs its own UUID too.
+  if (!load()) gameId = newGameId();
   render();
   maybeAiMove();
+
+  // A game restored in a FINISHED state may have missed its archive write:
+  // the tab can die between the synchronous localStorage save and the
+  // asynchronous IndexedDB commit, and nothing on the next boot calls
+  // showGameOver() again. Re-offer the restored game — the idempotent
+  // UUID-keyed put makes this a no-op when the record already exists.
+  // On window load, NOT a zero timeout: archive.js is a later script tag
+  // and the parser may yield to timers while it is still being fetched.
+  window.addEventListener('load', function () {
+    const status = fullStatus();
+    if (status.over && state.history.length) archiveCurrentGame(status);
+  });
 })();

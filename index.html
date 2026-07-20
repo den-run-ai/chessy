@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/style.css?r=r20">
+  <link rel="stylesheet" href="css/style.css?r=r21">
 </head>
 <body>
   <div class="app">
@@ -102,6 +102,8 @@
           aria-describedby="gameOverDetail">
     <h2 id="gameOverTitle"></h2>
     <p id="gameOverDetail"></p>
+    <!-- Shown only when the coaching-archive write FAILED (js/app.js). -->
+    <p class="offline-note" id="archiveNote" role="status" hidden></p>
     <div class="buttons gameover-actions">
       <button id="gameOverReview" class="btn primary">Review game</button>
       <button id="gameOverRematch" class="btn">Rematch</button>
@@ -117,10 +119,12 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r20';</script>
-  <script src="js/engine.js?r=r20"></script>
-  <script src="js/ai.js?r=r20"></script>
-  <script src="js/app.js?r=r20"></script>
+  <script>window.CHESSY_RELEASE = 'r21';</script>
+  <script src="js/engine.js?r=r21"></script>
+  <script src="js/ai.js?r=r21"></script>
+  <script src="js/store.js?r=r21"></script>
+  <script src="js/app.js?r=r21"></script>
+  <script src="js/archive.js?r=r21"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.
