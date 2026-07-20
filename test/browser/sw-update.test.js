@@ -47,7 +47,7 @@ check(refTokens.length > 0 && refTokens.every(function (t) { return t === swToke
   'every ?r= reference in index.html carries the same token (' + refTokens.length + ' refs)');
 check(versionedRefs.every(function (ref) { return swSrc.indexOf(ref.replace('?r=' + swToken, '')) !== -1; }),
   'every versioned index.html reference has a matching sw.js precache entry');
-check(swSrc.indexOf("'./js/ai-worker.js?r=' + RELEASE") !== -1,
+check(swSrc.indexOf("'./assets/ai-worker.js?r=' + RELEASE") !== -1,
   'the worker script is precached under the release token');
 
 // ---- Dynamic old-worker → new-release transition ----
@@ -107,14 +107,17 @@ function browserType() {
     document.querySelectorAll('script[src], link[rel="stylesheet"]').forEach(function (el) {
       urls.push(el.src || el.href);
     });
-    return {
-      token: token,
-      mixed: urls.filter(function (u) { return u.indexOf('?r=' + token) === -1; }),
-      total: urls.length,
-      engine: typeof Chess !== 'undefined' && typeof ChessAI !== 'undefined',
-      ready: document.getElementById('installNote').textContent.indexOf('Ready offline') !== -1,
-      controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller)
-    };
+    return caches.keys().then(function (keys) {
+      return {
+        token: token,
+        mixed: urls.filter(function (u) { return u.indexOf('?r=' + token) === -1; }),
+        total: urls.length,
+        engine: typeof Chess !== 'undefined' && typeof ChessAI !== 'undefined',
+        ready: document.getElementById('installNote').textContent.indexOf('Ready offline') !== -1,
+        controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+        caches: keys.filter(function (k) { return k.indexOf('chessy-') === 0; })
+      };
+    });
   };
 
   async function stable(pred, label, timeoutMs) {
@@ -146,6 +149,15 @@ function browserType() {
     'phase B ready under the new worker');
   check(b.mixed.length === 0 && b.engine,
     'update in flight: the rB document executes only rB assets (' + b.total + ' checked)');
+
+  // "controlled" above can still mean the rA worker (it controls the page
+  // while rB installs). Before testing rB's OWN cache offline, wait for
+  // proof the rB worker activated: its activate handler deletes the rA
+  // cache, so chessy-rB present + chessy-rA gone = takeover complete.
+  await stable(function (s) {
+    return s.caches.indexOf('chessy-rB') !== -1 && s.caches.indexOf('chessy-rA') === -1;
+  }, 'rB worker takeover (rA cache cleaned)');
+  check(true, 'the rB worker activates and cleans up the rA cache');
 
   // Offline after the update: the cached rB shell must request the cached
   // rB assets — still zero cross-release loads. Chromium only: Playwright's

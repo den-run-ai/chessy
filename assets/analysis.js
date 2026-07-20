@@ -28,7 +28,7 @@
   function ensureWorker() {
     if (worker || typeof Worker === 'undefined') return worker;
     try {
-      worker = new Worker('js/ai-worker.js' +
+      worker = new Worker('assets/ai-worker.js' +
         (global.CHESSY_RELEASE ? '?r=' + global.CHESSY_RELEASE : ''));
     } catch (e) { return null; }
     worker.onmessage = function (e) {
