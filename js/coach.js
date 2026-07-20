@@ -495,8 +495,13 @@
         bestSans: bestSans,
         moments: top
       };
-      CoachStore.updateGame(r.game)
-        .catch(function () { /* scan still usable this session */ });
+      CoachStore.updateGame(r.game).catch(function () {
+        // The scan still works this session, but it will be gone after a
+        // reload — say so instead of silently presenting it as saved.
+        if (token !== scanToken) return;
+        $('scanStatus').textContent +=
+          ' (Could not save the scan — it lasts this session only.)';
+      });
       renderScan(r);
     });
   }
@@ -584,6 +589,15 @@
     const fenBefore = r.fens[ply];
     const entry = r.gs.history[ply];
     const mover = Chess.parseFen(fenBefore).turn;
+    // Snapshot the reflection NOW: these are the answers that passed the
+    // reflect-first gate. The fields stay editable while the engine runs,
+    // so the card must not reread the DOM at save time — a post-verdict
+    // rewrite would replace the honest pre-engine reading.
+    const reflection = {
+      threat: $('reflectThreat').value,
+      candidates: $('reflectCandidates').value,
+      evaluation: $('reflectEval').value
+    };
     $('verifyBox').hidden = false;
     $('verifyResult').textContent = 'Analysing…';
     $('saveCard').disabled = true;
@@ -593,6 +607,11 @@
     $('reflectVerify').disabled = true;
 
     analyse(fenBefore, null, r.states[ply].positions).then(function (best) {
+      // Already stale (the user flagged another moment or left the game)?
+      // Bail BEFORE enqueueing the second probe: each probe costs up to
+      // 1.2 s plus watchdog allowance on the shared FIFO, and abandoned
+      // pairs would delay the verification the user is actually watching.
+      if (token !== verifyToken || review !== r || r.flagged !== ply) return;
       // The played move's value = the value of the position it leads to.
       // If that position is terminal (mate, stalemate, dead, 50-move, or a
       // COMPLETED threefold — hence the full prefix state, not a bare FEN)
@@ -626,7 +645,8 @@
           bestMove: bm ? { from: bm.from, to: bm.to, promotion: bm.promotion || null } : null,
           bestScore: best.score, playedScore: after.score, lossCp: lossCp,
           kind: kind,
-          depth: best.depth
+          depth: best.depth,
+          reflection: reflection
         };
         $('causeLabel').hidden = kind === 'pattern';
         $('verifyResult').textContent = (same
@@ -681,11 +701,9 @@
       kind: v.kind,
       cause: cause,
       lesson: lesson,
-      reflection: {
-        threat: $('reflectThreat').value.trim(),
-        candidates: $('reflectCandidates').value.trim(),
-        evaluation: $('reflectEval').value
-      },
+      // The snapshot taken when verification was submitted — never the
+      // fields' current contents (editable since the verdict appeared).
+      reflection: v.reflection,
       createdAt: now,
       due: now,        // first review is immediate (the "learn" step)
       step: -1,        // -1 = not yet on the day ladder
@@ -708,6 +726,11 @@
   // seconds of work), so closing the dialog mid-batch neither cancels nor
   // duplicates it; the list simply refreshes when the batch lands.
   let importBusy = false;
+  // Each dialog OPEN starts a new session. A batch's completion may only
+  // touch the dialog it was started from — the user can close the dialog
+  // mid-batch and reopen it with a fresh paste, and the old batch landing
+  // must not close (and thereby discard) that new session.
+  let importSession = 0;
 
   function newGameChoice(name) {
     const el = document.querySelector('input[name="' + name + '"]:checked');
@@ -715,8 +738,12 @@
   }
 
   $('importPgnBtn').addEventListener('click', function () {
+    importSession++;
     $('importText').value = '';
-    $('importError').textContent = '';
+    $('importError').textContent = importBusy
+      ? 'A previous import is still finishing — Import unlocks when it lands.'
+      : '';
+    $('importStart').disabled = importBusy;
     $('importDialog').showModal();
   });
   $('importCancel').addEventListener('click', function () {
@@ -726,6 +753,7 @@
   $('importStart').addEventListener('click', function () {
     if (importBusy) return;
     importBusy = true;
+    const session = importSession;
     $('importStart').disabled = true;
     const playerColor = (newGameChoice('importColor') || 'both');
     const games = Chess.parsePgn($('importText').value);
@@ -736,7 +764,17 @@
       chain = chain.then(function () {
         if (g.unsupported) throw new Error('games from a set-up position are not supported');
         const gs = Chess.replaySans(g.sans); // throws on illegal moves
+        // Chessy's own rules auto-draw threefold/fifty (a casual-play
+        // simplification), but imported games were played under standard
+        // CLAIM-based rules — a player may legally play on, resign, or
+        // lose on time in a "claimable" position. Only forced outcomes
+        // may override the recorded result; an auto-draw reason is kept
+        // only when it agrees with what the PGN declares.
         const status = Chess.gameStatus(gs);
+        const forced = status.over &&
+          (status.reason === 'checkmate' || status.reason === 'stalemate' ||
+           status.reason === 'insufficient material');
+        const agrees = status.over && g.result === status.result;
         return CoachStore.addGame({
           source: 'import',
           tags: g.tags,
@@ -745,8 +783,8 @@
           // on those moves. Applies to the whole pasted batch.
           playerColor: playerColor,
           clocks: null, // PGN %clk import is a follow-up
-          result: status.over ? status.result : g.result,
-          reason: status.over ? status.reason : '',
+          result: forced ? status.result : agrees ? status.result : g.result,
+          reason: (forced || agrees) ? status.reason : '',
           mode: null, difficulty: null, timeControl: (g.tags && g.tags.TimeControl) || null,
           plies: gs.history.length,
           createdAt: Date.now()
@@ -759,6 +797,10 @@
     chain.then(function () {
       importBusy = false;
       $('importStart').disabled = false;
+      // The archive changed regardless of which dialog session survives.
+      if (ok > 0) renderGameList();
+      // Completion UI belongs to THIS batch's dialog session only.
+      if (session !== importSession) return;
       if (ok === 0 && failed === 0) {
         $('importError').textContent = 'No games found in that text.';
         return;
@@ -769,11 +811,9 @@
       }
       if (failed > 0) {
         $('importError').textContent = ok + ' imported, ' + failed + ' skipped (' + firstError + ').';
-        renderGameList();
         return;
       }
       $('importDialog').close();
-      renderGameList();
     });
   });
 

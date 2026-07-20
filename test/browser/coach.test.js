@@ -161,12 +161,57 @@ require('./helper').run('coach', async function (t) {
   });
   check(true, 'tagless multi-game paste imports both games');
 
+  // Claim-based draws don't override the recorded result: this game ends in
+  // a threefold-CLAIMABLE position, but the player resigned instead — the
+  // declared 0-1 must be archived, not Chessy's automatic 1/2-1/2.
+  await page.click('#importPgnBtn');
+  await page.fill('#importText',
+    '[White "Claim"]\n[Result "0-1"]\n\n1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 0-1');
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+  const claimed = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (games) {
+      const g = games.find(function (x) { return x.tags && x.tags.White === 'Claim'; });
+      return { result: g.result, reason: g.reason };
+    });
+  });
+  check(claimed.result === '0-1' && claimed.reason === '',
+    'a claimable-draw position keeps the declared result (0-1, not auto-1/2-1/2)');
+
+  // A batch landing after its dialog was closed must not close a NEWLY
+  // reopened dialog (or discard its fresh paste).
+  await page.click('#importPgnBtn');
+  await page.evaluate(function () {
+    CoachStore.__realAddGame = CoachStore.addGame;
+    CoachStore.addGame = function (g) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { CoachStore.__realAddGame(g).then(resolve, reject); }, 1500);
+      });
+    };
+  });
+  await page.fill('#importText', '1. e4 e5 *');
+  await page.click('#importStart');
+  await page.click('#importCancel'); // close mid-batch
+  await page.click('#importPgnBtn'); // reopen: a NEW dialog session
+  check(await page.evaluate(function () { return document.getElementById('importStart').disabled; }),
+    'Import stays locked while the previous batch is still writing');
+  await page.fill('#importText', '1. d4 d5 *');
+  await page.waitForFunction(function () {
+    return !document.getElementById('importStart').disabled;
+  }, null, { timeout: 15000 });
+  check(await page.evaluate(function () { return document.getElementById('importDialog').open; }),
+    'the old batch landing does not close the reopened dialog');
+  check((await page.inputValue('#importText')) === '1. d4 d5 *', 'the new paste survives');
+  await page.evaluate(function () { CoachStore.addGame = CoachStore.__realAddGame; });
+  await page.click('#importStart');
+  await page.waitForFunction(function () { return !document.getElementById('importDialog').open; });
+
   // The imported archive survives a reload and replays in the browser.
   await page.reload();
   await page.waitForSelector('#board .square');
   await page.click('#tabReview');
   await page.waitForSelector('.game-item');
-  check(await page.locator('.game-item').count() === 5, 'imported games survive reload');
+  check(await page.locator('.game-item').count() === 8, 'imported games survive reload');
   await page.locator('.game-item', { hasText: 'Anna vs Ben' }).click();
   check((await page.textContent('#reviewStatus')).includes('Position 0/7'),
     'imported game opens in the position browser');
@@ -266,6 +311,11 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#cardSaved')).includes('lesson'),
     'saving requires a one-sentence lesson');
 
+  // Rewriting the reflection AFTER the verdict must not reach the card:
+  // the answers that passed the reflect-first gate were snapshotted when
+  // verification was submitted.
+  await page.fill('#reflectThreat', 'rewritten after seeing the verdict');
+
   // Save the lesson card — double-click on purpose: the button must
   // disable before the async write, so only ONE card is created.
   await page.fill('#cardLesson', 'Look for forcing mates before anything else');
@@ -286,7 +336,7 @@ require('./helper').run('coach', async function (t) {
   check(savedCard.kind === 'pattern' && savedCard.cause === 'pattern' &&
         savedCard.step === -1 && savedCard.due <= Date.now() &&
         !!savedCard.bestMove && savedCard.reflection.threat === 'mate on f7',
-    'saved card carries verdict, reflection and immediate-due scheduling');
+    'saved card carries the PRE-verdict reflection snapshot, verdict and immediate due');
 
   // A move that COMPLETES a threefold repetition is a draw — verification
   // must score it 0 from the prefix's repetition table, not analyse the
