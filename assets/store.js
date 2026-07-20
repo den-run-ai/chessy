@@ -236,7 +236,19 @@
           if (c) {
             if (c.value.ply !== fields.ply) { c.continue(); return; }
             outcome = 'updated';
-            s.put(Object.assign({}, c.value, fields));
+            const merged = Object.assign({}, c.value, fields);
+            // Attempt history is only meaningful against the move it was
+            // graded on: if a re-save changed the card's canonical move,
+            // the old attempts' correct/incorrect flags would silently be
+            // read against the NEW move (Train, Progress). Start the
+            // history over.
+            const oldBest = c.value.bestMove || null;
+            const newBest = fields.bestMove || null;
+            const sameBest = (!oldBest && !newBest) || (!!oldBest && !!newBest &&
+              oldBest.from === newBest.from && oldBest.to === newBest.to &&
+              (oldBest.promotion || null) === (newBest.promotion || null));
+            if (!sameBest) merged.attempts = [];
+            s.put(merged);
           } else {
             s.add(Object.assign({}, freshDefaults, fields));
           }

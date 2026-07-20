@@ -162,6 +162,12 @@
   // missing (e.g. its archive write failed).
   function openArchivedGame(gameId) {
     showView('review');
+    // No id at all (the archive write failed): the game list IS the
+    // destination — never guess at some other record.
+    if (!gameId) {
+      $('tabReview').focus();
+      return Promise.resolve();
+    }
     return CoachStore.getGame(gameId).then(function (game) {
       if (game) openReview(game); // openReview moves focus into the flow
       else $('tabReview').focus();
