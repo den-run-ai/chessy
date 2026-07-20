@@ -161,6 +161,35 @@
   }
   function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
 
+  // ONE card per moment (gameId + ply), enforced atomically: the index
+  // lookup and the write share a single readwrite transaction, so two
+  // saves racing on the same moment (double-fire, second tab) cannot mint
+  // two cards — the loser of the race updates the winner's card instead.
+  // Resolves 'updated' when a card for the moment existed, else 'saved'.
+  function upsertCardByMoment(fields, freshDefaults) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('cards', 'readwrite');
+        const s = t.objectStore('cards');
+        const cur = s.index('gameId').openCursor(IDBKeyRange.only(fields.gameId));
+        let outcome = 'saved';
+        cur.onsuccess = function () {
+          const c = cur.result;
+          if (c) {
+            if (c.value.ply !== fields.ply) { c.continue(); return; }
+            outcome = 'updated';
+            s.put(Object.assign({}, c.value, fields));
+          } else {
+            s.add(Object.assign({}, freshDefaults, fields));
+          }
+        };
+        t.oncomplete = function () { resolve(outcome); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
@@ -168,6 +197,7 @@
     listGames: listGames,
     addCard: addCard,
     updateCard: updateCard,
+    upsertCardByMoment: upsertCardByMoment,
     listCards: listCards
   };
 })(typeof window !== 'undefined' ? window : globalThis);

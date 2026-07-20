@@ -43,6 +43,9 @@
     review = null; // leaving a game abandons its (unsaved) reflection state
     $('reviewFlow').hidden = true;
     $('gameListWrap').hidden = false;
+    // Announce the abandonment: the reflection flow cancels any in-flight
+    // probe when it observes current() === null.
+    document.dispatchEvent(new CustomEvent('chessy:reviewrender'));
     return CoachStore.listGames().then(function (games) {
       const list = $('gameList');
       list.innerHTML = '';
