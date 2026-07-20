@@ -1,8 +1,9 @@
 /* Game archive foundation: finished games persist to IndexedDB, keyed on
- * the game's UUID (idempotent re-archive that keeps the original
- * createdAt; a DIVERGENT completion under the same key — cloned tabs —
- * forks a fresh id instead of overwriting), with failures surfaced both
- * in the game-over dialog and, for the boot reconcile, on the page. */
+ * the game's UUID — idempotent re-archive keeping the earliest completion
+ * time, revisions (undo → different finish) replacing the record in
+ * place — with failures surfaced both in the game-over dialog and, for
+ * boot-time work, on the page. SINGLE-TAB model by design (#44 tracks
+ * cross-tab semantics). */
 'use strict';
 require('./helper').run('archive', async function (t) {
   const page = t.page, check = t.check, mv = t.mv;
@@ -45,8 +46,8 @@ require('./helper').run('archive', async function (t) {
 
   // Reload → undo → reproduce the SAME ending: the UUID is persisted with
   // the saved game, so the re-archive is an idempotent overwrite — and it
-  // keeps the ORIGINAL createdAt (listGames sorts by createdAt; a re-shown
-  // game must not jump to the top of the chronology).
+  // keeps the EARLIEST completion time (listGames sorts by createdAt; a
+  // re-shown game must not jump to the top of the chronology).
   const overwriteId = await page.evaluate(function () {
     return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
   });
@@ -111,112 +112,55 @@ require('./helper').run('archive', async function (t) {
     return g.id === 'zero-ply-forfeit' && g.plies === 0 && g.reason === 'time forfeit';
   }), 'a zero-ply time forfeit is archived');
 
-  // A CLONED tab shares the persisted gameId but may play a different
-  // continuation: its divergent completion must fork a fresh id (both
-  // finished games survive), never overwrite the first tab's record.
-  const cloneStoredId = await page.evaluate(function () {
-    const sharedId = JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
-    return ChessyArchive.record(
-      { history: [{ san: 'f3' }, { san: 'e6' }, { san: 'g4' }, { san: 'Qh4#' }] },
-      { mode: 'pvp', difficulty: '3', timeControl: 'none' },
-      { over: true, result: '0-1', reason: 'checkmate' },
-      sharedId);
-  });
-  await waitGameCount(3);
-  const afterClone = await games();
-  check(cloneStoredId !== savedId &&
-        afterClone.some(function (g) { return g.id === savedId && g.sans[1] === 'e5'; }) &&
-        afterClone.some(function (g) { return g.id === cloneStoredId && g.sans[1] === 'e6'; }),
-    'a divergent completion from a cloned tab forks a fresh id — both games kept');
-
-  // A SAME-tab replay edit (close dialog → undo → different finish) is
-  // NOT a clone: it revises this instance's one record instead of adding
-  // a second game.
-  const tabEdit = await page.evaluate(function () {
-    const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
-    const over = { over: true, result: '0-1', reason: 'checkmate' };
+  // A REVISED ending (undo → different finish) replaces the instance's
+  // one record — one game instance, one record. And a same-ending
+  // re-offer keeps the EARLIEST known completion time even when the
+  // earlier evidence arrives later (a delayed slot drain).
+  const revised = await page.evaluate(function () {
     const mk = function (sans) {
       return { history: sans.map(function (s) { return { san: s }; }) };
     };
-    return ChessyArchive.record(mk(['e4', 'e5']), cfg, over, 'tab-edit-test',
-      { tab: 'T1', endedAt: 1111 })
+    const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
+    const over = { over: true, result: '1-0', reason: 'checkmate' };
+    return ChessyArchive.record(mk(['e4', 'e5']), cfg, over, 'rev-game', { endedAt: 1000 })
       .then(function () {
-        return ChessyArchive.record(mk(['e4', 'c5']), cfg, over, 'tab-edit-test',
-          { tab: 'T1', endedAt: 2222 });
+        return ChessyArchive.record(mk(['e4', 'c5']), cfg, over, 'rev-game', { endedAt: 2000 });
       })
-      .then(function (secondId) {
-        return CoachStore.getGame('tab-edit-test').then(function (g) {
-          return { secondId: secondId, sans: g.sans.join(' '), createdAt: g.createdAt };
-        });
-      });
+      .then(function () { // earlier evidence of the SAME ending arrives late
+        return ChessyArchive.record(mk(['e4', 'c5']), cfg, over, 'rev-game', { endedAt: 1500 });
+      })
+      .then(function () { return CoachStore.getGame('rev-game'); });
   });
-  await waitGameCount(4);
-  check(tabEdit.secondId === 'tab-edit-test' && tabEdit.sans === 'e4 c5' &&
-        tabEdit.createdAt === 2222,
-    'a same-tab replay edit overwrites the one record (revised ending, no fork)');
+  await waitGameCount(3);
+  check(revised.sans.join(' ') === 'e4 c5' && revised.createdAt === 1500,
+    'a revised ending replaces the record; same-ending re-offers keep the earliest time');
 
-  // Re-offering an ending never transfers ownership: another tab's boot
-  // reconcile of the same ending keeps the original writer's tab, so the
-  // reconciler cannot later overwrite the owner's game by diverging.
-  const ownership = await page.evaluate(function () {
-    const mk = function (sans, tab, createdAt) {
-      return { id: 'owner-test', source: 'play', tags: {}, sans: sans,
-        playerColor: 'both', clocks: sans.map(function () { return null; }),
-        result: '1-0', reason: 'checkmate', mode: 'pvp', difficulty: '2',
-        timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab };
-    };
-    return CoachStore.archiveGame(mk(['e4'], 'TAB-A', 1000))
-      .then(function () { return CoachStore.archiveGame(mk(['e4'], 'TAB-B', 2000)); })
-      .then(function () { return CoachStore.getGame('owner-test'); })
-      .then(function (g) {
-        return CoachStore.archiveGame(mk(['d4'], 'TAB-B', 3000)).then(function (forkId) {
-          return { keptTab: g.tab, keptAt: g.createdAt, forkId: forkId };
-        });
-      });
-  });
-  await waitGameCount(6);
-  check(ownership.keptTab === 'TAB-A' && ownership.keptAt === 1000 &&
-        ownership.forkId !== 'owner-test',
-    "same-ending reconcile keeps the owner's tab — the reconciler's divergence forks");
-
-  // Durability slots: records parked by tabs that died before their
-  // IndexedDB commits are recovered on the next boot, then cleared. Slots
-  // are PER TAB, so two cloned tabs that both died mid-commit — sharing a
-  // gameId but holding divergent endings — each recover (one forks).
+  // Durability slot: a record parked by a tab that died before its
+  // IndexedDB commit is recovered on the next boot, then cleared.
   await page.evaluate(function () {
-    const park = function (tab, id, sans, createdAt) {
-      localStorage.setItem('chessy-pending-archive-v1:' + tab + ':1', JSON.stringify({
-        id: id, source: 'play', tags: {},
-        sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      w: 'w-dead-1',
+      rec: {
+        id: 'parked-game', source: 'play', tags: {},
+        sans: ['e4', 'e5'], playerColor: 'both', clocks: [null, null],
         result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
-        timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab
-      }));
-    };
-    park('DEAD-TAB', 'parked-game', ['e4', 'e5'], 7777);
-    park('CLONE-A', 'shared-pend', ['c4', 'c5'], 8888);
-    park('CLONE-B', 'shared-pend', ['d4', 'd5'], 9999);
+        timeControl: 'none', plies: 2, createdAt: 7777
+      }
+    }));
   });
   await page.reload();
   await page.waitForSelector('#board .square');
-  await waitGameCount(9);
-  const drained = await games();
-  check(drained.some(function (g) { return g.id === 'parked-game' && g.createdAt === 7777; }),
+  await waitGameCount(4);
+  check((await games()).some(function (g) { return g.id === 'parked-game' && g.createdAt === 7777; }),
     'a parked record from a dead tab is recovered on boot');
-  check(drained.some(function (g) { return g.sans[0] === 'c4'; }) &&
-        drained.some(function (g) { return g.sans[0] === 'd4'; }) &&
-        drained.some(function (g) { return g.id === 'shared-pend'; }),
-    'cloned tabs’ divergent parked records BOTH recover (one keeps the id, one forks)');
   check(await page.evaluate(function () {
-    for (let i = 0; i < localStorage.length; i++) {
-      if (localStorage.key(i).indexOf('chessy-pending-archive-v1:') === 0) return false;
-    }
-    return true;
-  }), 'all recovered durability slots are cleared');
+    return localStorage.getItem('chessy-pending-archive-v1') === null;
+  }), 'the recovered durability slot is cleared');
 
-  // OVERLAPPING same-tab writes share a gameId (undo → revised ending
-  // while the first write is still in flight): each write parks under its
-  // OWN slot, so the first commit settling must not remove the second's
-  // recoverable copy.
+  // OVERLAPPING writes (undo → revised ending while the first write is
+  // still in flight): the slot holds the LATEST unarchived ending, and an
+  // earlier commit settling must not clear it — slots clear by per-write
+  // token.
   const slotRace = await page.evaluate(function () {
     const real = CoachStore.archiveGame;
     let release;
@@ -232,120 +176,24 @@ require('./helper').run('archive', async function (t) {
     };
     const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
     const over = { over: true, result: '1-0', reason: 'checkmate' };
-    const parked = function () {
-      const held = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k.indexOf('chessy-pending-archive-v1:T-SLOT:') === 0) {
-          held.push(JSON.parse(localStorage.getItem(k)).sans[0]);
-        }
-      }
-      return held;
+    const held = function () {
+      const cur = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+      return cur && cur.rec ? cur.rec.sans[0] : null;
     };
-    const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { tab: 'T-SLOT', endedAt: 1 });
-    const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { tab: 'T-SLOT', endedAt: 2 });
+    const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { endedAt: 1 });
+    const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { endedAt: 2 });
     return p1.then(function () {
-      const afterFirst = parked();
+      const afterFirst = held();
       release();
       return p2.then(function () {
         CoachStore.archiveGame = real;
-        return { afterFirst: afterFirst, afterBoth: parked() };
+        return { afterFirst: afterFirst, afterBoth: held() };
       });
     });
   });
-  await waitGameCount(10);
-  check(slotRace.afterFirst.length === 1 && slotRace.afterFirst[0] === 'a4' &&
-        slotRace.afterBoth.length === 0,
-    "an earlier commit does not remove a later write's parked copy (per-write slots)");
-
-  // Re-offering the same divergent completion twice (a boot's slot drain
-  // and its state reconcile both submit it) lands on ONE deterministic
-  // fork — never a new UUID per attempt.
-  const dupeFork = await page.evaluate(function () {
-    const mk = function (sans, tab) {
-      return { id: 'dupe-fork', source: 'play', tags: {}, sans: sans,
-        playerColor: 'both', clocks: sans.map(function () { return null; }),
-        result: '1-0', reason: 'checkmate', mode: 'pvp', difficulty: '2',
-        timeControl: 'none', plies: sans.length, createdAt: 5, tab: tab };
-    };
-    return CoachStore.archiveGame(mk(['h4'], 'T-OTHER'))
-      .then(function () { return CoachStore.archiveGame(mk(['h3'], 'T-DUPE')); })
-      .then(function (first) {
-        return CoachStore.archiveGame(mk(['h3'], 'T-DUPE')).then(function (second) {
-          return CoachStore.listGames().then(function (all) {
-            return { first: first, second: second,
-                     copies: all.filter(function (g) { return g.sans[0] === 'h3'; }).length };
-          });
-        });
-      });
-  });
-  await waitGameCount(12);
-  check(dupeFork.first === dupeFork.second && dupeFork.copies === 1,
-    'the same divergent completion offered twice lands on one deterministic fork');
-
-  // Several parked revisions from ONE tab must drain in WRITE order —
-  // localStorage key enumeration order is user-agent-defined, and a stale
-  // ending replayed last would overwrite the final one.
-  await page.evaluate(function () {
-    const park = function (seq, sans) {
-      localStorage.setItem('chessy-pending-archive-v1:T-ORD:' + seq, JSON.stringify({
-        id: 'ord-game', source: 'play', tags: {},
-        sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
-        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
-        timeControl: 'none', plies: sans.length, createdAt: 100 + seq, tab: 'T-ORD'
-      }));
-    };
-    park(2, ['b4']); // the LATER revision, parked under the higher sequence
-    park(1, ['b3']);
-  });
-  await page.reload();
-  await page.waitForSelector('#board .square');
-  await waitGameCount(13);
-  check((await games()).some(function (g) { return g.id === 'ord-game' && g.sans[0] === 'b4'; }),
-    'parked revisions drain in write order — the later ending wins');
-
-  // A dead tab's UNRECOVERED fork must not duplicate through the state
-  // reconcile: the boot submits the restored ending under the SAVED
-  // writer identity, so the slot drain and the reconcile land on the
-  // same deterministic fork.
-  await t.newGame({ mode: 'pvp' });
-  await mv('f2', 'f3'); await mv('e7', 'e5');
-  await mv('g2', 'g4'); await mv('d8', 'h4');
-  await page.waitForSelector('#gameOverDialog[open]');
-  await page.click('#gameOverClose');
-  await waitGameCount(14);
-  const cloneId = await page.evaluate(function () {
-    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    // Another tab archived a DIVERGENT ending under this instance's id...
-    return CoachStore.putGame({
-      id: saved.gameId, source: 'play', tags: {},
-      sans: ['d4', 'd5'], playerColor: 'both', clocks: [null, null],
-      result: '1/2-1/2', reason: 'agreement', mode: 'pvp', difficulty: '2',
-      timeControl: 'none', plies: 2, createdAt: 4444, tab: 'OTHER'
-    }).then(function () {
-      // ...while THIS ending's writer (OLD-TAB) died before its commit,
-      // leaving only its parked slot.
-      localStorage.setItem('chessy-pending-archive-v1:OLD-TAB:1', JSON.stringify({
-        id: saved.gameId, source: 'play', tags: {},
-        sans: ['f3', 'e5', 'g4', 'Qh4#'], playerColor: 'both',
-        clocks: [null, null, null, null], result: '0-1', reason: 'checkmate',
-        mode: 'pvp', difficulty: '2', timeControl: 'none', plies: 4,
-        createdAt: 5555, tab: 'OLD-TAB'
-      }));
-      return saved.gameId;
-    });
-  });
-  await t.inject(function () {
-    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    saved.tab = 'OLD-TAB'; // the save was written by the dead tab too
-    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
-  });
-  await page.waitForTimeout(400); // drain + reconcile both settle
-  const lineage = await games();
-  check(lineage.filter(function (g) {
-    return g.id === cloneId || g.id.indexOf(cloneId + ':') === 0;
-  }).length === 2,
-    'slot drain + state reconcile of a dead tab’s ending land on ONE fork (no duplicate)');
+  await waitGameCount(5);
+  check(slotRace.afterFirst === 'a4' && slotRace.afterBoth === null,
+    "an earlier commit does not clear a later revision's parked copy (token-matched slot)");
 
   // A write that fails AFTER the dialog was closed reports to the
   // always-visible page note — a note inside a closed dialog is invisible.
@@ -383,6 +231,22 @@ require('./helper').run('archive', async function (t) {
   check((await page.textContent('#archiveNote')).includes('could not be archived'),
     'a failed archive write is reported in the game-over dialog');
   await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+  await page.click('#gameOverClose');
+
+  // A MISSING archive module (partial cache eviction) is a failure to
+  // surface, not silence.
+  await page.evaluate(function () {
+    window.__realChessyArchive = window.ChessyArchive;
+    delete window.ChessyArchive;
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForSelector('#archiveNote:not([hidden])');
+  check((await page.textContent('#archiveNote')).includes('could not be archived'),
+    'a missing archive module is reported, not silently dropped');
+  await page.evaluate(function () { window.ChessyArchive = window.__realChessyArchive; });
   await page.click('#gameOverClose');
 
   // A BOOT-TIME reconcile failure has no open dialog to report into: it

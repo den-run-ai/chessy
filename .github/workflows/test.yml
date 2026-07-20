@@ -13,10 +13,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: No committed merge-conflict markers
+        # Exact marker syntax only — "<<<<<<< ref" / ">>>>>>> ref" and a
+        # bare 7-char "=======" line — so legitimate ==== underlines or
+        # longer separator lines never false-positive.
         # git grep exits 1 when nothing matches, which is the pass case.
         run: |
-          if git grep -nE '^(<{7}|={7}|>{7})'; then
+          if git grep -nE '^(<{7} |>{7} |={7}$)'; then
             echo '::error::Committed merge-conflict markers found'
+            exit 1
+          fi
+
+  release-gate:
+    # Versioned cache entries are immutable: if executable content changes
+    # without a release-token bump, controlled clients keep serving the old
+    # cached bytes for the unchanged URL indefinitely. The in-tree token
+    # agreement is checked by test/browser/sw-update.test.js; comparing
+    # against the BASE revision requires CI.
+    if: github.base_ref
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Executable changes require a release-token bump
+        run: |
+          git fetch origin "$GITHUB_BASE_REF"
+          # This PR's own asset changes are identified against the MERGE
+          # BASE...
+          base=$(git merge-base "origin/$GITHUB_BASE_REF" HEAD)
+          if git diff --quiet "$base" HEAD -- assets/; then
+            echo "assets/ unchanged since $base — no bump required"
+            exit 0
+          fi
+          # ...but the token must exceed the base branch TIP: if the base
+          # advanced with its own bump (r20 → r21) and this PR also picked
+          # r21, comparing against the merge base's r20 would pass while
+          # merging would ship changed assets/ under an already-deployed
+          # token — clients would keep the first r21 bytes indefinitely.
+          base_token=$(git show "origin/$GITHUB_BASE_REF:sw.js" | sed -n "s/^const RELEASE = '\(.*\)';$/\1/p")
+          head_token=$(sed -n "s/^const RELEASE = '\(.*\)';$/\1/p" sw.js)
+          echo "assets/ changed: base-tip token '$base_token' → head token '$head_token'"
+          # STRICTLY INCREASING, not merely different: the service worker
+          # treats the numeric suffix as release chronology (older tokens
+          # are refused on cache miss), so a decreased token would make
+          # every prior release look "newer" and defeat that ordering.
+          base_num=${base_token#r}
+          head_num=${head_token#r}
+          if ! [ "$head_num" -gt "$base_num" ] 2>/dev/null; then
+            echo "::error::assets/ changed: the RELEASE token must INCREASE ('$base_token' → '$head_token' is not a bump)"
             exit 1
           fi
 
