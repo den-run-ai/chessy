@@ -190,6 +190,26 @@ function browserType() {
   check(stale.status === 503 && stale.caches.indexOf('chessy-' + RA) === -1,
     'a stale release token is refused (503), never refilled from the current deployment');
 
+  // An OWN-token miss (evicted entry) is refused too: this worker cannot
+  // know whether a newer deployment is already live, and the host ignores
+  // the token — the fetch could return newer bytes under this release's
+  // URL. (The entry is restored afterwards: the offline phase needs it.)
+  const ownMiss = await page.evaluate(function (rb) {
+    const key = './assets/ai.js?r=' + rb;
+    return caches.open('chessy-' + rb).then(function (c) {
+      return c.delete(key)
+        .then(function () { return fetch('assets/ai.js?r=' + rb); })
+        .then(function (r) {
+          // Restore via the UNVERSIONED path (SWR branch hits the network)
+          // — cache.add on the versioned URL would just receive the 503.
+          return fetch('assets/ai.js').then(function (fresh) {
+            return c.put(key, fresh).then(function () { return r.status; });
+          });
+        });
+    });
+  }, RB);
+  check(ownMiss === 503, 'an own-token miss is refused as well (evicted entry, deploy state unknown)');
+
   // Offline after the update: the cached rB shell must request the cached
   // rB assets — still zero cross-release loads. Chromium only: Playwright's
   // WebKit cannot emulate an offline navigation served by a service worker

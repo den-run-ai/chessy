@@ -105,22 +105,25 @@ self.addEventListener('fetch', (event) => {
   // ?r=rN after a later release deploys would store the newer file under
   // the old release's key — poisoning the isolation the token exists for.
   // A cache miss consults the request's token (tokens are rN, ordered):
-  //   - own or NEWER release → the network currently serves those bytes
-  //     (a newer token means an update is in flight through this older
-  //     worker), so fetch and fill;
-  //   - OLDER release → this worker's activation deleted that release's
-  //     cache, and the network now serves DIFFERENT bytes under the same
-  //     URL. Refilling would hand an old page current code — the mixed
-  //     execution this design exists to prevent — so the miss FAILS
-  //     (503) instead; the app degrades (e.g. its AI worker falls back
-  //     to the synchronous path) until that stale page next navigates.
+  //   - strictly NEWER release → an update is in flight through this
+  //     older worker and the network currently serves exactly those
+  //     bytes, so fetch and fill;
+  //   - own or OLDER release → the miss FAILS (503). An older release's
+  //     cache was deleted by this worker's activation; and even an OWN
+  //     token miss (evicted entry) cannot trust the network — a newer
+  //     deployment may already be live, and the host ignores the token,
+  //     so the fetch could return newer bytes under this release's URL.
+  //     Either refill would hand a page mixed code — the exact thing
+  //     this design exists to prevent. The app degrades (e.g. its AI
+  //     worker falls back to the synchronous path) until the page next
+  //     navigates into a coherent release.
   if (reqUrl.searchParams.has('r')) {
     const reqNum = Number((/^r(\d+)$/.exec(reqUrl.searchParams.get('r')) || [])[1]);
     const ownNum = Number((/^r(\d+)$/.exec(RELEASE) || [])[1]);
     const fill = caches.match(event.request).then((cached) => {
       if (cached) return cached;
-      if (!(reqNum >= ownNum)) {
-        return new Response('stale release', { status: 503, statusText: 'Service Unavailable' });
+      if (!(reqNum > ownNum)) {
+        return new Response('unavailable release', { status: 503, statusText: 'Service Unavailable' });
       }
       return fetch(event.request).then((response) => {
         if (!response.ok) return response;

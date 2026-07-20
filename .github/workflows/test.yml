@@ -31,8 +31,14 @@ jobs:
           base_token=$(git show "$base:sw.js" | sed -n "s/^const RELEASE = '\(.*\)';$/\1/p")
           head_token=$(sed -n "s/^const RELEASE = '\(.*\)';$/\1/p" sw.js)
           echo "assets/ changed: base token '$base_token' → head token '$head_token'"
-          if [ "$base_token" = "$head_token" ]; then
-            echo "::error::assets/ changed but the RELEASE token was not bumped (sw.js + index.html)"
+          # STRICTLY INCREASING, not merely different: the service worker
+          # treats the numeric suffix as release chronology (older tokens
+          # are refused on cache miss), so a decreased token would make
+          # every prior release look "newer" and defeat that ordering.
+          base_num=${base_token#r}
+          head_num=${head_token#r}
+          if ! [ "$head_num" -gt "$base_num" ] 2>/dev/null; then
+            echo "::error::assets/ changed: the RELEASE token must INCREASE ('$base_token' → '$head_token' is not a bump)"
             exit 1
           fi
 
