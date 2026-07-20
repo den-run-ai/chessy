@@ -801,10 +801,12 @@
     // Fall back to the on-board replay if Review is unavailable.
     if (window.CoachReview) {
       // The attempt resolves with the id ACTUALLY stored (a cloned tab's
-      // divergent completion forks a fresh one); a failed write resolves
-      // null and the missing-record path lands on the game list.
+      // divergent completion forks a fresh one); a FAILED write resolves
+      // null and must land on the game list — falling back to gameId
+      // could open a PREVIOUS archived ending of this instance (undo →
+      // different finish whose replacement write failed), a wrong game.
       archiveAttempt.then(function (storedId) {
-        CoachReview.openArchivedGame(storedId || gameId);
+        CoachReview.openArchivedGame(storedId);
       });
       return;
     }

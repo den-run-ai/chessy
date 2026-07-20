@@ -185,14 +185,11 @@ require('./helper').run('archive', async function (t) {
   // gameId but holding divergent endings — each recover (one forks).
   await page.evaluate(function () {
     const park = function (tab, id, sans, createdAt) {
-      localStorage.setItem('chessy-pending-archive-v1:' + tab, JSON.stringify({
-        w: 'tok-' + tab,
-        rec: {
-          id: id, source: 'play', tags: {},
-          sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
-          result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
-          timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab
-        }
+      localStorage.setItem('chessy-pending-archive-v1:' + tab + ':1', JSON.stringify({
+        id: id, source: 'play', tags: {},
+        sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab
       }));
     };
     park('DEAD-TAB', 'parked-game', ['e4', 'e5'], 7777);
@@ -216,9 +213,10 @@ require('./helper').run('archive', async function (t) {
     return true;
   }), 'all recovered durability slots are cleared');
 
-  // Two same-tab writes can share a gameId (undo → revised ending while
-  // the first write is still in flight): the FIRST commit settling must
-  // not clear the SECOND's parked copy — slots clear by per-write token.
+  // OVERLAPPING same-tab writes share a gameId (undo → revised ending
+  // while the first write is still in flight): each write parks under its
+  // OWN slot, so the first commit settling must not remove the second's
+  // recoverable copy.
   const slotRace = await page.evaluate(function () {
     const real = CoachStore.archiveGame;
     let release;
@@ -234,23 +232,31 @@ require('./helper').run('archive', async function (t) {
     };
     const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
     const over = { over: true, result: '1-0', reason: 'checkmate' };
-    const key = 'chessy-pending-archive-v1:T-SLOT';
+    const parked = function () {
+      const held = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k.indexOf('chessy-pending-archive-v1:T-SLOT:') === 0) {
+          held.push(JSON.parse(localStorage.getItem(k)).sans[0]);
+        }
+      }
+      return held;
+    };
     const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { tab: 'T-SLOT', endedAt: 1 });
     const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { tab: 'T-SLOT', endedAt: 2 });
     return p1.then(function () {
-      const held = JSON.parse(localStorage.getItem(key) || 'null');
-      const secondStillParked = !!(held && held.rec && held.rec.sans[0] === 'a4');
+      const afterFirst = parked();
       release();
       return p2.then(function () {
         CoachStore.archiveGame = real;
-        return { secondStillParked: secondStillParked,
-                 clearedAfter: localStorage.getItem(key) === null };
+        return { afterFirst: afterFirst, afterBoth: parked() };
       });
     });
   });
   await waitGameCount(10);
-  check(slotRace.secondStillParked && slotRace.clearedAfter,
-    "an earlier commit does not clear a later write's parked copy (token-matched slots)");
+  check(slotRace.afterFirst.length === 1 && slotRace.afterFirst[0] === 'a4' &&
+        slotRace.afterBoth.length === 0,
+    "an earlier commit does not remove a later write's parked copy (per-write slots)");
 
   // Re-offering the same divergent completion twice (a boot's slot drain
   // and its state reconcile both submit it) lands on ONE deterministic

@@ -30,34 +30,23 @@
   // IndexedDB commit settles. A Rematch can replace the MAIN save while
   // the write is still in flight, and a tab dying before the commit would
   // otherwise lose that finished game with nothing left to reconcile
-  // from. The slot key carries the writing TAB's nonce: concurrent tabs
-  // must not overwrite each other's parked records, and one tab's commit
-  // must not clear a cloned tab's parked divergent completion just
-  // because the two share a gameId. One slot per tab suffices — at most
-  // one game-end write is in flight per tab — and reconcilePending()
-  // sweeps every slot on the next boot.
+  // from. ONE SLOT PER WRITE — the key is tab nonce + write sequence, so
+  // no write ever shares a key with another: concurrent tabs cannot
+  // overwrite each other's parked records, and overlapping writes in ONE
+  // tab (undo → revised ending while the first write is in flight, which
+  // even share a gameId) each keep their own recoverable copy; a commit
+  // settling removes exactly its own slot. reconcilePending() sweeps
+  // every slot on the next boot.
   const PENDING_PREFIX = 'chessy-pending-archive-v1:';
-
-  function pendingKey(rec) { return PENDING_PREFIX + (rec.tab || 'unknown'); }
-
-  // Each PARK gets its own token, and only the commit holding that token
-  // may clear the slot: two same-tab writes can share a gameId (undo →
-  // revised ending while the first write is still in flight), and the
-  // first commit settling must not discard the second's parked copy.
   let writeSeq = 0;
 
-  function clearPendingIf(key, token) {
-    try {
-      const cur = JSON.parse(localStorage.getItem(key));
-      if (cur && cur.w === token) localStorage.removeItem(key);
-    } catch (e) {
-      try { localStorage.removeItem(key); } catch (e2) { /* gone */ }
-    }
+  function clearPending(key) {
+    try { localStorage.removeItem(key); } catch (e) { /* gone */ }
   }
 
-  function commit(rec, token) {
+  function commit(rec, key) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
-      clearPendingIf(pendingKey(rec), token);
+      if (key) clearPending(key);
       return storedId;
     });
   }
@@ -85,11 +74,9 @@
       createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now(),
       tab: (opts && opts.tab) || null
     };
-    const token = 'w' + (++writeSeq);
-    try {
-      localStorage.setItem(pendingKey(rec), JSON.stringify({ w: token, rec: rec }));
-    } catch (e) { /* best effort */ }
-    return commit(rec, token);
+    let key = PENDING_PREFIX + (rec.tab || 'unknown') + ':' + (++writeSeq);
+    try { localStorage.setItem(key, JSON.stringify(rec)); } catch (e) { key = null; }
+    return commit(rec, key);
   }
 
   // Boot recovery: sweep EVERY parked slot whose commit never settled —
@@ -108,14 +95,13 @@
     } catch (e) { return Promise.resolve(null); }
     return keys.reduce(function (chain, key) {
       return chain.then(function () {
-        let slot = null;
-        try { slot = JSON.parse(localStorage.getItem(key)); } catch (e) { /* corrupt */ }
-        const rec = slot && slot.rec;
+        let rec = null;
+        try { rec = JSON.parse(localStorage.getItem(key)); } catch (e) { /* corrupt */ }
         if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) {
-          try { localStorage.removeItem(key); } catch (e) { /* gone */ }
+          clearPending(key);
           return null;
         }
-        return commit(rec, slot.w);
+        return commit(rec, key);
       });
     }, Promise.resolve(null));
   }
