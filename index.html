@@ -18,7 +18,16 @@
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
 
-    <main class="layout">
+    <nav class="tabs" aria-label="App sections">
+      <button type="button" class="tab" id="tabPlay" data-view="play" aria-current="page">Play</button>
+      <button type="button" class="tab" id="tabReview" data-view="review">Review</button>
+    </nav>
+
+    <!-- Shown only OUTSIDE Play while a timed game's clocks are running:
+         the live game must stay visible from the coach views. -->
+    <button type="button" id="liveGameNote" class="live-note" hidden></button>
+
+    <main class="layout view" id="viewPlay">
       <section class="board-wrap">
         <div class="board" id="board" role="grid" aria-label="Chess board"></div>
       </section>
@@ -54,6 +63,34 @@
         <div class="offline-note" id="installNote" role="status">Preparing offline mode…</div>
       </aside>
     </main>
+
+    <!-- Review: archived games → position browser. Reflection, engine
+         verification and lesson cards build on this in later slices. -->
+    <section class="view coach" id="viewReview" hidden aria-labelledby="reviewTitle">
+      <div class="view-head">
+        <h2 id="reviewTitle">Review</h2>
+      </div>
+      <div id="gameListWrap">
+        <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
+        <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
+      </div>
+
+      <div id="reviewFlow" hidden>
+        <button type="button" id="reviewBack" class="btn">← All games</button>
+        <div class="coach-board-row">
+          <div class="coach-board-wrap">
+            <div class="board small" id="reviewBoard" aria-label="Review board"></div>
+            <div class="buttons review-nav">
+              <button type="button" id="revStart" class="btn" aria-label="Go to start position">⏮</button>
+              <button type="button" id="revPrev" class="btn" aria-label="Previous move">◀</button>
+              <button type="button" id="revNext" class="btn" aria-label="Next move">▶</button>
+              <button type="button" id="revEnd" class="btn" aria-label="Go to final position">⏭</button>
+            </div>
+            <p class="coach-note" id="reviewStatus" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Setup uses styled radio groups, NOT native selects: mobile browsers
@@ -111,7 +148,9 @@
 
   <script src="js/engine.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/store.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/coach.js"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

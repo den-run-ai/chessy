@@ -100,4 +100,64 @@ require('./helper').run('a11y', async function (t) {
   await page.click('#promotionChoices [aria-label="Promote to knight"]');
   check((await page.locator(sq('b8')).getAttribute('aria-label')).includes('white knight'),
     'named promotion button promotes to the chosen piece');
+
+  // ---- Contrast gates (WCAG 1.4.3 text, 1.4.11 focus indicator) ----
+  // Computed straight from the live styles so a palette change that breaks
+  // the ratios fails here, not in a manual audit.
+  const ratios = await page.evaluate(function () {
+    function resolve(css) {
+      const d = document.createElement('div');
+      d.style.color = css;
+      document.body.appendChild(d);
+      const v = getComputedStyle(d).color;
+      d.remove();
+      return v;
+    }
+    function lum(css) {
+      const m = resolve(css).match(/\d+(\.\d+)?/g).map(Number);
+      function f(v) {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      }
+      return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]);
+    }
+    function ratio(a, b) {
+      const x = lum(a), y = lum(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    }
+    const primary = getComputedStyle(document.getElementById('newGame'));
+    const tab = getComputedStyle(document.getElementById('tabPlay')); // aria-current at boot
+    // The focus ring color comes from the stylesheet rule — programmatic
+    // .focus() does not reliably match :focus-visible across engines.
+    let ring = null;
+    for (const sheet of document.styleSheets) {
+      for (const rule of sheet.cssRules) {
+        if (rule.selectorText && rule.selectorText.indexOf('.square:focus-visible') !== -1) {
+          ring = rule.style.getPropertyValue('outline-color') || rule.style.outlineColor;
+        }
+      }
+    }
+    const light = getComputedStyle(document.querySelector('#board .square.light'));
+    const dark = getComputedStyle(document.querySelector('#board .square.dark'));
+    return {
+      btn: ratio(primary.color, primary.backgroundColor),
+      tab: ratio(tab.color, tab.backgroundColor),
+      ringLight: ring ? ratio(ring, light.backgroundColor) : 0,
+      ringDark: ring ? ratio(ring, dark.backgroundColor) : 0
+    };
+  });
+  check(ratios.btn >= 4.5, 'primary button text contrast ≥ 4.5:1 (' + ratios.btn.toFixed(2) + ')');
+  check(ratios.tab >= 4.5, 'active tab text contrast ≥ 4.5:1 (' + ratios.tab.toFixed(2) + ')');
+  check(ratios.ringLight >= 3 && ratios.ringDark >= 3,
+    'square focus ring ≥ 3:1 against both square colors (' +
+    ratios.ringLight.toFixed(2) + ', ' + ratios.ringDark.toFixed(2) + ')');
+
+  // ---- The Review board shares the Play board's grid semantics ----
+  check(await page.getAttribute('#reviewBoard', 'role') === 'grid', 'reviewBoard is an ARIA grid');
+  check(await page.locator('#reviewBoard [role="row"]').count() === 8, 'reviewBoard has 8 ARIA rows');
+  check(await page.locator('#reviewBoard [role="gridcell"]').count() === 64, 'reviewBoard has 64 gridcells');
+  check(await page.locator('#reviewBoard .square[tabindex="0"]').count() === 1,
+    'reviewBoard has a single roving tab stop');
+  check(await page.locator('#reviewBoard button.square').count() === 64,
+    'review board squares are focusable buttons (keyboard-inspectable)');
 });

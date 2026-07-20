@@ -338,9 +338,30 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
+  // While the user is in a coach view (Review etc.), a running timed
+  // game's clocks keep ticking invisibly and can flag — surface them as a
+  // persistent banner that returns to Play. Untimed games need no banner:
+  // nothing in Play can end without the player acting there.
+  const liveNoteEl = document.getElementById('liveGameNote');
+
+  function updateLiveNote() {
+    const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
+    const running = clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over;
+    if (inPlay || !running) { liveNoteEl.hidden = true; return; }
+    liveNoteEl.hidden = false;
+    liveNoteEl.textContent = '⏱ Timed game running — White ' + fmtClock(liveRemaining('w')) +
+      ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
+  }
+
+  liveNoteEl.addEventListener('click', function () {
+    if (window.Coach) Coach.showView('play');
+  });
+  document.addEventListener('chessy:viewchange', updateLiveNote);
+
   // The ticker calls this alone (not render()) so the 5 Hz tick never
   // rebuilds the move list or rewrites localStorage.
   function renderClocks() {
+    updateLiveNote();
     const timed = clocks.wMs !== null;
     clocksEl.hidden = !timed;
     if (!timed) return;
@@ -575,6 +596,9 @@
   }
 
   function showGameOver(status) {
+    // Finished games feed the coaching archive (Review tab). Coach dedupes
+    // re-shown endings of the same game instance (gameSeq).
+    if (window.Coach) Coach.archiveGame(state, settings, status, gameSeq);
     const title = status.result === '1-0' ? 'White wins!' :
                   status.result === '0-1' ? 'Black wins!' : 'Draw';
     document.getElementById('gameOverTitle').textContent = title;
@@ -584,7 +608,20 @@
   }
 
   // ---- Controls ----
+  // A fresh id on every New game/Rematch: the coaching archive dedupes
+  // re-shown endings by (instance, moves, result) — an identical game
+  // played twice is two archive entries, the same ending re-displayed is
+  // one. The id must be CROSS-TAB unique: two tabs incrementing the same
+  // restored counter would collide in the archive's unique signature index
+  // and silently merge two legitimately separate games.
+  let gameSeq = 0;
+
+  function newGameId() {
+    return Date.now() * 4096 + Math.floor(Math.random() * 4096);
+  }
+
   function startNewGame() {
+    gameSeq = newGameId();
     cancelAi();
     state = Chess.newGameState();
     selected = null;
@@ -655,6 +692,9 @@
 
   document.getElementById('gameOverReview').addEventListener('click', function () {
     gameOverDialog.close();
+    // Hand off to the coaching review of the just-archived game (Review
+    // tab). Fall back to the on-board replay if the coach is unavailable.
+    if (window.Coach && Coach.openLatestArchived && Coach.openLatestArchived()) return;
     setViewPly(0); // start reviewing from the first position
     // Move focus to the forward control so arrow keys drive the replay
     // (the dialog would otherwise hand focus back to the last board square).
@@ -680,6 +720,8 @@
 
   document.addEventListener('keydown', function (e) {
     if (promotionDialog.open || gameOverDialog.open || newGameDialog.open) return;
+    // Replay keys drive the LIVE game board — not the coach views.
+    if (document.body.dataset.view && document.body.dataset.view !== 'play') return;
     const t = e.target;
     if (t && (t.tagName === 'SELECT' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (!state.history.length) return;
@@ -745,7 +787,10 @@
         clocks: clocks.wMs !== null
           ? { wMs: liveRemaining('w'), bMs: liveRemaining('b') } : null,
         timeForfeit: timeForfeit,
-        flipped: flipped
+        flipped: flipped,
+        // Persisted so the coach's archive dedupe survives reloads: a
+        // reload → undo → replayed ending is the SAME game instance.
+        gameSeq: gameSeq
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -807,6 +852,7 @@
         clocks.bMs = null;
       }
       flipped = !!data.flipped;
+      gameSeq = Number(data.gameSeq) || 0;
       return true;
     } catch (e) {
       return false;
@@ -815,7 +861,26 @@
 
   // ---- Boot ----
   buildBoard();
-  load();
+  // No saved game: the implicit first game needs its own unique instance
+  // id too — a fixed 0 would collide across tabs just like a counter.
+  if (!load()) gameSeq = newGameId();
   render();
   maybeAiMove();
+
+  // A game restored in a FINISHED state may have missed its archive write:
+  // the tab can die between the synchronous localStorage save and the
+  // asynchronous IndexedDB commit, and nothing on the next boot calls
+  // showGameOver() again. Re-offer the restored game to the coach — the
+  // archive's unique signature index makes this a no-op when the game is
+  // already stored (and re-points the "Review game" handoff at the right
+  // record). On window load, NOT a zero timeout: coach.js is a later
+  // script tag and the parser may yield to timers while it is still being
+  // fetched.
+  window.addEventListener('load', function () {
+    if (!window.Coach) return;
+    const status = fullStatus();
+    if (status.over && state.history.length) {
+      Coach.archiveGame(state, settings, status, gameSeq);
+    }
+  });
 })();

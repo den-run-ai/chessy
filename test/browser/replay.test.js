@@ -60,17 +60,29 @@ require('./helper').run('replay', async function (t) {
     'undo during AI search cancels it and takes back the human move');
   check((await page.locator(sq('e2') + ' .piece').textContent()).trim() !== '', 'pawn is back on e2');
 
-  // Game-over dialog: fool's mate, then Review game.
+  // Game-over dialog: fool's mate, then Review game — which now hands off
+  // to the COACHING review of the just-archived game, not the on-board
+  // replay.
   await t.newGame({ mode: 'pvp' });
   await mv('f2', 'f3'); await mv('e7', 'e5');
   await mv('g2', 'g4'); await mv('d8', 'h4');
   await page.waitForSelector('#gameOverDialog[open]');
   check((await page.textContent('#gameOverTitle')).includes('Black wins'), 'game-over dialog shown for checkmate');
   await page.click('#gameOverReview');
-  check((await page.textContent('#status')).includes('start position'), 'Review game opens replay at the start');
-  await page.keyboard.press('ArrowRight');
-  check((await page.textContent('#status')).includes('1. f3'), 'stepping through the finished game works');
+  await page.waitForSelector('#viewReview:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
+  });
+  check((await page.textContent('#reviewStatus')).includes('Position 0/4'),
+    'Review game opens the archived game in the coaching review');
+  await page.click('#revNext');
+  check((await page.textContent('#reviewStatus')).includes('Position 1/4'),
+    'stepping through the coached game works');
 
+  // The on-board replay still works from the Play tab.
+  await page.click('#tabPlay');
+  await page.keyboard.press('Home');
+  check((await page.textContent('#status')).includes('start position'), 'on-board replay still reachable');
   await page.keyboard.press('End');
   await mv('f2', 'f3'); // must be ignored — game is over
   check(await page.locator('#moveList .ply').count() === 4, 'no moves playable after game over');
