@@ -135,16 +135,18 @@ require('./helper').run('archive', async function (t) {
   check(revised.sans.join(' ') === 'e4 c5' && revised.createdAt === 1500,
     'a revised ending replaces the record; same-ending re-offers keep the earliest time');
 
-  // Durability slot: a record parked by a tab that died before its
+  // Durability queue: a record parked by a tab that died before its
   // IndexedDB commit is recovered on the next boot, then cleared.
   await page.evaluate(function () {
     localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-      w: 'w-dead-1',
-      rec: {
-        id: 'parked-game', source: 'play', tags: {},
-        sans: ['e4', 'e5'], playerColor: 'both', clocks: [null, null],
-        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
-        timeControl: 'none', plies: 2, createdAt: 7777
+      'parked-game': {
+        w: 'w-dead-1',
+        rec: {
+          id: 'parked-game', source: 'play', tags: {},
+          sans: ['e4', 'e5'], playerColor: 'both', clocks: [null, null],
+          result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+          timeControl: 'none', plies: 2, createdAt: 7777
+        }
       }
     }));
   });
@@ -155,12 +157,12 @@ require('./helper').run('archive', async function (t) {
     'a parked record from a dead tab is recovered on boot');
   check(await page.evaluate(function () {
     return localStorage.getItem('chessy-pending-archive-v1') === null;
-  }), 'the recovered durability slot is cleared');
+  }), 'the recovered durability queue is cleared');
 
   // OVERLAPPING writes (undo → revised ending while the first write is
-  // still in flight): the slot holds the LATEST unarchived ending, and an
-  // earlier commit settling must not clear it — slots clear by per-write
-  // token.
+  // still in flight): the game's queue entry holds the LATEST unarchived
+  // ending, and an earlier commit settling must not clear it — entries
+  // clear by per-write token.
   const slotRace = await page.evaluate(function () {
     const real = CoachStore.archiveGame;
     let release;
@@ -178,7 +180,8 @@ require('./helper').run('archive', async function (t) {
     const over = { over: true, result: '1-0', reason: 'checkmate' };
     const held = function () {
       const cur = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
-      return cur && cur.rec ? cur.rec.sans[0] : null;
+      const entry = cur && cur['slot-race'];
+      return entry && entry.rec ? entry.rec.sans[0] : null;
     };
     const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { endedAt: 1 });
     const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { endedAt: 2 });
@@ -193,7 +196,47 @@ require('./helper').run('archive', async function (t) {
   });
   await waitGameCount(5);
   check(slotRace.afterFirst === 'a4' && slotRace.afterBoth === null,
-    "an earlier commit does not clear a later revision's parked copy (token-matched slot)");
+    "an earlier commit does not clear a later revision's parked copy (token-matched entry)");
+
+  // INDEPENDENT games queue independently: game A's FAILED write must stay
+  // parked while a later game B parks and commits — a single shared slot
+  // would let B overwrite A's only recoverable copy, then B's success
+  // would clear the slot and no boot could ever retry A.
+  const queued = await page.evaluate(function () {
+    const real = CoachStore.archiveGame;
+    CoachStore.archiveGame = function (rec) {
+      if (rec.id === 'queue-lost') return Promise.reject(new Error('quota'));
+      return real(rec);
+    };
+    const mk = function (sans) {
+      return { history: sans.map(function (s) { return { san: s }; }) };
+    };
+    const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
+    const over = { over: true, result: '1-0', reason: 'checkmate' };
+    return ChessyArchive.record(mk(['h3']), cfg, over, 'queue-lost', { endedAt: 1 })
+      .catch(function () { /* the injected failure */ })
+      .then(function () {
+        return ChessyArchive.record(mk(['h4']), cfg, over, 'queue-kept', { endedAt: 2 });
+      })
+      .then(function () {
+        CoachStore.archiveGame = real;
+        const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+        return {
+          lostParked: !!(map && map['queue-lost'] && map['queue-lost'].rec.sans[0] === 'h3'),
+          keptCleared: !(map && map['queue-kept'])
+        };
+      });
+  });
+  await waitGameCount(6);
+  check(queued.lostParked && queued.keptCleared,
+    "a later game's successful commit clears only its own entry — a failed game stays parked");
+  // Drop the failed entry so it does not skew the later drain sections.
+  await page.evaluate(function () {
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1'));
+    delete map['queue-lost'];
+    if (Object.keys(map).length === 0) localStorage.removeItem('chessy-pending-archive-v1');
+    else localStorage.setItem('chessy-pending-archive-v1', JSON.stringify(map));
+  });
 
   // A write that fails AFTER the dialog was closed reports to the
   // always-visible page note — a note inside a closed dialog is invisible.
@@ -230,6 +273,40 @@ require('./helper').run('archive', async function (t) {
   await page.waitForSelector('#archiveNote:not([hidden])');
   check((await page.textContent('#archiveNote')).includes('could not be archived'),
     'a failed archive write is reported in the game-over dialog');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+  await page.click('#gameOverClose');
+
+  // A late failure from a SUPERSEDED attempt (undo → the ending replayed
+  // and re-archived under the SAME game UUID) must not surface anywhere:
+  // the newer attempt owns the outcome, and here it committed fine.
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    let first = true;
+    CoachStore.archiveGame = function (rec) {
+      if (first) {
+        first = false;
+        return new Promise(function (resolve, reject) {
+          window.__failFirstArchive = function () { reject(new Error('quota')); };
+        });
+      }
+      return CoachStore.__realArchiveGame(rec);
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4'); // attempt 1: write held open
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.click('#undo');
+  await mv('d8', 'h4');                       // attempt 2: same game id, commits
+  await page.waitForSelector('#gameOverDialog[open]');
+  await waitGameCount(7);
+  await page.evaluate(function () { window.__failFirstArchive(); });
+  await page.waitForTimeout(300);             // let the stale rejection land
+  check(await page.locator('#archiveNote').isHidden(),
+    "a superseded attempt's late failure does not blame the current dialog");
+  check(await page.locator('#archiveBootNote').isHidden(),
+    "a superseded attempt's late failure is not reported as pending recovery");
   await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
   await page.click('#gameOverClose');
 
