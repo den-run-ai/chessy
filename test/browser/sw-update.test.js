@@ -42,6 +42,8 @@ const versionedRefs = Array.from(htmlSrc.matchAll(/(?:src|href)="([^"]+\?r=[\w-]
   .map(function (m) { return m[1]; });
 
 check(!!swToken, 'sw.js declares a RELEASE token (' + swToken + ')');
+check(/^r\d+$/.test(swToken || ''),
+  'the token is rN (numeric): sw.js orders tokens to refuse stale-release refills');
 check(inlineToken === swToken, 'index.html CHESSY_RELEASE matches sw.js RELEASE');
 check(refTokens.length > 0 && refTokens.every(function (t) { return t === swToken; }),
   'every ?r= reference in index.html carries the same token (' + refTokens.length + ' refs)');
@@ -61,7 +63,10 @@ function browserType() {
 }
 
 (async function () {
-  const phase = { release: 'rA' };
+  // Numeric tokens, like production: the worker ORDERS tokens to refuse
+  // refilling a stale release's URL from the current deployment.
+  const RA = 'r9001', RB = 'r9002';
+  const phase = { release: RA };
   const server = http.createServer(function (req, res) {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p.endsWith('/')) p += 'index.html';
@@ -79,6 +84,14 @@ function browserType() {
       // the SAME working tree.
       if (file.endsWith('index.html') || file.endsWith('sw.js')) {
         body = Buffer.from(data.toString().split(swToken).join(phase.release));
+      }
+      // Give each release OBSERVABLY DIFFERENT executable bytes: URL
+      // checks alone cannot tell whether a worker answered an rB request
+      // with cached rA contents. The marker records which release's code
+      // actually EXECUTED.
+      if (file.endsWith(path.join('assets', 'app.js'))) {
+        body = Buffer.concat([Buffer.from(body),
+          Buffer.from("\n;window.CHESSY_BUILD = '" + phase.release + "';\n")]);
       }
       res.writeHead(200, {
         'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
@@ -110,6 +123,7 @@ function browserType() {
     return caches.keys().then(function (keys) {
       return {
         token: token,
+        build: window.CHESSY_BUILD || '',
         mixed: urls.filter(function (u) { return u.indexOf('?r=' + token) === -1; }),
         total: urls.length,
         engine: typeof Chess !== 'undefined' && typeof ChessAI !== 'undefined',
@@ -136,28 +150,65 @@ function browserType() {
   // Phase A: first install.
   await page.goto(url);
   const a = await stable(function (s) { return s.ready && s.controlled; }, 'phase A ready');
-  check(a.token === 'rA' && a.total >= 4 && a.mixed.length === 0 && a.engine,
-    'release rA loads coherently (' + a.total + ' assets, 0 mixed)');
+  check(a.token === RA && a.total >= 4 && a.mixed.length === 0 && a.engine,
+    'release A loads coherently (' + a.total + ' assets, 0 mixed)');
+  check(a.build === RA, 'release A executes release A BYTES (build marker ' + a.build + ')');
 
-  // Phase B publishes while the rA worker still controls the page. The
-  // reload's network-first navigation fetches the rB shell; its ?r=rB
-  // assets miss the rA cache and come from the network — never from the
-  // old release's cache. The new worker then installs and takes over.
-  phase.release = 'rB';
+  // Phase B publishes while the A worker still controls the page. The
+  // reload's network-first navigation fetches the B shell; its ?r= assets
+  // miss the A cache and come from the network — never from the old
+  // release's cache. The new worker then installs and takes over.
+  phase.release = RB;
   await page.reload();
-  const b = await stable(function (s) { return s.token === 'rB' && s.ready && s.controlled; },
+  const b = await stable(function (s) { return s.token === RB && s.ready && s.controlled; },
     'phase B ready under the new worker');
   check(b.mixed.length === 0 && b.engine,
-    'update in flight: the rB document executes only rB assets (' + b.total + ' checked)');
+    'update in flight: the B document executes only B asset URLs (' + b.total + ' checked)');
+  check(b.build === RB,
+    'update in flight: the executed bytes are release B’s, not cached A contents');
 
-  // "controlled" above can still mean the rA worker (it controls the page
-  // while rB installs). Before testing rB's OWN cache offline, wait for
-  // proof the rB worker activated: its activate handler deletes the rA
-  // cache, so chessy-rB present + chessy-rA gone = takeover complete.
+  // "controlled" above can still mean the A worker (it controls the page
+  // while B installs). Before testing B's OWN cache offline, wait for
+  // proof the B worker activated: its activate handler deletes the A
+  // cache, so B's cache present + A's gone = takeover complete.
   await stable(function (s) {
-    return s.caches.indexOf('chessy-rB') !== -1 && s.caches.indexOf('chessy-rA') === -1;
-  }, 'rB worker takeover (rA cache cleaned)');
-  check(true, 'the rB worker activates and cleans up the rA cache');
+    return s.caches.indexOf('chessy-' + RB) !== -1 && s.caches.indexOf('chessy-' + RA) === -1;
+  }, 'B worker takeover (A cache cleaned)');
+  check(true, 'the B worker activates and cleans up the A cache');
+
+  // A stale-release URL must NEVER be refilled from the current
+  // deployment: the host ignores the token, so the bytes would be B's
+  // under A's key — an old page alive across the deploy would execute
+  // them. The worker refuses the miss instead.
+  const stale = await page.evaluate(function (ra) {
+    return fetch('assets/app.js?r=' + ra).then(function (r) {
+      return caches.keys().then(function (keys) {
+        return { status: r.status, caches: keys };
+      });
+    });
+  }, RA);
+  check(stale.status === 503 && stale.caches.indexOf('chessy-' + RA) === -1,
+    'a stale release token is refused (503), never refilled from the current deployment');
+
+  // An OWN-token miss (evicted entry) is refused too: this worker cannot
+  // know whether a newer deployment is already live, and the host ignores
+  // the token — the fetch could return newer bytes under this release's
+  // URL. (The entry is restored afterwards: the offline phase needs it.)
+  const ownMiss = await page.evaluate(function (rb) {
+    const key = './assets/ai.js?r=' + rb;
+    return caches.open('chessy-' + rb).then(function (c) {
+      return c.delete(key)
+        .then(function () { return fetch('assets/ai.js?r=' + rb); })
+        .then(function (r) {
+          // Restore via the UNVERSIONED path (SWR branch hits the network)
+          // — cache.add on the versioned URL would just receive the 503.
+          return fetch('assets/ai.js').then(function (fresh) {
+            return c.put(key, fresh).then(function () { return r.status; });
+          });
+        });
+    });
+  }, RB);
+  check(ownMiss === 503, 'an own-token miss is refused as well (evicted entry, deploy state unknown)');
 
   // Offline after the update: the cached rB shell must request the cached
   // rB assets — still zero cross-release loads. Chromium only: Playwright's
@@ -167,8 +218,9 @@ function browserType() {
   if ((process.env.BROWSER || 'chromium') === 'chromium') {
     await context.setOffline(true);
     await page.reload();
-    const off = await stable(function (s) { return s.token === 'rB' && s.engine; }, 'offline reload');
-    check(off.mixed.length === 0, 'offline: cached shell and cached assets are the same release');
+    const off = await stable(function (s) { return s.token === RB && s.engine; }, 'offline reload');
+    check(off.mixed.length === 0 && off.build === RB,
+      'offline: cached shell, cached assets and executed bytes are all one release');
     check(await page.locator('#board .square').count() === 64, 'offline app is functional');
     await context.setOffline(false);
   } else {
