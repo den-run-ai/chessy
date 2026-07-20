@@ -26,11 +26,35 @@
   // a boot-time reconcile keeps the chronology instead of stamping the
   // restart); tab is the writing tab's identity (same-tab replay edits
   // overwrite, cloned-tab divergence forks).
+  // Durability slot: the record is parked in localStorage until its
+  // IndexedDB commit settles. A Rematch can replace the MAIN save while
+  // the write is still in flight, and a tab dying before the commit would
+  // otherwise lose that finished game with nothing left to reconcile
+  // from. One slot suffices: at most one game-end write is in flight per
+  // tab, and reconcilePending() drains it on the next boot.
+  const PENDING_KEY = 'chessy-pending-archive-v1';
+
+  function clearPendingIf(id) {
+    try {
+      const cur = JSON.parse(localStorage.getItem(PENDING_KEY));
+      if (cur && cur.id === id) localStorage.removeItem(PENDING_KEY);
+    } catch (e) {
+      try { localStorage.removeItem(PENDING_KEY); } catch (e2) { /* gone */ }
+    }
+  }
+
+  function commit(rec) {
+    return CoachStore.archiveGame(rec).then(function (storedId) {
+      clearPendingIf(rec.id); // don't clear a NEWER game's parked record
+      return storedId;
+    });
+  }
+
   function record(state, settings, status, gameId, opts) {
     if (!gameId || !status.over) {
       return Promise.resolve(null);
     }
-    return CoachStore.archiveGame({
+    const rec = {
       id: gameId,
       source: 'play',
       tags: {},
@@ -48,8 +72,22 @@
       plies: state.history.length,
       createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now(),
       tab: (opts && opts.tab) || null
-    });
+    };
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(rec)); } catch (e) { /* best effort */ }
+    return commit(rec);
   }
 
-  window.ChessyArchive = { record: record };
+  // Boot recovery for a parked record whose commit never settled (rejects
+  // when the retry fails too, so the caller can surface it). Resolves null
+  // when nothing was pending.
+  function reconcilePending() {
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem(PENDING_KEY)); } catch (e) { /* corrupt */ }
+    if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) {
+      return Promise.resolve(null);
+    }
+    return commit(rec);
+  }
+
+  window.ChessyArchive = { record: record, reconcilePending: reconcilePending };
 })();

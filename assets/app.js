@@ -746,7 +746,11 @@
       turnStartedAt = Date.now();
     }
     selected = null;
-    render();
+    // Taking back an ending voids its completion time: a DIFFERENT finish
+    // reached after this undo must archive under ITS OWN time (a replayed
+    // identical ending keeps the original createdAt in the store anyway).
+    gameEndedAt = null;
+    render(); // persists the cleared endedAt via save()
     // If undo landed on the AI's turn (e.g. undoing the computer's opening
     // move while playing Black), let it move again instead of deadlocking.
     maybeAiMove();
@@ -949,5 +953,15 @@
   window.addEventListener('load', function () {
     const status = fullStatus();
     if (status.over) archiveCurrentGame(status, archiveBootNoteEl);
+    // Also drain the durability slot: a Rematch may have replaced the
+    // main save while the previous game's archive write was in flight
+    // (archive.js parks each record until its commit settles).
+    if (window.ChessyArchive) {
+      ChessyArchive.reconcilePending().catch(function () {
+        archiveBootNoteEl.hidden = false;
+        archiveBootNoteEl.textContent =
+          'This game could not be archived (storage unavailable).';
+      });
+    }
   });
 })();
