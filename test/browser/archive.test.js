@@ -234,8 +234,11 @@ require('./helper').run('archive', async function (t) {
   await page.click('#gameOverClose');
 
   // A MISSING archive module (partial cache eviction) is a failure to
-  // surface, not silence.
+  // surface, not silence — and it must show in the OPEN dialog (the
+  // failure is synchronous, so the dialog opens first). Reset the note
+  // left visible by the previous section so this assertion is genuine.
   await page.evaluate(function () {
+    document.getElementById('archiveNote').hidden = true;
     window.__realChessyArchive = window.ChessyArchive;
     delete window.ChessyArchive;
   });
@@ -262,4 +265,10 @@ require('./helper').run('archive', async function (t) {
   await page.waitForSelector('#archiveBootNote:not([hidden])', { timeout: 5000 });
   check((await page.textContent('#archiveBootNote')).includes('could not be archived'),
     'a boot-time reconcile failure is reported outside the closed dialog');
+  // A failed drain STOPS the boot chain: the state reconcile must not
+  // park over the slot and destroy the earlier game's only recoverable
+  // copy (the earlier failed-write section parked one).
+  check(await page.evaluate(function () {
+    return localStorage.getItem('chessy-pending-archive-v1') !== null;
+  }), 'a failed drain preserves the parked slot for the next boot');
 });

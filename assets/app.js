@@ -654,8 +654,11 @@
     // a re-shown ending keeps it, and a later boot's reconcile archives
     // under this time, not the restart time.
     if (!gameEndedAt) { gameEndedAt = Date.now(); save(); }
-    archiveCurrentGame(status);
+    // Open the dialog BEFORE the archive attempt: a SYNCHRONOUS failure
+    // (missing archive module) must land in the now-open dialog's note,
+    // not be routed behind it.
     gameOverDialog.showModal();
+    archiveCurrentGame(status);
   }
 
   // Finished games feed the coaching archive (assets/archive.js) — keyed on
@@ -685,7 +688,7 @@
     noteEl = noteEl || archiveNoteEl;
     // A missing archive module (e.g. partial cache eviction took store.js
     // or archive.js) is a FAILURE, not silence — the game will not be
-    // recorded.
+    // recorded. (Synchronous, so showGameOver opens the dialog FIRST.)
     if (!window.ChessyArchive) {
       showArchiveFailure(noteEl);
       archiveAttempt = Promise.resolve(null);
@@ -695,9 +698,16 @@
     // shown there must survive later attempts. The dialog's note resets
     // per presentation.
     if (noteEl !== archiveBootNoteEl) noteEl.hidden = true;
-    archiveAttempt = ChessyArchive.record(state, settings, status, gameId,
+    const idAtCall = gameId;
+    archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall,
       { endedAt: gameEndedAt })
-      .catch(function () { showArchiveFailure(noteEl); return null; });
+      .catch(function () {
+        // A failure landing after a NEWER game replaced this one must not
+        // show inside the newer game's dialog — that would blame the
+        // wrong game. Route stale failures to the page note.
+        showArchiveFailure(gameId === idAtCall ? noteEl : archiveBootNoteEl);
+        return null;
+      });
   }
 
   // ---- Controls ----
@@ -1001,24 +1011,35 @@
     const bootState = state;
     const bootId = gameId;
     const bootEndedAt = gameEndedAt;
+    // settings is a shared mutable object — a New game started while the
+    // drain below is in flight must not relabel the restored record.
+    const bootSettings = Object.assign({}, settings);
     if (!window.ChessyArchive) {
       // Partial cache eviction can lose store.js/archive.js while the
       // game itself still runs — that is a failure to surface, not
-      // silence (the finished game will never be recorded).
-      if (bootStatus.over) showArchiveFailure(archiveBootNoteEl);
+      // silence: neither the restored finished game nor a parked slot
+      // from an earlier session can be recorded. (The slot key is
+      // archive.js's constant, read directly — the module that owns it
+      // is the thing that's missing.)
+      let pendingParked = false;
+      try {
+        pendingParked = localStorage.getItem('chessy-pending-archive-v1') !== null;
+      } catch (e) { /* storage unavailable */ }
+      if (bootStatus.over || pendingParked) showArchiveFailure(archiveBootNoteEl);
       return;
     }
     // Drain the durability slot FIRST (a Rematch may have replaced the
     // main save while a write was in flight), THEN re-offer the restored
-    // game — sequentially, so the two writes never race. The boot note is
-    // sticky: a drain failure stays visible even if the reconcile
-    // succeeds (that parked game is still unarchived).
+    // game — sequentially, so the two writes never race. A FAILED drain
+    // stops the chain: the state reconcile would park over the single
+    // slot and destroy the earlier game's only recoverable copy; the next
+    // boot retries both. The boot note is sticky either way.
     ChessyArchive.reconcilePending()
-      .catch(function () { showArchiveFailure(archiveBootNoteEl); })
       .then(function () {
         if (!bootStatus.over) return;
-        ChessyArchive.record(bootState, settings, bootStatus, bootId, { endedAt: bootEndedAt })
+        ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
+          { endedAt: bootEndedAt })
           .catch(function () { showArchiveFailure(archiveBootNoteEl); });
-      });
+      }, function () { showArchiveFailure(archiveBootNoteEl); });
   });
 })();
