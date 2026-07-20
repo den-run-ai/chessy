@@ -179,24 +179,39 @@ require('./helper').run('archive', async function (t) {
         ownership.forkId !== 'owner-test',
     "same-ending reconcile keeps the owner's tab — the reconciler's divergence forks");
 
-  // Durability slot: a record parked by a tab that died before its
-  // IndexedDB commit is recovered on the next boot, then cleared.
+  // Durability slots: records parked by tabs that died before their
+  // IndexedDB commits are recovered on the next boot, then cleared. Slots
+  // are PER TAB, so two cloned tabs that both died mid-commit — sharing a
+  // gameId but holding divergent endings — each recover (one forks).
   await page.evaluate(function () {
-    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-      id: 'parked-game', source: 'play', tags: {},
-      sans: ['e4', 'e5'], playerColor: 'both', clocks: [null, null],
-      result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
-      timeControl: 'none', plies: 2, createdAt: 7777, tab: 'DEAD-TAB'
-    }));
+    const park = function (tab, id, sans, createdAt) {
+      localStorage.setItem('chessy-pending-archive-v1:' + tab, JSON.stringify({
+        id: id, source: 'play', tags: {},
+        sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab
+      }));
+    };
+    park('DEAD-TAB', 'parked-game', ['e4', 'e5'], 7777);
+    park('CLONE-A', 'shared-pend', ['c4', 'c5'], 8888);
+    park('CLONE-B', 'shared-pend', ['d4', 'd5'], 9999);
   });
   await page.reload();
   await page.waitForSelector('#board .square');
-  await waitGameCount(7);
-  check((await games()).some(function (g) { return g.id === 'parked-game' && g.createdAt === 7777; }),
+  await waitGameCount(9);
+  const drained = await games();
+  check(drained.some(function (g) { return g.id === 'parked-game' && g.createdAt === 7777; }),
     'a parked record from a dead tab is recovered on boot');
+  check(drained.some(function (g) { return g.sans[0] === 'c4'; }) &&
+        drained.some(function (g) { return g.sans[0] === 'd4'; }) &&
+        drained.some(function (g) { return g.id === 'shared-pend'; }),
+    'cloned tabs’ divergent parked records BOTH recover (one keeps the id, one forks)');
   check(await page.evaluate(function () {
-    return localStorage.getItem('chessy-pending-archive-v1') === null;
-  }), 'the recovered durability slot is cleared');
+    for (let i = 0; i < localStorage.length; i++) {
+      if (localStorage.key(i).indexOf('chessy-pending-archive-v1:') === 0) return false;
+    }
+    return true;
+  }), 'all recovered durability slots are cleared');
 
   // A FAILED archive write is surfaced in the game-over dialog.
   await page.evaluate(function () {
