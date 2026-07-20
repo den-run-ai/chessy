@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="css/style.css?r=r21">
+  <link rel="stylesheet" href="css/style.css?r=r22">
 </head>
 <body>
   <div class="app">
@@ -18,7 +18,16 @@
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
 
-    <main class="layout">
+    <nav class="tabs" aria-label="App sections">
+      <button type="button" class="tab" id="tabPlay" data-view="play" aria-current="page">Play</button>
+      <button type="button" class="tab" id="tabReview" data-view="review">Review</button>
+    </nav>
+
+    <!-- Shown only OUTSIDE Play while a timed game's clocks are running:
+         the live game must stay visible from the coach views (#34). -->
+    <button type="button" id="liveGameNote" class="live-note" hidden></button>
+
+    <main class="layout view" id="viewPlay">
       <section class="board-wrap">
         <div class="board" id="board" role="grid" aria-label="Chess board"></div>
       </section>
@@ -54,6 +63,34 @@
         <div class="offline-note" id="installNote" role="status">Preparing offline mode…</div>
       </aside>
     </main>
+
+    <!-- Review: READ-ONLY browsing of archived games. Reflection and
+         lesson cards build on this in the next slice. -->
+    <section class="view coach" id="viewReview" hidden aria-labelledby="reviewTitle">
+      <div class="view-head">
+        <h2 id="reviewTitle">Review</h2>
+      </div>
+      <div id="gameListWrap">
+        <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
+        <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
+      </div>
+
+      <div id="reviewFlow" hidden>
+        <button type="button" id="reviewBack" class="btn">← All games</button>
+        <div class="coach-board-row">
+          <div class="coach-board-wrap">
+            <div class="board small" id="reviewBoard" aria-label="Review board"></div>
+            <div class="buttons review-nav">
+              <button type="button" id="revStart" class="btn" aria-label="Go to start position">⏮</button>
+              <button type="button" id="revPrev" class="btn" aria-label="Previous move">◀</button>
+              <button type="button" id="revNext" class="btn" aria-label="Next move">▶</button>
+              <button type="button" id="revEnd" class="btn" aria-label="Go to final position">⏭</button>
+            </div>
+            <p class="coach-note" id="reviewStatus" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Setup uses styled radio groups, NOT native selects: mobile browsers
@@ -119,12 +156,14 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r21';</script>
-  <script src="js/engine.js?r=r21"></script>
-  <script src="js/ai.js?r=r21"></script>
-  <script src="js/store.js?r=r21"></script>
-  <script src="js/app.js?r=r21"></script>
-  <script src="js/archive.js?r=r21"></script>
+  <script>window.CHESSY_RELEASE = 'r22';</script>
+  <script src="js/engine.js?r=r22"></script>
+  <script src="js/ai.js?r=r22"></script>
+  <script src="js/store.js?r=r22"></script>
+  <script src="js/app.js?r=r22"></script>
+  <script src="js/archive.js?r=r22"></script>
+  <script src="js/mini-board.js?r=r22"></script>
+  <script src="js/review.js?r=r22"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

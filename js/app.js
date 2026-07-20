@@ -342,9 +342,30 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
+  // While the user is in a coach view (Review), a running timed game's
+  // clocks keep ticking invisibly and can flag — surface them as a
+  // persistent banner that returns to Play (#34). Untimed games need no
+  // banner: nothing in Play can end without the player acting there.
+  const liveNoteEl = document.getElementById('liveGameNote');
+
+  function updateLiveNote() {
+    const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
+    const running = clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over;
+    if (inPlay || !running) { liveNoteEl.hidden = true; return; }
+    liveNoteEl.hidden = false;
+    liveNoteEl.textContent = '⏱ Timed game running — White ' + fmtClock(liveRemaining('w')) +
+      ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
+  }
+
+  liveNoteEl.addEventListener('click', function () {
+    if (window.CoachReview) CoachReview.showView('play');
+  });
+  document.addEventListener('chessy:viewchange', updateLiveNote);
+
   // The ticker calls this alone (not render()) so the 5 Hz tick never
   // rebuilds the move list or rewrites localStorage.
   function renderClocks() {
+    updateLiveNote();
     const timed = clocks.wMs !== null;
     clocksEl.hidden = !timed;
     if (!timed) return;
@@ -594,13 +615,19 @@
   // archive that silently drops games would corrupt every later statistic.
   const archiveNoteEl = document.getElementById('archiveNote');
 
+  // The CURRENT archive attempt: the game-over "Review game" handoff
+  // awaits it, so clicking the button while the write is still in flight
+  // opens the record that just landed — or the game list if it failed.
+  let archiveAttempt = Promise.resolve(null);
+
   function archiveCurrentGame(status) {
     if (!window.ChessyArchive) return;
     archiveNoteEl.hidden = true;
-    ChessyArchive.record(state, settings, status, gameId).catch(function () {
+    archiveAttempt = ChessyArchive.record(state, settings, status, gameId).catch(function () {
       archiveNoteEl.hidden = false;
       archiveNoteEl.textContent =
         'This game could not be archived (storage unavailable).';
+      return null;
     });
   }
 
@@ -689,6 +716,14 @@
 
   document.getElementById('gameOverReview').addEventListener('click', function () {
     gameOverDialog.close();
+    // Hand off to the coaching Review of this game's archived record —
+    // AFTER the archive attempt settles, so the record is there to open.
+    // Fall back to the on-board replay if Review is unavailable.
+    if (window.CoachReview) {
+      const id = gameId;
+      archiveAttempt.then(function () { CoachReview.openArchivedGame(id); });
+      return;
+    }
     setViewPly(0); // start reviewing from the first position
     // Move focus to the forward control so arrow keys drive the replay
     // (the dialog would otherwise hand focus back to the last board square).
@@ -714,6 +749,8 @@
 
   document.addEventListener('keydown', function (e) {
     if (promotionDialog.open || gameOverDialog.open || newGameDialog.open) return;
+    // Replay keys drive the LIVE game board — not the coach views.
+    if (document.body.dataset.view && document.body.dataset.view !== 'play') return;
     const t = e.target;
     if (t && (t.tagName === 'SELECT' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (!state.history.length) return;
