@@ -111,9 +111,12 @@
   // Boot recovery for parked records whose commits never settled. Every
   // queued entry is retried; entries that commit clear themselves, failed
   // ones STAY PARKED for the next boot, and the promise rejects when any
-  // retry failed so the caller can surface it. Resolves null when nothing
-  // was pending. Entries are independent games (one per id), so drain
-  // order does not matter.
+  // retry failed so the caller can surface it — the rejection carries
+  // `failedGameIds` so the caller can blame the specific games (and
+  // withdraw the blame when a later replacement write succeeds). Resolves
+  // null when nothing was pending. Entries are independent games (one per
+  // id), so drain order does not matter and one entry failing never stops
+  // another from committing.
   function reconcilePending() {
     let raw = null;
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { /* unavailable */ }
@@ -133,20 +136,23 @@
         dirty = true;
         continue;
       }
-      drains.push(commit(rec, entry.w));
+      drains.push(commit(rec, entry.w).then(
+        function (v) { return { ok: true, v: v }; },
+        function (e) { return { ok: false, e: e, id: id }; }));
     }
     // Synchronous with respect to the commits above: their token-matched
     // clears run strictly later, so this write cannot resurrect one.
     // (An empty or invalid-only map is removed outright.)
     if (drains.length === 0) { writePending(map); return Promise.resolve(null); }
     if (dirty) writePending(map);
-    return Promise.all(drains.map(function (p) {
-      return p.then(function (v) { return { ok: true, v: v }; },
-        function (e) { return { ok: false, e: e }; });
-    })).then(function (results) {
-      const failed = results.find(function (r) { return !r.ok; });
-      if (failed) throw failed.e;
-      return results.length;
+    return Promise.all(drains).then(function (results) {
+      const failures = results.filter(function (r) { return !r.ok; });
+      if (failures.length === 0) return results.length;
+      const err = failures[0].e instanceof Error
+        ? failures[0].e
+        : new Error('archive reconcile failed: ' + failures[0].e);
+      err.failedGameIds = failures.map(function (f) { return f.id; });
+      throw err;
     });
   }
 
