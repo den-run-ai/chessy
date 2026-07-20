@@ -55,23 +55,49 @@
     return !!r && !!flagged && r.game.id === flagged.gameId && r.ply === flagged.ply;
   }
 
+  // Only YOUR decisions can be flagged: reflection is about the player's
+  // own move, not the opponent's or the computer's. states[ply].turn is
+  // the side that moved HERE; 'both' (two players at one board) means
+  // every decision was made at this keyboard.
+  function flaggable(r) {
+    if (!r || r.ply >= r.gs.history.length) return false; // end position: nothing was played
+    const pc = r.game.playerColor;
+    if (pc !== 'w' && pc !== 'b') return true;
+    return r.states[r.ply].turn === pc;
+  }
+
+  // Abandon the reflection completely: nothing in flight may repaint the
+  // shared controls (seq bumps), the probe stops burning its budget, and
+  // the form/verdict UI resets.
+  function cancelReflection() {
+    verifySeq++;
+    saveSeq++;
+    flagged = null;
+    verdict = null;
+    ChessyAnalysis.cancel();
+    $('reflectForm').hidden = true;
+    $('verifyBox').hidden = true;
+  }
+
   // Review re-rendered: keep the flag button in step with the shown
-  // position, and abandon the reflection when the user steps away.
+  // position, and abandon the reflection when the user steps away —
+  // including back to the game list (current() is null there).
   document.addEventListener('chessy:reviewrender', function () {
     const r = CoachReview.current();
-    if (!r) return;
-    $('flagMoment').disabled = r.ply >= r.gs.history.length; // end position: nothing was played
-    if (!sameMoment(r)) {
-      flagged = null;
-      verdict = null;
-      $('reflectForm').hidden = true;
-      $('verifyBox').hidden = true;
-    }
+    if (!r) { if (flagged) cancelReflection(); return; }
+    $('flagMoment').disabled = !flaggable(r);
+    if (flagged && !sameMoment(r)) cancelReflection();
+  });
+
+  // Leaving Review for another view abandons the reflection too — an
+  // in-flight probe must not keep searching (or resurface) behind Play.
+  document.addEventListener('chessy:viewchange', function () {
+    if (flagged && document.body.dataset.view !== 'review') cancelReflection();
   });
 
   $('flagMoment').addEventListener('click', function () {
     const r = CoachReview.current();
-    if (!r || r.ply >= r.gs.history.length) return;
+    if (!flaggable(r)) return;
     verifySeq++; // an in-flight probe for another moment is now stale
     saveSeq++;   // so is any card write still owning the shared UI
     flagged = { gameId: r.game.id, ply: r.ply };
@@ -185,18 +211,10 @@
     };
     // ONE card per moment: re-saving replaces the lesson/cause/verdict on
     // the existing card (back to the immediate learning step, history
-    // kept) instead of minting a duplicate.
-    CoachStore.listCards().then(function (cards) {
-      const existing = cards.find(function (c) {
-        return c.gameId === v.gameId && c.ply === v.ply;
-      });
-      if (existing) {
-        return CoachStore.updateCard(Object.assign({}, existing, fields))
-          .then(function () { return 'updated'; });
-      }
-      return CoachStore.addCard(Object.assign({ createdAt: now, attempts: [] }, fields))
-        .then(function () { return 'saved'; });
-    }).then(function (outcome) {
+    // kept) instead of minting a duplicate — atomically in the store, so
+    // even saves racing from two tabs cannot create two cards.
+    CoachStore.upsertCardByMoment(fields, { createdAt: now, attempts: [] })
+      .then(function (outcome) {
       if (token !== saveSeq || verdict !== v) return;
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = outcome === 'updated'

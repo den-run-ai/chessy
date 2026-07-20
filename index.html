@@ -63,6 +63,9 @@
         <div class="captured" id="capturedByBlack" aria-label="Pieces captured by Black"></div>
 
         <div class="offline-note" id="installNote" role="status">Preparing offline mode…</div>
+        <!-- Shown only when the BOOT-TIME archive reconcile failed — the
+             game-over dialog (and its own note) is closed then. -->
+        <div class="offline-note" id="archiveBootNote" role="status" hidden></div>
       </aside>
     </main>
 
@@ -222,7 +225,7 @@
           aria-describedby="gameOverDetail">
     <h2 id="gameOverTitle"></h2>
     <p id="gameOverDetail"></p>
-    <!-- Shown only when the coaching-archive write FAILED (js/app.js). -->
+    <!-- Shown only when the coaching-archive write FAILED (assets/app.js). -->
     <p class="offline-note" id="archiveNote" role="status" hidden></p>
     <div class="buttons gameover-actions">
       <button id="gameOverReview" class="btn primary">Review game</button>

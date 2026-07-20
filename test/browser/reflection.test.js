@@ -143,4 +143,50 @@ require('./helper').run('reflection', async function (t) {
   await verifyDone();
   check(!(await page.locator('#saveCard').isDisabled()),
     'a fresh probe after the abandoned one works normally');
+
+  // Reflection is about YOUR decisions: in a vs-computer game only the
+  // human's moves are flaggable.
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'ai-game-flag-test', source: 'play', tags: {},
+      sans: ['f3', 'e5', 'g4', 'Qh4#'], playerColor: 'w',
+      clocks: [null, null, null, null], result: '0-1', reason: 'checkmate',
+      mode: 'ai-b', difficulty: '1', timeControl: 'none', plies: 4,
+      createdAt: Date.now() + 60000 }); // newest → first list item
+  });
+  await page.click('#reviewBack');
+  await page.waitForSelector('.game-item');
+  await page.locator('.game-item').first().click();
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/4') !== -1;
+  });
+  check(!(await page.locator('#flagMoment').isDisabled()),
+    'your own move (White to move) is flaggable in a vs-computer game');
+  await page.click('#revNext'); // ply 1: the computer's reply was played here
+  check(await page.locator('#flagMoment').isDisabled(),
+    "the computer's move is not flaggable");
+
+  // Leaving Review for Play abandons the reflection completely.
+  await page.click('#revPrev'); // ply 0 again — flaggable
+  await page.click('#flagMoment');
+  check(await page.locator('#reflectForm').isVisible(), 'reflection open before leaving Review');
+  await page.click('#tabPlay');
+  await page.click('#tabReview');
+  await page.waitForSelector('.game-item');
+  await page.locator('.game-item').first().click();
+  check(await page.locator('#reflectForm').isHidden(),
+    'leaving Review abandons the reflection (form closed on return)');
+
+  // The one-card-per-moment rule holds even for RACING saves (two tabs):
+  // the store's upsert does its lookup and write in one transaction.
+  const raceCount = await page.evaluate(function () {
+    const fields = { gameId: 'race-game', ply: 3, lesson: 'race' };
+    return Promise.all([
+      CoachStore.upsertCardByMoment(fields, { createdAt: 1, attempts: [] }),
+      CoachStore.upsertCardByMoment(fields, { createdAt: 1, attempts: [] })
+    ]).then(function () { return CoachStore.listCards(); })
+      .then(function (all) {
+        return all.filter(function (c) { return c.gameId === 'race-game'; }).length;
+      });
+  });
+  check(raceCount === 1, 'two racing saves for one moment yield one card (atomic upsert)');
 });

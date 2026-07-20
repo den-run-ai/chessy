@@ -8,6 +8,18 @@ permissions:
   contents: read
 
 jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No committed merge-conflict markers
+        # git grep exits 1 when nothing matches, which is the pass case.
+        run: |
+          if git grep -nE '^(<{7}|={7}|>{7})'; then
+            echo '::error::Committed merge-conflict markers found'
+            exit 1
+          fi
+
   engine:
     runs-on: ubuntu-latest
     steps:
