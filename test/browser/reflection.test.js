@@ -189,4 +189,44 @@ require('./helper').run('reflection', async function (t) {
       });
   });
   check(raceCount === 1, 'two racing saves for one moment yield one card (atomic upsert)');
+
+  // Attempt history is graded AGAINST the card's canonical move: a
+  // re-save that changes that move must reset the history (Progress would
+  // otherwise read old correct/incorrect flags against the new move),
+  // while a re-save keeping the move preserves it.
+  const history = await page.evaluate(function () {
+    const moment = { gameId: 'attempt-reset', ply: 2 };
+    const withBest = function (from, to, extra) {
+      return Object.assign({ bestMove: { from: from, to: to, promotion: null } },
+        moment, extra || {});
+    };
+    return CoachStore.upsertCardByMoment(withBest(0, 8), { createdAt: 1, attempts: [] })
+      .then(function () {
+        return CoachStore.listCards().then(function (all) {
+          const card = all.find(function (c) { return c.gameId === 'attempt-reset'; });
+          card.attempts = [{ at: 1, grade: 'good', correct: true }];
+          return CoachStore.updateCard(card);
+        });
+      })
+      .then(function () { // same canonical move → history kept
+        return CoachStore.upsertCardByMoment(withBest(0, 8, { lesson: 'reworded' }), {});
+      })
+      .then(function () {
+        return CoachStore.listCards().then(function (all) {
+          return all.find(function (c) { return c.gameId === 'attempt-reset'; }).attempts.length;
+        });
+      })
+      .then(function (keptCount) { // different canonical move → history reset
+        return CoachStore.upsertCardByMoment(withBest(0, 16), {}).then(function () {
+          return CoachStore.listCards().then(function (all) {
+            return { kept: keptCount,
+                     afterChange: all.find(function (c) {
+                       return c.gameId === 'attempt-reset';
+                     }).attempts.length };
+          });
+        });
+      });
+  });
+  check(history.kept === 1 && history.afterChange === 0,
+    'changing the canonical move resets attempt history; keeping it preserves it');
 });
