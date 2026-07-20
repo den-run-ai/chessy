@@ -1,7 +1,7 @@
 /* Engine correctness tests — run with: node test/engine.test.js */
 'use strict';
-require('../js/engine.js');
-require('../js/ai.js');
+require('../assets/engine.js');
+require('../assets/ai.js');
 const Chess = globalThis.Chess;
 const ChessAI = globalThis.ChessAI;
 
