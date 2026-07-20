@@ -93,6 +93,15 @@
         if (k && k.indexOf(PENDING_PREFIX) === 0) keys.push(k);
       }
     } catch (e) { return Promise.resolve(null); }
+    // WRITE ORDER, not enumeration order (which is user-agent-defined):
+    // a tab that parked several revisions of one game needs the later
+    // write to land last, or a stale ending would overwrite the final one.
+    keys.sort(function (a, b) {
+      const pa = a.lastIndexOf(':'), pb = b.lastIndexOf(':');
+      const ta = a.slice(0, pa), tb = b.slice(0, pb);
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      return Number(a.slice(pa + 1)) - Number(b.slice(pb + 1));
+    });
     return keys.reduce(function (chain, key) {
       return chain.then(function () {
         let rec = null;
