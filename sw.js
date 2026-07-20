@@ -3,16 +3,24 @@
  * Update strategy (reliable updates, still fully offline):
  * - RELEASE UNITS (#37): index.html references every executable asset with
  *   this release's ?r= token, and those versioned URLs are cached as
- *   distinct entries. A page therefore always executes the scripts of its
- *   own release — the mixed state (new HTML + old cached scripts, or the
- *   reverse) cannot occur, with or without an update in flight. The token
- *   here and in index.html must agree; test/browser/sw-update.test.js
- *   fails the build if they drift.
+ *   distinct, IMMUTABLE entries (cache-first, never revalidated — GitHub
+ *   Pages ignores the query string, so revalidating ?r=rN after a later
+ *   deploy would store the newer file under the old release's key). A page
+ *   therefore always executes the scripts of its own release — the mixed
+ *   state (new HTML + old cached scripts, or the reverse) cannot occur,
+ *   with or without an update in flight. The token here and in index.html
+ *   must agree; test/browser/sw-update.test.js fails the build if they
+ *   drift.
+ * - The executables live under assets/ — a ONE-TIME path migration: the
+ *   previously deployed worker matches its cache with ignoreSearch, so it
+ *   would have served its old js/ and css/ entries for any query-tokened
+ *   URL at those paths during the first upgrade. It has no cache entries
+ *   for assets/*, so the first new shell's requests fall through to the
+ *   network and the very first upgrade is coherent too.
  * - Navigations are network-first: online visits always get the newest app
  *   shell; offline falls back to the cached copy (which then requests its
  *   own release's cached assets).
- * - Assets are stale-while-revalidate: served instantly from cache,
- *   refreshed in the background.
+ * - Unversioned assets (manifest, icons) are stale-while-revalidate.
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
@@ -21,18 +29,18 @@ const CACHE = 'chessy-' + RELEASE;
 const ASSETS = [
   './',
   './index.html',
-  './css/style.css?r=' + RELEASE,
-  './js/engine.js?r=' + RELEASE,
-  './js/ai.js?r=' + RELEASE,
-  './js/ai-worker.js?r=' + RELEASE,
-  './js/store.js?r=' + RELEASE,
-  './js/app.js?r=' + RELEASE,
-  './js/archive.js?r=' + RELEASE,
-  './js/mini-board.js?r=' + RELEASE,
-  './js/review.js?r=' + RELEASE,
-  './js/analysis.js?r=' + RELEASE,
-  './js/reflection.js?r=' + RELEASE,
-  './js/train.js?r=' + RELEASE,
+  './assets/style.css?r=' + RELEASE,
+  './assets/engine.js?r=' + RELEASE,
+  './assets/ai.js?r=' + RELEASE,
+  './assets/ai-worker.js?r=' + RELEASE,
+  './assets/store.js?r=' + RELEASE,
+  './assets/app.js?r=' + RELEASE,
+  './assets/archive.js?r=' + RELEASE,
+  './assets/mini-board.js?r=' + RELEASE,
+  './assets/review.js?r=' + RELEASE,
+  './assets/analysis.js?r=' + RELEASE,
+  './assets/reflection.js?r=' + RELEASE,
+  './assets/train.js?r=' + RELEASE,
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -95,13 +103,32 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (new URL(event.request.url).origin !== self.location.origin) return;
+  const reqUrl = new URL(event.request.url);
+  if (reqUrl.origin !== self.location.origin) return;
 
-  // Assets: stale-while-revalidate — instant from cache, refreshed in the
-  // background; falls back to network when not cached, to cache when offline.
-  // The match is EXACT (no ignoreSearch): the ?r= release token is what
-  // keeps each release's assets distinct, so a request for one release must
-  // never be answered with another's cached copy.
+  // Versioned assets are IMMUTABLE: exact-match from cache (never
+  // ignoreSearch — the ?r= token is what keeps releases distinct), and
+  // NEVER revalidated. The host ignores the query string, so refreshing
+  // ?r=rN after a later release deploys would store the newer file under
+  // the old release's key — poisoning the isolation the token exists for.
+  // A miss (e.g. evicted entry) fetches the network and fills the cache.
+  if (reqUrl.searchParams.has('r')) {
+    const fill = caches.match(event.request).then((cached) => cached ||
+      fetch(event.request).then((response) => {
+        if (!response.ok) return response;
+        return caches.open(CACHE)
+          .then((cache) => cache.put(event.request, response.clone()))
+          .catch(() => undefined)
+          .then(() => response);
+      }));
+    event.waitUntil(fill.then(() => undefined, () => undefined));
+    event.respondWith(fill);
+    return;
+  }
+
+  // Unversioned assets (manifest, icons): stale-while-revalidate — instant
+  // from cache, refreshed in the background; falls back to network when
+  // not cached, to cache when offline.
   const cachedPromise = caches.match(event.request);
   const refresh = cachedPromise.then((cached) =>
     fetch(event.request)
