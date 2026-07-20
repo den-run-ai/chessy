@@ -588,7 +588,7 @@
     gameOverDialog.showModal();
   }
 
-  // Finished games feed the coaching archive (js/archive.js) — keyed on
+  // Finished games feed the coaching archive (assets/archive.js) — keyed on
   // this game's UUID, so re-offering the same ending is an idempotent
   // overwrite. A FAILED write is surfaced in the game-over dialog: an
   // archive that silently drops games would corrupt every later statistic.

@@ -1,6 +1,6 @@
 /*
  * Chessy archive — records finished games into the coaching store
- * (js/store.js). This is the whole slice: no UI reads the archive yet;
+ * (assets/store.js). This is the whole slice: no UI reads the archive yet;
  * the Review browser, reflection, and spaced review build on it next
  * (roadmap #23).
  *
