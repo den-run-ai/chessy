@@ -780,44 +780,66 @@
     let best = null, bestScore = 0, completed = 0;
 
     for (let d = 1; d <= maxDepth; d++) {
-      let alpha = -Infinity, beta = Infinity;
-      let iterBest = null, iterScore = maximizing ? -Infinity : Infinity;
+      // Aspiration window: from depth 2, expect this iteration to score
+      // near the previous one. A wrong guess fails the whole root — then
+      // the failed side re-searches doubled, eventually falling back to
+      // the full window, so a completed iteration is exactly what the
+      // full-window search would have produced. Mate scores never aspire.
+      let delta = 50;
+      let lo = -Infinity, hi = Infinity;
+      if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
+        lo = bestScore - delta; hi = bestScore + delta;
+      }
+      let iterBest = null, iterScore = 0;
       let aborted = false;
-      for (const it of items) {
-        let score;
-        try {
-          // Root PVS mirrors searchNode: full window until some move has
-          // set a finite bound, then scout + re-search. A repDraw counts
-          // as a searched move (its 0 tightened the bound).
-          if (it.repDraw) score = 0;
-          else if (iterBest === null) score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
-          else if (maximizing) {
-            score = searchNode(it.next, d - 1, alpha, alpha + 1, 1, ctx);
-            if (score > alpha && score < beta) {
-              ctx.researches++;
-              score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+      for (;;) { // aspiration attempts
+        let alpha = lo, beta = hi;
+        iterBest = null; iterScore = maximizing ? -Infinity : Infinity;
+        for (const it of items) {
+          let score;
+          try {
+            // Root PVS mirrors searchNode: full window until some move has
+            // set a finite bound, then scout + re-search. A repDraw counts
+            // as a searched move (its 0 tightened the bound).
+            if (it.repDraw) score = 0;
+            else if (iterBest === null) score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+            else if (maximizing) {
+              score = searchNode(it.next, d - 1, alpha, alpha + 1, 1, ctx);
+              if (score > alpha && score < beta) {
+                ctx.researches++;
+                score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+              }
+            } else {
+              score = searchNode(it.next, d - 1, beta - 1, beta, 1, ctx);
+              if (score < beta && score > alpha) {
+                ctx.researches++;
+                score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+              }
             }
-          } else {
-            score = searchNode(it.next, d - 1, beta - 1, beta, 1, ctx);
-            if (score < beta && score > alpha) {
-              ctx.researches++;
-              score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
-            }
+          } catch (e) {
+            if (e !== ABORT) throw e;
+            aborted = true;
+            break;
           }
-        } catch (e) {
-          if (e !== ABORT) throw e;
-          aborted = true;
-          break;
+          it.score = score;
+          if (iterBest === null || (maximizing ? score > iterScore : score < iterScore)) {
+            iterScore = score;
+            iterBest = it;
+          }
+          if (maximizing) { if (iterScore > alpha) alpha = iterScore; }
+          else { if (iterScore < beta) beta = iterScore; }
         }
-        it.score = score;
-        if (iterBest === null || (maximizing ? score > iterScore : score < iterScore)) {
-          iterScore = score;
-          iterBest = it;
-        }
-        if (maximizing) { if (iterScore > alpha) alpha = iterScore; }
-        else { if (iterScore < beta) beta = iterScore; }
+        if (aborted) break;
+        // Root fail-low/high: every score is only a bound, so the "best"
+        // is not trustworthy — widen the failed side, search the depth again.
+        if (iterScore <= lo) { ctx.researches++; delta *= 2; lo = delta > 800 ? -Infinity : iterScore - delta; continue; }
+        if (iterScore >= hi) { ctx.researches++; delta *= 2; hi = delta > 800 ? Infinity : iterScore + delta; continue; }
+        break;
       }
       if (aborted) {
+        // A partial (aborted) aspiration attempt is discarded like any
+        // partial iteration; depth 1 never aspires, so the emergency
+        // "budget died inside depth 1" result is still full-window.
         if (best === null && iterBest !== null) { best = iterBest; bestScore = iterScore; }
         break;
       }
