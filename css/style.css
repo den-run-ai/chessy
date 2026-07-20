@@ -515,3 +515,30 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 
 .review-nav .btn { flex: 1; min-height: 44px; }
 .review-nav .btn:disabled { opacity: 0.35; cursor: default; }
+
+.coach-side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+
+.coach-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--bg);
+  border: 1px solid #4a4642;
+  border-radius: 8px;
+  padding: 0.8rem;
+  font-size: 0.9rem;
+}
+.coach-form h3 { font-size: 1rem; }
+.coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
+
+.coach-form input[type="text"],
+.coach-form select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #4a4642;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  min-height: 40px;
+}
