@@ -492,8 +492,13 @@
         bestSans: bestSans,
         moments: top
       };
-      CoachStore.updateGame(r.game)
-        .catch(function () { /* scan still usable this session */ });
+      CoachStore.updateGame(r.game).catch(function () {
+        // The scan still works this session, but it will be gone after a
+        // reload — say so instead of silently presenting it as saved.
+        if (token !== scanToken) return;
+        $('scanStatus').textContent +=
+          ' (Could not save the scan — it lasts this session only.)';
+      });
       renderScan(r);
     });
   }
@@ -581,6 +586,15 @@
     const fenBefore = r.fens[ply];
     const entry = r.gs.history[ply];
     const mover = Chess.parseFen(fenBefore).turn;
+    // Snapshot the reflection NOW: these are the answers that passed the
+    // reflect-first gate. The fields stay editable while the engine runs,
+    // so the card must not reread the DOM at save time — a post-verdict
+    // rewrite would replace the honest pre-engine reading.
+    const reflection = {
+      threat: $('reflectThreat').value,
+      candidates: $('reflectCandidates').value,
+      evaluation: $('reflectEval').value
+    };
     $('verifyBox').hidden = false;
     $('verifyResult').textContent = 'Analysing…';
     $('saveCard').disabled = true;
@@ -590,6 +604,11 @@
     $('reflectVerify').disabled = true;
 
     analyse(fenBefore, null, r.states[ply].positions).then(function (best) {
+      // Already stale (the user flagged another moment or left the game)?
+      // Bail BEFORE enqueueing the second probe: each probe costs up to
+      // 1.2 s plus watchdog allowance on the shared FIFO, and abandoned
+      // pairs would delay the verification the user is actually watching.
+      if (token !== verifyToken || review !== r || r.flagged !== ply) return;
       // The played move's value = the value of the position it leads to.
       // If that position is terminal (mate, stalemate, dead, 50-move, or a
       // COMPLETED threefold — hence the full prefix state, not a bare FEN)
@@ -623,7 +642,8 @@
           bestMove: bm ? { from: bm.from, to: bm.to, promotion: bm.promotion || null } : null,
           bestScore: best.score, playedScore: after.score, lossCp: lossCp,
           kind: kind,
-          depth: best.depth
+          depth: best.depth,
+          reflection: reflection
         };
         $('causeLabel').hidden = kind === 'pattern';
         $('verifyResult').textContent = (same
@@ -678,11 +698,9 @@
       kind: v.kind,
       cause: cause,
       lesson: lesson,
-      reflection: {
-        threat: $('reflectThreat').value.trim(),
-        candidates: $('reflectCandidates').value.trim(),
-        evaluation: $('reflectEval').value
-      },
+      // The snapshot taken when verification was submitted — never the
+      // fields' current contents (editable since the verdict appeared).
+      reflection: v.reflection,
       createdAt: now,
       due: now,        // first review is immediate (the "learn" step)
       step: -1,        // -1 = not yet on the day ladder

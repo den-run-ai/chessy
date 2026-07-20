@@ -311,6 +311,11 @@ require('./helper').run('coach', async function (t) {
   check((await page.textContent('#cardSaved')).includes('lesson'),
     'saving requires a one-sentence lesson');
 
+  // Rewriting the reflection AFTER the verdict must not reach the card:
+  // the answers that passed the reflect-first gate were snapshotted when
+  // verification was submitted.
+  await page.fill('#reflectThreat', 'rewritten after seeing the verdict');
+
   // Save the lesson card — double-click on purpose: the button must
   // disable before the async write, so only ONE card is created.
   await page.fill('#cardLesson', 'Look for forcing mates before anything else');
@@ -331,7 +336,7 @@ require('./helper').run('coach', async function (t) {
   check(savedCard.kind === 'pattern' && savedCard.cause === 'pattern' &&
         savedCard.step === -1 && savedCard.due <= Date.now() &&
         !!savedCard.bestMove && savedCard.reflection.threat === 'mate on f7',
-    'saved card carries verdict, reflection and immediate-due scheduling');
+    'saved card carries the PRE-verdict reflection snapshot, verdict and immediate due');
 
   // A move that COMPLETES a threefold repetition is a draw — verification
   // must score it 0 from the prefix's repetition table, not analyse the
