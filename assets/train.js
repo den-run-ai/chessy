@@ -26,11 +26,12 @@
   const AGAIN_DELAY = 10 * 60 * 1000;        // "Again" retries later today
 
   const trainBoard = ChessyMiniBoard.make($('trainBoard'), onTrainSquare);
-  let train = null; // { queue, card, state, selected, answered, lastCorrect }
+  let train = null; // { queue, card, state, selected, answered, grading, lastCorrect }
 
   function loadTrain() {
     return CoachStore.dueCards(Date.now()).then(function (cards) {
-      train = { queue: cards, card: null, state: null, selected: null, answered: false };
+      train = { queue: cards, card: null, state: null, selected: null,
+                answered: false, grading: false };
       nextTrainCard();
     }).catch(function () {
       $('trainEmpty').hidden = false;
@@ -158,10 +159,12 @@
 
   function grade(g) {
     const t = train;
-    if (!t || !t.card || !t.answered) return;
-    // Consume the answer BEFORE the async write: a double-click must not
-    // reach gradeCard twice for one reveal.
-    t.answered = false;
+    if (!t || !t.card || !t.answered || t.grading) return;
+    // ONE grade per reveal: `grading` blocks a second grade click while
+    // the write is in flight, and `answered` stays TRUE so the board
+    // cannot accept a second answer meanwhile — resetting it here would
+    // re-enable both until the async write settled.
+    t.grading = true;
     const now = Date.now();
     const correct = !!t.lastCorrect;
     CoachStore.gradeCard(t.card.id, function (fresh) {
@@ -169,12 +172,14 @@
       schedule(fresh, g, now);
       return fresh;
     }).then(function () {
-      nextTrainCard();
+      t.grading = false;
+      if (train === t) nextTrainCard(); // Refresh may have rebuilt the queue
     }, function () {
       // The grade was NOT saved (quota, storage failure): keep the card
-      // on screen and say so — silently advancing would drop the attempt
-      // and reschedule nothing.
-      t.answered = true;
+      // on screen (still answered) and say so — silently advancing would
+      // drop the attempt and reschedule nothing.
+      t.grading = false;
+      if (train !== t) return;
       $('trainOutcome').textContent =
         '⚠ Could not save that grade (storage unavailable) — try again.';
     });

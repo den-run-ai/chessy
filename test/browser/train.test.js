@@ -136,4 +136,50 @@ require('./helper').run('train', async function (t) {
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
   check(true, 'a failed grade write keeps the card and the retry succeeds');
+
+  // A SLOW grade write must keep BOTH the board and the grade buttons
+  // disabled until it settles: a second answer or grade fired while the
+  // write is pending would record a duplicate attempt / climb two rungs.
+  await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.kind === 'differ'; });
+      c.due = Date.now() - 1;
+      return CoachStore.updateCard(c);
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  const before = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.kind === 'differ'; });
+      return { attempts: c.attempts.length, step: c.step };
+    });
+  });
+  await tsq('a7').click();
+  await tsq('a8').click();
+  await page.waitForSelector('#promotionDialog[open]');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () {
+    CoachStore.__realGradeCard = CoachStore.gradeCard;
+    CoachStore.gradeCard = function (id, mutate) {
+      const real = CoachStore.__realGradeCard;
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { real(id, mutate).then(resolve, reject); }, 600);
+      });
+    };
+  });
+  await page.click('#gradeGood');
+  await tsq('a7').click();        // second answer attempt while pending
+  await page.click('#gradeGood'); // second grade while pending
+  await page.waitForSelector('#trainEmpty:not([hidden])', { timeout: 5000 });
+  await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__realGradeCard; });
+  const after = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.kind === 'differ'; });
+      return { attempts: c.attempts.length, step: c.step };
+    });
+  });
+  check(after.attempts === before.attempts + 1 && after.step === before.step + 1,
+    'a pending grade write blocks a second answer/grade (one attempt, one rung)');
 });
