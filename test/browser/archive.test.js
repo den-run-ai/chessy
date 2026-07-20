@@ -1,5 +1,8 @@
 /* Game archive foundation: finished games persist to IndexedDB, keyed on
- * the game's UUID (idempotent re-archive), with failures surfaced. */
+ * the game's UUID (idempotent re-archive that keeps the original
+ * createdAt; a DIVERGENT completion under the same key — cloned tabs —
+ * forks a fresh id instead of overwriting), with failures surfaced both
+ * in the game-over dialog and, for the boot reconcile, on the page. */
 'use strict';
 require('./helper').run('archive', async function (t) {
   const page = t.page, check = t.check, mv = t.mv;
@@ -41,7 +44,16 @@ require('./helper').run('archive', async function (t) {
   check(pair[0].id !== pair[1].id, 'identical rematch archives under a fresh UUID');
 
   // Reload → undo → reproduce the SAME ending: the UUID is persisted with
-  // the saved game, so the re-archive is an idempotent overwrite.
+  // the saved game, so the re-archive is an idempotent overwrite — and it
+  // keeps the ORIGINAL createdAt (listGames sorts by createdAt; a re-shown
+  // game must not jump to the top of the chronology).
+  const overwriteId = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
+  });
+  const createdAtBefore = (await games()).filter(function (g) {
+    return g.id === overwriteId;
+  })[0].createdAt;
+  await page.waitForTimeout(50); // ensure a rewritten createdAt would differ
   await page.reload();
   await page.waitForSelector('#board .square');
   await page.click('#undo');
@@ -50,7 +62,10 @@ require('./helper').run('archive', async function (t) {
   await page.click('#gameOverClose');
   await page.waitForTimeout(300); // let any (wrong) duplicate write land
   await waitGameCount(2);
-  check(true, 'a replayed ending after reload overwrites its record (still 2 games)');
+  const overwritten = (await games()).filter(function (g) { return g.id === overwriteId; })[0];
+  check(!!overwritten, 'a replayed ending after reload overwrites its record (still 2 games)');
+  check(overwritten.createdAt === createdAtBefore,
+    'the overwrite keeps the original createdAt');
 
   // Boot reconcile: if the archive write was lost (tab died before the
   // IndexedDB commit), the next boot re-offers the restored finished game.
@@ -71,10 +86,42 @@ require('./helper').run('archive', async function (t) {
   check((await games())[0].id === savedId,
     'boot re-archives a finished game whose write was lost (same UUID)');
 
+  // A game can be over before the first move (time forfeit on the initial
+  // position) — it is archived, not skipped.
+  const zeroPlyId = await page.evaluate(function () {
+    return ChessyArchive.record(
+      { history: [] },
+      { mode: 'pvp', difficulty: '3', timeControl: '5+0' },
+      { over: true, result: '0-1', reason: 'time forfeit' },
+      'zero-ply-forfeit');
+  });
+  await waitGameCount(2);
+  check(zeroPlyId === 'zero-ply-forfeit' && (await games()).some(function (g) {
+    return g.id === 'zero-ply-forfeit' && g.plies === 0 && g.reason === 'time forfeit';
+  }), 'a zero-ply time forfeit is archived');
+
+  // A CLONED tab shares the persisted gameId but may play a different
+  // continuation: its divergent completion must fork a fresh id (both
+  // finished games survive), never overwrite the first tab's record.
+  const cloneStoredId = await page.evaluate(function () {
+    const sharedId = JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
+    return ChessyArchive.record(
+      { history: [{ san: 'f3' }, { san: 'e6' }, { san: 'g4' }, { san: 'Qh4#' }] },
+      { mode: 'pvp', difficulty: '3', timeControl: 'none' },
+      { over: true, result: '0-1', reason: 'checkmate' },
+      sharedId);
+  });
+  await waitGameCount(3);
+  const afterClone = await games();
+  check(cloneStoredId !== savedId &&
+        afterClone.some(function (g) { return g.id === savedId && g.sans[1] === 'e5'; }) &&
+        afterClone.some(function (g) { return g.id === cloneStoredId && g.sans[1] === 'e6'; }),
+    'a divergent completion from a cloned tab forks a fresh id — both games kept');
+
   // A FAILED archive write is surfaced in the game-over dialog.
   await page.evaluate(function () {
-    CoachStore.__realPutGame = CoachStore.putGame;
-    CoachStore.putGame = function () { return Promise.reject(new Error('quota')); };
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function () { return Promise.reject(new Error('quota')); };
   });
   await t.newGame({ mode: 'pvp' });
   await mv('f2', 'f3'); await mv('e7', 'e5');
@@ -83,6 +130,20 @@ require('./helper').run('archive', async function (t) {
   await page.waitForSelector('#archiveNote:not([hidden])');
   check((await page.textContent('#archiveNote')).includes('could not be archived'),
     'a failed archive write is reported in the game-over dialog');
-  await page.evaluate(function () { CoachStore.putGame = CoachStore.__realPutGame; });
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
   await page.click('#gameOverClose');
+
+  // A BOOT-TIME reconcile failure has no open dialog to report into: it
+  // must surface in the always-visible page note. Break IndexedDB before
+  // the scripts run, then boot the finished saved game (whose archive
+  // write above was rejected, so the reconcile really does try to write).
+  await page.addInitScript(function () {
+    Object.defineProperty(window, 'indexedDB',
+      { get: function () { return undefined; }, configurable: true });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForSelector('#archiveBootNote:not([hidden])', { timeout: 5000 });
+  check((await page.textContent('#archiveBootNote')).includes('could not be archived'),
+    'a boot-time reconcile failure is reported outside the closed dialog');
 });

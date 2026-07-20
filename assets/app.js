@@ -174,6 +174,7 @@
   // falls back to a synchronous call where workers are unavailable.
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // {depth, quiesce, started} for the in-flight search (PGN log)
+  let aiWatchdog = null;      // guards against an alive-but-SILENT worker (see maybeAiMove)
 
   function createAiWorker() {
     if (typeof Worker === 'undefined') return null;
@@ -189,9 +190,25 @@
       };
       w.onerror = function () {
         // Broken worker: fall back to the synchronous path so the app is
-        // never stuck on "thinking".
-        aiWorker = null;
-        if (aiThinking) { aiThinking = false; maybeAiMove(); }
+        // never stuck on "thinking" — then replace the worker so future
+        // moves leave the main thread again.
+        //
+        // Only a worker that FAILED WHILE SEARCHING earns a replacement.
+        // A persistently unloadable worker script fires onerror on every
+        // fresh instance without ever receiving a message; replacing those
+        // too would spawn workers in a loop, and each replacement's error
+        // would restart (and so forever postpone) the pending synchronous
+        // fallback. An idle startup failure instead drops to synchronous
+        // mode for the session — the pre-watchdog behavior.
+        const wasSearching = !!w.searching;
+        if (aiWorker === w) aiWorker = null;
+        if (!wasSearching) return;
+        if (aiThinking) {
+          const originalStartedAt = aiPending && aiPending.started;
+          aiThinking = false;
+          maybeAiMove(originalStartedAt);
+        }
+        aiWorker = createAiWorker();
       };
       return w;
     } catch (e) { return null; }
@@ -205,6 +222,7 @@
       aiWorker.terminate();
       aiWorker = createAiWorker();
     }
+    clearTimeout(aiWatchdog);
     aiRequestId++;
     aiThinking = false;
     aiPending = null;
@@ -547,14 +565,40 @@
     return { maxDepth: Number(settings.difficulty), timeMs: 10000, quiesce: false };
   }
 
-  function maybeAiMove() {
+  function maybeAiMove(startedAt) {
     if (state.turn !== aiColor() || fullStatus().over) return;
     aiThinking = true;
     render();
     const cfg = aiConfig();
     const id = ++aiRequestId;
-    aiPending = { depth: cfg.maxDepth, quiesce: cfg.quiesce, started: Date.now() };
+    aiPending = {
+      depth: cfg.maxDepth,
+      quiesce: cfg.quiesce,
+      // A worker-failure retry is still the same move attempt. Keep its
+      // original start so the debug PGN reports the worker wait as well as
+      // the synchronous fallback search.
+      started: Number.isFinite(startedAt) ? startedAt : Date.now()
+    };
     if (aiWorker) {
+      // Watchdog for an alive-but-silent worker: onerror only covers
+      // workers that break LOUDLY — one that simply never replies would
+      // leave the game on "Computer is thinking…" forever. After the
+      // search budget plus margin, replace it and let the synchronous
+      // fallback answer.
+      clearTimeout(aiWatchdog);
+      aiWatchdog = setTimeout(function () {
+        if (id !== aiRequestId || !aiThinking) return;
+        if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+        const originalStartedAt = aiPending && aiPending.started;
+        aiThinking = false;
+        // THIS move falls back synchronously (aiWorker is null while
+        // maybeAiMove picks its path); a fresh worker then serves later
+        // moves — without it, one transient hang would put every future
+        // AI turn on the main thread for the full search budget.
+        maybeAiMove(originalStartedAt);
+        aiWorker = createAiWorker();
+      }, cfg.timeMs + 3000);
+      aiWorker.searching = true; // this worker did real work (see onerror)
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
         quiesce: cfg.quiesce, positions: state.positions
@@ -573,6 +617,7 @@
   }
 
   function applyAiMove(move, reachedDepth) {
+    clearTimeout(aiWatchdog);
     aiThinking = false;
     viewPly = null;
     // Re-resolve against this state's legal moves (the worker's move object
@@ -614,18 +659,32 @@
   // overwrite. A FAILED write is surfaced in the game-over dialog: an
   // archive that silently drops games would corrupt every later statistic.
   const archiveNoteEl = document.getElementById('archiveNote');
+  const archiveBootNoteEl = document.getElementById('archiveBootNote');
 
   // The CURRENT archive attempt: the game-over "Review game" handoff
   // awaits it, so clicking the button while the write is still in flight
   // opens the record that just landed — or the game list if it failed.
+  // It resolves with the id actually stored, which can differ from gameId:
+  // a cloned tab's divergent completion is archived under a fresh id.
   let archiveAttempt = Promise.resolve(null);
 
-  function archiveCurrentGame(status) {
+  function archiveCurrentGame(status, noteEl) {
     if (!window.ChessyArchive) return;
-    archiveNoteEl.hidden = true;
-    archiveAttempt = ChessyArchive.record(state, settings, status, gameId).catch(function () {
-      archiveNoteEl.hidden = false;
-      archiveNoteEl.textContent =
+    noteEl = noteEl || archiveNoteEl;
+    noteEl.hidden = true;
+    const idAtCall = gameId;
+    archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall).then(function (storedId) {
+      // Adopt a forked id (CoachStore.archiveGame keeps both tabs' games)
+      // so this tab's re-shows and boot reconcile overwrite OUR record,
+      // not the other tab's — unless a new game replaced gameId meanwhile.
+      if (storedId && storedId !== idAtCall && gameId === idAtCall) {
+        gameId = storedId;
+        save();
+      }
+      return storedId;
+    }).catch(function () {
+      noteEl.hidden = false;
+      noteEl.textContent =
         'This game could not be archived (storage unavailable).';
       return null;
     });
@@ -720,8 +779,12 @@
     // AFTER the archive attempt settles, so the record is there to open.
     // Fall back to the on-board replay if Review is unavailable.
     if (window.CoachReview) {
-      const id = gameId;
-      archiveAttempt.then(function () { CoachReview.openArchivedGame(id); });
+      // The attempt resolves with the id ACTUALLY stored (a cloned tab's
+      // divergent completion forks a fresh one); a failed write resolves
+      // null and the missing-record path lands on the game list.
+      archiveAttempt.then(function (storedId) {
+        CoachReview.openArchivedGame(storedId || gameId);
+      });
       return;
     }
     setViewPly(0); // start reviewing from the first position
@@ -900,11 +963,14 @@
   // the tab can die between the synchronous localStorage save and the
   // asynchronous IndexedDB commit, and nothing on the next boot calls
   // showGameOver() again. Re-offer the restored game — the idempotent
-  // UUID-keyed put makes this a no-op when the record already exists.
+  // UUID-keyed archive makes this a no-op when the record already exists.
+  // Zero-ply games too: a timed game can be forfeit before the first move.
+  // The game-over dialog is CLOSED on boot, so a reconcile failure reports
+  // to the always-visible page note instead of the dialog's.
   // On window load, NOT a zero timeout: archive.js is a later script tag
   // and the parser may yield to timers while it is still being fetched.
   window.addEventListener('load', function () {
     const status = fullStatus();
-    if (status.over && state.history.length) archiveCurrentGame(status);
+    if (status.over) archiveCurrentGame(status, archiveBootNoteEl);
   });
 })();

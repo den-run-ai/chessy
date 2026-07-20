@@ -39,6 +39,10 @@ require('./helper').run('review', async function (t) {
   await page.click('#reviewBack');
   await page.waitForSelector('.game-item');
   check(await page.locator('#reviewFlow').isHidden(), 'Back returns to the game list');
+  await page.waitForFunction(function () {
+    return document.activeElement && document.activeElement.className === 'game-item';
+  });
+  check(true, 'Back moves focus onto the game list (not left on a hidden button)');
   check((await page.textContent('.game-item')).includes('0-1') &&
         (await page.textContent('.game-item')).includes('Two players'),
     'game list shows result and mode');
@@ -62,6 +66,8 @@ require('./helper').run('review', async function (t) {
   await page.locator('.game-item').first().click();
   check((await page.textContent('#reviewStatus')).includes('Position 0/4'),
     'list click opens the position browser');
+  check(await page.evaluate(function () { return document.activeElement.id; }) === 'reviewBack',
+    'opening from the list moves focus into the review flow');
   await page.click('#reviewBack');
 
   // A missing record (failed archive write) lands on the game list, not a

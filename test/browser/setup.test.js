@@ -77,4 +77,76 @@ require('./helper').run('setup', async function (t) {
     return document.getElementById('installNote').textContent.includes('Ready offline');
   }, null, { timeout: 15000 });
   check(true, 'offline note reaches "Ready offline" after SW install');
+  // Worker failures retry the SAME AI move synchronously, so their recorded
+  // timing must include time already spent waiting for the worker. This
+  // controllable stub first fails loudly, then stays alive but silent; it
+  // affects every later navigation, so these tests must stay LAST.
+  await page.addInitScript(function () {
+    window.__chessyTestWorkerCount = 0;
+    window.Worker = function () {
+      const worker = this;
+      window.__chessyTestWorkerCount++;
+      // 'birth-error' workers fail on LOAD, before any message — the
+      // persistently-unloadable-script case.
+      if (window.__chessyTestWorkerMode === 'birth-error') {
+        setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 50);
+      }
+      this.postMessage = function () {
+        if (window.__chessyTestWorkerMode === 'error') {
+          setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 750);
+        }
+      };
+      this.terminate = function () {};
+    };
+    // Survives reloads so a phase can exercise the boot-time worker.
+    window.__chessyTestWorkerMode = sessionStorage.getItem('chessy-test-worker-mode') || 'error';
+  });
+  await t.inject(function () { localStorage.removeItem('chessy-game-v1'); });
+
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 5000 });
+  const failedAiMs = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return saved.history[0].ai.ms;
+  });
+  check(failedAiMs >= 700,
+    'failed worker: AI timing includes the pre-error wait (' + failedAiMs + 'ms)');
+
+  await page.evaluate(function () { window.__chessyTestWorkerMode = 'silent'; });
+  await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 20000 });
+  check(true, 'silent worker: the watchdog falls back and the computer still moves');
+  check(!(await page.textContent('#status')).includes('thinking'),
+    'status leaves "thinking" after the fallback move');
+  const stalledAiMs = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return saved.history[0].ai.ms;
+  });
+  check(stalledAiMs >= 4900,
+    'silent worker: AI timing includes the watchdog wait (' + stalledAiMs + 'ms)');
+
+  // A PERSISTENTLY unloadable worker script fires onerror on every fresh
+  // instance before any message. The app must drop to synchronous mode —
+  // not spawn replacements in a loop whose startup errors keep restarting
+  // (and so forever postponing) the pending synchronous fallback.
+  await page.evaluate(function () {
+    sessionStorage.setItem('chessy-test-worker-mode', 'birth-error');
+    localStorage.removeItem('chessy-game-v1');
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(300); // let the boot worker's startup error land
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length >= 1;
+  }, null, { timeout: 20000 });
+  check(!(await page.textContent('#status')).includes('thinking'),
+    'unloadable worker: the computer still moves via the synchronous path');
+  const spawned = await page.evaluate(function () { return window.__chessyTestWorkerCount; });
+  check(spawned <= 2,
+    'unloadable worker is not respawned in a loop (' + spawned + ' constructed)');
 });
