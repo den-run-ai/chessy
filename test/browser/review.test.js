@@ -80,6 +80,30 @@ require('./helper').run('review', async function (t) {
   check(await page.evaluate(function () { return document.activeElement.id; }) === 'tabReview',
     'fallback still moves focus into Review');
 
+  // A failed REPLACEMENT archive must not open the previous archived
+  // ending of the same instance: after undo → replayed finish whose write
+  // fails, "Review game" lands on the game list — the record on disk is
+  // STALE, and opening it by gameId would show a wrong game.
+  await page.click('#tabPlay');
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function () { return Promise.reject(new Error('quota')); };
+  });
+  await page.click('#undo');
+  await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview');
+  await page.waitForSelector('#viewReview:not([hidden])');
+  check(await page.locator('#gameListWrap').isVisible() &&
+        await page.locator('#reviewFlow').isHidden(),
+    'a failed replacement archive lands on the game list, not the stale record');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+
   // Arrow keys drive the coach board / Play replay in their own views only:
   // in Review, pressing ArrowLeft must not rewind the Play replay view.
   await page.keyboard.press('ArrowLeft');
