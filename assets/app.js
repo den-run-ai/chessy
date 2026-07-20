@@ -644,13 +644,17 @@
   const archiveNoteEl = document.getElementById('archiveNote');
   const archiveBootNoteEl = document.getElementById('archiveBootNote');
 
-  function archiveCurrentGame(status, noteEl) {
+  function archiveCurrentGame(status, noteEl, asTab) {
     if (!window.ChessyArchive) return;
     noteEl = noteEl || archiveNoteEl;
     noteEl.hidden = true;
     const idAtCall = gameId;
+    // asTab: the boot reconcile submits a RESTORED ending under the tab
+    // identity persisted with the save — the writer that produced it. With
+    // this tab's fresh nonce instead, the deterministic fork of an already
+    // recovered ending would land on a second fork id (duplicate game).
     ChessyArchive.record(state, settings, status, idAtCall,
-      { endedAt: gameEndedAt, tab: tabNonce }).then(function (storedId) {
+      { endedAt: gameEndedAt, tab: asTab || tabNonce }).then(function (storedId) {
       // A cloned tab's divergent completion is archived under a fresh id
       // (CoachStore.archiveGame keeps both games); adopt it so this tab's
       // re-shows and boot reconcile overwrite OUR record, not the other
@@ -660,8 +664,13 @@
         save();
       }
     }).catch(function () {
-      noteEl.hidden = false;
-      noteEl.textContent =
+      // The dialog may have CLOSED while the write was in flight (Close/
+      // Rematch clicked, or a slow first open): report where the user can
+      // still see it.
+      const el = (noteEl === archiveNoteEl && !gameOverDialog.open)
+        ? archiveBootNoteEl : noteEl;
+      el.hidden = false;
+      el.textContent =
         'This game could not be archived (storage unavailable).';
     });
   }
@@ -676,6 +685,9 @@
   // createdAt must be the completion time even when the write is only
   // reconciled on a much later boot (chronology, not restart time).
   let gameEndedAt = null;
+  // The tab identity persisted with the restored save — the writer that
+  // produced a restored ending. Only the boot reconcile submits under it.
+  let savedGameTab = null;
 
   function newGameId() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -860,10 +872,13 @@
         flipped: flipped,
         // Persisted so the archive's idempotent overwrite survives
         // reloads: a reload → undo → replayed ending is the SAME game
-        // instance and must keep its record key — and its original
-        // completion time, for a boot-time reconcile's createdAt.
+        // instance and must keep its record key — its original completion
+        // time (a boot-time reconcile's createdAt), and its WRITER (the
+        // reconcile re-submits the ending under the identity that
+        // produced it, so recovery and reconcile land on one record).
         gameId: gameId,
-        endedAt: gameEndedAt
+        endedAt: gameEndedAt,
+        tab: tabNonce
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -927,6 +942,7 @@
       flipped = !!data.flipped;
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
       gameEndedAt = Number.isFinite(data.endedAt) ? data.endedAt : null;
+      savedGameTab = typeof data.tab === 'string' && data.tab ? data.tab : null;
       return true;
     } catch (e) {
       return false;
@@ -967,7 +983,7 @@
       : Promise.resolve(null);
     drained.then(function () {
       const status = fullStatus();
-      if (status.over) archiveCurrentGame(status, archiveBootNoteEl);
+      if (status.over) archiveCurrentGame(status, archiveBootNoteEl, savedGameTab);
     });
   });
 })();

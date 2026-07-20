@@ -283,6 +283,93 @@ require('./helper').run('archive', async function (t) {
   check(dupeFork.first === dupeFork.second && dupeFork.copies === 1,
     'the same divergent completion offered twice lands on one deterministic fork');
 
+  // Several parked revisions from ONE tab must drain in WRITE order —
+  // localStorage key enumeration order is user-agent-defined, and a stale
+  // ending replayed last would overwrite the final one.
+  await page.evaluate(function () {
+    const park = function (seq, sans) {
+      localStorage.setItem('chessy-pending-archive-v1:T-ORD:' + seq, JSON.stringify({
+        id: 'ord-game', source: 'play', tags: {},
+        sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: 100 + seq, tab: 'T-ORD'
+      }));
+    };
+    park(2, ['b4']); // the LATER revision, parked under the higher sequence
+    park(1, ['b3']);
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await waitGameCount(13);
+  check((await games()).some(function (g) { return g.id === 'ord-game' && g.sans[0] === 'b4'; }),
+    'parked revisions drain in write order — the later ending wins');
+
+  // A dead tab's UNRECOVERED fork must not duplicate through the state
+  // reconcile: the boot submits the restored ending under the SAVED
+  // writer identity, so the slot drain and the reconcile land on the
+  // same deterministic fork.
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await waitGameCount(14);
+  const cloneId = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    // Another tab archived a DIVERGENT ending under this instance's id...
+    return CoachStore.putGame({
+      id: saved.gameId, source: 'play', tags: {},
+      sans: ['d4', 'd5'], playerColor: 'both', clocks: [null, null],
+      result: '1/2-1/2', reason: 'agreement', mode: 'pvp', difficulty: '2',
+      timeControl: 'none', plies: 2, createdAt: 4444, tab: 'OTHER'
+    }).then(function () {
+      // ...while THIS ending's writer (OLD-TAB) died before its commit,
+      // leaving only its parked slot.
+      localStorage.setItem('chessy-pending-archive-v1:OLD-TAB:1', JSON.stringify({
+        id: saved.gameId, source: 'play', tags: {},
+        sans: ['f3', 'e5', 'g4', 'Qh4#'], playerColor: 'both',
+        clocks: [null, null, null, null], result: '0-1', reason: 'checkmate',
+        mode: 'pvp', difficulty: '2', timeControl: 'none', plies: 4,
+        createdAt: 5555, tab: 'OLD-TAB'
+      }));
+      return saved.gameId;
+    });
+  });
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.tab = 'OLD-TAB'; // the save was written by the dead tab too
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  await page.waitForTimeout(400); // drain + reconcile both settle
+  const lineage = await games();
+  check(lineage.filter(function (g) {
+    return g.id === cloneId || g.id.indexOf(cloneId + ':') === 0;
+  }).length === 2,
+    'slot drain + state reconcile of a dead tab’s ending land on ONE fork (no duplicate)');
+
+  // A write that fails AFTER the dialog was closed reports to the
+  // always-visible page note — a note inside a closed dialog is invisible.
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function () {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { reject(new Error('quota')); }, 400);
+      });
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose'); // closed before the write settles
+  await page.waitForSelector('#archiveBootNote:not([hidden])', { timeout: 5000 });
+  check((await page.textContent('#archiveBootNote')).includes('could not be archived'),
+    'a failure landing after the dialog closed surfaces on the page');
+  await page.evaluate(function () {
+    CoachStore.archiveGame = CoachStore.__realArchiveGame;
+    document.getElementById('archiveBootNote').hidden = true;
+  });
+
   // A FAILED archive write is surfaced in the game-over dialog.
   await page.evaluate(function () {
     CoachStore.__realArchiveGame = CoachStore.archiveGame;
