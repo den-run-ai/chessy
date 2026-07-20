@@ -1,23 +1,39 @@
 /* Chessy service worker.
  *
  * Update strategy (reliable updates, still fully offline):
+ * - RELEASE UNITS (#37): index.html references every executable asset with
+ *   this release's ?r= token, and those versioned URLs are cached as
+ *   distinct, IMMUTABLE entries (cache-first, never revalidated — GitHub
+ *   Pages ignores the query string, so revalidating ?r=rN after a later
+ *   deploy would store the newer file under the old release's key). A page
+ *   therefore always executes the scripts of its own release — the mixed
+ *   state (new HTML + old cached scripts, or the reverse) cannot occur,
+ *   with or without an update in flight. The token here and in index.html
+ *   must agree; test/browser/sw-update.test.js fails the build if they
+ *   drift.
+ * - The executables live under assets/ — a ONE-TIME path migration: the
+ *   previously deployed worker matches its cache with ignoreSearch, so it
+ *   would have served its old js/ and css/ entries for any query-tokened
+ *   URL at those paths during the first upgrade. It has no cache entries
+ *   for assets/*, so the first new shell's requests fall through to the
+ *   network and the very first upgrade is coherent too.
  * - Navigations are network-first: online visits always get the newest app
- *   shell; offline falls back to the cached copy.
- * - Assets are stale-while-revalidate: served instantly from cache, refreshed
- *   in the background so the next load is current even if the cache name
- *   wasn't bumped.
+ *   shell; offline falls back to the cached copy (which then requests its
+ *   own release's cached assets).
+ * - Unversioned assets (manifest, icons) are stale-while-revalidate.
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const CACHE = 'chessy-v19';
+const RELEASE = 'r20';
+const CACHE = 'chessy-' + RELEASE;
 const ASSETS = [
   './',
   './index.html',
-  './css/style.css',
-  './js/engine.js',
-  './js/ai.js',
-  './js/ai-worker.js',
-  './js/app.js',
+  './assets/style.css?r=' + RELEASE,
+  './assets/engine.js?r=' + RELEASE,
+  './assets/ai.js?r=' + RELEASE,
+  './assets/ai-worker.js?r=' + RELEASE,
+  './assets/app.js?r=' + RELEASE,
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -80,11 +96,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (new URL(event.request.url).origin !== self.location.origin) return;
+  const reqUrl = new URL(event.request.url);
+  if (reqUrl.origin !== self.location.origin) return;
 
-  // Assets: stale-while-revalidate — instant from cache, refreshed in the
-  // background; falls back to network when not cached, to cache when offline.
-  const cachedPromise = caches.match(event.request, { ignoreSearch: true });
+  // Versioned assets are IMMUTABLE: exact-match from cache (never
+  // ignoreSearch — the ?r= token is what keeps releases distinct), and
+  // NEVER revalidated. The host ignores the query string, so refreshing
+  // ?r=rN after a later release deploys would store the newer file under
+  // the old release's key — poisoning the isolation the token exists for.
+  // A miss (e.g. evicted entry) fetches the network and fills the cache.
+  if (reqUrl.searchParams.has('r')) {
+    const fill = caches.match(event.request).then((cached) => cached ||
+      fetch(event.request).then((response) => {
+        if (!response.ok) return response;
+        return caches.open(CACHE)
+          .then((cache) => cache.put(event.request, response.clone()))
+          .catch(() => undefined)
+          .then(() => response);
+      }));
+    event.waitUntil(fill.then(() => undefined, () => undefined));
+    event.respondWith(fill);
+    return;
+  }
+
+  // Unversioned assets (manifest, icons): stale-while-revalidate — instant
+  // from cache, refreshed in the background; falls back to network when
+  // not cached, to cache when offline.
+  const cachedPromise = caches.match(event.request);
   const refresh = cachedPromise.then((cached) =>
     fetch(event.request)
       .then((response) => {
