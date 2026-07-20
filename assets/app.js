@@ -638,13 +638,25 @@
   // overwrite. A FAILED write is surfaced in the game-over dialog: an
   // archive that silently drops games would corrupt every later statistic.
   const archiveNoteEl = document.getElementById('archiveNote');
+  const archiveBootNoteEl = document.getElementById('archiveBootNote');
 
-  function archiveCurrentGame(status) {
+  function archiveCurrentGame(status, noteEl) {
     if (!window.ChessyArchive) return;
-    archiveNoteEl.hidden = true;
-    ChessyArchive.record(state, settings, status, gameId).catch(function () {
-      archiveNoteEl.hidden = false;
-      archiveNoteEl.textContent =
+    noteEl = noteEl || archiveNoteEl;
+    noteEl.hidden = true;
+    const idAtCall = gameId;
+    ChessyArchive.record(state, settings, status, idAtCall).then(function (storedId) {
+      // A cloned tab's divergent completion is archived under a fresh id
+      // (CoachStore.archiveGame keeps both games); adopt it so this tab's
+      // re-shows and boot reconcile overwrite OUR record, not the other
+      // tab's — unless a new game already replaced gameId meanwhile.
+      if (storedId && storedId !== idAtCall && gameId === idAtCall) {
+        gameId = storedId;
+        save();
+      }
+    }).catch(function () {
+      noteEl.hidden = false;
+      noteEl.textContent =
         'This game could not be archived (storage unavailable).';
     });
   }
@@ -908,11 +920,14 @@
   // the tab can die between the synchronous localStorage save and the
   // asynchronous IndexedDB commit, and nothing on the next boot calls
   // showGameOver() again. Re-offer the restored game — the idempotent
-  // UUID-keyed put makes this a no-op when the record already exists.
+  // UUID-keyed archive makes this a no-op when the record already exists.
+  // Zero-ply games too: a timed game can be forfeit before the first move.
+  // The game-over dialog is CLOSED on boot, so a reconcile failure reports
+  // to the always-visible page note instead of the dialog's.
   // On window load, NOT a zero timeout: archive.js is a later script tag
   // and the parser may yield to timers while it is still being fetched.
   window.addEventListener('load', function () {
     const status = fullStatus();
-    if (status.over && state.history.length) archiveCurrentGame(status);
+    if (status.over) archiveCurrentGame(status, archiveBootNoteEl);
   });
 })();
