@@ -97,7 +97,7 @@
     fens.push(Chess.toFen(gs));
     // Full game states per ply (WITH repetition tables): engine analysis
     // of "the position before move k" needs the repetition counts a bare
-    // FEN cannot carry (js/reflection.js).
+    // FEN cannot carry (assets/reflection.js).
     let s = Chess.newGameState();
     const states = [s];
     for (const h of gs.history) {
@@ -123,7 +123,7 @@
     $('revPrev').disabled = r.ply === 0;
     $('revNext').disabled = r.ply >= r.gs.history.length;
     $('revEnd').disabled = r.ply >= r.gs.history.length;
-    // The reflection flow (js/reflection.js) tracks the shown position.
+    // The reflection flow (assets/reflection.js) tracks the shown position.
     document.dispatchEvent(new CustomEvent('chessy:reviewrender'));
   }
 
