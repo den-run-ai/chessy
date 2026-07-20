@@ -1,8 +1,9 @@
 /*
  * Chessy AI — iterative-deepening minimax with alpha-beta pruning over the
  * Chess engine, with a Zobrist-keyed transposition table, hash/killer/history
- * move ordering, draw awareness (repetitions against the game history and
- * the search path, dead positions), and (bounded) quiescence search.
+ * move ordering, principal variation search, root aspiration windows, mild
+ * late move reductions, draw awareness (repetitions against the game history
+ * and the search path, dead positions), and (bounded) quiescence search.
  *
  * Entry points:
  *   think(state, {maxDepth, timeMs, nodeLimit, quiesce, positions, seed,
@@ -602,6 +603,7 @@
     let best = maximizing ? -Infinity : Infinity;
     let bestPk = 0;
     let anyLegal = false;
+    let legalCount = 0;
     let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
     ctx.path1.push(r1); ctx.path2.push(r2);
@@ -637,21 +639,46 @@
       // guard and do not restore delta pruning there; the 16-position bench
       // (--exact: 0 move/score divergences vs the no-PVS baseline) and the
       // tactics suite are the empirical evidence that move selection holds.
+      //
+      // Late move reduction (deliberately mild, and — like PVS above — a
+      // selective heuristic, not exact): a quiet 4th-or-later move at depth 4+
+      // scouts one ply shallower first; if even the reduced scout improves the
+      // bound, it is re-searched at full depth before the usual PVS verdict.
+      // Never reduced: captures, promotions, check evasions, checking moves,
+      // the hash move, killer moves.
+      let red = 0;
+      if (depth >= 4 && legalCount >= 3 && !inChk && !m.captured && !m.promotion) {
+        const pk = packMove(m), k = ctx.killers[ply];
+        if (pk !== ttPk && !(k && (pk === k[0] || pk === k[1])) &&
+            !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
+          red = 1;
+        }
+      }
       let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
         childRep = ctx.repPly;
       } else if (maximizing) {
-        score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
+        score = searchNode(next, depth - 1 - red, alpha, alpha + 1, ply + 1, ctx);
         childRep = ctx.repPly;
+        if (red && score > alpha) {
+          ctx.researches++;
+          score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
         if (score > alpha && score < beta) {
           ctx.researches++;
           score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
           if (ctx.repPly < childRep) childRep = ctx.repPly;
         }
       } else {
-        score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
+        score = searchNode(next, depth - 1 - red, beta - 1, beta, ply + 1, ctx);
         childRep = ctx.repPly;
+        if (red && score < beta) {
+          ctx.researches++;
+          score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
         if (score < beta && score > alpha) {
           ctx.researches++;
           score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
@@ -659,6 +686,7 @@
         }
       }
       anyLegal = true;
+      legalCount++;
       if (childRep < repMin) repMin = childRep;
       if (maximizing ? score > best : score < best) {
         best = score;
