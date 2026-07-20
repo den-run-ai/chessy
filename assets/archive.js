@@ -40,19 +40,24 @@
 
   function pendingKey(rec) { return PENDING_PREFIX + (rec.tab || 'unknown'); }
 
-  function clearPendingIf(key, id) {
+  // Each PARK gets its own token, and only the commit holding that token
+  // may clear the slot: two same-tab writes can share a gameId (undo →
+  // revised ending while the first write is still in flight), and the
+  // first commit settling must not discard the second's parked copy.
+  let writeSeq = 0;
+
+  function clearPendingIf(key, token) {
     try {
       const cur = JSON.parse(localStorage.getItem(key));
-      if (cur && cur.id === id) localStorage.removeItem(key);
+      if (cur && cur.w === token) localStorage.removeItem(key);
     } catch (e) {
       try { localStorage.removeItem(key); } catch (e2) { /* gone */ }
     }
   }
 
-  function commit(rec) {
+  function commit(rec, token) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
-      // id-checked: this tab's slot may already hold a NEWER game's record
-      clearPendingIf(pendingKey(rec), rec.id);
+      clearPendingIf(pendingKey(rec), token);
       return storedId;
     });
   }
@@ -80,8 +85,11 @@
       createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now(),
       tab: (opts && opts.tab) || null
     };
-    try { localStorage.setItem(pendingKey(rec), JSON.stringify(rec)); } catch (e) { /* best effort */ }
-    return commit(rec);
+    const token = 'w' + (++writeSeq);
+    try {
+      localStorage.setItem(pendingKey(rec), JSON.stringify({ w: token, rec: rec }));
+    } catch (e) { /* best effort */ }
+    return commit(rec, token);
   }
 
   // Boot recovery: sweep EVERY parked slot whose commit never settled —
@@ -100,13 +108,14 @@
     } catch (e) { return Promise.resolve(null); }
     return keys.reduce(function (chain, key) {
       return chain.then(function () {
-        let rec = null;
-        try { rec = JSON.parse(localStorage.getItem(key)); } catch (e) { /* corrupt */ }
+        let slot = null;
+        try { slot = JSON.parse(localStorage.getItem(key)); } catch (e) { /* corrupt */ }
+        const rec = slot && slot.rec;
         if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) {
           try { localStorage.removeItem(key); } catch (e) { /* gone */ }
           return null;
         }
-        return commit(rec);
+        return commit(rec, slot.w);
       });
     }, Promise.resolve(null));
   }

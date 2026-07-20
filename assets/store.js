@@ -144,7 +144,23 @@
               record.createdAt = existing.createdAt;
               record.tab = existing.tab;
             } else if (!sameTab) {
-              record.id = storedId = newId();
+              // Fork DETERMINISTICALLY per writer (original id + tab): the
+              // same divergent completion can be re-offered more than once
+              // (a boot's slot drain and its state reconcile both submit
+              // it), and every attempt must land on the SAME fork — a
+              // random UUID per attempt would duplicate the game. The fork
+              // gets the same-ending treatment as any record.
+              record.id = storedId = record.tab ? game.id + ':' + record.tab : newId();
+              const forkReq = s.get(record.id);
+              forkReq.onsuccess = function () {
+                const fork = forkReq.result;
+                if (fork && sameEnding(fork, record)) {
+                  record.createdAt = fork.createdAt;
+                  record.tab = fork.tab;
+                }
+                putReq = s.put(record);
+              };
+              return;
             }
           }
           putReq = s.put(record);
