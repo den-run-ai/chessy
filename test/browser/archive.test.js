@@ -186,10 +186,13 @@ require('./helper').run('archive', async function (t) {
   await page.evaluate(function () {
     const park = function (tab, id, sans, createdAt) {
       localStorage.setItem('chessy-pending-archive-v1:' + tab, JSON.stringify({
-        id: id, source: 'play', tags: {},
-        sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
-        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
-        timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab
+        w: 'tok-' + tab,
+        rec: {
+          id: id, source: 'play', tags: {},
+          sans: sans, playerColor: 'both', clocks: sans.map(function () { return null; }),
+          result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+          timeControl: 'none', plies: sans.length, createdAt: createdAt, tab: tab
+        }
       }));
     };
     park('DEAD-TAB', 'parked-game', ['e4', 'e5'], 7777);
@@ -212,6 +215,67 @@ require('./helper').run('archive', async function (t) {
     }
     return true;
   }), 'all recovered durability slots are cleared');
+
+  // Two same-tab writes can share a gameId (undo → revised ending while
+  // the first write is still in flight): the FIRST commit settling must
+  // not clear the SECOND's parked copy — slots clear by per-write token.
+  const slotRace = await page.evaluate(function () {
+    const real = CoachStore.archiveGame;
+    let release;
+    const gate = new Promise(function (r) { release = r; });
+    let calls = 0;
+    CoachStore.archiveGame = function (rec) {
+      calls++;
+      if (calls === 2) return gate.then(function () { return real(rec); });
+      return real(rec);
+    };
+    const mk = function (sans) {
+      return { history: sans.map(function (s) { return { san: s }; }) };
+    };
+    const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
+    const over = { over: true, result: '1-0', reason: 'checkmate' };
+    const key = 'chessy-pending-archive-v1:T-SLOT';
+    const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { tab: 'T-SLOT', endedAt: 1 });
+    const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { tab: 'T-SLOT', endedAt: 2 });
+    return p1.then(function () {
+      const held = JSON.parse(localStorage.getItem(key) || 'null');
+      const secondStillParked = !!(held && held.rec && held.rec.sans[0] === 'a4');
+      release();
+      return p2.then(function () {
+        CoachStore.archiveGame = real;
+        return { secondStillParked: secondStillParked,
+                 clearedAfter: localStorage.getItem(key) === null };
+      });
+    });
+  });
+  await waitGameCount(10);
+  check(slotRace.secondStillParked && slotRace.clearedAfter,
+    "an earlier commit does not clear a later write's parked copy (token-matched slots)");
+
+  // Re-offering the same divergent completion twice (a boot's slot drain
+  // and its state reconcile both submit it) lands on ONE deterministic
+  // fork — never a new UUID per attempt.
+  const dupeFork = await page.evaluate(function () {
+    const mk = function (sans, tab) {
+      return { id: 'dupe-fork', source: 'play', tags: {}, sans: sans,
+        playerColor: 'both', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'checkmate', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: 5, tab: tab };
+    };
+    return CoachStore.archiveGame(mk(['h4'], 'T-OTHER'))
+      .then(function () { return CoachStore.archiveGame(mk(['h3'], 'T-DUPE')); })
+      .then(function (first) {
+        return CoachStore.archiveGame(mk(['h3'], 'T-DUPE')).then(function (second) {
+          return CoachStore.listGames().then(function (all) {
+            return { first: first, second: second,
+                     copies: all.filter(function (g) { return g.sans[0] === 'h3'; }).length };
+          });
+        });
+      });
+  });
+  await waitGameCount(12);
+  check(dupeFork.first === dupeFork.second && dupeFork.copies === 1,
+    'the same divergent completion offered twice lands on one deterministic fork');
 
   // A FAILED archive write is surfaced in the game-over dialog.
   await page.evaluate(function () {
