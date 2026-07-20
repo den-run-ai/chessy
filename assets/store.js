@@ -117,9 +117,12 @@
   //   - same ending re-offered     → overwritten, original createdAt kept
   //     (listGames sorts by createdAt — a re-shown old game must not jump
   //     to the top of the chronology)
-  //   - DIVERGENT completion (two tabs finished the same instance
-  //     differently) → stored under a fresh id so neither game is lost;
-  //     the caller adopts the returned id for its own re-shows.
+  //   - different ending, SAME tab → overwritten: an ordinary replay edit
+  //     (close dialog → undo → different finish) revises this instance's
+  //     one record, it does not add a second game
+  //   - different ending from ANOTHER (or unknown) tab → stored under a
+  //     fresh id so neither tab's finished game is lost; the caller
+  //     adopts the returned id for its own re-shows.
   function archiveGame(game) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
@@ -132,8 +135,9 @@
           const existing = getReq.result;
           const record = Object.assign({}, game);
           if (existing) {
+            const sameTab = !!existing.tab && !!record.tab && existing.tab === record.tab;
             if (sameEnding(existing, record)) record.createdAt = existing.createdAt;
-            else record.id = storedId = newId();
+            else if (!sameTab) record.id = storedId = newId();
           }
           putReq = s.put(record);
         };

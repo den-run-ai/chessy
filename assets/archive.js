@@ -22,7 +22,11 @@
   // surfaces that (a training archive that silently drops games would
   // corrupt every later statistic). A zero-ply game is still archived:
   // a timed game can be forfeit on time before the first move.
-  function record(state, settings, status, gameId) {
+  // opts: { endedAt, tab } — endedAt is the persisted completion time (so
+  // a boot-time reconcile keeps the chronology instead of stamping the
+  // restart); tab is the writing tab's identity (same-tab replay edits
+  // overwrite, cloned-tab divergence forks).
+  function record(state, settings, status, gameId, opts) {
     if (!gameId || !status.over) {
       return Promise.resolve(null);
     }
@@ -42,7 +46,8 @@
       difficulty: settings.difficulty,
       timeControl: settings.timeControl,
       plies: state.history.length,
-      createdAt: Date.now()
+      createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now(),
+      tab: (opts && opts.tab) || null
     });
   }
 
