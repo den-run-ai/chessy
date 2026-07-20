@@ -33,6 +33,13 @@ require('./helper').run('review', async function (t) {
   await page.click('#revEnd');
   check((await page.textContent('#reviewStatus')).includes('end of game'), 'End reaches the final position');
   check(await page.locator('#revNext').isDisabled(), 'Next disabled at the end');
+  // The final checkmate position keeps the Play board's check semantics:
+  // highlighted king, "in check" in its ARIA label, and the status line.
+  check((await page.textContent('#reviewStatus')).includes('(in check)'),
+    'the checkmate final position reports check in the status');
+  check(await page.locator('#reviewBoard .square.check').count() === 1 &&
+        (await page.getAttribute('#reviewBoard .square.check', 'aria-label')).includes('in check'),
+    'the review board highlights and announces the checked king');
   await page.click('#revPrev');
   check((await page.textContent('#reviewStatus')).includes('played here: Qh4'),
     'Prev steps back to the last decision');
@@ -112,4 +119,45 @@ require('./helper').run('review', async function (t) {
 
   // Play is undisturbed.
   check(await page.locator('#viewPlay').isVisible(), 'Play tab returns to the game');
+
+  // A SLOW archive write must not let "Review game" yank the user away
+  // after they have moved on: a new game started while the write is in
+  // flight supersedes the queued handoff (the game stays reachable from
+  // the Review list).
+  await page.evaluate(function () {
+    CoachStore.__realArchiveGame = CoachStore.archiveGame;
+    CoachStore.archiveGame = function (rec) {
+      return new Promise(function (resolve) {
+        window.__releaseArchive = function () {
+          resolve(CoachStore.__realArchiveGame(rec));
+        };
+      });
+    };
+  });
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverReview');        // handoff queued on the held write
+  await t.newGame({ mode: 'pvp' });           // the user moves on
+  await page.evaluate(function () { window.__releaseArchive(); });
+  await page.waitForTimeout(300);             // let the stale handoff settle
+  check(await page.locator('#viewPlay').isVisible() &&
+        await page.locator('#viewReview').isHidden(),
+    'a stale Review-game handoff does not override later navigation');
+  await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
+
+  // The page-level archive failure note lives OUTSIDE the view
+  // containers: a late failure shown after the user wandered into Review
+  // must stay visible there, not vanish with the hidden Play view.
+  await page.evaluate(function () {
+    const el = document.getElementById('archiveBootNote');
+    el.hidden = false;
+    el.textContent = 'This game could not be archived (storage unavailable).';
+  });
+  await page.click('#tabReview');
+  check(await page.locator('#archiveBootNote').isVisible(),
+    'the archive failure note stays visible in the Review view');
+  await page.click('#tabPlay');
+  await page.evaluate(function () { document.getElementById('archiveBootNote').hidden = true; });
 });

@@ -94,11 +94,16 @@
     const r = review;
     const state = Chess.parseFen(r.fens[r.ply]);
     const last = r.ply > 0 ? r.gs.history[r.ply - 1].move : null;
-    reviewBoard.render(state, { lastMove: last });
+    // A checked king (checkmate's final position included) keeps the Play
+    // board's highlight and "in check" announcement on the review board.
+    const inCheck = Chess.inCheck(state, state.turn);
+    const kingSq = inCheck ? state.board.indexOf(state.turn + 'K') : -1;
+    reviewBoard.render(state, { lastMove: last, check: kingSq });
     const side = state.turn === 'w' ? 'White' : 'Black';
     const played = r.ply < r.gs.history.length ? r.gs.history[r.ply] : null;
     $('reviewStatus').textContent = 'Position ' + r.ply + '/' + r.gs.history.length +
-      ' · ' + side + ' to move' + (played ? ' · played here: ' + played.san : ' · end of game');
+      ' · ' + side + ' to move' + (inCheck ? ' (in check)' : '') +
+      (played ? ' · played here: ' + played.san : ' · end of game');
     $('revStart').disabled = r.ply === 0;
     $('revPrev').disabled = r.ply === 0;
     $('revNext').disabled = r.ply >= r.gs.history.length;

@@ -377,6 +377,10 @@
 
   liveNoteEl.addEventListener('click', function () {
     if (window.CoachReview) CoachReview.showView('play');
+    // Returning to Play hides this (focused) banner via updateLiveNote:
+    // hand focus to the board's roving tab stop instead of leaving it on
+    // a hidden element (keyboard users would drop to the document body).
+    setFocusSquare(focusSquare, true);
   });
   document.addEventListener('chessy:viewchange', updateLiveNote);
 
@@ -854,7 +858,14 @@
       // gameId could open a PREVIOUS archived ending of this instance
       // (undo → different finish whose replacement write failed), a
       // wrong game.
+      const idAtClick = gameId;
       archiveAttempt.then(function (storedId) {
+        // The user may have MOVED ON while a slow write settled — started
+        // a new game, or navigated to another view themselves. A stale
+        // handoff must not yank them away; the game stays one click away
+        // in the Review list.
+        const view = document.body.dataset.view || 'play';
+        if (gameId !== idAtClick || view !== 'play') return;
         CoachReview.openArchivedGame(storedId);
       });
       return;
