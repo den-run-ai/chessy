@@ -668,12 +668,22 @@
     // per presentation.
     if (noteEl !== archiveBootNoteEl) noteEl.hidden = true;
     const idAtCall = gameId;
+    const seqAtCall = ++archiveSeq;
     ChessyArchive.record(state, settings, status, idAtCall, { endedAt: gameEndedAt })
       .catch(function () {
-        // A failure landing after a NEWER game replaced this one must not
-        // show inside the newer game's dialog — that would blame the
-        // wrong game. Route stale failures to the page note.
-        showArchiveFailure(gameId === idAtCall ? noteEl : archiveBootNoteEl);
+        if (gameId !== idAtCall) {
+          // A failure landing after a NEWER game replaced this one must
+          // not show inside the newer game's dialog — that would blame
+          // the wrong game. Route it to the page note (the record stays
+          // parked for boot recovery either way).
+          showArchiveFailure(archiveBootNoteEl);
+        } else if (seqAtCall === archiveSeq) {
+          showArchiveFailure(noteEl);
+        }
+        // else: same game but a NEWER attempt superseded this one (undo →
+        // revised finish while this write was in flight). That attempt
+        // owns the outcome — reporting this stale failure would blame a
+        // dialog whose own (revised) record may have committed fine.
       });
   }
 
@@ -686,6 +696,10 @@
   // createdAt must be the completion time even when the write is only
   // reconciled on a much later boot (chronology, not restart time).
   let gameEndedAt = null;
+  // Monotonic archive-attempt generation: a late failure whose attempt
+  // has been superseded (undo → revised finish re-archived under the SAME
+  // game id) must not report into the superseding ending's dialog.
+  let archiveSeq = 0;
 
   function newGameId() {
     return (typeof crypto !== 'undefined' && crypto.randomUUID)
