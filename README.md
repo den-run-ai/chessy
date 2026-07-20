@@ -124,11 +124,11 @@ gated on the engine *and* browser suites.
 | Path | Purpose |
 | --- | --- |
 | `index.html` | App shell |
-| `js/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
-| `js/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
-| `js/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
-| `js/app.js` | Board UI, game flow, persistence |
-| `css/style.css` | Styling |
+| `assets/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
+| `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
+| `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
+| `assets/app.js` | Board UI, game flow, persistence |
+| `assets/style.css` | Styling |
 | `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |
 | `icons/` | App icons (generated, no external assets) |
