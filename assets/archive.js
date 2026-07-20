@@ -16,37 +16,63 @@
   'use strict';
   if (typeof CoachStore === 'undefined' || typeof Chess === 'undefined') return;
 
-  // Durability slot: the record is parked in localStorage until its
+  // Durability queue: each record is parked in localStorage until its
   // IndexedDB commit settles. A Rematch can replace the MAIN save while
   // the write is still in flight, and a tab dying before the commit would
   // otherwise lose that finished game with nothing left to reconcile
-  // from. ONE slot, holding the LATEST unarchived ending; each park gets
-  // its own token and only the commit holding the CURRENT token may clear
-  // the slot — an earlier write settling after a revision was parked
-  // (undo → different finish while the first write was in flight) must
-  // not discard the revision's recoverable copy. reconcilePending()
-  // drains the slot on the next boot.
+  // from. The queue is a map KEYED BY GAME ID — one entry per game, so a
+  // failed write for game A survives game B parking later (a single
+  // shared slot would let B overwrite A's only recoverable copy). Within
+  // one game the latest park wins (a revised ending supersedes the one it
+  // replaced), and each park gets its own token: only the commit holding
+  // the entry's CURRENT token may clear it, so an earlier write settling
+  // after a revision was parked must not discard the revision's copy.
+  // reconcilePending() drains every entry on the next boot.
   const PENDING_KEY = 'chessy-pending-archive-v1';
   let writeSeq = 0;
 
   function parkToken() {
-    // Unique across reloads too: a stale slot must never token-match a
+    // Unique across reloads too: a stale entry must never token-match a
     // fresh run's write.
     return 'w' + Date.now().toString(36) + '-' + (++writeSeq);
   }
 
-  function clearPendingIf(token) {
+  function readPending() {
     try {
-      const cur = JSON.parse(localStorage.getItem(PENDING_KEY));
-      if (cur && cur.w === token) localStorage.removeItem(PENDING_KEY);
-    } catch (e) {
-      try { localStorage.removeItem(PENDING_KEY); } catch (e2) { /* gone */ }
+      const map = JSON.parse(localStorage.getItem(PENDING_KEY));
+      if (map && typeof map === 'object' && !Array.isArray(map)) return map;
+    } catch (e) { /* corrupt */ }
+    return null;
+  }
+
+  function writePending(map) {
+    try {
+      if (Object.keys(map).length === 0) localStorage.removeItem(PENDING_KEY);
+      else localStorage.setItem(PENDING_KEY, JSON.stringify(map));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function park(rec) {
+    const token = parkToken();
+    const map = readPending() || {};
+    map[rec.id] = { w: token, rec: rec };
+    return writePending(map) ? token : null; // quota/blocked → best effort
+  }
+
+  function clearPendingIf(id, token) {
+    const map = readPending();
+    if (!map) return;
+    const cur = map[id];
+    if (cur && cur.w === token) {
+      delete map[id];
+      writePending(map);
     }
   }
 
   function commit(rec, token) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
-      if (token) clearPendingIf(token);
+      if (token) clearPendingIf(rec.id, token);
       return storedId;
     });
   }
@@ -79,25 +105,49 @@
       plies: state.history.length,
       createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now()
     };
-    let token = parkToken();
-    try {
-      localStorage.setItem(PENDING_KEY, JSON.stringify({ w: token, rec: rec }));
-    } catch (e) { token = null; /* best effort */ }
-    return commit(rec, token);
+    return commit(rec, park(rec));
   }
 
-  // Boot recovery for a parked record whose commit never settled (rejects
-  // when the retry fails too, so the caller can surface it). Resolves null
-  // when nothing was pending.
+  // Boot recovery for parked records whose commits never settled. Every
+  // queued entry is retried; entries that commit clear themselves, failed
+  // ones STAY PARKED for the next boot, and the promise rejects when any
+  // retry failed so the caller can surface it. Resolves null when nothing
+  // was pending. Entries are independent games (one per id), so drain
+  // order does not matter.
   function reconcilePending() {
-    let slot = null;
-    try { slot = JSON.parse(localStorage.getItem(PENDING_KEY)); } catch (e) { /* corrupt */ }
-    const rec = slot && slot.rec;
-    if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) {
+    let raw = null;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { /* unavailable */ }
+    if (raw === null) return Promise.resolve(null);
+    const map = readPending();
+    if (!map) { // unparseable — nothing recoverable
       try { localStorage.removeItem(PENDING_KEY); } catch (e) { /* gone */ }
       return Promise.resolve(null);
     }
-    return commit(rec, slot.w);
+    const drains = [];
+    let dirty = false;
+    for (const id of Object.keys(map)) {
+      const entry = map[id];
+      const rec = entry && entry.rec;
+      if (!rec || typeof rec.id !== 'string' || rec.id !== id || !Array.isArray(rec.sans)) {
+        delete map[id]; // malformed entry — drop it
+        dirty = true;
+        continue;
+      }
+      drains.push(commit(rec, entry.w));
+    }
+    // Synchronous with respect to the commits above: their token-matched
+    // clears run strictly later, so this write cannot resurrect one.
+    // (An empty or invalid-only map is removed outright.)
+    if (drains.length === 0) { writePending(map); return Promise.resolve(null); }
+    if (dirty) writePending(map);
+    return Promise.all(drains.map(function (p) {
+      return p.then(function (v) { return { ok: true, v: v }; },
+        function (e) { return { ok: false, e: e }; });
+    })).then(function (results) {
+      const failed = results.find(function (r) { return !r.ok; });
+      if (failed) throw failed.e;
+      return results.length;
+    });
   }
 
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending };
