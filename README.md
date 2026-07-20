@@ -17,8 +17,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   claim-based procedure (automatic would be five-fold/75 moves).
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
   as either color. Iterative-deepening minimax with alpha-beta pruning, a
-  Zobrist-keyed transposition table, and hash/killer/history move ordering,
-  running in a Web Worker so the UI never blocks. The evaluation is tapered
+  Zobrist-keyed transposition table, hash/killer/history move ordering,
+  principal variation search with root aspiration windows, and mild late
+  move reductions, running in a Web Worker so the UI never blocks. The evaluation is tapered
   between midgame and endgame (the king hides, then centralizes) and scores
   mobility, doubled/isolated/passed pawns, and the king's pawn shield. The
   search knows about draws: repetitions of game or search-path positions and
@@ -145,7 +146,7 @@ gated on the engine *and* browser suites.
 | --- | --- |
 | `index.html` | App shell |
 | `assets/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
-| `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
+| `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, PVS + aspiration + LMR, transposition table, quiescence |
 | `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `assets/app.js` | Board UI, game flow, persistence |
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards) |
