@@ -951,17 +951,23 @@
   // On window load, NOT a zero timeout: archive.js is a later script tag
   // and the parser may yield to timers while it is still being fetched.
   window.addEventListener('load', function () {
-    const status = fullStatus();
-    if (status.over) archiveCurrentGame(status, archiveBootNoteEl);
-    // Also drain the durability slot: a Rematch may have replaced the
-    // main save while the previous game's archive write was in flight
-    // (archive.js parks each record until its commit settles).
-    if (window.ChessyArchive) {
-      ChessyArchive.reconcilePending().catch(function () {
-        archiveBootNoteEl.hidden = false;
-        archiveBootNoteEl.textContent =
-          'This game could not be archived (storage unavailable).';
-      });
-    }
+    // Drain the durability slots FIRST (a Rematch may have replaced the
+    // main save while a write was in flight; archive.js parks each record
+    // until its commit settles), THEN re-offer the restored game: run
+    // concurrently, both could submit the same record and race their
+    // forks against another tab's divergent ending. Forks are also
+    // deterministic per writer as a second guard, but the boot stays
+    // sequential regardless.
+    const drained = window.ChessyArchive
+      ? ChessyArchive.reconcilePending().catch(function () {
+          archiveBootNoteEl.hidden = false;
+          archiveBootNoteEl.textContent =
+            'This game could not be archived (storage unavailable).';
+        })
+      : Promise.resolve(null);
+    drained.then(function () {
+      const status = fullStatus();
+      if (status.over) archiveCurrentGame(status, archiveBootNoteEl);
+    });
   });
 })();
