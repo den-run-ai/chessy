@@ -141,6 +141,8 @@ require('./helper').run('train', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('trainOutcome').textContent.indexOf('Could not save') !== -1;
   });
+  check(!(await page.locator('#gradeGood').isDisabled()),
+    'a failed grade re-enables the controls for the retry');
   await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__realGradeCard; });
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
@@ -171,16 +173,23 @@ require('./helper').run('train', async function (t) {
   await page.waitForSelector('#trainReveal:not([hidden])');
   await page.evaluate(function () {
     CoachStore.__realGradeCard = CoachStore.gradeCard;
-    CoachStore.gradeCard = function (id, mutate) {
+    CoachStore.gradeCard = function () {
+      const args = arguments;
       const real = CoachStore.__realGradeCard;
       return new Promise(function (resolve, reject) {
-        setTimeout(function () { real(id, mutate).then(resolve, reject); }, 600);
+        setTimeout(function () {
+          real.apply(CoachStore, args).then(resolve, reject);
+        }, 600);
       });
     };
   });
   await page.click('#gradeGood');
+  check(await page.locator('#gradeGood').isDisabled() &&
+        await page.locator('#gradeHard').isDisabled() &&
+        await page.locator('#gradeAgain').isDisabled(),
+    'grade buttons are visibly disabled while the write is in flight');
   await tsq('a7').click();        // second answer attempt while pending
-  await page.click('#gradeGood'); // second grade while pending
+  await page.click('#gradeGood', { force: true }); // second grade while pending
   await page.waitForSelector('#trainEmpty:not([hidden])', { timeout: 5000 });
   await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__realGradeCard; });
   const after = await page.evaluate(function () {
@@ -191,4 +200,247 @@ require('./helper').run('train', async function (t) {
   });
   check(after.attempts === before.attempts + 1 && after.step === before.step + 1,
     'a pending grade write blocks a second answer/grade (one attempt, one rung)');
+
+  // CONCURRENT grades of the same presented card (two windows showing
+  // the same due card): IndexedDB serializes the transactions, so the
+  // loser's mutate would otherwise run on the freshly updated card and
+  // double-record. The expected-revision pin rejects it as 'stale'.
+  const stale = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards[0];
+      const beforeCount = (c.attempts || []).length;
+      const expect = { due: c.due, attempts: beforeCount };
+      const mut = function (fresh) {
+        fresh.attempts = (fresh.attempts || []).concat([{ at: 1, grade: 'good', correct: true }]);
+        fresh.due = fresh.due + 60000;
+        return fresh;
+      };
+      return CoachStore.gradeCard(c.id, expect, mut).then(function (first) {
+        return CoachStore.gradeCard(c.id, expect, mut).then(function (second) {
+          return CoachStore.listCards().then(function (afterCards) {
+            const a = afterCards.find(function (x) { return x.id === c.id; });
+            return {
+              firstOk: !!first && first !== 'stale',
+              second: second,
+              added: (a.attempts || []).length - beforeCount
+            };
+          });
+        });
+      });
+    });
+  });
+  check(stale.firstOk && stale.second === 'stale' && stale.added === 1,
+    'a concurrent grade against the same presented revision is rejected as stale');
+
+  // A card can OPEN in check (and an answer can give check): the training
+  // board keeps the mini board's check highlight and announcement.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g3', ply: 0,
+      fenBefore: 'r1bqkbnr/pppp1Qpp/2n5/4p3/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 0 3',
+      playedSan: 'Kxf7', bestSan: 'Kxf7',
+      bestMove: { from: 4, to: 13, promotion: null }, // e8 → f7
+      bestScore: 0, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Address the check first', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  check(await page.locator('#trainBoard .square.check').count() === 1 &&
+        (await page.getAttribute('#trainBoard .square.check', 'aria-label')).includes('in check'),
+    'a card opening in check highlights and announces the checked king');
+  await tsq('e8').click();
+  await tsq('f7').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+
+  // A 'stale' grade does NOT always mean another grade consumed the card:
+  // a concurrent lesson re-save also revises it and leaves it due now —
+  // the queue reloads so the revised card is re-presented, not skipped.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g4', ply: 3,
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      playedSan: 'Qh4#', bestSan: 'Qh4#',
+      bestMove: { from: 3, to: 39, promotion: null },
+      bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Original lesson', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () { // re-save from "another window"
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.gameId === 'g4'; });
+      c.lesson = 'Revised elsewhere';
+      c.due = c.due - 5000; // still due, different revision
+      return CoachStore.updateCard(c);
+    });
+  });
+  await page.click('#gradeGood'); // stale: the presented revision is gone
+  await page.waitForSelector('#trainCardBox:not([hidden])', { timeout: 5000 });
+  check((await page.textContent('#trainCount')).includes('1 due'),
+    'a stale grade against a concurrently revised card re-presents it');
+  check(await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.gameId === 'g4'; });
+      return c.attempts.length === 0 && c.lesson === 'Revised elsewhere';
+    });
+  }), 'the stale grade recorded nothing against the revised card');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+
+  // A stale grade whose reload TRANSIENTLY fails must not strand focus in
+  // the now-hidden card box: loadTrain's catch clears the training state,
+  // so the post-reload focus guard sees no card.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g4b', ply: 3,
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      playedSan: 'Qh4#', bestSan: 'Qh4#',
+      bestMove: { from: 3, to: 39, promotion: null },
+      bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Stale-reload-failure test', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () {
+    // Revise the card (makes the pending grade stale) AND make the
+    // follow-up reload reject once.
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.gameId === 'g4b'; });
+      c.due = c.due - 5000;
+      return CoachStore.updateCard(c);
+    }).then(function () {
+      CoachStore.__realDueCards = CoachStore.dueCards;
+      CoachStore.dueCards = function () {
+        CoachStore.dueCards = CoachStore.__realDueCards; // fail once only
+        return Promise.reject(new Error('blocked'));
+      };
+    });
+  });
+  await page.click('#gradeGood'); // stale → reload → reload rejects
+  await page.waitForSelector('#trainCardBox[hidden]', { state: 'attached', timeout: 5000 });
+  check(await page.evaluate(function () {
+    const box = document.getElementById('trainCardBox');
+    // Not stranded in the now-hidden card box; focus was rescued to the
+    // visible Refresh (browsers differ on resetting activeElement to the
+    // body when the focused element is hidden, so we move it explicitly).
+    return !box.contains(document.activeElement) &&
+           document.activeElement === document.getElementById('trainRefresh');
+  }), 'a failed stale-reload rescues focus to the visible Refresh, not the hidden card box');
+  check(await page.locator('#trainRefresh').isVisible(),
+    'a failed stale-reload leaves Refresh visible to retry');
+  check((await page.textContent('#trainCount')) === '',
+    'a failed reload clears the stale due count');
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+
+  // A stale grade whose reload finds an EMPTY queue (a concurrent grade
+  // consumed the last-due card) hides the focused grade button and shows
+  // Refresh — focus must move to Refresh, not fall to the document.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g4c', ply: 3,
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      playedSan: 'Qh4#', bestSan: 'Qh4#',
+      bestMove: { from: 3, to: 39, promotion: null },
+      bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Empty-after-stale test', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () { // another window grades it away first
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.gameId === 'g4c'; });
+      c.attempts = (c.attempts || []).concat([{ at: 1, grade: 'good', correct: true }]);
+      c.due = Date.now() + 86400000; // climbs a rung: no longer due
+      return CoachStore.updateCard(c);
+    });
+  });
+  await page.click('#gradeGood'); // stale → reload → empty queue
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check(await page.evaluate(function () {
+    return document.activeElement === document.getElementById('trainRefresh');
+  }), 'a stale grade that empties the queue moves focus to the visible Refresh');
+
+  // A grade settling AFTER the user left Train must not advance focus
+  // into the hidden view.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g5', ply: 3,
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      playedSan: 'Qh4#', bestSan: 'Qh4#',
+      bestMove: { from: 3, to: 39, promotion: null },
+      bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Focus test', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () {
+    CoachStore.__realGradeCard = CoachStore.gradeCard;
+    CoachStore.gradeCard = function () {
+      const args = arguments;
+      const real = CoachStore.__realGradeCard;
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          real.apply(CoachStore, args).then(resolve, reject);
+        }, 500);
+      });
+    };
+  });
+  await page.click('#gradeGood');
+  await page.click('#tabPlay'); // leave Train while the write is in flight
+  await page.waitForTimeout(800);
+  await page.evaluate(function () { CoachStore.gradeCard = CoachStore.__realGradeCard; });
+  check(await page.evaluate(function () {
+    return !document.getElementById('viewTrain').contains(document.activeElement);
+  }), 'a grade settling after leaving Train does not pull focus into the hidden view');
+  check(await page.locator('#viewPlay').isVisible(), 'the active view is undisturbed');
+
+  // A transient queue-load failure leaves a visible retry control.
+  await page.evaluate(function () {
+    CoachStore.__realDueCards = CoachStore.dueCards;
+    CoachStore.dueCards = function () { return Promise.reject(new Error('blocked')); };
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check((await page.textContent('#trainEmpty')).includes('unavailable') &&
+        await page.locator('#trainRefresh').isVisible(),
+    'a failed queue load surfaces the error WITH a visible Refresh to retry');
+  await page.evaluate(function () { CoachStore.dueCards = CoachStore.__realDueCards; });
+  await page.click('#trainRefresh');
+  await page.waitForFunction(function () {
+    return document.getElementById('trainEmpty').textContent.indexOf('No cards due') !== -1;
+  });
+  check(true, 'Refresh retries the load once storage is available again');
 });

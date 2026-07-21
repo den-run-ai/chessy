@@ -32,6 +32,10 @@ require('./helper').run('clocks', async function (t) {
   await page.click('#liveGameNote');
   check(await page.locator('#viewPlay').isVisible(), 'the banner returns to Play');
   check(await page.locator('#liveGameNote').isHidden(), 'banner hides back in Play');
+  check(await page.evaluate(function () {
+    return document.activeElement.classList.contains('square') &&
+           !!document.activeElement.closest('#board');
+  }), 'the banner hands focus to the Play board, not a now-hidden element');
 
   // Think time + remaining clocks recorded on the move.
   const rec = await page.evaluate(function () {

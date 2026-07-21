@@ -83,6 +83,9 @@
           cell.classList.toggle('black-piece', !!p && p[0] === 'b');
           cell.classList.toggle('selected', i === opts.selected);
           cell.classList.toggle('last-move', isLast);
+          // opts.check: index of a king in check (mirrors the Play
+          // board's highlight — checkmate's final position included).
+          cell.classList.toggle('check', i === opts.check);
           const target = opts.targets && opts.targets.find(function (m) { return m.to === i; });
           cell.classList.toggle('hint', !!target && !target.captured);
           cell.classList.toggle('hint-capture', !!target && !!target.captured);
@@ -91,6 +94,7 @@
             (p ? ', ' + (p[0] === 'w' ? 'white' : 'black') + ' ' + PIECE_NAMES[p[1]] : ', empty');
           if (i === opts.selected) label += ', selected';
           if (target) label += target.captured ? ', capture available' : ', legal move';
+          if (i === opts.check) label += ', in check';
           if (isLast) label += ', last move';
           cell.setAttribute('aria-label', label);
           cell.setAttribute('aria-selected', i === opts.selected ? 'true' : 'false');

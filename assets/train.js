@@ -10,8 +10,10 @@
  * - Honest wording: a card stores Chessy's ONE saved move; a different
  *   answer "differs", it is not declared wrong — the player grades
  *   themselves.
- * - Grades are ATOMIC store-level read-modify-writes (CoachStore.gradeCard),
- *   so a double-fire can never record two attempts or climb two rungs.
+ * - Grades are ATOMIC store-level read-modify-writes (CoachStore.gradeCard)
+ *   PINNED to the presented card revision, so neither a double-fire nor a
+ *   concurrent grade from another window can record two attempts or climb
+ *   two rungs.
  */
 (function () {
   'use strict';
@@ -28,15 +30,45 @@
   const trainBoard = ChessyMiniBoard.make($('trainBoard'), onTrainSquare);
   let train = null; // { queue, card, state, selected, answered, grading, lastCorrect }
 
+  // Async settles may land after the user left Train: repainting a hidden
+  // view is harmless, but moving FOCUS into it would strand keyboard and
+  // screen-reader users outside the active view.
+  function inTrainView() { return document.body.dataset.view === 'train'; }
+
+  // The mini board mirrors the Play board's check semantics — a card can
+  // open (or an answer land) with a king in check, and hiding that would
+  // drop a crucial constraint of the exercise.
+  function checkSquare(state) {
+    return Chess.inCheck(state, state.turn) ? state.board.indexOf(state.turn + 'K') : -1;
+  }
+
   function loadTrain() {
     return CoachStore.dueCards(Date.now()).then(function (cards) {
       train = { queue: cards, card: null, state: null, selected: null,
                 answered: false, grading: false };
       nextTrainCard();
     }).catch(function () {
+      // Clear the training state on failure: the card box is hidden below,
+      // so any stale `train.card` left over would make a post-load focus
+      // guard (`train && train.card`) strand focus in now-hidden content.
+      train = { queue: [], card: null, state: null, selected: null,
+                answered: false, grading: false };
       $('trainEmpty').hidden = false;
       $('trainEmpty').textContent = 'Archive unavailable in this browser.';
+      // No card is available: a stale "1 due" (or larger) count left in the
+      // header would contradict the hidden card box.
+      $('trainCount').textContent = '';
       $('trainCardBox').hidden = true;
+      // A transient failure (e.g. a briefly blocked upgrade) must leave a
+      // visible retry control — not force the user to discover that
+      // switching views retries the load.
+      $('trainRefresh').hidden = false;
+      // Move focus to Refresh — the one actionable control now — whenever
+      // the failure happened while Train is active: a stale-reload hid the
+      // card box holding the focused grade button, and leaving focus on
+      // hidden content (or dropped to the body, browser-dependent) would
+      // strand keyboard and screen-reader users.
+      if (inTrainView()) $('trainRefresh').focus();
     });
   }
 
@@ -57,7 +89,7 @@
       return;
     }
     t.state = Chess.parseFen(t.card.fenBefore);
-    trainBoard.render(t.state, {});
+    trainBoard.render(t.state, { check: checkSquare(t.state) });
     $('trainPrompt').textContent =
       (t.state.turn === 'w' ? 'White' : 'Black') +
       ' to move — find the move Chessy saved for this moment. (You played ' +
@@ -71,7 +103,8 @@
     if (t.selected === null || (p && p[0] === t.state.turn)) {
       if (p && p[0] === t.state.turn) {
         t.selected = i;
-        trainBoard.render(t.state, { selected: i, targets: Chess.legalMovesFrom(t.state, i) });
+        trainBoard.render(t.state, { selected: i, check: checkSquare(t.state),
+          targets: Chess.legalMovesFrom(t.state, i) });
       }
       return;
     }
@@ -79,7 +112,7 @@
       .filter(function (m) { return m.to === i; });
     if (candidates.length === 0) {
       t.selected = null;
-      trainBoard.render(t.state, {});
+      trainBoard.render(t.state, { check: checkSquare(t.state) });
       return;
     }
     if (candidates[0].promotion) {
@@ -127,7 +160,8 @@
     t.answered = true;
     t.lastCorrect = correct;
     const attemptSan = Chess.toSan(t.state, attempt);
-    trainBoard.render(Chess.applyMove(t.state, attempt), { lastMove: attempt });
+    const after = Chess.applyMove(t.state, attempt);
+    trainBoard.render(after, { lastMove: attempt, check: checkSquare(after) });
     $('trainReveal').hidden = false;
     // Honest wording: the card stores ONE bounded engine line — a
     // different answer may be equally sound, so it "differs", it is not
@@ -157,6 +191,16 @@
     }
   }
 
+  // Visibly disable the grade buttons while a write is in flight:
+  // enabled-looking controls whose clicks are silently discarded would
+  // let the user believe a LATER choice was accepted when the first one
+  // is what got stored.
+  function setGradeControls(disabled) {
+    $('gradeAgain').disabled = disabled;
+    $('gradeHard').disabled = disabled;
+    $('gradeGood').disabled = disabled;
+  }
+
   function grade(g) {
     const t = train;
     if (!t || !t.card || !t.answered || t.grading) return;
@@ -165,26 +209,49 @@
     // cannot accept a second answer meanwhile — resetting it here would
     // re-enable both until the async write settled.
     t.grading = true;
+    setGradeControls(true);
     const now = Date.now();
     const correct = !!t.lastCorrect;
-    CoachStore.gradeCard(t.card.id, function (fresh) {
+    // Pin the write to the revision the player actually graded: a
+    // concurrent grade of the same due card (another window) makes this
+    // one resolve 'stale' instead of double-recording.
+    const expect = { due: t.card.due, attempts: (t.card.attempts || []).length };
+    CoachStore.gradeCard(t.card.id, expect, function (fresh) {
       fresh.attempts = (fresh.attempts || []).concat([{ at: now, grade: g, correct: correct }]);
       schedule(fresh, g, now);
       return fresh;
-    }).then(function () {
+    }).then(function (result) {
       t.grading = false;
-      if (train === t) {
-        nextTrainCard(); // Refresh may have rebuilt the queue
-        // Grading hid the reveal box — and the focused grade button with
-        // it. Move focus into what replaced it: the next card's board, or
-        // Refresh when the queue ran dry.
-        focusAfterAdvance();
+      setGradeControls(false);
+      if (train !== t) return;
+      if (result === 'stale') {
+        // The presented revision was consumed — but not necessarily by a
+        // concurrent GRADE: a lesson re-save from another window also
+        // revises the card and leaves it due NOW. Rebuild the queue so
+        // such a card is re-presented instead of silently skipped.
+        loadTrain().then(function () {
+          // focusAfterAdvance handles BOTH outcomes — next card's board,
+          // or the visible Refresh when the concurrent grade emptied the
+          // queue — so it must run whenever Train is active, not only
+          // when a card remains. (A failed reload already focused Refresh
+          // in loadTrain's catch; refocusing it is a harmless no-op.)
+          if (inTrainView()) focusAfterAdvance();
+        });
+        return;
       }
+      nextTrainCard(); // Refresh may have rebuilt the queue
+      // Grading hid the reveal box — and the focused grade button with
+      // it. Move focus into what replaced it (next card's board, or
+      // Refresh when the queue ran dry) — but only while Train is the
+      // ACTIVE view: a slow write settling after the user switched away
+      // must not strand focus inside the hidden view.
+      if (inTrainView()) focusAfterAdvance();
     }, function () {
       // The grade was NOT saved (quota, storage failure): keep the card
-      // on screen (still answered) and say so — silently advancing would
-      // drop the attempt and reschedule nothing.
+      // on screen (still answered), re-enable the controls, and say so —
+      // silently advancing would drop the attempt and reschedule nothing.
       t.grading = false;
+      setGradeControls(false);
       if (train !== t) return;
       $('trainOutcome').textContent =
         '⚠ Could not save that grade (storage unavailable) — try again.';
@@ -208,8 +275,11 @@
   $('gradeGood').addEventListener('click', function () { grade('good'); });
   $('trainRefresh').addEventListener('click', function () {
     loadTrain().then(function () {
-      // Finding a due card hides the (focused) Refresh button itself.
-      if (train && train.card) focusAfterAdvance();
+      // Finding a due card hides the (focused) Refresh button itself, so
+      // focus moves to the board; an empty result keeps Refresh focused.
+      // Gated on Train still being active — a slow load settling after
+      // the user switched views must not pull focus into the hidden view.
+      if (inTrainView()) focusAfterAdvance();
     });
   });
 
