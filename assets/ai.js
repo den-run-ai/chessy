@@ -783,18 +783,22 @@
       // Aspiration window: from depth 2, expect this iteration to score
       // near the previous one. A wrong guess fails the whole root — then
       // the failed side re-searches doubled, eventually falling back to
-      // the full window. A completed iteration therefore reproduces the
-      // full-window RESULT (the selected move) for this search: null-window
-      // scouts are sound (quiescence delta pruning is disabled under them,
-      // see quiesceNode), so a move is never wrongly rejected, and any root
-      // fail-low/high widens and re-searches rather than trusting a bound.
-      // On the reviewer's FEN
-      // (r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq - 2 15) the
-      // accepted value now matches the independent full-window score. What is
-      // NOT bit-exact is the leaf SCORE: delta pruning still runs under the
-      // (real, wider-than-null) aspiration window at PV nodes, carrying its
-      // inherent window-sensitivity — the same property plain alpha-beta has,
-      // not an aspiration-specific defect. Mate scores never aspire.
+      // the full window; a root fail-low/high never trusts the bound, it
+      // widens and re-searches. Like PVS (which it sits on top of),
+      // aspiration is a SELECTIVE heuristic, not a proven-exact transform:
+      // delta pruning still runs UNDER the finite aspiration window at PV
+      // nodes, and that window is not null (delta pruning is disabled only
+      // when beta - alpha <= 1). So an in-window value can be a delta-pruning
+      // artifact that a full-window search would not produce, and aspiration
+      // may accept it without widening — it reproduces the full-window RESULT
+      // in practice, but that is validated empirically (on the reviewer's FEN
+      // r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq - 2 15 the
+      // accepted value matches the independent full-window score; the
+      // 16-position --exact bench shows 0 move/score divergences vs no
+      // aspiration), not guaranteed. This window-sensitivity is a property of
+      // delta pruning that plain alpha-beta shares, not an aspiration defect;
+      // we keep it rather than restore faster, more aggressive pruning. Mate
+      // scores never aspire.
       let delta = 50;
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
