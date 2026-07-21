@@ -103,14 +103,29 @@ console.log('conversion');
 function convert(name, fen, maxPlies, nodesPerMove) {
   let state = Chess.newGameState(fen);
   let plies = 0;
+  let illegal = false;
   while (plies < maxPlies && !Chess.gameStatus(state).over) {
     const r = ChessAI.think(state, {
       maxDepth: 30, nodeLimit: nodesPerMove, quiesce: true, randomize: false,
       positions: state.positions
     });
     if (!r.move) break;
+    // Chess.playMove trusts its argument — it applies whatever move it is
+    // given without confirming legality. Validate against the position's own
+    // legal moves first, or a regression that returned an illegal move would
+    // drive the playout through an impossible position and could reach a
+    // bogus "checkmate" that passes the assertion below.
+    const legal = Chess.legalMoves(state).some(function (m) {
+      return m.from === r.move.from && m.to === r.move.to && m.promotion === r.move.promotion;
+    });
+    if (!legal) { illegal = true; break; }
     state = Chess.playMove(state, r.move);
     plies++;
+  }
+  if (illegal) {
+    check(false, name + ' [returns a legal move]',
+      'engine returned an illegal move during the conversion playout');
+    return;
   }
   const status = Chess.gameStatus(state);
   check(status.reason === 'checkmate', name + ' (mated in ' + plies + ' plies)',
@@ -160,15 +175,29 @@ for (const [name, fen] of [
 // PVS could bend the full-window value AND both scouts consistently, so the
 // reference must NOT come from the code under test. `oracle()` below is a
 // plain, self-contained alpha-beta (no PVS, no TT, no quiescence, no delta
-// pruning) over the engine's own evaluation — an independent witness.
+// pruning) over the engine's own evaluation — an independent witness. It DOES
+// reproduce the engine's search-path repetition rule, so it solves the same
+// minimax problem the engine does (see the comment in oracle()).
 console.log('PVS soundness (independent minimax oracle)');
-function oracle(state, depth, alpha, beta, ply) {
+// `path` carries the repetition keys of the search-path ancestors (the root
+// included, exactly as ChessAI.search pushes the root before recursing).
+function oracle(state, depth, alpha, beta, ply, path) {
   const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
   const kingSq = state.board.indexOf(turn + 'K');
   const maximizing = turn === 'w';
   const inChk = Chess.isAttacked(state.board, kingSq, enemy);
   if (state.halfmove >= 100 && !inChk) return 0;
   if (Chess.insufficientMaterial(state.board)) return 0;
+  // Search-path repetition: production ChessAI.search scores the FIRST
+  // recurrence of any ancestor position (root included) as a draw — the
+  // deliberate twofold path heuristic. Model it here with the same key
+  // (ChessAI.repKey, ep-normalized identically) and ordering (before the
+  // leaf), or the oracle is not solving the same minimax problem: a legal
+  // cycle back to an ancestor would score as a static leaf here but 0 in the
+  // engine, and an unrelated eval/ordering change that let such a cycle reach
+  // the root value would fail this regression despite sound PVS.
+  const key = ChessAI.repKey(state);
+  for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
   const legal = [];
   for (const m of Chess.pseudoMoves(state)) {
     const nx = Chess.applyMove(state, m);
@@ -178,17 +207,19 @@ function oracle(state, depth, alpha, beta, ply) {
   if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
   if (depth <= 0) return ChessAI.evaluate(state.board);
   let best = maximizing ? -Infinity : Infinity;
+  path.push(key);
   for (const nx of legal) {
-    const s = oracle(nx, depth - 1, alpha, beta, ply + 1);
+    const s = oracle(nx, depth - 1, alpha, beta, ply + 1, path);
     if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
     else { if (s < best) best = s; if (best < beta) beta = best; }
     if (beta <= alpha) break;
   }
+  path.pop();
   return best;
 }
 const PVS_FEN = 'r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9';
 const pvsState = Chess.parseFen(PVS_FEN);
-const vOracle = oracle(pvsState, 4, -Infinity, Infinity, 0);   // independent truth
+const vOracle = oracle(pvsState, 4, -Infinity, Infinity, 0, []);   // independent truth
 const vFull = ChessAI.search(pvsState, 4, -Infinity, Infinity, false); // PVS full window
 check(vFull === vOracle, 'PVS full-window value equals independent minimax', 'oracle=' + vOracle + ' pvs=' + vFull);
 const scoutBelow = ChessAI.search(pvsState, 4, vOracle - 1, vOracle, false); // must fail high (>= vOracle)

@@ -252,7 +252,17 @@ if (n < 2) {
     '  (' + n + ' pair' + (n === 1 ? '' : 's') + ' — too few for a confidence interval)');
   console.log('RESULT: inconclusive (need at least 2 pairs for a CI)');
 } else {
-  const sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1));
+  let sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1));
+  // A zero sample variance (every observed pair scored identically) does NOT
+  // prove the true per-pair variance is zero — with few pairs it is a common
+  // artifact, e.g. two swept pairs occur 6.25% of the time under a fair,
+  // independent-game null, yet would otherwise print a [100%, 100%] interval
+  // and declare the candidate stronger. Treating the estimate as known-zero is
+  // false certainty. Fall back to the LARGEST standard deviation a [0,1]-
+  // bounded pair score can have (0.5, attained by a 0/1 split), so the
+  // interval reflects genuine small-sample uncertainty; a real, sustained
+  // sweep still narrows the CI as n grows and can reach significance honestly.
+  if (sd === 0) sd = 0.5;
   // The standard deviation is ESTIMATED from these same n pairs, so a small
   // match needs Student's t, not the normal 1.96 — otherwise the interval is
   // too narrow and a borderline candidate can be wrongly called stronger. df
@@ -260,7 +270,9 @@ if (n < 2) {
   // is within ~0.001 of the true 95% two-sided value for df>30 (df=99 ->
   // 1.984, df=∞ -> 1.96).
   const half = tCrit95(n - 1) * sd / Math.sqrt(n);
-  const lo = mean - half, hi = mean + half;
+  // Clamp the reported bounds to the [0,1] a score can occupy (the verdict
+  // comparisons below are unaffected: clamping never crosses 0.5).
+  const lo = Math.max(0, mean - half), hi = Math.min(1, mean + half);
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
     '  score ' + (mean * 100).toFixed(1) + '%' +
     '  95% CI [' + (lo * 100).toFixed(1) + '%, ' + (hi * 100).toFixed(1) + '%] over ' + n + ' pairs');
