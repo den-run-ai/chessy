@@ -390,8 +390,12 @@
   }
 
   function checkTime(ctx) {
-    ctx.nodes++;
+    // Check the node budget BEFORE counting this node, so exactly nodeLimit
+    // nodes are actually evaluated (counting first would abort on entry to
+    // node nodeLimit+1 while still incrementing it — an off-by-one that
+    // reports one more node than was searched).
     if (ctx.nodes >= ctx.nodeLimit) throw ABORT;
+    ctx.nodes++;
     if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
   }
 
@@ -749,8 +753,11 @@
     }
 
     if (best === null) best = items[0]; // budget died inside depth 1: any legal move
+    // Report the last FULLY completed depth (0 if even depth 1 was aborted):
+    // a partial iteration's move is still returned, but must not be reported
+    // as a completed search draft.
     return {
-      move: best.move, depth: completed || 1, score: bestScore, nodes: ctx.nodes,
+      move: best.move, depth: completed, score: bestScore, nodes: ctx.nodes,
       qnodes: ctx.qnodes, cutoffs: ctx.cutoffs, researches: ctx.researches
     };
   }
