@@ -157,6 +157,11 @@ function openingState(sans) {
   return state;
 }
 
+// Candidate-only LMR activity, accumulated across every match game (the base
+// ref predates LMR and reports no counters). Emitted in the artifact so a
+// verdict records how much the reductions actually fired.
+let candLmr = 0, candLmrRe = 0;
+
 // One game: engines[0] plays White. Returns 1 / 0.5 / 0 from White's view.
 function playGame(engines, sans, seed) {
   for (const ctx of engines) vm.runInContext('Math.random = __mkRand(' + seed + ')', ctx);
@@ -171,6 +176,8 @@ function playGame(engines, sans, seed) {
     const r = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.toFen(state)), {
       maxDepth: 30, nodeLimit: NODES, quiesce: true, positions: state.positions
     });
+    // `cand` is the working-tree engine (assigned below, before any game runs).
+    if (ctx === cand) { candLmr += r.lmr || 0; candLmrRe += r.lmrRe || 0; }
     const legal = Chess.legalMoves(state);
     const local = r.move && legal.find(function (m) {
       return m.from === r.move.from && m.to === r.move.to && m.promotion === r.move.promotion;
@@ -254,6 +261,7 @@ const n = pairScores.length;
 const mean = n ? pairScores.reduce(function (a, b) { return a + b; }, 0) / n : NaN;
 
 console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
+console.log('lmr-activity: reductions ' + candLmr + ', researches ' + candLmrRe + ' (candidate only)');
 console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + NODES + ' nodes/move');
 // A paired CI needs the sample variance, which is undefined for n < 2 (the
 // n-1 denominator is 0). Report the raw score but no interval/verdict rather

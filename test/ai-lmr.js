@@ -43,6 +43,19 @@ function find(state, pred, what) {
   if (!m) throw new Error('fixture broken: no ' + what + ' move in ' + Chess.toFen(state));
   return m;
 }
+// Vertical mirror + color swap (a1<->a8, White<->Black) — turns a White-to-move
+// fixture into its Black-to-move twin so the minimizing branch is exercised.
+function mirrorFen(fen) {
+  const p = fen.split(' ');
+  const swap = function (ch) { return ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase(); };
+  p[0] = p[0].split('/').reverse().map(function (rank) {
+    return rank.split('').map(function (c) { return /\d/.test(c) ? c : swap(c); }).join('');
+  }).join('/');
+  p[1] = p[1] === 'w' ? 'b' : 'w';
+  if (p[2] !== '-') p[2] = p[2].split('').map(swap).sort().join('');
+  if (p[3] !== '-') p[3] = p[3][0] + (9 - Number(p[3][1]));
+  return p.join(' ');
+}
 // Convenience: is this move reduced under otherwise-maximally-eligible
 // conditions, overriding only the fields a case wants to probe?
 function reduces(state, m, over) {
@@ -83,6 +96,12 @@ check(reduces(mid, quiet, { ctx: kctx1 }) === false, 'a primary killer is NOT re
 const kctx2 = ChessAI.makeCtx(true, Infinity); kctx2.killers[0] = [0, ChessAI.packMove(quiet)];
 check(reduces(mid, quiet, { ctx: kctx2 }) === false, 'a secondary killer is NOT reduced');
 
+// Quiescence gate: with quiescence OFF (Expert mode) the reduced scout has no
+// horizon to catch tactics, so LMR is disabled entirely — the same move that
+// is reduced under quiescence is left full-width here.
+const qoffCtx = ChessAI.makeCtx(false, Infinity);
+check(reduces(mid, quiet, { ctx: qoffCtx }) === false, 'no move is reduced when quiescence is off (Expert mode)');
+
 // Promotions are never reduced.
 const PROMO = '4k3/P7/8/8/8/8/8/4K3 w - - 0 1';
 const promoState = Chess.parseFen(PROMO);
@@ -119,6 +138,31 @@ console.log('LMR counters over a real search');
   check(ctx.lmrRe <= ctx.lmr, 'every re-search corresponds to a reduction (lmrRe <= lmr)',
     'lmr=' + ctx.lmr + ' lmrRe=' + ctx.lmrRe);
 }
+// Quiescence gate end-to-end: the SAME position at the SAME depth reduces
+// nothing with quiescence off (Expert) but reduces with it on (Master). This
+// is the fix for the Expert-mode node regression — full-width search there.
+{
+  const off = ChessAI.makeCtx(false, Infinity);
+  ChessAI.search(mid, 4, -Infinity, Infinity, false, { ctx: off });
+  check(off.lmr === 0, 'search depth 4 with quiescence off applies zero reductions (Expert)', 'lmr=' + off.lmr);
+  const on = ChessAI.makeCtx(true, Infinity);
+  ChessAI.search(mid, 4, -Infinity, Infinity, true, { ctx: on });
+  check(on.lmr > 0, 'search depth 4 with quiescence on applies reductions (Master)', 'lmr=' + on.lmr);
+}
+// Minimizing branch: the mirror of MID (Black to move) drives the
+// `if (red && score < beta)` re-search path, symmetric to White's maximizing
+// re-search above — so the Black side gets the same reduce-then-verify guard.
+{
+  const midB = Chess.parseFen(mirrorFen(MID));
+  check(midB.turn === 'b', 'fixture: mirrored MID has Black to move');
+  const ctx = ChessAI.makeCtx(true, Infinity);
+  ChessAI.search(midB, 4, -Infinity, Infinity, true, { ctx: ctx });
+  check(ctx.lmr > 0, 'minimizing root (Black) applies reductions', 'lmr=' + ctx.lmr);
+  check(ctx.lmrRe > 0, 'minimizing root forces a full-depth re-search', 'lmrRe=' + ctx.lmrRe);
+  check(ctx.lmrRe <= ctx.lmr, 'minimizing: every re-search corresponds to a reduction (lmrRe <= lmr)',
+    'lmr=' + ctx.lmr + ' lmrRe=' + ctx.lmrRe);
+}
+
 // A root that is in check reduces nothing even with enough evasions to clear
 // the legalCount gate — the exclusion is the check, not move scarcity.
 {

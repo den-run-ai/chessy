@@ -365,8 +365,17 @@
   // captures, promotions, the hash move, killer moves, or a move that itself
   // gives check. The gates are ordered cheap-to-expensive so the attack lookup
   // for the checking-move test runs only for moves that clear every other bar.
+  //
+  // LMR is gated on quiescence being ON. The reduced scout searches one ply
+  // shallower; only a quiescence horizon can catch the tactic that shallower
+  // depth would otherwise miss, so without it too many reduced scouts beat the
+  // bound and trigger the full-depth re-search — the re-search overhead
+  // outweighs the reduction and NET nodes rise (measured +37.7% at depth 5,
+  // --no-quiesce, the Expert-mode config). With quiescence LMR is a clear win
+  // (~39% fewer nodes at depth 6). So Expert (quiescence off) keeps full-width
+  // search; Master (quiescence on) gets the reductions.
   function lmrReduces(state, next, m, depth, legalCount, inChk, ttPk, ply, ctx) {
-    if (depth < 4 || legalCount < 3 || inChk || m.captured || m.promotion) return false;
+    if (!ctx.quiesce || depth < 4 || legalCount < 3 || inChk || m.captured || m.promotion) return false;
     const pk = packMove(m), k = ctx.killers[ply];
     if (pk === ttPk) return false;                        // hash move: searched first, trust it
     if (k && (pk === k[0] || pk === k[1])) return false;  // killer: a proven refutation here

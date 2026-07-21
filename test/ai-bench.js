@@ -7,6 +7,7 @@
  *   node test/ai-bench.js                  # candidate numbers only
  *   node test/ai-bench.js --base main      # candidate vs ref: node ratio
  *   node test/ai-bench.js --depth 5        # fixed search depth (default 5)
+ *   node test/ai-bench.js --no-quiesce     # quiescence off (the Expert-mode config)
  *   node test/ai-bench.js --exact          # fail if move/score diverge from base
  *
  * Both engines get an identical seeded Math.random (re-seeded per position),
@@ -27,6 +28,9 @@ function opt(name, dflt) {
 const BASE = opt('base', null);
 const DEPTH = Number(opt('depth', 5));
 const EXACT = args.includes('--exact');
+// Quiescence on by default (Master mode); --no-quiesce is the Expert config,
+// where LMR is deliberately disabled — a bench here should show lmr 0.
+const QUIESCE = !args.includes('--no-quiesce');
 
 // 8 base positions: opening, open middlegame, closed middlegame, tactical
 // middlegame, rook ending, minor-piece ending, promotion race, pawn ending.
@@ -96,13 +100,14 @@ function bench(ctx, fen) {
   vm.runInContext('Math.random = __mkRand(0xC0FFEE)', ctx);
   const state = ctx.Chess.parseFen(fen);
   const t0 = Date.now();
-  const r = ctx.ChessAI.think(state, { maxDepth: DEPTH, quiesce: true });
+  const r = ctx.ChessAI.think(state, { maxDepth: DEPTH, quiesce: QUIESCE });
   return {
     ms: Date.now() - t0,
     nodes: r.nodes,
     qnodes: r.qnodes || 0,
     cutoffs: r.cutoffs || 0,
     researches: r.researches || 0,
+    lmr: r.lmr || 0,
     depth: r.depth,
     score: r.score,
     move: r.move ? ctx.Chess.sqName(r.move.from) + ctx.Chess.sqName(r.move.to) + (r.move.promotion || '') : '-'
@@ -124,11 +129,12 @@ const base = BASE ? loadEngine(BASE) : null;
 
 let logRatioSum = 0, flagged = 0, mismatches = 0;
 let totC = 0, totB = 0, msC = 0, msB = 0;
-console.log('depth ' + DEPTH + (BASE ? ', base ' + BASE : '') + '\n');
+console.log('depth ' + DEPTH + (QUIESCE ? '' : ', no-quiesce') + (BASE ? ', base ' + BASE : '') + '\n');
 for (const [name, fen] of POSITIONS) {
   const c = bench(cand, fen);
   let line = name.padEnd(34) + ' cand ' + String(c.nodes).padStart(8) +
-    ' n  d' + c.depth + ' ' + String(c.score).padStart(6) + ' ' + c.move.padEnd(6);
+    ' n  d' + c.depth + ' ' + String(c.score).padStart(6) + ' ' + c.move.padEnd(6) +
+    ' lmr' + String(c.lmr).padStart(4);
   totC += c.nodes; msC += c.ms;
   if (base) {
     const b = bench(base, fen);
