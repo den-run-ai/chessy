@@ -473,7 +473,17 @@
       // window, so don't bother searching it — UNLESS it gives check: a
       // checking capture can be mate (e.g. Qxg7#) regardless of its
       // material gain, so the score is not bounded by standPat + value.
-      if (!inChk && !m.promotion) {
+      //
+      // Only on a REAL window (width > 1). Delta pruning bounds a capture by
+      // its immediate material + a fixed positional margin, which is not a
+      // true bound when the capture opens a deeper combination — a latent
+      // unsoundness that a wide window hides (alpha sits far below standPat,
+      // so nothing prunes) but a null scout window exposes (alpha hugs
+      // standPat, so the margin decides). Under a null window the pruned
+      // value would not be a sound bound, so PVS's null-window scout could
+      // then miss a genuinely better move (false fail-low). Disabling delta
+      // pruning there keeps the scout a plain, sound alpha-beta bound.
+      if (!inChk && !m.promotion && beta - alpha > 1) {
         const gain = VALUES[m.captured[1]] + DELTA;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
             !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
@@ -607,15 +617,19 @@
       // dependency is the MINIMUM over its scout and re-search — a path-
       // dependent draw seen by either must reach the TT guard below.
       //
-      // NOTE: this is a node reducer, NOT a bit-exact transform of the
-      // non-PVS search. Quiescence delta pruning keys off the alpha/beta
-      // window, so a scout's narrow window can prune a capture the full
-      // window would keep and return a slightly different (still valid as
-      // a bound) leaf value; on rare tactical positions that shifts the
-      // chosen move versus a plain search. That interaction is accepted
-      // and validated empirically (node reduction + tactics + self-play),
-      // not by claiming exactness — see test/ai-tactics.js for the pinned
-      // regression FEN that isolates it.
+      // Scout SOUNDNESS with quiescence: quiescence delta pruning is disabled
+      // under a null window (see quiesceNode), so a scout is a plain alpha-beta
+      // bound — it cannot report a false fail-low and hide a genuinely better
+      // move (the r3617... regression: without that guard, depth-2 quiescent
+      // PVS picked b8c6 -7 over the true best d7d5 -307). Move selection is
+      // therefore sound. What PVS is NOT is a bit-exact transform: the leaf
+      // SCORES of the full-window re-searches still carry delta pruning's
+      // inherent window-sensitivity (a value depends on the window a move was
+      // searched under — true of plain alpha-beta too, not just PVS), so exact
+      // centipawns can differ negligibly from a hypothetical no-pruning search.
+      // Validated by node reduction + tactics + self-play; test/ai-tactics.js
+      // pins the scout-soundness regression against an independent minimax
+      // oracle.
       let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
