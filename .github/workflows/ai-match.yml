@@ -1,0 +1,42 @@
+name: AI self-play match
+
+# Manual-only: a full 200-game match takes far too long for PR CI.
+# Compares the checked-out candidate against a base ref and reports
+# W/D/L with a paired 95% confidence interval.
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Git ref to play against
+        default: origin/main
+        required: true
+      nodes:
+        description: Fixed nodes per move
+        default: "10000"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run match
+        # Pass dispatch inputs through the environment, never interpolated into
+        # the script text: `${{ inputs.base }}` spliced directly into `run:`
+        # would let a value like $(cmd) or a quote execute commands. As env
+        # values they reach Bash as data, and "$BASE"/"$NODES" are ordinary
+        # variable expansions. (ai-match.js in turn runs `git show` via
+        # execFileSync, so the ref is never re-parsed by a shell there either.)
+        env:
+          BASE: ${{ inputs.base }}
+          NODES: ${{ inputs.nodes }}
+        run: node test/ai-match.js --base "$BASE" --nodes "$NODES"

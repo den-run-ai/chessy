@@ -133,7 +133,14 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 
 ```sh
 node test/engine.test.js
+node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 ```
+
+Two more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
+--base origin/main` measures search nodes over 16 benchmark positions
+against a git ref, and `node test/ai-match.js --base origin/main` plays a
+200-game paired self-play match (also available as the "AI self-play
+match" workflow_dispatch action).
 
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
