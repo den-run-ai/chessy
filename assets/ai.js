@@ -617,19 +617,26 @@
       // dependency is the MINIMUM over its scout and re-search — a path-
       // dependent draw seen by either must reach the TT guard below.
       //
-      // Scout SOUNDNESS with quiescence: quiescence delta pruning is disabled
-      // under a null window (see quiesceNode), so a scout is a plain alpha-beta
-      // bound — it cannot report a false fail-low and hide a genuinely better
-      // move (the r3617... regression: without that guard, depth-2 quiescent
-      // PVS picked b8c6 -7 over the true best d7d5 -307). Move selection is
-      // therefore sound. What PVS is NOT is a bit-exact transform: the leaf
-      // SCORES of the full-window re-searches still carry delta pruning's
-      // inherent window-sensitivity (a value depends on the window a move was
-      // searched under — true of plain alpha-beta too, not just PVS), so exact
-      // centipawns can differ negligibly from a hypothetical no-pruning search.
-      // Validated by node reduction + tactics + self-play; test/ai-tactics.js
-      // pins the scout-soundness regression against an independent minimax
-      // oracle.
+      // PVS is a SELECTIVE heuristic, not a bit-exact minimax transform, and
+      // its exactness is validated empirically rather than proven. Two things
+      // keep a scout from silently discarding a better move at the leaves it
+      // searches itself: quiescence delta pruning is disabled under a null
+      // window (see quiesceNode), so those leaves are plain alpha-beta bounds
+      // (without that guard, depth-2 quiescent PVS picked b8c6 -7 over the true
+      // best d7d5 -307 — pinned in test/ai-tactics.js against an independent
+      // minimax oracle). The residual, deliberately-accepted unsoundness:
+      //   (1) a scout may return a TT entry stored by a WIDER, delta-pruned
+      //       search of the same node — that cached value is not a guaranteed
+      //       sound bound, so the null-window guard does not make every scout
+      //       exact, only the ones that reach their own leaves;
+      //   (2) delta pruning's leaf values are window-sensitive in general (a
+      //       value depends on the window a move was searched under — a
+      //       property plain alpha-beta shares, not a PVS defect).
+      // So exact centipawns can differ from a hypothetical no-delta-pruning
+      // search. We keep the tradeoff (sound over fast) at the null-window
+      // guard and do not restore delta pruning there; the 16-position bench
+      // (--exact: 0 move/score divergences vs the no-PVS baseline) and the
+      // tactics suite are the empirical evidence that move selection holds.
       let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
