@@ -22,15 +22,23 @@
  *   Both engines get an identically seeded Math.random per game, so the whole
  *   match is reproducible.
  *
+ * Shard a large match by seed (--seeds/--seedbase) and/or by opening range
+ * (--openbase/--opencount) so any single shard fits the workflow timeout; the
+ * aggregator (test/ai-match-agg.js) checks the shards tile the full manifest.
+ *
  * Output (all machine-readable, captured into the workflow artifact):
- *   pair-scores:  the raw per-(opening, seed) pair scores;
- *   records:      one structured JSON record per pair {op, name, seed, gseed,
- *                 white, black, pair} — enough to recompute any verdict and to
- *                 concatenate disjoint --seedbase shards;
- *   lmr-activity: the candidate's total LMR reductions / re-searches;
- *   RESULT:       the opening-CLUSTER non-inferiority verdict (see
- *                 test/match-stats.js) — the 95% lower bound is taken over the
- *                 per-opening means, not the individual pairs.
+ *   pair-scores:     the raw per-(opening, seed) pair scores;
+ *   records:         one structured JSON record per pair {op, name, seed,
+ *                    gseed, white, black, pair} — enough to recompute any
+ *                    verdict and to concatenate disjoint shards;
+ *   openings-total:  the opening-list size (aggregator cross-check);
+ *   shard:           this shard's opening and seed ranges;
+ *   lmr-activity:    the candidate's cumulative LMR reductions / re-searches;
+ *   depth-dist /     the completed-depth histogram and the fraction of moves
+ *   completed-depth: returned from a depth >= 5 (LMR-capable) search;
+ *   RESULT:          the opening-CLUSTER non-inferiority verdict (see
+ *                    test/match-stats.js) — the 95% lower bound is over the
+ *                    per-opening means, not the individual pairs.
  */
 'use strict';
 const fs = require('fs');
@@ -102,6 +110,22 @@ if (!Number.isSafeInteger(SEED_BASE + SEEDS)) {
 // safe integer. `--pairs nope` would otherwise become NaN, making the limit
 // check permanently false and running the full match unexpectedly.
 const PAIRS_LIMIT = args.includes('--pairs') ? posInt('pairs', 0) : Infinity;
+// Opening-range shard: [--openbase, --openbase + --opencount) into OPENINGS.
+// Lets a high-budget match be split by OPENING (not only by seed) so a shard
+// stays under the workflow timeout; the aggregator checks that the shards'
+// (opening, seed) cells tile the full manifest exactly. openbase is a
+// non-negative safe int (same NaN/overflow hazards as seedbase); opencount
+// absent = to the end of the list.
+const OPEN_BASE = (function () {
+  const raw = opt('openbase', '0');
+  const n = Number(raw);
+  if (!Number.isSafeInteger(n) || n < 0) {
+    console.error('--openbase must be a non-negative safe integer (got "' + raw + '")');
+    process.exit(2);
+  }
+  return n;
+})();
+const OPEN_COUNT = args.includes('--opencount') ? posInt('opencount', 0) : Infinity;
 
 // 100 frozen, diverse opening lines spanning the ECO range. The match plays
 // each as candidate-White AND candidate-Black (paired), so opening and color
@@ -252,10 +276,21 @@ function openingState(sans) {
   return state;
 }
 
-// Candidate-only LMR activity, accumulated across every match game (the base
-// ref predates LMR and reports no counters). Emitted in the artifact so a
-// verdict records how much the reductions actually fired.
-let candLmr = 0, candLmrRe = 0;
+// Candidate-only telemetry, accumulated across every match move the candidate
+// makes (the base ref predates LMR and reports no counters). Emitted in the
+// artifact so a verdict records how much the reductions actually fired AND
+// whether the budget searched deep enough for them to matter.
+//
+// LMR only affects the RETURNED move when the last COMPLETED iteration reached
+// depth >= 5: reductions fire inside searchNode at depth >= 4, and the top
+// searchNode of a completed depth-d iteration is at depth d-1, so d must be
+// >= 5. r.lmr is cumulative over all iterations (including the final aborted
+// one, whose move is discarded), so it can be nonzero even when the returned
+// move was chosen by a depth <= 4 search. candDepthGe5 / candDepths therefore
+// report the honest signal: how often the candidate actually returned a move
+// from an LMR-capable search.
+let candLmr = 0, candLmrRe = 0, candMoves = 0, candDepthGe5 = 0;
+const candDepths = {}; // completed-depth histogram: depth -> count
 
 // One game: engines[0] plays White. Returns 1 / 0.5 / 0 from White's view.
 function playGame(engines, sans, seed) {
@@ -272,7 +307,12 @@ function playGame(engines, sans, seed) {
       maxDepth: 30, nodeLimit: NODES, quiesce: true, positions: state.positions
     });
     // `cand` is the working-tree engine (assigned below, before any game runs).
-    if (ctx === cand) { candLmr += r.lmr || 0; candLmrRe += r.lmrRe || 0; }
+    if (ctx === cand) {
+      candLmr += r.lmr || 0; candLmrRe += r.lmrRe || 0; candMoves++;
+      const dp = r.depth || 0;
+      candDepths[dp] = (candDepths[dp] || 0) + 1;
+      if (dp >= 5) candDepthGe5++;
+    }
     const legal = Chess.legalMoves(state);
     const local = r.move && legal.find(function (m) {
       return m.from === r.move.from && m.to === r.move.to && m.promotion === r.move.promotion;
@@ -334,6 +374,16 @@ if (args.includes('--check-openings')) {
   process.exit(bad ? 1 : 0);
 }
 
+// Resolve the opening-range shard against the frozen list.
+const OPEN_LO = OPEN_BASE;
+const OPEN_HI = Math.min(OPENINGS.length,
+  OPEN_BASE + (OPEN_COUNT === Infinity ? OPENINGS.length : OPEN_COUNT));
+if (OPEN_LO >= OPENINGS.length) {
+  console.error('--openbase ' + OPEN_BASE + ' is past the last opening index (' +
+    (OPENINGS.length - 1) + ')');
+  process.exit(2);
+}
+
 const cand = loadEngine(null);
 const base = loadEngine(BASE);
 assertBounded(cand, 'candidate (working tree)');
@@ -345,7 +395,7 @@ const records = [];    // structured per-pair records for clustering/aggregation
 const t0 = Date.now();
 outer:
 for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
-  for (let o = 0; o < OPENINGS.length; o++) {
+  for (let o = OPEN_LO; o < OPEN_HI; o++) {
     if (pairScores.length >= PAIRS_LIMIT) break outer;
     const seed = (o * 977 + s * 7919 + 1) | 0;
     let pair = 0;
@@ -371,9 +421,21 @@ process.stderr.write('\n');
 
 const cs = clusterStats(records);
 
+// Completed-depth histogram and the fraction of candidate moves returned from
+// an LMR-capable search (depth >= 5): the honest "did LMR affect the move"
+// signal used to calibrate the node budget.
+const ge5Pct = candMoves ? (100 * candDepthGe5 / candMoves) : 0;
+
 console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
 console.log('records: ' + JSON.stringify(records));        // structured, for the cluster aggregator
-console.log('lmr-activity: reductions ' + candLmr + ', researches ' + candLmrRe + ' (candidate only)');
+console.log('openings-total: ' + OPENINGS.length);         // opening-list size (aggregator cross-check)
+console.log('shard: openings [' + OPEN_LO + ',' + OPEN_HI + ') seeds [' +
+  SEED_BASE + ',' + (SEED_BASE + SEEDS) + ')');
+console.log('lmr-activity: reductions ' + candLmr + ', researches ' + candLmrRe +
+  ' (candidate only, cumulative over all iterations)');
+console.log('depth-dist: ' + JSON.stringify(candDepths));  // completed-depth histogram (candidate moves)
+console.log('completed-depth: ' + candDepthGe5 + '/' + candMoves + ' candidate moves reached depth >= 5 (' +
+  ge5Pct.toFixed(1) + '% — LMR-capable)');
 console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + NODES + ' nodes/move');
 // The verdict is the opening-CLUSTER one-sided non-inferiority bound (mean and
 // 95% lower bound over the per-opening means, NOT the raw pairs — see

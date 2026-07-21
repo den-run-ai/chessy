@@ -81,6 +81,8 @@ jobs:
         run: node test/ai-match.js --check-openings
       - name: Run match cluster-statistics tests
         run: node test/match-stats.test.js
+      - name: Run match shard-aggregator tests
+        run: node test/ai-match-agg.test.js
 
   browser:
     runs-on: ubuntu-latest
