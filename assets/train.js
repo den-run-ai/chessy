@@ -55,11 +55,20 @@
                 answered: false, grading: false };
       $('trainEmpty').hidden = false;
       $('trainEmpty').textContent = 'Archive unavailable in this browser.';
+      // No card is available: a stale "1 due" (or larger) count left in the
+      // header would contradict the hidden card box.
+      $('trainCount').textContent = '';
       $('trainCardBox').hidden = true;
       // A transient failure (e.g. a briefly blocked upgrade) must leave a
       // visible retry control — not force the user to discover that
       // switching views retries the load.
       $('trainRefresh').hidden = false;
+      // Move focus to Refresh — the one actionable control now — whenever
+      // the failure happened while Train is active: a stale-reload hid the
+      // card box holding the focused grade button, and leaving focus on
+      // hidden content (or dropped to the body, browser-dependent) would
+      // strand keyboard and screen-reader users.
+      if (inTrainView()) $('trainRefresh').focus();
     });
   }
 
@@ -221,7 +230,12 @@
         // revises the card and leaves it due NOW. Rebuild the queue so
         // such a card is re-presented instead of silently skipped.
         loadTrain().then(function () {
-          if (train && train.card && inTrainView()) focusAfterAdvance();
+          // focusAfterAdvance handles BOTH outcomes — next card's board,
+          // or the visible Refresh when the concurrent grade emptied the
+          // queue — so it must run whenever Train is active, not only
+          // when a card remains. (A failed reload already focused Refresh
+          // in loadTrain's catch; refocusing it is a harmless no-op.)
+          if (inTrainView()) focusAfterAdvance();
         });
         return;
       }
@@ -261,10 +275,11 @@
   $('gradeGood').addEventListener('click', function () { grade('good'); });
   $('trainRefresh').addEventListener('click', function () {
     loadTrain().then(function () {
-      // Finding a due card hides the (focused) Refresh button itself —
-      // but a slow load settling after the user switched views must not
-      // pull focus into the hidden Train view.
-      if (train && train.card && inTrainView()) focusAfterAdvance();
+      // Finding a due card hides the (focused) Refresh button itself, so
+      // focus moves to the board; an empty result keeps Refresh focused.
+      // Gated on Train still being active — a slow load settling after
+      // the user switched views must not pull focus into the hidden view.
+      if (inTrainView()) focusAfterAdvance();
     });
   });
 

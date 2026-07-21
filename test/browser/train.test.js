@@ -336,11 +336,17 @@ require('./helper').run('train', async function (t) {
   await page.click('#gradeGood'); // stale → reload → reload rejects
   await page.waitForSelector('#trainCardBox[hidden]', { state: 'attached', timeout: 5000 });
   check(await page.evaluate(function () {
-    return !document.getElementById('viewTrain').querySelector('#trainCardBox')
-      .contains(document.activeElement);
-  }), 'a failed stale-reload does not strand focus in the hidden card box');
+    const box = document.getElementById('trainCardBox');
+    // Not stranded in the now-hidden card box; focus was rescued to the
+    // visible Refresh (browsers differ on resetting activeElement to the
+    // body when the focused element is hidden, so we move it explicitly).
+    return !box.contains(document.activeElement) &&
+           document.activeElement === document.getElementById('trainRefresh');
+  }), 'a failed stale-reload rescues focus to the visible Refresh, not the hidden card box');
   check(await page.locator('#trainRefresh').isVisible(),
     'a failed stale-reload leaves Refresh visible to retry');
+  check((await page.textContent('#trainCount')) === '',
+    'a failed reload clears the stale due count');
   await page.click('#trainRefresh');
   await page.waitForSelector('#trainCardBox:not([hidden])');
   await tsq('d8').click();
@@ -348,6 +354,39 @@ require('./helper').run('train', async function (t) {
   await page.waitForSelector('#trainReveal:not([hidden])');
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
+
+  // A stale grade whose reload finds an EMPTY queue (a concurrent grade
+  // consumed the last-due card) hides the focused grade button and shows
+  // Refresh — focus must move to Refresh, not fall to the document.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g4c', ply: 3,
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      playedSan: 'Qh4#', bestSan: 'Qh4#',
+      bestMove: { from: 3, to: 39, promotion: null },
+      bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Empty-after-stale test', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () { // another window grades it away first
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.gameId === 'g4c'; });
+      c.attempts = (c.attempts || []).concat([{ at: 1, grade: 'good', correct: true }]);
+      c.due = Date.now() + 86400000; // climbs a rung: no longer due
+      return CoachStore.updateCard(c);
+    });
+  });
+  await page.click('#gradeGood'); // stale → reload → empty queue
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check(await page.evaluate(function () {
+    return document.activeElement === document.getElementById('trainRefresh');
+  }), 'a stale grade that empties the queue moves focus to the visible Refresh');
 
   // A grade settling AFTER the user left Train must not advance focus
   // into the hidden view.
