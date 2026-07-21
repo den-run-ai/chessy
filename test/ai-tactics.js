@@ -49,6 +49,16 @@ function solve(fen, nodes, positions) {
   };
 }
 
+// Is `move` (an engine result move object) actually legal in this position?
+// Existence alone (`!!move`) would let a broken engine pass an avoid-only or
+// smoke-test spec by returning a non-null but illegal move, so every spec
+// checks membership in the position's own legal-move list.
+function isLegal(fen, move) {
+  return !!move && Chess.legalMoves(Chess.parseFen(fen)).some(function (m) {
+    return m.from === move.from && m.to === move.to && m.promotion === move.promotion;
+  });
+}
+
 // [name, fen, allowed-moves (or null), nodes, avoided-moves, requireMate]
 // Each spec runs as written AND mirrored.
 const SPECS = [
@@ -78,12 +88,8 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
     const label = name + (flip ? ' (mirrored)' : '');
     // A LEGAL move must always come back — otherwise an avoid-only spec
     // ('-', or any illegal UCI, is not in the avoid list) would pass a broken
-    // engine that returned no move or an illegal one. Validate against the
-    // position's own legal moves, not just existence.
-    const legal = !!r.move && Chess.legalMoves(Chess.parseFen(f)).some(function (m) {
-      return m.from === r.move.from && m.to === r.move.to && m.promotion === r.move.promotion;
-    });
-    check(r.uci !== '-' && legal, label + ' [returns a legal move]', 'got ' + r.uci);
+    // engine that returned no move or an illegal one.
+    check(r.uci !== '-' && isLegal(f, r.move), label + ' [returns a legal move]', 'got ' + r.uci);
     if (ok && ok.length) check(ok.indexOf(r.uci) >= 0, label, 'got ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
     if (bad && bad.length) check(bad.indexOf(r.uci) < 0, label + ' [restraint]', 'played ' + r.uci);
     // The forced win must keep the correct SIGN, not just any mate magnitude:
@@ -227,7 +233,33 @@ const scoutAbove = ChessAI.search(pvsState, 4, vOracle, vOracle + 1, false); // 
 check(scoutBelow >= vOracle, 'null-window scout below the true value fails high', 'v=' + vOracle + ' scout=' + scoutBelow);
 check(scoutAbove <= vOracle, 'null-window scout above the true value fails low', 'v=' + vOracle + ' scout=' + scoutAbove);
 const pvsMove = solve(PVS_FEN, 60000);
-check(pvsMove.uci !== '-' && !!pvsMove.move, 'sharp position returns a legal move (quiescence on)', 'got ' + pvsMove.uci);
+check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
+  'sharp position returns a legal move (quiescence on)', 'got ' + pvsMove.uci);
+
+// --- ABORT unwind: a finite node budget that runs out mid-search must not
+// leave stale ancestor keys on a REUSED context, or the next search treats
+// them as repetition ancestors and returns a false draw (0). Regression for
+// the AI-0 fix to ChessAI.search's path unwinding.
+console.log('ABORT unwind (reused finite-budget context)');
+(function () {
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const fresh = ChessAI.search(Chess.parseFen(START), 1, -Infinity, Infinity, false);
+  // Abort a depth-3 search after 3 nodes on a reusable context...
+  const ctx = ChessAI.makeCtx(false, Infinity, 3);
+  let aborted = false;
+  try { ChessAI.search(Chess.parseFen(START), 3, -Infinity, Infinity, false, { ctx: ctx }); }
+  catch (e) { aborted = true; }
+  check(aborted, 'finite node budget aborts the search', 'expected an ABORT throw');
+  check(ctx.path1.length === 0 && ctx.path2.length === 0,
+    'ABORT unwinds the search path (no stale ancestors)',
+    'path1=' + ctx.path1.length + ' path2=' + ctx.path2.length);
+  // ...then replenish the budget and reuse the context: the depth-1 score must
+  // match a fresh context, not the poisoned 0 a stale ancestor would force.
+  ctx.nodes = 0; ctx.nodeLimit = Infinity;
+  const reused = ChessAI.search(Chess.parseFen(START), 1, -Infinity, Infinity, false, { ctx: ctx });
+  check(reused === fresh, 'reused context is not poisoned by a prior ABORT',
+    'fresh=' + fresh + ' reused=' + reused);
+})();
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

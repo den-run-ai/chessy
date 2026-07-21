@@ -4,9 +4,10 @@
  * no queue: the only caller is the reflection flow, whose Verify button
  * disables while a request is in flight. A NEW request supersedes an
  * abandoned one — the busy worker is terminated (nothing left occupying
- * it) and the old promise resolves null so its caller discards it. A
- * watchdog terminates an alive-but-silent worker and answers with the
- * synchronous search, so verification can never hang.
+ * it) and the old promise resolves null so its caller discards it. A wedged
+ * or crashed worker is retried once in a FRESH worker; if that also fails the
+ * probe resolves gracefully (null). The search NEVER runs on the main thread,
+ * so verification can neither hang nor freeze the UI.
  */
 (function (global) {
   'use strict';
@@ -21,11 +22,20 @@
   // reintroduce exactly the nondeterminism we are avoiding: a faster or
   // less-loaded run could finish an extra depth and prefer a different move.
   const CFG = { maxDepth: 30, nodeLimit: 150000, quiesce: true, randomize: false };
-  // Wall clock is used ONLY to rescue a wedged (never-answering) worker, never
-  // to bound the search: the watchdog terminates a silent worker and answers
-  // with the identical node-bounded synchronous search. Generous enough that a
-  // slow device finishing the node budget does not trip a redundant fallback.
-  const WATCHDOG_MS = 8000;
+  // A FIXED NODE budget is not a fixed WALL-CLOCK cost: 150k nodes is ~1s on a
+  // desktop but several seconds on a hard midgame position on a slow phone. The
+  // watchdog exists only to rescue a genuinely WEDGED worker, so it sits well
+  // above that realistic completion time — a healthy-but-slow worker must be
+  // allowed to finish, not killed and (as before) have its entire 150k-node
+  // search recomputed synchronously on the main thread, which froze the UI for
+  // seconds (~9s measured on Kiwipete). Overridable to a tiny value ONLY so a
+  // test can exercise the timeout path without a multi-second wait.
+  const DEFAULT_WATCHDOG_MS = 20000;
+  function watchdogMs() {
+    const o = global.CHESSY_VERIFY_WATCHDOG_MS;
+    return typeof o === 'number' && o > 0 ? o : DEFAULT_WATCHDOG_MS;
+  }
+  const MAX_ATTEMPTS = 2; // initial worker + one fresh-worker retry, then give up
 
   let worker = null;
   let active = null;
@@ -49,7 +59,7 @@
     };
     worker.onerror = function () {
       if (worker) { worker.terminate(); worker = null; }
-      if (active) active.fallback();
+      if (active) active.recover();
     };
     return worker;
   }
@@ -57,7 +67,8 @@
   // `positions` is the game's repetition table up to this position — the
   // engine needs it to score a move that completes a repetition as the
   // draw it is. Resolves with {move, depth, score}, or null when a newer
-  // request superseded this one.
+  // request superseded this one, when no Web Worker is available, or when a
+  // wedged/crashed worker could not be recovered.
   function analyse(fen, positions) {
     if (active) {
       // The previous request was abandoned (its moment was left) — kill
@@ -66,29 +77,28 @@
       settle(active, null);
     }
     return new Promise(function (resolve) {
-      const job = { id: ++seq, resolve: resolve };
+      const job = { id: ++seq, resolve: resolve, attempts: 0 };
       active = job;
-      job.fallback = function () {
-        // A canceled or superseded job must not burn the synchronous
-        // search budget on the main thread — its result would be
-        // discarded, and the freeze would hit whatever view the user
-        // moved on to.
+      // Dispatch the probe to a worker and arm the watchdog. The search is
+      // ALWAYS off the main thread: without a Web Worker (or once the retry
+      // budget is spent) we resolve null gracefully rather than block the UI.
+      function dispatch() {
         if (active !== job) return;
-        settle(job, ChessAI.think(Chess.parseFen(fen),
-          Object.assign({}, CFG, { positions: positions || undefined })));
-      };
-      // The zero-delay fallback registers as the job's watchdog so a
-      // cancel/supersede clears the pending timer as well.
-      if (!ensureWorker()) { job.watchdog = setTimeout(job.fallback, 0); return; }
-      job.watchdog = setTimeout(function () {
         if (worker) { worker.terminate(); worker = null; }
-        job.fallback();
-      }, WATCHDOG_MS);
-      worker.postMessage({
-        id: job.id, fen: fen, positions: positions || undefined,
-        maxDepth: CFG.maxDepth, nodeLimit: CFG.nodeLimit, quiesce: CFG.quiesce,
-        randomize: CFG.randomize
-      });
+        if (job.attempts >= MAX_ATTEMPTS || !ensureWorker()) { settle(job, null); return; }
+        job.attempts++;
+        job.watchdog = setTimeout(job.recover, watchdogMs());
+        worker.postMessage({
+          id: job.id, fen: fen, positions: positions || undefined,
+          maxDepth: CFG.maxDepth, nodeLimit: CFG.nodeLimit, quiesce: CFG.quiesce,
+          randomize: CFG.randomize
+        });
+      }
+      // A wedged worker (watchdog fired) or a crashed one (worker.onerror):
+      // retry once in a fresh worker, then give up gracefully. Guarded so a
+      // supersede/cancel that already settled this job wins the race.
+      job.recover = function () { if (active === job) dispatch(); };
+      dispatch();
     });
   }
 
