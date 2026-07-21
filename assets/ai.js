@@ -784,10 +784,17 @@
       // near the previous one. A wrong guess fails the whole root — then
       // the failed side re-searches doubled, eventually falling back to
       // the full window. A completed iteration therefore reproduces the
-      // full-window RESULT for this search — with the same caveat as PVS
-      // above: quiescence delta pruning is window-sensitive, so the leaf
-      // values (and rarely the chosen move) are those of this windowed
-      // search, not a bit-exact non-aspiration one. Mate scores never aspire.
+      // full-window RESULT (the selected move) for this search: null-window
+      // scouts are sound (quiescence delta pruning is disabled under them,
+      // see quiesceNode), so a move is never wrongly rejected, and any root
+      // fail-low/high widens and re-searches rather than trusting a bound.
+      // On the reviewer's FEN
+      // (r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq - 2 15) the
+      // accepted value now matches the independent full-window score. What is
+      // NOT bit-exact is the leaf SCORE: delta pruning still runs under the
+      // (real, wider-than-null) aspiration window at PV nodes, carrying its
+      // inherent window-sensitivity — the same property plain alpha-beta has,
+      // not an aspiration-specific defect. Mate scores never aspire.
       let delta = 50;
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
