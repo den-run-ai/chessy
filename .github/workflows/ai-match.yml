@@ -4,11 +4,15 @@ name: AI self-play match
 # checked-out candidate against a base ref and reports W/D/L with a paired 95%
 # confidence interval, plus the machine-readable `pair-scores:` line.
 #
-# Sharding a large match: dispatch several runs with the SAME base/nodes but
-# different --seedbase values (0, 4, 8, ...) and concatenate their pair-scores
-# arrays — each shard's (opening, seed) pairs are disjoint. Every run uploads a
-# `match-results` artifact carrying the exact candidate/base SHAs, the command,
-# and the raw pair scores, so a match verdict is fully reproducible.
+# The 800-game match is 100 frozen openings x 4 seeds x both colors. Shard it by
+# dispatching runs with the SAME base/nodes but disjoint seed slots — e.g. four
+# runs with --seeds 1 and --seedbase 0, 1, 2, 3 (200 games each). Every run
+# uploads a `match-results` artifact carrying the exact candidate/base SHAs, the
+# command, and the machine-readable `records:` line. Combine the shards into the
+# authoritative opening-clustered verdict with:
+#   node test/ai-match-agg.js shard0.txt shard1.txt shard2.txt shard3.txt
+# The verdict's 95% lower bound is taken over the per-opening means (n = 100
+# openings), not the individual pairs — see test/match-stats.js.
 on:
   workflow_dispatch:
     inputs:
