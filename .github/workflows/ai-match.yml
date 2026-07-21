@@ -30,4 +30,13 @@ jobs:
         with:
           node-version: 22
       - name: Run match
-        run: node test/ai-match.js --base "${{ inputs.base }}" --nodes "${{ inputs.nodes }}"
+        # Pass dispatch inputs through the environment, never interpolated into
+        # the script text: `${{ inputs.base }}` spliced directly into `run:`
+        # would let a value like $(cmd) or a quote execute commands. As env
+        # values they reach Bash as data, and "$BASE"/"$NODES" are ordinary
+        # variable expansions. (ai-match.js in turn runs `git show` via
+        # execFileSync, so the ref is never re-parsed by a shell there either.)
+        env:
+          BASE: ${{ inputs.base }}
+          NODES: ${{ inputs.nodes }}
+        run: node test/ai-match.js --base "$BASE" --nodes "$NODES"

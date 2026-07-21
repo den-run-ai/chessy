@@ -15,6 +15,8 @@ require('../assets/ai.js');
 const Chess = globalThis.Chess;
 const ChessAI = globalThis.ChessAI;
 
+const MATE = 1000000, MATE_NEAR = MATE - 1000; // mirror ai.js
+
 let passed = 0, failed = 0;
 function check(ok, label, detail) {
   if (ok) { passed++; console.log('  ok  ' + label); }
@@ -80,7 +82,15 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
     check(r.uci !== '-' && !!r.move, label + ' [returns a move]', 'got ' + r.uci);
     if (ok && ok.length) check(ok.indexOf(r.uci) >= 0, label, 'got ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
     if (bad && bad.length) check(bad.indexOf(r.uci) < 0, label + ' [restraint]', 'played ' + r.uci);
-    if (requireMate) check(Math.abs(r.score) > 999000, label + ' [mate seen]', 'score ' + r.score);
+    // The forced win must keep the correct SIGN, not just any mate magnitude:
+    // the original (White to move, White winning) must score positive, its
+    // color-swapped mirror (Black winning) negative. Math.abs would let the
+    // engine claim a mate for the WRONG side and still pass.
+    if (requireMate) {
+      const wantMate = flip ? -MATE_NEAR : MATE_NEAR;
+      check(flip ? r.score < wantMate : r.score > wantMate,
+        label + ' [mate seen, winning side]', 'score ' + r.score);
+    }
   }
 }
 
@@ -138,26 +148,49 @@ for (const [name, fen] of [
   check(r.score === 0, name, 'score ' + r.score + ' (d' + r.depth + ')');
 }
 
-// --- PVS soundness vs the delta-pruning interaction (regression) ---
-// This position exposed that quiescence delta pruning is window-sensitive:
-// with quiescence ON, PVS's narrow scout windows change the pruned set, so
-// ChessAI.search() returns -57 where the pre-PVS delta-pruned search returned
-// -29. That divergence is accepted — delta pruning is a heuristic, and PVS is
-// documented as a node reducer, not a bit-exact transform (see ai.js).
-//
-// What MUST hold is that PVS introduces no FALSE fail-low/high of its own:
-// with delta pruning absent (quiescence OFF), the search is exact alpha-beta,
-// so a null-window scout must correctly bracket the true minimax value. If a
-// future change let a scout fail low below the true value, PVS would skip the
-// required re-search and silently pick a worse move — this guards against that.
-console.log('PVS soundness (delta-pruning interaction)');
+// --- PVS soundness vs an INDEPENDENT minimax oracle (regression) ---
+// The property that must hold: PVS introduces no false fail-low/high. With
+// delta pruning absent (quiescence OFF) the search is exact alpha-beta, so
+// ChessAI.search's full-window value must equal the true minimax value and a
+// null-window scout must correctly bracket it. A future change that corrupted
+// PVS could bend the full-window value AND both scouts consistently, so the
+// reference must NOT come from the code under test. `oracle()` below is a
+// plain, self-contained alpha-beta (no PVS, no TT, no quiescence, no delta
+// pruning) over the engine's own evaluation — an independent witness.
+console.log('PVS soundness (independent minimax oracle)');
+function oracle(state, depth, alpha, beta, ply) {
+  const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+  const kingSq = state.board.indexOf(turn + 'K');
+  const maximizing = turn === 'w';
+  const inChk = Chess.isAttacked(state.board, kingSq, enemy);
+  if (state.halfmove >= 100 && !inChk) return 0;
+  if (Chess.insufficientMaterial(state.board)) return 0;
+  const legal = [];
+  for (const m of Chess.pseudoMoves(state)) {
+    const nx = Chess.applyMove(state, m);
+    const ks = m.piece[1] === 'K' ? m.to : kingSq;
+    if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push(nx);
+  }
+  if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
+  if (depth <= 0) return ChessAI.evaluate(state.board);
+  let best = maximizing ? -Infinity : Infinity;
+  for (const nx of legal) {
+    const s = oracle(nx, depth - 1, alpha, beta, ply + 1);
+    if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
+    else { if (s < best) best = s; if (best < beta) beta = best; }
+    if (beta <= alpha) break;
+  }
+  return best;
+}
 const PVS_FEN = 'r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9';
 const pvsState = Chess.parseFen(PVS_FEN);
-const vFull = ChessAI.search(pvsState, 4, -Infinity, Infinity, false); // true depth-4 value, no quiescence
-const scoutBelow = ChessAI.search(pvsState, 4, vFull - 1, vFull, false); // must fail high (>= vFull)
-const scoutAbove = ChessAI.search(pvsState, 4, vFull, vFull + 1, false); // must fail low (<= vFull)
-check(scoutBelow >= vFull, 'null-window scout below the true value fails high', 'v=' + vFull + ' scout=' + scoutBelow);
-check(scoutAbove <= vFull, 'null-window scout above the true value fails low', 'v=' + vFull + ' scout=' + scoutAbove);
+const vOracle = oracle(pvsState, 4, -Infinity, Infinity, 0);   // independent truth
+const vFull = ChessAI.search(pvsState, 4, -Infinity, Infinity, false); // PVS full window
+check(vFull === vOracle, 'PVS full-window value equals independent minimax', 'oracle=' + vOracle + ' pvs=' + vFull);
+const scoutBelow = ChessAI.search(pvsState, 4, vOracle - 1, vOracle, false); // must fail high (>= vOracle)
+const scoutAbove = ChessAI.search(pvsState, 4, vOracle, vOracle + 1, false); // must fail low (<= vOracle)
+check(scoutBelow >= vOracle, 'null-window scout below the true value fails high', 'v=' + vOracle + ' scout=' + scoutBelow);
+check(scoutAbove <= vOracle, 'null-window scout above the true value fails low', 'v=' + vOracle + ' scout=' + scoutAbove);
 const pvsMove = solve(PVS_FEN, 60000);
 check(pvsMove.uci !== '-' && !!pvsMove.move, 'sharp position returns a legal move (quiescence on)', 'got ' + pvsMove.uci);
 

@@ -37,23 +37,49 @@ function opt(name, dflt) {
   return i >= 0 ? args[i + 1] : dflt;
 }
 const BASE = opt('base', 'origin/main');
+// An explicit `--base` with no value (or an empty string) makes opt() return
+// undefined/'' — which loadEngine treats as the working tree, silently playing
+// the candidate against itself and emitting a plausible but meaningless result.
+// Require a non-empty ref (the default 'origin/main' only applies when --base
+// is absent entirely).
+if (!BASE) {
+  console.error('--base requires a non-empty git ref');
+  process.exit(2);
+}
+// Positive INTEGER: node/ply/seed/pair counts index integer loops, so a
+// decimal (`--plies 1.1` -> 2 plies) or non-numeric value silently runs a
+// different experiment than requested. A non-numeric --nodes would become NaN,
+// and `ctx.nodes >= NaN` is always false — turning the per-move budget OFF and
+// letting the search run toward depth 30 unbounded.
 function posInt(name, dflt) {
   const raw = opt(name, String(dflt));
   const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) {
-    console.error('--' + name + ' must be a positive finite number (got "' + raw + '")');
+  if (!Number.isInteger(n) || n <= 0) {
+    console.error('--' + name + ' must be a positive integer (got "' + raw + '")');
     process.exit(2);
   }
   return n;
 }
-// A non-numeric --nodes would become NaN, and `ctx.nodes >= NaN` is always
-// false — turning the per-move budget OFF and letting the search run toward
-// depth 30 unbounded. Validate up front.
 const NODES = posInt('nodes', 10000);
 const MAX_PLIES = posInt('plies', 180);
 const SEEDS = posInt('seeds', 4);
-const SEED_BASE = Number(opt('seedbase', 0)); // run seeds SEED_BASE..SEED_BASE+SEEDS-1 (shard a match across processes)
-const PAIRS_LIMIT = Number(opt('pairs', Infinity));
+// Seed base (shard offset): a finite integer >= 0. A typo like `--seedbase nope`
+// becomes NaN, making the seed loop `s < NaN + SEEDS` false from the start —
+// exiting successfully with an empty, inconclusive result and silently
+// dropping the shard.
+const SEED_BASE = (function () {
+  const raw = opt('seedbase', '0');
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    console.error('--seedbase must be a non-negative integer (got "' + raw + '")');
+    process.exit(2);
+  }
+  return n;
+})();
+// Pair limit: absent = whole match (Infinity); present must be a positive
+// integer. `--pairs nope` would otherwise become NaN, making the limit check
+// permanently false and running the full match unexpectedly.
+const PAIRS_LIMIT = args.includes('--pairs') ? posInt('pairs', 0) : Infinity;
 
 // 25 balanced openings as SAN lines from the start position.
 const OPENINGS = [
@@ -155,13 +181,21 @@ function playGame(engines, sans, seed) {
 // tiny node budget plus a time backstop (all engine versions honor timeMs, so
 // this can't hang); if it blows past the node budget, it doesn't support the
 // per-move budget and the match would be unfair — refuse loudly.
+const PROBE_NODES = 3000;
 function assertBounded(ctx, label) {
   const probe = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.START_FEN),
-    { maxDepth: 30, nodeLimit: 3000, timeMs: 5000, quiesce: true, randomize: false });
-  if (probe.nodes > 6000) {
+    { maxDepth: 30, nodeLimit: PROBE_NODES, timeMs: 5000, quiesce: true, randomize: false });
+  // A compliant engine evaluates AT MOST the requested budget (the node-budget
+  // fix makes it exactly nodeLimit). Allow only a 1-node slack for an older
+  // ref's documented off-by-one; anything beyond that means the ref enforces
+  // the budget late or at a multiple of the request, so every match move would
+  // give it materially more computation than its opponent — an unfair,
+  // invalid fixed-node result.
+  if (probe.nodes > PROBE_NODES + 1) {
     console.error('base "' + label + '" does not honor nodeLimit (searched ' + probe.nodes +
-      ' nodes for a 3000-node probe). Pick a ref that supports the per-move node budget ' +
-      '(any ref at or after the node-budget fix, e.g. claude/ai-3-tests), not pre-nodeLimit main.');
+      ' nodes for a ' + PROBE_NODES + '-node probe). Pick a ref that supports the per-move ' +
+      'node budget (any ref at or after the node-budget fix, e.g. claude/ai-3-tests), not ' +
+      'pre-nodeLimit main.');
     process.exit(3);
   }
 }
@@ -195,6 +229,15 @@ for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
 }
 process.stderr.write('\n');
 
+// 95% two-sided Student's t critical value by degrees of freedom.
+function tCrit95(df) {
+  const T = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
+    2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093,
+    2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
+  if (df <= 0) return Infinity;
+  return df <= 30 ? T[df - 1] : 1.96 + 2.4 / df;
+}
+
 const n = pairScores.length;
 const mean = n ? pairScores.reduce(function (a, b) { return a + b; }, 0) / n : NaN;
 
@@ -210,7 +253,13 @@ if (n < 2) {
   console.log('RESULT: inconclusive (need at least 2 pairs for a CI)');
 } else {
   const sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1));
-  const half = 1.96 * sd / Math.sqrt(n);
+  // The standard deviation is ESTIMATED from these same n pairs, so a small
+  // match needs Student's t, not the normal 1.96 — otherwise the interval is
+  // too narrow and a borderline candidate can be wrongly called stronger. df
+  // = n-1; the table is exact for df<=30 and the approximation 1.96 + 2.4/df
+  // is within ~0.001 of the true 95% two-sided value for df>30 (df=99 ->
+  // 1.984, df=∞ -> 1.96).
+  const half = tCrit95(n - 1) * sd / Math.sqrt(n);
   const lo = mean - half, hi = mean + half;
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
     '  score ' + (mean * 100).toFixed(1) + '%' +
