@@ -81,4 +81,21 @@ require('./helper').run('progress', async function (t) {
   check(overflow <= 0,
     'no horizontal overflow at phone width (long stat labels wrap; ' + overflow + 'px)');
   await page.setViewportSize({ width: 1280, height: 720 });
+
+  // A read failure AFTER a successful render must not leave a stale cause
+  // snapshot beneath the "unavailable" message — both lists clear.
+  check((await page.textContent('#causeStats')).trim().length > 0,
+    'cause tallies are populated before the failure');
+  await page.click('#tabPlay');
+  await page.evaluate(function () {
+    CoachStore.__realListCards = CoachStore.listCards;
+    CoachStore.listCards = function () { return Promise.reject(new Error('blocked')); };
+  });
+  await page.click('#tabProgress');
+  await page.waitForFunction(function () {
+    return document.getElementById('progressStats').textContent.indexOf('unavailable') !== -1;
+  });
+  check((await page.textContent('#causeStats')).trim() === '',
+    'a failed progress read clears the stale cause tallies too');
+  await page.evaluate(function () { CoachStore.listCards = CoachStore.__realListCards; });
 });

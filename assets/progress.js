@@ -58,6 +58,9 @@
       const dl = $('progressStats');
       dl.innerHTML = '';
       stat(dl, 'Archive unavailable in this browser', '—');
+      // Clear the cause tallies too: a prior successful snapshot left
+      // beneath the failure message would present stale counts as current.
+      $('causeStats').innerHTML = '';
     });
   }
 
