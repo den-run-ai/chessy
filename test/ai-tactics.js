@@ -76,10 +76,14 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
     const bad = flip ? (avoided || []).map(mirrorMove) : avoided;
     const r = solve(f, nodes);
     const label = name + (flip ? ' (mirrored)' : '');
-    // A legal move must always come back — otherwise an avoid-only spec
-    // ('-' is not in the avoid list) would pass a broken engine that
-    // returned no move at all.
-    check(r.uci !== '-' && !!r.move, label + ' [returns a move]', 'got ' + r.uci);
+    // A LEGAL move must always come back — otherwise an avoid-only spec
+    // ('-', or any illegal UCI, is not in the avoid list) would pass a broken
+    // engine that returned no move or an illegal one. Validate against the
+    // position's own legal moves, not just existence.
+    const legal = !!r.move && Chess.legalMoves(Chess.parseFen(f)).some(function (m) {
+      return m.from === r.move.from && m.to === r.move.to && m.promotion === r.move.promotion;
+    });
+    check(r.uci !== '-' && legal, label + ' [returns a legal move]', 'got ' + r.uci);
     if (ok && ok.length) check(ok.indexOf(r.uci) >= 0, label, 'got ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
     if (bad && bad.length) check(bad.indexOf(r.uci) < 0, label + ' [restraint]', 'played ' + r.uci);
     // The forced win must keep the correct SIGN, not just any mate magnitude:
