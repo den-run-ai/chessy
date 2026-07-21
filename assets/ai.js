@@ -559,8 +559,10 @@
     // bound) could cross the 100-halfmove boundary, where the clock changes
     // the score. Scores are only trusted at the SAME draft (entry.depth ===
     // depth): depth-pure values keep the search equivalent to plain minimax
-    // (up to path-dependent repetition draws inside subtrees); the stored
-    // best move is useful for ordering at any draft.
+    // (up to path-dependent repetition draws inside subtrees, and — with
+    // quiescence on — the window-sensitivity of delta pruning, which makes
+    // leaf values depend on the alpha/beta they were searched under); the
+    // stored best move is useful for ordering at any draft.
     const useTT = state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
     let ttPk = 0;
     if (useTT) {
@@ -597,6 +599,16 @@
       // it), so the null window is well-formed. A child's repetition
       // dependency is the MINIMUM over its scout and re-search — a path-
       // dependent draw seen by either must reach the TT guard below.
+      //
+      // NOTE: this is a node reducer, NOT a bit-exact transform of the
+      // non-PVS search. Quiescence delta pruning keys off the alpha/beta
+      // window, so a scout's narrow window can prune a capture the full
+      // window would keep and return a slightly different (still valid as
+      // a bound) leaf value; on rare tactical positions that shifts the
+      // chosen move versus a plain search. That interaction is accepted
+      // and validated empirically (node reduction + tactics + self-play),
+      // not by claiming exactness — see test/ai-tactics.js for the pinned
+      // regression FEN that isolates it.
       let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
