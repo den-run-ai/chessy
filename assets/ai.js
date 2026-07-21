@@ -755,8 +755,11 @@
       // Aspiration window: from depth 2, expect this iteration to score
       // near the previous one. A wrong guess fails the whole root — then
       // the failed side re-searches doubled, eventually falling back to
-      // the full window, so a completed iteration is exactly what the
-      // full-window search would have produced. Mate scores never aspire.
+      // the full window. A completed iteration therefore reproduces the
+      // full-window RESULT for this search — with the same caveat as PVS
+      // above: quiescence delta pruning is window-sensitive, so the leaf
+      // values (and rarely the chosen move) are those of this windowed
+      // search, not a bit-exact non-aspiration one. Mate scores never aspire.
       let delta = 50;
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
