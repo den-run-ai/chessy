@@ -360,7 +360,10 @@
     return {
       quiesce: !!quiesce,
       deadline: deadline,
-      nodeLimit: nodeLimit || Infinity,
+      // Only a missing/null limit means "unbounded". An explicit 0 is a real
+      // (already-exhausted) budget: it must return without searching, not be
+      // silently promoted to Infinity by a falsy check.
+      nodeLimit: nodeLimit == null ? Infinity : nodeLimit,
       nodes: 0,
       qnodes: 0,       // quiescence share of nodes
       cutoffs: 0,      // beta cutoffs in the main search
@@ -572,9 +575,13 @@
           if (s > MATE_NEAR) s -= ply;
           else if (s < -MATE_NEAR) s += ply;
           if (e.flag === EXACT) return s;
-          if (e.flag === LOWER) { if (s >= beta) return s; if (s > alpha) alpha = s; }
-          else { if (s <= alpha) return s; if (s < beta) beta = s; }
-          if (alpha >= beta) return s;
+          // A TT bound that already satisfies the window ends the search at
+          // this node exactly like an in-loop beta cutoff, so it must feed the
+          // same counter — otherwise transposition-heavy positions under-report
+          // cutoffs and benchmark deltas that shift TT hit rates are misleading.
+          if (e.flag === LOWER) { if (s >= beta) { ctx.cutoffs++; return s; } if (s > alpha) alpha = s; }
+          else { if (s <= alpha) { ctx.cutoffs++; return s; } if (s < beta) beta = s; }
+          if (alpha >= beta) { ctx.cutoffs++; return s; }
         }
       }
     }

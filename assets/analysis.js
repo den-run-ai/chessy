@@ -12,7 +12,11 @@
   'use strict';
   if (typeof Chess === 'undefined' || typeof ChessAI === 'undefined') return;
 
-  const CFG = { maxDepth: 30, timeMs: 1200, quiesce: true };
+  // randomize:false makes Verify deterministic: the same position always
+  // yields the same probe move/score, so a re-run cannot save a different
+  // verdict for an unchanged position (the root shuffle is the only source
+  // of run-to-run variation in the search).
+  const CFG = { maxDepth: 30, timeMs: 1200, quiesce: true, randomize: false };
 
   let worker = null;
   let active = null;
@@ -73,7 +77,8 @@
       }, CFG.timeMs + 4000);
       worker.postMessage({
         id: job.id, fen: fen, positions: positions || undefined,
-        maxDepth: CFG.maxDepth, timeMs: CFG.timeMs, quiesce: CFG.quiesce
+        maxDepth: CFG.maxDepth, timeMs: CFG.timeMs, quiesce: CFG.quiesce,
+        randomize: CFG.randomize
       });
     });
   }

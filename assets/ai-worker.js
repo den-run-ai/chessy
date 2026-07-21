@@ -10,7 +10,12 @@ self.onmessage = function (e) {
     maxDepth: e.data.maxDepth,
     timeMs: e.data.timeMs,
     quiesce: e.data.quiesce,
-    positions: e.data.positions
+    positions: e.data.positions,
+    // Forward the determinism controls so an analysis/Verify probe searches
+    // reproducibly (a fixed seed or randomize:false) instead of falling back
+    // to Math.random and possibly preferring a different move each run.
+    seed: e.data.seed,
+    randomize: e.data.randomize
   });
   self.postMessage({ id: e.data.id, move: result.move, depth: result.depth, score: result.score });
 };
