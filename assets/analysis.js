@@ -12,11 +12,20 @@
   'use strict';
   if (typeof Chess === 'undefined' || typeof ChessAI === 'undefined') return;
 
-  // randomize:false makes Verify deterministic: the same position always
-  // yields the same probe move/score, so a re-run cannot save a different
-  // verdict for an unchanged position (the root shuffle is the only source
-  // of run-to-run variation in the search).
-  const CFG = { maxDepth: 30, timeMs: 1200, quiesce: true, randomize: false };
+  // A FIXED NODE BUDGET — not a wall-clock deadline — is what makes Verify
+  // deterministic. The search evaluates exactly nodeLimit nodes, so it
+  // completes the same depth and returns the same move/score on every device
+  // and under any worker scheduling or load; a re-run cannot save a different
+  // verdict for an unchanged position. (randomize:false removes the only other
+  // source of run-to-run variation, the root shuffle.) A timeMs budget would
+  // reintroduce exactly the nondeterminism we are avoiding: a faster or
+  // less-loaded run could finish an extra depth and prefer a different move.
+  const CFG = { maxDepth: 30, nodeLimit: 150000, quiesce: true, randomize: false };
+  // Wall clock is used ONLY to rescue a wedged (never-answering) worker, never
+  // to bound the search: the watchdog terminates a silent worker and answers
+  // with the identical node-bounded synchronous search. Generous enough that a
+  // slow device finishing the node budget does not trip a redundant fallback.
+  const WATCHDOG_MS = 8000;
 
   let worker = null;
   let active = null;
@@ -74,10 +83,10 @@
       job.watchdog = setTimeout(function () {
         if (worker) { worker.terminate(); worker = null; }
         job.fallback();
-      }, CFG.timeMs + 4000);
+      }, WATCHDOG_MS);
       worker.postMessage({
         id: job.id, fen: fen, positions: positions || undefined,
-        maxDepth: CFG.maxDepth, timeMs: CFG.timeMs, quiesce: CFG.quiesce,
+        maxDepth: CFG.maxDepth, nodeLimit: CFG.nodeLimit, quiesce: CFG.quiesce,
         randomize: CFG.randomize
       });
     });

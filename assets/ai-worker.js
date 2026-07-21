@@ -9,6 +9,10 @@ self.onmessage = function (e) {
   const result = ChessAI.think(state, {
     maxDepth: e.data.maxDepth,
     timeMs: e.data.timeMs,
+    // A node budget (analysis/Verify) makes a probe reproducible where a
+    // wall-clock timeMs (Play) cannot; forward both so each caller's chosen
+    // budget reaches the search.
+    nodeLimit: e.data.nodeLimit,
     quiesce: e.data.quiesce,
     positions: e.data.positions,
     // Forward the determinism controls so an analysis/Verify probe searches

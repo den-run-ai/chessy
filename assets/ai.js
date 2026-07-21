@@ -781,6 +781,15 @@
   function search(state, depth, alpha, beta, useQuiesce, opts) {
     opts = opts || {};
     const ctx = opts.ctx || makeCtx(useQuiesce, Infinity);
+    // Baseline path depth. searchNode pushes an ancestor key per ply and pops
+    // it on the way out, but an ABORT thrown mid-search (a finite nodeLimit
+    // running out) unwinds straight past those pops. Restoring the path to its
+    // pre-call length — rather than blindly subtracting only the seeded count —
+    // discards BOTH our seeded ancestors and any stragglers a partial search
+    // left behind, so a reused context (search's `ctx` option) can't inherit
+    // stale ancestors that turn a fresh, non-drawn search into a false
+    // repetition draw.
+    const base = ctx.path1.length;
     const seeded = opts.ancestors || [];
     for (const fen of seeded) {
       hashState(Chess.parseFen(fen));
@@ -790,8 +799,8 @@
     try {
       return searchNode(state, depth, alpha, beta, seeded.length, ctx);
     } finally {
-      ctx.path1.length -= seeded.length;
-      ctx.path2.length -= seeded.length;
+      ctx.path1.length = base;
+      ctx.path2.length = base;
     }
   }
 
