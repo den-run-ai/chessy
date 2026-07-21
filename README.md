@@ -78,12 +78,15 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   accessible mini board (same ARIA grid model as the Play board,
   inspection-only). A running timed game stays visible from the coach views
   via a live-clock banner that returns to Play.
-- **Reflection → lesson cards** — flag one of your own positions in Review,
-  answer the reflection questions *before* the engine speaks (the answers are
-  snapshotted at submit), then get **one** bounded Chessy probe. You own the
-  diagnosis — a move that differs from Chessy's line is not declared wrong
-  ("my move was also sound" is a first-class cause) — and write a one-sentence
-  lesson onto **one card per moment** (game + ply).
+- **Reflection → lesson cards** — flag one of your own positions in Review;
+  the engine stays hidden until you answer the reflection questions, and each
+  probe snapshots the answers as submitted (a rewrite after the verdict can't
+  reach that probe's card). One request runs at a time — Verify disables while
+  it's in flight — and you can revise your answers and re-probe the same
+  moment, which updates its **one card per moment** (game + ply) in place. You
+  own the diagnosis: a move that differs from Chessy's line is not declared
+  wrong ("my move was also sound" is a first-class cause), and you write the
+  one-sentence lesson.
 - **Train** — due lesson cards replayed on the mini board, on the fixed
   **1 / 3 / 7 / 14 / 30 / 90-day** spaced ladder (Good climbs a rung, Hard
   repeats it, Again retries in ten minutes). No background timers — the queue
@@ -93,8 +96,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   cards, due-now, 30-day reviews, and per-cause tallies. The one narrow signal
   ("matched Chessy's saved move on first try") is labelled as exactly that —
   **no headline accuracy**, weakness ranking, or confidence claims.
-- Import, automatic scanning, export/restore, and a language coach remain
-  future work (roadmap [#23](https://github.com/den-run-ai/chessy/issues/23)).
+- Coaching-data import (PGN/Lichess), automatic scanning, archive
+  export/restore + Delete All, and a language coach remain future work
+  (roadmap [#23](https://github.com/den-run-ai/chessy/issues/23)). Standard PGN
+  export and the validated single-game restore, described above, already ship.
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest. Assets load as **release
