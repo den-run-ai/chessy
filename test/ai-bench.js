@@ -78,7 +78,9 @@ const MK_RAND = 'function __mkRand(seed) {\n' +
 function loadEngine(ref) {
   const read = function (file) {
     if (!ref) return fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-    return cp.execSync('git show ' + ref + ':' + file,
+    // execFileSync (argv array, no shell) so a ref string can't be interpolated
+    // into a shell command line.
+    return cp.execFileSync('git', ['show', ref + ':' + file],
       { encoding: 'utf8', maxBuffer: 1 << 24, cwd: path.join(__dirname, '..') });
   };
   const ctx = vm.createContext({ console: console });
