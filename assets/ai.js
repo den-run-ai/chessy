@@ -5,10 +5,13 @@
  * the search path, dead positions), and (bounded) quiescence search.
  *
  * Entry points:
- *   think(state, {maxDepth, timeMs, quiesce, positions}) — iterative
- *     deepening from depth 1 up to maxDepth, stopping early when the timeMs
- *     budget runs out (the move from the last COMPLETED iteration is used)
- *     or a forced mate is found. Returns {move, depth, score, nodes}.
+ *   think(state, {maxDepth, timeMs, nodeLimit, quiesce, positions, seed,
+ *     randomize}) — iterative deepening from depth 1 up to maxDepth,
+ *     stopping early when the timeMs/nodeLimit budget runs out (the move
+ *     from the last COMPLETED iteration is used) or a forced mate is found.
+ *     seed makes the root shuffle reproducible; randomize:false disables it
+ *     entirely (benchmarks/analysis). Returns {move, depth, score, nodes,
+ *     qnodes, cutoffs, researches}.
  *   bestMove(state, depth, quiesce, positions) — fixed-depth wrapper.
  */
 (function (global) {
@@ -353,11 +356,18 @@
     return (m.from << 9) | (m.to << 3) | (m.promotion ? PROMO_IDX[m.promotion] : 0);
   }
 
-  function makeCtx(quiesce, deadline) {
+  function makeCtx(quiesce, deadline, nodeLimit) {
     return {
       quiesce: !!quiesce,
       deadline: deadline,
+      // Only a missing/null limit means "unbounded". An explicit 0 is a real
+      // (already-exhausted) budget: it must return without searching, not be
+      // silently promoted to Infinity by a falsy check.
+      nodeLimit: nodeLimit == null ? Infinity : nodeLimit,
       nodes: 0,
+      qnodes: 0,       // quiescence share of nodes
+      cutoffs: 0,      // beta cutoffs in the main search
+      researches: 0,   // scout/aspiration repeats at full window
       tt: new Map(),
       killers: [],                    // per-ply [primary, secondary] packed quiet moves
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
@@ -383,6 +393,11 @@
   }
 
   function checkTime(ctx) {
+    // Check the node budget BEFORE counting this node, so exactly nodeLimit
+    // nodes are actually evaluated (counting first would abort on entry to
+    // node nodeLimit+1 while still incrementing it — an off-by-one that
+    // reports one more node than was searched).
+    if (ctx.nodes >= ctx.nodeLimit) throw ABORT;
     ctx.nodes++;
     if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
   }
@@ -420,6 +435,7 @@
   // QMAX plies so pathological lines can't run away.
   function quiesceNode(state, alpha, beta, ply, qply, ctx) {
     checkTime(ctx);
+    ctx.qnodes++;
     if (Chess.insufficientMaterial(state.board)) return 0; // dead after captures
     const turn = state.turn;
     const enemy = turn === 'w' ? 'b' : 'w';
@@ -559,9 +575,13 @@
           if (s > MATE_NEAR) s -= ply;
           else if (s < -MATE_NEAR) s += ply;
           if (e.flag === EXACT) return s;
-          if (e.flag === LOWER) { if (s >= beta) return s; if (s > alpha) alpha = s; }
-          else { if (s <= alpha) return s; if (s < beta) beta = s; }
-          if (alpha >= beta) return s;
+          // A TT bound that already satisfies the window ends the search at
+          // this node exactly like an in-loop beta cutoff, so it must feed the
+          // same counter — otherwise transposition-heavy positions under-report
+          // cutoffs and benchmark deltas that shift TT hit rates are misleading.
+          if (e.flag === LOWER) { if (s >= beta) { ctx.cutoffs++; return s; } if (s > alpha) alpha = s; }
+          else { if (s <= alpha) { ctx.cutoffs++; return s; } if (s < beta) beta = s; }
+          if (alpha >= beta) { ctx.cutoffs++; return s; }
         }
       }
     }
@@ -587,6 +607,7 @@
       if (maximizing) { if (best > alpha) alpha = best; }
       else { if (best < beta) beta = best; }
       if (beta <= alpha) {
+        ctx.cutoffs++;
         if (!m.captured && !m.promotion) recordQuietCutoff(ctx, m, ply, depth, turn);
         break;
       }
@@ -616,9 +637,9 @@
     return best;
   }
 
-  function shuffle(arr) {
+  function shuffle(arr, rand) {
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor((rand() / 4294967296) * (i + 1));
       const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
     }
     return arr;
@@ -645,6 +666,12 @@
     opts = opts || {};
     const maxDepth = Math.max(1, opts.maxDepth || 3);
     const deadline = opts.timeMs ? Date.now() + opts.timeMs : Infinity;
+    // Root variety: seeded (reproducible), default Math.random, or none.
+    // Deterministic modes exist for benchmarks, analysis and tests; casual
+    // play keeps its randomness.
+    const rand = opts.seed != null ? mulberry32(opts.seed | 0)
+      : opts.randomize === false ? null
+      : function () { return Math.random() * 4294967296; };
     // The game's repetition table: the explicit option wins, else a full
     // game state carries its own (bare parseFen() states have neither).
     const positions = opts.positions || state.positions || null;
@@ -654,10 +681,10 @@
     // callers must not get a "best move" from a finished game.
     const status = Chess.gameStatus(
       Object.assign({}, state, { positions: positions || {} }));
-    if (status.over) return { move: null, depth: 0, score: 0, nodes: 0 };
+    if (status.over) return { move: null, depth: 0, score: 0, nodes: 0, qnodes: 0, cutoffs: 0, researches: 0 };
     const moves = Chess.legalMoves(state);
     const maximizing = state.turn === 'w';
-    const ctx = makeCtx(opts.quiesce, deadline);
+    const ctx = makeCtx(opts.quiesce, deadline, opts.nodeLimit);
 
     // Seed the game's actual occurrence counts (the keys of the repetition
     // table are 4-field FENs, already ep-normalized like our repetition
@@ -680,11 +707,12 @@
     ctx.path1.push(R1);
     ctx.path2.push(R2);
 
-    const items = orderMoves(shuffle(moves), 0, 0, ctx, state.turn).map(function (m) {
+    const items = orderMoves(rand ? shuffle(moves, rand) : moves, 0, 0, ctx, state.turn).map(function (m) {
       const next = Chess.applyMove(state, m);
       return {
         move: m,
         next: next,
+        score: 0,
         repDraw: !!(positions && (positions[Chess.positionKey(next)] || 0) >= 2)
       };
     });
@@ -704,6 +732,7 @@
           aborted = true;
           break;
         }
+        it.score = score;
         if (iterBest === null || (maximizing ? score > iterScore : score < iterScore)) {
           iterScore = score;
           iterBest = it;
@@ -718,16 +747,26 @@
       best = iterBest;
       bestScore = iterScore;
       completed = d;
-      // Search last iteration's best first: with the tight window it sets up,
-      // the other moves usually fail low immediately.
+      // Order the whole root by this iteration's scores (fail-low moves
+      // carry bounds — fine as an ordering heuristic), best strictly first:
+      // with the tight window the best sets up, later moves usually fail
+      // low immediately.
+      items.sort(function (a, b) { return maximizing ? b.score - a.score : a.score - b.score; });
       items.splice(items.indexOf(iterBest), 1);
       items.unshift(iterBest);
       if (Math.abs(bestScore) >= MATE_NEAR) break; // forced mate found — deeper won't help
       if (Date.now() >= deadline) break;
+      if (ctx.nodes >= ctx.nodeLimit) break;
     }
 
     if (best === null) best = items[0]; // budget died inside depth 1: any legal move
-    return { move: best.move, depth: completed || 1, score: bestScore, nodes: ctx.nodes };
+    // Report the last FULLY completed depth (0 if even depth 1 was aborted):
+    // a partial iteration's move is still returned, but must not be reported
+    // as a completed search draft.
+    return {
+      move: best.move, depth: completed, score: bestScore, nodes: ctx.nodes,
+      qnodes: ctx.qnodes, cutoffs: ctx.cutoffs, researches: ctx.researches
+    };
   }
 
   // Fixed-depth compatibility wrappers.
@@ -742,6 +781,15 @@
   function search(state, depth, alpha, beta, useQuiesce, opts) {
     opts = opts || {};
     const ctx = opts.ctx || makeCtx(useQuiesce, Infinity);
+    // Baseline path depth. searchNode pushes an ancestor key per ply and pops
+    // it on the way out, but an ABORT thrown mid-search (a finite nodeLimit
+    // running out) unwinds straight past those pops. Restoring the path to its
+    // pre-call length — rather than blindly subtracting only the seeded count —
+    // discards BOTH our seeded ancestors and any stragglers a partial search
+    // left behind, so a reused context (search's `ctx` option) can't inherit
+    // stale ancestors that turn a fresh, non-drawn search into a false
+    // repetition draw.
+    const base = ctx.path1.length;
     const seeded = opts.ancestors || [];
     for (const fen of seeded) {
       hashState(Chess.parseFen(fen));
@@ -751,8 +799,8 @@
     try {
       return searchNode(state, depth, alpha, beta, seeded.length, ctx);
     } finally {
-      ctx.path1.length -= seeded.length;
-      ctx.path2.length -= seeded.length;
+      ctx.path1.length = base;
+      ctx.path2.length = base;
     }
   }
 

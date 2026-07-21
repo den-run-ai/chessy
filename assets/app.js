@@ -645,7 +645,11 @@
       // Depth is the deepest COMPLETED iteration, which under a time budget
       // can be less than the configured maximum.
       state.history[state.history.length - 1].ai = {
-        depth: reachedDepth || aiPending.depth,
+        // reachedDepth is the deepest COMPLETED iteration and may legitimately
+        // be 0 (the budget expired before depth 1 finished). Only a
+        // missing value falls back to the configured maximum — coercing a
+        // real 0 would falsely record the max depth for partial searches.
+        depth: reachedDepth != null ? reachedDepth : aiPending.depth,
         quiesce: aiPending.quiesce,
         ms: Date.now() - aiPending.started
       };
