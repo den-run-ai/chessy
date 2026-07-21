@@ -1,49 +1,42 @@
 name: AI self-play match
 
-# Manual-only: a full match takes far too long for PR CI. Compares the
-# checked-out candidate against a base ref and reports W/D/L with a paired 95%
-# confidence interval, plus the machine-readable `pair-scores:` line.
+# The full 800-game non-inferiority match, fanned out as a build matrix so it
+# runs off the local container and fits the per-job timeout: 100 frozen openings
+# x 4 seeds x both colors = 800 games, split into 20 shards of 20 openings x 1
+# seed (40 games each). Every shard job uploads a `match-results-*` artifact and
+# prints the machine-readable `records:` line to its log; combine them into the
+# authoritative opening-clustered verdict with
+#   node test/ai-match-agg.js match-results-*.txt
+# whose 95% lower bound is taken over the 100 per-opening means (see
+# test/match-stats.js).
 #
-# The 800-game match is 100 frozen openings x 4 seeds x both colors. Shard it by
-# dispatching runs with the SAME base/nodes but disjoint seed slots — e.g. four
-# runs with --seeds 1 and --seedbase 0, 1, 2, 3 (200 games each). Every run
-# uploads a `match-results` artifact carrying the exact candidate/base SHAs, the
-# command, and the machine-readable `records:` line. Combine the shards into the
-# authoritative opening-clustered verdict with:
-#   node test/ai-match-agg.js shard0.txt shard1.txt shard2.txt shard3.txt
-# The verdict's 95% lower bound is taken over the per-opening means (n = 100
-# openings), not the individual pairs — see test/match-stats.js.
+# Only `base` and `nodes` are dispatch inputs (so a run is dispatchable against
+# the default-branch schema); the 20 (seedbase, openbase) shards are the matrix.
 on:
   workflow_dispatch:
     inputs:
       base:
-        description: Git ref to play against (prefer an explicit SHA, e.g. d1d2590, for provenance)
+        description: Git ref/SHA to play against (e.g. d1d25909 for provenance)
         default: origin/main
         required: true
       nodes:
         description: Fixed nodes per move
         default: "10000"
         required: true
-      pairs:
-        description: Limit to the first N (opening, seed) pairs (blank = whole shard)
-        required: false
-      seeds:
-        description: Deterministic seeds per opening (blank = harness default of 4)
-        required: false
-      seedbase:
-        description: Seed shard offset (0, 4, 8, ... to run disjoint shards)
-        required: false
-      plies:
-        description: Max plies before an unfinished game is scored a draw (blank = default 180)
-        required: false
 
 permissions:
   contents: read
 
 jobs:
-  match:
+  shard:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        seedbase: [0, 1, 2, 3]
+        openbase: [0, 20, 40, 60, 80]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,52 +44,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run match
-        # Dispatch inputs reach Bash ONLY as environment values, never spliced
-        # into the script text: `${{ inputs.base }}` interpolated into `run:`
-        # would let a value like $(cmd) execute. As env values they are data,
-        # and the optional flags are appended to an argv array (never a
-        # re-parsed string). ai-match.js validates every numeric input and runs
-        # `git show <ref>` via execFileSync, so the ref is never shell-parsed.
+      - name: Run shard (openings [openbase, openbase+20) x seed seedbase)
+        # Dispatch inputs reach Bash only as environment values, never spliced
+        # into the script; the matrix coordinates are trusted integer literals.
         env:
           BASE: ${{ inputs.base }}
           NODES: ${{ inputs.nodes }}
-          PAIRS: ${{ inputs.pairs }}
-          SEEDS: ${{ inputs.seeds }}
-          SEEDBASE: ${{ inputs.seedbase }}
-          PLIES: ${{ inputs.plies }}
+          SEEDBASE: ${{ matrix.seedbase }}
+          OPENBASE: ${{ matrix.openbase }}
         run: |
           set -euo pipefail
-          # Resolve both endpoints to concrete SHAs for the record (fetch-depth
-          # 0 above makes the base ref resolvable).
           CAND_SHA=$(git rev-parse HEAD)
           BASE_SHA=$(git rev-parse "$BASE")
-          args=(--base "$BASE" --nodes "$NODES")
-          # Optional flags are appended only when non-empty: ai-match.js rejects
-          # an empty --pairs/--seeds/--seedbase (NaN) rather than defaulting, so
-          # a blank dispatch field must not become a flag at all.
-          if [ -n "$PAIRS" ];    then args+=(--pairs "$PAIRS"); fi
-          if [ -n "$SEEDS" ];    then args+=(--seeds "$SEEDS"); fi
-          if [ -n "$SEEDBASE" ]; then args+=(--seedbase "$SEEDBASE"); fi
-          if [ -n "$PLIES" ];    then args+=(--plies "$PLIES"); fi
+          FILE="match-results-s${SEEDBASE}-o${OPENBASE}.txt"
           {
             echo "candidate-sha: $CAND_SHA"
-            echo "base-ref:      $BASE"
             echo "base-sha:      $BASE_SHA"
             echo "nodes-per-move: $NODES"
-            echo "command:       node test/ai-match.js ${args[*]}"
-            echo "node-version:  $(node --version)"
+            echo "openings-total: 100"
+            echo "command:       node test/ai-match.js --base $BASE --nodes $NODES --seeds 1 --seedbase $SEEDBASE --openbase $OPENBASE --opencount 20"
             echo "workflow-run:  ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo "---"
-          } | tee match-results.txt
-          # ai-match.js writes progress to stderr (shown live in the log) and
-          # the pair-scores / W-D-L / CI / RESULT lines to stdout, which we
-          # both echo and append to the artifact.
-          node test/ai-match.js "${args[@]}" | tee -a match-results.txt
-      - name: Upload match results
+          } | tee "$FILE"
+          node test/ai-match.js --base "$BASE" --nodes "$NODES" \
+            --seeds 1 --seedbase "$SEEDBASE" --openbase "$OPENBASE" --opencount 20 | tee -a "$FILE"
+      - name: Upload shard results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: match-results
-          path: match-results.txt
+          name: match-results-s${{ matrix.seedbase }}-o${{ matrix.openbase }}
+          path: match-results-s${{ matrix.seedbase }}-o${{ matrix.openbase }}.txt
           if-no-files-found: warn
