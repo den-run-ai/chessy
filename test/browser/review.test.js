@@ -4,7 +4,8 @@
 require('./helper').run('review', async function (t) {
   const page = t.page, check = t.check, mv = t.mv;
 
-  check(await page.locator('.tab').count() === 2, 'Play and Review section tabs');
+  check(await page.locator('#tabPlay').count() === 1 && await page.locator('#tabReview').count() === 1,
+    'Play and Review section tabs');
   check(await page.getAttribute('#tabPlay', 'aria-current') === 'page', 'Play tab current at boot');
 
   // Finish a game, then "Review game" hands off to the archived record.

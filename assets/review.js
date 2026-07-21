@@ -12,26 +12,40 @@
   const $ = function (id) { return document.getElementById(id); };
 
   // ---- Views ----
-  // Later slices append to VIEWS (and add their tab + section markup).
-  const VIEWS = ['play', 'review'];
+  // Later slices register their own view (tab + section markup) via
+  // CoachReview.registerView, so this file never grows with them.
+  const VIEWS = [
+    { name: 'play', onShow: null },
+    { name: 'review', onShow: function () { renderGameList(); } }
+  ];
 
   function showView(name) {
     document.body.dataset.view = name;
     for (const v of VIEWS) {
-      $('view' + v[0].toUpperCase() + v.slice(1)).hidden = name !== v;
-      const tab = $('tab' + v[0].toUpperCase() + v.slice(1));
-      if (name === v) tab.setAttribute('aria-current', 'page');
-      else tab.removeAttribute('aria-current');
+      $('view' + v.name[0].toUpperCase() + v.name.slice(1)).hidden = name !== v.name;
+      const tab = $('tab' + v.name[0].toUpperCase() + v.name.slice(1));
+      if (name === v.name) {
+        tab.setAttribute('aria-current', 'page');
+        if (v.onShow) v.onShow();
+      } else {
+        tab.removeAttribute('aria-current');
+      }
     }
-    if (name === 'review') renderGameList();
     // Play owns the live-game banner: leaving Play during a running timed
     // game must surface the still-ticking clocks (see app.js).
     document.dispatchEvent(new CustomEvent('chessy:viewchange'));
   }
 
-  for (const v of VIEWS) {
-    $('tab' + v[0].toUpperCase() + v.slice(1))
-      .addEventListener('click', function () { showView(v); });
+  function bindTab(v) {
+    $('tab' + v.name[0].toUpperCase() + v.name.slice(1))
+      .addEventListener('click', function () { showView(v.name); });
+  }
+  VIEWS.forEach(bindTab);
+
+  function registerView(name, onShow) {
+    const v = { name: name, onShow: onShow || null };
+    VIEWS.push(v);
+    bindTab(v);
   }
 
   // ---- Game list ----
@@ -172,6 +186,7 @@
 
   window.CoachReview = {
     showView: showView,
+    registerView: registerView,
     openArchivedGame: openArchivedGame,
     // The currently open game and shown ply (null on the game list) — the
     // reflection flow reads this instead of duplicating browser state.

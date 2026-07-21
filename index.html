@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r23">
+  <link rel="stylesheet" href="assets/style.css?r=r24">
 </head>
 <body>
   <div class="app">
@@ -21,6 +21,7 @@
     <nav class="tabs" aria-label="App sections">
       <button type="button" class="tab" id="tabPlay" data-view="play" aria-current="page">Play</button>
       <button type="button" class="tab" id="tabReview" data-view="review">Review</button>
+      <button type="button" class="tab" id="tabTrain" data-view="train">Train</button>
     </nav>
 
     <!-- Shown only OUTSIDE Play while a timed game's clocks are running:
@@ -145,6 +146,35 @@
         </div>
       </div>
     </section>
+
+    <!-- Train: due lesson cards on the fixed 1/3/7/14/30/90-day ladder. -->
+    <section class="view coach" id="viewTrain" hidden aria-labelledby="trainTitle">
+      <div class="view-head">
+        <h2 id="trainTitle">Train</h2>
+        <span class="coach-note" id="trainCount"></span>
+      </div>
+      <p class="coach-note" id="trainEmpty" hidden></p>
+      <button type="button" id="trainRefresh" class="btn" hidden>Refresh</button>
+      <div id="trainCardBox" hidden>
+        <div class="coach-board-row">
+          <div class="coach-board-wrap">
+            <div class="board small" id="trainBoard" aria-label="Training board"></div>
+          </div>
+          <div class="coach-side">
+            <p id="trainPrompt"></p>
+            <div id="trainReveal" class="coach-form" hidden>
+              <p id="trainOutcome" aria-live="polite"></p>
+              <p id="trainLesson"></p>
+              <div class="buttons">
+                <button type="button" id="gradeAgain" class="btn">Again</button>
+                <button type="button" id="gradeHard" class="btn">Hard</button>
+                <button type="button" id="gradeGood" class="btn primary">Good</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
     </main>
   </div>
 
@@ -211,21 +241,22 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r23';</script>
-  <script src="assets/engine.js?r=r23"></script>
-  <script src="assets/ai.js?r=r23"></script>
+  <script>window.CHESSY_RELEASE = 'r24';</script>
+  <script src="assets/engine.js?r=r24"></script>
+  <script src="assets/ai.js?r=r24"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r23"></script>
-  <script src="assets/archive.js?r=r23"></script>
-  <script src="assets/app.js?r=r23"></script>
-  <script src="assets/mini-board.js?r=r23"></script>
-  <script src="assets/review.js?r=r23"></script>
-  <script src="assets/analysis.js?r=r23"></script>
-  <script src="assets/reflection.js?r=r23"></script>
+  <script src="assets/store.js?r=r24"></script>
+  <script src="assets/archive.js?r=r24"></script>
+  <script src="assets/app.js?r=r24"></script>
+  <script src="assets/mini-board.js?r=r24"></script>
+  <script src="assets/review.js?r=r24"></script>
+  <script src="assets/analysis.js?r=r24"></script>
+  <script src="assets/reflection.js?r=r24"></script>
+  <script src="assets/train.js?r=r24"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

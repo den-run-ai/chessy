@@ -181,6 +181,47 @@
   }
   function listCards() { return tx('cards', 'readonly', function (s) { return s.getAll(); }); }
 
+  function dueCards(now) {
+    return tx('cards', 'readonly', function (s) {
+      return s.index('due').getAll(IDBKeyRange.upperBound(now));
+    }).then(function (cards) { return cards.sort(function (a, b) { return a.due - b.due; }); });
+  }
+
+  // Atomic read-modify-write for grading: `mutate` runs on the FRESH
+  // stored record inside one transaction. `expect` pins the grade to the
+  // card revision the player was actually shown — {due, attempts: count}
+  // at presentation time. IndexedDB serializes the transactions, so
+  // without this check the LOSER of a concurrent grade (another window
+  // showing the same due card) would run its mutate on the freshly
+  // updated card and append a second attempt / climb a second rung; with
+  // it, the stale grade is rejected inside the same transaction.
+  // Resolves with the updated record, 'stale' when the expected revision
+  // was already consumed, or null when the card is gone.
+  function gradeCard(id, expect, mutate) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('cards', 'readwrite');
+        const s = t.objectStore('cards');
+        let outcome = null;
+        const getReq = s.get(id);
+        getReq.onsuccess = function () {
+          const card = getReq.result;
+          if (!card) return; // deleted meanwhile — nothing to grade
+          if (expect && (card.due !== expect.due ||
+              (card.attempts || []).length !== expect.attempts)) {
+            outcome = 'stale';
+            return;
+          }
+          outcome = mutate(card) || card;
+          s.put(outcome);
+        };
+        t.oncomplete = function () { resolve(outcome); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   // ONE card per moment (gameId + ply), enforced atomically: the index
   // lookup and the write share a single readwrite transaction, so two
   // saves racing on the same moment (double-fire, second tab) cannot mint
@@ -230,6 +271,8 @@
     addCard: addCard,
     updateCard: updateCard,
     upsertCardByMoment: upsertCardByMoment,
-    listCards: listCards
+    listCards: listCards,
+    dueCards: dueCards,
+    gradeCard: gradeCard
   };
 })(typeof window !== 'undefined' ? window : globalThis);
