@@ -473,7 +473,17 @@
       // window, so don't bother searching it — UNLESS it gives check: a
       // checking capture can be mate (e.g. Qxg7#) regardless of its
       // material gain, so the score is not bounded by standPat + value.
-      if (!inChk && !m.promotion) {
+      //
+      // Only on a REAL window (width > 1). Delta pruning bounds a capture by
+      // its immediate material + a fixed positional margin, which is not a
+      // true bound when the capture opens a deeper combination — a latent
+      // unsoundness that a wide window hides (alpha sits far below standPat,
+      // so nothing prunes) but a null scout window exposes (alpha hugs
+      // standPat, so the margin decides). Under a null window the pruned
+      // value would not be a sound bound, so PVS's null-window scout could
+      // then miss a genuinely better move (false fail-low). Disabling delta
+      // pruning there keeps the scout a plain, sound alpha-beta bound.
+      if (!inChk && !m.promotion && beta - alpha > 1) {
         const gain = VALUES[m.captured[1]] + DELTA;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
             !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
@@ -562,8 +572,10 @@
     // bound) could cross the 100-halfmove boundary, where the clock changes
     // the score. Scores are only trusted at the SAME draft (entry.depth ===
     // depth): depth-pure values keep the search equivalent to plain minimax
-    // (up to path-dependent repetition draws inside subtrees); the stored
-    // best move is useful for ordering at any draft.
+    // (up to path-dependent repetition draws inside subtrees, and — with
+    // quiescence on — the window-sensitivity of delta pruning, which makes
+    // leaf values depend on the alpha/beta they were searched under); the
+    // stored best move is useful for ordering at any draft.
     const useTT = state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
     let ttPk = 0;
     if (useTT) {
@@ -597,9 +609,57 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
+      // Principal variation search: the first legal move gets the full
+      // window; later moves get a null-window scout ("can this beat the
+      // bound at all?") and repeat at the full window only when the scout
+      // says yes. The bound is always finite by then (the first move set
+      // it), so the null window is well-formed. A child's repetition
+      // dependency is the MINIMUM over its scout and re-search — a path-
+      // dependent draw seen by either must reach the TT guard below.
+      //
+      // PVS is a SELECTIVE heuristic, not a bit-exact minimax transform, and
+      // its exactness is validated empirically rather than proven. Two things
+      // keep a scout from silently discarding a better move at the leaves it
+      // searches itself: quiescence delta pruning is disabled under a null
+      // window (see quiesceNode), so those leaves are plain alpha-beta bounds
+      // (without that guard, depth-2 quiescent PVS picked b8c6 -7 over the true
+      // best d7d5 -307 — pinned in test/ai-tactics.js against an independent
+      // minimax oracle). The residual, deliberately-accepted unsoundness:
+      //   (1) a scout may return a TT entry stored by a WIDER, delta-pruned
+      //       search of the same node — that cached value is not a guaranteed
+      //       sound bound, so the null-window guard does not make every scout
+      //       exact, only the ones that reach their own leaves;
+      //   (2) delta pruning's leaf values are window-sensitive in general (a
+      //       value depends on the window a move was searched under — a
+      //       property plain alpha-beta shares, not a PVS defect).
+      // So exact centipawns can differ from a hypothetical no-delta-pruning
+      // search. We keep the tradeoff (sound over fast) at the null-window
+      // guard and do not restore delta pruning there; the 16-position bench
+      // (--exact: 0 move/score divergences vs the no-PVS baseline) and the
+      // tactics suite are the empirical evidence that move selection holds.
+      let score, childRep;
+      if (!anyLegal) {
+        score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+        childRep = ctx.repPly;
+      } else if (maximizing) {
+        score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
+        childRep = ctx.repPly;
+        if (score > alpha && score < beta) {
+          ctx.researches++;
+          score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
+      } else {
+        score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
+        childRep = ctx.repPly;
+        if (score < beta && score > alpha) {
+          ctx.researches++;
+          score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
+      }
       anyLegal = true;
-      const score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
-      if (ctx.repPly < repMin) repMin = ctx.repPly;
+      if (childRep < repMin) repMin = childRep;
       if (maximizing ? score > best : score < best) {
         best = score;
         bestPk = packMove(m);
@@ -726,7 +786,24 @@
       for (const it of items) {
         let score;
         try {
-          score = it.repDraw ? 0 : searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+          // Root PVS mirrors searchNode: full window until some move has
+          // set a finite bound, then scout + re-search. A repDraw counts
+          // as a searched move (its 0 tightened the bound).
+          if (it.repDraw) score = 0;
+          else if (iterBest === null) score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+          else if (maximizing) {
+            score = searchNode(it.next, d - 1, alpha, alpha + 1, 1, ctx);
+            if (score > alpha && score < beta) {
+              ctx.researches++;
+              score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+            }
+          } else {
+            score = searchNode(it.next, d - 1, beta - 1, beta, 1, ctx);
+            if (score < beta && score > alpha) {
+              ctx.researches++;
+              score = searchNode(it.next, d - 1, alpha, beta, 1, ctx);
+            }
+          }
         } catch (e) {
           if (e !== ABORT) throw e;
           aborted = true;
