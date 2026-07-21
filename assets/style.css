@@ -539,6 +539,20 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .coach-form h3 { font-size: 1rem; }
 .coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
 
+.stats {
+  display: grid;
+  /* minmax(0, max-content), NOT max-content: the label column must be
+     allowed to shrink below its one-line width on narrow phones so long
+     labels wrap instead of forcing horizontal page overflow. */
+  grid-template-columns: minmax(0, max-content) 1fr;
+  gap: 0.3rem 1rem;
+  font-size: 0.9rem;
+}
+.stats dt { color: var(--muted); }
+.stats dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.coach-subhead { font-size: 0.95rem; margin-top: 0.25rem; }
+
 .coach-form input[type="text"],
 .coach-form select {
   background: var(--panel);
