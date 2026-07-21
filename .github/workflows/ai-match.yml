@@ -1,19 +1,37 @@
 name: AI self-play match
 
-# Manual-only: a full 200-game match takes far too long for PR CI.
-# Compares the checked-out candidate against a base ref and reports
-# W/D/L with a paired 95% confidence interval.
+# Manual-only: a full match takes far too long for PR CI. Compares the
+# checked-out candidate against a base ref and reports W/D/L with a paired 95%
+# confidence interval, plus the machine-readable `pair-scores:` line.
+#
+# Sharding a large match: dispatch several runs with the SAME base/nodes but
+# different --seedbase values (0, 4, 8, ...) and concatenate their pair-scores
+# arrays — each shard's (opening, seed) pairs are disjoint. Every run uploads a
+# `match-results` artifact carrying the exact candidate/base SHAs, the command,
+# and the raw pair scores, so a match verdict is fully reproducible.
 on:
   workflow_dispatch:
     inputs:
       base:
-        description: Git ref to play against
+        description: Git ref to play against (prefer an explicit SHA, e.g. d1d2590, for provenance)
         default: origin/main
         required: true
       nodes:
         description: Fixed nodes per move
         default: "10000"
         required: true
+      pairs:
+        description: Limit to the first N (opening, seed) pairs (blank = whole shard)
+        required: false
+      seeds:
+        description: Deterministic seeds per opening (blank = harness default of 4)
+        required: false
+      seedbase:
+        description: Seed shard offset (0, 4, 8, ... to run disjoint shards)
+        required: false
+      plies:
+        description: Max plies before an unfinished game is scored a draw (blank = default 180)
+        required: false
 
 permissions:
   contents: read
@@ -30,13 +48,51 @@ jobs:
         with:
           node-version: 22
       - name: Run match
-        # Pass dispatch inputs through the environment, never interpolated into
-        # the script text: `${{ inputs.base }}` spliced directly into `run:`
-        # would let a value like $(cmd) or a quote execute commands. As env
-        # values they reach Bash as data, and "$BASE"/"$NODES" are ordinary
-        # variable expansions. (ai-match.js in turn runs `git show` via
-        # execFileSync, so the ref is never re-parsed by a shell there either.)
+        # Dispatch inputs reach Bash ONLY as environment values, never spliced
+        # into the script text: `${{ inputs.base }}` interpolated into `run:`
+        # would let a value like $(cmd) execute. As env values they are data,
+        # and the optional flags are appended to an argv array (never a
+        # re-parsed string). ai-match.js validates every numeric input and runs
+        # `git show <ref>` via execFileSync, so the ref is never shell-parsed.
         env:
           BASE: ${{ inputs.base }}
           NODES: ${{ inputs.nodes }}
-        run: node test/ai-match.js --base "$BASE" --nodes "$NODES"
+          PAIRS: ${{ inputs.pairs }}
+          SEEDS: ${{ inputs.seeds }}
+          SEEDBASE: ${{ inputs.seedbase }}
+          PLIES: ${{ inputs.plies }}
+        run: |
+          set -euo pipefail
+          # Resolve both endpoints to concrete SHAs for the record (fetch-depth
+          # 0 above makes the base ref resolvable).
+          CAND_SHA=$(git rev-parse HEAD)
+          BASE_SHA=$(git rev-parse "$BASE")
+          args=(--base "$BASE" --nodes "$NODES")
+          # Optional flags are appended only when non-empty: ai-match.js rejects
+          # an empty --pairs/--seeds/--seedbase (NaN) rather than defaulting, so
+          # a blank dispatch field must not become a flag at all.
+          if [ -n "$PAIRS" ];    then args+=(--pairs "$PAIRS"); fi
+          if [ -n "$SEEDS" ];    then args+=(--seeds "$SEEDS"); fi
+          if [ -n "$SEEDBASE" ]; then args+=(--seedbase "$SEEDBASE"); fi
+          if [ -n "$PLIES" ];    then args+=(--plies "$PLIES"); fi
+          {
+            echo "candidate-sha: $CAND_SHA"
+            echo "base-ref:      $BASE"
+            echo "base-sha:      $BASE_SHA"
+            echo "nodes-per-move: $NODES"
+            echo "command:       node test/ai-match.js ${args[*]}"
+            echo "node-version:  $(node --version)"
+            echo "workflow-run:  ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "---"
+          } | tee match-results.txt
+          # ai-match.js writes progress to stderr (shown live in the log) and
+          # the pair-scores / W-D-L / CI / RESULT lines to stdout, which we
+          # both echo and append to the artifact.
+          node test/ai-match.js "${args[@]}" | tee -a match-results.txt
+      - name: Upload match results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: match-results
+          path: match-results.txt
+          if-no-files-found: warn

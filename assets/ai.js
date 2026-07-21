@@ -357,6 +357,24 @@
     return (m.from << 9) | (m.to << 3) | (m.promotion ? PROMO_IDX[m.promotion] : 0);
   }
 
+  // Late-move-reduction eligibility for one ordered move (pure; the single
+  // source of truth shared by searchNode and test/ai-lmr.js). A quiet
+  // 4th-or-later move (legalCount is the count of legal moves ALREADY
+  // searched, so >= 3 means this is at least the 4th) at depth >= 4 may scout
+  // one ply shallower. Never reduced: any move while in check (all evasions),
+  // captures, promotions, the hash move, killer moves, or a move that itself
+  // gives check. The gates are ordered cheap-to-expensive so the attack lookup
+  // for the checking-move test runs only for moves that clear every other bar.
+  function lmrReduces(state, next, m, depth, legalCount, inChk, ttPk, ply, ctx) {
+    if (depth < 4 || legalCount < 3 || inChk || m.captured || m.promotion) return false;
+    const pk = packMove(m), k = ctx.killers[ply];
+    if (pk === ttPk) return false;                        // hash move: searched first, trust it
+    if (k && (pk === k[0] || pk === k[1])) return false;  // killer: a proven refutation here
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    if (Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) return false; // gives check
+    return true;
+  }
+
   function makeCtx(quiesce, deadline, nodeLimit) {
     return {
       quiesce: !!quiesce,
@@ -369,6 +387,8 @@
       qnodes: 0,       // quiescence share of nodes
       cutoffs: 0,      // beta cutoffs in the main search
       researches: 0,   // scout/aspiration repeats at full window
+      lmr: 0,          // late-move reductions applied (reduced-depth scouts)
+      lmrRe: 0,        // reduced scouts that beat the bound and forced a full re-search
       tt: new Map(),
       killers: [],                    // per-ply [primary, secondary] packed quiet moves
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
@@ -646,14 +666,8 @@
       // bound, it is re-searched at full depth before the usual PVS verdict.
       // Never reduced: captures, promotions, check evasions, checking moves,
       // the hash move, killer moves.
-      let red = 0;
-      if (depth >= 4 && legalCount >= 3 && !inChk && !m.captured && !m.promotion) {
-        const pk = packMove(m), k = ctx.killers[ply];
-        if (pk !== ttPk && !(k && (pk === k[0] || pk === k[1])) &&
-            !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
-          red = 1;
-        }
-      }
+      const red = lmrReduces(state, next, m, depth, legalCount, inChk, ttPk, ply, ctx) ? 1 : 0;
+      if (red) ctx.lmr++;
       let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
@@ -662,7 +676,7 @@
         score = searchNode(next, depth - 1 - red, alpha, alpha + 1, ply + 1, ctx);
         childRep = ctx.repPly;
         if (red && score > alpha) {
-          ctx.researches++;
+          ctx.researches++; ctx.lmrRe++;
           score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
           if (ctx.repPly < childRep) childRep = ctx.repPly;
         }
@@ -675,7 +689,7 @@
         score = searchNode(next, depth - 1 - red, beta - 1, beta, ply + 1, ctx);
         childRep = ctx.repPly;
         if (red && score < beta) {
-          ctx.researches++;
+          ctx.researches++; ctx.lmrRe++;
           score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
           if (ctx.repPly < childRep) childRep = ctx.repPly;
         }
@@ -769,7 +783,7 @@
     // callers must not get a "best move" from a finished game.
     const status = Chess.gameStatus(
       Object.assign({}, state, { positions: positions || {} }));
-    if (status.over) return { move: null, depth: 0, score: 0, nodes: 0, qnodes: 0, cutoffs: 0, researches: 0 };
+    if (status.over) return { move: null, depth: 0, score: 0, nodes: 0, qnodes: 0, cutoffs: 0, researches: 0, lmr: 0, lmrRe: 0 };
     const moves = Chess.legalMoves(state);
     const maximizing = state.turn === 'w';
     const ctx = makeCtx(opts.quiesce, deadline, opts.nodeLimit);
@@ -906,7 +920,8 @@
     // as a completed search draft.
     return {
       move: best.move, depth: completed, score: bestScore, nodes: ctx.nodes,
-      qnodes: ctx.qnodes, cutoffs: ctx.cutoffs, researches: ctx.researches
+      qnodes: ctx.qnodes, cutoffs: ctx.cutoffs, researches: ctx.researches,
+      lmr: ctx.lmr, lmrRe: ctx.lmrRe
     };
   }
 
@@ -952,6 +967,10 @@
     search: search,
     makeCtx: makeCtx,
     hashKey: hashKey,
-    repKey: repKey
+    repKey: repKey,
+    // LMR internals surfaced for test/ai-lmr.js (the eligibility predicate and
+    // the move packer needed to build hash/killer keys); not used by the app.
+    lmrReduces: lmrReduces,
+    packMove: packMove
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -75,6 +75,8 @@ jobs:
         run: node test/engine.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
+      - name: Run LMR regression tests
+        run: node test/ai-lmr.js
 
   browser:
     runs-on: ubuntu-latest
