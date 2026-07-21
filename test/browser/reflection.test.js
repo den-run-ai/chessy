@@ -100,9 +100,11 @@ require('./helper').run('reflection', async function (t) {
     'starting a new probe clears the previous save notice');
   await verifyDone();
 
-  // A canceled synchronous fallback (workers unavailable) never runs the
-  // search: the discarded result would freeze the view the user moved to.
-  const fallbackSkipped = await page.evaluate(function () {
+  // Without a Web Worker the probe resolves gracefully (null) — it must NEVER
+  // run the search on the main thread. (The search is deterministic by node
+  // count, not wall clock, so a 150k-node main-thread run froze the UI for
+  // seconds.) ChessAI.think is therefore never called here.
+  const noWorker = await page.evaluate(function () {
     const realWorker = window.Worker;
     const realThink = ChessAI.think;
     window.Worker = undefined;
@@ -110,7 +112,7 @@ require('./helper').run('reflection', async function (t) {
     ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
     const p = ChessyAnalysis.analyse(
       'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    ChessyAnalysis.cancel();
+    ChessyAnalysis.cancel(); // canceling a job already settled null is a no-op
     return p.then(function (res) {
       return new Promise(function (r) {
         setTimeout(function () {
@@ -121,8 +123,32 @@ require('./helper').run('reflection', async function (t) {
       });
     });
   });
-  check(fallbackSkipped.res === null && fallbackSkipped.calls === 0,
-    'a canceled synchronous fallback never runs the search');
+  check(noWorker.res === null && noWorker.calls === 0,
+    'no Web Worker resolves Verify gracefully without a main-thread search');
+
+  // A WEDGED worker (constructs fine, never answers) must also resolve
+  // gracefully — retried once in a fresh worker, then null — never recomputing
+  // the 150k-node search synchronously on the main thread (measured ~9s on
+  // Kiwipete). Forced with a silent stub Worker and a tiny watchdog override.
+  const wedged = await page.evaluate(function () {
+    const realWorker = window.Worker;
+    const realThink = ChessAI.think;
+    const realWd = window.CHESSY_VERIFY_WATCHDOG_MS;
+    let calls = 0;
+    ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
+    window.Worker = function () { this.postMessage = function () {}; this.terminate = function () {}; };
+    window.CHESSY_VERIFY_WATCHDOG_MS = 30;
+    return ChessyAnalysis.analyse(
+      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+    ).then(function (res) {
+      window.Worker = realWorker;
+      ChessAI.think = realThink;
+      window.CHESSY_VERIFY_WATCHDOG_MS = realWd;
+      return { res: res, calls: calls };
+    });
+  });
+  check(wedged.res === null && wedged.calls === 0,
+    'a wedged worker resolves Verify gracefully (null) without a main-thread search');
 
   // A DIFFERING move: the player owns the call, including "also sound".
   await page.click('#revStart'); // ply 0: f3 was played here

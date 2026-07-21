@@ -46,16 +46,18 @@ if (!BASE) {
   console.error('--base requires a non-empty git ref');
   process.exit(2);
 }
-// Positive INTEGER: node/ply/seed/pair counts index integer loops, so a
+// Positive SAFE integer: node/ply/seed/pair counts index integer loops, so a
 // decimal (`--plies 1.1` -> 2 plies) or non-numeric value silently runs a
 // different experiment than requested. A non-numeric --nodes would become NaN,
 // and `ctx.nodes >= NaN` is always false — turning the per-move budget OFF and
-// letting the search run toward depth 30 unbounded.
+// letting the search run toward depth 30 unbounded. Number.isSafeInteger (not
+// just isInteger) also rejects magnitudes past 2^53, where `n++` in a loop can
+// stop advancing (float rounding) and spin forever.
 function posInt(name, dflt) {
   const raw = opt(name, String(dflt));
   const n = Number(raw);
-  if (!Number.isInteger(n) || n <= 0) {
-    console.error('--' + name + ' must be a positive integer (got "' + raw + '")');
+  if (!Number.isSafeInteger(n) || n <= 0) {
+    console.error('--' + name + ' must be a positive safe integer (got "' + raw + '")');
     process.exit(2);
   }
   return n;
@@ -63,22 +65,32 @@ function posInt(name, dflt) {
 const NODES = posInt('nodes', 10000);
 const MAX_PLIES = posInt('plies', 180);
 const SEEDS = posInt('seeds', 4);
-// Seed base (shard offset): a finite integer >= 0. A typo like `--seedbase nope`
+// Seed base (shard offset): a safe integer >= 0. A typo like `--seedbase nope`
 // becomes NaN, making the seed loop `s < NaN + SEEDS` false from the start —
 // exiting successfully with an empty, inconclusive result and silently
-// dropping the shard.
+// dropping the shard. A value beyond 2^53 would make the loop counter's `s++`
+// stop advancing and run the match forever, hence isSafeInteger.
 const SEED_BASE = (function () {
   const raw = opt('seedbase', '0');
   const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0) {
-    console.error('--seedbase must be a non-negative integer (got "' + raw + '")');
+  if (!Number.isSafeInteger(n) || n < 0) {
+    console.error('--seedbase must be a non-negative safe integer (got "' + raw + '")');
     process.exit(2);
   }
   return n;
 })();
+// The seed loop runs `for (s = SEED_BASE; s < SEED_BASE + SEEDS; s++)`: even
+// with both operands safe, their SUM (the loop bound, against which `s++` is
+// compared) must also stay safe, or the final increments lose precision and
+// the loop never terminates.
+if (!Number.isSafeInteger(SEED_BASE + SEEDS)) {
+  console.error('--seedbase + --seeds must stay within the safe-integer range (got ' +
+    SEED_BASE + ' + ' + SEEDS + ')');
+  process.exit(2);
+}
 // Pair limit: absent = whole match (Infinity); present must be a positive
-// integer. `--pairs nope` would otherwise become NaN, making the limit check
-// permanently false and running the full match unexpectedly.
+// safe integer. `--pairs nope` would otherwise become NaN, making the limit
+// check permanently false and running the full match unexpectedly.
 const PAIRS_LIMIT = args.includes('--pairs') ? posInt('pairs', 0) : Infinity;
 
 // 25 balanced openings as SAN lines from the start position.
