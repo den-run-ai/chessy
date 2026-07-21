@@ -74,6 +74,10 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
     const bad = flip ? (avoided || []).map(mirrorMove) : avoided;
     const r = solve(f, nodes);
     const label = name + (flip ? ' (mirrored)' : '');
+    // A legal move must always come back — otherwise an avoid-only spec
+    // ('-' is not in the avoid list) would pass a broken engine that
+    // returned no move at all.
+    check(r.uci !== '-' && !!r.move, label + ' [returns a move]', 'got ' + r.uci);
     if (ok && ok.length) check(ok.indexOf(r.uci) >= 0, label, 'got ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
     if (bad && bad.length) check(bad.indexOf(r.uci) < 0, label + ' [restraint]', 'played ' + r.uci);
     if (requireMate) check(Math.abs(r.score) > 999000, label + ' [mate seen]', 'score ' + r.score);
@@ -133,6 +137,29 @@ for (const [name, fen] of [
   const r = solve(fen, 15000);
   check(r.score === 0, name, 'score ' + r.score + ' (d' + r.depth + ')');
 }
+
+// --- PVS soundness vs the delta-pruning interaction (regression) ---
+// This position exposed that quiescence delta pruning is window-sensitive:
+// with quiescence ON, PVS's narrow scout windows change the pruned set, so
+// ChessAI.search() returns -57 where the pre-PVS delta-pruned search returned
+// -29. That divergence is accepted — delta pruning is a heuristic, and PVS is
+// documented as a node reducer, not a bit-exact transform (see ai.js).
+//
+// What MUST hold is that PVS introduces no FALSE fail-low/high of its own:
+// with delta pruning absent (quiescence OFF), the search is exact alpha-beta,
+// so a null-window scout must correctly bracket the true minimax value. If a
+// future change let a scout fail low below the true value, PVS would skip the
+// required re-search and silently pick a worse move — this guards against that.
+console.log('PVS soundness (delta-pruning interaction)');
+const PVS_FEN = 'r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9';
+const pvsState = Chess.parseFen(PVS_FEN);
+const vFull = ChessAI.search(pvsState, 4, -Infinity, Infinity, false); // true depth-4 value, no quiescence
+const scoutBelow = ChessAI.search(pvsState, 4, vFull - 1, vFull, false); // must fail high (>= vFull)
+const scoutAbove = ChessAI.search(pvsState, 4, vFull, vFull + 1, false); // must fail low (<= vFull)
+check(scoutBelow >= vFull, 'null-window scout below the true value fails high', 'v=' + vFull + ' scout=' + scoutBelow);
+check(scoutAbove <= vFull, 'null-window scout above the true value fails low', 'v=' + vFull + ' scout=' + scoutAbove);
+const pvsMove = solve(PVS_FEN, 60000);
+check(pvsMove.uci !== '-' && !!pvsMove.move, 'sharp position returns a legal move (quiescence on)', 'got ' + pvsMove.uci);
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

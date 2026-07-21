@@ -4,17 +4,24 @@
  * minutes to hours depending on --nodes).
  *
  * Usage:
- *   node test/ai-match.js --base origin/main            # full 200-game match
- *   node test/ai-match.js --base HEAD~1 --nodes 3000    # cheaper run
- *   node test/ai-match.js --base main --pairs 20        # first N (opening,seed) pairs
+ *   node test/ai-match.js --base claude/ai-3-tests        # full 200-game match
+ *   node test/ai-match.js --base HEAD~1 --nodes 3000      # cheaper run
+ *   node test/ai-match.js --base claude/ai-3-tests --pairs 20   # first N pairs
+ *
+ * The base ref MUST honor the per-move node budget (nodeLimit). Pre-nodeLimit
+ * refs (e.g. an old origin/main) would search toward depth 30 unbounded and
+ * hang the match, so both engines are probed up front and the run refuses a
+ * base that ignores the budget. The 'origin/main' default is kept only as a
+ * convenience for when main itself carries the budget; otherwise pass an
+ * explicit ref at or after the node-budget fix.
  *
  * Design (paired match):
  *   25 balanced openings x 4 deterministic seeds x both colors = 200 games.
  *   Fixed nodes per move (default 10000) with quiescence; 180-ply cap, an
- *   unfinished game is a draw. Both engines get an identically seeded
- *   Math.random per game, so the whole match is reproducible.
- *   Reported: W/D/L, score, and a paired 95% confidence interval over the
- *   (opening, seed) pairs — if it crosses 50%, the result is inconclusive.
+ *   unfinished game is a draw (but a game decided ON the cap move is scored).
+ *   Both engines get an identically seeded Math.random per game, so the whole
+ *   match is reproducible. Reported: W/D/L, score, and a paired 95% confidence
+ *   interval over the (opening, seed) pairs — if it crosses 50%, inconclusive.
  */
 'use strict';
 const fs = require('fs');
@@ -30,9 +37,21 @@ function opt(name, dflt) {
   return i >= 0 ? args[i + 1] : dflt;
 }
 const BASE = opt('base', 'origin/main');
-const NODES = Number(opt('nodes', 10000));
-const MAX_PLIES = Number(opt('plies', 180));
-const SEEDS = Number(opt('seeds', 4));
+function posInt(name, dflt) {
+  const raw = opt(name, String(dflt));
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    console.error('--' + name + ' must be a positive finite number (got "' + raw + '")');
+    process.exit(2);
+  }
+  return n;
+}
+// A non-numeric --nodes would become NaN, and `ctx.nodes >= NaN` is always
+// false — turning the per-move budget OFF and letting the search run toward
+// depth 30 unbounded. Validate up front.
+const NODES = posInt('nodes', 10000);
+const MAX_PLIES = posInt('plies', 180);
+const SEEDS = posInt('seeds', 4);
 const SEED_BASE = Number(opt('seedbase', 0)); // run seeds SEED_BASE..SEED_BASE+SEEDS-1 (shard a match across processes)
 const PAIRS_LIMIT = Number(opt('pairs', Infinity));
 
@@ -77,7 +96,9 @@ const MK_RAND = 'function __mkRand(seed) {\n' +
 function loadEngine(ref) {
   const read = function (file) {
     if (!ref) return fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-    return cp.execSync('git show ' + ref + ':' + file,
+    // execFileSync (argv array, no shell) so a ref with shell metacharacters
+    // can't be interpolated into a command line.
+    return cp.execFileSync('git', ['show', ref + ':' + file],
       { encoding: 'utf8', maxBuffer: 1 << 24, cwd: path.join(__dirname, '..') });
   };
   const ctx = vm.createContext({ console: console });
@@ -120,11 +141,35 @@ function playGame(engines, sans, seed) {
     state = Chess.playMove(state, local);
     plies++;
   }
-  return 0.5; // unfinished games are draws
+  // The last move at the ply cap may itself be checkmate/stalemate/50-move —
+  // score the final position rather than blindly calling a decided game a draw.
+  const finalStatus = Chess.gameStatus(state);
+  if (finalStatus.over) {
+    return finalStatus.result === '1-0' ? 1 : finalStatus.result === '0-1' ? 0 : 0.5;
+  }
+  return 0.5; // genuinely unfinished games are draws
+}
+
+// A base engine that ignores nodeLimit would search toward depth 30 with no
+// bound, so every move would hang the match. Probe it BEFORE playing: give a
+// tiny node budget plus a time backstop (all engine versions honor timeMs, so
+// this can't hang); if it blows past the node budget, it doesn't support the
+// per-move budget and the match would be unfair — refuse loudly.
+function assertBounded(ctx, label) {
+  const probe = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.START_FEN),
+    { maxDepth: 30, nodeLimit: 3000, timeMs: 5000, quiesce: true, randomize: false });
+  if (probe.nodes > 6000) {
+    console.error('base "' + label + '" does not honor nodeLimit (searched ' + probe.nodes +
+      ' nodes for a 3000-node probe). Pick a ref that supports the per-move node budget ' +
+      '(any ref at or after the node-budget fix, e.g. claude/ai-3-tests), not pre-nodeLimit main.');
+    process.exit(3);
+  }
 }
 
 const cand = loadEngine(null);
 const base = loadEngine(BASE);
+assertBounded(cand, 'candidate (working tree)');
+assertBounded(base, BASE);
 
 let w = 0, d = 0, l = 0, games = 0;
 const pairScores = []; // candidate score per (opening, seed) pair, in [0, 1]
@@ -151,16 +196,26 @@ for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
 process.stderr.write('\n');
 
 const n = pairScores.length;
-const mean = pairScores.reduce(function (a, b) { return a + b; }, 0) / n;
-const sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1));
-const half = 1.96 * sd / Math.sqrt(n);
-const lo = mean - half, hi = mean + half;
+const mean = n ? pairScores.reduce(function (a, b) { return a + b; }, 0) / n : NaN;
 
 console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
 console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + NODES + ' nodes/move');
-console.log('W ' + w + ' / D ' + d + ' / L ' + l +
-  '  score ' + (mean * 100).toFixed(1) + '%' +
-  '  95% CI [' + (lo * 100).toFixed(1) + '%, ' + (hi * 100).toFixed(1) + '%] over ' + n + ' pairs');
-console.log(lo > 0.5 ? 'RESULT: candidate is stronger (CI above 50%)'
-  : hi < 0.5 ? 'RESULT: candidate is weaker (CI below 50%)'
-  : 'RESULT: inconclusive (CI crosses 50%)');
+// A paired CI needs the sample variance, which is undefined for n < 2 (the
+// n-1 denominator is 0). Report the raw score but no interval/verdict rather
+// than printing a NaN CB.
+if (n < 2) {
+  console.log('W ' + w + ' / D ' + d + ' / L ' + l +
+    (n ? '  score ' + (mean * 100).toFixed(1) + '%' : '') +
+    '  (' + n + ' pair' + (n === 1 ? '' : 's') + ' — too few for a confidence interval)');
+  console.log('RESULT: inconclusive (need at least 2 pairs for a CI)');
+} else {
+  const sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1));
+  const half = 1.96 * sd / Math.sqrt(n);
+  const lo = mean - half, hi = mean + half;
+  console.log('W ' + w + ' / D ' + d + ' / L ' + l +
+    '  score ' + (mean * 100).toFixed(1) + '%' +
+    '  95% CI [' + (lo * 100).toFixed(1) + '%, ' + (hi * 100).toFixed(1) + '%] over ' + n + ' pairs');
+  console.log(lo > 0.5 ? 'RESULT: candidate is stronger (CI above 50%)'
+    : hi < 0.5 ? 'RESULT: candidate is weaker (CI below 50%)'
+    : 'RESULT: inconclusive (CI crosses 50%)');
+}
