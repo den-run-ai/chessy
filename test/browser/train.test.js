@@ -299,6 +299,56 @@ require('./helper').run('train', async function (t) {
   await page.click('#gradeGood');
   await page.waitForSelector('#trainEmpty:not([hidden])');
 
+  // A stale grade whose reload TRANSIENTLY fails must not strand focus in
+  // the now-hidden card box: loadTrain's catch clears the training state,
+  // so the post-reload focus guard sees no card.
+  await page.evaluate(function () {
+    return CoachStore.addCard({
+      gameId: 'g4b', ply: 3,
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      playedSan: 'Qh4#', bestSan: 'Qh4#',
+      bestMove: { from: 3, to: 39, promotion: null },
+      bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
+      lesson: 'Stale-reload-failure test', reflection: {},
+      createdAt: Date.now(), due: Date.now() - 1, step: -1, attempts: []
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.evaluate(function () {
+    // Revise the card (makes the pending grade stale) AND make the
+    // follow-up reload reject once.
+    return CoachStore.listCards().then(function (cards) {
+      const c = cards.find(function (x) { return x.gameId === 'g4b'; });
+      c.due = c.due - 5000;
+      return CoachStore.updateCard(c);
+    }).then(function () {
+      CoachStore.__realDueCards = CoachStore.dueCards;
+      CoachStore.dueCards = function () {
+        CoachStore.dueCards = CoachStore.__realDueCards; // fail once only
+        return Promise.reject(new Error('blocked'));
+      };
+    });
+  });
+  await page.click('#gradeGood'); // stale → reload → reload rejects
+  await page.waitForSelector('#trainCardBox[hidden]', { state: 'attached', timeout: 5000 });
+  check(await page.evaluate(function () {
+    return !document.getElementById('viewTrain').querySelector('#trainCardBox')
+      .contains(document.activeElement);
+  }), 'a failed stale-reload does not strand focus in the hidden card box');
+  check(await page.locator('#trainRefresh').isVisible(),
+    'a failed stale-reload leaves Refresh visible to retry');
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await tsq('d8').click();
+  await tsq('h4').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+
   // A grade settling AFTER the user left Train must not advance focus
   // into the hidden view.
   await page.evaluate(function () {

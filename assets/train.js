@@ -48,6 +48,11 @@
                 answered: false, grading: false };
       nextTrainCard();
     }).catch(function () {
+      // Clear the training state on failure: the card box is hidden below,
+      // so any stale `train.card` left over would make a post-load focus
+      // guard (`train && train.card`) strand focus in now-hidden content.
+      train = { queue: [], card: null, state: null, selected: null,
+                answered: false, grading: false };
       $('trainEmpty').hidden = false;
       $('trainEmpty').textContent = 'Archive unavailable in this browser.';
       $('trainCardBox').hidden = true;
