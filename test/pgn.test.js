@@ -141,6 +141,38 @@ check(!foolBad.valid && /contradicts/.test(foolBad.error),
 const foolOk = PGN.parseGame('[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1');
 check(foolOk.valid && foolOk.result === '0-1' && foolOk.reason === 'checkmate',
   'a terminal result is derived from the position (…Qh4# → 0-1)');
+// BOTH declarations are checked: a contradicting Result TAG is caught even
+// when the movetext marker (*) would otherwise mask it.
+const foolTag = PGN.parseGame('[Result "1-0"]\n\n1. f3 e5 2. g4 Qh4# *');
+check(!foolTag.valid && /contradicts/.test(foolTag.error),
+  'a contradicting Result tag is rejected even when the movetext marker is *');
+
+// A move played AFTER a terminal position is rejected.
+const afterMate = PGN.parseGame('1. f3 e5 2. g4 Qh4# 3. e4 *');
+check(!afterMate.valid && /after the game ended/.test(afterMate.error) && afterMate.ply === 5,
+  'a move after the game already ended is rejected');
+
+// Symbolic !/? glyphs are preserved as NAGs, not silently stripped.
+const annotated = PGN.parseGame('1. e4! e5?! *');
+check(annotated.valid && annotated.moves[0].nags.indexOf('$1') !== -1 &&
+  annotated.moves[1].nags.indexOf('$6') !== -1,
+  'symbolic move glyphs (!, ?!) are captured as NAGs');
+
+// Malformed / short FEN counters are rejected (parseFen would yield NaN).
+check(!PGN.parseGame('[SetUp "1"][FEN "4k3/8/8/8/8/8/4P3/4K3 w - - wat nope"]\n\n1. e4 *').valid &&
+  !PGN.parseGame('[SetUp "1"][FEN "4k3/8/8/8/8/8/4P3/4K3 w - -"]\n\n1. e4 *').valid,
+  'a FEN with non-numeric or missing move counters is rejected');
+
+// Calendar-invalid dates (Date.parse rolls them over) are rejected.
+const badDate = PGN.parseGame('[Date "2024.02.31"][Result "*"]\n\n1. e4 *');
+check(PGN.toRecord(badDate, { importedAt: 1 }).playedAt === null,
+  'a calendar-invalid PGN date does not become a played timestamp');
+
+// A ) inside a SEMICOLON comment within a variation is not the variation end.
+const semiVar = PGN.parseGame('1. e4 (1. d4 ; misleading ) in a comment\n1... d5) e5 *');
+check(semiVar.valid && semiVar.moves.length === 2 &&
+  semiVar.moves[0].san === 'e4' && semiVar.moves[1].san === 'e5',
+  'a ) inside a ; comment within a variation does not terminate the variation');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

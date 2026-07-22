@@ -16,6 +16,9 @@
   if (typeof Chess === 'undefined') return;
 
   const RESULTS = { '1-0': 1, '0-1': 1, '1/2-1/2': 1, '*': 1 };
+  // Standard NAG codes for the symbolic suffix glyphs, so `e4!` / `e5?!`
+  // keep their annotation meaning instead of being stripped away.
+  const GLYPH_NAG = { '!': '$1', '?': '$2', '!!': '$3', '??': '$4', '!?': '$5', '?!': '$6' };
 
   // --- Tag pairs: [Key "Value"], with \" and \\ escapes in the value. ---
   function parseTags(text) {
@@ -81,9 +84,10 @@
         let depth = 1; i++;
         while (i < n && depth > 0) {
           const c = text[i];
-          // A brace comment inside the variation can itself contain ( or ):
-          // skip it whole so those never miscount the variation depth.
+          // Brace AND semicolon comments inside the variation can contain (
+          // or ): skip each whole so those never miscount the variation depth.
           if (c === '{') { const j = text.indexOf('}', i + 1); i = j < 0 ? n : j + 1; continue; }
+          if (c === ';') { const j = text.indexOf('\n', i); i = j < 0 ? n : j + 1; continue; }
           if (c === '(') depth++;
           else if (c === ')') depth--;
           i++;
@@ -113,7 +117,12 @@
       // any, is a SAN on the same token (spaceless PGN).
       tok = tok.replace(/^\d+\.(\.\.)?/, '');
       if (!tok) continue;
-      moves.push({ san: tok, nags: [], comment: null, clkMs: null });
+      // A trailing !/? suffix glyph is a move annotation, not part of the SAN;
+      // canon() strips it to match the legal move, so capture it as the
+      // equivalent NAG here so the annotation is not silently lost.
+      const glyph = (tok.match(/[!?]+$/) || [])[0];
+      const nags = glyph && GLYPH_NAG[glyph] ? [GLYPH_NAG[glyph]] : [];
+      moves.push({ san: tok, nags: nags, comment: null, clkMs: null });
     }
     return { moves: moves, result: result, pre: pre };
   }
@@ -141,12 +150,14 @@
     return Chess.sqName(m.from) + Chess.sqName(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
   }
 
-  // Strict structural FEN validation (parseFen is lenient): 8 ranks that each
-  // sum to 8 squares of valid pieces, exactly one king per side, a legal side
-  // to move, castling field and en-passant square.
+  // Strict structural FEN validation (parseFen is lenient): the FULL six-field
+  // shape — 8 ranks each summing to 8 squares of valid pieces, exactly one king
+  // per side, a legal side to move, castling and en-passant fields, and numeric
+  // halfmove/fullmove counters (else parseFen yields NaN counters that would
+  // disable the fifty-move rule).
   function validFen(fen) {
     const parts = String(fen).trim().split(/\s+/);
-    if (parts.length < 4) return false;
+    if (parts.length !== 6) return false;
     const rows = parts[0].split('/');
     if (rows.length !== 8) return false;
     let wk = 0, bk = 0;
@@ -163,17 +174,27 @@
     if (parts[1] !== 'w' && parts[1] !== 'b') return false;
     if (!/^(-|K?Q?k?q?)$/.test(parts[2]) || parts[2] === '') return false;
     if (!/^(-|[a-h][36])$/.test(parts[3])) return false;
+    if (!/^\d+$/.test(parts[4])) return false;      // halfmove clock
+    if (!/^[1-9]\d*$/.test(parts[5])) return false; // fullmove number (>= 1)
     return true;
   }
 
-  // Played timestamp (ms) from UTCDate/Date (+ optional UTCTime), or null.
+  // Played timestamp (ms) from UTCDate/Date (+ optional UTCTime), or null. The
+  // calendar fields are round-tripped: Date.parse silently rolls impossible
+  // dates over (2024.02.31 → Mar 2), so a parsed value whose UTC components do
+  // not match the declared date is rejected rather than recorded as a
+  // different day.
   function tagDate(tags) {
     if (!tags) return null;
     const d = tags.UTCDate || tags.Date;
     if (!d || !/^\d{4}\.\d{2}\.\d{2}$/.test(d)) return null;
     const t = tags.UTCTime && /^\d{2}:\d{2}:\d{2}$/.test(tags.UTCTime) ? tags.UTCTime : '00:00:00';
     const ms = Date.parse(d.replace(/\./g, '-') + 'T' + t + 'Z');
-    return isNaN(ms) ? null : ms;
+    if (isNaN(ms)) return null;
+    const back = new Date(ms), ymd = d.split('.').map(Number);
+    if (back.getUTCFullYear() !== ymd[0] || back.getUTCMonth() + 1 !== ymd[1] ||
+        back.getUTCDate() !== ymd[2]) return null;
+    return ms;
   }
 
   // Parse and VALIDATE the first game in `text`. Returns
@@ -212,6 +233,13 @@
     let s = state;
     for (let k = 0; k < parsed.moves.length; k++) {
       const raw = parsed.moves[k];
+      // A game cannot continue past its ending: reject any move played from an
+      // already-terminal position (checkmate/stalemate, fifty-move, threefold,
+      // or an insufficient-material SetUp/FEN).
+      if (Chess.gameStatus(s).over) {
+        return { valid: false, error: 'move "' + raw.san + '" played after the game ended',
+          ply: k + 1, tags: tags, setupFen: setup, moves: [] };
+      }
       const legal = Chess.legalMoves(s);
       const want = canon(raw.san);
       const hit = legal.find(function (m) { return canon(Chess.toSan(s, m, legal)) === want; });
@@ -226,25 +254,29 @@
       });
       s = Chess.playMove(s, hit);
     }
-    // The declared result comes from the movetext token, then the Result tag,
-    // but ONLY if it is a valid PGN result — a malformed tag never becomes the
-    // stored result.
     const status = Chess.gameStatus(s);
-    const declared = RESULTS[parsed.result] ? parsed.result
-      : (RESULTS[tags.Result] ? tags.Result : null);
     let result;
     if (status.over) {
-      // At a TERMINAL position the rules determine the result. A declared,
-      // decisive result that contradicts it is a corrupt game (e.g. Fool's
-      // Mate …Qh4# labelled 1-0) — reject it rather than store a wrong label.
-      if (declared && declared !== '*' && declared !== status.result) {
-        return { valid: false, tags: tags, setupFen: setup, moves: [],
-          error: 'declared result ' + declared + ' contradicts the terminal position (' +
-            status.result + ')' };
+      // At a TERMINAL position the rules determine the result. EVERY declared
+      // decisive result — the movetext token AND the Result tag, independently —
+      // must agree with it; either contradicting (e.g. Fool's Mate …Qh4#
+      // labelled 1-0) is a corrupt game, rejected rather than stored mislabelled.
+      const declarations = [parsed.result, tags.Result].filter(function (r) {
+        return RESULTS[r] && r !== '*';
+      });
+      for (const d of declarations) {
+        if (d !== status.result) {
+          return { valid: false, tags: tags, setupFen: setup, moves: [],
+            error: 'declared result ' + d + ' contradicts the terminal position (' +
+              status.result + ')' };
+        }
       }
       result = status.result;
     } else {
-      result = declared || '*';
+      // Non-terminal: the movetext token, then the Result tag, but ONLY if it is
+      // a valid PGN result — a malformed tag never becomes the stored result.
+      result = RESULTS[parsed.result] ? parsed.result
+        : (RESULTS[tags.Result] ? tags.Result : '*');
     }
     return {
       valid: true, error: null, tags: tags, setupFen: setup,
