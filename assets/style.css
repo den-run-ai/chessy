@@ -539,6 +539,15 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .coach-form h3 { font-size: 1rem; }
 .coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
 
+/* Chessy candidate lines: SAN + eval on one row, the short PV beneath. */
+.verify-lines { list-style: decimal; margin: 0; padding-left: 1.4rem; display: flex;
+  flex-direction: column; gap: 0.35rem; }
+.verify-lines li { padding: 0.15rem 0; }
+.verify-lines .vl-head { display: block; font-weight: 700; }
+.verify-lines .vl-pv { display: block; color: var(--muted); font-size: 0.82rem;
+  font-variant-numeric: tabular-nums; }
+.verify-meta { font-size: 0.78rem; }
+
 .stats {
   display: grid;
   /* minmax(0, max-content), NOT max-content: the label column must be

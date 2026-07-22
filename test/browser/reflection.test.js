@@ -58,6 +58,17 @@ require('./helper').run('reflection', async function (t) {
   check((await page.textContent('#verifyResult')).includes('for Black') &&
         (await page.textContent('#verifyResult')).includes('+M'),
     'a Black decision shows the eval from Black’s perspective (+M for Black)');
+  // Phase 3: the contract renders candidate LINES + provenance, not a single line.
+  check(await page.locator('#verifyLines').isVisible() &&
+        (await page.locator('#verifyLines li').count()) >= 1,
+    'Chessy candidate lines are rendered');
+  check((await page.textContent('#verifyLines')).indexOf('Qh4') !== -1,
+    'the mating line appears among the candidates');
+  check((await page.textContent('#verifyMeta')).indexOf('depth') !== -1 &&
+        (await page.textContent('#verifyMeta')).indexOf('Chessy') !== -1,
+    'engine provenance/meta (version + depth) is shown');
+  check(await page.locator('#verifyPlayed').isVisible(),
+    'the played move’s standing among the candidates is shown');
   check(await page.locator('#causeLabel').isHidden(),
     'no cause asked when the move matches');
   check(!(await page.locator('#reflectVerify').isDisabled()), 'probe button re-enables');
@@ -174,6 +185,9 @@ require('./helper').run('reflection', async function (t) {
   // Ply 0 (f3) is a WHITE decision: the eval is labelled from White's side.
   check((await page.textContent('#verifyResult')).includes('for White'),
     'a White decision shows the eval from White’s perspective');
+  check((await page.locator('#verifyLines li').count()) >= 1 &&
+        await page.locator('#verifyPlayed').isVisible(),
+    'candidate lines and the played-move standing show for a differing move');
   check(!(await page.locator('#causeLabel').isHidden()), 'cause picker shown for a differing move');
   await page.fill('#cardLesson', 'Do not weaken the king for nothing');
   await page.click('#saveCard');

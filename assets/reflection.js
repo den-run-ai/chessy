@@ -24,7 +24,6 @@
 
   const $ = function (id) { return document.getElementById(id); };
 
-  const MATE_ISH = 900000; // |score| above this reads as mate
   const CAUSE_LABELS = {
     'threat-scan': 'Missed a threat',
     candidates: 'Good move not among candidates',
@@ -36,16 +35,68 @@
     match: 'Good move (matched Chessy)'
   };
 
-  // Engine scores are centipawns from WHITE's perspective. `turn` ('w'/'b')
-  // is the side to move at the flagged position, so the value is flipped to
-  // that side's POV: a reflection eval reads from the perspective of the
-  // player whose move it is, and a bare "+0.4" on a Black decision (which
-  // actually means White is better) can no longer be misread.
-  function fmtScore(cpWhite, turn) {
-    const s = turn === 'b' ? -cpWhite : cpWhite;
-    if (s > MATE_ISH) return '+M';
-    if (s < -MATE_ISH) return '−M';
+  // Format a contract line's eval from the PLAYER's perspective (the side to
+  // move). scoreCpPlayer is already player-POV; a mate reads +M when the
+  // player is the one mating, −M when it is being mated, with the move count.
+  function fmtLine(line, turn) {
+    if (line.mate) {
+      const playerMates = line.mate.forWhite === (turn === 'w');
+      const moves = Math.ceil(line.mate.inPlies / 2);
+      return (playerMates ? '+M' : '−M') + ' (#' + moves + ')';
+    }
+    const s = line.scoreCpPlayer;
     return (s >= 0 ? '+' : '') + (s / 100).toFixed(1);
+  }
+
+  // Render Chessy's candidate lines (SAN · eval · short PV) and the played
+  // move's standing. `turn` is the side to move at the flagged position.
+  function renderLines(contract) {
+    const turn = contract.turn;
+    const ol = $('verifyLines');
+    ol.innerHTML = '';
+    contract.bestLines.forEach(function (line) {
+      const li = document.createElement('li');
+      const head = document.createElement('span');
+      head.className = 'vl-head';
+      head.textContent = line.san + '  ' + fmtLine(line, turn);
+      li.appendChild(head);
+      if (line.pv && line.pv.length > 1) {
+        const pv = document.createElement('span');
+        pv.className = 'vl-pv';
+        pv.textContent = line.pv.join(' ');
+        li.appendChild(pv);
+      }
+      ol.appendChild(li);
+    });
+    ol.hidden = false;
+
+    const pl = contract.playedLine;
+    const played = $('verifyPlayed');
+    if (pl && pl.amongCandidates) {
+      played.textContent = 'Your move is Chessy candidate #' + pl.rank +
+        ' (' + fmtLine(pl, turn) + ').';
+      played.hidden = false;
+    } else if (pl) {
+      played.textContent = 'Your move is outside Chessy’s top candidates (' +
+        fmtLine(pl, turn) + ') — not necessarily an error.';
+      played.hidden = false;
+    } else {
+      played.hidden = true;
+    }
+
+    const meta = $('verifyMeta');
+    meta.textContent = 'Chessy ' + contract.engine.version + ' · depth ' + contract.depth +
+      ' · ' + contract.nodes + ' nodes' +
+      (contract.stability ? ' · best move ' +
+        (contract.stability.bestMoveStable ? 'stable' : 'unsettled') : '') +
+      ' · estimate, not authoritative analysis.';
+    meta.hidden = false;
+  }
+
+  function hideLines() {
+    $('verifyLines').hidden = true;
+    $('verifyPlayed').hidden = true;
+    $('verifyMeta').hidden = true;
   }
 
   // The flagged moment (game id + ply) and the verdict for it. Plain
@@ -147,64 +198,61 @@
     const entry = r.gs.history[ply];
     $('verifyBox').hidden = false;
     $('verifyResult').textContent = 'Analysing…';
+    hideLines();
     // A stale "saved/Updated" notice must not outlive the verdict it
     // reported: edited answers are NOT persisted until saved again.
     $('cardSaved').hidden = true;
     $('saveCard').disabled = true;
     $('reflectVerify').disabled = true; // one probe at a time
 
-    ChessyAnalysis.analyse(fenBefore, r.states[ply].positions).then(function (res) {
+    // The played move is scored and ranked against Chessy's own candidates.
+    const playedMove = { from: entry.move.from, to: entry.move.to,
+      promotion: entry.move.promotion || null };
+    ChessyAnalysis.analyse(fenBefore, r.states[ply].positions, { playedMove: playedMove })
+      .then(function (contract) {
       if (token === verifySeq) $('reflectVerify').disabled = false;
       // null = superseded by a newer request; token/moment guards cover
       // the user having flagged elsewhere or left the game meanwhile.
-      if (res === null || token !== verifySeq || !sameMoment(CoachReview.current())) return;
-      // Resolve the engine's move object back to a legal move on this board.
-      const pos = Chess.parseFen(fenBefore);
-      const legal = Chess.legalMoves(pos);
-      const bm = res.move && legal.find(function (m) {
-        return m.from === res.move.from && m.to === res.move.to &&
-               (m.promotion || null) === (res.move.promotion || null);
-      });
-      // A probe that returns no move, an ILLEGAL move (nothing on this board
-      // matches it), or a non-numeric score cannot found a lesson card: the
-      // verdict it would carry is meaningless. Report it, leave Save
-      // disabled and let the player Verify again, rather than mint a card
-      // around a bogus "best" move (the old code stored bestMove:null and a
-      // '?' SAN and still enabled Save).
-      if (!bm || typeof res.score !== 'number' || !isFinite(res.score)) {
+      if (contract === null || token !== verifySeq || !sameMoment(CoachReview.current())) return;
+      // A usable contract needs at least one legal candidate line. Anything
+      // less (a wedged worker recovered to null already returned above; a
+      // terminal position yields none) cannot found a lesson card — report
+      // it and leave Save disabled rather than mint a card around nothing.
+      if (!contract.bestLines || !contract.bestLines.length) {
         verdict = null;
+        hideLines();
         $('causeLabel').hidden = true;
         $('saveCard').disabled = true;
         $('verifyResult').textContent =
           'Chessy could not analyse this position — Verify again.';
         return;
       }
-      const bestSan = Chess.toSan(pos, bm, legal);
-      const same = entry.move.from === bm.from && entry.move.to === bm.to &&
-        (entry.move.promotion || null) === (bm.promotion || null);
-      // The flagged decision belongs to the side to move here; show and store
-      // the eval from THAT side's POV. bestScore stays the canonical WHITE-POV
-      // centipawns (fmtScore flips it for display).
-      const mover = pos.turn === 'w' ? 'White' : 'Black';
+      const turn = contract.turn;
+      const mover = turn === 'w' ? 'White' : 'Black';
+      const top = contract.bestLines[0];
+      const same = contract.classification === 'same';
+      renderLines(contract);
+      // Chessy offers candidate LINES, never an automatic mistake verdict;
+      // the player owns the cause when the played move is not the top line.
       verdict = {
         gameId: flagged.gameId, ply: ply, fenBefore: fenBefore,
-        playedSan: entry.san, bestSan: bestSan,
-        bestMove: { from: bm.from, to: bm.to, promotion: bm.promotion || null },
-        bestScore: res.score, depth: res.depth,
-        kind: same ? 'match' : 'differ',
+        playedSan: entry.san, bestSan: top.san, bestMove: top.move,
+        bestScore: top.scoreCpWhite, mate: top.mate, depth: contract.depth,
+        kind: same ? 'match' : 'differ', classification: contract.classification,
+        engine: contract.engine,
+        lines: contract.bestLines.map(function (l) {
+          return { san: l.san, uci: l.uci, scoreCpPlayer: l.scoreCpPlayer, mate: l.mate, pv: l.pv };
+        }),
+        playedLine: contract.playedLine,
         reflection: reflection
       };
-      // ONE probe, no severity grading: a single time-bounded line cannot
-      // say how bad a different move was — only what Chessy preferred.
-      // The player makes the call via the cause picker.
       $('causeLabel').hidden = same;
-      $('verifyResult').textContent = (same
-        ? 'You played ' + entry.san + ' — Chessy’s line agrees (eval ' +
-          fmtScore(res.score, pos.turn) + ' for ' + mover + ', depth ' + res.depth + ').'
-        : 'You played ' + entry.san + ' — Chessy preferred ' + bestSan + ' (eval ' +
-          fmtScore(res.score, pos.turn) + ' for ' + mover + ', depth ' + res.depth +
-          '). A different move is not necessarily an error — your call below.') +
-        ' Chessy estimate, not authoritative analysis.';
+      $('verifyResult').textContent = same
+        ? 'You played ' + entry.san + ' — Chessy’s top line agrees (eval ' +
+          fmtLine(top, turn) + ' for ' + mover + ').'
+        : 'You played ' + entry.san + ' — Chessy preferred ' + top.san + ' (eval ' +
+          fmtLine(top, turn) + ' for ' + mover +
+          '). A different move is not necessarily an error — your call below.';
       $('saveCard').disabled = false;
     });
   });
@@ -232,7 +280,11 @@
     const fields = {
       gameId: v.gameId, ply: v.ply, fenBefore: v.fenBefore,
       playedSan: v.playedSan, bestSan: v.bestSan, bestMove: v.bestMove,
-      bestScore: v.bestScore, depth: v.depth, kind: v.kind,
+      bestScore: v.bestScore, mate: v.mate || null, depth: v.depth, kind: v.kind,
+      // Provenance + the structured lines behind the verdict, so a card can
+      // later be re-rendered (or re-scored) with the engine that produced it.
+      classification: v.classification || null, engine: v.engine || null,
+      lines: v.lines || null, playedLine: v.playedLine || null,
       cause: cause, lesson: lesson, reflection: v.reflection,
       due: now,  // first review is immediate (the "learn" step)
       step: -1   // -1 = not yet on the day ladder (Train slice)

@@ -1,27 +1,33 @@
 /*
- * Chessy analysis — ONE bounded engine request at a time, in its own
- * worker so a live Play search is never disturbed. There is deliberately
- * no queue: the only caller is the reflection flow, whose Verify button
- * disables while a request is in flight. A NEW request supersedes an
- * abandoned one — the busy worker is terminated (nothing left occupying
- * it) and the old promise resolves null so its caller discards it. A wedged
- * or crashed worker is retried once in a FRESH worker; if that also fails the
- * probe resolves gracefully (null). The search NEVER runs on the main thread,
- * so verification can neither hang nor freeze the UI.
+ * Chessy analysis — ONE bounded analysis-CONTRACT request at a time, in its
+ * own worker (analysis-worker.js) so a live Play search is never disturbed.
+ * There is deliberately no queue: the only caller is the reflection flow,
+ * whose Verify button disables while a request is in flight. A NEW request
+ * supersedes an abandoned one — the busy worker is terminated (nothing left
+ * occupying it) and the old promise resolves null so its caller discards it.
+ * A wedged or crashed worker is retried once in a FRESH worker; if that also
+ * fails the probe resolves gracefully (null). The search NEVER runs on the
+ * main thread, so verification can neither hang nor freeze the UI.
+ *
+ * analyse(fen, positions, opts) resolves the ChessyAnalysisCore contract
+ * (bestLines, playedLine, provenance, stability, …) — or null when superseded,
+ * when no Web Worker is available, or when a wedged/crashed worker could not
+ * be recovered. opts.playedMove ({from,to,promotion}) is scored and ranked.
  */
 (function (global) {
   'use strict';
   if (typeof Chess === 'undefined' || typeof ChessAI === 'undefined') return;
 
-  // A FIXED NODE BUDGET — not a wall-clock deadline — is what makes Verify
-  // deterministic. The search evaluates exactly nodeLimit nodes, so it
-  // completes the same depth and returns the same move/score on every device
-  // and under any worker scheduling or load; a re-run cannot save a different
-  // verdict for an unchanged position. (randomize:false removes the only other
-  // source of run-to-run variation, the root shuffle.) A timeMs budget would
-  // reintroduce exactly the nondeterminism we are avoiding: a faster or
-  // less-loaded run could finish an extra depth and prefer a different move.
-  const CFG = { maxDepth: 30, nodeLimit: 150000, quiesce: true, randomize: false };
+  // A FIXED NODE BUDGET — not a wall-clock deadline — is what makes the probe
+  // deterministic: the search evaluates exactly nodeLimit nodes, completing
+  // the same depth and returning the same contract on every device and under
+  // any worker scheduling or load. The contract deep-verifies its candidates
+  // at that completed depth under full windows with delta pruning off, bounded
+  // by verifyNodeLimit; stability re-scans at a larger fixed budget.
+  const CFG = {
+    maxDepth: 30, nodeLimit: 150000, multiPV: 3, pvLen: 6,
+    verifyNodeLimit: 2000000, stabilityNodeLimit: 300000
+  };
   // A FIXED NODE budget is not a fixed WALL-CLOCK cost: 150k nodes is ~1s on a
   // desktop but several seconds on a hard midgame position on a slow phone. The
   // watchdog exists only to rescue a genuinely WEDGED worker, so it sits well
@@ -51,11 +57,11 @@
   function ensureWorker() {
     if (worker || typeof Worker === 'undefined') return worker;
     try {
-      worker = new Worker('assets/ai-worker.js' +
+      worker = new Worker('assets/analysis-worker.js' +
         (global.CHESSY_RELEASE ? '?r=' + global.CHESSY_RELEASE : ''));
     } catch (e) { return null; }
     worker.onmessage = function (e) {
-      if (active && e.data.id === active.id) settle(active, e.data);
+      if (active && e.data.id === active.id) settle(active, e.data.contract);
     };
     worker.onerror = function () {
       if (worker) { worker.terminate(); worker = null; }
@@ -65,11 +71,14 @@
   }
 
   // `positions` is the game's repetition table up to this position — the
-  // engine needs it to score a move that completes a repetition as the
-  // draw it is. Resolves with {move, depth, score}, or null when a newer
-  // request superseded this one, when no Web Worker is available, or when a
-  // wedged/crashed worker could not be recovered.
-  function analyse(fen, positions) {
+  // engine needs it to score a move that completes a repetition as the draw
+  // it is. `opts.playedMove` ({from,to,promotion}) is the move actually
+  // played, scored and ranked against the candidates. Resolves with the
+  // ChessyAnalysisCore contract, or null when a newer request superseded this
+  // one, when no Web Worker is available, or when a wedged/crashed worker
+  // could not be recovered.
+  function analyse(fen, positions, opts) {
+    opts = opts || {};
     if (active) {
       // The previous request was abandoned (its moment was left) — kill
       // its search instead of letting it finish underneath the new one.
@@ -90,8 +99,10 @@
         job.watchdog = setTimeout(job.recover, watchdogMs());
         worker.postMessage({
           id: job.id, fen: fen, positions: positions || undefined,
-          maxDepth: CFG.maxDepth, nodeLimit: CFG.nodeLimit, quiesce: CFG.quiesce,
-          randomize: CFG.randomize
+          playedMove: opts.playedMove || undefined,
+          maxDepth: CFG.maxDepth, nodeLimit: CFG.nodeLimit, multiPV: CFG.multiPV,
+          pvLen: CFG.pvLen, verifyNodeLimit: CFG.verifyNodeLimit,
+          stabilityNodeLimit: CFG.stabilityNodeLimit
         });
       }
       // A wedged worker (watchdog fired) or a crashed one (worker.onerror):
