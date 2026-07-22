@@ -161,6 +161,74 @@ const sought = solve('7k/8/5K2/8/8/8/8/3Q4 b - - 0 1', 6000, escapeRep);
 check(sought.move.from === loseMoves[0].from && sought.move.to === loseMoves[0].to,
   'losing side heads for threefold', 'got ' + sought.uci);
 
+// --- Repetition awareness INSIDE quiescence (regression). The main search
+// scores repetitions as draws, but a repetition first reached PAST the horizon
+// — a check evasion into a position that already stands twice, or that closes a
+// cycle on a search-path ancestor — must also score 0, not by its material.
+// Setup: fenS is Black-to-move IN CHECK (bishop a2 pins the a2–g8 diagonal);
+// Black's king can step to e5, reaching fenA (White up Q+B, eval ~ +1182). The
+// e5 escape is a check evasion resolved only in quiescence (depth-0 search with
+// quiesce on), so it exercises the quiescence prelude, not the main search.
+console.log('quiescence repetition');
+(function () {
+  const fenA = '8/8/8/4k3/8/8/B7/K6Q w - - 6 20';   // Black Ke5, White Ka1/Ba2/Qh1
+  const fenS = '8/8/4k3/8/8/8/B7/K6Q b - - 5 20';   // Black Ke6 (in check), Ke5 -> fenA
+  const S = Chess.parseFen(fenS), A = Chess.parseFen(fenA);
+  const matVal = ChessAI.evaluate(A.board); // ~ +1182, the non-draw material score
+
+  // (a) Search-path repetition: fenA seeded as an ancestor -> the e5 evasion
+  // closes the cycle and the quiescence value is the draw (0), not the material.
+  let ctx = ChessAI.makeCtx(true, Infinity);
+  const vPath = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx, ancestors: [fenA] });
+  check(vPath === 0, 'quiescence honors a search-path repetition (draw, not material)',
+    'value ' + vPath + ' (material would be ' + matVal + ')');
+  // ...and the draw's PATH dependency propagates as repPly, so no shallower node
+  // caches it in the TT. The cycle closed on the seeded ancestor at path index 0.
+  check(ctx.repPly === 0, 'quiescence path draw propagates repPly (TT-contamination guard)',
+    'repPly ' + ctx.repPly + ' (expected 0)');
+
+  // (b) A true game-history threefold seen only in quiescence also scores 0,
+  // and is path-INDEPENDENT (repPly stays Infinity, so it remains cacheable).
+  ctx = ChessAI.makeCtx(true, Infinity);
+  ctx.gameCounts.set(ChessAI.repKey(A), 2); // fenA already stands twice
+  const vHist = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx });
+  check(vHist === 0, 'quiescence honors a game-history threefold',
+    'value ' + vHist + ' (material would be ' + matVal + ')');
+  check(ctx.repPly === Infinity, 'quiescence game-history draw stays cacheable (repPly=Infinity)',
+    'repPly ' + ctx.repPly);
+
+  // (c) Control: with neither seeded, the same evasion is a plain material leaf.
+  ctx = ChessAI.makeCtx(true, Infinity);
+  const vFree = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx });
+  check(vFree === matVal, 'without a repetition the quiescence leaf is material',
+    'value ' + vFree + ' (expected ' + matVal + ')');
+})();
+
+// --- Null-window scout vs a warm, wide-window TT (regression). A score a WIDER
+// search produced with delta pruning active is not a sound null-window bound;
+// the TT must withhold it from a quiescent null scout (offering only the hash
+// move). Invariant: a null scout that reuses a warm, wide-window-populated
+// context must return exactly what a FRESH-context scout returns.
+console.log('null-scout TT safety');
+(function () {
+  const cases = [
+    ['r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9', 4],
+    ['r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1', 4], // Kiwipete
+    ['r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', 4]
+  ];
+  for (const [fen, d] of cases) {
+    const st = Chess.parseFen(fen);
+    const vFull = ChessAI.search(st, d, -Infinity, Infinity, true);       // true value
+    const lo = vFull - 1, hi = vFull;                                     // scout straddling it
+    const vFresh = ChessAI.search(st, d, lo, hi, true);                   // fresh-context scout
+    const ctx = ChessAI.makeCtx(true, Infinity);
+    ChessAI.search(st, d, -Infinity, Infinity, true, { ctx: ctx });      // warm the TT (wide window)
+    const vWarm = ChessAI.search(st, d, lo, hi, true, { ctx: ctx });     // reuse the warm TT
+    check(vWarm === vFresh, 'warm wide-window TT does not corrupt a null scout',
+      fen.split(' ')[0].slice(0, 12) + ' d' + d + ': fresh ' + vFresh + ' warm ' + vWarm);
+  }
+})();
+
 // --- Zugzwang/fortress: mutual-zugzwang blocked pawns are a dead draw.
 console.log('zugzwang');
 for (const [name, fen] of [
