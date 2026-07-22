@@ -36,7 +36,13 @@
     match: 'Good move (matched Chessy)'
   };
 
-  function fmtScore(s) {
+  // Engine scores are centipawns from WHITE's perspective. `turn` ('w'/'b')
+  // is the side to move at the flagged position, so the value is flipped to
+  // that side's POV: a reflection eval reads from the perspective of the
+  // player whose move it is, and a bare "+0.4" on a Black decision (which
+  // actually means White is better) can no longer be misread.
+  function fmtScore(cpWhite, turn) {
+    const s = turn === 'b' ? -cpWhite : cpWhite;
     if (s > MATE_ISH) return '+M';
     if (s < -MATE_ISH) return '−M';
     return (s >= 0 ? '+' : '') + (s / 100).toFixed(1);
@@ -152,19 +158,38 @@
       // null = superseded by a newer request; token/moment guards cover
       // the user having flagged elsewhere or left the game meanwhile.
       if (res === null || token !== verifySeq || !sameMoment(CoachReview.current())) return;
-      // Resolve the engine's move object back to a SAN on this board.
-      const legal = Chess.legalMoves(Chess.parseFen(fenBefore));
+      // Resolve the engine's move object back to a legal move on this board.
+      const pos = Chess.parseFen(fenBefore);
+      const legal = Chess.legalMoves(pos);
       const bm = res.move && legal.find(function (m) {
         return m.from === res.move.from && m.to === res.move.to &&
                (m.promotion || null) === (res.move.promotion || null);
       });
-      const bestSan = bm ? Chess.toSan(Chess.parseFen(fenBefore), bm, legal) : '?';
-      const same = bm && entry.move.from === bm.from && entry.move.to === bm.to &&
+      // A probe that returns no move, an ILLEGAL move (nothing on this board
+      // matches it), or a non-numeric score cannot found a lesson card: the
+      // verdict it would carry is meaningless. Report it, leave Save
+      // disabled and let the player Verify again, rather than mint a card
+      // around a bogus "best" move (the old code stored bestMove:null and a
+      // '?' SAN and still enabled Save).
+      if (!bm || typeof res.score !== 'number' || !isFinite(res.score)) {
+        verdict = null;
+        $('causeLabel').hidden = true;
+        $('saveCard').disabled = true;
+        $('verifyResult').textContent =
+          'Chessy could not analyse this position — Verify again.';
+        return;
+      }
+      const bestSan = Chess.toSan(pos, bm, legal);
+      const same = entry.move.from === bm.from && entry.move.to === bm.to &&
         (entry.move.promotion || null) === (bm.promotion || null);
+      // The flagged decision belongs to the side to move here; show and store
+      // the eval from THAT side's POV. bestScore stays the canonical WHITE-POV
+      // centipawns (fmtScore flips it for display).
+      const mover = pos.turn === 'w' ? 'White' : 'Black';
       verdict = {
         gameId: flagged.gameId, ply: ply, fenBefore: fenBefore,
         playedSan: entry.san, bestSan: bestSan,
-        bestMove: bm ? { from: bm.from, to: bm.to, promotion: bm.promotion || null } : null,
+        bestMove: { from: bm.from, to: bm.to, promotion: bm.promotion || null },
         bestScore: res.score, depth: res.depth,
         kind: same ? 'match' : 'differ',
         reflection: reflection
@@ -175,10 +200,10 @@
       $('causeLabel').hidden = same;
       $('verifyResult').textContent = (same
         ? 'You played ' + entry.san + ' — Chessy’s line agrees (eval ' +
-          fmtScore(res.score) + ', depth ' + res.depth + ').'
+          fmtScore(res.score, pos.turn) + ' for ' + mover + ', depth ' + res.depth + ').'
         : 'You played ' + entry.san + ' — Chessy preferred ' + bestSan + ' (eval ' +
-          fmtScore(res.score) + ', depth ' + res.depth + '). A different move is not' +
-          ' necessarily an error — your call below.') +
+          fmtScore(res.score, pos.turn) + ' for ' + mover + ', depth ' + res.depth +
+          '). A different move is not necessarily an error — your call below.') +
         ' Chessy estimate, not authoritative analysis.';
       $('saveCard').disabled = false;
     });

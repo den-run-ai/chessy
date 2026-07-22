@@ -52,6 +52,12 @@ require('./helper').run('reflection', async function (t) {
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('agrees'),
     'matching move reported as agreement');
+  // Ply 3 is a BLACK decision (…Qh4#): the eval is labelled from Black's
+  // perspective, so a bare White-POV number can't be misread. Black delivers
+  // mate here, which reads as a win FOR BLACK.
+  check((await page.textContent('#verifyResult')).includes('for Black') &&
+        (await page.textContent('#verifyResult')).includes('+M'),
+    'a Black decision shows the eval from Black’s perspective (+M for Black)');
   check(await page.locator('#causeLabel').isHidden(),
     'no cause asked when the move matches');
   check(!(await page.locator('#reflectVerify').isDisabled()), 'probe button re-enables');
@@ -165,6 +171,9 @@ require('./helper').run('reflection', async function (t) {
   check((await page.textContent('#verifyResult')).includes('preferred') &&
         (await page.textContent('#verifyResult')).includes('not necessarily an error'),
     'a differing move is not declared an error');
+  // Ply 0 (f3) is a WHITE decision: the eval is labelled from White's side.
+  check((await page.textContent('#verifyResult')).includes('for White'),
+    'a White decision shows the eval from White’s perspective');
   check(!(await page.locator('#causeLabel').isHidden()), 'cause picker shown for a differing move');
   await page.fill('#cardLesson', 'Do not weaken the king for nothing');
   await page.click('#saveCard');
@@ -179,6 +188,31 @@ require('./helper').run('reflection', async function (t) {
   const both = await cards();
   check(both.length === 2 && both.some(function (c) { return c.cause === 'sound-alternative'; }),
     '"my move was also sound" is a first-class cause (2 cards total)');
+
+  // An ILLEGAL/unusable engine result must NOT be turned into a card: a move
+  // that matches nothing on the board (or a non-numeric score) leaves Save
+  // disabled and asks the player to Verify again.
+  await page.evaluate(function () {
+    window.__realAnalyse = ChessyAnalysis.analyse;
+    ChessyAnalysis.analyse = function () {
+      return Promise.resolve({ move: { from: -1, to: -1, promotion: null }, score: 40, depth: 5 });
+    };
+  });
+  await page.click('#flagMoment'); // re-flag ply 0
+  await page.fill('#reflectThreat', 'probe returns garbage');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse'),
+    'an illegal engine move is reported, not scored');
+  check(await page.locator('#saveCard').isDisabled(),
+    'an illegal engine move keeps Save disabled (no card can be founded on it)');
+  // Even a click that bypasses the disabled attribute cannot force a card:
+  // the handler re-checks disabled and the null verdict.
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === 2, 'an illegal engine result creates no card');
+  await page.evaluate(function () { ChessyAnalysis.analyse = window.__realAnalyse; });
 
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
