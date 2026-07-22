@@ -525,7 +525,10 @@
       // value is not a sound bound, so a PVS scout could miss a better move
       // (false fail-low). Disabling it there keeps the scout a plain, sound
       // alpha-beta bound (see the residual-unsoundness note in searchNode).
-      if (!inChk && !m.promotion && beta - alpha > 1) {
+      // ctx.noDelta additionally disables it ENTIRELY for the analysis contract
+      // (assets/analysis-core.js), whose candidate roots must be exact,
+      // comparable full-window scores rather than delta-pruning artifacts.
+      if (!ctx.noDelta && !inChk && !m.promotion && beta - alpha > 1) {
         const gain = VALUES[m.captured[1]] + DELTA;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
             !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
@@ -960,13 +963,30 @@
     }
   }
 
+  // --- Analysis hook. Orchestration (MultiPV, PV walk, provenance) lives in
+  // analysis-core.js; the engine exposes only two minimal seams. (1) Set
+  // ctx.noDelta before a search to disable quiescence delta pruning, so
+  // candidate roots are exact, comparable full-window scores. (2)
+  // ttPackedMove() returns the raw PACKED best move stored for `state`
+  // (from<<9 | to<<3 | promoIdx, with promoIdx Q=1 R=2 B=3 N=4), or 0 — the
+  // PV walk (decode, legal replay, cycle termination) is done by the caller,
+  // so no move-legality or PV logic leaks into the hot engine file. ---
+  function ttPackedMove(ctx, state) {
+    hashState(state);
+    const e = ctx.tt.get(H1);
+    return (e && e.h2 === H2 && e.move) ? e.move : 0;
+  }
+
   global.ChessAI = {
     bestMove: bestMove,
     think: think,
     evaluate: evaluate,
     search: search,
     makeCtx: makeCtx,
+    ttPackedMove: ttPackedMove,
     hashKey: hashKey,
-    repKey: repKey
+    repKey: repKey,
+    MATE: MATE,
+    MATE_NEAR: MATE_NEAR
   };
 })(typeof window !== 'undefined' ? window : globalThis);
