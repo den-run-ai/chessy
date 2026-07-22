@@ -72,8 +72,18 @@
     return key + '|hm' + (state.halfmove || 0) + '|' + hash(rep);
   }
 
-  // The config hash folds EVERY output-affecting option, so two runs that would
-  // differ in bestLines/scores/classification never collide in the cache. It is
+  // The played move under evaluation, normalized for the config hash. It is an
+  // OUTPUT-affecting input: analyse() derives playedLine + classification from
+  // it, so two requests for the same position that differ only in playedMove
+  // must key DISTINCT cache entries (otherwise the second is served the first's
+  // playedLine/classification). null when no move is under evaluation.
+  function playedKey(move) {
+    return move ? (move.from + '-' + move.to + '=' + (move.promotion || '')) : null;
+  }
+
+  // The config hash folds EVERY output-affecting option (including the played
+  // move under evaluation), so two runs that would differ in
+  // bestLines/scores/classification/playedLine never collide in the cache. It is
   // pure (no search): the analysis service computes the cache identity from it
   // BEFORE dispatching, and analyse() reuses it, so the lookup key, the stored
   // key and the key implied by the returned result are one and the same.
@@ -87,6 +97,7 @@
       multiPV: Math.max(1, opts.multiPV || 3),
       pvLen: opts.pvLen || 6,
       nodeBudget: opts.nodeBudget || 8000000,
+      played: playedKey(opts.playedMove),
       noDelta: true }));
   }
 

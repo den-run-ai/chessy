@@ -181,6 +181,15 @@ check(id.configHash === a.engine.configHash && id.version === a.engine.version &
 check(Core.configHashOf(FAST) === a.engine.configHash &&
   Core.configHashOf(Object.assign({}, FAST, { multiPV: 2 })) !== a.engine.configHash,
   'configHashOf is pure and changes with an output-affecting option');
+// The played move under evaluation is output-affecting (it drives playedLine +
+// classification), so it MUST change the config identity — otherwise a cache
+// keyed on it would serve one move's verdict for another.
+const pmA = { from: sq('a2'), to: sq('a3'), promotion: null };
+const pmB = { from: sq('e2'), to: sq('e4'), promotion: null };
+check(Core.configHashOf(Object.assign({ playedMove: pmA }, FAST)) !== a.engine.configHash &&
+  Core.configHashOf(Object.assign({ playedMove: pmA }, FAST)) !==
+    Core.configHashOf(Object.assign({ playedMove: pmB }, FAST)),
+  'the played move under evaluation is folded into the config identity');
 // The identity fingerprint carries the repetition + halfmove context, so the
 // same board with a different history keys a distinct cache entry.
 check(Core.identity(rep3, FAST).positionFingerprint !== id.positionFingerprint,

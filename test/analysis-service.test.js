@@ -116,6 +116,21 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   check(store._map.size === 4,
     'a differing config, halfmove clock or repetition history each key a distinct cache entry');
 
+  // --- Cache separates the played move: playedLine/classification are derived
+  //     from playedMove, so the same position with a different played move must
+  //     re-dispatch and return its OWN verdict, not the first request's. ---
+  const storePM = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }, { mode: 'normal' }), store: storePM });
+  const e2e4 = { from: Chess.sqIndex('e2'), to: Chess.sqIndex('e4'), promotion: null };
+  const d2d4 = { from: Chess.sqIndex('d2'), to: Chess.sqIndex('d4'), promotion: null };
+  const pmFirst = await Svc.analyse(Object.assign({}, REQ, { gameId: 'pm', opts: Object.assign({}, FAST, { playedMove: e2e4 }) }));
+  const dPM = Svc.stats().dispatches;
+  const pmSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'pm', opts: Object.assign({}, FAST, { playedMove: d2d4 }) }));
+  check(Svc.stats().dispatches === dPM + 1 && storePM._map.size === 2 &&
+    pmFirst.playedLine && pmSecond.playedLine &&
+    pmFirst.playedLine.uci === 'e2e4' && pmSecond.playedLine.uci === 'd2d4',
+    'a different played move keys a distinct cache entry (its own playedLine, not the first\'s)');
+
   // --- Game revision: a stale-revision cache record is NOT a hit (re-dispatch) ---
   const store2 = makeStore();
   reset({ factory: factoryOf({ mode: 'normal' }, { mode: 'normal' }), store: store2 });
