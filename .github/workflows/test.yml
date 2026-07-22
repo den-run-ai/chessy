@@ -75,6 +75,8 @@ jobs:
         run: node test/engine.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
+      - name: Run evaluation-tuner regression tests
+        run: node test/ai-tune.test.js
       - name: Validate frozen match openings
         run: node test/ai-match.js --check-openings
       - name: Run match cluster-statistics tests
