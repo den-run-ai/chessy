@@ -168,7 +168,11 @@
     // Safety cap for the deep-verify (all legal roots, uncapped otherwise):
     // hitting it flips `complete` to false rather than silently dropping moves.
     const nodeBudget = opts.nodeBudget || 8000000;
-    const positions = opts.positions || null;
+    // A full game state carries its own repetition table; fall back to it (as
+    // ChessAI.think does) so analyse(state) on a completed threefold is
+    // terminal and deep lines see draws — the fingerprint, terminal check,
+    // scan and verification all use this same resolved table.
+    const positions = opts.positions || state.positions || null;
     const played = opts.playedMove || null;
     const version = opts.engineVersion || ENGINE_VERSION;
     const turn = state.turn, maximizing = turn === 'w';

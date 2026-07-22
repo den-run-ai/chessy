@@ -133,5 +133,14 @@ const noTs = PGN.toRecord(PGN.parseGame('[Result "*"]\n\n1. e4 *'), {});
 check(noTs.createdAt > 0 && noTs.importedAt === null && noTs.playedAt === null,
   'createdAt falls back to now (never 0) when no timestamp is supplied');
 
+// A declared result that CONTRADICTS a terminal position is rejected; a
+// terminal result is otherwise derived from the position itself.
+const foolBad = PGN.parseGame('[Result "1-0"]\n\n1. f3 e5 2. g4 Qh4# 1-0');
+check(!foolBad.valid && /contradicts/.test(foolBad.error),
+  'a declared result contradicting a terminal position (…Qh4# as 1-0) is rejected');
+const foolOk = PGN.parseGame('[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1');
+check(foolOk.valid && foolOk.result === '0-1' && foolOk.reason === 'checkmate',
+  'a terminal result is derived from the position (…Qh4# → 0-1)');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

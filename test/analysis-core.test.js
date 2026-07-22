@@ -153,6 +153,14 @@ check(a.nodes > 0 && a.nodes >= a.bestLines.length,
 check(a.bestLines.every(function (l) { return l.pv[0] === l.san && pvIsLegal(Chess.START_FEN, l.pvUci); }),
   'each PV starts with its move and replays legally (deep TT preserved before the PV walk)');
 
+// --- analyse falls back to state.positions: a threefold carried by the state's
+//     own repetition table (no opts.positions) is terminal, not deep-scored. ---
+const rep3 = Chess.parseFen(Chess.START_FEN);
+rep3.positions = {}; rep3.positions[Chess.positionKey(rep3)] = 3;
+const repAnalysis = Core.analyse(rep3, FAST); // deliberately NO opts.positions
+check(repAnalysis.bestLines.length === 0 && repAnalysis.classification === null,
+  'analyse falls back to state.positions: a completed threefold is terminal');
+
 // --- The halfmove clock is part of the fingerprint (50-move-rule sensitivity) ---
 const fpA = Core.positionFingerprint(Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 0 1'), null);
 const fpB = Core.positionFingerprint(Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 99 1'), null);

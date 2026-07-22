@@ -226,13 +226,26 @@
       });
       s = Chess.playMove(s, hit);
     }
-    // A terminal final position labels the reason; otherwise it is an
-    // imported (possibly unfinished) game. The result is taken from the
-    // movetext token, then the Result tag, but ONLY if it is a valid PGN
-    // result — a malformed tag never becomes the stored result.
+    // The declared result comes from the movetext token, then the Result tag,
+    // but ONLY if it is a valid PGN result — a malformed tag never becomes the
+    // stored result.
     const status = Chess.gameStatus(s);
-    const result = RESULTS[parsed.result] ? parsed.result
-      : (RESULTS[tags.Result] ? tags.Result : '*');
+    const declared = RESULTS[parsed.result] ? parsed.result
+      : (RESULTS[tags.Result] ? tags.Result : null);
+    let result;
+    if (status.over) {
+      // At a TERMINAL position the rules determine the result. A declared,
+      // decisive result that contradicts it is a corrupt game (e.g. Fool's
+      // Mate …Qh4# labelled 1-0) — reject it rather than store a wrong label.
+      if (declared && declared !== '*' && declared !== status.result) {
+        return { valid: false, tags: tags, setupFen: setup, moves: [],
+          error: 'declared result ' + declared + ' contradicts the terminal position (' +
+            status.result + ')' };
+      }
+      result = status.result;
+    } else {
+      result = declared || '*';
+    }
     return {
       valid: true, error: null, tags: tags, setupFen: setup,
       result: result, reason: status.over ? status.reason : 'imported',
