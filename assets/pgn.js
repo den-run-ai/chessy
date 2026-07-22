@@ -184,10 +184,15 @@
     if (typeof text !== 'string' || !text.trim()) {
       return { valid: false, error: 'empty PGN', moves: [] };
     }
-    const tags = parseTags(text);
-    // Movetext is everything after the leading block of tag-pair lines. Do
-    // NOT scan for the last ']' — a %clk/eval comment can contain one.
-    const body = text.replace(/^\s*(?:\[\w+\s+"(?:[^"\\]|\\.)*"\]\s*)+/, '');
+    // Tags come from THIS game's leading tag block ONLY — never a scan of the
+    // whole input, or a later game's [White]/[Result]/… in a multi-game PGN
+    // would overwrite the first game's tags even though move parsing stops at
+    // its result. Movetext is everything after that block (a %clk/eval comment
+    // can contain a ']', so the block is matched structurally, not by lastIndexOf).
+    const headerMatch = text.match(/^\s*(?:\[\w+\s+"(?:[^"\\]|\\.)*"\]\s*)+/);
+    const header = headerMatch ? headerMatch[0] : '';
+    const tags = parseTags(header);
+    const body = text.slice(header.length);
     const setup = tags.SetUp === '1' && tags.FEN ? tags.FEN : (tags.FEN || null);
     if (setup && !validFen(setup)) {
       return { valid: false, error: 'invalid SetUp/FEN tag', tags: tags, moves: [] };
@@ -267,11 +272,14 @@
       timeControl: opts.timeControl || (game.tags && game.tags.TimeControl) || 'unknown',
       plies: game.plies,
       // Meaningful epoch-ms timestamps: when the game was played (from tags)
-      // and when it was imported; createdAt (list order) prefers import time.
+      // and when it was imported; createdAt (list order) prefers import time,
+      // then the played date, and finally NOW — never 0, so an imported game
+      // can never sort to the epoch. The import boundary should still pass an
+      // explicit importedAt; this is the last-resort floor.
       playedAt: playedAt,
       importedAt: importedAt,
       createdAt: opts.createdAt != null ? opts.createdAt
-        : (importedAt != null ? importedAt : (playedAt != null ? playedAt : 0))
+        : (importedAt != null ? importedAt : (playedAt != null ? playedAt : Date.now()))
     };
   }
 

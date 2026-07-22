@@ -100,6 +100,11 @@ const two = '[Result "1-0"]\n\n1. e4 e5 1-0\n\n[Result "0-1"]\n\n1. d4 d5 0-1';
 const first = PGN.parseGame(two);
 check(first.moves.length === 2 && first.moves[0].san === 'e4' && first.result === '1-0',
   'parsing stops at the first game’s result — later games do not concatenate');
+// TAGS come from the first game only — a later game must not overwrite them.
+const twoTags = '[White "First"][Result "1-0"]\n\n1. e4 e5 1-0\n\n[White "Second"][Result "0-1"]\n\n1. d4 d5 0-1';
+const ft = PGN.parseGame(twoTags);
+check(ft.tags.White === 'First' && ft.tags.Result === '1-0' && ft.moves[0].san === 'e4',
+  'tags come from the first game only — a later game cannot overwrite them');
 
 // --- P2: identical moves, DIFFERENT games, must not collapse under one id ---
 const gameA = PGN.parseGame('[White "Alice"][Black "Bob"][Date "2024.01.01"][Result "1-0"]\n\n1. e4 e5 1-0');
@@ -122,6 +127,11 @@ check(badResult.valid && badResult.result === '*',
 const dated = PGN.parseGame('[UTCDate "2024.03.04"][UTCTime "12:00:00"][Result "*"]\n\n1. e4 *');
 check(PGN.toRecord(dated, { importedAt: 5 }).playedAt === Date.parse('2024-03-04T12:00:00Z'),
   'the played timestamp is parsed from UTCDate/UTCTime to epoch ms');
+// createdAt is never 0: with no importedAt and no date tag it floors to now,
+// so an imported game can never sort to the epoch.
+const noTs = PGN.toRecord(PGN.parseGame('[Result "*"]\n\n1. e4 *'), {});
+check(noTs.createdAt > 0 && noTs.importedAt === null && noTs.playedAt === null,
+  'createdAt falls back to now (never 0) when no timestamp is supplied');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

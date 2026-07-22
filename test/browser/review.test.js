@@ -241,4 +241,31 @@ require('./helper').run('review', async function (t) {
   check(true, 'the refreshed list arrives once the read settles');
   await page.evaluate(function () { CoachStore.listGames = CoachStore.__realListGames; });
   await page.click('#tabPlay');
+
+  // An imported SetUp/FEN game replays from its OWN initial position, not the
+  // standard start: Review must browse it, not reject it with "no longer
+  // replays" (Chess.replaySans only knows the standard start).
+  await page.evaluate(function () {
+    return CoachStore.putGame({
+      id: 'setup-game', source: 'import', tags: {},
+      setupFen: '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',
+      sans: ['e4', 'Ke7'], playerColor: null, clocks: [null, null],
+      result: '*', reason: 'imported', mode: 'import', difficulty: null,
+      timeControl: 'unknown', plies: 2, createdAt: Date.now() + 100000
+    });
+  });
+  await page.evaluate(function () { return CoachReview.openArchivedGame('setup-game'); });
+  await page.waitForSelector('#viewReview:not([hidden])');
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/2') !== -1;
+  });
+  check(await page.locator('#reviewFlow').isVisible() &&
+        (await page.textContent('#reviewStatus')).includes('played here: e4'),
+    'a SetUp/FEN import replays from its custom initial position in Review');
+  await page.click('#revEnd');
+  check((await page.textContent('#reviewStatus')).includes('Position 2/2') &&
+        (await page.textContent('#reviewStatus')).includes('end of game'),
+    'the SetUp/FEN game browses through to its end');
+  await page.click('#reviewBack');
+  await page.click('#tabPlay');
 });
