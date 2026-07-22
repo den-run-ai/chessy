@@ -1,12 +1,17 @@
 /*
  * Chessy coaching store — the IndexedDB archive behind the coaching
- * features (roadmap #23). Two object stores, created up front so later
- * slices need no version bump:
+ * features (roadmap #23). Object stores:
  *
  *   games: { id (the game's UUID from app.js), source ('play'), tags,
  *            sans, playerColor, clocks, result, reason, mode, difficulty,
  *            timeControl, plies, createdAt }
- *   cards: { id (auto), gameId, ply, ... } — lesson cards (a later slice)
+ *   cards: { id (auto), gameId, ply, ... } — lesson cards
+ *   analyses: { key, gameId, ply, ... } — one bounded engine analysis per
+ *            (game, ply, position fingerprint, engine, config); the caller
+ *            builds `key` via analysisKey() so the SAME FEN reached with a
+ *            different repetition history is a DISTINCT entry.
+ *   analysisJobs: { gameId, state, cursorPly, moments, ... } — one
+ *            reload-safe, resumable two-pass scan per game (Phase 5).
  *
  * The games keyPath is the app's own per-game UUID: a re-shown or revised
  * ending of the same game instance (reload, undo → replay, reopened
@@ -28,11 +33,18 @@
   'use strict';
 
   const DB_NAME = 'chessy-coach';
-  // v5 is the FIRST released schema: v1–v4 only ever existed on
-  // pre-release preview branches (PR #38 and the first cut of its split),
-  // so the upgrade drops any stores such a preview left behind and
-  // recreates them. Fresh installs run the same path from nothing.
-  const DB_VERSION = 5;
+  // v5 was the FIRST released schema (v1–v4 only ever existed on pre-release
+  // preview branches). v6 adds the analyses + analysisJobs stores.
+  //
+  // MIGRATIONS ARE NON-DESTRUCTIVE from v5 on. The old code unconditionally
+  // deleted EVERY object store in onupgradeneeded and recreated them — safe
+  // only because v1–v4 were throwaway previews with no data worth keeping.
+  // Applying that to a v5→v6 bump would ERASE every shipped game and lesson
+  // card. So we now create only the stores that don't exist yet (fresh
+  // install, or a wiped preview) and leave existing v5 data untouched. The
+  // preview wipe is scoped to genuinely pre-release versions (oldVersion in
+  // 1..4) — never to released data.
+  const DB_VERSION = 6;
 
   let dbPromise = null;
 
@@ -40,15 +52,37 @@
     if (!dbPromise) {
       dbPromise = new Promise(function (resolve, reject) {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = function () {
+        req.onupgradeneeded = function (e) {
           const db = req.result;
-          for (const name of Array.from(db.objectStoreNames)) {
-            db.deleteObjectStore(name);
+          // A pre-release preview (v1–v4) may hold an incompatible layout
+          // and NO data worth migrating — wipe it. A fresh install
+          // (oldVersion 0) and any released version (>= 5) are never wiped.
+          if (e.oldVersion >= 1 && e.oldVersion < 5) {
+            for (const name of Array.from(db.objectStoreNames)) {
+              db.deleteObjectStore(name);
+            }
           }
-          db.createObjectStore('games', { keyPath: 'id' });
-          const cards = db.createObjectStore('cards', { keyPath: 'id', autoIncrement: true });
-          cards.createIndex('due', 'due');
-          cards.createIndex('gameId', 'gameId');
+          // Create-if-absent: existing v5 stores (and their data) survive.
+          if (!db.objectStoreNames.contains('games')) {
+            db.createObjectStore('games', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('cards')) {
+            const cards = db.createObjectStore('cards', { keyPath: 'id', autoIncrement: true });
+            cards.createIndex('due', 'due');
+            cards.createIndex('gameId', 'gameId');
+          }
+          // v6 stores. keyPath 'key' on analyses (caller-built composite);
+          // gameId/ply indexed so a game revision can prune stale analyses
+          // exactly like cards. One job per game (keyPath 'gameId').
+          if (!db.objectStoreNames.contains('analyses')) {
+            const analyses = db.createObjectStore('analyses', { keyPath: 'key' });
+            analyses.createIndex('gameId', 'gameId');
+            analyses.createIndex('gamePly', ['gameId', 'ply']);
+          }
+          if (!db.objectStoreNames.contains('analysisJobs')) {
+            const jobs = db.createObjectStore('analysisJobs', { keyPath: 'gameId' });
+            jobs.createIndex('state', 'state');
+          }
         };
         req.onsuccess = function () {
           const db = req.result;
@@ -124,25 +158,53 @@
   function archiveGame(game) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        // Includes 'cards': revising an ending in place must ATOMICALLY
-        // remove the lesson cards flagged on the abandoned continuation.
-        const t = db.transaction(['games', 'cards'], 'readwrite');
+        // Includes 'cards'/'analyses'/'analysisJobs': revising an ending in
+        // place must ATOMICALLY remove the derived data (lesson cards,
+        // engine analyses, scan progress) flagged on the abandoned
+        // continuation, in the same transaction that rewrites the game.
+        const t = db.transaction(['games', 'cards', 'analyses', 'analysisJobs'], 'readwrite');
         const s = t.objectStore('games');
         const getReq = s.get(game.id);
         let putReq = null;
-        // A revised ending replaces the old one under the same id: cards
-        // flagged on plies BEYOND the moves the two endings share now
-        // reference positions this game no longer contains — remove them.
-        // Cards on the shared prefix stay valid.
-        function pruneCards(id, oldSans, newSans) {
+        // A revised ending replaces the old one under the same id. Anything
+        // derived from plies BEYOND the moves the two endings share now
+        // references positions this game no longer contains; prune from the
+        // FIRST DIVERGENT ply, leaving the shared prefix intact.
+        function pruneFromDivergence(id, oldSans, newSans) {
           let p = 0;
           while (p < oldSans.length && p < newSans.length && oldSans[p] === newSans[p]) p++;
-          const cur = t.objectStore('cards').index('gameId').openCursor(IDBKeyRange.only(id));
-          cur.onsuccess = function () {
-            const c = cur.result;
+          // Cards flagged past the divergence.
+          const cc = t.objectStore('cards').index('gameId').openCursor(IDBKeyRange.only(id));
+          cc.onsuccess = function () {
+            const c = cc.result;
             if (!c) return;
             if (c.value.ply >= p) c.delete();
             c.continue();
+          };
+          // Engine analyses of positions past the divergence are stale.
+          const ac = t.objectStore('analyses').index('gameId').openCursor(IDBKeyRange.only(id));
+          ac.onsuccess = function () {
+            const a = ac.result;
+            if (!a) return;
+            if (a.value.ply >= p) a.delete();
+            a.continue();
+          };
+          // The resumable scan: drop found moments past the divergence and
+          // rewind the cursor to it so a resume re-scans the changed tail. A
+          // job whose progress is entirely within the shared prefix
+          // (cursorPly <= p, no later moments) is left untouched.
+          const jr = t.objectStore('analysisJobs').get(id);
+          jr.onsuccess = function () {
+            const job = jr.result;
+            if (!job) return;
+            const moments = (job.moments || []).filter(function (m) { return m.ply < p; });
+            const cursorPly = typeof job.cursorPly === 'number'
+              ? Math.min(job.cursorPly, p) : job.cursorPly;
+            if (moments.length === (job.moments || []).length && cursorPly === job.cursorPly) return;
+            job.moments = moments;
+            job.cursorPly = cursorPly;
+            if (job.state === 'done') job.state = 'paused'; // reached removed territory: resume
+            t.objectStore('analysisJobs').put(job);
           };
         }
         getReq.onsuccess = function () {
@@ -152,7 +214,7 @@
             if (sameEnding(existing, record)) {
               record.createdAt = Math.min(existing.createdAt, record.createdAt);
             } else {
-              pruneCards(game.id, existing.sans, record.sans); // revised ending
+              pruneFromDivergence(game.id, existing.sans, record.sans); // revised ending
             }
           }
           putReq = s.put(record);
@@ -167,6 +229,30 @@
     });
   }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
+
+  // Import a validated PGN record (see ChessyPGN.toRecord). DEDUPED by its id
+  // (external id or content hash): the lookup and the write share ONE
+  // transaction, so a record already present is left as-is and a repeated
+  // import yields a single game. Resolves 'imported' or 'duplicate'. The
+  // record must already be fully validated — this only persists it (commit
+  // once, atomically).
+  function importGame(record) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('games', 'readwrite');
+        const s = t.objectStore('games');
+        const getReq = s.get(record.id);
+        let outcome = 'imported';
+        getReq.onsuccess = function () {
+          if (getReq.result) { outcome = 'duplicate'; return; } // already have it
+          s.add(record);
+        };
+        t.oncomplete = function () { resolve(outcome); };
+        t.onerror = function () { reject(getReq.error || t.error); };
+        t.onabort = function () { reject(getReq.error || t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
 
   function listGames() {
     return tx('games', 'readonly', function (s) { return s.getAll(); })
@@ -263,9 +349,47 @@
     });
   }
 
+  // ---- analyses (Phase 1/5) --------------------------------------------
+  // One stored analysis per (game, ply, position fingerprint, engine,
+  // config). The key MUST fold in everything that can change the result:
+  // notably the position fingerprint carries the repetition context, so the
+  // SAME FEN reached with a different history — which can score differently
+  // (a move that completes a threefold is a draw) — is a distinct entry.
+  function analysisKey(gameId, ply, positionFingerprint, engineId, configHash) {
+    return [gameId, ply, positionFingerprint, engineId, configHash].join('|');
+  }
+  function putAnalysis(rec) {
+    return tx('analyses', 'readwrite', function (s) { return s.put(rec); });
+  }
+  function getAnalysis(key) {
+    return tx('analyses', 'readonly', function (s) { return s.get(key); });
+  }
+  function listAnalysesForGame(gameId) {
+    return tx('analyses', 'readonly', function (s) {
+      return s.index('gameId').getAll(IDBKeyRange.only(gameId));
+    });
+  }
+
+  // ---- analysisJobs (Phase 5) ------------------------------------------
+  // One resumable, reload-safe two-pass scan per game, keyed on gameId:
+  //   { gameId, state, cursorPly, moments: [{ ply, ... }], engine, config,
+  //     updatedAt }
+  // archiveGame() prunes a job from the first divergent ply when its game is
+  // revised, so a resume never trusts progress over positions that changed.
+  function putJob(job) {
+    return tx('analysisJobs', 'readwrite', function (s) { return s.put(job); });
+  }
+  function getJob(gameId) {
+    return tx('analysisJobs', 'readonly', function (s) { return s.get(gameId); });
+  }
+  function deleteJob(gameId) {
+    return tx('analysisJobs', 'readwrite', function (s) { return s.delete(gameId); });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
+    importGame: importGame,
     getGame: getGame,
     listGames: listGames,
     addCard: addCard,
@@ -273,6 +397,13 @@
     upsertCardByMoment: upsertCardByMoment,
     listCards: listCards,
     dueCards: dueCards,
-    gradeCard: gradeCard
+    gradeCard: gradeCard,
+    analysisKey: analysisKey,
+    putAnalysis: putAnalysis,
+    getAnalysis: getAnalysis,
+    listAnalysesForGame: listAnalysesForGame,
+    putJob: putJob,
+    getJob: getJob,
+    deleteJob: deleteJob
   };
 })(typeof window !== 'undefined' ? window : globalThis);

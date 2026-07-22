@@ -93,9 +93,35 @@
   const reviewBoard = ChessyMiniBoard.make($('reviewBoard'), null);
   let review = null; // { game, gs, fens[], states[], ply }
 
+  // The game's OWN starting position — a custom SetUp/FEN (imported games) or
+  // the standard start — as a fresh full game state each call.
+  function initialState(game) {
+    if (game.setupFen) {
+      const s = Chess.parseFen(game.setupFen);
+      if (!s.history) s.history = [];
+      if (!s.positions) { s.positions = {}; s.positions[Chess.positionKey(s)] = 1; }
+      return s;
+    }
+    return Chess.newGameState();
+  }
+
+  // Replay the archived SANs from that initial position (Chess.replaySans
+  // always starts from the standard start, so it can't replay an imported
+  // SetUp/FEN game). Throws on the first SAN that doesn't match a legal move.
+  function replayGame(game) {
+    let s = initialState(game);
+    for (const san of game.sans) {
+      const legal = Chess.legalMoves(s);
+      const m = legal.find(function (mv) { return Chess.toSan(s, mv, legal) === san; });
+      if (!m) throw new Error('illegal or unknown SAN "' + san + '"');
+      s = Chess.playMove(s, m);
+    }
+    return s;
+  }
+
   function openReview(game) {
     let gs;
-    try { gs = Chess.replaySans(game.sans); }
+    try { gs = replayGame(game); }
     catch (e) {
       $('reviewEmpty').hidden = false;
       $('reviewEmpty').textContent = 'This archived game no longer replays: ' + e.message;
@@ -105,8 +131,9 @@
     fens.push(Chess.toFen(gs));
     // Full game states per ply (WITH repetition tables): engine analysis
     // of "the position before move k" needs the repetition counts a bare
-    // FEN cannot carry (assets/reflection.js).
-    let s = Chess.newGameState();
+    // FEN cannot carry (assets/reflection.js). Starts from the game's OWN
+    // initial position so SetUp/FEN imports browse correctly.
+    let s = initialState(game);
     const states = [s];
     for (const h of gs.history) {
       s = Chess.playMove(s, h.move);
