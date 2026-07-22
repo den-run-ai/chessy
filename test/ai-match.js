@@ -4,7 +4,7 @@
  * minutes to hours depending on --nodes).
  *
  * Usage:
- *   node test/ai-match.js --base claude/ai-3-tests        # full 200-game match
+ *   node test/ai-match.js --base claude/ai-3-tests        # full 800-game match
  *   node test/ai-match.js --base HEAD~1 --nodes 3000      # cheaper run
  *   node test/ai-match.js --base claude/ai-3-tests --pairs 20   # first N pairs
  *
@@ -418,6 +418,22 @@ const cs = clusterStats(records);
 // depth >= 5 search — search-depth telemetry for calibrating the node budget.
 const ge5Pct = candMoves ? (100 * candDepthGe5 / candMoves) : 0;
 
+// Provenance so a shard produced directly here (e.g. via --openbase/--opencount)
+// is admissible to ai-match-agg.js without the workflow's metadata header — the
+// aggregator requires candidate-sha / base-sha / nodes-per-move on EVERY shard.
+// candidate = the working tree at HEAD (a locally dirty tree is the caller's
+// responsibility, exactly as the workflow assumes a clean checkout); base = the
+// resolved --base ref. 'unknown' if git can't resolve a ref; the aggregator's
+// SHA-agreement check still stops a mixed shard set from combining.
+function gitSha(ref) {
+  try {
+    return cp.execFileSync('git', ['rev-parse', ref],
+      { encoding: 'utf8', cwd: path.join(__dirname, '..') }).trim();
+  } catch (e) { return 'unknown'; }
+}
+console.log('candidate-sha: ' + gitSha('HEAD'));
+console.log('base-sha: ' + gitSha(BASE));
+console.log('nodes-per-move: ' + NODES);
 console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
 console.log('records: ' + JSON.stringify(records));        // structured, for the cluster aggregator
 console.log('openings-total: ' + OPENINGS.length);         // opening-list size (aggregator cross-check)

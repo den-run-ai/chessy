@@ -97,6 +97,19 @@ for (const file of files) {
     if (typeof r.pair !== 'number' || r.pair < 0 || r.pair > 1) {
       fail(2, file + ': record pair ' + JSON.stringify(r.pair) + ' is not a score in [0,1]');
     }
+    // Both game scores must be valid, and `pair` must equal their mean. The
+    // combined W/D/L is reconstructed from white/black while the gate reads
+    // pair; without this an internally inconsistent record (e.g. white 0,
+    // black 0, pair 1) could report 800 losses alongside a 100% PASS.
+    for (const g of ['white', 'black']) {
+      if (r[g] !== 0 && r[g] !== 0.5 && r[g] !== 1) {
+        fail(2, file + ': record ' + g + ' ' + JSON.stringify(r[g]) + ' is not a game score in {0, 0.5, 1}');
+      }
+    }
+    if (Math.abs(r.pair - (r.white + r.black) / 2) > 1e-9) {
+      fail(2, file + ': record pair ' + r.pair + ' != (white ' + r.white + ' + black ' +
+        r.black + ') / 2 — inconsistent game/pair scores');
+    }
     const k = r.op + ':' + r.seed;
     if (owner.has(k)) {
       fail(4, 'cell (opening ' + r.op + ', seed ' + r.seed + ') appears in both ' +

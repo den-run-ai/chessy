@@ -47,12 +47,18 @@ console.log('degenerate inputs');
 // A single opening cannot yield a confidence bound.
 const one = clusterStats([{ op: 0, pair: 0.7 }]);
 check(one.nClusters === 1 && !one.pass && /inconclusive/.test(one.verdict), 'single opening -> inconclusive');
-// Zero observed variance falls back to the largest bounded sd, so a small
-// perfectly-swept sample is NOT declared significant.
-const swept = [];
-for (let op = 0; op < 4; op++) swept.push({ op: op, pair: 1 });
-const swv = clusterStats(swept);
-check(!swv.pass, '4 swept openings -> not significant (variance fallback guards against false certainty)');
+
+// Identity match (regression for P1): identical engines make every opening's
+// colour-swapped games mirror to exactly 0.5, so the observed cross-opening SD
+// is zero. Retaining it, the lower bound is the mean (0.5): an unchanged
+// candidate is declared NON-INFERIOR (not stronger), never a false FAIL.
+const identity = [];
+for (let op = 0; op < 100; op++) for (let s = 0; s < 4; s++) identity.push({ op: op, pair: 0.5 });
+const iv = clusterStats(identity);
+check(iv.sd === 0 && Math.abs(iv.lo95 - 0.5) < 1e-12 && iv.pass && /non-inferior/.test(iv.verdict),
+  'identity match (all 0.5, zero variance) -> lower bound 50%, PASS non-inferior (lo95 ' +
+  (iv.lo95 * 100).toFixed(2) + '%)');
+check(iv.lo95 <= 0.50, 'identity match is NOT over-claimed as stronger (lo95 not > 50%)');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

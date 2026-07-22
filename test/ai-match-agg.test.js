@@ -29,10 +29,13 @@ function shardFile(name, seed, over) {
   over = over || {};
   const recs = [];
   for (let op = 0; op < OPENINGS; op++) {
-    // Per-opening mean alternates 0.75 / 0.65 -> mean 0.70, real variance ->
-    // a clean PASS (lower bound well above 50%).
+    // Per-opening pair alternates 0.75 (W1/B0.5) / 0.50 (W0.5/B0.5) -> mean
+    // 0.625 with real variance -> a clean PASS (lower bound well above 50%).
+    // Both game scores are in {0,0.5,1} and pair === (white+black)/2, so the
+    // records satisfy the aggregator's consistency check.
+    const white = 1, black = op % 2 ? 0.5 : 0;
     recs.push({ op: op, name: 'op' + op, seed: seed, gseed: op * 7 + seed,
-      white: 1, black: 0.5, pair: op % 2 ? 0.75 : 0.65 });
+      white: white, black: black, pair: (white + black) / 2 });
   }
   if (over.badRecord) recs.push(over.badRecord);
   if (over.dropOp != null) recs.splice(over.dropOp, 1); // remove a cell -> incomplete
@@ -93,6 +96,14 @@ check(run([rawShard('badpair.txt', [{ op: 0, seed: 0, white: 1, black: 1, pair: 
   'an out-of-range pair -> exit 2 (malformed record)');
 check(run([rawShard('good11.txt', [{ op: 0, seed: 0, white: 1, black: 0, pair: 0.5 }])], ['--openings', '1', '--seeds', '1']) === 1,
   'a valid 1x1 manifest at 50% -> exit 1 (aggregates, FAILs the gate)');
+// Regression: an internally inconsistent record (the reviewer's white 0 /
+// black 0 / pair 1) must be rejected, not silently gated on `pair` while W/D/L
+// reads white/black — otherwise 800 losses could report a 100% PASS.
+check(run([rawShard('inconsistent.txt', [{ op: 0, seed: 0, white: 0, black: 0, pair: 1 }])], ['--openings', '1', '--seeds', '1']) === 2,
+  'pair != (white+black)/2 -> exit 2 (inconsistent record)');
+// A game score outside {0,0.5,1} is malformed even if `pair` looks in-range.
+check(run([rawShard('badgame.txt', [{ op: 0, seed: 0, white: 0.3, black: 0.7, pair: 0.5 }])], ['--openings', '1', '--seeds', '1']) === 2,
+  'a non-{0,0.5,1} game score -> exit 2 (malformed record)');
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

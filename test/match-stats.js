@@ -52,12 +52,18 @@ function clusterStats(records) {
     };
   }
   const mean = means.reduce(function (a, b) { return a + b; }, 0) / nClusters;
-  let sd = Math.sqrt(means.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (nClusters - 1));
-  // A zero observed variance across openings does not prove zero true variance;
-  // with a bounded [0,1] score fall back to its largest possible sd (0.5) so
-  // the bound reflects genuine uncertainty rather than false certainty. (Mirrors
-  // ai-match's pair-level guard.)
-  if (sd === 0) sd = 0.5;
+  const sd = Math.sqrt(means.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (nClusters - 1));
+  // Zero observed variance is RETAINED, not inflated to the bounded maximum.
+  // This match is deterministic and reproducible, so a zero cross-opening SD is
+  // a genuine degeneracy — most importantly the identity case, where an
+  // unchanged candidate's colour-swapped games mirror to exactly 0.5 in every
+  // opening. Retained, the bound is then the mean (0.5) and an identical
+  // candidate correctly PASSES non-inferiority. Inflating sd to 0.5 instead
+  // drove that identity match's lower bound to ~41.7%, FAILING a candidate that
+  // is non-inferior by construction. Tiny samples are guarded by the PROTOCOL
+  // (a predeclared 100 openings x 4 seeds, no interim stopping / no post-hoc
+  // extension), not by an artificial variance floor; nClusters < 2 is rejected
+  // above.
   const half = tCrit95Lower(nClusters - 1) * sd / Math.sqrt(nClusters);
   const lo95 = Math.max(0, mean - half);
   let verdict, pass;
