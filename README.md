@@ -154,10 +154,13 @@ and reports train **and held-out validation** loss. It never writes
 `assets/ai.js`: it prints a frozen candidate, and lower loss is treated as a
 *hypothesis only* — a candidate ships solely if it then clears the tactics
 suite, the benchmark, and the predeclared clustered match (lower bound above
-50%). See the file header for flags (`--games`, `--nodes`, `--lambda`,
-`--data` to cache a generated set for cheap hyper-parameter sweeps), and
-`test/ai-tune-findings.md` for the first experiment's result — the shipped
-weights already sit at a Texel-loss local optimum, so no weight change ships.
+50%). Selection is honest: a **game-grouped** train/validation/test split (no
+game's correlated positions leak across the boundary), λ chosen on validation,
+final comparison on the untouched test set. See the file header for flags
+(`--games`, `--nodes`, `--lambdas`, `--data` to cache a set for cheap sweeps),
+`test/ai-tune.test.js` for the CI-run correctness checks, and
+`test/ai-tune-findings.md` for the first experiment's result — it produced **no
+admissible candidate**, so no weight change ships.
 
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
