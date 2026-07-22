@@ -80,8 +80,12 @@
       if (ch === '(') { // skip a (balanced, possibly nested) variation
         let depth = 1; i++;
         while (i < n && depth > 0) {
-          if (text[i] === '(') depth++;
-          else if (text[i] === ')') depth--;
+          const c = text[i];
+          // A brace comment inside the variation can itself contain ( or ):
+          // skip it whole so those never miscount the variation depth.
+          if (c === '{') { const j = text.indexOf('}', i + 1); i = j < 0 ? n : j + 1; continue; }
+          if (c === '(') depth++;
+          else if (c === ')') depth--;
           i++;
         }
         continue;
@@ -94,10 +98,17 @@
       }
       if (/\s/.test(ch)) { i++; continue; }
       let j = i;
-      while (j < n && !/[\s{();$]/.test(text[j])) j++;
+      while (j < n && !/[\s{}();$]/.test(text[j])) j++;
+      // FORWARD-PROGRESS INVARIANT: a stray ) or } (e.g. leaked from a
+      // mis-nested comment) is a special char the branches above don't
+      // consume, so the token scan makes no progress — skip it by one to
+      // guarantee the loop always advances and can never freeze.
+      if (j === i) { i++; continue; }
       let tok = text.slice(i, j);
       i = j;
-      if (RESULTS[tok]) { result = tok; continue; }
+      // Stop at the FIRST game's result: a multi-game PGN must not
+      // concatenate later games' moves onto this one.
+      if (RESULTS[tok]) { result = tok; break; }
       // Strip a leading move number ("12." / "12...") — the remainder, if
       // any, is a SAN on the same token (spaceless PGN).
       tok = tok.replace(/^\d+\.(\.\.)?/, '');
@@ -107,9 +118,16 @@
     return { moves: moves, result: result, pre: pre };
   }
 
-  // Two 32-bit hashes concatenated → a compact, low-collision content id.
-  function contentHash(setupFen, uciList, result) {
-    const s = (setupFen || 'start') + '|' + uciList.join(' ') + '|' + (result || '*');
+  // The seven-tag-roster identity that distinguishes two DIFFERENT games that
+  // happen to share the same moves+result (a common opening line played twice
+  // by different people). Folded into the content id so they do not collapse.
+  const IDENTITY_TAGS = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'UTCDate', 'UTCTime'];
+
+  // Two 32-bit hashes concatenated → a compact, low-collision content id over
+  // the initial position, canonical moves, result AND identity tags.
+  function contentHash(setupFen, uciList, result, tags) {
+    let s = (setupFen || 'start') + '|' + uciList.join(' ') + '|' + (result || '*');
+    if (tags) for (const k of IDENTITY_TAGS) if (tags[k]) s += '|' + k + '=' + tags[k];
     let a = 5381, b = 52711;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
@@ -121,6 +139,41 @@
 
   function uciOf(m) {
     return Chess.sqName(m.from) + Chess.sqName(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
+  }
+
+  // Strict structural FEN validation (parseFen is lenient): 8 ranks that each
+  // sum to 8 squares of valid pieces, exactly one king per side, a legal side
+  // to move, castling field and en-passant square.
+  function validFen(fen) {
+    const parts = String(fen).trim().split(/\s+/);
+    if (parts.length < 4) return false;
+    const rows = parts[0].split('/');
+    if (rows.length !== 8) return false;
+    let wk = 0, bk = 0;
+    for (const row of rows) {
+      let count = 0;
+      for (const ch of row) {
+        if (/[1-8]/.test(ch)) count += Number(ch);
+        else if (/[prnbqkPRNBQK]/.test(ch)) { count += 1; if (ch === 'K') wk++; if (ch === 'k') bk++; }
+        else return false;
+      }
+      if (count !== 8) return false;
+    }
+    if (wk !== 1 || bk !== 1) return false;
+    if (parts[1] !== 'w' && parts[1] !== 'b') return false;
+    if (!/^(-|K?Q?k?q?)$/.test(parts[2]) || parts[2] === '') return false;
+    if (!/^(-|[a-h][36])$/.test(parts[3])) return false;
+    return true;
+  }
+
+  // Played timestamp (ms) from UTCDate/Date (+ optional UTCTime), or null.
+  function tagDate(tags) {
+    if (!tags) return null;
+    const d = tags.UTCDate || tags.Date;
+    if (!d || !/^\d{4}\.\d{2}\.\d{2}$/.test(d)) return null;
+    const t = tags.UTCTime && /^\d{2}:\d{2}:\d{2}$/.test(tags.UTCTime) ? tags.UTCTime : '00:00:00';
+    const ms = Date.parse(d.replace(/\./g, '-') + 'T' + t + 'Z');
+    return isNaN(ms) ? null : ms;
   }
 
   // Parse and VALIDATE the first game in `text`. Returns
@@ -136,6 +189,9 @@
     // NOT scan for the last ']' — a %clk/eval comment can contain one.
     const body = text.replace(/^\s*(?:\[\w+\s+"(?:[^"\\]|\\.)*"\]\s*)+/, '');
     const setup = tags.SetUp === '1' && tags.FEN ? tags.FEN : (tags.FEN || null);
+    if (setup && !validFen(setup)) {
+      return { valid: false, error: 'invalid SetUp/FEN tag', tags: tags, moves: [] };
+    }
     let state;
     try {
       state = setup ? Chess.parseFen(setup) : Chess.newGameState();
@@ -166,9 +222,12 @@
       s = Chess.playMove(s, hit);
     }
     // A terminal final position labels the reason; otherwise it is an
-    // imported (possibly unfinished) game.
+    // imported (possibly unfinished) game. The result is taken from the
+    // movetext token, then the Result tag, but ONLY if it is a valid PGN
+    // result — a malformed tag never becomes the stored result.
     const status = Chess.gameStatus(s);
-    const result = parsed.result || tags.Result || '*';
+    const result = RESULTS[parsed.result] ? parsed.result
+      : (RESULTS[tags.Result] ? tags.Result : '*');
     return {
       valid: true, error: null, tags: tags, setupFen: setup,
       result: result, reason: status.over ? status.reason : 'imported',
@@ -181,8 +240,10 @@
   function toRecord(game, opts) {
     opts = opts || {};
     const uciList = game.moves.map(function (m) { return m.uci; });
-    const hash = contentHash(game.setupFen, uciList, game.result);
+    const hash = contentHash(game.setupFen, uciList, game.result, game.tags);
     const externalId = opts.externalId || null;
+    const importedAt = opts.importedAt != null ? opts.importedAt : null;
+    const playedAt = opts.playedAt != null ? opts.playedAt : tagDate(game.tags);
     return {
       id: externalId || hash,
       source: 'import',
@@ -191,8 +252,11 @@
       tags: game.tags || {},
       setupFen: game.setupFen || null,
       sans: game.moves.map(function (m) { return m.san; }),
+      // Canonical moves alongside display SAN, with annotations preserved.
       moves: game.moves.map(function (m) {
-        return { san: m.san, uci: m.uci, from: m.from, to: m.to, promotion: m.promotion };
+        return { san: m.san, uci: m.uci, from: m.from, to: m.to, promotion: m.promotion,
+          nags: m.nags && m.nags.length ? m.nags : undefined,
+          comment: m.comment || undefined };
       }),
       playerColor: opts.playerColor != null ? opts.playerColor : null,
       clocks: game.moves.map(function (m) { return m.clkMs != null ? { ms: m.clkMs } : null; }),
@@ -202,11 +266,12 @@
       difficulty: null,
       timeControl: opts.timeControl || (game.tags && game.tags.TimeControl) || 'unknown',
       plies: game.plies,
-      importedAt: opts.importedAt != null ? opts.importedAt : null,
-      playedAt: opts.playedAt != null ? opts.playedAt
-        : (game.tags && game.tags.UTCDate) || (game.tags && game.tags.Date) || null,
+      // Meaningful epoch-ms timestamps: when the game was played (from tags)
+      // and when it was imported; createdAt (list order) prefers import time.
+      playedAt: playedAt,
+      importedAt: importedAt,
       createdAt: opts.createdAt != null ? opts.createdAt
-        : (opts.importedAt != null ? opts.importedAt : 0)
+        : (importedAt != null ? importedAt : (playedAt != null ? playedAt : 0))
     };
   }
 

@@ -119,5 +119,29 @@ const reps = {}; reps[key] = 2;
 const f2 = Core.positionFingerprint(start, reps);
 check(f0 !== f2, 'the same FEN with a different repetition history has a distinct fingerprint');
 
+// --- Deep verification is seeded with the game's repetition table: a move
+//     that COMPLETES a seeded threefold is scored as the draw it is (A1). ---
+const midFen = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+const mid = Chess.parseFen(midFen);
+const nf3 = Chess.legalMoves(mid).find(function (m) {
+  return m.from === sq('g1') && m.to === sq('f3');
+});
+const afterNf3Key = Chess.positionKey(Chess.applyMove(mid, nf3));
+const seenReps = {}; seenReps[afterNf3Key] = 2; // Nf3 would be the 3rd occurrence
+const drawn = Core.analyse(mid, Object.assign({ playedMove: nf3, positions: seenReps }, FAST));
+check(drawn.playedLine && drawn.playedLine.scoreCpPlayer === 0 && !drawn.playedLine.mate,
+  'a candidate completing a seeded threefold is scored as a draw (repetition-seeded search)');
+
+// --- bestLines is TRUE final-depth MultiPV (every legal root deep-scored) ---
+const krk = Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 0 1'); // few legal moves
+const krkA = Core.analyse(krk, Object.assign({}, FAST, { multiPV: 50 }));
+check(krkA.bestLines.length === Chess.legalMoves(krk).length,
+  'every legal root move is deep-scored (bestLines is real MultiPV, not a shortlist)');
+
+// --- Contract carries completeness + verified-best stability across depths ---
+check(a.complete === true && a.stability &&
+  a.stability.depths.length === 2 && typeof a.stability.bestMoveStable === 'boolean',
+  'the contract reports completeness and best-move stability across two depths');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
