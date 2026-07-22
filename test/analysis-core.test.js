@@ -161,6 +161,12 @@ const repAnalysis = Core.analyse(rep3, FAST); // deliberately NO opts.positions
 check(repAnalysis.bestLines.length === 0 && repAnalysis.classification === null,
   'analyse falls back to state.positions: a completed threefold is terminal');
 
+// --- Stability is only reported when a genuinely shallower pass ran: at
+//     depth 1 there is none, so it must not fabricate depths:[1,1]. ---
+const d1 = Core.analyse(start, { maxDepth: 1, nodeLimit: 5000, multiPV: 3 });
+check(d1.depth === 1 && d1.bestLines.length > 0 && d1.stability === null,
+  'no stability is claimed at depth 1 (no shallower search to compare)');
+
 // --- The halfmove clock is part of the fingerprint (50-move-rule sensitivity) ---
 const fpA = Core.positionFingerprint(Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 0 1'), null);
 const fpB = Core.positionFingerprint(Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 99 1'), null);

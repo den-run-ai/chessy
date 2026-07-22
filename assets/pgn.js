@@ -31,14 +31,20 @@
     return tags;
   }
 
-  // [%clk H:MM:SS(.f)] / MM:SS / SS -> milliseconds, or null.
+  // [%clk H:MM:SS(.f)] / MM:SS(.f) / SS(.f) -> milliseconds, or null. The shape
+  // is validated STRICTLY (subordinate fields 00-59, no empty/excess parts) so
+  // a corrupt annotation (1::2, 0:99:00, four fields) becomes null rather than a
+  // fabricated remaining time.
   function parseClk(comment) {
-    const m = /\[%clk\s+([\d:.]+)\]/.exec(comment);
+    const m = /\[%clk\s+([^\]]+)\]/.exec(comment);
     if (!m) return null;
-    const parts = m[1].split(':').map(Number);
-    if (parts.some(function (x) { return isNaN(x); })) return null;
-    let sec = 0;
-    for (const p of parts) sec = sec * 60 + p;
+    const hms = /^(?:(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)|(\d+):([0-5]\d(?:\.\d+)?)|(\d+(?:\.\d+)?))$/
+      .exec(m[1].trim());
+    if (!hms) return null;
+    let sec;
+    if (hms[1] !== undefined) sec = Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
+    else if (hms[4] !== undefined) sec = Number(hms[4]) * 60 + Number(hms[5]);
+    else sec = Number(hms[6]);
     return Math.round(sec * 1000);
   }
 
@@ -273,14 +279,22 @@
       }
       result = status.result;
     } else {
-      // Non-terminal: the movetext token, then the Result tag, but ONLY if it is
-      // a valid PGN result — a malformed tag never becomes the stored result.
-      result = RESULTS[parsed.result] ? parsed.result
-        : (RESULTS[tags.Result] ? tags.Result : '*');
+      // Non-terminal: the movetext token and the Result tag describe the same
+      // outcome. Two DECISIVE declarations that disagree are a corrupt result
+      // (reject); otherwise prefer whichever is decisive (a bare * defers to a
+      // decisive tag), and only a valid PGN result is ever stored.
+      const md = RESULTS[parsed.result] && parsed.result !== '*' ? parsed.result : null;
+      const td = RESULTS[tags.Result] && tags.Result !== '*' ? tags.Result : null;
+      if (md && td && md !== td) {
+        return { valid: false, tags: tags, setupFen: setup, moves: [],
+          error: 'movetext result ' + md + ' conflicts with the Result tag ' + td };
+      }
+      result = md || td || '*';
     }
     return {
       valid: true, error: null, tags: tags, setupFen: setup,
       result: result, reason: status.over ? status.reason : 'imported',
+      preComment: parsed.pre || null,
       moves: moves, plies: moves.length
     };
   }
@@ -301,6 +315,8 @@
       contentHash: hash,
       tags: game.tags || {},
       setupFen: game.setupFen || null,
+      // A comment before the first move (game annotation) is preserved too.
+      preComment: game.preComment || undefined,
       sans: game.moves.map(function (m) { return m.san; }),
       // Canonical moves alongside display SAN, with annotations preserved.
       moves: game.moves.map(function (m) {

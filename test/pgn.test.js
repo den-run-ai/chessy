@@ -174,5 +174,24 @@ check(semiVar.valid && semiVar.moves.length === 2 &&
   semiVar.moves[0].san === 'e4' && semiVar.moves[1].san === 'e5',
   'a ) inside a ; comment within a variation does not terminate the variation');
 
+// Two DECISIVE non-terminal declarations that disagree are rejected; a bare *
+// movetext marker defers to a decisive Result tag.
+check(!PGN.parseGame('[Result "1-0"]\n\n1. e4 0-1').valid,
+  'a movetext result conflicting with the Result tag (non-terminal) is rejected');
+check(PGN.parseGame('[Result "1-0"]\n\n1. e4 *').result === '1-0',
+  'a bare * movetext marker defers to a decisive Result tag');
+
+// parseClk validates the documented shape: malformed clocks become null.
+check(PGN.parseClk('[%clk 0:03:00]') === 180000 &&
+  PGN.parseClk('[%clk 1::2]') === null && PGN.parseClk('[%clk 0:99:00]') === null &&
+  PGN.parseClk('[%clk 1:2:3:4]') === null,
+  'parseClk accepts H:MM:SS and rejects empty/out-of-range/excess fields');
+
+// A comment before the first move is preserved on the game and record.
+const pre = PGN.parseGame('{Opening note} 1. e4 *');
+check(pre.preComment === 'Opening note' &&
+  PGN.toRecord(pre, { importedAt: 1 }).preComment === 'Opening note',
+  'a pre-first-move comment is preserved through parse and toRecord');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

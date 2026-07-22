@@ -211,14 +211,20 @@
     const shallow = analysisCtx(quiesce, positions, nodeBudget);
     const scored = [];
     let bestPrev = null, bestPrevScore = null;
+    // Stability needs a genuinely SHALLOWER pass; at depth 1 there is none, so
+    // it is left unmeasured rather than reusing the deep score (which would
+    // fabricate depths:[1,1], bestMoveStable:true).
+    const stabilityDepth = depth > 1 ? depth - 1 : 0;
     for (const m of legal) {
       const swD = scoreMove(state, beforeFen, m, depth, quiesce, deep);
       if (swD === ABORTED) { out.complete = false; break; }
       scored.push(lineOf(state, m, swD, deep, pvLen, maximizing)); // PV from the deep TT
-      const swPrev = depth > 1 ? scoreMove(state, beforeFen, m, depth - 1, quiesce, shallow) : swD;
-      if (swPrev === ABORTED) { out.complete = false; break; }
-      const prevSort = maximizing ? swPrev : -swPrev;
-      if (bestPrev === null || prevSort > bestPrevScore) { bestPrevScore = prevSort; bestPrev = m; }
+      if (stabilityDepth) {
+        const swPrev = scoreMove(state, beforeFen, m, stabilityDepth, quiesce, shallow);
+        if (swPrev === ABORTED) { out.complete = false; break; }
+        const prevSort = maximizing ? swPrev : -swPrev;
+        if (bestPrev === null || prevSort > bestPrevScore) { bestPrevScore = prevSort; bestPrev = m; }
+      }
     }
     scored.sort(function (a, b) { return b._sort - a._sort; });
     // Report the FULL work: the scan plus both deep-verify passes, not just the
@@ -235,8 +241,9 @@
     }
 
     // 3) Stability: is the VERIFIED best move the same one depth shallower?
-    if (scored.length && bestPrev) {
-      out.stability = { depths: [Math.max(1, depth - 1), depth],
+    //    Only reported when a shallower pass actually ran (depth > 1).
+    if (stabilityDepth && scored.length && bestPrev) {
+      out.stability = { depths: [stabilityDepth, depth],
         bestMoveStable: same(scored[0].move, bestPrev) };
     }
 
