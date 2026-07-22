@@ -48,8 +48,8 @@ const mate = Core.analyse(mateState, Object.assign({
 check(mate.bestLines.length > 0 && mate.bestLines[0].san.indexOf('Qh4') === 0,
   'mate-in-1: the mating move is the top line', mate.bestLines[0] && mate.bestLines[0].san);
 check(!!mate.bestLines[0].mate && mate.bestLines[0].mate.forWhite === false &&
-  mate.bestLines[0].mate.inPlies >= 1 && mate.bestLines[0].scoreCpWhite === null,
-  'mate is reported for Black, cp is null, distance separate');
+  mate.bestLines[0].mate.inPlies === 1 && mate.bestLines[0].scoreCpWhite === null,
+  'mate is reported for Black, cp is null, distance is exactly 1 ply (no off-by-one)');
 check(mate.classification === 'same',
   'playing the mate classifies as "same" (matches the top line)');
 check(mate.mate && mate.mate.forWhite === false, 'top-level mate mirrors the best line');
@@ -142,6 +142,21 @@ check(krkA.bestLines.length === Chess.legalMoves(krk).length,
 check(a.complete === true && a.stability &&
   a.stability.depths.length === 2 && typeof a.stability.bestMoveStable === 'boolean',
   'the contract reports completeness and best-move stability across two depths');
+
+// --- Reported nodes include the deep-verify work, not just the scan ---
+check(a.nodes > 0 && a.nodes >= a.bestLines.length,
+  'reported nodes accumulate the deep-verify passes, not only the preliminary scan');
+
+// --- Every returned PV is consistent with its own deep score: replaying the
+//     PV from the position reaches the line the score describes (legal PV,
+//     built from the deep TT, not clobbered by the shallow stability pass). ---
+check(a.bestLines.every(function (l) { return l.pv[0] === l.san && pvIsLegal(Chess.START_FEN, l.pvUci); }),
+  'each PV starts with its move and replays legally (deep TT preserved before the PV walk)');
+
+// --- The halfmove clock is part of the fingerprint (50-move-rule sensitivity) ---
+const fpA = Core.positionFingerprint(Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 0 1'), null);
+const fpB = Core.positionFingerprint(Chess.parseFen('8/8/8/8/8/5k2/8/R6K w - - 99 1'), null);
+check(fpA !== fpB, 'the same board at a different halfmove clock has a distinct fingerprint');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

@@ -55,10 +55,13 @@
     return (h >>> 0).toString(16);
   }
 
-  // The COMPLETE repetition context, not just the current count: the same FEN
-  // reached with a different history can score differently (a move completing
-  // a threefold is a draw), so every prior occurrence count folds into the
-  // fingerprint. Sorted so the hash is order-independent.
+  // The COMPLETE state identity that can change the analysis, not just the
+  // board: (1) positionKey omits the HALFMOVE CLOCK, but the 50-move rule
+  // makes the same board at halfmove 0 vs 99 score differently, so the clock
+  // is folded in; (2) the same FEN reached with a different history can score
+  // differently (a move completing a threefold is a draw), so every prior
+  // occurrence count folds in too. Reps are sorted so the hash is
+  // order-independent.
   function positionFingerprint(state, positions) {
     const key = Chess.positionKey(state);
     let rep = '';
@@ -66,7 +69,7 @@
       rep = Object.keys(positions).filter(function (k) { return positions[k] > 0; })
         .sort().map(function (k) { return k + '=' + positions[k]; }).join(';');
     }
-    return key + '|' + hash(rep);
+    return key + '|hm' + (state.halfmove || 0) + '|' + hash(rep);
   }
 
   // Seed a shared analysis context: delta pruning OFF, the game's repetition
@@ -95,9 +98,14 @@
     } catch (e) { return ABORTED; }
   }
 
+  // Mate distance in plies FROM the analysed position. sw scores the child
+  // after the candidate move, searched with ONE seeded ancestor (ply base 1),
+  // so |sw| = MATE - plyOfMate already counts the candidate ply: the distance
+  // from the analysed position is exactly MATE - |sw| (no extra +1). For a
+  // mate-in-one (…Qh4#, sw = -(MATE-1)) this is 1.
   function mateOf(sw) {
-    if (sw > MATE_NEAR) return { forWhite: true, inPlies: MATE - sw + 1 };
-    if (sw < -MATE_NEAR) return { forWhite: false, inPlies: MATE + sw + 1 };
+    if (sw > MATE_NEAR) return { forWhite: true, inPlies: MATE - sw };
+    if (sw < -MATE_NEAR) return { forWhite: false, inPlies: MATE + sw };
     return null;
   }
 
@@ -189,23 +197,30 @@
 
     const beforeFen = Chess.toFen(state);
     const legal = Chess.legalMoves(state);
-    // 2) Deep-verify EVERY legal root move at the completed depth AND one
-    //    shallower, under full windows with delta off, sharing one seeded ctx.
-    //    Scoring all roots (not a shortlist) makes bestLines true MultiPV; the
-    //    two depths measure stability of the VERIFIED best move.
-    const ctx = analysisCtx(quiesce, positions, nodeBudget);
+    // 2) Deep-verify EVERY legal root move at the completed depth (scoring all
+    //    roots, not a shortlist, makes bestLines true MultiPV) and, one depth
+    //    shallower, on a SEPARATE context so the stability pass never overwrites
+    //    the deep transposition table before the PV is read from it. The PV for
+    //    each move is captured from the deep TT immediately after its own deep
+    //    search, so it always matches the score it is shown with.
+    const deep = analysisCtx(quiesce, positions, nodeBudget);
+    const shallow = analysisCtx(quiesce, positions, nodeBudget);
     const scored = [];
     let bestPrev = null, bestPrevScore = null;
     for (const m of legal) {
-      const swD = scoreMove(state, beforeFen, m, depth, quiesce, ctx);
+      const swD = scoreMove(state, beforeFen, m, depth, quiesce, deep);
       if (swD === ABORTED) { out.complete = false; break; }
-      const swPrev = depth > 1 ? scoreMove(state, beforeFen, m, depth - 1, quiesce, ctx) : swD;
+      scored.push(lineOf(state, m, swD, deep, pvLen, maximizing)); // PV from the deep TT
+      const swPrev = depth > 1 ? scoreMove(state, beforeFen, m, depth - 1, quiesce, shallow) : swD;
       if (swPrev === ABORTED) { out.complete = false; break; }
-      scored.push(lineOf(state, m, swD, ctx, pvLen, maximizing));
       const prevSort = maximizing ? swPrev : -swPrev;
       if (bestPrev === null || prevSort > bestPrevScore) { bestPrevScore = prevSort; bestPrev = m; }
     }
     scored.sort(function (a, b) { return b._sort - a._sort; });
+    // Report the FULL work: the scan plus both deep-verify passes, not just the
+    // preliminary scan (which is a fraction of the total nodes).
+    out.nodes = scan.nodes + deep.nodes + shallow.nodes;
+    out.qnodes = scan.qnodes + deep.qnodes + shallow.qnodes;
 
     out.bestLines = scored.slice(0, multiPV).map(strip);
     if (out.bestLines.length) {
