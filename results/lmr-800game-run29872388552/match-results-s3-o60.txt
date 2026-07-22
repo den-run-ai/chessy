@@ -1,0 +1,17 @@
+candidate-sha: af695a48def80b9902f650a5cec29e7a8ae93062
+base-sha:      d1d25909940541df3309b87a7b7cabc474fb8105
+nodes-per-move: 80000
+openings-total: 100
+command:       node test/ai-match.js --base d1d25909940541df3309b87a7b7cabc474fb8105 --nodes 80000 --seeds 1 --seedbase 3 --openbase 60 --opencount 20
+workflow-run:  https://github.com/den-run-ai/chessy/actions/runs/29872388552
+---
+pair-scores: [1,1,0.25,0.75,0,0.75,0.75,0.5,0.75,0.5,0.25,0.5,0.75,0.5,0.75,0.5,0.5,0.75,0.5,0.5]
+records: [{"op":60,"name":"Slav","seed":3,"gseed":82378,"white":1,"black":1,"pair":1},{"op":61,"name":"Slav Nc3","seed":3,"gseed":83355,"white":1,"black":1,"pair":1},{"op":62,"name":"Semi-Slav","seed":3,"gseed":84332,"white":0.5,"black":0,"pair":0.25},{"op":63,"name":"QGA","seed":3,"gseed":85309,"white":0.5,"black":1,"pair":0.75},{"op":64,"name":"QGA Classical","seed":3,"gseed":86286,"white":0,"black":0,"pair":0},{"op":65,"name":"Tarrasch Defense","seed":3,"gseed":87263,"white":0.5,"black":1,"pair":0.75},{"op":66,"name":"Chigorin Defense","seed":3,"gseed":88240,"white":1,"black":0.5,"pair":0.75},{"op":67,"name":"Albin Counter-Gambit","seed":3,"gseed":89217,"white":0,"black":1,"pair":0.5},{"op":68,"name":"Nimzo-Indian","seed":3,"gseed":90194,"white":0.5,"black":1,"pair":0.75},{"op":69,"name":"Nimzo-Indian Rubinstein","seed":3,"gseed":91171,"white":1,"black":0,"pair":0.5},{"op":70,"name":"Queen's Indian","seed":3,"gseed":92148,"white":0,"black":0.5,"pair":0.25},{"op":71,"name":"Bogo-Indian","seed":3,"gseed":93125,"white":0.5,"black":0.5,"pair":0.5},{"op":72,"name":"KID Main","seed":3,"gseed":94102,"white":0.5,"black":1,"pair":0.75},{"op":73,"name":"KID Classical","seed":3,"gseed":95079,"white":0.5,"black":0.5,"pair":0.5},{"op":74,"name":"KID Fianchetto","seed":3,"gseed":96056,"white":0.5,"black":1,"pair":0.75},{"op":75,"name":"Grunfeld","seed":3,"gseed":97033,"white":1,"black":0,"pair":0.5},{"op":76,"name":"Grunfeld Exchange","seed":3,"gseed":98010,"white":1,"black":0,"pair":0.5},{"op":77,"name":"Benoni Modern","seed":3,"gseed":98987,"white":1,"black":0.5,"pair":0.75},{"op":78,"name":"Benko Gambit","seed":3,"gseed":99964,"white":1,"black":0,"pair":0.5},{"op":79,"name":"Old Benoni","seed":3,"gseed":100941,"white":0,"black":1,"pair":0.5}]
+openings-total: 100
+shard: openings [60,80) seeds [3,4)
+lmr-activity: reductions 1411289, researches 32708 (candidate only, cumulative over all iterations)
+depth-dist: {"1":23,"2":11,"3":26,"4":487,"5":502,"6":776,"7":496,"8":185,"9":31,"10":11,"11":8,"12":5,"13":2,"14":10,"15":2,"16":3,"18":1,"19":1}
+completed-depth: 2033/2580 candidate moves reached depth >= 5 (78.8% — LMR-capable)
+candidate vs d1d25909940541df3309b87a7b7cabc474fb8105: 40 games, 80000 nodes/move
+W 17 / D 13 / L 10  score 58.75%  one-sided 95% lower bound 49.20%  over 20 openings (20 pairs)
+RESULT: PASS — non-inferior (one-sided 95% lower bound above 49%)

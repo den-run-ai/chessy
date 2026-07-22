@@ -1,0 +1,17 @@
+candidate-sha: af695a48def80b9902f650a5cec29e7a8ae93062
+base-sha:      d1d25909940541df3309b87a7b7cabc474fb8105
+nodes-per-move: 80000
+openings-total: 100
+command:       node test/ai-match.js --base d1d25909940541df3309b87a7b7cabc474fb8105 --nodes 80000 --seeds 1 --seedbase 0 --openbase 80 --opencount 20
+workflow-run:  https://github.com/den-run-ai/chessy/actions/runs/29872388552
+---
+pair-scores: [0.75,0.5,0.75,0.75,0.5,0.5,1,0,1,1,0.5,0.5,0.5,0.5,0,0.5,0.5,0,0.25,0.5]
+records: [{"op":80,"name":"Dutch Stonewall","seed":0,"gseed":78161,"white":1,"black":0.5,"pair":0.75},{"op":81,"name":"Dutch Leningrad","seed":0,"gseed":79138,"white":0,"black":1,"pair":0.5},{"op":82,"name":"Dutch Classical","seed":0,"gseed":80115,"white":1,"black":0.5,"pair":0.75},{"op":83,"name":"London System","seed":0,"gseed":81092,"white":0.5,"black":1,"pair":0.75},{"op":84,"name":"London vs KID","seed":0,"gseed":82069,"white":1,"black":0,"pair":0.5},{"op":85,"name":"Torre Attack","seed":0,"gseed":83046,"white":0,"black":1,"pair":0.5},{"op":86,"name":"Colle System","seed":0,"gseed":84023,"white":1,"black":1,"pair":1},{"op":87,"name":"Catalan","seed":0,"gseed":85000,"white":0,"black":0,"pair":0},{"op":88,"name":"Catalan Open","seed":0,"gseed":85977,"white":1,"black":1,"pair":1},{"op":89,"name":"Trompowsky","seed":0,"gseed":86954,"white":1,"black":1,"pair":1},{"op":90,"name":"Veresov","seed":0,"gseed":87931,"white":1,"black":0,"pair":0.5},{"op":91,"name":"English Symmetrical","seed":0,"gseed":88908,"white":1,"black":0,"pair":0.5},{"op":92,"name":"English Four Knights","seed":0,"gseed":89885,"white":1,"black":0,"pair":0.5},{"op":93,"name":"English Anglo-Indian","seed":0,"gseed":90862,"white":0.5,"black":0.5,"pair":0.5},{"op":94,"name":"Reti","seed":0,"gseed":91839,"white":0,"black":0,"pair":0},{"op":95,"name":"Reti KIA","seed":0,"gseed":92816,"white":0.5,"black":0.5,"pair":0.5},{"op":96,"name":"King's Indian Attack","seed":0,"gseed":93793,"white":1,"black":0,"pair":0.5},{"op":97,"name":"Bird Opening","seed":0,"gseed":94770,"white":0,"black":0,"pair":0},{"op":98,"name":"Larsen Attack","seed":0,"gseed":95747,"white":0,"black":0.5,"pair":0.25},{"op":99,"name":"Nimzo-Larsen","seed":0,"gseed":96724,"white":1,"black":0,"pair":0.5}]
+openings-total: 100
+shard: openings [80,100) seeds [0,1)
+lmr-activity: reductions 1447636, researches 35856 (candidate only, cumulative over all iterations)
+depth-dist: {"1":20,"2":15,"3":24,"4":515,"5":499,"6":591,"7":458,"8":311,"9":70,"10":32,"11":24,"12":3,"13":1,"14":1}
+completed-depth: 1990/2564 candidate moves reached depth >= 5 (77.6% — LMR-capable)
+candidate vs d1d25909940541df3309b87a7b7cabc474fb8105: 40 games, 80000 nodes/move
+W 17 / D 8 / L 15  score 52.50%  one-sided 95% lower bound 40.81%  over 20 openings (20 pairs)
+RESULT: FAIL — non-inferiority not met (lower bound at or below 49%)

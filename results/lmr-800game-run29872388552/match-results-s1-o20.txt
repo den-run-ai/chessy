@@ -1,0 +1,17 @@
+candidate-sha: af695a48def80b9902f650a5cec29e7a8ae93062
+base-sha:      d1d25909940541df3309b87a7b7cabc474fb8105
+nodes-per-move: 80000
+openings-total: 100
+command:       node test/ai-match.js --base d1d25909940541df3309b87a7b7cabc474fb8105 --nodes 80000 --seeds 1 --seedbase 1 --openbase 20 --opencount 20
+workflow-run:  https://github.com/den-run-ai/chessy/actions/runs/29872388552
+---
+pair-scores: [0.25,0.75,0.5,0.75,0.5,0.75,0.25,0.25,0.75,0.5,1,0.5,1,0.5,0.5,1,0.25,0,0.5,0.5]
+records: [{"op":20,"name":"Sicilian Dragon","seed":1,"gseed":27460,"white":0,"black":0.5,"pair":0.25},{"op":21,"name":"Sicilian Scheveningen","seed":1,"gseed":28437,"white":0.5,"black":1,"pair":0.75},{"op":22,"name":"Sicilian Classical","seed":1,"gseed":29414,"white":1,"black":0,"pair":0.5},{"op":23,"name":"Sicilian Taimanov","seed":1,"gseed":30391,"white":1,"black":0.5,"pair":0.75},{"op":24,"name":"Sicilian Kan","seed":1,"gseed":31368,"white":1,"black":0,"pair":0.5},{"op":25,"name":"Sicilian Sveshnikov","seed":1,"gseed":32345,"white":0.5,"black":1,"pair":0.75},{"op":26,"name":"Sicilian Accelerated Dragon","seed":1,"gseed":33322,"white":0,"black":0.5,"pair":0.25},{"op":27,"name":"Sicilian Rossolimo","seed":1,"gseed":34299,"white":0.5,"black":0,"pair":0.25},{"op":28,"name":"Sicilian Moscow","seed":1,"gseed":35276,"white":0.5,"black":1,"pair":0.75},{"op":29,"name":"Sicilian Alapin","seed":1,"gseed":36253,"white":1,"black":0,"pair":0.5},{"op":30,"name":"Sicilian Alapin d5","seed":1,"gseed":37230,"white":1,"black":1,"pair":1},{"op":31,"name":"Sicilian Closed","seed":1,"gseed":38207,"white":1,"black":0,"pair":0.5},{"op":32,"name":"Sicilian Grand Prix","seed":1,"gseed":39184,"white":1,"black":1,"pair":1},{"op":33,"name":"Sicilian Smith-Morra","seed":1,"gseed":40161,"white":1,"black":0,"pair":0.5},{"op":34,"name":"Sicilian Kalashnikov","seed":1,"gseed":41138,"white":1,"black":0,"pair":0.5},{"op":35,"name":"Sicilian Hyperaccelerated","seed":1,"gseed":42115,"white":1,"black":1,"pair":1},{"op":36,"name":"French Winawer","seed":1,"gseed":43092,"white":0.5,"black":0,"pair":0.25},{"op":37,"name":"French Classical","seed":1,"gseed":44069,"white":0,"black":0,"pair":0},{"op":38,"name":"French Tarrasch","seed":1,"gseed":45046,"white":1,"black":0,"pair":0.5},{"op":39,"name":"French Advance","seed":1,"gseed":46023,"white":1,"black":0,"pair":0.5}]
+openings-total: 100
+shard: openings [20,40) seeds [1,2)
+lmr-activity: reductions 1305797, researches 30430 (candidate only, cumulative over all iterations)
+depth-dist: {"1":25,"2":12,"3":25,"4":515,"5":413,"6":637,"7":479,"8":283,"9":46,"10":11,"11":4,"12":4,"30":1}
+completed-depth: 1878/2455 candidate moves reached depth >= 5 (76.5% — LMR-capable)
+candidate vs d1d25909940541df3309b87a7b7cabc474fb8105: 40 games, 80000 nodes/move
+W 18 / D 8 / L 14  score 55.00%  one-sided 95% lower bound 44.32%  over 20 openings (20 pairs)
+RESULT: FAIL — non-inferiority not met (lower bound at or below 49%)

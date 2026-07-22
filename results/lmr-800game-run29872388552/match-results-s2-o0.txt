@@ -1,0 +1,17 @@
+candidate-sha: af695a48def80b9902f650a5cec29e7a8ae93062
+base-sha:      d1d25909940541df3309b87a7b7cabc474fb8105
+nodes-per-move: 80000
+openings-total: 100
+command:       node test/ai-match.js --base d1d25909940541df3309b87a7b7cabc474fb8105 --nodes 80000 --seeds 1 --seedbase 2 --openbase 0 --opencount 20
+workflow-run:  https://github.com/den-run-ai/chessy/actions/runs/29872388552
+---
+pair-scores: [0.5,0.25,0.75,1,1,0.25,0.5,0.75,0.5,0.75,0,0.75,0.25,0.5,0,0.75,0.5,0.75,0.5,0.5]
+records: [{"op":0,"name":"Italian","seed":2,"gseed":15839,"white":0,"black":1,"pair":0.5},{"op":1,"name":"Two Knights","seed":2,"gseed":16816,"white":0,"black":0.5,"pair":0.25},{"op":2,"name":"Two Knights Fried Liver","seed":2,"gseed":17793,"white":1,"black":0.5,"pair":0.75},{"op":3,"name":"Ruy Lopez Morphy","seed":2,"gseed":18770,"white":1,"black":1,"pair":1},{"op":4,"name":"Ruy Lopez Berlin","seed":2,"gseed":19747,"white":1,"black":1,"pair":1},{"op":5,"name":"Ruy Lopez Exchange","seed":2,"gseed":20724,"white":0,"black":0.5,"pair":0.25},{"op":6,"name":"Ruy Lopez Steinitz","seed":2,"gseed":21701,"white":0.5,"black":0.5,"pair":0.5},{"op":7,"name":"Scotch","seed":2,"gseed":22678,"white":0.5,"black":1,"pair":0.75},{"op":8,"name":"Scotch Gambit","seed":2,"gseed":23655,"white":0.5,"black":0.5,"pair":0.5},{"op":9,"name":"Four Knights","seed":2,"gseed":24632,"white":0.5,"black":1,"pair":0.75},{"op":10,"name":"Petrov Classical","seed":2,"gseed":25609,"white":0,"black":0,"pair":0},{"op":11,"name":"Philidor","seed":2,"gseed":26586,"white":1,"black":0.5,"pair":0.75},{"op":12,"name":"Vienna Gambit","seed":2,"gseed":27563,"white":0.5,"black":0,"pair":0.25},{"op":13,"name":"Vienna Bishop","seed":2,"gseed":28540,"white":0.5,"black":0.5,"pair":0.5},{"op":14,"name":"King's Gambit Accepted","seed":2,"gseed":29517,"white":0,"black":0,"pair":0},{"op":15,"name":"King's Gambit Declined","seed":2,"gseed":30494,"white":1,"black":0.5,"pair":0.75},{"op":16,"name":"Bishop's Opening","seed":2,"gseed":31471,"white":0.5,"black":0.5,"pair":0.5},{"op":17,"name":"Center Game","seed":2,"gseed":32448,"white":0.5,"black":1,"pair":0.75},{"op":18,"name":"Ponziani","seed":2,"gseed":33425,"white":1,"black":0,"pair":0.5},{"op":19,"name":"Sicilian Najdorf","seed":2,"gseed":34402,"white":0,"black":1,"pair":0.5}]
+openings-total: 100
+shard: openings [0,20) seeds [2,3)
+lmr-activity: reductions 1566134, researches 43331 (candidate only, cumulative over all iterations)
+depth-dist: {"1":19,"2":9,"3":25,"4":545,"5":409,"6":686,"7":395,"8":247,"9":89,"10":31,"11":22,"12":14,"13":4,"14":7,"15":4,"16":1,"19":1}
+completed-depth: 1910/2508 candidate moves reached depth >= 5 (76.2% — LMR-capable)
+candidate vs d1d25909940541df3309b87a7b7cabc474fb8105: 40 games, 80000 nodes/move
+W 13 / D 17 / L 10  score 53.75%  one-sided 95% lower bound 42.76%  over 20 openings (20 pairs)
+RESULT: FAIL — non-inferiority not met (lower bound at or below 49%)

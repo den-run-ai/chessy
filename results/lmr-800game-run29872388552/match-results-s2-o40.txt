@@ -1,0 +1,17 @@
+candidate-sha: af695a48def80b9902f650a5cec29e7a8ae93062
+base-sha:      d1d25909940541df3309b87a7b7cabc474fb8105
+nodes-per-move: 80000
+openings-total: 100
+command:       node test/ai-match.js --base d1d25909940541df3309b87a7b7cabc474fb8105 --nodes 80000 --seeds 1 --seedbase 2 --openbase 40 --opencount 20
+workflow-run:  https://github.com/den-run-ai/chessy/actions/runs/29872388552
+---
+pair-scores: [0.75,1,0.25,1,0,0.25,0.25,0.5,0.5,0.75,0.5,1,0.5,0.5,0.5,0.75,0.5,0.25,0,0.5]
+records: [{"op":40,"name":"French Exchange","seed":2,"gseed":54919,"white":1,"black":0.5,"pair":0.75},{"op":41,"name":"French Rubinstein","seed":2,"gseed":55896,"white":1,"black":1,"pair":1},{"op":42,"name":"Caro-Kann Classical","seed":2,"gseed":56873,"white":0.5,"black":0,"pair":0.25},{"op":43,"name":"Caro-Kann Advance","seed":2,"gseed":57850,"white":1,"black":1,"pair":1},{"op":44,"name":"Caro-Kann Exchange","seed":2,"gseed":58827,"white":0,"black":0,"pair":0},{"op":45,"name":"Caro-Kann Panov","seed":2,"gseed":59804,"white":0.5,"black":0,"pair":0.25},{"op":46,"name":"Caro-Kann Two Knights","seed":2,"gseed":60781,"white":0.5,"black":0,"pair":0.25},{"op":47,"name":"Caro-Kann Fantasy","seed":2,"gseed":61758,"white":0,"black":1,"pair":0.5},{"op":48,"name":"Scandinavian Main","seed":2,"gseed":62735,"white":0.5,"black":0.5,"pair":0.5},{"op":49,"name":"Scandinavian Modern","seed":2,"gseed":63712,"white":1,"black":0.5,"pair":0.75},{"op":50,"name":"Pirc","seed":2,"gseed":64689,"white":1,"black":0,"pair":0.5},{"op":51,"name":"Pirc Austrian","seed":2,"gseed":65666,"white":1,"black":1,"pair":1},{"op":52,"name":"Modern Defense","seed":2,"gseed":66643,"white":0.5,"black":0.5,"pair":0.5},{"op":53,"name":"Alekhine","seed":2,"gseed":67620,"white":0,"black":1,"pair":0.5},{"op":54,"name":"Alekhine Exchange","seed":2,"gseed":68597,"white":1,"black":0,"pair":0.5},{"op":55,"name":"Nimzowitsch Defense","seed":2,"gseed":69574,"white":0.5,"black":1,"pair":0.75},{"op":56,"name":"Owen Defense","seed":2,"gseed":70551,"white":0,"black":1,"pair":0.5},{"op":57,"name":"QGD Main","seed":2,"gseed":71528,"white":0,"black":0.5,"pair":0.25},{"op":58,"name":"QGD Exchange","seed":2,"gseed":72505,"white":0,"black":0,"pair":0},{"op":59,"name":"QGD Tartakower","seed":2,"gseed":73482,"white":1,"black":0,"pair":0.5}]
+openings-total: 100
+shard: openings [40,60) seeds [2,3)
+lmr-activity: reductions 1277575, researches 27813 (candidate only, cumulative over all iterations)
+depth-dist: {"1":19,"2":12,"3":40,"4":634,"5":411,"6":598,"7":321,"8":206,"9":73,"10":16,"11":13,"12":6,"13":2,"14":1,"16":1,"17":6,"18":1,"19":1,"21":1,"23":1}
+completed-depth: 1658/2363 candidate moves reached depth >= 5 (70.2% — LMR-capable)
+candidate vs d1d25909940541df3309b87a7b7cabc474fb8105: 40 games, 80000 nodes/move
+W 15 / D 11 / L 14  score 51.25%  one-sided 95% lower bound 39.74%  over 20 openings (20 pairs)
+RESULT: FAIL — non-inferiority not met (lower bound at or below 49%)
