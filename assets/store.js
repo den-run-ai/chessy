@@ -230,6 +230,30 @@
   }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
 
+  // Import a validated PGN record (see ChessyPGN.toRecord). DEDUPED by its id
+  // (external id or content hash): the lookup and the write share ONE
+  // transaction, so a record already present is left as-is and a repeated
+  // import yields a single game. Resolves 'imported' or 'duplicate'. The
+  // record must already be fully validated — this only persists it (commit
+  // once, atomically).
+  function importGame(record) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('games', 'readwrite');
+        const s = t.objectStore('games');
+        const getReq = s.get(record.id);
+        let outcome = 'imported';
+        getReq.onsuccess = function () {
+          if (getReq.result) { outcome = 'duplicate'; return; } // already have it
+          s.add(record);
+        };
+        t.oncomplete = function () { resolve(outcome); };
+        t.onerror = function () { reject(getReq.error || t.error); };
+        t.onabort = function () { reject(getReq.error || t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   function listGames() {
     return tx('games', 'readonly', function (s) { return s.getAll(); })
       .then(function (games) { return games.sort(function (a, b) { return b.createdAt - a.createdAt; }); });
@@ -365,6 +389,7 @@
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
+    importGame: importGame,
     getGame: getGame,
     listGames: listGames,
     addCard: addCard,
