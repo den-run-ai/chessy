@@ -338,16 +338,37 @@
     return R1 + ':' + R2;
   }
 
+  // Repetition prelude shared by the main search and quiescence. Writes two
+  // module-level out-params (no per-node allocation on the hot path):
+  //   REP_DRAW — the position scores as a draw;
+  //   REP_PLY  — the shallowest search-path ancestor ply the draw closed on,
+  //              or Infinity for a path-INDEPENDENT game-history threefold
+  //              (which stays cacheable). Callers copy REP_PLY into ctx.repPly.
+  // A path cycle fires on the FIRST recurrence (the deliberate twofold
+  // heuristic that makes perpetuals visible at shallow depth); a true game-
+  // history threefold needs the position to already stand at two occurrences.
+  let REP_DRAW = false, REP_PLY = Infinity;
+  function checkRep(ctx, r1, r2) {
+    for (let j = ctx.path1.length - 1; j >= 0; j--) {
+      if (ctx.path1[j] === r1 && ctx.path2[j] === r2) {
+        REP_DRAW = true; REP_PLY = j; return;
+      }
+    }
+    if ((ctx.gameCounts.get(r1 + ':' + r2) || 0) >= 2) { REP_DRAW = true; REP_PLY = Infinity; return; }
+    REP_DRAW = false; REP_PLY = Infinity;
+  }
+
   // ---- Transposition table ----
   const EXACT = 0, LOWER = 1, UPPER = 2;
 
-  function ttStore(ctx, h1, h2, depth, ply, score, flag, movePk) {
+  function ttStore(ctx, h1, h2, depth, ply, score, flag, movePk, nullSafe) {
     // Mate scores are stored relative to THIS node (distance-to-mate), so an
     // entry stays correct no matter what ply the position recurs at.
     if (score > MATE_NEAR) score += ply;
     else if (score < -MATE_NEAR) score -= ply;
     if (ctx.tt.size >= TT_MAX && !ctx.tt.has(h1)) return;
-    ctx.tt.set(h1, { h2: h2, depth: depth, score: score, flag: flag, move: movePk });
+    // ns: the score is a sound null-window bound (see the probe/store notes).
+    ctx.tt.set(h1, { h2: h2, depth: depth, score: score, flag: flag, move: movePk, ns: nullSafe });
   }
 
   // Pack a move into one int for TT/killer storage and identity checks.
@@ -436,6 +457,9 @@
   function quiesceNode(state, alpha, beta, ply, qply, ctx) {
     checkTime(ctx);
     ctx.qnodes++;
+    // Repetition-dependency out-param, same contract as searchNode: the
+    // shallowest ancestor ply this node's score depended on (Infinity = safe).
+    ctx.repPly = Infinity;
     if (Chess.insufficientMaterial(state.board)) return 0; // dead after captures
     const turn = state.turn;
     const enemy = turn === 'w' ? 'b' : 'w';
@@ -443,9 +467,29 @@
     const maximizing = turn === 'w';
     const inChk = Chess.isAttacked(state.board, kingSq, enemy);
 
+    // Repetition awareness inside quiescence (shared prelude with searchNode).
+    // A capture or promotion — quiescence's staple — is irreversible and resets
+    // the halfmove clock, and no position can recur without a >=4-ply reversible
+    // round trip, so below halfmove 4 no path cycle or game-history threefold is
+    // possible and the hash/scan/push is skipped entirely. Above it (a check-
+    // evasion chain) a repetition must score 0 exactly as in the main search:
+    // otherwise a threefold first seen past the horizon (e.g. a check evasion
+    // into it) is scored by its material, and a path-dependent draw would leave
+    // repPly = Infinity and let an ancestor cache a score its history can't hold.
+    let rr1 = 0, rr2 = 0;
+    const trackRep = state.halfmove >= 4;
+    if (trackRep) {
+      hashState(state);
+      rr1 = R1; rr2 = R2;
+      checkRep(ctx, rr1, rr2);
+      if (REP_DRAW) { ctx.repPly = REP_PLY; return 0; }
+    }
+
     // Terminal states outrank the static evaluation: a stalemate must not
     // stand pat as if the material were live, and the 50-move draw stands
-    // unless the position is checkmate (mate takes precedence).
+    // unless the position is checkmate (mate takes precedence). These are
+    // position-intrinsic (repPly stays Infinity), so they return before the
+    // path push below.
     const pseudo = Chess.pseudoMoves(state);
     if (!hasLegalMove(state, pseudo)) {
       return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
@@ -462,6 +506,11 @@
       else { if (best <= alpha) return best; if (best < beta) beta = best; }
     }
 
+    // Only a node that survives to explore children joins the search path, so a
+    // deeper quiescence line can detect a cycle back to here.
+    if (trackRep) { ctx.path1.push(rr1); ctx.path2.push(rr2); }
+    let repMin = Infinity;
+
     const DELTA = 200; // delta pruning margin
     const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
 
@@ -470,19 +519,12 @@
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
       // Delta pruning: even winning this capture outright can't affect the
-      // window, so don't bother searching it — UNLESS it gives check: a
-      // checking capture can be mate (e.g. Qxg7#) regardless of its
-      // material gain, so the score is not bounded by standPat + value.
-      //
-      // Only on a REAL window (width > 1). Delta pruning bounds a capture by
-      // its immediate material + a fixed positional margin, which is not a
-      // true bound when the capture opens a deeper combination — a latent
-      // unsoundness that a wide window hides (alpha sits far below standPat,
-      // so nothing prunes) but a null scout window exposes (alpha hugs
-      // standPat, so the margin decides). Under a null window the pruned
-      // value would not be a sound bound, so PVS's null-window scout could
-      // then miss a genuinely better move (false fail-low). Disabling delta
-      // pruning there keeps the scout a plain, sound alpha-beta bound.
+      // window, so don't bother searching it — UNLESS it gives check (a
+      // checking capture can be mate, e.g. Qxg7#, regardless of material gain).
+      // Only on a REAL window (width > 1): under a null window the delta-pruned
+      // value is not a sound bound, so a PVS scout could miss a better move
+      // (false fail-low). Disabling it there keeps the scout a plain, sound
+      // alpha-beta bound (see the residual-unsoundness note in searchNode).
       if (!inChk && !m.promotion && beta - alpha > 1) {
         const gain = VALUES[m.captured[1]] + DELTA;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
@@ -491,6 +533,7 @@
         }
       }
       const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx);
+      if (ctx.repPly < repMin) repMin = ctx.repPly; // min over searched children
       if (maximizing) {
         if (score > best) best = score;
         if (best > alpha) alpha = best;
@@ -500,6 +543,8 @@
       }
       if (beta <= alpha) break;
     }
+    if (trackRep) { ctx.path1.pop(); ctx.path2.pop(); }
+    ctx.repPly = repMin; // propagate the subtree's repetition dependency upward
     return best;
   }
 
@@ -530,30 +575,18 @@
     hashState(state);
     const h1 = H1, h2 = H2, r1 = R1, r2 = R2;
 
-    // Repetition awareness. A position scores as a draw when the line makes
-    // it the third occurrence against the ACTUAL game history, or when it
-    // closes a cycle within the search path. The cycle rule fires on the
-    // FIRST recurrence — the standard engine "twofold" heuristic, NOT exact
-    // threefold counting: if the line comes back around, the side preferring
-    // the draw can simply run the cycle again, and every node in between
-    // already gives the other side its chance to deviate. This is
-    // deliberately conservative (it can call a line a draw one cycle early)
-    // and is what makes perpetual check a real resource at shallow depths.
-    // A single earlier occurrence in the game history alone is NOT a draw:
-    // the position would have to recur twice more.
-    for (let j = ctx.path1.length - 1; j >= 0; j--) {
-      if (ctx.path1[j] === r1 && ctx.path2[j] === r2) {
-        // This draw is a property of the PATH (the cycle closes on the
-        // ancestor at ply j), not of the position itself — flag it so no
-        // ancestor above j caches a score built on it (see ttStore below).
-        ctx.repPly = j;
-        return 0;
-      }
-    }
-    // A true third occurrence against the actual game history is
-    // path-independent (the history is fixed for the whole search) and
-    // stays cacheable.
-    if ((ctx.gameCounts.get(r1 + ':' + r2) || 0) >= 2) return 0;
+    // Repetition awareness (shared with quiescence via checkRep). A position
+    // scores as a draw when the line makes it the third occurrence against the
+    // ACTUAL game history, or when it closes a cycle within the search path.
+    // The cycle rule fires on the FIRST recurrence — the standard engine
+    // "twofold" heuristic, NOT exact threefold counting — which is what makes
+    // perpetual check a real resource at shallow depth. A path draw is a
+    // property of the PATH (it closed on the ancestor at ply REP_PLY): flag it
+    // via ctx.repPly so no ancestor above caches a score built on it. A true
+    // game-history threefold is path-independent (REP_PLY = Infinity) and stays
+    // cacheable.
+    checkRep(ctx, r1, r2);
+    if (REP_DRAW) { ctx.repPly = REP_PLY; return 0; }
 
     // Horizon: evaluate the leaf terminal-aware. A bare evaluate() cannot
     // tell a checkmate from a quiet position or a stalemate from a won one,
@@ -582,7 +615,13 @@
       const e = ctx.tt.get(h1);
       if (e && e.h2 === h2) {
         ttPk = e.move;
-        if (e.depth === depth) {
+        // Null-window-scout safety. A score a WIDER search produced with delta
+        // pruning active is not a sound scout bound (delta pruning bounds a
+        // capture by material + margin, which a null window's tight alpha can
+        // expose as false — see quiesceNode). Withhold such a score from a
+        // quiescent null scout; the hash move above is still used for ordering.
+        const scoreSafe = e.ns || !(ctx.quiesce && beta - alpha <= 1);
+        if (e.depth === depth && scoreSafe) {
           let s = e.score;
           if (s > MATE_NEAR) s -= ply;
           else if (s < -MATE_NEAR) s += ply;
@@ -692,7 +731,11 @@
     // inherit a draw (or bound) that its own history does not justify.
     if (useTT && repMin >= ply) {
       const flag = best <= alphaOrig ? UPPER : best >= betaOrig ? LOWER : EXACT;
-      ttStore(ctx, h1, h2, depth, ply, best, flag, bestPk);
+      // Null-window-safe only when no delta pruning could have shaped this
+      // score: quiescence disabled, or this node itself ran under a (null)
+      // window that disables delta pruning throughout its subtree.
+      const nullSafe = !ctx.quiesce || betaOrig - alphaOrig <= 1;
+      ttStore(ctx, h1, h2, depth, ply, best, flag, bestPk, nullSafe);
     }
     return best;
   }
