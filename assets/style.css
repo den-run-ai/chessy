@@ -548,6 +548,21 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   font-variant-numeric: tabular-nums; }
 .verify-meta { font-size: 0.78rem; }
 
+/* Review data panel: PGN import + backup/restore/delete controls. */
+.data-panel { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.8rem; }
+.data-panel details { border: 1px solid #4a4642; border-radius: 8px; padding: 0.5rem 0.7rem; }
+.data-panel summary { cursor: pointer; font-weight: 700; }
+.data-panel details[open] summary { margin-bottom: 0.5rem; }
+.data-panel label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted);
+  margin-bottom: 0.5rem; }
+.data-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; }
+.data-panel fieldset { border: 1px solid #4a4642; border-radius: 6px; margin: 0 0 0.5rem; padding: 0.4rem 0.6rem; }
+.data-panel fieldset label { flex-direction: row; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
+.data-panel legend { color: var(--muted); font-size: 0.82rem; padding: 0 0.3rem; }
+.btn.danger { border-color: #7a3b3b; color: #e8b4b4; }
+.btn.danger:hover { background: rgba(160, 60, 60, 0.25); }
+.coach-note.err { color: #e8a0a0; }
+
 .stats {
   display: grid;
   /* minmax(0, max-content), NOT max-content: the label column must be

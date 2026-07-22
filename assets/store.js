@@ -386,10 +386,69 @@
     return tx('analysisJobs', 'readwrite', function (s) { return s.delete(gameId); });
   }
 
+  // ---- Data controls (Phase 4b): backup / atomic restore / delete-all ----
+  const ALL_STORES = ['games', 'cards', 'analyses', 'analysisJobs'];
+
+  // A full snapshot of every store, for JSON backup.
+  function exportAll() {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(ALL_STORES, 'readonly');
+        const out = { version: DB_VERSION, games: [], cards: [], analyses: [], analysisJobs: [] };
+        ALL_STORES.forEach(function (name) {
+          t.objectStore(name).getAll().onsuccess = function (e) { out[name] = e.target.result; };
+        });
+        t.oncomplete = function () { resolve(out); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
+  // Replace EVERY store from a backup, atomically: an invalid dump is
+  // rejected before any write, and any failed add aborts the whole
+  // transaction (the clears roll back with it) — so a restore never leaves a
+  // half-replaced archive. Resolves with the number of games + cards restored.
+  function restoreAll(dump) {
+    if (!dump || ALL_STORES.some(function (n) { return !Array.isArray(dump[n]); })) {
+      return Promise.reject(new Error('invalid backup'));
+    }
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(ALL_STORES, 'readwrite');
+        ALL_STORES.forEach(function (name) {
+          const s = t.objectStore(name);
+          s.clear();
+          dump[name].forEach(function (rec) { s.add(rec); });
+        });
+        t.oncomplete = function () { resolve(dump.games.length + dump.cards.length); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
+  // Delete ALL training data (every store cleared in one transaction; the
+  // schema is kept). The caller fences this behind an explicit confirm.
+  function deleteAll() {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(ALL_STORES, 'readwrite');
+        ALL_STORES.forEach(function (name) { t.objectStore(name).clear(); });
+        t.oncomplete = function () { resolve(); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
     importGame: importGame,
+    exportAll: exportAll,
+    restoreAll: restoreAll,
+    deleteAll: deleteAll,
     getGame: getGame,
     listGames: listGames,
     addCard: addCard,

@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r34">
+  <link rel="stylesheet" href="assets/style.css?r=r35">
 </head>
 <body>
   <div class="app">
@@ -83,6 +83,41 @@
         <h2 id="reviewTitle">Review</h2>
       </div>
       <div id="gameListWrap">
+        <div class="data-panel">
+          <details id="importDetails">
+            <summary>Import a game (PGN)</summary>
+            <label>Paste PGN
+              <textarea id="importPgn" rows="4" autocomplete="off"
+                        placeholder="[Event &quot;…&quot;] … 1. e4 e5 …"></textarea></label>
+            <label class="data-file">Or load a .pgn file
+              <input type="file" id="importFile" accept=".pgn,.txt,text/plain"></label>
+            <fieldset id="importSide">
+              <legend>Your side (used to flag your own moves)</legend>
+              <label><input type="radio" name="importSide" value="w"> White</label>
+              <label><input type="radio" name="importSide" value="b"> Black</label>
+              <label><input type="radio" name="importSide" value="" checked> Unknown / both</label>
+            </fieldset>
+            <button type="button" id="importBtn" class="btn primary">Import game</button>
+            <p class="coach-note" id="importStatus" aria-live="polite" hidden></p>
+          </details>
+          <details id="dataDetails">
+            <summary>Backup &amp; data</summary>
+            <div class="buttons">
+              <button type="button" id="exportData" class="btn">Export backup</button>
+              <button type="button" id="restoreData" class="btn">Restore backup…</button>
+              <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+              <button type="button" id="deleteData" class="btn danger">Delete all data</button>
+            </div>
+            <div id="deleteConfirm" hidden>
+              <p class="coach-note">This permanently deletes every archived game, lesson card and analysis. This cannot be undone.</p>
+              <div class="buttons">
+                <button type="button" id="deleteCancel" class="btn">Cancel</button>
+                <button type="button" id="deleteConfirmBtn" class="btn danger">Delete everything</button>
+              </div>
+            </div>
+            <p class="coach-note" id="dataStatus" aria-live="polite" hidden></p>
+          </details>
+        </div>
         <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
         <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
       </div>
@@ -253,25 +288,26 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r34';</script>
-  <script src="assets/engine.js?r=r34"></script>
-  <script src="assets/ai.js?r=r34"></script>
+  <script>window.CHESSY_RELEASE = 'r35';</script>
+  <script src="assets/engine.js?r=r35"></script>
+  <script src="assets/ai.js?r=r35"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r34"></script>
-  <script src="assets/archive.js?r=r34"></script>
-  <script src="assets/app.js?r=r34"></script>
-  <script src="assets/mini-board.js?r=r34"></script>
-  <script src="assets/review.js?r=r34"></script>
-  <script src="assets/analysis.js?r=r34"></script>
-  <script src="assets/analysis-core.js?r=r34"></script>
-  <script src="assets/pgn.js?r=r34"></script>
-  <script src="assets/reflection.js?r=r34"></script>
-  <script src="assets/train.js?r=r34"></script>
-  <script src="assets/progress.js?r=r34"></script>
+  <script src="assets/store.js?r=r35"></script>
+  <script src="assets/archive.js?r=r35"></script>
+  <script src="assets/app.js?r=r35"></script>
+  <script src="assets/mini-board.js?r=r35"></script>
+  <script src="assets/review.js?r=r35"></script>
+  <script src="assets/analysis.js?r=r35"></script>
+  <script src="assets/analysis-core.js?r=r35"></script>
+  <script src="assets/pgn.js?r=r35"></script>
+  <script src="assets/reflection.js?r=r35"></script>
+  <script src="assets/data-controls.js?r=r35"></script>
+  <script src="assets/train.js?r=r35"></script>
+  <script src="assets/progress.js?r=r35"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

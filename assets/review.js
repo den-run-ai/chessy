@@ -188,6 +188,9 @@
     showView: showView,
     registerView: registerView,
     openArchivedGame: openArchivedGame,
+    // Re-read the archive into the list (data controls call this after an
+    // import / restore / delete). No-op safe when a game is open.
+    refreshGames: function () { return renderGameList(); },
     // The currently open game and shown ply (null on the game list) — the
     // reflection flow reads this instead of duplicating browser state.
     current: function () { return review; }
