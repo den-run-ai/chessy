@@ -483,7 +483,7 @@
       // value would not be a sound bound, so PVS's null-window scout could
       // then miss a genuinely better move (false fail-low). Disabling delta
       // pruning there keeps the scout a plain, sound alpha-beta bound.
-      if (!inChk && !m.promotion && beta - alpha > 1) {
+      if (!ctx.noDelta && !inChk && !m.promotion && beta - alpha > 1) {
         const gain = VALUES[m.captured[1]] + DELTA;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
             !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
@@ -917,13 +917,49 @@
     }
   }
 
+  // --- Analysis hooks (orchestration lives in analysis-core.js). Set
+  // ctx.noDelta before a search to disable quiescence delta pruning, so
+  // candidate root scores are exact full-window values comparable move to
+  // move. principalVariation() rebuilds a legal PV from the TT. ---
+  const PROMO_UN = { 1: 'Q', 2: 'R', 3: 'B', 4: 'N' };
+  function ttBestMove(ctx, state) {
+    hashState(state);
+    const e = ctx.tt.get(H1);
+    if (!e || e.h2 !== H2 || !e.move) return null;
+    const from = (e.move >> 9) & 63, to = (e.move >> 3) & 63, pi = e.move & 7;
+    const promo = pi ? PROMO_UN[pi] : null;
+    return Chess.legalMoves(state).find(function (m) {
+      return m.from === from && m.to === to && (m.promotion || null) === promo;
+    }) || null;
+  }
+  // Reconstruct a LEGAL principal variation by walking TT best moves; stops
+  // at a missing entry or a repeated position (a cached cycle).
+  function principalVariation(state, ctx, maxLen) {
+    const pv = [], seen = new Set();
+    let s = state;
+    for (let i = 0; i < maxLen; i++) {
+      hashState(s);
+      const key = H1 + ':' + H2;
+      if (seen.has(key)) break;
+      seen.add(key);
+      const m = ttBestMove(ctx, s);
+      if (!m) break;
+      pv.push({ from: m.from, to: m.to, promotion: m.promotion || null });
+      s = Chess.applyMove(s, m);
+    }
+    return pv;
+  }
+
   global.ChessAI = {
     bestMove: bestMove,
     think: think,
     evaluate: evaluate,
     search: search,
     makeCtx: makeCtx,
+    principalVariation: principalVariation,
     hashKey: hashKey,
-    repKey: repKey
+    repKey: repKey,
+    MATE: MATE,
+    MATE_NEAR: MATE_NEAR
   };
 })(typeof window !== 'undefined' ? window : globalThis);
