@@ -4,7 +4,7 @@
  * minutes to hours depending on --nodes).
  *
  * Usage:
- *   node test/ai-match.js --base claude/ai-3-tests        # full 200-game match
+ *   node test/ai-match.js --base claude/ai-3-tests        # full 800-game match
  *   node test/ai-match.js --base HEAD~1 --nodes 3000      # cheaper run
  *   node test/ai-match.js --base claude/ai-3-tests --pairs 20   # first N pairs
  *
@@ -16,12 +16,29 @@
  * explicit ref at or after the node-budget fix.
  *
  * Design (paired match):
- *   25 balanced openings x 4 deterministic seeds x both colors = 200 games.
+ *   100 frozen openings x 4 deterministic seeds x both colors = 800 games.
  *   Fixed nodes per move (default 10000) with quiescence; 180-ply cap, an
  *   unfinished game is a draw (but a game decided ON the cap move is scored).
  *   Both engines get an identically seeded Math.random per game, so the whole
- *   match is reproducible. Reported: W/D/L, score, and a paired 95% confidence
- *   interval over the (opening, seed) pairs — if it crosses 50%, inconclusive.
+ *   match is reproducible.
+ *
+ * Shard a large match by seed (--seeds/--seedbase) and/or by opening range
+ * (--openbase/--opencount) so any single shard fits the workflow timeout; the
+ * aggregator (test/ai-match-agg.js) checks the shards tile the full manifest.
+ *
+ * Output (all machine-readable, captured into the workflow artifact):
+ *   pair-scores:     the raw per-(opening, seed) pair scores;
+ *   records:         one structured JSON record per pair {op, name, seed,
+ *                    gseed, white, black, pair} — enough to recompute any
+ *                    verdict and to concatenate disjoint shards;
+ *   openings-total:  the opening-list size (aggregator cross-check);
+ *   shard:           this shard's opening and seed ranges;
+ *   depth-dist /     the completed-depth histogram and the fraction of moves
+ *   completed-depth: returned from a depth >= 5 search (search-depth telemetry,
+ *                    e.g. for calibrating the node budget);
+ *   RESULT:          the opening-CLUSTER non-inferiority verdict (see
+ *                    test/match-stats.js) — the 95% lower bound is over the
+ *                    per-opening means, not the individual pairs.
  */
 'use strict';
 const fs = require('fs');
@@ -30,6 +47,7 @@ const vm = require('vm');
 const cp = require('child_process');
 require('../assets/engine.js'); // arbiter rules (host realm)
 const Chess = globalThis.Chess;
+const { clusterStats } = require('./match-stats'); // opening-cluster verdict
 
 const args = process.argv.slice(2);
 function opt(name, dflt) {
@@ -92,34 +110,128 @@ if (!Number.isSafeInteger(SEED_BASE + SEEDS)) {
 // safe integer. `--pairs nope` would otherwise become NaN, making the limit
 // check permanently false and running the full match unexpectedly.
 const PAIRS_LIMIT = args.includes('--pairs') ? posInt('pairs', 0) : Infinity;
+// Opening-range shard: [--openbase, --openbase + --opencount) into OPENINGS.
+// Lets a high-budget match be split by OPENING (not only by seed) so a shard
+// stays under the workflow timeout; the aggregator checks that the shards'
+// (opening, seed) cells tile the full manifest exactly. openbase is a
+// non-negative safe int (same NaN/overflow hazards as seedbase); opencount
+// absent = to the end of the list.
+const OPEN_BASE = (function () {
+  const raw = opt('openbase', '0');
+  const n = Number(raw);
+  if (!Number.isSafeInteger(n) || n < 0) {
+    console.error('--openbase must be a non-negative safe integer (got "' + raw + '")');
+    process.exit(2);
+  }
+  return n;
+})();
+const OPEN_COUNT = args.includes('--opencount') ? posInt('opencount', 0) : Infinity;
 
-// 25 balanced openings as SAN lines from the start position.
+// 100 frozen, diverse opening lines spanning the ECO range. The match plays
+// each as candidate-White AND candidate-Black (paired), so opening and color
+// bias cancel in the pair score. FROZEN: the order is the opening ID that the
+// structured records and the cluster analysis index into — do not reorder.
 const OPENINGS = [
   ['Italian', 'e4 e5 Nf3 Nc6 Bc4 Bc5'],
-  ['Ruy Lopez', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6'],
-  ['Najdorf', 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6'],
-  ['Taimanov', 'e4 c5 Nf3 e6 d4 cxd4 Nxd4 Nc6'],
-  ['French', 'e4 e6 d4 d5 Nc3 Nf6'],
-  ['Caro-Kann', 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5'],
-  ['Scandinavian', 'e4 d5 exd5 Qxd5 Nc3 Qa5'],
-  ['Pirc', 'e4 d6 d4 Nf6 Nc3 g6'],
-  ['Alekhine', 'e4 Nf6 e5 Nd5 d4 d6'],
+  ['Two Knights', 'e4 e5 Nf3 Nc6 Bc4 Nf6'],
+  ['Two Knights Fried Liver', 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Na5'],
+  ['Ruy Lopez Morphy', 'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6'],
+  ['Ruy Lopez Berlin', 'e4 e5 Nf3 Nc6 Bb5 Nf6'],
+  ['Ruy Lopez Exchange', 'e4 e5 Nf3 Nc6 Bb5 a6 Bxc6 dxc6'],
+  ['Ruy Lopez Steinitz', 'e4 e5 Nf3 Nc6 Bb5 d6'],
   ['Scotch', 'e4 e5 Nf3 Nc6 d4 exd4 Nxd4'],
-  ['Petrov', 'e4 e5 Nf3 Nf6 Nxe5 d6 Nf3 Nxe4'],
-  ['Vienna', 'e4 e5 Nc3 Nf6 f4 d5'],
-  ['QGD', 'd4 d5 c4 e6 Nc3 Nf6'],
+  ['Scotch Gambit', 'e4 e5 Nf3 Nc6 d4 exd4 Bc4'],
+  ['Four Knights', 'e4 e5 Nf3 Nc6 Nc3 Nf6'],
+  ['Petrov Classical', 'e4 e5 Nf3 Nf6 Nxe5 d6 Nf3 Nxe4'],
+  ['Philidor', 'e4 e5 Nf3 d6 d4 exd4 Nxd4 Nf6'],
+  ['Vienna Gambit', 'e4 e5 Nc3 Nf6 f4 d5'],
+  ['Vienna Bishop', 'e4 e5 Nc3 Nf6 Bc4 Nc6'],
+  ['King\'s Gambit Accepted', 'e4 e5 f4 exf4 Nf3 g5'],
+  ['King\'s Gambit Declined', 'e4 e5 f4 Bc5'],
+  ['Bishop\'s Opening', 'e4 e5 Bc4 Nf6 d3 c6'],
+  ['Center Game', 'e4 e5 d4 exd4 Qxd4 Nc6'],
+  ['Ponziani', 'e4 e5 Nf3 Nc6 c3 Nf6'],
+  ['Sicilian Najdorf', 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6'],
+  ['Sicilian Dragon', 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6'],
+  ['Sicilian Scheveningen', 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 e6'],
+  ['Sicilian Classical', 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 Nc6'],
+  ['Sicilian Taimanov', 'e4 c5 Nf3 e6 d4 cxd4 Nxd4 Nc6'],
+  ['Sicilian Kan', 'e4 c5 Nf3 e6 d4 cxd4 Nxd4 a6'],
+  ['Sicilian Sveshnikov', 'e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5'],
+  ['Sicilian Accelerated Dragon', 'e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 g6'],
+  ['Sicilian Rossolimo', 'e4 c5 Nf3 Nc6 Bb5 g6'],
+  ['Sicilian Moscow', 'e4 c5 Nf3 d6 Bb5 Bd7'],
+  ['Sicilian Alapin', 'e4 c5 c3 Nf6 e5 Nd5'],
+  ['Sicilian Alapin d5', 'e4 c5 c3 d5 exd5 Qxd5'],
+  ['Sicilian Closed', 'e4 c5 Nc3 Nc6 g3 g6'],
+  ['Sicilian Grand Prix', 'e4 c5 Nc3 Nc6 f4 g6'],
+  ['Sicilian Smith-Morra', 'e4 c5 d4 cxd4 c3 dxc3 Nxc3'],
+  ['Sicilian Kalashnikov', 'e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 e5'],
+  ['Sicilian Hyperaccelerated', 'e4 c5 Nf3 g6'],
+  ['French Winawer', 'e4 e6 d4 d5 Nc3 Bb4'],
+  ['French Classical', 'e4 e6 d4 d5 Nc3 Nf6'],
+  ['French Tarrasch', 'e4 e6 d4 d5 Nd2 Nf6'],
+  ['French Advance', 'e4 e6 d4 d5 e5 c5'],
+  ['French Exchange', 'e4 e6 d4 d5 exd5 exd5'],
+  ['French Rubinstein', 'e4 e6 d4 d5 Nc3 dxe4 Nxe4'],
+  ['Caro-Kann Classical', 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5'],
+  ['Caro-Kann Advance', 'e4 c6 d4 d5 e5 Bf5'],
+  ['Caro-Kann Exchange', 'e4 c6 d4 d5 exd5 cxd5'],
+  ['Caro-Kann Panov', 'e4 c6 d4 d5 exd5 cxd5 c4 Nf6'],
+  ['Caro-Kann Two Knights', 'e4 c6 Nc3 d5 Nf3 Bg4'],
+  ['Caro-Kann Fantasy', 'e4 c6 d4 d5 f3 e6'],
+  ['Scandinavian Main', 'e4 d5 exd5 Qxd5 Nc3 Qa5'],
+  ['Scandinavian Modern', 'e4 d5 exd5 Nf6'],
+  ['Pirc', 'e4 d6 d4 Nf6 Nc3 g6'],
+  ['Pirc Austrian', 'e4 d6 d4 Nf6 Nc3 g6 f4 Bg7'],
+  ['Modern Defense', 'e4 g6 d4 Bg7 Nc3 d6'],
+  ['Alekhine', 'e4 Nf6 e5 Nd5 d4 d6'],
+  ['Alekhine Exchange', 'e4 Nf6 e5 Nd5 d4 d6 c4 Nb6 exd6'],
+  ['Nimzowitsch Defense', 'e4 Nc6 d4 d5'],
+  ['Owen Defense', 'e4 b6 d4 Bb7'],
+  ['QGD Main', 'd4 d5 c4 e6 Nc3 Nf6'],
+  ['QGD Exchange', 'd4 d5 c4 e6 Nc3 Nf6 cxd5 exd5'],
+  ['QGD Tartakower', 'd4 d5 c4 e6 Nf3 Nf6 Nc3 Be7'],
   ['Slav', 'd4 d5 c4 c6 Nf3 Nf6'],
+  ['Slav Nc3', 'd4 d5 c4 c6 Nc3 Nf6'],
+  ['Semi-Slav', 'd4 d5 c4 c6 Nf3 Nf6 Nc3 e6'],
   ['QGA', 'd4 d5 c4 dxc4 Nf3 Nf6 e3 e6'],
+  ['QGA Classical', 'd4 d5 c4 dxc4 Nf3 Nf6 e3 e6 Bxc4 c5'],
+  ['Tarrasch Defense', 'd4 d5 c4 e6 Nc3 c5'],
+  ['Chigorin Defense', 'd4 d5 c4 Nc6'],
+  ['Albin Counter-Gambit', 'd4 d5 c4 e5 dxe5 d4'],
   ['Nimzo-Indian', 'd4 Nf6 c4 e6 Nc3 Bb4'],
-  ['Queens Indian', 'd4 Nf6 c4 e6 Nf3 b6'],
-  ['KID', 'd4 Nf6 c4 g6 Nc3 Bg7 e4 d6'],
+  ['Nimzo-Indian Rubinstein', 'd4 Nf6 c4 e6 Nc3 Bb4 e3 O-O'],
+  ['Queen\'s Indian', 'd4 Nf6 c4 e6 Nf3 b6'],
+  ['Bogo-Indian', 'd4 Nf6 c4 e6 Nf3 Bb4'],
+  ['KID Main', 'd4 Nf6 c4 g6 Nc3 Bg7 e4 d6'],
+  ['KID Classical', 'd4 Nf6 c4 g6 Nc3 Bg7 e4 d6 Nf3 O-O'],
+  ['KID Fianchetto', 'd4 Nf6 c4 g6 Nf3 Bg7 g3 O-O'],
   ['Grunfeld', 'd4 Nf6 c4 g6 Nc3 d5'],
-  ['Benoni', 'd4 Nf6 c4 c5 d5 e6'],
-  ['Dutch', 'd4 f5 g3 Nf6 Bg2 e6'],
-  ['London', 'd4 d5 Bf4 Nf6 e3 c5'],
+  ['Grunfeld Exchange', 'd4 Nf6 c4 g6 Nc3 d5 cxd5 Nxd5 e4 Nxc3 bxc3'],
+  ['Benoni Modern', 'd4 Nf6 c4 c5 d5 e6'],
+  ['Benko Gambit', 'd4 Nf6 c4 c5 d5 b5'],
+  ['Old Benoni', 'd4 c5 d5 e5'],
+  ['Dutch Stonewall', 'd4 f5 g3 Nf6 Bg2 e6'],
+  ['Dutch Leningrad', 'd4 f5 g3 Nf6 Bg2 g6'],
+  ['Dutch Classical', 'd4 f5 c4 Nf6 Nc3 e6'],
+  ['London System', 'd4 d5 Bf4 Nf6 e3 c5'],
+  ['London vs KID', 'd4 Nf6 Bf4 g6 e3 Bg7'],
+  ['Torre Attack', 'd4 Nf6 Nf3 e6 Bg5 c5'],
+  ['Colle System', 'd4 d5 Nf3 Nf6 e3 e6'],
   ['Catalan', 'd4 Nf6 c4 e6 g3 d5 Bg2'],
-  ['English', 'c4 e5 Nc3 Nf6 Nf3 Nc6'],
-  ['Reti', 'Nf3 d5 c4 e6 g3 Nf6']
+  ['Catalan Open', 'd4 Nf6 c4 e6 g3 d5 Bg2 dxc4'],
+  ['Trompowsky', 'd4 Nf6 Bg5 Ne4'],
+  ['Veresov', 'd4 Nf6 Nc3 d5 Bg5'],
+  ['English Symmetrical', 'c4 c5 Nc3 Nc6 g3 g6'],
+  ['English Four Knights', 'c4 e5 Nc3 Nf6 Nf3 Nc6'],
+  ['English Anglo-Indian', 'c4 Nf6 Nc3 e6 Nf3 b6'],
+  ['Reti', 'Nf3 d5 c4 e6 g3 Nf6'],
+  ['Reti KIA', 'Nf3 d5 g3 Nf6 Bg2 e6'],
+  ['King\'s Indian Attack', 'Nf3 Nf6 g3 g6 Bg2 Bg7'],
+  ['Bird Opening', 'f4 d5 Nf3 Nf6 e3 g6'],
+  ['Larsen Attack', 'b3 e5 Bb2 Nc6'],
+  ['Nimzo-Larsen', 'Nf3 Nf6 b3 g6']
 ];
 
 const MK_RAND = 'function __mkRand(seed) {\n' +
@@ -146,16 +258,32 @@ function loadEngine(ref) {
   return ctx;
 }
 
+// Match an opening SAN token to its move. Trailing check/mate marks are
+// stripped from both the token and the engine's canonical SAN, so a frozen
+// line need not carry '+'/'#' exactly; a token that matches zero or more than
+// one legal move is a fatal (ambiguous/illegal) opening definition.
 function openingState(sans) {
+  const strip = function (s) { return s.replace(/[+#]$/, ''); };
   let state = Chess.newGameState();
   for (const san of sans.split(' ')) {
     const legal = Chess.legalMoves(state);
-    const m = legal.find(function (x) { return Chess.toSan(state, x, legal) === san; });
-    if (!m) throw new Error('bad opening SAN: ' + san + ' in "' + sans + '"');
-    state = Chess.playMove(state, m);
+    const hits = legal.filter(function (x) { return strip(Chess.toSan(state, x, legal)) === strip(san); });
+    if (hits.length !== 1) {
+      throw new Error('opening token "' + san + '" matched ' + hits.length + ' moves in "' + sans + '"');
+    }
+    state = Chess.playMove(state, hits[0]);
   }
   return state;
 }
+
+// Candidate-only search-depth telemetry, accumulated across every match move
+// the candidate makes. Emitted in the artifact so a run records how deep the
+// search actually reached at the chosen node budget — useful for calibrating
+// that budget (a budget that only ever completes depth 2-3 exercises far less
+// of the search than one reaching depth 5-6). candDepthGe5 counts moves whose
+// last COMPLETED iteration reached depth >= 5.
+let candMoves = 0, candDepthGe5 = 0;
+const candDepths = {}; // completed-depth histogram: depth -> count
 
 // One game: engines[0] plays White. Returns 1 / 0.5 / 0 from White's view.
 function playGame(engines, sans, seed) {
@@ -171,6 +299,13 @@ function playGame(engines, sans, seed) {
     const r = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.toFen(state)), {
       maxDepth: 30, nodeLimit: NODES, quiesce: true, positions: state.positions
     });
+    // `cand` is the working-tree engine (assigned below, before any game runs).
+    if (ctx === cand) {
+      candMoves++;
+      const dp = r.depth || 0;
+      candDepths[dp] = (candDepths[dp] || 0) + 1;
+      if (dp >= 5) candDepthGe5++;
+    }
     const legal = Chess.legalMoves(state);
     const local = r.move && legal.find(function (m) {
       return m.from === r.move.from && m.to === r.move.to && m.promotion === r.move.promotion;
@@ -212,6 +347,36 @@ function assertBounded(ctx, label) {
   }
 }
 
+// Fast CI guard: validate every frozen opening (legal, non-terminal, distinct)
+// without loading a base ref or playing a game, then exit. Keeps the 100-line
+// opening table honest on every PR.
+if (args.includes('--check-openings')) {
+  const seen = new Map();
+  let bad = 0;
+  for (let o = 0; o < OPENINGS.length; o++) {
+    const name = OPENINGS[o][0], line = OPENINGS[o][1];
+    try {
+      const st = openingState(line);
+      if (Chess.gameStatus(st).over) { console.error('FAIL ' + name + ': terminal after opening'); bad++; continue; }
+      const fen4 = Chess.toFen(st).split(' ').slice(0, 4).join(' ');
+      if (seen.has(fen4)) { console.error('FAIL ' + name + ': duplicate of ' + seen.get(fen4)); bad++; continue; }
+      seen.set(fen4, name);
+    } catch (e) { console.error('FAIL ' + name + ': ' + e.message); bad++; }
+  }
+  console.log(OPENINGS.length + ' openings checked, ' + bad + ' bad');
+  process.exit(bad ? 1 : 0);
+}
+
+// Resolve the opening-range shard against the frozen list.
+const OPEN_LO = OPEN_BASE;
+const OPEN_HI = Math.min(OPENINGS.length,
+  OPEN_BASE + (OPEN_COUNT === Infinity ? OPENINGS.length : OPEN_COUNT));
+if (OPEN_LO >= OPENINGS.length) {
+  console.error('--openbase ' + OPEN_BASE + ' is past the last opening index (' +
+    (OPENINGS.length - 1) + ')');
+  process.exit(2);
+}
+
 const cand = loadEngine(null);
 const base = loadEngine(BASE);
 assertBounded(cand, 'candidate (working tree)');
@@ -219,10 +384,11 @@ assertBounded(base, BASE);
 
 let w = 0, d = 0, l = 0, games = 0;
 const pairScores = []; // candidate score per (opening, seed) pair, in [0, 1]
+const records = [];    // structured per-pair records for clustering/aggregation
 const t0 = Date.now();
 outer:
 for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
-  for (let o = 0; o < OPENINGS.length; o++) {
+  for (let o = OPEN_LO; o < OPEN_HI; o++) {
     if (pairScores.length >= PAIRS_LIMIT) break outer;
     const seed = (o * 977 + s * 7919 + 1) | 0;
     let pair = 0;
@@ -235,60 +401,62 @@ for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
       pair += sc;
     }
     pairScores.push(pair / 2);
+    // `op` is the frozen opening index — the cluster unit. `seed` is the seed
+    // slot (shard coordinate); `gseed` the derived game seed. Both game scores
+    // are kept from the candidate's view so any verdict can be recomputed.
+    records.push({ op: o, name: OPENINGS[o][0], seed: s, gseed: seed,
+      white: asWhite, black: asBlack, pair: pair / 2 });
     process.stderr.write('\r' + games + ' games (' + OPENINGS[o][0] + ', seed ' + s + ')  ' +
       'W' + w + ' D' + d + ' L' + l + '  ' + Math.round((Date.now() - t0) / 1000) + 's   ');
   }
 }
 process.stderr.write('\n');
 
-// 95% two-sided Student's t critical value by degrees of freedom.
-function tCrit95(df) {
-  const T = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
-    2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093,
-    2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
-  if (df <= 0) return Infinity;
-  return df <= 30 ? T[df - 1] : 1.96 + 2.4 / df;
+const cs = clusterStats(records);
+
+// Completed-depth histogram and the fraction of candidate moves returned from a
+// depth >= 5 search — search-depth telemetry for calibrating the node budget.
+const ge5Pct = candMoves ? (100 * candDepthGe5 / candMoves) : 0;
+
+// Provenance so a shard produced directly here (e.g. via --openbase/--opencount)
+// is admissible to ai-match-agg.js without the workflow's metadata header — the
+// aggregator requires candidate-sha / base-sha / nodes-per-move on EVERY shard.
+// candidate = the working tree at HEAD (a locally dirty tree is the caller's
+// responsibility, exactly as the workflow assumes a clean checkout); base = the
+// resolved --base ref. 'unknown' if git can't resolve a ref; the aggregator's
+// SHA-agreement check still stops a mixed shard set from combining.
+function gitSha(ref) {
+  try {
+    return cp.execFileSync('git', ['rev-parse', ref],
+      { encoding: 'utf8', cwd: path.join(__dirname, '..') }).trim();
+  } catch (e) { return 'unknown'; }
 }
-
-const n = pairScores.length;
-const mean = n ? pairScores.reduce(function (a, b) { return a + b; }, 0) / n : NaN;
-
+console.log('candidate-sha: ' + gitSha('HEAD'));
+console.log('base-sha: ' + gitSha(BASE));
+console.log('nodes-per-move: ' + NODES);
 console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
+console.log('records: ' + JSON.stringify(records));        // structured, for the cluster aggregator
+console.log('openings-total: ' + OPENINGS.length);         // opening-list size (aggregator cross-check)
+console.log('shard: openings [' + OPEN_LO + ',' + OPEN_HI + ') seeds [' +
+  SEED_BASE + ',' + (SEED_BASE + SEEDS) + ')');
+console.log('depth-dist: ' + JSON.stringify(candDepths));  // completed-depth histogram (candidate moves)
+console.log('completed-depth: ' + candDepthGe5 + '/' + candMoves + ' candidate moves reached depth >= 5 (' +
+  ge5Pct.toFixed(1) + '%)');
 console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + NODES + ' nodes/move');
-// A paired CI needs the sample variance, which is undefined for n < 2 (the
-// n-1 denominator is 0). Report the raw score but no interval/verdict rather
-// than printing a NaN CB.
-if (n < 2) {
+// The verdict is the opening-CLUSTER one-sided non-inferiority bound (mean and
+// 95% lower bound over the per-opening means, NOT the raw pairs — see
+// test/match-stats.js). A single --seeds 1 shard has one pair per opening, so
+// its cluster bound equals the pair bound; the authoritative 800-game bound
+// comes from aggregating the shards' `records:` with test/ai-match-agg.js.
+if (cs.nClusters < 2) {
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
-    (n ? '  score ' + (mean * 100).toFixed(1) + '%' : '') +
-    '  (' + n + ' pair' + (n === 1 ? '' : 's') + ' — too few for a confidence interval)');
-  console.log('RESULT: inconclusive (need at least 2 pairs for a CI)');
+    (cs.nClusters ? '  score ' + (cs.mean * 100).toFixed(1) + '%' : '') +
+    '  (' + cs.nClusters + ' opening' + (cs.nClusters === 1 ? '' : 's') + ')');
+  console.log('RESULT: ' + cs.verdict);
 } else {
-  let sd = Math.sqrt(pairScores.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1));
-  // A zero sample variance (every observed pair scored identically) does NOT
-  // prove the true per-pair variance is zero — with few pairs it is a common
-  // artifact, e.g. two swept pairs occur 6.25% of the time under a fair,
-  // independent-game null, yet would otherwise print a [100%, 100%] interval
-  // and declare the candidate stronger. Treating the estimate as known-zero is
-  // false certainty. Fall back to the LARGEST standard deviation a [0,1]-
-  // bounded pair score can have (0.5, attained by a 0/1 split), so the
-  // interval reflects genuine small-sample uncertainty; a real, sustained
-  // sweep still narrows the CI as n grows and can reach significance honestly.
-  if (sd === 0) sd = 0.5;
-  // The standard deviation is ESTIMATED from these same n pairs, so a small
-  // match needs Student's t, not the normal 1.96 — otherwise the interval is
-  // too narrow and a borderline candidate can be wrongly called stronger. df
-  // = n-1; the table is exact for df<=30 and the approximation 1.96 + 2.4/df
-  // is within ~0.001 of the true 95% two-sided value for df>30 (df=99 ->
-  // 1.984, df=∞ -> 1.96).
-  const half = tCrit95(n - 1) * sd / Math.sqrt(n);
-  // Clamp the reported bounds to the [0,1] a score can occupy (the verdict
-  // comparisons below are unaffected: clamping never crosses 0.5).
-  const lo = Math.max(0, mean - half), hi = Math.min(1, mean + half);
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
-    '  score ' + (mean * 100).toFixed(1) + '%' +
-    '  95% CI [' + (lo * 100).toFixed(1) + '%, ' + (hi * 100).toFixed(1) + '%] over ' + n + ' pairs');
-  console.log(lo > 0.5 ? 'RESULT: candidate is stronger (CI above 50%)'
-    : hi < 0.5 ? 'RESULT: candidate is weaker (CI below 50%)'
-    : 'RESULT: inconclusive (CI crosses 50%)');
+    '  score ' + (cs.mean * 100).toFixed(2) + '%' +
+    '  one-sided 95% lower bound ' + (cs.lo95 * 100).toFixed(2) + '%' +
+    '  over ' + cs.nClusters + ' openings (' + cs.nPairs + ' pairs)');
+  console.log('RESULT: ' + cs.verdict);
 }
