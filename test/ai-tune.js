@@ -35,6 +35,12 @@
  * clustered self-play match before anything merges. Labelling here is by
  * self-play outcome, a noisy signal: the fit is a hypothesis generator, and the
  * match — not this loss — is the arbiter of strength.
+ *
+ * First run's outcome is recorded in test/ai-tune-findings.md: on 13.7k diverse
+ * outcome-labelled positions the shipped weights are already a Texel-loss local
+ * optimum under any sane regularisation, and the only substantively-moved
+ * candidate (unregularised) overfits and fails the tactics suite. No weight
+ * change shipped — which is precisely the result this guardrail exists to give.
  */
 'use strict';
 const fs = require('fs');

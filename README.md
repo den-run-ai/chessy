@@ -155,7 +155,9 @@ and reports train **and held-out validation** loss. It never writes
 *hypothesis only* — a candidate ships solely if it then clears the tactics
 suite, the benchmark, and the predeclared clustered match (lower bound above
 50%). See the file header for flags (`--games`, `--nodes`, `--lambda`,
-`--data` to cache a generated set for cheap hyper-parameter sweeps).
+`--data` to cache a generated set for cheap hyper-parameter sweeps), and
+`test/ai-tune-findings.md` for the first experiment's result — the shipped
+weights already sit at a Texel-loss local optimum, so no weight change ships.
 
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
