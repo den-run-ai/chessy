@@ -83,6 +83,8 @@ jobs:
         run: node test/ai-match-agg.test.js
       - name: Run analysis-contract tests
         run: node test/analysis-core.test.js
+      - name: Run PGN import tests
+        run: node test/pgn.test.js
 
   browser:
     runs-on: ubuntu-latest
