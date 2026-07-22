@@ -136,11 +136,26 @@ node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 ```
 
-Two more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
+Three more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
 --base origin/main` measures search nodes over 16 benchmark positions
 against a git ref, and `node test/ai-match.js --base origin/main` plays an
 800-game paired self-play match (100 openings x 4 seeds x both colors; also
 available as the "AI self-play match" workflow_dispatch action).
+
+`node test/ai-tune.js` is a development-only evaluation-weight tuner — a
+Texel-style logistic fit of the *existing* evaluation constants in
+`assets/ai.js` (knight/bishop/rook/queen mobility, doubled and isolated pawn
+penalties, the pawn shield, and the passed-pawn midgame/endgame arrays). It
+generates a diverse self-play position set labelled by game outcome, extracts
+the exact linear features of those terms (with a fidelity self-check that the
+reconstruction equals `ai.js`'s own `evaluate()` at the shipped weights),
+fits the weights by gradient descent regularised toward the current values,
+and reports train **and held-out validation** loss. It never writes
+`assets/ai.js`: it prints a frozen candidate, and lower loss is treated as a
+*hypothesis only* — a candidate ships solely if it then clears the tactics
+suite, the benchmark, and the predeclared clustered match (lower bound above
+50%). See the file header for flags (`--games`, `--nodes`, `--lambda`,
+`--data` to cache a generated set for cheap hyper-parameter sweeps).
 
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
@@ -183,6 +198,7 @@ gated on the engine *and* browser suites.
 | `manifest.webmanifest` | PWA manifest |
 | `icons/` | App icons (generated, no external assets) |
 | `test/engine.test.js` | Engine test suite |
+| `test/ai-tune.js` | Development-only evaluation-weight tuner (Texel fit; never ships weights on its own) |
 
 ## License
 
