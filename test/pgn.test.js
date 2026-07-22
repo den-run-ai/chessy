@@ -193,5 +193,65 @@ check(pre.preComment === 'Opening note' &&
   PGN.toRecord(pre, { importedAt: 1 }).preComment === 'Opening note',
   'a pre-first-move comment is preserved through parse and toRecord');
 
+// === Edge cases surfaced by differentially testing against a PEG PGN grammar
+// (used as a dev-time oracle only — no runtime dependency is adopted). Each
+// asserts chessy's OWN behaviour; the oracle is not imported here. ===
+
+// A move whose SAN carries REDUNDANT disambiguation is accepted and stored in
+// chessy's own minimal canonical form. Only the a-rook can reach b1 here (the
+// king on e1 blocks the h-rook), so `Rb1` is enough — but many producers still
+// write `Rab1`. Historically chessy matched only its own minimal toSan output.
+const overFile = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"]\n[SetUp "1"]\n\n1. Rab1 *');
+check(overFile.valid && overFile.moves[0].san === 'Rb1',
+  'redundant file-disambiguation (Rab1 where Rb1 suffices) imports, stored canonical',
+  overFile.error);
+const overRank = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K3 w Q - 0 1"]\n[SetUp "1"]\n\n1. R1a2 *');
+check(overRank.valid && overRank.moves[0].san === 'Ra2',
+  'redundant rank-disambiguation (R1a2 where Ra2 suffices) imports');
+
+// The relaxed match NEVER guesses: a genuinely ambiguous (under-disambiguated)
+// SAN, and a disambiguation naming a nonexistent origin, both stay rejected.
+const ambig = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R1R1K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Rb1 *');
+check(!ambig.valid, 'a truly ambiguous SAN (two rooks reach b1) is still rejected');
+const bogus = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R1R1K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Rdb1 *');
+check(!bogus.valid, 'disambiguation naming a nonexistent origin (Rdb1) is rejected');
+const bothOk = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R1R1K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Rab1 *');
+check(bothOk.valid && bothOk.moves[0].san === 'Rab1',
+  'when two rooks reach b1, the disambiguated Rab1 imports and keeps its disambiguation');
+
+// Long-algebraic notation (from-square spelled out) imports; a knight move is
+// the clearest case since the piece letter and both squares are present.
+const lan = PGN.parseGame('[Result "*"]\n\n1. e2e4 e7e5 2. Ng1f3 *');
+check(lan.valid && lan.moves.map(function (m) { return m.san; }).join(' ') === 'e4 e5 Nf3',
+  'long-algebraic SAN (e2e4 / Ng1f3) imports, stored in canonical SAN');
+
+// A short-form pawn capture (file + destination, no explicit x) imports.
+const shortCap = PGN.parseGame('[FEN "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. ed5 *');
+check(shortCap.valid && shortCap.moves[0].san === 'exd5',
+  'a short-form pawn capture (ed5) imports, normalised to exd5');
+
+// A lowercase promotion piece imports, normalised to uppercase.
+const lowPromo = PGN.parseGame('[FEN "4k3/P7/8/8/8/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. a8=q+ Ke7 *');
+check(lowPromo.valid && lowPromo.moves[0].san === 'a8=Q+' && lowPromo.moves[0].promotion === 'Q',
+  'a lowercase promotion piece (a8=q) imports, normalised to a8=Q');
+
+// The traditional en-passant suffix "e.p." — written SPACED from the capture,
+// as FIDE-style notation and some producers do — no longer orphans a token and
+// invalidates the game; it is dropped as the annotation it is.
+const epSpaced = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6 e.p. Kd8 *');
+check(epSpaced.valid && epSpaced.moves.length === 2 &&
+  epSpaced.moves[0].san === 'exd6' && epSpaced.moves[1].san === 'Kd8',
+  'a spaced en-passant suffix ("exd6 e.p.") is dropped, and the next move still parses',
+  epSpaced.error);
+
+// A result glued to the final move with no separating space ("Qxf7#1-0") is
+// split: the move validates and the result is read, with the same first-game
+// boundary a standalone result token would give.
+const glued = PGN.parseGame('[Result "1-0"]\n\n1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7#1-0');
+check(glued.valid && glued.moves.length === 7 &&
+  glued.moves[6].san === 'Qxf7#' && glued.result === '1-0' && glued.reason === 'checkmate',
+  'a result glued to the mating move (Qxf7#1-0) splits into move + result',
+  glued.error);
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

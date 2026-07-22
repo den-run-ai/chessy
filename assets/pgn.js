@@ -57,6 +57,41 @@
       .replace(/0/g, 'O');
   }
 
+  // Parse a SAN's structural fields for a RELAXED match used only when the
+  // exact canonical spelling does not match. Handles the valid PGN spellings
+  // the engine's own toSan never emits: redundant disambiguation (Rab1 where
+  // Rb1 suffices), long-algebraic (e2e4 / Ng1-f3), short pawn captures (ed5)
+  // and lowercase promotion (a8=q). Returns null for castling and anything
+  // that is not a normal move (so those fall through to a plain reject).
+  function sanFields(san) {
+    const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]/g, '').replace(/[=\-]/g, '');
+    const m = /^([KQRBN])?([a-h])?([1-8])?x?([a-h][1-8])([QRBNqrbn])?$/.exec(t);
+    if (!m) return null;
+    return { piece: m[1] || 'P', file: m[2] || null, rank: m[3] || null,
+      dest: m[4], promo: m[5] ? m[5].toUpperCase() : null };
+  }
+
+  // Find the UNIQUE legal move matching a relaxed SAN spelling. Never guesses:
+  // zero OR MORE-THAN-ONE match returns null, so a genuinely ambiguous
+  // (under-disambiguated) or unknown move stays rejected. Only members of
+  // `legal` are ever considered, so this can never accept an illegal move — it
+  // only widens the set of legal SAN SPELLINGS chessy tolerates on import.
+  function looseFind(legal, want) {
+    const f = sanFields(want);
+    if (!f) return null;
+    const hits = legal.filter(function (m) {
+      if (m.castle) return false;
+      if (m.piece[1] !== f.piece) return false;
+      if ((m.promotion || null) !== f.promo) return false;
+      if (Chess.sqName(m.to) !== f.dest) return false;
+      const from = Chess.sqName(m.from);
+      if (f.file && from[0] !== f.file) return false;
+      if (f.rank && from[1] !== f.rank) return false;
+      return true;
+    });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
   // Tokenise the movetext after the tag section: returns raw move entries
   // { san, nags, comment, clkMs } in mainline order, plus the result token.
   function parseMovetext(text) {
@@ -123,12 +158,22 @@
       // any, is a SAN on the same token (spaceless PGN).
       tok = tok.replace(/^\d+\.(\.\.)?/, '');
       if (!tok) continue;
+      // A lone "e.p."/"e.p" is an en-passant annotation on the previous move,
+      // not a move — some producers write the suffix spaced ("exd6 e.p.").
+      if (/^e\.p\.?$/i.test(tok)) continue;
+      // A result glued to the final move with no separating space
+      // ("Qxe5#1-0"): split the result off, keep the move, and stop after it
+      // (same first-game boundary as a standalone result token).
+      let glued = false;
+      const rm = tok.match(/^(.+?)(1-0|0-1|1\/2-1\/2)$/);
+      if (rm && !/^\d+$/.test(rm[1])) { tok = rm[1]; result = rm[2]; glued = true; }
       // A trailing !/? suffix glyph is a move annotation, not part of the SAN;
       // canon() strips it to match the legal move, so capture it as the
       // equivalent NAG here so the annotation is not silently lost.
       const glyph = (tok.match(/[!?]+$/) || [])[0];
       const nags = glyph && GLYPH_NAG[glyph] ? [GLYPH_NAG[glyph]] : [];
       moves.push({ san: tok, nags: nags, comment: null, clkMs: null });
+      if (glued) break;
     }
     return { moves: moves, result: result, pre: pre };
   }
@@ -248,7 +293,12 @@
       }
       const legal = Chess.legalMoves(s);
       const want = canon(raw.san);
-      const hit = legal.find(function (m) { return canon(Chess.toSan(s, m, legal)) === want; });
+      // Exact canonical match first; fall back to a relaxed unique match so
+      // valid-but-alternately-spelled SAN (redundant disambiguation,
+      // long-algebraic, short pawn captures, lowercase promotion) still
+      // imports. Both draw ONLY from `legal`, so neither accepts an illegal move.
+      const hit = legal.find(function (m) { return canon(Chess.toSan(s, m, legal)) === want; })
+        || looseFind(legal, raw.san);
       if (!hit) {
         return { valid: false, error: 'illegal or unknown move "' + raw.san + '"',
           ply: k + 1, tags: tags, setupFen: setup, moves: [] };
