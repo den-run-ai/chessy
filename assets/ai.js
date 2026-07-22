@@ -119,6 +119,9 @@
 
   const MOBILITY = { N: 3, B: 3, R: 2, Q: 1 };  // centipawns per reachable square
   const DOUBLED = 12, ISOLATED = 12, SHIELD = 8;
+  // Bishop pair: two bishops cover both colour complexes, worth more as the
+  // board opens, so it grows into the endgame. Tapered like the other terms.
+  const BISHOP_PAIR_MG = 20, BISHOP_PAIR_EG = 40;
   const PASSED_MG = [0, 5, 10, 20, 35, 60, 80];   // by ranks advanced from home
   const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
 
@@ -166,6 +169,7 @@
     const pawnFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
     const pawnSquares = { w: [], b: [] };
     const kings = { w: -1, b: -1 };
+    const bishops = { w: 0, b: 0 };
 
     for (let i = 0; i < 64; i++) {
       const p = board[i];
@@ -182,11 +186,16 @@
       } else if (type === 'K') {
         kings[color] = i;
       } else {
+        if (type === 'B') bishops[color]++;
         const mob = mobility(board, i, type, color) * MOBILITY[type];
         m += mob; e += mob;
       }
       if (color === 'w') { mg += m; eg += e; } else { mg -= m; eg -= e; }
     }
+
+    // Bishop pair (two or more bishops — counts the rare third from promotion).
+    if (bishops.w >= 2) { mg += BISHOP_PAIR_MG; eg += BISHOP_PAIR_EG; }
+    if (bishops.b >= 2) { mg -= BISHOP_PAIR_MG; eg -= BISHOP_PAIR_EG; }
 
     for (const color of ['w', 'b']) {
       const sign = color === 'w' ? 1 : -1;
