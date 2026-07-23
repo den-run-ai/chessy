@@ -307,5 +307,26 @@ check(!PGN.parseGame('[Result "*"]\n\n1. 2e4 *').valid &&
   !PGN.parseGame('[FEN "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. xd5 *').valid,
   'malformed pawn tokens (2e4, ee4, xd5) are rejected');
 
+// Only grammar-legal trailing decoration is stripped before the relaxed match:
+// internal check/annotation/"=" punctuation cannot manufacture a shape.
+check(!PGN.parseGame('[Result "*"]\n\n1. e2!e4 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng!1f3 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e=2e4 *').valid,
+  'internal punctuation (e2!e4, Ng!1f3, e=2e4) does not form a relaxed match');
+// A trailing glyph on a genuine long-algebraic move is still fine.
+const lanGlyph = PGN.parseGame('[Result "*"]\n\n1. e2e4! *');
+check(lanGlyph.valid && lanGlyph.moves[0].san === 'e4' && lanGlyph.moves[0].nags.indexOf('$1') !== -1,
+  'a trailing glyph on a long-algebraic move (e2e4!) imports with its NAG');
+
+// A spaced "e.p." suffix is honoured only after a real en-passant capture.
+const epReal = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6 e.p. Kd8 *');
+check(epReal.valid && epReal.moves[0].san === 'exd6', 'a real en-passant capture keeps its spaced e.p. suffix');
+// After an ordinary (non-en-passant) move the suffix is bogus → rejected.
+check(!PGN.parseGame('[Result "*"]\n\n1. e4 e.p. e5 *').valid,
+  'an e.p. suffix after a non-en-passant move (e4 e.p.) is rejected');
+// Before the first move it is an unknown token → rejected (not swallowed).
+check(!PGN.parseGame('[Result "*"]\n\ne.p. 1. e4 *').valid,
+  'an e.p. suffix before the first move is rejected, not silently dropped');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

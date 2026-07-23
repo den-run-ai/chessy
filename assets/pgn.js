@@ -73,7 +73,12 @@
   // so "-e4", "N-f3", "N--f3", "Nf-3" are rejected. Pawn source fields are
   // shape-checked, so "2e4", "ee4", "xd5" are rejected.
   function sanFields(san) {
-    const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]/g, '').replace(/=/g, '');
+    // Strip ONLY grammar-legal trailing decoration — the en-passant suffix and
+    // a run of check/mate/annotation glyphs at the very end. The promotion "="
+    // is NOT stripped globally; each shape allows it only in its defined
+    // position (before a final promotion piece). So internal punctuation
+    // ("e2!e4", "Ng!1f3", "e=2e4") cannot manufacture a recognised shape.
+    const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]+$/, '');
     let m;
     // Piece, long-algebraic: piece + full origin square + optional hyphen + dest.
     if ((m = /^([KQRBN])([a-h][1-8])-?(x)?([a-h][1-8])$/.exec(t)))
@@ -82,16 +87,16 @@
     if ((m = /^([KQRBN])([a-h])?([1-8])?(x)?([a-h][1-8])$/.exec(t)))
       return { piece: m[1], file: m[2] || null, rank: m[3] || null, capture: !!m[4], dest: m[5], promo: null };
     // Pawn, long-algebraic: full origin square + optional hyphen + dest + promo.
-    if ((m = /^([a-h][1-8])-?(x)?([a-h][1-8])([QRBNqrbn])?$/.exec(t)))
+    if ((m = /^([a-h][1-8])-?(x)?([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)))
       return { piece: 'P', file: m[1][0], rank: m[1][1], capture: !!m[2], dest: m[3],
         promo: m[4] ? m[4].toUpperCase() : null };
     // Pawn, short capture: origin FILE (differing from the destination file) +
     // optional x + dest + promo. Always a capture.
-    if ((m = /^([a-h])(x)?([a-h][1-8])([QRBNqrbn])?$/.exec(t)) && m[1] !== m[3][0])
+    if ((m = /^([a-h])(x)?([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)) && m[1] !== m[3][0])
       return { piece: 'P', file: m[1], rank: null, capture: true, dest: m[3],
         promo: m[4] ? m[4].toUpperCase() : null };
     // Pawn, quiet push or promotion: destination only (no origin), never a capture.
-    if ((m = /^([a-h][1-8])([QRBNqrbn])?$/.exec(t)))
+    if ((m = /^([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)))
       return { piece: 'P', file: null, rank: null, capture: false, dest: m[1],
         promo: m[2] ? m[2].toUpperCase() : null };
     return null;
@@ -190,12 +195,16 @@
       tok = tok.replace(/^\d+\.(\.\.)?/, '');
       if (!tok) continue;
       // A lone "e.p."/"e.p", optionally carrying a trailing !/? glyph
-      // ("exd6 e.p.!"), is an en-passant annotation on the previous move, not
-      // a move — some producers write the suffix spaced. Any glyph's NAG is
-      // attached to that move so the annotation is not lost.
+      // ("exd6 e.p.!"), is an en-passant annotation on the PREVIOUS move — some
+      // producers write the suffix spaced. It is recorded on that move (with
+      // any glyph's NAG) and parseGame verifies the move really was an
+      // en-passant capture. With NO preceding move the token is left to fall
+      // through and fail as unknown, so a misplaced "e.p." is not swallowed.
       const epm = /^e\.p\.?([!?]+)?$/i.exec(tok);
-      if (epm) {
-        if (epm[1] && GLYPH_NAG[epm[1]] && moves.length) moves[moves.length - 1].nags.push(GLYPH_NAG[epm[1]]);
+      if (epm && moves.length) {
+        const prev = moves[moves.length - 1];
+        prev.epSuffix = true;
+        if (epm[1] && GLYPH_NAG[epm[1]]) prev.nags.push(GLYPH_NAG[epm[1]]);
         continue;
       }
       // A result glued to the final move with no separating space ("Qxe5#1-0",
@@ -339,6 +348,13 @@
         || looseFind(legal, raw.san);
       if (!hit) {
         return { valid: false, error: 'illegal or unknown move "' + raw.san + '"',
+          ply: k + 1, tags: tags, setupFen: setup, moves: [] };
+      }
+      // A spaced "e.p." suffix only belongs on a real en-passant capture: if it
+      // was written after a move that is not one, the annotation is bogus and
+      // the game is rejected rather than silently accepted.
+      if (raw.epSuffix && !hit.ep) {
+        return { valid: false, error: 'en-passant suffix on a non-en-passant move "' + raw.san + '"',
           ply: k + 1, tags: tags, setupFen: setup, moves: [] };
       }
       moves.push({
