@@ -438,6 +438,33 @@ require('./helper').run('reflection', async function (t) {
     'a result with garbled provenance is rejected (no vundefined / undefined nodes)');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse7; });
 
+  // A garbled cached line with a non-array pv must NOT throw while rendering
+  // (which would hang on "Analysing…"): it renders as an empty continuation.
+  await page.evaluate(function () {
+    window.__realAnalyse8 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
+        depth: 5, nodes: 100, elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'different-candidate',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+          uci: 'x', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: null, pvUci: null }]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'malformed pv');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.locator('#verifyLines li').count()) >= 1 &&
+        !(await page.textContent('#verifyResult')).includes('could not'),
+    'a malformed candidate pv renders as an empty continuation (no throw / hang)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse8; });
+
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
   await page.click('#flagMoment'); // re-flag ply 0

@@ -184,7 +184,9 @@
     ev.className = 'eval';
     ev.textContent = fmtLineEval(line, turn);
     li.appendChild(ev);
-    const pvTail = line.pv.slice(1, 1 + PV_TAIL).join(' ');
+    // A garbled cached line may carry a missing/non-array pv: treat it as an
+    // empty continuation rather than throwing while rendering.
+    const pvTail = Array.isArray(line.pv) ? line.pv.slice(1, 1 + PV_TAIL).join(' ') : '';
     if (pvTail) {
       const pv = document.createElement('span');
       pv.className = 'pv';
