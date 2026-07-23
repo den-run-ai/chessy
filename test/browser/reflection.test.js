@@ -129,7 +129,11 @@ require('./helper').run('reflection', async function (t) {
   const partialGated = await page.evaluate(function () {
     const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     const state = Chess.parseFen(fen);
-    const full = ChessyAnalysisCore.analyse(state, { maxDepth: 4, multiPV: 3, nodeLimit: 8000 });
+    // Include the ACTUAL played move (f3) so playedLine is populated: a partial
+    // scan must NOT report its rank as exact.
+    const played = { from: Chess.sqIndex('f2'), to: Chess.sqIndex('f3'), promotion: null };
+    const full = ChessyAnalysisCore.analyse(state,
+      { maxDepth: 4, multiPV: 3, nodeLimit: 8000, playedMove: played });
     full.complete = false; // pretend the node budget was reached
     window.__realSvc = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function () { return Promise.resolve(full); };
@@ -151,6 +155,11 @@ require('./helper').run('reflection', async function (t) {
   // CSS ::after that screen readers may not expose.
   check((await page.textContent('#verifyMeta')).toLowerCase().includes('partial'),
     'the partial warning is real text content (screen-reader accessible)');
+  // A partial scan must not present an EXACT rank: the summary says "provisional"
+  // and the lines use bullets, never "#n" that unsearched moves could displace.
+  check((await page.textContent('#verifyResult')).includes('provisional') &&
+        !(await page.textContent('#verifyLines')).includes('#'),
+    'a partial analysis withholds exact ranks (provisional standing, bulleted lines)');
   // A partial verdict cannot found a card: Save stays disabled and even a
   // forced click creates nothing (Train must never drill an incomplete scan).
   const cardsBeforePartial = (await cards()).length;
@@ -230,6 +239,33 @@ require('./helper').run('reflection', async function (t) {
   // the handler re-checks disabled and the null verdict.
   await page.evaluate(function () { document.getElementById('saveCard').click(); });
   check((await cards()).length === 2, 'an illegal engine result creates no card');
+
+  // A LEGAL top move but an unusable evaluation (no mate, non-finite score)
+  // must also be rejected — never rendered as "+0.0" or persisted into a card.
+  await page.evaluate(function () {
+    ChessyAnalysisService.analyse = function () {
+      const legal = Chess.legalMoves(Chess.parseFen(
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: null, scoreCpPlayer: null, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
+          uci: 'x', san: '?', scoreCpWhite: null, scoreCpPlayer: null, mate: null, pv: ['?'], pvUci: [] }]
+      });
+    };
+  });
+  await page.click('#flagMoment'); // re-flag ply 0
+  await page.fill('#reflectThreat', 'legal move, no eval');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a legal move with an invalid evaluation is rejected, not shown as +0.0 or saved');
+  check((await cards()).length === 2, 'an invalid-evaluation result creates no card');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse; });
 
   // Abandoning a probe: leave the game while it runs — the verdict must

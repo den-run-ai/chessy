@@ -64,8 +64,18 @@
       const goodForMover = line.mate.forWhite === (turn === 'w');
       return (goodForMover ? '+M' : '−M') + line.mate.inPlies;
     }
-    const s = turn === 'b' ? -line.scoreCpWhite : line.scoreCpWhite;
+    const cp = line.scoreCpWhite;
+    if (typeof cp !== 'number' || !isFinite(cp)) return '?'; // malformed payload
+    const s = turn === 'b' ? -cp : cp;
     return (s >= 0 ? '+' : '') + (s / 100).toFixed(1);
+  }
+
+  // A usable line must carry a real evaluation — a valid mate payload OR a
+  // finite white-POV centipawn score. A legal move with neither (a malformed
+  // worker/cache result) must not render as "+0.0" or found a card.
+  function validEval(line) {
+    return !!line && (!!line.mate ||
+      (typeof line.scoreCpWhite === 'number' && isFinite(line.scoreCpWhite)));
   }
 
   // The white-POV centipawn number a card stores for its best move. A mate is
@@ -152,10 +162,13 @@
   // short PV, and a "your move" tag when it is the move actually played. The
   // rank is shown explicitly (the list is unnumbered) so a played line appended
   // from OUTSIDE the top MultiPV reads as e.g. "#14", not the next list index.
-  function addLine(ol, line, turn, rank, isPlayed) {
+  function addLine(ol, line, turn, rank, isPlayed, exactRank) {
     const li = document.createElement('li');
     if (isPlayed) li.className = 'played';
-    li.appendChild(document.createTextNode('#' + rank + '  ' + line.san + ' '));
+    // A provisional (partial-analysis) ranking shows a bullet, never a precise
+    // "#n" that unsearched moves could still displace.
+    const marker = exactRank ? '#' + rank + '  ' : '• ';
+    li.appendChild(document.createTextNode(marker + line.san + ' '));
     const ev = document.createElement('span');
     ev.className = 'eval';
     ev.textContent = fmtLineEval(line, turn);
@@ -179,17 +192,17 @@
   // Render the candidate lines (best-first). When the played move ranked BELOW
   // the shown MultiPV it is appended with its true rank, so the player always
   // sees where their choice stood — without any line being called an error.
-  function renderLines(res, turn, playedUci) {
+  function renderLines(res, turn, playedUci, exactRanks) {
     const ol = $('verifyLines');
     ol.textContent = '';
     let playedShown = false;
     res.bestLines.forEach(function (line, i) {
       const isPlayed = line.uci === playedUci;
       if (isPlayed) playedShown = true;
-      addLine(ol, line, turn, i + 1, isPlayed);
+      addLine(ol, line, turn, i + 1, isPlayed, exactRanks);
     });
     const pl = res.playedLine;
-    if (pl && !playedShown) addLine(ol, pl, turn, pl.rank, true);
+    if (pl && !playedShown) addLine(ol, pl, turn, pl.rank, true, exactRanks);
   }
 
   $('reflectForm').addEventListener('submit', function (e) {
@@ -248,7 +261,9 @@
         return m.from === top.move.from && m.to === top.move.to &&
                (m.promotion || null) === (top.move.promotion || null);
       });
-      if (!bm) {
+      // No legal top move, or a top line with no usable evaluation (a malformed
+      // worker/cache result), cannot found a lesson.
+      if (!bm || !validEval(top)) {
         verdict = null;
         $('verifyLines').textContent = '';
         $('verifyMeta').textContent = '';
@@ -265,7 +280,7 @@
       const topEval = fmtLineEval(top, pos.turn);
 
       const partial = res.complete === false;
-      renderLines(res, pos.turn, playedUci);
+      renderLines(res, pos.turn, playedUci, !partial);
       // Provenance as REAL text (not CSS-generated), so assistive tech exposes
       // the partial qualification too — a budget-capped result must never read
       // as a settled, exhaustive verdict.
@@ -282,7 +297,10 @@
           topEval + ' for ' + mover + ').';
       } else {
         const pl = res.playedLine;
+        // Cite an EXACT rank only for a complete analysis: a partial scan ranks
+        // the played move within the searched prefix, not all legal moves.
         const standing = !pl ? ''
+          : partial ? ' — your move was evaluated (ranking provisional while the analysis is incomplete)'
           : pl.amongCandidates ? ' — your move is a Chessy candidate too (line ' + pl.rank + ')'
           : ' — your move ranks #' + pl.rank + ' of Chessy’s ' + legal.length + ' legal moves here';
         sentence = 'You played ' + entry.san + ' — Chessy preferred ' + top.san + ' (' +
