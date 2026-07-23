@@ -73,8 +73,8 @@ const SPECS = [
   // still avoids the losing promotions and returns a legal winning move, and
   // only at 20000 nodes does the tuned tapered eval (deeper endgame tables
   // spend the horizon differently) also PROVE the mate score.
-  ['restraint at 12k budget, never f8=Q', '8/5P1k/8/5K2/8/8/8/8 w - - 0 1', null, 12000,
-    ['f7f8Q', 'f7f8B', 'f7f8N']],
+  ['picks a winning move at 12k budget (f8=R or Kf6)', '8/5P1k/8/5K2/8/8/8/8 w - - 0 1',
+    ['f7f8R', 'f5f6'], 12000, ['f7f8Q', 'f7f8B', 'f7f8N']],
   ['proves mate at 20k budget, never f8=Q', '8/5P1k/8/5K2/8/8/8/8 w - - 0 1', null, 20000,
     ['f7f8Q', 'f7f8B', 'f7f8N'], true],
   ['underpromote N, royal fork', '8/2q1P1k1/8/8/8/8/P7/4K3 w - - 0 1', ['e7e8N'], 12000],
@@ -324,10 +324,12 @@ check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
 // independent witness: alpha-beta to the horizon, then a self-contained
 // quiescence mirroring quiesceNode's rules (insufficient material, terminal
 // mate/stalemate, 50-move, QMAX=16, stand-pat, capture/promotion filter, check
-// evasions) — but with NO delta pruning, NO TT, NO move ordering. It has no
-// pruning so it is exponential; the positions are kept shallow/small. Includes
-// BOTH delta-review witnesses, the exact regressions that motivated removing
-// delta pruning. Unpruned, so kept to fast positions.
+// evasions) — but with NO selective/delta pruning, NO TT, NO move ordering.
+// Ordinary alpha-beta cutoffs and quiescence stand-pat remain (that is what it
+// shares with production); it just lacks the selective pruning and TT that make
+// production fast, so it is near-exponential and the positions are kept
+// shallow/small. Includes BOTH delta-review witnesses, the exact regressions
+// that motivated removing delta pruning.
 const QMAX_ORACLE = 16;
 function oracleQuiesce(state, alpha, beta, ply, qply, path) {
   if (Chess.insufficientMaterial(state.board)) return 0;
@@ -381,6 +383,10 @@ function oracleQ(state, depth, alpha, beta, ply, path) {
     if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push(nx);
   }
   if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
+  // Mirror searchNode: checkmate outranks the 50-move rule (handled by the
+  // terminal test above), but once a legal evasion is confirmed the 50-move
+  // draw stands even in check. (The !inChk case returned 0 at entry.)
+  if (state.halfmove >= 100) return 0;
   let best = maximizing ? -Infinity : Infinity;
   path.push(key);
   for (const nx of legal) {
@@ -402,7 +408,12 @@ const Q_CASES = [
   ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 0],
   ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 1],
   ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 2],
-  [PVS_FEN, 2]
+  [PVS_FEN, 2],
+  // in check AT the 50-move boundary with a legal evasion (Kxg2): checkmate
+  // would outrank the rule, but a mere evasion leaves the draw standing, so
+  // both oracle and production must score 0 — exercises oracleQ's fifty-move
+  // branch after confirming a legal move.
+  ['6k1/8/8/8/8/8/6q1/7K w - - 100 60', 2]
 ];
 for (const [fen, d] of Q_CASES) {
   const st = Chess.parseFen(fen);

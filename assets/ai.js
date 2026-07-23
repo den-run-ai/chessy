@@ -37,17 +37,15 @@
   // phase-specific piece value's positional intent; the raw material value
   // (VALUES_MG / VALUES_EG) is added on top in evaluate().
   //
-  // PROVENANCE / LICENSE (must be resolved before release): these twelve
-  // tables and the VALUES_MG/VALUES_EG piece values above are the verbatim
-  // "PeSTO" coefficients by Ronald Friederich (author of the RofChade engine),
-  // as published on the Chess Programming Wiki "PeSTO's Evaluation Function"
-  // (https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function). CPW text
-  // is CC BY-SA 3.0; Chessy is MIT. Whether short numeric tuning constants are
-  // copyrightable is debatable, but the lineage must be recorded and the grant
-  // confirmed. Options for the maintainer: (a) confirm/obtain an explicit
-  // permissive grant from the author and add attribution, (b) rely on the
-  // data/non-copyrightability position with documented legal review, or
-  // (c) replace these with independently retuned tables. Tracked in #72.
+  // PROVENANCE / ATTRIBUTION: these twelve tables and the VALUES_MG/VALUES_EG
+  // piece values are the "PeSTO" coefficients by Ronald Friederich (author of
+  // the RofChade engine), originally published by him on the TalkChess forum
+  // and mirrored on the Chess Programming Wiki. They are used here as functional
+  // numerical tuning outputs in a dictated piece×square layout — facts/data,
+  // not copyrightable expression — with attribution retained (see
+  // THIRD_PARTY_NOTICES.md). The CPW page is a secondary reference only, NOT the
+  // licensing source (its sitewide CC BY-SA 3.0 marking is not MIT-compatible
+  // and does not govern this reuse). Decision and rationale recorded in #72.
   const PST = {
     P: [
         0,   0,   0,   0,   0,   0,   0,   0,
@@ -900,16 +898,15 @@
 
     for (let d = 1; d <= maxDepth; d++) {
       // Aspiration window: from depth 2, expect this iteration to score
-      // near the previous one. A wrong guess fails the whole root — then
-      // the failed side re-searches doubled, eventually falling back to
-      // the full window; a root fail-low/high never trusts the bound, it
-      // widens and re-searches. A root fail-low/high never trusts the bound,
-      // it widens and re-searches. Sitting on top of a now-exact PVS (delta
-      // pruning removed), aspiration reproduces the full-window result — the
-      // reviewer's FEN r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq
-      // - 2 15 gives the same value as an independent full-window search, and
-      // the 16-position --exact bench shows 0 move/score divergences vs no
-      // aspiration. Mate scores never aspire.
+      // near the previous one. A wrong guess fails the whole root, which never
+      // trusts the bound — the failed side widens (doubling) and re-searches,
+      // eventually falling back to the full window. Sitting on top of a
+      // now-exact PVS (delta pruning removed), aspiration reproduces the
+      // full-window result — the reviewer's FEN
+      // r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq - 2 15 gives the
+      // same value as an independent full-window search, and the 16-position
+      // --exact bench shows 0 move/score divergences vs no aspiration. Mate
+      // scores never aspire.
       let delta = 50;
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
