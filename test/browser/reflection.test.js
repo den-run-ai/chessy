@@ -606,6 +606,46 @@ require('./helper').run('reflection', async function (t) {
   check(!(await page.locator('#saveCard').isDisabled()),
     'a fresh probe after the abandoned one works normally');
 
+  // Integration (real service + worker, no stub): a malformed CACHED result is
+  // rejected safely, and "Verify again" bypasses/evicts the bad cache and
+  // dispatches a fresh worker run that replaces it — not the same bad entry
+  // served forever. The Verify above cached a VALID analysis for this moment.
+  const gid = await page.evaluate(function () { return CoachReview.current().game.id; });
+  const corrupted = await page.evaluate(function (gid) {
+    return CoachStore.listAnalysesForGame(gid).then(function (recs) {
+      const rec = recs.find(function (r) { return r.ply === 0; });
+      if (!rec) return false;
+      // Break the top line's move so it can no longer resolve to a legal move,
+      // leaving engine/fingerprint/turn intact so the service still serves it.
+      rec.result.bestLines[0].move = { from: -1, to: -1, promotion: null };
+      return CoachStore.putAnalysis(rec).then(function () { return true; });
+    });
+  }, gid);
+  check(corrupted, 'a valid analysis was cached, then corrupted in place');
+
+  const d0 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
+  await page.click('#reflectVerify'); // serves the corrupted cache entry
+  await verifyDone();
+  const d1 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled() && d1 === d0,
+    'a malformed cached result is served, rejected, and dispatches no worker');
+
+  await page.click('#reflectVerify'); // retry: bypasses the evicted cache
+  await verifyDone();
+  const d2 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
+  check(d2 > d1, 'Verify again after a rejected cache dispatches a fresh worker run');
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'the fresh run yields a valid, saveable result');
+  const replaced = await page.evaluate(function (gid) {
+    return CoachStore.listAnalysesForGame(gid).then(function (recs) {
+      const rec = recs.find(function (r) { return r.ply === 0; });
+      const mv = rec && rec.result.bestLines[0].move;
+      return !!mv && mv.from >= 0 && mv.to >= 0;
+    });
+  }, gid);
+  check(replaced, 'the valid re-run replaced the corrupted cache entry');
+
   // Reflection is about YOUR decisions: in a vs-computer game only the
   // human's moves are flaggable.
   await page.evaluate(function () {

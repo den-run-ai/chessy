@@ -364,6 +364,13 @@
   function getAnalysis(key) {
     return tx('analyses', 'readonly', function (s) { return s.get(key); });
   }
+  // Evict a single cached analysis by key. The reflection layer applies rules
+  // the store/service cannot (per-line legality + SAN); when it rejects a
+  // served result as unusable it evicts the entry so a retry re-runs the worker
+  // instead of serving the same bad cache forever.
+  function deleteAnalysis(key) {
+    return tx('analyses', 'readwrite', function (s) { return s.delete(key); });
+  }
   function listAnalysesForGame(gameId) {
     return tx('analyses', 'readonly', function (s) {
       return s.index('gameId').getAll(IDBKeyRange.only(gameId));
@@ -401,6 +408,7 @@
     analysisKey: analysisKey,
     putAnalysis: putAnalysis,
     getAnalysis: getAnalysis,
+    deleteAnalysis: deleteAnalysis,
     listAnalysesForGame: listAnalysesForGame,
     putJob: putJob,
     getJob: getJob,

@@ -115,6 +115,9 @@
   let verdict = null;
   let verifySeq = 0;
   let saveSeq = 0;
+  // The moment ("gameId:ply") whose last analysis was rejected as unusable, so
+  // the next Verify for it bypasses the (evicted) cache and re-runs the worker.
+  let retryFresh = null;
 
   function sameMoment(r) {
     return !!r && !!flagged && r.game.id === flagged.gameId && r.ply === flagged.ply;
@@ -276,12 +279,19 @@
     $('saveCard').disabled = true;
     $('reflectVerify').disabled = true; // one analysis at a time
 
-    ChessyAnalysisService.analyse({
+    // If the previous analysis for THIS moment was rejected as unusable, bypass
+    // the cache on this run (consume the flag). `fresh` lives on the request,
+    // not in opts, so it never perturbs the analysis identity / cache key.
+    const momentKey = flagged.gameId + ':' + ply;
+    const wantFresh = retryFresh === momentKey;
+    retryFresh = null;
+    const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
-      fen: fenBefore, positions: r.states[ply].positions,
+      fen: fenBefore, positions: r.states[ply].positions, fresh: wantFresh,
       opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
         nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
-    }).then(function (res) {
+    };
+    ChessyAnalysisService.analyse(analysisReq).then(function (res) {
       if (token === verifySeq) $('reflectVerify').disabled = false;
       // A newer request superseded this one, or the user left the moment: drop
       // it silently (the owning request/moment repaints the shared controls).
@@ -335,6 +345,12 @@
         (res.playedLine == null ||
           (resolveLine(res.playedLine) !== null && Number.isFinite(res.playedLine.rank)));
       if (!bm || !provOk || !completeOk || !linesOk) {
+        // This unusable result may have come from the IndexedDB cache; evict it
+        // AND mark the moment so the next Verify bypasses the cache and
+        // dispatches a fresh worker run instead of serving the same bad entry.
+        // A valid re-run then overwrites the cache.
+        ChessyAnalysisService.invalidate(analysisReq);
+        retryFresh = flagged.gameId + ':' + ply;
         failVerify('Chessy could not analyse this position — Verify again.');
         return;
       }
