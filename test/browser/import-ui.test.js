@@ -105,6 +105,25 @@ require('./helper').run('import-ui', async function (t) {
     return getComputedStyle(s).backgroundColor;
   });
   check(pillBg === 'rgb(93, 122, 58)', 'the selected side pill uses the AA-contrast accent');
+  // The primary Import button uses the AA-contrast dark accent too.
+  const submitBg = await page.$eval('#importSubmit', function (b) {
+    return getComputedStyle(b).backgroundColor;
+  });
+  check(submitBg === 'rgb(93, 122, 58)', 'the primary Import button uses the AA-contrast accent');
+
+  // An oversized file is rejected BEFORE reading — no freeze, no import.
+  await page.setInputFiles('#importFile', {
+    name: 'huge.pgn', mimeType: 'application/x-chess-pgn',
+    buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 0x20) // 5 MB + 1, over the limit
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('importStatus').textContent.indexOf('too large') !== -1;
+  }, { timeout: 5000 });
+  check((await status()).kind === 'error' &&
+        (await page.$eval('#importText', function (e) { return e.value.length; })) < 1000,
+    'an oversized file is rejected and never read into the textarea');
+  check(await listCount() === 2, 'an oversized file imports nothing');
+
   await page.setInputFiles('#importFile', {
     name: 'game.pgn', mimeType: 'application/x-chess-pgn',
     buffer: Buffer.from('[Event "File"]\n\n1. c4 c5 2. g3 g6 *')

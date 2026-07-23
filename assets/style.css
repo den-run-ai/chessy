@@ -223,8 +223,11 @@ body {
   cursor: pointer;
 }
 .btn:hover { background: #4a4642; }
-.btn.primary { background: var(--accent); color: #fff; }
-.btn.primary:hover { background: var(--accent-dark); }
+/* --accent-dark, not --accent: white-on-#7fa650 is ~2.81:1 (below WCAG AA);
+   white-on-#5d7a3a clears 4.5:1 for these 0.9rem labels. Hover goes darker
+   still for feedback. */
+.btn.primary { background: var(--accent-dark); color: #fff; }
+.btn.primary:hover { background: #4a6330; }
 
 .captured {
   min-height: 1.4rem;

@@ -38,6 +38,11 @@
   let reader = null;    // the current (abortable) FileReader
   let reading = false;
   let importing = false;
+  // A single game is a few KB even with heavy comments; a multi-game PGN
+  // database can be hundreds of MB. Reading one into a string would freeze or
+  // OOM the page before the user could cancel, so reject oversized files up
+  // front (only the first game is imported anyway).
+  const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB
 
   function setStatus(msg, kind) {
     statusEl.textContent = msg || '';
@@ -100,6 +105,13 @@
   fileEl.addEventListener('change', function () {
     const file = fileEl.files && fileEl.files[0];
     if (!file) return;
+    // Reject an oversized file BEFORE reading it — do not touch the current
+    // reader or textarea, so a rejected pick leaves the dialog as it was.
+    if (file.size > MAX_IMPORT_BYTES) {
+      setStatus('That file is too large (' + Math.round(file.size / 1048576) +
+        ' MB). Import a single-game PGN (up to 5 MB).', 'error');
+      return;
+    }
     if (reader) { try { reader.abort(); } catch (e) { /* already done */ } }
     // Choosing a file makes THAT file the source of truth: clear any prior
     // text (typed or from an earlier file) up front, so a still-pending or a
@@ -158,15 +170,19 @@
     setStatus('Importing…', 'info');
     CoachStore.importGame(record).then(function (outcome) {
       if (myGen !== generation) return; // dialog closed/reopened/resubmitted meanwhile
-      importing = false;
-      refreshBusy();
       if (outcome === 'duplicate') {
-        // Already archived — keep the dialog open so the message is seen; do
-        // NOT mint a second game.
+        // Already archived — dialog stays open, so re-enable Submit; do NOT
+        // mint a second game.
+        importing = false;
+        refreshBusy();
         setStatus('This game is already in your archive.', 'info');
         return;
       }
-      // Committed. Refresh the list underneath, then close onto it.
+      // Committed. Keep `importing` true (Submit stays disabled) through the
+      // refresh AND the close: while refreshGames() is pending on a large
+      // archive the dialog is still open, and a second paste submitted then
+      // would be stored silently but miss the refreshed list. close() →
+      // invalidate() clears `importing`.
       return Promise.resolve(CoachReview.refreshGames()).then(function () {
         if (myGen !== generation) return;
         close();
