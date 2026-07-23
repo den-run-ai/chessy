@@ -467,6 +467,7 @@
     parseTags: parseTags,
     parseClk: parseClk,
     contentHash: contentHash,
+    validFen: validFen,
     toRecord: toRecord
   };
 })(typeof window !== 'undefined' ? window : globalThis);

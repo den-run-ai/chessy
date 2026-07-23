@@ -225,6 +225,13 @@
     },
     // The currently open game and shown ply (null on the game list) — the
     // reflection flow reads this instead of duplicating browser state.
-    current: function () { return review; }
+    current: function () { return review; },
+    // Force the panel back to a FRESHLY rendered game list, abandoning any open
+    // review/reflection — used after a destructive replace/clear. Unlike
+    // refreshGames() this is unconditional (renderGameList already no-ops the
+    // open-game guard by clearing `review`), so a game left open on the stale
+    // archive can't keep taking Verify/Save actions against a record the
+    // restore/delete just removed.
+    resetToList: function () { return renderGameList(); }
   };
 })();

@@ -405,6 +405,10 @@
   var BACKUP_FORMAT = 'chessy-coach-backup';
   var BACKUP_VERSION = 1;
   var DURABLE_STORES = ['games', 'cards'];
+  // A restore CLEARS the recomputable caches too (they belong to games being
+  // removed) but only re-adds the durable rows — so it opens a transaction over
+  // all four stores while iterating DURABLE_STORES for the re-add.
+  var RESTORE_STORES = ['games', 'cards', 'analyses', 'analysisJobs'];
 
   function exportAll() {
     return open().then(function (db) {
@@ -419,6 +423,177 @@
         t.oncomplete = function () { resolve(out); };
         t.onerror = function () { reject(t.error); };
         t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
+  // ---- Restore (Phase 4b3) ---------------------------------------------
+  // A value usable as an IndexedDB key: string, finite number, valid Date, or
+  // an array of those. A record whose keyPath value is anything else would make
+  // store.add() throw SYNCHRONOUSLY (DataError) — caught in-transaction below,
+  // but rejecting it here means a known-bad backup never opens a transaction.
+  function validIdbKey(v) {
+    var tp = typeof v;
+    if (tp === 'string') return true;
+    if (tp === 'number') return isFinite(v);
+    if (v instanceof Date) return !isNaN(v.getTime());
+    if (Array.isArray(v)) return v.length > 0 && v.every(validIdbKey);
+    return false;
+  }
+
+  // Strict structural FEN check (Chess.parseFen is deliberately lenient, so it
+  // would accept "bad" and yield a broken position that Train's
+  // Chess.parseFen(card.fenBefore) then chokes on). Mirrors the six-field
+  // validation in pgn.js: 8 ranks each summing to 8 valid squares, exactly one
+  // king per side, a legal side to move, and numeric counters. Self-contained
+  // so store.js keeps no dependency on the later-loading pgn.js.
+  function validFen(fen) {
+    if (typeof fen !== 'string') return false;
+    var parts = fen.trim().split(/\s+/);
+    if (parts.length !== 6) return false;
+    var rows = parts[0].split('/');
+    if (rows.length !== 8) return false;
+    var wk = 0, bk = 0;
+    for (var ri = 0; ri < rows.length; ri++) {
+      var count = 0;
+      for (var ci = 0; ci < rows[ri].length; ci++) {
+        var ch = rows[ri][ci];
+        if (/[1-8]/.test(ch)) count += Number(ch);
+        else if (/[prnbqkPRNBQK]/.test(ch)) { count += 1; if (ch === 'K') wk++; if (ch === 'k') bk++; }
+        else return false;
+      }
+      if (count !== 8) return false;
+    }
+    if (wk !== 1 || bk !== 1) return false;
+    if (parts[1] !== 'w' && parts[1] !== 'b') return false;
+    if (!/^(-|K?Q?k?q?)$/.test(parts[2]) || parts[2] === '') return false;
+    if (!/^(-|[a-h][36])$/.test(parts[3])) return false;
+    if (!/^\d+$/.test(parts[4])) return false;      // halfmove clock
+    if (!/^[1-9]\d*$/.test(parts[5])) return false; // fullmove number (>= 1)
+    return true;
+  }
+
+  // Validate a parsed backup WITHOUT touching the database: format, a version
+  // no NEWER than this build understands, and every durable record's key and
+  // minimal schema. Returns an error string, or null when it is safe to
+  // restore. Rejecting here keeps the restore atomic — a malformed backup never
+  // gets a partial write.
+  function validateBackup(data) {
+    if (!data || typeof data !== 'object') return 'not a backup object';
+    if (data.format !== BACKUP_FORMAT) return 'unrecognised backup format';
+    // Every backup this app writes carries integer version fields. REQUIRE them
+    // (not merely "reject if newer"): a truncated file retaining only the
+    // format tag and empty stores must not be treated as a compatible v-nothing
+    // backup and allowed to erase the archive.
+    if (!Number.isInteger(data.version) || data.version < 1) {
+      return 'backup has no valid version';
+    }
+    if (data.version > BACKUP_VERSION) return 'backup is from a newer app version';
+    if (!Number.isInteger(data.dbVersion) || data.dbVersion < 1) {
+      return 'backup has no valid database version';
+    }
+    if (data.dbVersion > DB_VERSION) return 'backup is from a newer database schema';
+    // Must be a plain object: an ARRAY passes `typeof === 'object'` but then
+    // every named store reads as absent, so a `stores: []` backup would clear
+    // the archive while "restoring" zero records.
+    if (!data.stores || typeof data.stores !== 'object' || Array.isArray(data.stores)) {
+      return 'backup has no stores';
+    }
+    for (var i = 0; i < DURABLE_STORES.length; i++) {
+      var name = DURABLE_STORES[i];
+      var rows = data.stores[name];
+      if (rows === undefined) continue; // a store may legitimately be absent/empty
+      if (!Array.isArray(rows)) return 'store "' + name + '" is not an array';
+      for (var j = 0; j < rows.length; j++) {
+        var r = rows[j];
+        if (!r || typeof r !== 'object') return 'store "' + name + '" has a non-object record';
+        if (!validIdbKey(r.id)) return 'store "' + name + '" record ' + j + ' has an invalid "id" key';
+        // Required schema so a restored record is USABLE, not merely addable:
+        // a game must replay AND render in Review; a card must attach to a game
+        // AND be trainable. Otherwise the destructive restore swaps in records
+        // that later blow up the view or the training load.
+        if (name === 'games') {
+          if (typeof r.id !== 'string' || !Array.isArray(r.sans)) {
+            return 'store "games" record ' + j + ' is missing required fields';
+          }
+          // Review renders result / plies / createdAt directly; missing values
+          // show as "undefined", "NaN moves", "Invalid Date".
+          if (typeof r.result !== 'string' || !r.result) {
+            return 'store "games" record ' + j + ' is missing a result';
+          }
+          if (!Number.isFinite(r.plies)) {
+            return 'store "games" record ' + j + ' has a non-numeric plies';
+          }
+          if (!Number.isFinite(r.createdAt)) {
+            return 'store "games" record ' + j + ' has a non-numeric createdAt';
+          }
+        }
+        if (name === 'cards') {
+          if (typeof r.gameId !== 'string') {
+            return 'store "cards" record ' + j + ' is missing a gameId';
+          }
+          // Train dereferences fenBefore (Chess.parseFen) and schedules on due;
+          // an unparseable FEN drops the WHOLE training load into its "Archive
+          // unavailable" path, and a non-numeric due breaks the due index.
+          if (!validFen(r.fenBefore)) {
+            return 'store "cards" record ' + j + ' has an invalid fenBefore';
+          }
+          if (!Number.isFinite(r.due)) {
+            return 'store "cards" record ' + j + ' has a non-numeric due';
+          }
+          // Progress iterates `for (const a of attempts)` and Train grading
+          // does `(attempts || []).concat(...)`; a non-array (e.g. {}) is truthy
+          // so it slips the `|| []` guard and throws. Missing is fine (treated
+          // as empty); present-but-not-an-array is rejected.
+          if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
+            return 'store "cards" record ' + j + ' has a non-array attempts';
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  // Replace the DURABLE archive with a validated backup, ATOMICALLY: one
+  // read-write transaction clears games+cards and re-adds the backup's rows.
+  // Validated in memory first (invalid → rejected, zero writes). Crucially, a
+  // SYNCHRONOUS enqueue failure (an invalid key that slipped validation) must
+  // NOT let the preceding clear() auto-commit and destroy the archive: the loop
+  // is wrapped so any throw explicitly aborts the whole transaction, rolling
+  // the clear back. Any async request error aborts the transaction too (IDB
+  // atomicity), so a restore either fully lands or leaves the archive exactly
+  // as it was. Resolves with per-store counts.
+  function restoreAll(data) {
+    var err = validateBackup(data);
+    if (err) return Promise.reject(new Error('invalid backup: ' + err));
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        // The backup deliberately omits the recomputable engine caches, but the
+        // replacement must still CLEAR them in the SAME atomic transaction:
+        // analyses and analysisJobs keyed to games the restore removes are no
+        // longer reachable yet keep consuming quota, which can later fail game
+        // or card writes. Clear all four, re-add only the durable backup rows.
+        var t = db.transaction(RESTORE_STORES, 'readwrite');
+        var counts = {};
+        var failed = null;
+        t.oncomplete = function () { resolve(counts); };
+        t.onerror = function () { reject(failed || t.error || new Error('restore failed')); };
+        t.onabort = function () { reject(failed || t.error || new Error('restore aborted')); };
+        try {
+          RESTORE_STORES.forEach(function (name) { t.objectStore(name).clear(); });
+          DURABLE_STORES.forEach(function (name) {
+            var store = t.objectStore(name);
+            var rows = (data.stores[name] || []);
+            counts[name] = rows.length;
+            rows.forEach(function (r) { store.add(r); }); // may throw synchronously on a bad key
+          });
+        } catch (e) {
+          // Explicit abort so the clear() cannot commit: without this the
+          // transaction would still flush the queued clear and wipe the archive
+          // even though the restore "failed".
+          failed = e;
+          try { t.abort(); } catch (e2) { /* already aborting */ }
+        }
       });
     });
   }
@@ -443,6 +618,8 @@
     putJob: putJob,
     getJob: getJob,
     deleteJob: deleteJob,
-    exportAll: exportAll
+    exportAll: exportAll,
+    validateBackup: validateBackup,
+    restoreAll: restoreAll
   };
 })(typeof window !== 'undefined' ? window : globalThis);

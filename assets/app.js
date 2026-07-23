@@ -967,8 +967,61 @@
     if (document.visibilityState === 'hidden') save();
   });
 
+  // A cleared ending we could not durably fence — the save must not recreate
+  // it on the next pagehide/visibilitychange, or the next boot re-archives it
+  // onto the restored data. Keyed by a local ending signature so an Undo →
+  // different finish (a new ending) still saves normally.
+  const suppressedEndings = new Set();
+  function localEndingKey(id, sans, result, reason) {
+    return String(id) + '' + sans.join(',') + '' +
+      (result || '') + '' + (reason || '');
+  }
+
+  // Archive cleared (Delete-all / Restore, from data-controls): the current
+  // finished game is still in this session's live save and would be re-archived
+  // on the next boot. Fence its exact ending so record() refuses it. If the
+  // fence cannot be persisted — localStorage full, OR the archive module is
+  // absent (partial cache eviction) — remove the saved game to free space,
+  // retry the (tiny) fence, and suppress re-saving THIS ending for the rest of
+  // the session so a later pagehide/visibilitychange save() can't recreate it
+  // unfenced. An unfinished game is not a resurrection risk (not archived until
+  // it finishes) and is left alone.
+  document.addEventListener('chessy:archivecleared', function (e) {
+    if (!gameId) return;
+    const st = fullStatus();
+    if (!st.over) return;
+    const sans = state.history.map(function (h) { return h.san; });
+    let fenced = false;
+    if (window.ChessyArchive && ChessyArchive.fenceEnding) {
+      fenced = ChessyArchive.fenceEnding(gameId, sans, st.result, st.reason);
+    }
+    if (!fenced) {
+      let removed = false;
+      try { localStorage.removeItem(STORAGE_KEY); removed = true; } catch (e2) { /* nothing else to do */ }
+      if (window.ChessyArchive && ChessyArchive.fenceEnding) {
+        fenced = ChessyArchive.fenceEnding(gameId, sans, st.result, st.reason); // retry, space now freed
+      }
+      suppressedEndings.add(localEndingKey(gameId, sans, st.result, st.reason));
+      // Report back to the caller (data-controls fenceRecovery): the save is
+      // durably neutralized only if we FENCED it or REMOVED it. If neither
+      // persisted (localStorage fully unavailable), the caller qualifies its
+      // success so the user knows a reload could still resurrect it.
+      if (!fenced && !removed && e && e.detail) e.detail.neutralized = false;
+    }
+  });
+
   // ---- Persistence ----
   function save() {
+    // A cleared ending we couldn't durably fence must not be re-persisted (a
+    // pagehide/visibilitychange save would recreate the resurrection vector).
+    // Only pay for the check when something is actually suppressed.
+    if (suppressedEndings.size) {
+      const st = fullStatus();
+      if (st.over && suppressedEndings.has(localEndingKey(
+          gameId, state.history.map(function (h) { return h.san; }), st.result, st.reason))) {
+        return;
+      }
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         fen: Chess.toFen(state),
