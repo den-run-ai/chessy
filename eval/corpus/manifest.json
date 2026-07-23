@@ -1,0 +1,61 @@
+{
+  "corpus": "eval-v1",
+  "generator_version": "eval-v1.0.0",
+  "retrieval_date": "2026-07-23",
+  "total": 66,
+  "shard_size": 64,
+  "counts_by_category": {
+    "opening": 32,
+    "en-passant": 4,
+    "castling": 5,
+    "promotion": 4,
+    "stalemate": 4,
+    "checkmate": 3,
+    "mate-in-1": 4,
+    "fifty-move": 3,
+    "threefold": 2,
+    "insufficient-material": 3,
+    "kpk": 1,
+    "rook-endgame": 1
+  },
+  "counts_by_split": {
+    "train": 47,
+    "val": 7,
+    "test": 12
+  },
+  "split_policy": "70/15/15 train/val/test by stable id hash; never tune on the test split",
+  "analyse_opts": {
+    "nodeLimit": 3000,
+    "nodeBudget": 2000000,
+    "multiPV": 3,
+    "pvLen": 4,
+    "quiesce": true
+  },
+  "ndjson": "eval-v1.ndjson",
+  "ndjson_sha256": "45da6706a5b878f3441ca9ab79c2e9df9a2895ade6eb3575c1bce1c2db7677e5",
+  "licenses": {
+    "CC0-1.0": "Opening theory positions (names/ECO from lichess chess-openings, CC0); FEN derived by replaying the line through the Chessy engine.",
+    "MIT": "Original stateful/adversarial + endgame fixtures authored for this repository (chessy-eval-generator), validated by the engine."
+  },
+  "schema": [
+    "id",
+    "source_url",
+    "source_id",
+    "license",
+    "retrieval_date",
+    "source_sha",
+    "fen",
+    "move_history",
+    "phase",
+    "themes",
+    "rating_band",
+    "branching",
+    "split_group",
+    "generator_version",
+    "seed",
+    "core",
+    "shard",
+    "assert"
+  ],
+  "note": "Frozen, license-clean. No third-party game/puzzle databases vendored. See eval/LICENSE-REPORT.md."
+}
