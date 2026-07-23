@@ -65,13 +65,13 @@ require('./helper').run('data-controls', async function (t) {
         backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
     'a parked (pending-queue) game is included in the backup');
 
-  // A parked REVISION (same id as a committed row, but newer moves) is the
-  // authoritative copy when its write failed, so it must REPLACE the stale
-  // committed row in the backup, not be dropped as a duplicate id.
+  // A parked REVISION (same id as a committed row, but newer moves) is an
+  // UNCONFIRMED write — higher authority than the committed row — so it must
+  // REPLACE it in the backup, not be dropped as a duplicate id. (A surviving
+  // queue entry is genuinely unconfirmed: a successful commit clears its own
+  // id's entry, so a stale leftover can't reach here — see archive.test.js.)
   const revId = await page.evaluate(function () {
-    // The committed row is the OLD ending (earlier completion); the parked
-    // revision finished LATER, so it is the authoritative copy.
-    const g = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 *'), { playerColor: 'w', createdAt: 1 });
+    const g = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 *'), { playerColor: 'w' });
     return CoachStore.importGame(g).then(function () {
       const map = {};
       map[g.id] = { w: 't', rec: { id: g.id, source: 'play', sans: ['d4', 'd5', 'c4'],
@@ -84,29 +84,29 @@ require('./helper').run('data-controls', async function (t) {
   const backup3 = JSON.parse(fs.readFileSync(await dl3.path(), 'utf8'));
   const revved = backup3.stores.games.find(function (g) { return g.id === revId; });
   check(revved && revved.sans.join(',') === 'd4,d5,c4',
-    'a parked revision replaces the stale committed row of the same id');
+    'a parked (unconfirmed) revision replaces the committed row of the same id');
 
-  // The converse: a DEMONSTRABLY STALE pending entry (park() failed at quota,
-  // leaving an OLDER same-id entry, while the revision's own commit succeeded)
-  // must NOT override the newer committed row. Disambiguated by completion time.
-  const staleId = await page.evaluate(function () {
+  // Revision order is by SOURCE AUTHORITY, never wall-clock: a backward system
+  // clock can stamp a REVISED finish with a LOWER createdAt than the original.
+  // A recovery revision must still win even when its createdAt is the smaller.
+  const clockId = await page.evaluate(function () {
     localStorage.removeItem('chessy-pending-archive-v1');
-    // Committed row = the CURRENT revision, finished later (createdAt 50).
-    const g = { id: 'stale-x', source: 'play', sans: ['d4', 'd5', 'c4'], result: '1-0',
-      reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 50 };
+    // Committed = the ORIGINAL finish, stamped at a HIGHER time (100).
+    const g = { id: 'clock-x', source: 'play', sans: ['e4', 'e5'], result: '*',
+      reason: 'imported', mode: 'pvp', plies: 2, createdAt: 100 };
     return CoachStore.putGame(g).then(function () {
-      // A leftover parked entry holds the OLD ending, finished earlier (10).
+      // Parked = the later REVISION, but the clock moved back so its time is 20.
       localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-        'stale-x': { w: 't', rec: { id: 'stale-x', source: 'play', sans: ['e4', 'e5'],
-          result: '*', reason: 'imported', mode: 'pvp', plies: 2, createdAt: 10 } } }));
-      return 'stale-x';
+        'clock-x': { w: 't', rec: { id: 'clock-x', source: 'play', sans: ['d4', 'd5', 'c4'],
+          result: '1-0', reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 20 } } }));
+      return 'clock-x';
     });
   });
   const [dl3b] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
   const backup3b = JSON.parse(fs.readFileSync(await dl3b.path(), 'utf8'));
-  const staleRow = backup3b.stores.games.find(function (g) { return g.id === staleId; });
-  check(staleRow && staleRow.sans.join(',') === 'd4,d5,c4' && staleRow.result === '1-0',
-    'a stale older pending entry does not override a newer committed revision');
+  const clockRow = backup3b.stores.games.find(function (g) { return g.id === clockId; });
+  check(clockRow && clockRow.sans.join(',') === 'd4,d5,c4',
+    'a recovery revision wins by authority even with a lower (clock-skewed) createdAt');
 
   // A finished game saved ONLY in chessy-game-v1 (not in IndexedDB, not parked)
   // is reconstructed into the backup, so an unrecomputable game is not dropped.
@@ -192,6 +192,44 @@ require('./helper').run('data-controls', async function (t) {
   check(!backup7.stores.cards.some(function (c) { return c.gameId === 'rev-x'; }),
     'a parked revision prunes lesson cards from the abandoned continuation');
 
+  // Pruning uses the FINAL winner, not an intermediate revision that lost. The
+  // committed row and the finished local save share the prefix [f3,e5,g4]; an
+  // intermediate PENDING revision diverges at ply 1. A card at ply 2 is on the
+  // committed∩final shared prefix, so it must SURVIVE — pruning per-apply would
+  // have dropped it against the pending revision before the local save won.
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // final: fool's mate
+    const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+    // Final winner (local save): [f3,e5,g4,Qh4#].
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'prune2-x', endedAt: 9 }));
+    // Intermediate (pending) revision diverges at ply 1 — it must NOT drive pruning.
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'prune2-x': { w: 't', rec: { id: 'prune2-x', source: 'play', sans: ['f3', 'd5'],
+        result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 2 } } }));
+    // Committed row shares [f3,e5,g4] with the final ending, diverging at ply 3.
+    return CoachStore.putGame({ id: 'prune2-x', source: 'play', sans: ['f3', 'e5', 'g4', 'Nf6'],
+      result: '*', reason: 'imported', mode: 'pvp', plies: 4, createdAt: 1 })
+      .then(function () { return CoachStore.addCard({ gameId: 'prune2-x', ply: 2, cause: 't', due: 1, attempts: [], fenBefore: fen }); });
+  });
+  const [dl7b] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup7b = JSON.parse(fs.readFileSync(await dl7b.path(), 'utf8'));
+  const prune2 = backup7b.stores.games.find(function (g) { return g.id === 'prune2-x'; });
+  check(prune2 && prune2.sans.join(',') === 'f3,e5,g4,Qh4#',
+    'the finished local save wins the successive revision');
+  check(backup7b.stores.cards.some(function (c) { return c.gameId === 'prune2-x' && c.ply === 2; }),
+    'a card on the committed/final shared prefix survives an intermediate losing revision');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-game-v1');
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
   // A finished local save that REVISES the committed game (no pending record —
   // archive.js failed to load, say) still wins over the stale committed row.
   await page.evaluate(function () {
@@ -214,32 +252,9 @@ require('./helper').run('data-controls', async function (t) {
   check(saveRev && saveRev.result === '0-1' && saveRev.sans.length === 4,
     'a finished local save revising the committed game wins over the stale row');
 
-  // Ordering: the finished LOCAL SAVE is authoritative over a STALE PENDING
-  // record of the same id. The pending write may have been superseded (the
-  // player finished the game again after the parked attempt), so the merge
-  // applies the local save LAST. Both differ from the committed row here, so
-  // whichever is applied last visibly wins.
-  await page.evaluate(function () {
-    let s = Chess.newGameState();
-    function play(f, t) {
-      const legal = Chess.legalMoves(s);
-      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
-    }
-    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // fool's mate (true current finish)
-    localStorage.setItem('chessy-game-v1', JSON.stringify({
-      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'ord-x', endedAt: 9 }));
-    // A stale parked record for the SAME id holds a DIFFERENT, superseded finish.
-    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-      'ord-x': { w: 't', rec: { id: 'ord-x', source: 'play', sans: ['e4', 'e5'], result: '1-0',
-        reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 2 } } }));
-    return CoachStore.putGame({ id: 'ord-x', source: 'play', sans: ['e4'], result: '*',
-      reason: 'imported', mode: 'pvp', plies: 1, createdAt: 1 });
-  });
-  const [dl9] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
-  const backup9 = JSON.parse(fs.readFileSync(await dl9.path(), 'utf8'));
-  const ord = backup9.stores.games.find(function (g) { return g.id === 'ord-x'; });
-  check(ord && ord.result === '0-1' && ord.sans.length === 4,
-    'the finished local save wins over a stale pending record of the same id');
+  // (The finished-local-save-beats-a-same-id pending record case is covered by
+  // the clock-skew and successive-revision tests above: the local save is
+  // applied last and is authoritative for its id.)
   await page.evaluate(function () {
     localStorage.removeItem('chessy-game-v1');
     localStorage.removeItem('chessy-pending-archive-v1');
@@ -452,13 +467,22 @@ require('./helper').run('data-controls', async function (t) {
       emptyStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {} }),
       // A card without a numeric scheduling step would grade to due:NaN.
       noStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
-        games: [], cards: [{ id: 1, gameId: 'g', due: 0, fenBefore: startFen, attempts: [] }] } })
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, fenBefore: startFen, attempts: [] }] } }),
+      // A FRACTIONAL step indexes the fixed ladder off-rung → LADDER_DAYS[0.5]
+      // is undefined → due:NaN on the first grade.
+      fracStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0.5, fenBefore: startFen, attempts: [] }] } }),
+      // A step below -1 (the immediate-learn rung) also indexes off the ladder.
+      lowStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: -2, fenBefore: startFen, attempts: [] }] } })
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
   check(!!moreRejects.badAttempts, 'a card with a non-array attempts is rejected');
   check(!!moreRejects.emptyStores, 'a backup missing the games/cards arrays is rejected');
-  check(!!moreRejects.noStep, 'a card with a non-numeric scheduling step is rejected');
+  check(!!moreRejects.noStep, 'a card with a missing scheduling step is rejected');
+  check(!!moreRejects.fracStep, 'a card with a fractional ladder step is rejected');
+  check(!!moreRejects.lowStep, 'a card with a step below the immediate-learn rung is rejected');
 
   // ---- Write-lock: while a destructive operation is in flight, training/
   // derived writes are REJECTED so they can't commit behind the clear and

@@ -568,12 +568,15 @@
           if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
             return 'store "cards" record ' + j + ' has a non-array attempts';
           }
-          // Train.schedule() does arithmetic on card.step; a missing/non-numeric
-          // step yields step:NaN and due:NaN, which the IndexedDB `due` index
-          // cannot schedule. Every saved card carries a numeric step (reflection
-          // sets step:-1 for the immediate-learn rung).
-          if (!Number.isFinite(r.step)) {
-            return 'store "cards" record ' + j + ' has a non-numeric step';
+          // Train.schedule() uses card.step as an INDEX into a fixed ladder
+          // (LADDER_DAYS, 6 rungs) — LADDER_DAYS[card.step] — with -1 the
+          // immediate-learn rung reflection sets. A fractional step (0.5) or one
+          // below -1 indexes off the ladder to `undefined`, so the first grade
+          // stores due:NaN, which the IndexedDB `due` index cannot schedule.
+          // Require an integer in the supported domain; steps above the top rung
+          // are clamped by schedule() and so are harmless.
+          if (!Number.isInteger(r.step) || r.step < -1) {
+            return 'store "cards" record ' + j + ' has an out-of-range step';
           }
         }
       }

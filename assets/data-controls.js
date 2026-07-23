@@ -107,22 +107,35 @@
   // Merge the recovery sources IndexedDB can't see into the exported snapshot,
   // as one canonical routine so a backup can't silently drop or misrepresent a
   // finished game. exportAll gives the committed rows; a parked durability-queue
-  // record (in-flight/failed write) and the finished local save (chessy-game-v1)
-  // may each hold a NEWER copy. For each such record, applied newest-last
-  // (committed < local save < pending):
-  //   - identical ending re-offered → keep the committed row, but retain the
-  //     EARLIEST createdAt (archiveGame's same-ending rule — never export a
-  //     later completion time that would reorder the list);
-  //   - a genuine REVISION (same id, different moves) → the recovery copy wins
-  //     AND its abandoned-continuation cards are pruned at the divergence;
+  // record (an UNCONFIRMED write) and the finished local save (chessy-game-v1,
+  // the CURRENT live state) may each hold a newer copy.
+  //
+  // Sources are applied in ASCENDING authority — committed < pending < local
+  // save — and the last to touch an id wins. Authority, NOT wall-clock: a
+  // backward system clock can stamp a REVISED finish with a LOWER createdAt than
+  // the original (both come from Date.now()), so completion time cannot order
+  // revisions. A surviving pending entry is genuinely newer than the committed
+  // row because a successful commit clears its own id's queue entry, even when
+  // its park failed (archive.js commit()), so a stale leftover can't masquerade
+  // as an unconfirmed newer write. The local save is the live current state and
+  // is authoritative for its id.
+  //   - identical ending re-offered → keep the EARLIEST createdAt (archiveGame's
+  //     same-ending rule — never reorder the list by a later completion time)
+  //     but adopt the re-offer's fresher, unrecomputable metadata (clocks);
+  //   - a genuine REVISION (same id, different moves) → the higher-authority
+  //     copy wins;
   //   - a new id → added.
+  // Lesson cards are pruned ONCE at the end, against the ORIGINAL committed
+  // moves and the FINAL winning ending — never against an intermediate revision
+  // that lost, which could drop a card still valid for the final ending.
   // `keep(rec)` lets a caller veto a record (e.g. a fenced ending on the
   // restore branch) before it is merged.
   function mergeRecoverySources(data, keep) {
     const games = data.stores.games || (data.stores.games = []);
     const cards = data.stores.cards || (data.stores.cards = []);
     const byId = {};
-    games.forEach(function (g) { byId[g.id] = g; });
+    const committedSans = {}; // original committed moves per id, for a single prune
+    games.forEach(function (g) { byId[g.id] = g; committedSans[g.id] = g.sans; });
     function apply(rec) {
       if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) return;
       if (keep && !keep(rec)) return;
@@ -139,32 +152,27 @@
         byId[rec.id] = Object.assign({}, rec, { createdAt: earliest });
         return;
       }
-      if (cur) {
-        // A genuine REVISION (same id, different ending). A still-parked queue
-        // entry is NOT proof of "newest": park() can fail at quota and leave an
-        // OLDER same-id entry behind while the revision's own save AND commit
-        // succeeded (archive.js park()/commit at :144-166). Disambiguate by
-        // completion time — the recovery copy replaces the committed row only
-        // when it is at least as new; a demonstrably older entry (the committed
-        // row finished later) is a stale queue leftover and is kept out, so the
-        // backup can't silently regress the game or prune the newer copy's cards.
-        const curDate = Number.isFinite(cur.createdAt) ? cur.createdAt : -Infinity;
-        const recDate = Number.isFinite(rec.createdAt) ? rec.createdAt : -Infinity;
-        if (recDate < curDate) return; // stale queue entry — keep the committed revision
-        pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
-      }
-      byId[rec.id] = rec; // new id, or a revision that supersedes the committed row
+      byId[rec.id] = rec; // new id, or a higher-authority revision of this id
     }
-    // Apply pending-queue records first, then the finished LOCAL SAVE last, so
-    // for an IDENTICAL ending the fresher local-save metadata is adopted. Which
-    // copy wins a genuine REVISION no longer depends on order — apply() compares
-    // completion times — so a demonstrably stale queue entry never overrides a
-    // newer committed revision, whichever source is applied first.
+    // Pending queue first, then the finished LOCAL SAVE last (highest authority).
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
       ChessyArchive.pendingRecords().forEach(apply);
     }
     const saved = savedFinishedRecord();
     if (saved) apply(saved);
+    // Prune cards ONCE now that the winner per id is known: against the ORIGINAL
+    // committed moves (what the stored cards were cut for) and the FINAL ending.
+    // Doing it per-apply would let an intermediate revision that later loses
+    // prune a card that is still on the shared prefix of the committed and final
+    // endings. sameEnding leaves sans byte-identical, so the divergence is the
+    // full length and nothing is pruned.
+    Object.keys(byId).forEach(function (id) {
+      const oldSans = committedSans[id];
+      const finalSans = byId[id].sans;
+      if (oldSans && finalSans !== oldSans) {
+        pruneCardsFromDivergence(cards, id, oldSans, finalSans);
+      }
+    });
     data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
   }
 

@@ -158,9 +158,30 @@
     }
   }
 
+  // Drop any parked entry for `id`, whatever its token. Used only when a commit
+  // SUCCEEDED but its own park had failed (null token), so clearPendingIf can't
+  // match: the durable write supersedes any earlier park for that id.
+  function clearPending(id) {
+    const map = readPending();
+    if (!map || !(id in map)) return;
+    delete map[id];
+    writePending(map);
+  }
+
   function commit(rec, token) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
-      if (token) clearPendingIf(rec.id, token);
+      if (token) {
+        clearPendingIf(rec.id, token);
+      } else {
+        // This write's park FAILED (null token — e.g. quota), so clearPendingIf
+        // would no-op and a PRIOR parked entry for this id would linger even
+        // though this newer ending is now durably committed. A finished game is
+        // revised sequentially (same tab, #44), so a successful commit
+        // supersedes any earlier park for the same id: drop it. Without this a
+        // stale queue leftover would later be treated as an unconfirmed newer
+        // write and regress the committed revision in a backup.
+        clearPending(rec.id);
+      }
       return storedId;
     });
   }

@@ -325,6 +325,39 @@ require('./helper').run('archive', async function (t) {
   await page.evaluate(function () { CoachStore.archiveGame = CoachStore.__realArchiveGame; });
   await page.click('#gameOverClose');
 
+  // A successful commit whose OWN park failed (quota) clears a PRIOR parked
+  // entry for that id. Otherwise a stale leftover — an older ending whose park
+  // wrote while a newer revision's park hit quota but its commit still landed —
+  // would survive to be treated as an unconfirmed newer write and regress the
+  // committed revision in a backup. Force the park write to fail by exhausting
+  // localStorage; the smaller clear (a removeItem) still succeeds.
+  const rootFix = await page.evaluate(function () {
+    // A stale prior entry for root-x (an OLDER ending).
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'root-x': { w: 'stale', rec: { id: 'root-x', source: 'play', sans: ['e4', 'e5'],
+        result: '*', reason: 'imported', mode: 'pvp', plies: 2, createdAt: 1 } } }));
+    // Exhaust localStorage so the next pending WRITE (park, a larger map) fails.
+    const filler = new Array(1024 * 1024 + 1).join('x');
+    const keys = [];
+    try {
+      for (let i = 0; i < 40; i++) { localStorage.setItem('__fill-' + i, filler); keys.push('__fill-' + i); }
+    } catch (e) { /* quota reached */ }
+    const mk = function (sans) { return { history: sans.map(function (s) { return { san: s }; }) }; };
+    const cfg = { mode: 'pvp', difficulty: '3', timeControl: 'none' };
+    const over = { over: true, result: '1-0', reason: 'checkmate' };
+    // A NEW ending (revision) for root-x: its park can't persist (quota), but
+    // the IndexedDB commit succeeds and must drop the stale prior entry.
+    return ChessyArchive.record(mk(['d4', 'd5', 'c4']), cfg, over, 'root-x', { endedAt: 2 })
+      .then(function () {
+        keys.forEach(function (k) { localStorage.removeItem(k); });
+        const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+        return { staleGone: !(map && map['root-x'] && map['root-x'].rec.sans[0] === 'e4') };
+      });
+  });
+  await waitGameCount(8);
+  check(rootFix.staleGone,
+    'a successful commit whose park failed clears the stale prior queue entry');
+
   // A failure routed to the PAGE note (the dialog had closed) is OWNED by
   // its game: when a replacement attempt for the SAME game later
   // succeeds, the note clears — the page must not keep claiming a game
