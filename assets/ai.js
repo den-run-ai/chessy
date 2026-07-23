@@ -17,99 +17,153 @@
 (function (global) {
   'use strict';
 
+  // Material for MOVE ORDERING and delta pruning (MVV-LVA, quiescence margins).
+  // Deliberately a single representative value per type: ordering only needs a
+  // stable ranking and delta pruning a safe margin, so keeping these constant
+  // isolates the evaluation change below to eval alone (search behaviour that
+  // reads VALUES is unchanged).
   const VALUES = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 0 };
 
-  // Piece-square tables from White's perspective, index 0 = a8.
+  // Phase-specific material for EVALUATION. The endgame revalues pieces the
+  // way real endgames do: pawns and rooks gain, minor pieces lose a little,
+  // the queen drops. Interpolated with the piece-square tables below by the
+  // same game-phase weight, so material and placement taper coherently.
+  const VALUES_MG = { P: 82, N: 337, B: 365, R: 477, Q: 1025, K: 0 };
+  const VALUES_EG = { P: 94, N: 281, B: 297, R: 512, Q: 936, K: 0 };
+
+  // Piece-square tables from White's perspective, index 0 = a8. A coherent,
+  // tuned tapered set (PeSTO / Rofchade lineage): every piece — not just pawns
+  // and the king — now has a distinct endgame table, and the two phases are
+  // blended by remaining non-pawn material. Values are centipawns and already
+  // include their phase-specific piece value's positional intent; the raw
+  // material value (VALUES_MG / VALUES_EG) is added on top in evaluate().
   const PST = {
     P: [
-       0,  0,  0,  0,  0,  0,  0,  0,
-      50, 50, 50, 50, 50, 50, 50, 50,
-      10, 10, 20, 30, 30, 20, 10, 10,
-       5,  5, 10, 25, 25, 10,  5,  5,
-       0,  0,  0, 20, 20,  0,  0,  0,
-       5, -5,-10,  0,  0,-10, -5,  5,
-       5, 10, 10,-20,-20, 10, 10,  5,
-       0,  0,  0,  0,  0,  0,  0,  0
+        0,   0,   0,   0,   0,   0,   0,   0,
+       98, 134,  61,  95,  68, 126,  34, -11,
+       -6,   7,  26,  31,  65,  56,  25, -20,
+      -14,  13,   6,  21,  23,  12,  17, -23,
+      -27,  -2,  -5,  12,  17,   6,  10, -25,
+      -26,  -4,  -4, -10,   3,   3,  33, -12,
+      -35,  -1, -20, -23, -15,  24,  38, -22,
+        0,   0,   0,   0,   0,   0,   0,   0
     ],
     N: [
-      -50,-40,-30,-30,-30,-30,-40,-50,
-      -40,-20,  0,  0,  0,  0,-20,-40,
-      -30,  0, 10, 15, 15, 10,  0,-30,
-      -30,  5, 15, 20, 20, 15,  5,-30,
-      -30,  0, 15, 20, 20, 15,  0,-30,
-      -30,  5, 10, 15, 15, 10,  5,-30,
-      -40,-20,  0,  5,  5,  0,-20,-40,
-      -50,-40,-30,-30,-30,-30,-40,-50
+      -167, -89, -34, -49,  61, -97, -15,-107,
+       -73, -41,  72,  36,  23,  62,   7, -17,
+       -47,  60,  37,  65,  84, 129,  73,  44,
+        -9,  17,  19,  53,  37,  69,  18,  22,
+       -13,   4,  16,  13,  28,  19,  21,  -8,
+       -23,  -9,  12,  10,  19,  17,  25, -16,
+       -29, -53, -12,  -3,  -1,  18, -14, -19,
+      -105, -21, -58, -33, -17, -28, -19, -23
     ],
     B: [
-      -20,-10,-10,-10,-10,-10,-10,-20,
-      -10,  0,  0,  0,  0,  0,  0,-10,
-      -10,  0,  5, 10, 10,  5,  0,-10,
-      -10,  5,  5, 10, 10,  5,  5,-10,
-      -10,  0, 10, 10, 10, 10,  0,-10,
-      -10, 10, 10, 10, 10, 10, 10,-10,
-      -10,  5,  0,  0,  0,  0,  5,-10,
-      -20,-10,-10,-10,-10,-10,-10,-20
+      -29,   4, -82, -37, -25, -42,   7,  -8,
+      -26,  16, -18, -13,  30,  59,  18, -47,
+      -16,  37,  43,  40,  35,  50,  37,  -2,
+       -4,   5,  19,  50,  37,  37,   7,  -2,
+       -6,  13,  13,  26,  34,  12,  10,   4,
+        0,  15,  15,  15,  14,  27,  18,  10,
+        4,  15,  16,   0,   7,  21,  33,   1,
+      -33,  -3, -14, -21, -13, -12, -39, -21
     ],
     R: [
-       0,  0,  0,  0,  0,  0,  0,  0,
-       5, 10, 10, 10, 10, 10, 10,  5,
-      -5,  0,  0,  0,  0,  0,  0, -5,
-      -5,  0,  0,  0,  0,  0,  0, -5,
-      -5,  0,  0,  0,  0,  0,  0, -5,
-      -5,  0,  0,  0,  0,  0,  0, -5,
-      -5,  0,  0,  0,  0,  0,  0, -5,
-       0,  0,  0,  5,  5,  0,  0,  0
+       32,  42,  32,  51,  63,   9,  31,  43,
+       27,  32,  58,  62,  80,  67,  26,  44,
+       -5,  19,  26,  36,  17,  45,  61,  16,
+      -24, -11,   7,  26,  24,  35,  -8, -20,
+      -36, -26, -12,  -1,   9,  -7,   6, -23,
+      -45, -25, -16, -17,   3,   0,  -5, -33,
+      -44, -16, -20,  -9,  -1,  11,  -6, -71,
+      -19, -13,   1,  17,  16,   7, -37, -26
     ],
     Q: [
-      -20,-10,-10, -5, -5,-10,-10,-20,
-      -10,  0,  0,  0,  0,  0,  0,-10,
-      -10,  0,  5,  5,  5,  5,  0,-10,
-       -5,  0,  5,  5,  5,  5,  0, -5,
-        0,  0,  5,  5,  5,  5,  0, -5,
-      -10,  5,  5,  5,  5,  5,  0,-10,
-      -10,  0,  5,  0,  0,  0,  0,-10,
-      -20,-10,-10, -5, -5,-10,-10,-20
+      -28,   0,  29,  12,  59,  44,  43,  45,
+      -24, -39,  -5,   1, -16,  57,  28,  54,
+      -13, -17,   7,   8,  29,  56,  47,  57,
+      -27, -27, -16, -16,  -1,  17,  -2,   1,
+       -9, -26,  -9, -10,  -2,  -4,   3,  -3,
+      -14,   2, -11,  -2,  -5,   2,  14,   5,
+      -35,  -8,  11,   2,   8,  15,  -3,   1,
+       -1, -18,  -9,  10, -15, -25, -31, -50
     ],
     K: [
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -20,-30,-30,-40,-40,-30,-30,-20,
-      -10,-20,-20,-20,-20,-20,-20,-10,
-       20, 20,  0,  0,  0,  0, 20, 20,
-       20, 30, 10,  0,  0, 10, 30, 20
+      -65,  23,  16, -15, -56, -34,   2,  13,
+       29,  -1, -20,  -7,  -8,  -4, -38, -29,
+       -9,  24,   2, -16, -20,   6,  22, -22,
+      -17, -20, -12, -27, -30, -25, -14, -36,
+      -49,  -1, -27, -39, -46, -44, -33, -51,
+      -14, -14, -22, -46, -44, -30, -15, -27,
+        1,   7,  -8, -64, -43, -16,   9,   8,
+      -15,  36,  12, -54,   8, -28,  24,  14
     ]
   };
 
-  // Endgame piece-square tables where the endgame wants different placement
-  // than the midgame: the king centralizes instead of hiding, pawns race for
-  // promotion. Other piece types use the same table in both phases.
+  // Endgame piece-square tables — a distinct, tuned table per piece (the
+  // midgame set's endgame counterpart). The king centralizes instead of
+  // hiding, pawns weight toward promotion, and minor/major pieces shift toward
+  // their endgame squares.
   const PST_EG = {
     P: [
-       0,  0,  0,  0,  0,  0,  0,  0,
-      80, 80, 80, 80, 80, 80, 80, 80,
-      50, 50, 50, 50, 50, 50, 50, 50,
-      30, 30, 30, 30, 30, 30, 30, 30,
-      15, 15, 15, 15, 15, 15, 15, 15,
-       5,  5,  5,  5,  5,  5,  5,  5,
-       0,  0,  0,  0,  0,  0,  0,  0,
-       0,  0,  0,  0,  0,  0,  0,  0
+        0,   0,   0,   0,   0,   0,   0,   0,
+      178, 173, 158, 134, 147, 132, 165, 187,
+       94, 100,  85,  67,  56,  53,  82,  84,
+       32,  24,  13,   5,  -2,   4,  17,  17,
+       13,   9,  -3,  -7,  -7,  -8,   3,  -1,
+        4,   7,  -6,   1,   0,  -5,  -1,  -8,
+       13,   8,   8,  10,  13,   0,   2,  -7,
+        0,   0,   0,   0,   0,   0,   0,   0
     ],
-    N: PST.N,
-    B: PST.B,
-    R: PST.R,
-    Q: PST.Q,
+    N: [
+      -58, -38, -13, -28, -31, -27, -63, -99,
+      -25,  -8, -25,  -2,  -9, -25, -24, -52,
+      -24, -20,  10,   9,  -1,  -9, -19, -41,
+      -17,   3,  22,  22,  22,  11,   8, -18,
+      -18,  -6,  16,  25,  16,  17,   4, -18,
+      -23,  -3,  -1,  15,  10,  -3, -20, -22,
+      -42, -20, -10,  -5,  -2, -20, -23, -44,
+      -29, -51, -23, -15, -22, -18, -50, -64
+    ],
+    B: [
+      -14, -21, -11,  -8,  -7,  -9, -17, -24,
+       -8,  -4,   7, -12,  -3, -13,  -4, -14,
+        2,  -8,   0,  -1,  -2,   6,   0,   4,
+       -3,   9,  12,   9,  14,  10,   3,   2,
+       -6,   3,  13,  19,   7,  10,  -3,  -9,
+      -12,  -3,   8,  10,  13,   3,  -7, -15,
+      -14, -18,  -7,  -1,   4,  -9, -15, -27,
+      -23,  -9, -23,  -5,  -9, -16,  -5, -17
+    ],
+    R: [
+       13,  10,  18,  15,  12,  12,   8,   5,
+       11,  13,  13,  11,  -3,   3,   8,   3,
+        7,   7,   7,   5,   4,  -3,  -5,  -3,
+        4,   3,  13,   1,   2,   1,  -1,   2,
+        3,   5,   8,   4,  -5,  -6,  -8, -11,
+       -4,   0,  -5,  -1,  -7, -12,  -8, -16,
+       -6,  -6,   0,   2,  -9,  -9, -11,  -3,
+       -9,   2,   3,  -1,  -5, -13,   4, -20
+    ],
+    Q: [
+       -9,  22,  22,  27,  27,  19,  10,  20,
+      -17,  20,  32,  41,  58,  25,  30,   0,
+      -20,   6,   9,  49,  47,  35,  19,   9,
+        3,  22,  24,  45,  57,  40,  57,  36,
+      -18,  28,  19,  47,  31,  34,  39,  23,
+      -16, -27,  15,   6,   9,  17,  10,   5,
+      -22, -23, -30, -16, -16, -23, -36, -32,
+      -33, -28, -22, -43,  -5, -32, -20, -41
+    ],
     K: [
-      -50,-40,-30,-20,-20,-30,-40,-50,
-      -30,-20,-10,  0,  0,-10,-20,-30,
-      -30,-10, 20, 30, 30, 20,-10,-30,
-      -30,-10, 30, 40, 40, 30,-10,-30,
-      -30,-10, 30, 40, 40, 30,-10,-30,
-      -30,-10, 20, 30, 30, 20,-10,-30,
-      -30,-30,  0,  0,  0,  0,-30,-30,
-      -50,-30,-30,-30,-30,-30,-30,-50
+      -74, -35, -18, -18, -11,  15,   4, -17,
+      -12,  17,  14,  17,  17,  38,  23,  11,
+       10,  17,  23,  15,  20,  45,  44,  13,
+       -8,  22,  24,  27,  26,  33,  26,   3,
+      -18,  -4,  21,  24,  27,  23,   9, -11,
+      -19,  -3,  11,  21,  23,  16,   7,  -9,
+      -27, -11,   4,  13,  14,   4,  -5, -17,
+      -53, -34, -21, -11, -28, -14, -24, -43
     ]
   };
 
@@ -159,13 +213,19 @@
   // Tapered: midgame and endgame scores are computed side by side and
   // interpolated by remaining material, so the king hides while queens are
   // on and centralizes when they come off, and passed pawns grow as the
-  // board empties. Terms: material + PST, mobility, doubled/isolated/passed
-  // pawns, and a midgame pawn shield in front of the king.
+  // board empties. Both phases now use a full, distinct piece-square table
+  // per piece and phase-specific material values (VALUES_MG/VALUES_EG), so
+  // the taper covers material and placement coherently rather than reusing
+  // midgame tables in the endgame. Terms: phase material + PST, mobility,
+  // doubled/isolated/passed pawns, a midgame pawn shield in front of the
+  // king, and a lone-king mop-up gradient so basic mates convert.
   function evaluate(board) {
     let mg = 0, eg = 0, phase = 0;
     const pawnFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
     const pawnSquares = { w: [], b: [] };
     const kings = { w: -1, b: -1 };
+    const force = { w: 0, b: 0 };  // count of non-king men (pawns + pieces)
+    const pieces = { w: 0, b: 0 }; // count of non-king, non-pawn material (mating force)
 
     for (let i = 0; i < 64; i++) {
       const p = board[i];
@@ -174,14 +234,16 @@
       // Mirror the square vertically for Black.
       const sq = color === 'w' ? i : (7 - Math.floor(i / 8)) * 8 + (i % 8);
       phase += PHASE[type];
-      let m = VALUES[type] + PST[type][sq];
-      let e = VALUES[type] + PST_EG[type][sq];
+      let m = VALUES_MG[type] + PST[type][sq];
+      let e = VALUES_EG[type] + PST_EG[type][sq];
+      if (type !== 'K') force[color]++;
       if (type === 'P') {
         pawnFiles[color][i % 8]++;
         pawnSquares[color].push(i);
       } else if (type === 'K') {
         kings[color] = i;
       } else {
+        pieces[color]++;
         const mob = mobility(board, i, type, color) * MOBILITY[type];
         m += mob; e += mob;
       }
@@ -231,8 +293,44 @@
     }
 
     const ph = Math.min(phase, PHASE_MAX);
-    return Math.round((mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX);
+    let score = Math.round((mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX);
+
+    // Mop-up: when one side is reduced to a bare king, add the classic mating
+    // gradient — drive the lone king toward a corner and march the winning king
+    // in. Material + piece-square tables alone give no such gradient, so a
+    // winning side can shuffle a basic K+R-vs-K into the fifty-move rule; this
+    // term restores the drive. It activates ONLY when the STRONG side has a
+    // real mating PIECE (pieces > 0) and the weak side is a bare king
+    // (force === 0). Requiring a piece — not just any non-king material —
+    // excludes K+P-vs-K, where the win is to escort and promote the pawn, not
+    // to chase the enemy king (chasing there can even lose the pawn); once the
+    // pawn queens, the queen is a piece and the gradient re-engages. Not
+    // tapered — a bare-king position is always deep endgame; added on top of
+    // the (endgame-dominated) score.
+    if (kings.w >= 0 && kings.b >= 0) {
+      if (pieces.w > 0 && force.b === 0) score += mopUp(kings.b, kings.w);
+      else if (pieces.b > 0 && force.w === 0) score -= mopUp(kings.w, kings.b);
+    }
+    return score;
   }
+
+  // Mating gradient for a lone king (loser) hunted by the winner's king.
+  // Rewards pushing the loser off-center and closing the kings' distance —
+  // the standard "mop-up" heuristic. Magnitudes (up to ~48 + ~24 cp) are large
+  // enough to steer the search yet far below a piece, so they never distort
+  // material judgement in the rare non-lone-king positions they could reach.
+  function mopUp(loser, winner) {
+    const lr = loser >> 3, lf = loser & 7;
+    const wr = winner >> 3, wf = winner & 7;
+    const cmd = Math.max(3 - lf, lf - 4) + Math.max(3 - lr, lr - 4); // center dist 0..6
+    const kd = Math.abs(lr - wr) + Math.abs(lf - wf);               // king manhattan 2..14
+    return 8 * cmd + 2 * (14 - kd);
+  }
+  // Upper bound on mopUp() (cmd<=6 -> 48, kings>=2 apart -> 2*(14-2)=24): the
+  // gain from a capture that leaves a bare king can jump by this much when the
+  // mating gradient switches on, which the quiescence delta-pruning margin
+  // must cover so it never prunes a capture that actually crosses the window.
+  const MOPUP_MAX = 72;
 
   // Mate scores are MATE minus the ply at which mate is delivered, so nearer
   // mates always outrank farther ones. Anything beyond MATE_NEAR is a mate.
@@ -423,17 +521,125 @@
     if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
   }
 
-  // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,
-  // then quiet moves by history score.
-  function orderMoves(moves, ttPk, ply, ctx, turn) {
+  // ---- Static exchange evaluation (SEE) ----
+  // Net material a capture wins or loses if BOTH sides recapture on the target
+  // square with their least valuable attacker until neither side gains. Used
+  // for capture ORDERING (losing captures deferred) and quiescence PRUNING.
+  // Implemented on a reused scratch board: each recapture nulls the attacker's
+  // origin square, so a slider standing behind another on the same ray is
+  // revealed by the next scan automatically — x-rays handled with no extra
+  // bookkeeping. Deliberate, harmless-for-ordering approximations: pins are
+  // not modelled (standard for SEE), and a pawn that promotes ON A RECAPTURE is
+  // scored as a pawn (only the initial move's promotion is credited).
+  const SEE_VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 20000 };
+  const SEE_BOARD = new Array(64); // scratch occupancy (single-threaded; reused)
+
+  // Least valuable `side` attacker of `target` under occupancy `b`, or null.
+  function leastAttacker(b, target, side) {
+    const r = target >> 3, c = target & 7;
+    const pr = side === 'w' ? r + 1 : r - 1; // a side-pawn sits one rank toward its home
+    if (pr >= 0 && pr < 8) {
+      for (const dc of [-1, 1]) {
+        const nc = c + dc;
+        if (nc >= 0 && nc < 8 && b[pr * 8 + nc] === side + 'P') return { sq: pr * 8 + nc, type: 'P' };
+      }
+    }
+    for (const [dr, dc] of N_JUMPS) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr * 8 + nc] === side + 'N') return { sq: nr * 8 + nc, type: 'N' };
+    }
+    let rook = null, queen = null, bishop = null;
+    for (const [dr, dc] of DIAG) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const p = b[nr * 8 + nc];
+        if (p) {
+          if (p[0] === side) { if (p[1] === 'B') bishop = bishop || { sq: nr * 8 + nc, type: 'B' }; else if (p[1] === 'Q') queen = queen || { sq: nr * 8 + nc, type: 'Q' }; }
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+    if (bishop) return bishop;
+    for (const [dr, dc] of ORTHO) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const p = b[nr * 8 + nc];
+        if (p) {
+          if (p[0] === side) { if (p[1] === 'R') rook = rook || { sq: nr * 8 + nc, type: 'R' }; else if (p[1] === 'Q') queen = queen || { sq: nr * 8 + nc, type: 'Q' }; }
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+    if (rook) return rook;
+    if (queen) return queen;
+    for (const [dr, dc] of ALL_DIRS) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr * 8 + nc] === side + 'K') return { sq: nr * 8 + nc, type: 'K' };
+    }
+    return null;
+  }
+
+  // SEE of a capture/promotion `move` on `board` (the pre-move position), in
+  // centipawns for the side making the capture.
+  function see(board, move) {
+    const side0 = move.piece[0];
+    const target = move.to;
+    const b = SEE_BOARD;
+    for (let i = 0; i < 64; i++) b[i] = board[i];
+    let capType;
+    if (move.ep) {
+      capType = 'P';
+      const capRow = side0 === 'w' ? (target >> 3) + 1 : (target >> 3) - 1;
+      b[capRow * 8 + (target & 7)] = null; // en passant: the taken pawn is behind target
+    } else {
+      capType = board[target] ? board[target][1] : null;
+    }
+    let onType = move.piece[1];
+    let gain0 = capType ? SEE_VAL[capType] : 0;
+    if (move.promotion) { gain0 += SEE_VAL[move.promotion] - SEE_VAL.P; onType = move.promotion; }
+    b[move.from] = null;
+    b[target] = side0 + onType;
+
+    const gain = [gain0];
+    let onVal = SEE_VAL[onType]; // value of the piece now standing on target
+    let side = side0 === 'w' ? 'b' : 'w';
+    let d = 0;
+    for (;;) {
+      const a = leastAttacker(b, target, side);
+      if (!a) break;
+      d++;
+      gain[d] = onVal - gain[d - 1];
+      if (Math.max(-gain[d - 1], gain[d]) < 0) break; // both sides prefer to stop here
+      b[a.sq] = null;
+      b[target] = side + a.type;
+      onVal = SEE_VAL[a.type];
+      side = side === 'w' ? 'b' : 'w';
+    }
+    while (d > 0) { gain[d - 1] = -Math.max(-gain[d - 1], gain[d]); d--; }
+    return gain[0];
+  }
+
+  // Move ordering: hash move, then captures/promotions split by SEE (winning
+  // and equal first, best material first; losing captures deferred below quiet
+  // moves), killer moves, then quiet moves by history score.
+  function orderMoves(moves, ttPk, ply, ctx, turn, board) {
     const killers = ctx.killers[ply];
     const hist = turn === 'w' ? ctx.histW : ctx.histB;
     for (const m of moves) {
       const pk = packMove(m);
       let s;
       if (pk === ttPk) s = 2e9;
-      else if (m.promotion) s = 1e9 + VALUES[m.promotion];
-      else if (m.captured) s = 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
+      else if (m.captured || m.promotion) {
+        // Winning/equal exchanges keep the proven MVV-LVA/promotion ordering
+        // just below the hash move; a material-LOSING exchange (SEE < 0) drops
+        // below every quiet move. m.see is cached for the quiescence prune.
+        const seeScore = see(board, m);
+        m.see = seeScore;
+        const base = m.promotion ? 1e9 + VALUES[m.promotion] : 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
+        s = seeScore < 0 ? base - 2e9 : base;
+      }
       else if (killers && pk === killers[0]) s = 1e7;
       else if (killers && pk === killers[1]) s = 1e7 - 1;
       else s = hist[m.from * 64 + m.to];
@@ -514,10 +720,21 @@
     const DELTA = 200; // delta pruning margin
     const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
 
-    for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
+    for (const m of orderMoves(moves, 0, ply, ctx, turn, state.board)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      // SEE pruning: a capture that loses material by static exchange (m.see,
+      // set in orderMoves) can only pull the side to move BELOW its stand-pat
+      // baseline, so — unlike delta pruning, which bounds by the captured value
+      // — it prunes the "poisoned" captures MVV-LVA cannot tell from sound ones
+      // (a defended queen grab). Same guards as delta pruning: real window
+      // only, never while in check or when the capture gives check, and OFF for
+      // the exact analysis path.
+      if (!ctx.noDelta && !inChk && !m.promotion && m.captured && beta - alpha > 1 && m.see < 0 &&
+          !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
+        continue;
+      }
       // Delta pruning: even winning this capture outright can't affect the
       // window, so don't bother searching it — UNLESS it gives check (a
       // checking capture can be mate, e.g. Qxg7#, regardless of material gain).
@@ -529,7 +746,14 @@
       // (assets/analysis-core.js), whose candidate roots must be exact,
       // comparable full-window scores rather than delta-pruning artifacts.
       if (!ctx.noDelta && !inChk && !m.promotion && beta - alpha > 1) {
-        const gain = VALUES[m.captured[1]] + DELTA;
+        // The bound must cover the FULL evaluation swing a capture can produce,
+        // not just a flat piece value: the tapered eval can value a piece above
+        // the ordering constant (a queen up to VALUES_MG 1025), and capturing
+        // the opponent's last unit switches on the mop-up gradient (up to
+        // MOPUP_MAX). Using the larger phase value plus both margins keeps delta
+        // pruning from discarding a capture that actually crosses the window.
+        const cv = m.captured[1];
+        const gain = Math.max(VALUES_MG[cv], VALUES_EG[cv]) + DELTA + MOPUP_MAX;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
             !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
           continue;
@@ -647,7 +871,7 @@
     let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
     ctx.path1.push(r1); ctx.path2.push(r2);
-    for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn)) {
+    for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn, state.board)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
@@ -813,7 +1037,7 @@
     ctx.path1.push(R1);
     ctx.path2.push(R2);
 
-    const items = orderMoves(rand ? shuffle(moves, rand) : moves, 0, 0, ctx, state.turn).map(function (m) {
+    const items = orderMoves(rand ? shuffle(moves, rand) : moves, 0, 0, ctx, state.turn, state.board).map(function (m) {
       const next = Chess.applyMove(state, m);
       return {
         move: m,
@@ -986,6 +1210,7 @@
     ttPackedMove: ttPackedMove,
     hashKey: hashKey,
     repKey: repKey,
+    see: see,
     MATE: MATE,
     MATE_NEAR: MATE_NEAR
   };
