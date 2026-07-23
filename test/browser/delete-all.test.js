@@ -126,4 +126,51 @@ require('./helper').run('delete-all', async function (t) {
   check(/Delete failed/.test(preserved.status), 'a rejected clear reports failure');
   check(preserved.queue !== null && preserved.keepFenced === false,
     'a rejected clear preserves the durability queue and fences nothing');
+
+  // ---- P1: a game finishing DURING a failed clear is PARKED, not lost. Even
+  // if the player rematches (overwriting the live save) before reloading, the
+  // parked entry survives to boot-reconcile. ----
+  const parkedOnFail = await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    var realDelete = CoachStore.deleteAllData;
+    // A clear that rejects, but ONLY after a live finish had a chance to record.
+    CoachStore.deleteAllData = function () {
+      var st = { over: true, result: '1-0', reason: 'checkmate' };
+      // While suspended (the delete set it), this finish must park, not commit.
+      return ChessyArchive.record({ history: [{ san: 'e4' }] }, { mode: 'pvp' }, st, 'mid-delete', {})
+        .then(function () { return Promise.reject(new Error('storage unavailable')); });
+    };
+    return new Promise(function (resolve) {
+      document.getElementById('deleteAllBtn').click();
+      document.getElementById('deleteAllConfirm').click();
+      setTimeout(function () {
+        CoachStore.deleteAllData = realDelete;
+        var q = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || '{}');
+        resolve({ parked: !!q['mid-delete'],
+          fenced: ChessyArchive.isFencedEnding('mid-delete', ['e4'], '1-0', 'checkmate') });
+      }, 200);
+    });
+  });
+  check(parkedOnFail.parked === true && parkedOnFail.fenced === false,
+    'a finish during a FAILED clear is parked (recoverable), not fenced or lost');
+
+  // ---- Durable fencing confirmation: if the queue cannot be neutralized, a
+  // successful clear reports a QUALIFIED success, not a clean one. ----
+  const qualified = await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      x: { w: 't', rec: { id: 'x', sans: [], result: '*', reason: 'imported' } } }));
+    var realDrop = ChessyArchive.dropPendingQueue;
+    ChessyArchive.dropPendingQueue = function () { return false; }; // blocked removal
+    return new Promise(function (resolve) {
+      document.getElementById('deleteAllBtn').click();
+      document.getElementById('deleteAllConfirm').click();
+      setTimeout(function () {
+        ChessyArchive.dropPendingQueue = realDrop;
+        var el = document.getElementById('dataStatus');
+        resolve({ text: el.textContent, kind: el.dataset.kind });
+      }, 300);
+    });
+  });
+  check(/Reload once storage is available/.test(qualified.text) && qualified.kind === 'error',
+    'a delete whose recovery could not be neutralized reports a qualified success');
 });

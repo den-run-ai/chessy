@@ -404,10 +404,16 @@
     $('deleteAllCancel').addEventListener('click', function () { closeDialog(deleteDialog); });
     $('deleteAllConfirm').addEventListener('click', function () {
       closeDialog(deleteDialog);
+      // Mutex: never let a Delete-all overlap another Delete-all or a restore.
+      if (opInFlight) {
+        setStatus('Another data operation is already in progress. Try again once it finishes.', 'error');
+        return;
+      }
+      opInFlight = true;
       setStatus('Deleting…', 'info');
       cancelAnalysis();
-      // Suspend live archive writes so a game that finishes DURING the clear
-      // can't queue a write on top of the emptied store. Fence the recovery
+      // Suspend live archive writes so a game that finishes DURING the clear is
+      // PARKED, not landed on top of the emptied store. Fence the recovery
       // sources ONLY AFTER the clear COMMITS: a parked durability-queue entry
       // can be the only recoverable copy of a game precisely when IndexedDB is
       // failing, so a rejected clear must leave the queue and the saved game
@@ -418,16 +424,23 @@
       // fence even if the drop is momentarily blocked.
       suspendArchive(true);
       CoachStore.deleteAllData().then(function () {
-        fenceRecovery();
+        const neutralized = fenceRecovery();
         suspendArchive(false);
-        // The clear landed; a cosmetic refresh failure must not report failure.
-        return refresh().then(
-          function () { setStatus('All training data deleted.', 'info'); },
-          function () { setStatus('All training data deleted. Reopen Review to refresh.', 'info'); }
+        opInFlight = false;
+        const msg = 'All training data deleted.' +
+          (neutralized ? '' : ' Reload once storage is available so the old game cannot return.');
+        // Force the Review panel back to a fresh (now empty) list even if a
+        // stale game was left open, so a later Verify/Save can't recreate an
+        // orphan card/analysis for a deleted game. A refresh failure is cosmetic.
+        return Promise.resolve(CoachReview.resetToList()).then(
+          function () { setStatus(msg, neutralized ? 'info' : 'error'); },
+          function () { setStatus(msg + ' Reopen Review to refresh.', neutralized ? 'info' : 'error'); }
         );
       }).catch(function (err) {
-        // Nothing was fenced or dropped — every recovery source is intact.
+        // Nothing was fenced or dropped — every recovery source is intact. A
+        // finish that arrived while suspended was PARKED, so it survives.
         suspendArchive(false);
+        opInFlight = false;
         setStatus('Delete failed: ' + (err && err.message ? err.message : 'storage unavailable'), 'error');
       });
     });
