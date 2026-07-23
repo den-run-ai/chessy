@@ -58,20 +58,43 @@
   }
 
   // Parse a SAN's structural fields for a RELAXED match used only when the
-  // exact canonical spelling does not match. Handles the valid PGN spellings
-  // the engine's own toSan never emits: redundant disambiguation (Rab1 where
-  // Rb1 suffices), long-algebraic (e2e4 / Ng1-f3), short pawn captures (ed5)
-  // and lowercase promotion (a8=q). Returns null for castling and anything
-  // that is not a normal move (so those fall through to a plain reject).
+  // exact canonical spelling does not match. It admits ONLY a closed set of
+  // well-formed alternate spellings the engine's own toSan never emits, each
+  // with a specific shape — anything outside them returns null (a plain
+  // reject), so a token is never accepted merely because it happens to match a
+  // unique legal move. The `capture` flag records whether the spelling asserts
+  // a capture; looseFind requires it to agree with the move it matches.
+  //   Piece long-algebraic   Ng1f3 / Ng1-f3 / Ng1xf3   (FULL origin square)
+  //   Piece SAN + disambig   Nf3 / Rab1 / R1a2 / Raxb1 (partial disambig)
+  //   Pawn long-algebraic    e2e4 / e2-e4 / e4xd5       (FULL origin square)
+  //   Pawn short capture     ed5 / exd5                 (origin FILE, x optional)
+  //   Pawn push / promotion  e4 / a8=q                  (no origin)
+  // The hyphen appears ONLY between a full origin square and the destination,
+  // so "-e4", "N-f3", "N--f3", "Nf-3" are rejected. Pawn source fields are
+  // shape-checked, so "2e4", "ee4", "xd5" are rejected.
   function sanFields(san) {
     const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]/g, '').replace(/=/g, '');
-    // An optional single hyphen is allowed ONLY in the origin→destination
-    // position (long-algebraic "Ng1-f3" / "e2-e4"); arbitrary hyphens
-    // ("N--f3", "Nf-3") are NOT stripped and stay rejected.
-    const m = /^([KQRBN])?([a-h])?([1-8])?-?(x)?([a-h][1-8])([QRBNqrbn])?$/.exec(t);
-    if (!m) return null;
-    return { piece: m[1] || 'P', file: m[2] || null, rank: m[3] || null,
-      capture: !!m[4], dest: m[5], promo: m[6] ? m[6].toUpperCase() : null };
+    let m;
+    // Piece, long-algebraic: piece + full origin square + optional hyphen + dest.
+    if ((m = /^([KQRBN])([a-h][1-8])-?(x)?([a-h][1-8])$/.exec(t)))
+      return { piece: m[1], file: m[2][0], rank: m[2][1], capture: !!m[3], dest: m[4], promo: null };
+    // Piece, standard SAN with optional (possibly redundant) disambiguation.
+    if ((m = /^([KQRBN])([a-h])?([1-8])?(x)?([a-h][1-8])$/.exec(t)))
+      return { piece: m[1], file: m[2] || null, rank: m[3] || null, capture: !!m[4], dest: m[5], promo: null };
+    // Pawn, long-algebraic: full origin square + optional hyphen + dest + promo.
+    if ((m = /^([a-h][1-8])-?(x)?([a-h][1-8])([QRBNqrbn])?$/.exec(t)))
+      return { piece: 'P', file: m[1][0], rank: m[1][1], capture: !!m[2], dest: m[3],
+        promo: m[4] ? m[4].toUpperCase() : null };
+    // Pawn, short capture: origin FILE (differing from the destination file) +
+    // optional x + dest + promo. Always a capture.
+    if ((m = /^([a-h])(x)?([a-h][1-8])([QRBNqrbn])?$/.exec(t)) && m[1] !== m[3][0])
+      return { piece: 'P', file: m[1], rank: null, capture: true, dest: m[3],
+        promo: m[4] ? m[4].toUpperCase() : null };
+    // Pawn, quiet push or promotion: destination only (no origin), never a capture.
+    if ((m = /^([a-h][1-8])([QRBNqrbn])?$/.exec(t)))
+      return { piece: 'P', file: null, rank: null, capture: false, dest: m[1],
+        promo: m[2] ? m[2].toUpperCase() : null };
+    return null;
   }
 
   // Find the UNIQUE legal move matching a relaxed SAN spelling. Never guesses:
@@ -87,11 +110,11 @@
       if (m.piece[1] !== f.piece) return false;
       if ((m.promotion || null) !== f.promo) return false;
       if (Chess.sqName(m.to) !== f.dest) return false;
-      // An explicit capture marker (x) must correspond to an ACTUAL capture, so
-      // "Nxf3" onto an empty f3 is rejected rather than stored as "Nf3". A
-      // short-form omission (no x, e.g. "ed5") is still tolerated for real
-      // captures — a pawn changing file already implies the capture.
-      if (f.capture && !m.captured) return false;
+      // The spelling's capture assertion must AGREE with the move: a capture
+      // marker on a quiet move ("Nxf3" onto an empty f3) and a missing marker
+      // on a real capture ("Ne5" for Nxe5) are both rejected. The only tolerated
+      // x-omission is the pawn short-capture shape, where sanFields sets capture.
+      if (f.capture !== !!m.captured) return false;
       const from = Chess.sqName(m.from);
       if (f.file && from[0] !== f.file) return false;
       if (f.rank && from[1] !== f.rank) return false;

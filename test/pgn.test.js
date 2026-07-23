@@ -285,5 +285,27 @@ check(epGlyph.valid && epGlyph.moves.length === 2 && epGlyph.moves[0].san === 'e
   'a spaced en-passant suffix with a glyph ("exd6 e.p.!") drops the suffix and keeps the NAG',
   epGlyph.error);
 
+// The relaxed matcher admits only well-formed alternate spellings, never an
+// arbitrary token that happens to match a unique legal move.
+// A PIECE capture that omits x (Ne5 for Nxe5) is rejected — the no-x tolerance
+// is only for short PAWN captures.
+const pieceCapNoX = PGN.parseGame('[FEN "4k3/8/8/4p3/8/5N2/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ne5 *');
+check(!pieceCapNoX.valid, 'a piece capture written without x (Ne5 for Nxe5) is rejected');
+const pieceCapX = PGN.parseGame('[FEN "4k3/8/8/4p3/8/5N2/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Nxe5 *');
+check(pieceCapX.valid && pieceCapX.moves[0].san === 'Nxe5', 'the same piece capture with x imports');
+
+// The long-algebraic hyphen requires a COMPLETE origin square: "-e4" and
+// "N-f3" are rejected; only "e2-e4" / "Ng1-f3" use the fallback.
+check(!PGN.parseGame('[Result "*"]\n\n1. -e4 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. N-f3 *').valid,
+  'a hyphen without a complete origin square (-e4, N-f3) is rejected');
+
+// Malformed pawn tokens with the wrong source-field shape are rejected:
+// bare rank origin (2e4), same-file "capture" (ee4), and file-less capture (xd5).
+check(!PGN.parseGame('[Result "*"]\n\n1. 2e4 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. ee4 *').valid &&
+  !PGN.parseGame('[FEN "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. xd5 *').valid,
+  'malformed pawn tokens (2e4, ee4, xd5) are rejected');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
