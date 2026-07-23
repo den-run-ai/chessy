@@ -49,7 +49,19 @@
     statusEl.dataset.kind = kind || '';
   }
   // Submit is unavailable while a file is being read or an import is in flight.
-  function refreshBusy() { submitBtn.disabled = reading || importing; }
+  // While a write is IN FLIGHT the source and side inputs are locked too:
+  // editing them wouldn't bump `generation`, so the in-flight callback still
+  // owns the dialog — a later close would discard newly typed PGN, a
+  // duplicate/error would report against content that was never submitted, and
+  // changing the side would show a value different from the one already stored
+  // in the committed record. Locking them removes the whole class of races.
+  function refreshBusy() {
+    submitBtn.disabled = reading || importing;
+    textEl.disabled = importing;
+    if (fileEl) fileEl.disabled = importing;
+    const sides = form.querySelectorAll('input[name="importSide"]');
+    for (let i = 0; i < sides.length; i++) sides[i].disabled = importing;
+  }
 
   // Invalidate any in-flight read/import and stop a running FileReader. Called
   // whenever the dialog's lifecycle changes so late callbacks can't touch a

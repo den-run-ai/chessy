@@ -182,6 +182,16 @@ require('./helper').run('import-ui', async function (t) {
   await page.click('#importOpen');
   await page.fill('#importText', '[Event "LateCommit"]\n\n1. b3 b6 2. Bb2 Bb7 *');
   await page.click('#importSubmit');   // importing; the deferred write is pending
+  // The whole form is locked while the write is in flight (source + side, not
+  // just Submit) — editing them would leave the in-flight callback owning the
+  // dialog against stale content.
+  check(await page.evaluate(function () {
+    return document.getElementById('importText').disabled &&
+           document.getElementById('importFile').disabled &&
+           Array.prototype.every.call(
+             document.querySelectorAll('input[name="importSide"]'),
+             function (r) { return r.disabled; });
+  }), 'the source and side inputs are locked while an import is in flight');
   await page.click('#importCancel');   // Cancel closes the dialog and bumps the generation
   check(!(await dialogOpen()), 'Cancel closes the dialog while an import is still in flight');
   // The write now lands (after Cancel). Restore the real method and run it.
