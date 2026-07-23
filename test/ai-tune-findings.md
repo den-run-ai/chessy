@@ -77,12 +77,13 @@ also clears the tactics suite and the predeclared clustered self-play match with
   disturb the fixed-node tactical tests).
 - **Self-play vs baseline** (candidate = working tree, base = HEAD; 3000
   nodes/move, a bounded 60-opening × both-colours = 120-game confirmatory run,
-  played to completion — no interim stopping): the two engines play essentially
-  even, as a one-centipawn change to a single endgame passed-pawn weight must —
-  near-identical engines draw or split the pair. The clustered 95 % lower bound
-  does **not** clear 50 %. (This bounded run is a confirmatory check, not the full
-  predeclared 800-game gate; the point is only that the candidate shows no
-  demonstrable strength, and it does not.)
+  played to completion — no interim stopping): **W47 / D28 / L45, score 50.83 %,
+  one-sided 95 % lower bound 49.86 %** over 60 openings. RESULT: non-inferior (LB
+  above 49 %) but **NOT stronger** — the bound does not clear 50 %. 58 of 60
+  opening pairs scored exactly 0.5: a one-centipawn change to a single endgame
+  passed-pawn weight cannot separate near-identical engines. (This bounded run is
+  a confirmatory check, not the full predeclared 800-game gate; the point is only
+  that the candidate shows no demonstrable strength, and it does not.)
 
 The candidate is therefore **not** a demonstrated improvement — it is a
 noise-level artifact of a validation margin one part in ~45,000 wide.
