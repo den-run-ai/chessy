@@ -521,17 +521,125 @@
     if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
   }
 
-  // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,
-  // then quiet moves by history score.
-  function orderMoves(moves, ttPk, ply, ctx, turn) {
+  // ---- Static exchange evaluation (SEE) ----
+  // Net material a capture wins or loses if BOTH sides recapture on the target
+  // square with their least valuable attacker until neither side gains. Used
+  // for capture ORDERING (losing captures deferred) and quiescence PRUNING.
+  // Implemented on a reused scratch board: each recapture nulls the attacker's
+  // origin square, so a slider standing behind another on the same ray is
+  // revealed by the next scan automatically — x-rays handled with no extra
+  // bookkeeping. Deliberate, harmless-for-ordering approximations: pins are
+  // not modelled (standard for SEE), and a pawn that promotes ON A RECAPTURE is
+  // scored as a pawn (only the initial move's promotion is credited).
+  const SEE_VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 20000 };
+  const SEE_BOARD = new Array(64); // scratch occupancy (single-threaded; reused)
+
+  // Least valuable `side` attacker of `target` under occupancy `b`, or null.
+  function leastAttacker(b, target, side) {
+    const r = target >> 3, c = target & 7;
+    const pr = side === 'w' ? r + 1 : r - 1; // a side-pawn sits one rank toward its home
+    if (pr >= 0 && pr < 8) {
+      for (const dc of [-1, 1]) {
+        const nc = c + dc;
+        if (nc >= 0 && nc < 8 && b[pr * 8 + nc] === side + 'P') return { sq: pr * 8 + nc, type: 'P' };
+      }
+    }
+    for (const [dr, dc] of N_JUMPS) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr * 8 + nc] === side + 'N') return { sq: nr * 8 + nc, type: 'N' };
+    }
+    let rook = null, queen = null, bishop = null;
+    for (const [dr, dc] of DIAG) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const p = b[nr * 8 + nc];
+        if (p) {
+          if (p[0] === side) { if (p[1] === 'B') bishop = bishop || { sq: nr * 8 + nc, type: 'B' }; else if (p[1] === 'Q') queen = queen || { sq: nr * 8 + nc, type: 'Q' }; }
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+    if (bishop) return bishop;
+    for (const [dr, dc] of ORTHO) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const p = b[nr * 8 + nc];
+        if (p) {
+          if (p[0] === side) { if (p[1] === 'R') rook = rook || { sq: nr * 8 + nc, type: 'R' }; else if (p[1] === 'Q') queen = queen || { sq: nr * 8 + nc, type: 'Q' }; }
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+    if (rook) return rook;
+    if (queen) return queen;
+    for (const [dr, dc] of ALL_DIRS) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr * 8 + nc] === side + 'K') return { sq: nr * 8 + nc, type: 'K' };
+    }
+    return null;
+  }
+
+  // SEE of a capture/promotion `move` on `board` (the pre-move position), in
+  // centipawns for the side making the capture.
+  function see(board, move) {
+    const side0 = move.piece[0];
+    const target = move.to;
+    const b = SEE_BOARD;
+    for (let i = 0; i < 64; i++) b[i] = board[i];
+    let capType;
+    if (move.ep) {
+      capType = 'P';
+      const capRow = side0 === 'w' ? (target >> 3) + 1 : (target >> 3) - 1;
+      b[capRow * 8 + (target & 7)] = null; // en passant: the taken pawn is behind target
+    } else {
+      capType = board[target] ? board[target][1] : null;
+    }
+    let onType = move.piece[1];
+    let gain0 = capType ? SEE_VAL[capType] : 0;
+    if (move.promotion) { gain0 += SEE_VAL[move.promotion] - SEE_VAL.P; onType = move.promotion; }
+    b[move.from] = null;
+    b[target] = side0 + onType;
+
+    const gain = [gain0];
+    let onVal = SEE_VAL[onType]; // value of the piece now standing on target
+    let side = side0 === 'w' ? 'b' : 'w';
+    let d = 0;
+    for (;;) {
+      const a = leastAttacker(b, target, side);
+      if (!a) break;
+      d++;
+      gain[d] = onVal - gain[d - 1];
+      if (Math.max(-gain[d - 1], gain[d]) < 0) break; // both sides prefer to stop here
+      b[a.sq] = null;
+      b[target] = side + a.type;
+      onVal = SEE_VAL[a.type];
+      side = side === 'w' ? 'b' : 'w';
+    }
+    while (d > 0) { gain[d - 1] = -Math.max(-gain[d - 1], gain[d]); d--; }
+    return gain[0];
+  }
+
+  // Move ordering: hash move, then captures/promotions split by SEE (winning
+  // and equal first, best material first; losing captures deferred below quiet
+  // moves), killer moves, then quiet moves by history score.
+  function orderMoves(moves, ttPk, ply, ctx, turn, board) {
     const killers = ctx.killers[ply];
     const hist = turn === 'w' ? ctx.histW : ctx.histB;
     for (const m of moves) {
       const pk = packMove(m);
       let s;
       if (pk === ttPk) s = 2e9;
-      else if (m.promotion) s = 1e9 + VALUES[m.promotion];
-      else if (m.captured) s = 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
+      else if (m.captured || m.promotion) {
+        // Winning/equal exchanges keep the proven MVV-LVA/promotion ordering
+        // just below the hash move; a material-LOSING exchange (SEE < 0) drops
+        // below every quiet move. m.see is cached for the quiescence prune.
+        const seeScore = see(board, m);
+        m.see = seeScore;
+        const base = m.promotion ? 1e9 + VALUES[m.promotion] : 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
+        s = seeScore < 0 ? base - 2e9 : base;
+      }
       else if (killers && pk === killers[0]) s = 1e7;
       else if (killers && pk === killers[1]) s = 1e7 - 1;
       else s = hist[m.from * 64 + m.to];
@@ -612,10 +720,21 @@
     const DELTA = 200; // delta pruning margin
     const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
 
-    for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
+    for (const m of orderMoves(moves, 0, ply, ctx, turn, state.board)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      // SEE pruning: a capture that loses material by static exchange (m.see,
+      // set in orderMoves) can only pull the side to move BELOW its stand-pat
+      // baseline, so — unlike delta pruning, which bounds by the captured value
+      // — it prunes the "poisoned" captures MVV-LVA cannot tell from sound ones
+      // (a defended queen grab). Same guards as delta pruning: real window
+      // only, never while in check or when the capture gives check, and OFF for
+      // the exact analysis path.
+      if (!ctx.noDelta && !inChk && !m.promotion && m.captured && beta - alpha > 1 && m.see < 0 &&
+          !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
+        continue;
+      }
       // Delta pruning: even winning this capture outright can't affect the
       // window, so don't bother searching it — UNLESS it gives check (a
       // checking capture can be mate, e.g. Qxg7#, regardless of material gain).
@@ -752,7 +871,7 @@
     let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
     ctx.path1.push(r1); ctx.path2.push(r2);
-    for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn)) {
+    for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn, state.board)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
@@ -918,7 +1037,7 @@
     ctx.path1.push(R1);
     ctx.path2.push(R2);
 
-    const items = orderMoves(rand ? shuffle(moves, rand) : moves, 0, 0, ctx, state.turn).map(function (m) {
+    const items = orderMoves(rand ? shuffle(moves, rand) : moves, 0, 0, ctx, state.turn, state.board).map(function (m) {
       const next = Chess.applyMove(state, m);
       return {
         move: m,
@@ -1091,6 +1210,7 @@
     ttPackedMove: ttPackedMove,
     hashKey: hashKey,
     repKey: repKey,
+    see: see,
     MATE: MATE,
     MATE_NEAR: MATE_NEAR
   };

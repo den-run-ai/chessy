@@ -354,6 +354,31 @@ assertEqual(cleanScore < -150, true,
 assertEqual(ChessAI.search(perpX, 3, -Infinity, Infinity, false), cleanScore,
   'clean shared-ctx score matches a fresh-ctx search');
 
+// --- Static exchange evaluation (used for capture ordering and quiescence
+// pruning). See docs/see-experiment.md for why this branch is NOT merged. ---
+console.log('static exchange evaluation');
+function seeOf(fen, uci) {
+  const s = Chess.parseFen(fen);
+  const m = Chess.legalMoves(s).find(function (x) {
+    return Chess.sqName(x.from) + Chess.sqName(x.to) + (x.promotion || '') === uci;
+  });
+  return ChessAI.see(s.board, m);
+}
+assertEqual(seeOf('4k3/8/8/4p3/8/8/8/4R1K1 w - - 0 1', 'e1e5'), 100,
+  'SEE: rook wins an undefended pawn (+100)');
+assertEqual(seeOf('4r1k1/8/8/4p3/8/8/8/4R1K1 w - - 0 1', 'e1e5'), -400,
+  'SEE: rook takes pawn defended by a rook (-400)');
+assertEqual(seeOf('4k3/8/5p2/4p3/8/5N2/8/4K3 w - - 0 1', 'f3e5'), -220,
+  'SEE: knight takes pawn defended by a pawn (-220)');
+assertEqual(seeOf('4r1k1/8/8/4p3/8/4R3/8/4R1K1 w - - 0 1', 'e3e5'), 100,
+  'SEE: doubled rooks recapture through an x-ray (+100)');
+assertEqual(seeOf('4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 1', 'd5e6'), 100,
+  'SEE: en passant wins an undefended pawn (+100)');
+assertEqual(seeOf('4r1k1/5P2/8/8/8/8/8/6K1 w - - 0 1', 'f7e8Q'), 1300,
+  'SEE: pawn captures a rook and promotes, square safe (+1300)');
+assertEqual(seeOf('6rk/5P2/8/8/8/8/8/6K1 w - - 0 1', 'f7g8Q'), 400,
+  'SEE: capture-promotion recaptured by the king wins rook, loses queen (+400)');
+
 // think() must not return a "best move" from a game that is already over,
 // even when legal moves exist (the 50-move rule, dead positions and
 // completed threefolds end the game before the moves run out).
