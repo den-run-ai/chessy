@@ -253,5 +253,37 @@ check(glued.valid && glued.moves.length === 7 &&
   'a result glued to the mating move (Qxf7#1-0) splits into move + result',
   glued.error);
 
+// The relaxed match honours an explicit capture marker: "Nxf3" onto an empty
+// f3 is rejected (not silently stored as Nf3), while a real capture is kept.
+check(!PGN.parseGame('[Result "*"]\n\n1. Nxf3 *').valid,
+  'a capture marker on a non-capturing move (Nxf3 onto empty f3) is rejected');
+const realCap = PGN.parseGame('[Result "*"]\n\n1. e4 d5 2. exd5 *');
+check(realCap.valid && realCap.moves[2].san === 'exd5',
+  'a genuine capture spelled with x still imports');
+
+// The glued-result split covers ALL four PGN result markers, including the
+// unfinished-game "*": "1. e4*" imports the same as "1. e4 *".
+const gluedStar = PGN.parseGame('[Result "*"]\n\n1. e4*');
+check(gluedStar.valid && gluedStar.moves.length === 1 &&
+  gluedStar.moves[0].san === 'e4' && gluedStar.result === '*',
+  'a result glued to a nonterminal move (e4*) splits into move + "*"');
+
+// Arbitrary hyphens are NOT accepted — only the long-algebraic origin→dest
+// separator is. "N--f3" / "Nf-3" stay rejected; "Ng1-f3" imports.
+check(!PGN.parseGame('[Result "*"]\n\n1. N--f3 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. Nf-3 *').valid,
+  'malformed hyphenated tokens (N--f3, Nf-3) are rejected');
+const lanDash = PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1-f3 *');
+check(lanDash.valid && lanDash.moves[2].san === 'Nf3',
+  'the long-algebraic hyphen separator (Ng1-f3) imports');
+
+// A spaced en-passant suffix carrying a glyph ("exd6 e.p.!") is recognised:
+// the suffix is dropped and the "!" becomes the previous move's NAG.
+const epGlyph = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6 e.p.! Kd8 *');
+check(epGlyph.valid && epGlyph.moves.length === 2 && epGlyph.moves[0].san === 'exd6' &&
+  epGlyph.moves[0].nags.indexOf('$1') !== -1 && epGlyph.moves[1].san === 'Kd8',
+  'a spaced en-passant suffix with a glyph ("exd6 e.p.!") drops the suffix and keeps the NAG',
+  epGlyph.error);
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

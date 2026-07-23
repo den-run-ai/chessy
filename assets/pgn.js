@@ -64,11 +64,14 @@
   // and lowercase promotion (a8=q). Returns null for castling and anything
   // that is not a normal move (so those fall through to a plain reject).
   function sanFields(san) {
-    const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]/g, '').replace(/[=\-]/g, '');
-    const m = /^([KQRBN])?([a-h])?([1-8])?x?([a-h][1-8])([QRBNqrbn])?$/.exec(t);
+    const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]/g, '').replace(/=/g, '');
+    // An optional single hyphen is allowed ONLY in the origin→destination
+    // position (long-algebraic "Ng1-f3" / "e2-e4"); arbitrary hyphens
+    // ("N--f3", "Nf-3") are NOT stripped and stay rejected.
+    const m = /^([KQRBN])?([a-h])?([1-8])?-?(x)?([a-h][1-8])([QRBNqrbn])?$/.exec(t);
     if (!m) return null;
     return { piece: m[1] || 'P', file: m[2] || null, rank: m[3] || null,
-      dest: m[4], promo: m[5] ? m[5].toUpperCase() : null };
+      capture: !!m[4], dest: m[5], promo: m[6] ? m[6].toUpperCase() : null };
   }
 
   // Find the UNIQUE legal move matching a relaxed SAN spelling. Never guesses:
@@ -84,6 +87,11 @@
       if (m.piece[1] !== f.piece) return false;
       if ((m.promotion || null) !== f.promo) return false;
       if (Chess.sqName(m.to) !== f.dest) return false;
+      // An explicit capture marker (x) must correspond to an ACTUAL capture, so
+      // "Nxf3" onto an empty f3 is rejected rather than stored as "Nf3". A
+      // short-form omission (no x, e.g. "ed5") is still tolerated for real
+      // captures — a pawn changing file already implies the capture.
+      if (f.capture && !m.captured) return false;
       const from = Chess.sqName(m.from);
       if (f.file && from[0] !== f.file) return false;
       if (f.rank && from[1] !== f.rank) return false;
@@ -158,14 +166,21 @@
       // any, is a SAN on the same token (spaceless PGN).
       tok = tok.replace(/^\d+\.(\.\.)?/, '');
       if (!tok) continue;
-      // A lone "e.p."/"e.p" is an en-passant annotation on the previous move,
-      // not a move — some producers write the suffix spaced ("exd6 e.p.").
-      if (/^e\.p\.?$/i.test(tok)) continue;
-      // A result glued to the final move with no separating space
-      // ("Qxe5#1-0"): split the result off, keep the move, and stop after it
-      // (same first-game boundary as a standalone result token).
+      // A lone "e.p."/"e.p", optionally carrying a trailing !/? glyph
+      // ("exd6 e.p.!"), is an en-passant annotation on the previous move, not
+      // a move — some producers write the suffix spaced. Any glyph's NAG is
+      // attached to that move so the annotation is not lost.
+      const epm = /^e\.p\.?([!?]+)?$/i.exec(tok);
+      if (epm) {
+        if (epm[1] && GLYPH_NAG[epm[1]] && moves.length) moves[moves.length - 1].nags.push(GLYPH_NAG[epm[1]]);
+        continue;
+      }
+      // A result glued to the final move with no separating space ("Qxe5#1-0",
+      // "e4*"): split the result off, keep the move, and stop after it (same
+      // first-game boundary as a standalone result token). ALL four PGN result
+      // markers are handled, matching the standalone-token set.
       let glued = false;
-      const rm = tok.match(/^(.+?)(1-0|0-1|1\/2-1\/2)$/);
+      const rm = tok.match(/^(.+?)(1-0|0-1|1\/2-1\/2|\*)$/);
       if (rm && !/^\d+$/.test(rm[1])) { tok = rm[1]; result = rm[2]; glued = true; }
       // A trailing !/? suffix glyph is a move annotation, not part of the SAN;
       // canon() strips it to match the legal move, so capture it as the
