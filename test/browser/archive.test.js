@@ -198,8 +198,10 @@ require('./helper').run('archive', async function (t) {
       const entry = cur && cur['slot-race'];
       return entry && entry.rec ? entry.rec.sans[0] : null;
     };
-    const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { endedAt: 1 });
-    const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { endedAt: 2 });
+    // Live finishes always carry a rev (app.js stamps one per finish); the
+    // revised ending (a4) takes the higher rev, so its later park supersedes a3.
+    const p1 = ChessyArchive.record(mk(['a3']), cfg, over, 'slot-race', { endedAt: 1, rev: 1 });
+    const p2 = ChessyArchive.record(mk(['a4']), cfg, over, 'slot-race', { endedAt: 2, rev: 2 });
     return p1.then(function () {
       const afterFirst = held();
       release();

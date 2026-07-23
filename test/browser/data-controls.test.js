@@ -285,6 +285,12 @@ require('./helper').run('data-controls', async function (t) {
     localStorage.removeItem('chessy-game-v1');
     localStorage.removeItem('chessy-pending-archive-v1');
   });
+  // (Merge revision-ordering across committed/pending/saved sources — the
+  // same-ending rev compare, the __proto__ null-prototype map, and the raw
+  // pending-queue export fallback — lives in revision-order.test.js, whose fresh
+  // origin has its own download-count budget: Chromium throttles a burst of
+  // automatic downloads at ~10 and this suite already spends that budget.)
+
   // ---- Restore replaces the archive from a validated backup (UI path). ----
   // Add another game and a PARKED durability-queue entry, then restore the
   // 2-game backup: the extra games go, and the parked ending is fenced. (The
@@ -500,7 +506,20 @@ require('./helper').run('data-controls', async function (t) {
         games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0.5, fenBefore: startFen, attempts: [] }] } }),
       // A step below -1 (the immediate-learn rung) also indexes off the ladder.
       lowStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
-        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: -2, fenBefore: startFen, attempts: [] }] } })
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: -2, fenBefore: startFen, attempts: [] }] } }),
+      // Every ATTEMPT entry is validated, not merely the array: a non-object
+      // entry throws when Progress dereferences a.at / a.correct…
+      badAttemptEntry: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [null] }] } }),
+      // …a non-numeric `at` silently corrupts the first-try statistics…
+      badAttemptTime: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [{ at: 'x', correct: true }] }] } }),
+      // …and a non-boolean `correct` misreports it as correct/incorrect.
+      badAttemptCorrect: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [{ at: 1 }] }] } }),
+      // A well-formed attempt entry still passes.
+      goodAttempt: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [{ at: 1, grade: 'good', correct: false }] }] } })
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
@@ -509,6 +528,10 @@ require('./helper').run('data-controls', async function (t) {
   check(!!moreRejects.noStep, 'a card with a missing scheduling step is rejected');
   check(!!moreRejects.fracStep, 'a card with a fractional ladder step is rejected');
   check(!!moreRejects.lowStep, 'a card with a step below the immediate-learn rung is rejected');
+  check(!!moreRejects.badAttemptEntry, 'a card with a non-object attempt entry is rejected');
+  check(!!moreRejects.badAttemptTime, 'a card with a non-numeric attempt time is rejected');
+  check(!!moreRejects.badAttemptCorrect, 'a card with a non-boolean attempt correctness is rejected');
+  check(moreRejects.goodAttempt === null, 'a card with a well-formed attempt entry passes validation');
 
   // ---- Write-lock: while a destructive operation is in flight, training/
   // derived writes are REJECTED so they can't commit behind the clear and

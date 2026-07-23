@@ -86,6 +86,23 @@
     };
   }
 
+  // The parked (awaiting-commit) records read STRAIGHT from localStorage — the
+  // fallback for mergeRecoverySources when ChessyArchive (which owns the queue)
+  // failed to load, so a finished game recoverable only from the queue is not
+  // silently dropped from a backup.
+  function rawPendingRecords() {
+    let map;
+    try { map = JSON.parse(localStorage.getItem(PENDING_KEY)); }
+    catch (e) { return []; }
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return [];
+    const out = [];
+    for (const id of Object.keys(map)) {
+      const rec = map[id] && map[id].rec;
+      if (rec && typeof rec.id === 'string' && Array.isArray(rec.sans)) out.push(rec);
+    }
+    return out;
+  }
+
   // The same ENDING (identical moves + result + reason) — as opposed to a
   // REVISED completion of the instance. Mirrors store.js's sameEnding so the
   // backup merge agrees with what archiveGame() would have done.
@@ -138,23 +155,30 @@
   function mergeRecoverySources(data, keep) {
     const games = data.stores.games || (data.stores.games = []);
     const cards = data.stores.cards || (data.stores.cards = []);
-    const byId = {};
-    const committedSans = {}; // original committed moves per id, for a single prune
+    // Null-prototype maps: a game id is untrusted (imported/restored), and a
+    // literal '__proto__' key on a plain {} would mutate the prototype chain
+    // instead of storing the row (dropping it, or worse). Object.create(null)
+    // has no such key to collide with; Object.keys still enumerates own keys.
+    const byId = Object.create(null);
+    const committedSans = Object.create(null); // original committed moves per id
     games.forEach(function (g) { byId[g.id] = g; committedSans[g.id] = g.sans; });
     function apply(rec) {
       if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) return;
       if (keep && !keep(rec)) return;
       const cur = byId[rec.id];
       if (cur && sameEnding(cur, rec)) {
-        // Identical ending re-offered: archiveGame() overwrites ALL fields from
-        // the re-offered record (newer clocks/metadata are unrecomputable) but
-        // retains the EARLIEST completion time. Mirror that — take the recovery
-        // record, keep the minimum createdAt — rather than keeping the committed
-        // row wholesale (which would drop the newer metadata).
+        // Identical ending re-offered: keep the EARLIEST completion time (the
+        // same-ending rule — never reorder the list by a later clock) but take
+        // metadata/clocks AND the rev marker from the HIGHER-rev copy. Comparing
+        // rev here mirrors archiveGame(): a stale lower-rev same-ending save must
+        // not regress the fresher (unrecomputable) clock metadata or the rev of
+        // a higher-rev copy applied earlier.
         const earliest = Number.isFinite(cur.createdAt) &&
           (!Number.isFinite(rec.createdAt) || cur.createdAt < rec.createdAt)
           ? cur.createdAt : rec.createdAt;
-        byId[rec.id] = Object.assign({}, rec, { createdAt: earliest });
+        const curRev = Number.isFinite(cur.rev) ? cur.rev : -Infinity;
+        const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
+        byId[rec.id] = Object.assign({}, recRev >= curRev ? rec : cur, { createdAt: earliest });
         return;
       }
       if (cur) {
@@ -173,6 +197,11 @@
     // committed is already in byId, then the queue, then the live save last.
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
       ChessyArchive.pendingRecords().forEach(apply);
+    } else {
+      // Archive module absent (partial cache eviction lost archive.js): read the
+      // durability queue straight from localStorage so a finished game
+      // recoverable ONLY from the queue is still exported, not silently dropped.
+      rawPendingRecords().forEach(apply);
     }
     const saved = savedFinishedRecord();
     if (saved) apply(saved);
@@ -430,8 +459,19 @@
       // is in flight must be PARKED, not landed on top of the replacement.
       suspendArchive(true);
       CoachStore.restoreAll(data).then(function (counts) {
-        // Committed. Fence recovery ONLY now (on success); a failed/aborted
-        // restore leaves the durability queue and saved game untouched.
+        // Committed. Seed the revision floor from the restored games so a later
+        // live finish cannot mint a rev at or below a restored game's — the
+        // restored rows are now in IndexedDB, which nextRev() cannot read
+        // synchronously. (Best effort; a missing/older module simply no-ops.)
+        if (typeof ChessyArchive !== 'undefined' && ChessyArchive.seedRev) {
+          let maxRev = -Infinity;
+          (data.stores.games || []).forEach(function (g) {
+            if (g && Number.isFinite(g.rev) && g.rev > maxRev) maxRev = g.rev;
+          });
+          if (Number.isFinite(maxRev)) { try { ChessyArchive.seedRev(maxRev); } catch (e) { /* best effort */ } }
+        }
+        // Fence recovery ONLY now (on success); a failed/aborted restore leaves
+        // the durability queue and saved game untouched.
         const neutralized = fenceRecovery();
         suspendArchive(false);
         opInFlight = false;

@@ -201,4 +201,20 @@ require('./helper').run('import-ui', async function (t) {
   }, { timeout: 5000 });
   check(await listCount() === 4,
     'an import that commits after Cancel still refreshes into the list');
+
+  // The 5 MB ceiling applies to PASTED text too, not only uploaded files: an
+  // oversized paste is refused up front (before parseGame) and imports nothing.
+  await page.click('#importOpen');
+  await page.evaluate(function () {
+    // Set the value directly (a 5 MB+ fill would be needlessly slow), then let
+    // submit read it — non-whitespace so it survives the empty-check trim.
+    document.getElementById('importText').value = '1. e4 e5 ' + 'x'.repeat(5 * 1024 * 1024 + 100);
+  });
+  await page.click('#importSubmit');
+  await page.waitForFunction(function () {
+    return document.getElementById('importStatus').textContent.indexOf('too large') !== -1;
+  }, { timeout: 5000 });
+  check((await status()).kind === 'error', 'an oversized PGN paste is rejected as too large');
+  check(await listCount() === 4, 'an oversized PGN paste imports nothing');
+  await page.click('#importCancel');
 });

@@ -40,15 +40,66 @@
   // are not proof of newest either; the rev is. Persisted so it survives
   // reloads; an in-memory floor keeps it monotonic even if a persist fails.
   const REV_KEY = 'chessy-archive-rev-v1';
+  const GAME_SAVE_KEY = 'chessy-game-v1';
   let memRev = 0;
+  function readRevValue(raw) {
+    const n = typeof raw === 'number' ? raw : parseInt(raw, 10);
+    return Number.isFinite(n) ? n : -Infinity;
+  }
+  // The highest rev any DURABLE, synchronously-readable source already carries.
+  // REV_KEY is the primary persisted floor, but its setItem can be SILENTLY
+  // dropped at quota while a game save (or a parked entry) that carries a high
+  // rev still persists; after a reload `memRev` is 0 and REV_KEY is stale, so an
+  // Undo → revised finish would otherwise mint a rev BELOW one a recoverable
+  // copy already uses and lose the ordering. Deriving the floor from the live
+  // save and the durability queue too keeps the sequence monotonic across that
+  // failed write. (Committed IndexedDB rows can't be read synchronously; a
+  // restore seeds them explicitly via seedRev().)
+  function durableRevFloor() {
+    let floor = memRev;
+    try { floor = Math.max(floor, readRevValue(localStorage.getItem(REV_KEY))); }
+    catch (e) { /* unreadable */ }
+    try {
+      const g = JSON.parse(localStorage.getItem(GAME_SAVE_KEY));
+      if (g && Number.isFinite(g.rev)) floor = Math.max(floor, g.rev);
+    } catch (e) { /* absent/corrupt */ }
+    const map = readPending();
+    if (map) {
+      for (const id of Object.keys(map)) {
+        const rec = map[id] && map[id].rec;
+        if (rec && Number.isFinite(rec.rev)) floor = Math.max(floor, rec.rev);
+      }
+    }
+    return floor;
+  }
   function nextRev() {
-    let stored = 0;
-    try { stored = parseInt(localStorage.getItem(REV_KEY), 10); } catch (e) { /* unreadable */ }
-    if (!Number.isFinite(stored)) stored = 0;
-    const rev = Math.max(stored, memRev) + 1;
+    const rev = durableRevFloor() + 1;
     memRev = rev;
-    try { localStorage.setItem(REV_KEY, String(rev)); } catch (e) { /* quota: in-memory floor still holds this session */ }
+    try { localStorage.setItem(REV_KEY, String(rev)); }
+    catch (e) { /* quota: the floor is re-derived from durable sources next time */ }
     return rev;
+  }
+  // Raise the floor to at least `rev`. A RESTORE re-adds committed rows the
+  // synchronous floor can't see; seeding from their max rev stops a later live
+  // finish minting a rev at or below a restored game's, which would let a stale
+  // copy of that id outrank the restored one.
+  function seedRev(rev) {
+    if (!Number.isFinite(rev) || rev <= memRev) return;
+    memRev = rev;
+    try {
+      if (!(readRevValue(localStorage.getItem(REV_KEY)) >= rev)) {
+        localStorage.setItem(REV_KEY, String(rev));
+      }
+    } catch (e) { /* quota: in-memory floor still holds this session */ }
+  }
+  // Same finish re-offered? (identical moves + result + reason, as opposed to a
+  // revised completion of the instance) — mirrors store.js so the queue guard
+  // agrees with what archiveGame() and the backup merge decide.
+  function sameEndingRec(a, b) {
+    return Array.isArray(a.sans) && Array.isArray(b.sans) &&
+      a.sans.length === b.sans.length &&
+      a.sans.every(function (s, i) { return s === b.sans[i]; }) &&
+      a.result === b.result && a.reason === b.reason;
   }
 
   // Archive-clear fence (Phase 4b3/4b4). A restore or Delete-all fences the
@@ -162,8 +213,23 @@
   }
 
   function park(rec) {
-    const token = parkToken();
     const map = readPending() || {};
+    const cur = map[rec.id];
+    // The queue must always hold the NEWEST unconfirmed ending for an id, so a
+    // stale re-offer cannot displace a revision still awaiting recovery. Only a
+    // strictly higher rev — or the SAME ending (a fresher write of that finish)
+    // — may replace an existing entry. A LOWER-rev finish, or a revless boot
+    // re-offer of a DIFFERENT ending than a revless pending revision, is refused
+    // and the pending copy stays. Live finishes always carry a rev, so this only
+    // ever withholds a demonstrably not-newer copy; the stale record is dropped
+    // rather than parked (a null token means commit() clears nothing).
+    if (cur && cur.rec) {
+      const curRev = Number.isFinite(cur.rec.rev) ? cur.rec.rev : -Infinity;
+      const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
+      if (recRev < curRev) return null;
+      if (recRev === curRev && !sameEndingRec(cur.rec, rec)) return null;
+    }
+    const token = parkToken();
     map[rec.id] = { w: token, rec: rec };
     return writePending(map) ? token : null; // quota/blocked → best effort
   }
@@ -230,9 +296,13 @@
       // Revision order marker. app.js stamps a rev when the game first finishes
       // and passes it here (and into the live save), so a committed row, a
       // parked copy, and the saved game of the SAME id sort exactly. A caller
-      // that doesn't supply one (a boot reconcile of a pre-rev save) gets a
-      // fresh monotonic rev — still greater than any earlier finish's.
-      rev: (opts && Number.isFinite(opts.rev)) ? opts.rev : nextRev()
+      // that supplies none is a boot reconcile of a PRE-REV (legacy) save: it is
+      // ranked as the OLDEST (revless), NOT minted a fresh rev. Minting one
+      // would let a stale legacy snapshot outrank a same-id revision still
+      // awaiting recovery in the queue (a fresh nextRev() beats a revless
+      // pending entry), permanently discarding the revision. reconcilePending()
+      // migrates a genuinely-recovered legacy entry into the sequence instead.
+      rev: (opts && Number.isFinite(opts.rev)) ? opts.rev : undefined
     };
     // A destructive replace is in progress: PARK the record but do NOT commit
     // it onto the store being replaced. Parking (not dropping) is what keeps a
@@ -284,6 +354,12 @@
         dirty = true;
         continue;
       }
+      // Migrate a legacy (revless) queued finish INTO the rev sequence as it is
+      // recovered, so a later revless boot re-offer of the same id can no longer
+      // overwrite this committed copy (revless vs revless cannot be ordered). A
+      // revision awaiting recovery thereby outranks its stale saved twin once it
+      // commits. Live entries already carry a rev; this only touches legacy ones.
+      if (!Number.isFinite(rec.rev)) rec.rev = nextRev();
       drains.push(commit(rec, entry.w).then(
         function (v) { return { ok: true, v: v }; },
         function (e) { return { ok: false, e: e, id: id }; }));
@@ -321,5 +397,6 @@
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
     isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
     dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
-    operationActive: operationActive, pendingRecords: pendingRecords, nextRev: nextRev };
+    operationActive: operationActive, pendingRecords: pendingRecords,
+    nextRev: nextRev, seedRev: seedRev };
 })();

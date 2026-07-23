@@ -166,6 +166,17 @@
     const text = textEl.value.trim();
     if (!text) { setStatus('Paste a PGN or choose a file first.', 'error'); textEl.focus(); return; }
 
+    // The 5 MB ceiling applies to PASTED text as well as uploaded files: a
+    // multi-megabyte paste would stall parseGame / freeze the page exactly as an
+    // oversized file would (only the first game is imported anyway). Blob
+    // measures UTF-8 bytes to match file.size; fall back to char length.
+    const bytes = (typeof Blob !== 'undefined') ? new Blob([text]).size : text.length;
+    if (bytes > MAX_IMPORT_BYTES) {
+      setStatus('That PGN is too large (' + Math.round(bytes / 1048576) +
+        ' MB) to import. Nothing was imported.', 'error');
+      return;
+    }
+
     let game;
     try { game = ChessyPGN.parseGame(text); }
     catch (err) { setStatus('Could not parse that PGN: ' + err.message, 'error'); return; }

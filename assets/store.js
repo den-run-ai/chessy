@@ -222,12 +222,31 @@
         }
         getReq.onsuccess = function () {
           const existing = getReq.result;
-          const record = Object.assign({}, game);
+          let record = Object.assign({}, game);
           if (existing) {
+            // Revision ordering, decided ATOMICALLY inside this transaction —
+            // before any overwrite or prune. A LOWER revision may never replace
+            // the ending, replace metadata, or prune derived data; a stale boot
+            // save (lower rev) must not clobber a newer committed record and
+            // remove its cards. Revless (legacy/imported) rows rank as oldest.
+            const existingRev = Number.isFinite(existing.rev) ? existing.rev : -Infinity;
+            const incomingRev = Number.isFinite(record.rev) ? record.rev : -Infinity;
             if (sameEnding(existing, record)) {
-              record.createdAt = Math.min(existing.createdAt, record.createdAt);
+              // Same finish re-offered: keep the EARLIEST completion time, but
+              // take metadata/clocks and the rev marker from the HIGHER-rev copy
+              // (a stale lower-rev re-offer must not regress fresher metadata).
+              const earliest = Math.min(
+                Number.isFinite(existing.createdAt) ? existing.createdAt : Infinity,
+                Number.isFinite(record.createdAt) ? record.createdAt : Infinity);
+              record = Object.assign({}, incomingRev >= existingRev ? record : existing);
+              if (Number.isFinite(earliest)) record.createdAt = earliest;
+            } else if (incomingRev < existingRev) {
+              // A genuine revision, but STALE: leave the committed row and its
+              // derived cards/analyses untouched. (The transaction commits with
+              // no write; the caller still resolves with this id.)
+              return;
             } else {
-              pruneFromDivergence(game.id, existing.sans, record.sans); // revised ending
+              pruneFromDivergence(game.id, existing.sans, record.sans); // newer revision
             }
           }
           putReq = s.put(record);
@@ -565,8 +584,27 @@
           // does `(attempts || []).concat(...)`; a non-array (e.g. {}) is truthy
           // so it slips the `|| []` guard and throws. Missing is fine (treated
           // as empty); present-but-not-an-array is rejected.
-          if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
-            return 'store "cards" record ' + j + ' has a non-array attempts';
+          if (r.attempts !== undefined) {
+            if (!Array.isArray(r.attempts)) {
+              return 'store "cards" record ' + j + ' has a non-array attempts';
+            }
+            // Validate every ENTRY, not merely the array: Progress dereferences
+            // `a.at` (now - a.at <= 30*DAY) and `a.correct` on each attempt, so a
+            // non-object entry (null, a string) throws on the deref, and a
+            // non-numeric `at` / non-boolean `correct` silently corrupts the
+            // first-try statistics a restored card feeds.
+            for (var q = 0; q < r.attempts.length; q++) {
+              var at = r.attempts[q];
+              if (!at || typeof at !== 'object') {
+                return 'store "cards" record ' + j + ' has a non-object attempt';
+              }
+              if (!Number.isFinite(at.at)) {
+                return 'store "cards" record ' + j + ' has an attempt with a non-numeric time';
+              }
+              if (typeof at.correct !== 'boolean') {
+                return 'store "cards" record ' + j + ' has an attempt with a non-boolean correct';
+              }
+            }
           }
           // Train.schedule() uses card.step as an INDEX into a fixed ladder
           // (LADDER_DAYS, 6 rungs) — LADDER_DAYS[card.step] — with -1 the
