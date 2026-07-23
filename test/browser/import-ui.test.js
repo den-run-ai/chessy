@@ -166,4 +166,29 @@ require('./helper').run('import-ui', async function (t) {
   await page.click('#importCancel');
   check(!(await dialogOpen()), 'cancel closes the dialog');
   check(await listCount() === 3, 'a rejected SetUp/FEN import adds no game');
+
+  // A commit that lands AFTER Cancel must still refresh the list: Cancel bumps
+  // the generation but cannot abort the IndexedDB transaction, so the game
+  // would otherwise be stored yet missing from Review until a later refresh.
+  await page.evaluate(function () {
+    window.__origImport = CoachStore.importGame.bind(CoachStore);
+    window.__runImport = null;
+    CoachStore.importGame = function (rec) {
+      return new Promise(function (resolve, reject) {
+        window.__runImport = function () { window.__origImport(rec).then(resolve, reject); };
+      });
+    };
+  });
+  await page.click('#importOpen');
+  await page.fill('#importText', '[Event "LateCommit"]\n\n1. b3 b6 2. Bb2 Bb7 *');
+  await page.click('#importSubmit');   // importing; the deferred write is pending
+  await page.click('#importCancel');   // Cancel closes the dialog and bumps the generation
+  check(!(await dialogOpen()), 'Cancel closes the dialog while an import is still in flight');
+  // The write now lands (after Cancel). Restore the real method and run it.
+  await page.evaluate(function () { CoachStore.importGame = window.__origImport; window.__runImport(); });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#gameList button').length === 4;
+  }, { timeout: 5000 });
+  check(await listCount() === 4,
+    'an import that commits after Cancel still refreshes into the list');
 });

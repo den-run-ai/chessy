@@ -172,20 +172,24 @@
     refreshBusy();
     setStatus('Importing…', 'info');
     CoachStore.importGame(record).then(function (outcome) {
-      if (myGen !== generation) return; // dialog closed/reopened/resubmitted meanwhile
       if (outcome === 'duplicate') {
-        // Already archived — dialog stays open, so re-enable Submit; do NOT
-        // mint a second game.
+        // Nothing was added. If the dialog was cancelled/reopened meanwhile
+        // there is nothing to report; otherwise re-enable Submit (the dialog
+        // stays open) and do NOT mint a second game.
+        if (myGen !== generation) return;
         importing = false;
         refreshBusy();
         setStatus('This game is already in your archive.', 'info');
         return;
       }
-      // Committed. Keep `importing` true (Submit stays disabled) through the
-      // refresh AND the close: while refreshGames() is pending on a large
-      // archive the dialog is still open, and a second paste submitted then
-      // would be stored silently but miss the refreshed list. close() →
-      // invalidate() clears `importing`.
+      // Committed. The game LANDED, so refresh the list even if the dialog was
+      // cancelled/closed while the write was in flight — Cancel bumps the
+      // generation but cannot abort the IndexedDB transaction, so without this
+      // a silently-committed import would be missing from Review until a later
+      // refresh. Only touch the dialog if this is still the current generation.
+      // Keeping `importing` true through the refresh also blocks a second
+      // silent paste while the still-open dialog's refreshGames() is pending
+      // (close() → invalidate() clears it).
       return Promise.resolve(CoachReview.refreshGames()).then(function () {
         if (myGen !== generation) return;
         close();
