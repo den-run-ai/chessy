@@ -115,6 +115,9 @@
   let verdict = null;
   let verifySeq = 0;
   let saveSeq = 0;
+  // The moment ("gameId:ply") whose last analysis was rejected as unusable, so
+  // the next Verify for it bypasses the (evicted) cache and re-runs the worker.
+  let retryFresh = null;
 
   function sameMoment(r) {
     return !!r && !!flagged && r.game.id === flagged.gameId && r.ply === flagged.ply;
@@ -276,12 +279,19 @@
     $('saveCard').disabled = true;
     $('reflectVerify').disabled = true; // one analysis at a time
 
-    ChessyAnalysisService.analyse({
+    // If the previous analysis for THIS moment was rejected as unusable, bypass
+    // the cache on this run (consume the flag). `fresh` lives on the request,
+    // not in opts, so it never perturbs the analysis identity / cache key.
+    const momentKey = flagged.gameId + ':' + ply;
+    const wantFresh = retryFresh === momentKey;
+    retryFresh = null;
+    const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
-      fen: fenBefore, positions: r.states[ply].positions,
+      fen: fenBefore, positions: r.states[ply].positions, fresh: wantFresh,
       opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
         nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
-    }).then(function (res) {
+    };
+    ChessyAnalysisService.analyse(analysisReq).then(function (res) {
       if (token === verifySeq) $('reflectVerify').disabled = false;
       // A newer request superseded this one, or the user left the moment: drop
       // it silently (the owning request/moment repaints the shared controls).
@@ -301,21 +311,46 @@
       // disabled and let the player Verify again.
       const pos = Chess.parseFen(fenBefore);
       const legal = Chess.legalMoves(pos);
+      // Resolve a line's ROOT move to a legal move on THIS board, returning that
+      // move — but only when the line's SAN is the canonical SAN for it. A
+      // corrupt cache/worker line can carry a well-formed eval yet an illegal
+      // move, or a SAN that names a different move than its from/to; such a line
+      // must never be shown as a Chessy candidate or used to diagnose the
+      // player's decision (Gate 0, roadmap #23). SAN comes from the same
+      // Chess.toSan the analysis core uses on the same position, so a genuine
+      // line always verifies.
+      function resolveLine(line) {
+        if (!validLine(line) || !line.move) return null;
+        const m = legal.find(function (mv) {
+          return mv.from === line.move.from && mv.to === line.move.to &&
+                 (mv.promotion || null) === (line.move.promotion || null);
+        });
+        return m && Chess.toSan(pos, m, legal) === line.san ? m : null;
+      }
       const top = res.bestLines && res.bestLines[0];
-      const bm = top && top.move && legal.find(function (m) {
-        return m.from === top.move.from && m.to === top.move.to &&
-               (m.promotion || null) === (top.move.promotion || null);
-      });
+      const bm = top ? resolveLine(top) : null;
       const provOk = res.engine && typeof res.engine.version === 'string' &&
         Number.isFinite(res.depth) && Number.isFinite(res.nodes) && Number.isFinite(res.elapsedMs);
-      // EVERY rendered candidate must be well-formed, not just the top line:
-      // renderLines dereferences each bestLines entry and any appended
-      // playedLine, so a null/malformed LATER candidate would throw mid-render
-      // and hang on "Analysing…". Reject the whole result as unusable instead.
-      const linesOk = Array.isArray(res.bestLines) && res.bestLines.every(validLine) &&
+      // Completeness must be an EXPLICIT boolean: a payload that omits `complete`
+      // or carries a non-boolean (e.g. the string "false") has unknown standing
+      // and must not be treated as a settled, card-founding analysis.
+      const completeOk = typeof res.complete === 'boolean';
+      // EVERY rendered line — each candidate AND any appended played line — must
+      // be legally resolved and SAN-verified, not just the top move: renderLines
+      // dereferences each entry, and a bogus-but-plausible candidate would
+      // otherwise mislead the diagnosis even though it cannot occur here. Reject
+      // the whole result as unusable rather than show or save part of it.
+      const linesOk = Array.isArray(res.bestLines) && res.bestLines.length > 0 &&
+        res.bestLines.every(function (l) { return resolveLine(l) !== null; }) &&
         (res.playedLine == null ||
-          (validLine(res.playedLine) && Number.isFinite(res.playedLine.rank)));
-      if (!bm || !validEval(top) || !provOk || !linesOk) {
+          (resolveLine(res.playedLine) !== null && Number.isFinite(res.playedLine.rank)));
+      if (!bm || !provOk || !completeOk || !linesOk) {
+        // This unusable result may have come from the IndexedDB cache; evict it
+        // AND mark the moment so the next Verify bypasses the cache and
+        // dispatches a fresh worker run instead of serving the same bad entry.
+        // A valid re-run then overwrites the cache.
+        ChessyAnalysisService.invalidate(analysisReq);
+        retryFresh = flagged.gameId + ':' + ply;
         failVerify('Chessy could not analyse this position — Verify again.');
         return;
       }

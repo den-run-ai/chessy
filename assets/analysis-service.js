@@ -199,8 +199,12 @@
       job.key = keyFor(job.req, job.ident);
     } catch (e) { settle(job, null); return; }
 
+    // req.fresh bypasses the cache read entirely: the reflection layer sets it
+    // on a retry after it rejected a served result as unusable, so the retry
+    // ALWAYS dispatches a fresh worker run (and its result overwrites the bad
+    // entry via persist) rather than racing a not-yet-committed eviction.
     var store = global.CoachStore;
-    if (store && store.getAnalysis && job.key) {
+    if (!job.req.fresh && store && store.getAnalysis && job.key) {
       var lookup;
       try { lookup = store.getAnalysis(job.key); } catch (e) { lookup = null; }
       if (lookup && typeof lookup.then === 'function') {
@@ -234,11 +238,32 @@
   // being revised): terminate the worker and resolve its promise null.
   function cancel() { abandon(); }
 
+  // Evict the cached result for a request. The service caches any reply that
+  // matches the request's position/config/turn, but the reflection layer
+  // applies stricter rules it cannot (every candidate legal + SAN-verified);
+  // when it rejects a served result as unusable it calls this so the NEXT
+  // analyse() for the same request misses the cache and dispatches a fresh
+  // worker run rather than serving the same bad entry forever. Recomputes the
+  // key exactly as run() does. Best-effort; resolves when the entry is gone.
+  function invalidate(req) {
+    var store = global.CoachStore;
+    if (!store || !store.deleteAnalysis || !req) return Promise.resolve();
+    try {
+      var state = Chess.parseFen(req.fen);
+      var opts = buildOpts(req);
+      var ident = ChessyAnalysisCore.identity(state, opts);
+      var key = keyFor(req, ident);
+      if (!key) return Promise.resolve();
+      return Promise.resolve(store.deleteAnalysis(key)).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+  }
+
   function stats() { return { dispatches: dispatches }; }
 
   global.ChessyAnalysisService = {
     analyse: analyse,
     cancel: cancel,
+    invalidate: invalidate,
     stats: stats,
     PROTOCOL: PROTOCOL
   };

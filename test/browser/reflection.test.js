@@ -297,17 +297,88 @@ require('./helper').run('reflection', async function (t) {
     'a malformed mate payload is rejected (no +Mundefined, no card)');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse2; });
 
+  // Gate 0: completeness must be an EXPLICIT boolean. A legal, SAN-consistent,
+  // well-scored line whose `complete` is a non-boolean (here the string
+  // "false") has unknown standing and must NOT found a card.
+  await page.evaluate(function () {
+    window.__realAnalyseC = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      const sn = Chess.toSan(pos, lm, lg);
+      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'c', san: sn, scoreCpWhite: 30, scoreCpPlayer: 30, mate: null, pv: [sn], pvUci: [] };
+      return Promise.resolve({
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: 'false', // not a boolean
+        scoreCpWhite: 30, scoreCpPlayer: 30, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null, bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'non-boolean complete');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a non-boolean complete flag is rejected (only explicit true founds a card)');
+  const beforeC = (await cards()).length;
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === beforeC, 'a non-boolean-complete result creates no card');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyseC; });
+
+  // Gate 0: EVERY candidate must legally resolve, not just the top line. A valid
+  // top line followed by a second candidate whose move is illegal here rejects
+  // the whole result — a bogus candidate must never be shown as Chessy's.
+  await page.evaluate(function () {
+    window.__realAnalyseD = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      const sn = Chess.toSan(pos, lm, lg);
+      const good = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'g', san: sn, scoreCpWhite: 25, scoreCpPlayer: 25, mate: null, pv: [sn], pvUci: [] };
+      const bad = { move: { from: -1, to: -1, promotion: null },
+        uci: 'b', san: 'Zz9', scoreCpWhite: 10, scoreCpPlayer: 10, mate: null, pv: [], pvUci: [] };
+      return Promise.resolve({
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: 25, scoreCpPlayer: 25, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null, bestLines: [good, bad]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'second candidate illegal');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a later illegal candidate rejects the whole result (every candidate is resolved)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyseD; });
+
   // A partial (complete:false) result whose played move merely LEADS the
   // searched prefix must not be presented as Chessy's settled "top line".
   await page.evaluate(function () {
     window.__realAnalyse3 = ChessyAnalysisService.analyse;
-    ChessyAnalysisService.analyse = function () {
-      const legal = Chess.legalMoves(Chess.parseFen(
-        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
-      const line = { move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
-        uci: 'lead', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['e4'], pvUci: [] };
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      // A SAN-consistent line: Gate 0 rejects any line whose SAN names a
+      // different move than its from/to.
+      const sn = Chess.toSan(pos, lm, lg);
+      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'lead', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: [sn], pvUci: [] };
       return Promise.resolve({
-        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
         depth: 3, nodes: 1, elapsedMs: 1, complete: false,
         scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'same',
         playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
@@ -334,9 +405,11 @@ require('./helper').run('reflection', async function (t) {
     window.__realAnalyse4 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
       const pos = Chess.parseFen(req.fen);
-      const lm = Chess.legalMoves(pos)[0];
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      const sn = Chess.toSan(pos, lm, lg);
       const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-        uci: 'x', san: 'x', scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, pv: ['x'], pvUci: [] };
+        uci: 'x', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, pv: [sn], pvUci: [] };
       return Promise.resolve({
         turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
         depth: 5, nodes: 1, elapsedMs: 1, complete: true,
@@ -370,9 +443,11 @@ require('./helper').run('reflection', async function (t) {
     window.__realAnalyse5 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
       const pos = Chess.parseFen(req.fen);
-      const lm = Chess.legalMoves(pos)[0];
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      const sn = Chess.toSan(pos, lm, lg);
       const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-        uci: 'x', san: 'x', scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, pv: ['x'], pvUci: [] };
+        uci: 'x', san: sn, scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, pv: [sn], pvUci: [] };
       return Promise.resolve({
         turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
         depth: 3, nodes: 1, elapsedMs: 1, complete: false,
@@ -417,13 +492,16 @@ require('./helper').run('reflection', async function (t) {
   await page.evaluate(function () {
     window.__realAnalyse7 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      const pos = Chess.parseFen(req.fen);
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      const sn = Chess.toSan(pos, lm, lg); // valid line, so the reject is purely the provenance
       return Promise.resolve({
-        turn: 'w', engine: null, depth: null, nodes: 'lots', elapsedMs: 1, complete: true,
+        turn: pos.turn, engine: null, depth: null, nodes: 'lots', elapsedMs: 1, complete: true,
         scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'unknown-equivalence',
         playedLine: null, stability: null,
         bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-          uci: 'x', san: 'x', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['x'], pvUci: [] }]
+          uci: 'x', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: [sn], pvUci: [] }]
       });
     };
   });
@@ -443,14 +521,19 @@ require('./helper').run('reflection', async function (t) {
   await page.evaluate(function () {
     window.__realAnalyse8 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      const pos = Chess.parseFen(req.fen);
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      // The line is otherwise valid (legal, SAN-consistent) — only its `pv` is
+      // malformed, which is the thing under test.
+      const sn = Chess.toSan(pos, lm, lg);
       return Promise.resolve({
-        turn: 'w', engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
+        turn: pos.turn, engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
         depth: 5, nodes: 100, elapsedMs: 1, complete: true,
         scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'different-candidate',
         playedLine: null, stability: null,
         bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-          uci: 'x', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: null, pvUci: null }]
+          uci: 'x', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: null, pvUci: null }]
       });
     };
   });
@@ -472,9 +555,12 @@ require('./helper').run('reflection', async function (t) {
   await page.evaluate(function () {
     window.__realAnalyse9 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      const pos = Chess.parseFen(req.fen);
+      const lg = Chess.legalMoves(pos);
+      const lm = lg[0];
+      const sn = Chess.toSan(pos, lm, lg); // valid top, so the reject is purely the null candidate
       const top = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-        uci: 'x', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['e4'], pvUci: [] };
+        uci: 'x', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: [sn], pvUci: [] };
       return Promise.resolve({
         turn: 'w', engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
         depth: 5, nodes: 100, elapsedMs: 1, complete: true,
@@ -519,6 +605,46 @@ require('./helper').run('reflection', async function (t) {
   await verifyDone();
   check(!(await page.locator('#saveCard').isDisabled()),
     'a fresh probe after the abandoned one works normally');
+
+  // Integration (real service + worker, no stub): a malformed CACHED result is
+  // rejected safely, and "Verify again" bypasses/evicts the bad cache and
+  // dispatches a fresh worker run that replaces it — not the same bad entry
+  // served forever. The Verify above cached a VALID analysis for this moment.
+  const gid = await page.evaluate(function () { return CoachReview.current().game.id; });
+  const corrupted = await page.evaluate(function (gid) {
+    return CoachStore.listAnalysesForGame(gid).then(function (recs) {
+      const rec = recs.find(function (r) { return r.ply === 0; });
+      if (!rec) return false;
+      // Break the top line's move so it can no longer resolve to a legal move,
+      // leaving engine/fingerprint/turn intact so the service still serves it.
+      rec.result.bestLines[0].move = { from: -1, to: -1, promotion: null };
+      return CoachStore.putAnalysis(rec).then(function () { return true; });
+    });
+  }, gid);
+  check(corrupted, 'a valid analysis was cached, then corrupted in place');
+
+  const d0 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
+  await page.click('#reflectVerify'); // serves the corrupted cache entry
+  await verifyDone();
+  const d1 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled() && d1 === d0,
+    'a malformed cached result is served, rejected, and dispatches no worker');
+
+  await page.click('#reflectVerify'); // retry: bypasses the evicted cache
+  await verifyDone();
+  const d2 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
+  check(d2 > d1, 'Verify again after a rejected cache dispatches a fresh worker run');
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'the fresh run yields a valid, saveable result');
+  const replaced = await page.evaluate(function (gid) {
+    return CoachStore.listAnalysesForGame(gid).then(function (recs) {
+      const rec = recs.find(function (r) { return r.ply === 0; });
+      const mv = rec && rec.result.bestLines[0].move;
+      return !!mv && mv.from >= 0 && mv.to >= 0;
+    });
+  }, gid);
+  check(replaced, 'the valid re-run replaced the corrupted cache entry');
 
   // Reflection is about YOUR decisions: in a vs-computer game only the
   // human's moves are flaggable.
