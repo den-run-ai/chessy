@@ -57,6 +57,82 @@
       .replace(/0/g, 'O');
   }
 
+  // Parse a SAN's structural fields for a RELAXED match used only when the
+  // exact canonical spelling does not match. It admits ONLY a closed set of
+  // well-formed alternate spellings the engine's own toSan never emits, each
+  // with a specific shape — anything outside them returns null (a plain
+  // reject), so a token is never accepted merely because it happens to match a
+  // unique legal move. The `capture` flag records whether the spelling asserts
+  // a capture; looseFind requires it to agree with the move it matches.
+  //   Piece long-algebraic   Ng1f3 / Ng1-f3 / Ng1xf3   (FULL origin square)
+  //   Piece SAN + disambig   Nf3 / Rab1 / R1a2 / Raxb1 (partial disambig)
+  //   Pawn long-algebraic    e2e4 / e2-e4 / e4xd5       (FULL origin square)
+  //   Pawn short capture     ed5 / exd5                 (origin FILE, x optional)
+  //   Pawn push / promotion  e4 / a8=q                  (no origin)
+  // The hyphen appears ONLY between a full origin square and the destination,
+  // so "-e4", "N-f3", "N--f3", "Nf-3" are rejected. Pawn source fields are
+  // shape-checked, so "2e4", "ee4", "xd5" are rejected.
+  function sanFields(san) {
+    // Strip ONLY grammar-legal trailing decoration — the en-passant suffix and
+    // a run of check/mate/annotation glyphs at the very end. The promotion "="
+    // is NOT stripped globally; each shape allows it only in its defined
+    // position (before a final promotion piece). So internal punctuation
+    // ("e2!e4", "Ng!1f3", "e=2e4") cannot manufacture a recognised shape.
+    const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]+$/, '');
+    let m;
+    // Piece, long-algebraic: piece + full origin square + dest. The separator
+    // is EITHER the quiet "-" OR the capture "x", never both ("Ng1-xe2" is
+    // rejected); only the x form asserts a capture.
+    if ((m = /^([KQRBN])([a-h][1-8])(?:-|(x))?([a-h][1-8])$/.exec(t)))
+      return { piece: m[1], file: m[2][0], rank: m[2][1], capture: !!m[3], dest: m[4], promo: null };
+    // Piece, standard SAN with optional (possibly redundant) disambiguation.
+    // The KING is excluded: it can never need disambiguation, so "Kef2"/"K1f2"
+    // are malformed (its only multi-square spelling is full-origin LAN above).
+    if ((m = /^([QRBN])([a-h])?([1-8])?(x)?([a-h][1-8])$/.exec(t)))
+      return { piece: m[1], file: m[2] || null, rank: m[3] || null, capture: !!m[4], dest: m[5], promo: null };
+    // Pawn, long-algebraic: full origin square + dest + promo. Separator is
+    // EITHER "-" OR "x", never both ("e2-xe4" is rejected).
+    if ((m = /^([a-h][1-8])(?:-|(x))?([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)))
+      return { piece: 'P', file: m[1][0], rank: m[1][1], capture: !!m[2], dest: m[3],
+        promo: m[4] ? m[4].toUpperCase() : null };
+    // Pawn, short capture: origin FILE (differing from the destination file) +
+    // optional x + dest + promo. Always a capture.
+    if ((m = /^([a-h])(x)?([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)) && m[1] !== m[3][0])
+      return { piece: 'P', file: m[1], rank: null, capture: true, dest: m[3],
+        promo: m[4] ? m[4].toUpperCase() : null };
+    // Pawn, quiet push or promotion: destination only (no origin), never a capture.
+    if ((m = /^([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)))
+      return { piece: 'P', file: null, rank: null, capture: false, dest: m[1],
+        promo: m[2] ? m[2].toUpperCase() : null };
+    return null;
+  }
+
+  // Find the UNIQUE legal move matching a relaxed SAN spelling. Never guesses:
+  // zero OR MORE-THAN-ONE match returns null, so a genuinely ambiguous
+  // (under-disambiguated) or unknown move stays rejected. Only members of
+  // `legal` are ever considered, so this can never accept an illegal move — it
+  // only widens the set of legal SAN SPELLINGS chessy tolerates on import.
+  function looseFind(legal, want) {
+    const f = sanFields(want);
+    if (!f) return null;
+    const hits = legal.filter(function (m) {
+      if (m.castle) return false;
+      if (m.piece[1] !== f.piece) return false;
+      if ((m.promotion || null) !== f.promo) return false;
+      if (Chess.sqName(m.to) !== f.dest) return false;
+      // The spelling's capture assertion must AGREE with the move: a capture
+      // marker on a quiet move ("Nxf3" onto an empty f3) and a missing marker
+      // on a real capture ("Ne5" for Nxe5) are both rejected. The only tolerated
+      // x-omission is the pawn short-capture shape, where sanFields sets capture.
+      if (f.capture !== !!m.captured) return false;
+      const from = Chess.sqName(m.from);
+      if (f.file && from[0] !== f.file) return false;
+      if (f.rank && from[1] !== f.rank) return false;
+      return true;
+    });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
   // Tokenise the movetext after the tag section: returns raw move entries
   // { san, nags, comment, clkMs } in mainline order, plus the result token.
   function parseMovetext(text) {
@@ -123,12 +199,42 @@
       // any, is a SAN on the same token (spaceless PGN).
       tok = tok.replace(/^\d+\.(\.\.)?/, '');
       if (!tok) continue;
+      // A lone "e.p."/"e.p", optionally carrying a trailing !/? glyph
+      // ("exd6 e.p.!"), is an en-passant annotation on the PREVIOUS move — some
+      // producers write the suffix spaced. It is recorded on that move (with
+      // any glyph's NAG) and parseGame verifies the move really was an
+      // en-passant capture. With NO preceding move the token is left to fall
+      // through and fail as unknown, so a misplaced "e.p." is not swallowed.
+      const epm = /^e\.p\.?([!?]+)?$/i.exec(tok);
+      if (epm && moves.length) {
+        const prev = moves[moves.length - 1];
+        prev.epSuffix = true;
+        if (epm[1] && GLYPH_NAG[epm[1]]) prev.nags.push(GLYPH_NAG[epm[1]]);
+        continue;
+      }
+      // A result glued to the final move with no separating space ("Qxe5#1-0",
+      // "e4*"): split the result off, keep the move, and stop after it (same
+      // first-game boundary as a standalone result token). ALL four PGN result
+      // markers are handled, matching the standalone-token set.
+      let glued = false;
+      const rm = tok.match(/^(.+?)(1-0|0-1|1\/2-1\/2|\*)$/);
+      if (rm && !/^\d+$/.test(rm[1])) { tok = rm[1]; result = rm[2]; glued = true; }
+      // An en-passant suffix ATTACHED to the move ("exd6e.p." / "Ng1f3e.p.!")
+      // — as opposed to spaced — is stripped and flagged here (not silently by
+      // canon/sanFields), so parseGame validates it against the resolved move's
+      // en-passant flag exactly like the spaced form. A trailing glyph is kept
+      // on the token so its NAG is still captured below.
+      let epSuffix = false;
+      const gm = (tok.match(/[!?]+$/) || [])[0];
+      const bare = gm ? tok.slice(0, tok.length - gm.length) : tok;
+      if (/e\.p\.?$/i.test(bare)) { epSuffix = true; tok = bare.replace(/e\.p\.?$/i, '') + (gm || ''); }
       // A trailing !/? suffix glyph is a move annotation, not part of the SAN;
       // canon() strips it to match the legal move, so capture it as the
       // equivalent NAG here so the annotation is not silently lost.
       const glyph = (tok.match(/[!?]+$/) || [])[0];
       const nags = glyph && GLYPH_NAG[glyph] ? [GLYPH_NAG[glyph]] : [];
-      moves.push({ san: tok, nags: nags, comment: null, clkMs: null });
+      moves.push({ san: tok, nags: nags, comment: null, clkMs: null, epSuffix: epSuffix });
+      if (glued) break;
     }
     return { moves: moves, result: result, pre: pre };
   }
@@ -248,9 +354,21 @@
       }
       const legal = Chess.legalMoves(s);
       const want = canon(raw.san);
-      const hit = legal.find(function (m) { return canon(Chess.toSan(s, m, legal)) === want; });
+      // Exact canonical match first; fall back to a relaxed unique match so
+      // valid-but-alternately-spelled SAN (redundant disambiguation,
+      // long-algebraic, short pawn captures, lowercase promotion) still
+      // imports. Both draw ONLY from `legal`, so neither accepts an illegal move.
+      const hit = legal.find(function (m) { return canon(Chess.toSan(s, m, legal)) === want; })
+        || looseFind(legal, raw.san);
       if (!hit) {
         return { valid: false, error: 'illegal or unknown move "' + raw.san + '"',
+          ply: k + 1, tags: tags, setupFen: setup, moves: [] };
+      }
+      // A spaced "e.p." suffix only belongs on a real en-passant capture: if it
+      // was written after a move that is not one, the annotation is bogus and
+      // the game is rejected rather than silently accepted.
+      if (raw.epSuffix && !hit.ep) {
+        return { valid: false, error: 'en-passant suffix on a non-en-passant move "' + raw.san + '"',
           ply: k + 1, tags: tags, setupFen: setup, moves: [] };
       }
       moves.push({

@@ -193,5 +193,175 @@ check(pre.preComment === 'Opening note' &&
   PGN.toRecord(pre, { importedAt: 1 }).preComment === 'Opening note',
   'a pre-first-move comment is preserved through parse and toRecord');
 
+// === Edge cases surfaced by differentially testing against a PEG PGN grammar
+// (used as a dev-time oracle only — no runtime dependency is adopted). Each
+// asserts chessy's OWN behaviour; the oracle is not imported here. ===
+
+// A move whose SAN carries REDUNDANT disambiguation is accepted and stored in
+// chessy's own minimal canonical form. Only the a-rook can reach b1 here (the
+// king on e1 blocks the h-rook), so `Rb1` is enough — but many producers still
+// write `Rab1`. Historically chessy matched only its own minimal toSan output.
+const overFile = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"]\n[SetUp "1"]\n\n1. Rab1 *');
+check(overFile.valid && overFile.moves[0].san === 'Rb1',
+  'redundant file-disambiguation (Rab1 where Rb1 suffices) imports, stored canonical',
+  overFile.error);
+const overRank = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K3 w Q - 0 1"]\n[SetUp "1"]\n\n1. R1a2 *');
+check(overRank.valid && overRank.moves[0].san === 'Ra2',
+  'redundant rank-disambiguation (R1a2 where Ra2 suffices) imports');
+
+// The relaxed match NEVER guesses: a genuinely ambiguous (under-disambiguated)
+// SAN, and a disambiguation naming a nonexistent origin, both stay rejected.
+const ambig = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R1R1K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Rb1 *');
+check(!ambig.valid, 'a truly ambiguous SAN (two rooks reach b1) is still rejected');
+const bogus = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R1R1K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Rdb1 *');
+check(!bogus.valid, 'disambiguation naming a nonexistent origin (Rdb1) is rejected');
+const bothOk = PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R1R1K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Rab1 *');
+check(bothOk.valid && bothOk.moves[0].san === 'Rab1',
+  'when two rooks reach b1, the disambiguated Rab1 imports and keeps its disambiguation');
+
+// Long-algebraic notation (from-square spelled out) imports; a knight move is
+// the clearest case since the piece letter and both squares are present.
+const lan = PGN.parseGame('[Result "*"]\n\n1. e2e4 e7e5 2. Ng1f3 *');
+check(lan.valid && lan.moves.map(function (m) { return m.san; }).join(' ') === 'e4 e5 Nf3',
+  'long-algebraic SAN (e2e4 / Ng1f3) imports, stored in canonical SAN');
+
+// A short-form pawn capture (file + destination, no explicit x) imports.
+const shortCap = PGN.parseGame('[FEN "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. ed5 *');
+check(shortCap.valid && shortCap.moves[0].san === 'exd5',
+  'a short-form pawn capture (ed5) imports, normalised to exd5');
+
+// A lowercase promotion piece imports, normalised to uppercase.
+const lowPromo = PGN.parseGame('[FEN "4k3/P7/8/8/8/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. a8=q+ Ke7 *');
+check(lowPromo.valid && lowPromo.moves[0].san === 'a8=Q+' && lowPromo.moves[0].promotion === 'Q',
+  'a lowercase promotion piece (a8=q) imports, normalised to a8=Q');
+
+// The traditional en-passant suffix "e.p." — written SPACED from the capture,
+// as FIDE-style notation and some producers do — no longer orphans a token and
+// invalidates the game; it is dropped as the annotation it is.
+const epSpaced = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6 e.p. Kd8 *');
+check(epSpaced.valid && epSpaced.moves.length === 2 &&
+  epSpaced.moves[0].san === 'exd6' && epSpaced.moves[1].san === 'Kd8',
+  'a spaced en-passant suffix ("exd6 e.p.") is dropped, and the next move still parses',
+  epSpaced.error);
+
+// A result glued to the final move with no separating space ("Qxf7#1-0") is
+// split: the move validates and the result is read, with the same first-game
+// boundary a standalone result token would give.
+const glued = PGN.parseGame('[Result "1-0"]\n\n1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7#1-0');
+check(glued.valid && glued.moves.length === 7 &&
+  glued.moves[6].san === 'Qxf7#' && glued.result === '1-0' && glued.reason === 'checkmate',
+  'a result glued to the mating move (Qxf7#1-0) splits into move + result',
+  glued.error);
+
+// The relaxed match honours an explicit capture marker: "Nxf3" onto an empty
+// f3 is rejected (not silently stored as Nf3), while a real capture is kept.
+check(!PGN.parseGame('[Result "*"]\n\n1. Nxf3 *').valid,
+  'a capture marker on a non-capturing move (Nxf3 onto empty f3) is rejected');
+const realCap = PGN.parseGame('[Result "*"]\n\n1. e4 d5 2. exd5 *');
+check(realCap.valid && realCap.moves[2].san === 'exd5',
+  'a genuine capture spelled with x still imports');
+
+// The glued-result split covers ALL four PGN result markers, including the
+// unfinished-game "*": "1. e4*" imports the same as "1. e4 *".
+const gluedStar = PGN.parseGame('[Result "*"]\n\n1. e4*');
+check(gluedStar.valid && gluedStar.moves.length === 1 &&
+  gluedStar.moves[0].san === 'e4' && gluedStar.result === '*',
+  'a result glued to a nonterminal move (e4*) splits into move + "*"');
+
+// Arbitrary hyphens are NOT accepted — only the long-algebraic origin→dest
+// separator is. "N--f3" / "Nf-3" stay rejected; "Ng1-f3" imports.
+check(!PGN.parseGame('[Result "*"]\n\n1. N--f3 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. Nf-3 *').valid,
+  'malformed hyphenated tokens (N--f3, Nf-3) are rejected');
+const lanDash = PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1-f3 *');
+check(lanDash.valid && lanDash.moves[2].san === 'Nf3',
+  'the long-algebraic hyphen separator (Ng1-f3) imports');
+
+// A spaced en-passant suffix carrying a glyph ("exd6 e.p.!") is recognised:
+// the suffix is dropped and the "!" becomes the previous move's NAG.
+const epGlyph = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6 e.p.! Kd8 *');
+check(epGlyph.valid && epGlyph.moves.length === 2 && epGlyph.moves[0].san === 'exd6' &&
+  epGlyph.moves[0].nags.indexOf('$1') !== -1 && epGlyph.moves[1].san === 'Kd8',
+  'a spaced en-passant suffix with a glyph ("exd6 e.p.!") drops the suffix and keeps the NAG',
+  epGlyph.error);
+
+// The relaxed matcher admits only well-formed alternate spellings, never an
+// arbitrary token that happens to match a unique legal move.
+// A PIECE capture that omits x (Ne5 for Nxe5) is rejected — the no-x tolerance
+// is only for short PAWN captures.
+const pieceCapNoX = PGN.parseGame('[FEN "4k3/8/8/4p3/8/5N2/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ne5 *');
+check(!pieceCapNoX.valid, 'a piece capture written without x (Ne5 for Nxe5) is rejected');
+const pieceCapX = PGN.parseGame('[FEN "4k3/8/8/4p3/8/5N2/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Nxe5 *');
+check(pieceCapX.valid && pieceCapX.moves[0].san === 'Nxe5', 'the same piece capture with x imports');
+
+// The long-algebraic hyphen requires a COMPLETE origin square: "-e4" and
+// "N-f3" are rejected; only "e2-e4" / "Ng1-f3" use the fallback.
+check(!PGN.parseGame('[Result "*"]\n\n1. -e4 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. N-f3 *').valid,
+  'a hyphen without a complete origin square (-e4, N-f3) is rejected');
+
+// Malformed pawn tokens with the wrong source-field shape are rejected:
+// bare rank origin (2e4), same-file "capture" (ee4), and file-less capture (xd5).
+check(!PGN.parseGame('[Result "*"]\n\n1. 2e4 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. ee4 *').valid &&
+  !PGN.parseGame('[FEN "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. xd5 *').valid,
+  'malformed pawn tokens (2e4, ee4, xd5) are rejected');
+
+// Only grammar-legal trailing decoration is stripped before the relaxed match:
+// internal check/annotation/"=" punctuation cannot manufacture a shape.
+check(!PGN.parseGame('[Result "*"]\n\n1. e2!e4 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng!1f3 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e=2e4 *').valid,
+  'internal punctuation (e2!e4, Ng!1f3, e=2e4) does not form a relaxed match');
+// A trailing glyph on a genuine long-algebraic move is still fine.
+const lanGlyph = PGN.parseGame('[Result "*"]\n\n1. e2e4! *');
+check(lanGlyph.valid && lanGlyph.moves[0].san === 'e4' && lanGlyph.moves[0].nags.indexOf('$1') !== -1,
+  'a trailing glyph on a long-algebraic move (e2e4!) imports with its NAG');
+
+// A spaced "e.p." suffix is honoured only after a real en-passant capture.
+const epReal = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6 e.p. Kd8 *');
+check(epReal.valid && epReal.moves[0].san === 'exd6', 'a real en-passant capture keeps its spaced e.p. suffix');
+// After an ordinary (non-en-passant) move the suffix is bogus → rejected.
+check(!PGN.parseGame('[Result "*"]\n\n1. e4 e.p. e5 *').valid,
+  'an e.p. suffix after a non-en-passant move (e4 e.p.) is rejected');
+// Before the first move it is an unknown token → rejected (not swallowed).
+check(!PGN.parseGame('[Result "*"]\n\ne.p. 1. e4 *').valid,
+  'an e.p. suffix before the first move is rejected, not silently dropped');
+
+// Long-algebraic uses EITHER the quiet "-" OR the capture "x", never both:
+// "Ng1-xe2" is rejected; "Ng1xe2" and "Ng1-e2" import.
+const lanBoth = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/6NK w - - 0 1"]\n[SetUp "1"]\n\n1. Ng1-xe2 *');
+check(!lanBoth.valid, 'a long-algebraic token with both separators (Ng1-xe2) is rejected');
+const lanCap = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/6NK w - - 0 1"]\n[SetUp "1"]\n\n1. Ng1xe2 *');
+check(lanCap.valid && lanCap.moves[0].san === 'Nxe2', 'long-algebraic capture (Ng1xe2) imports as Nxe2');
+const lanQuiet = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/6NK w - - 0 1"]\n[SetUp "1"]\n\n1. Ng1-f3 *');
+check(lanQuiet.valid && lanQuiet.moves[0].san === 'Nf3', 'long-algebraic quiet move (Ng1-f3) imports as Nf3');
+
+// Internal annotation glyphs never form a shape (only trailing ones are stripped).
+check(!PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1!f3 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e2?e4 *').valid &&
+  !PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"]\n[SetUp "1"]\n\n1. Ra!b1 *').valid,
+  'internal annotation glyphs (Ng1!f3, e2?e4, Ra!b1) do not form a relaxed match');
+
+// An ATTACHED en-passant suffix is validated like the spaced form: only a real
+// en-passant capture keeps it; on any other move the game is rejected.
+const epAttachReal = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6e.p. Kd8 *');
+check(epAttachReal.valid && epAttachReal.moves[0].san === 'exd6',
+  'an attached e.p. suffix on a real en-passant capture (exd6e.p.) imports', epAttachReal.error);
+check(!PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1f3e.p. *').valid,
+  'an attached e.p. suffix on a non-en-passant move (Ng1f3e.p.) is rejected');
+check(!PGN.parseGame('[Result "*"]\n\n1. e4e.p. *').valid,
+  'an attached e.p. suffix on an ordinary pawn push (e4e.p.) is rejected');
+
+// The king never takes SAN disambiguation: "Kef2"/"K1f2" are rejected, while
+// its full-origin long-algebraic form (Ke1f2) and the plain move (Kf2) import.
+check(!PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Kef2 *').valid &&
+  !PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. K1f2 *').valid,
+  'disambiguated king moves (Kef2, K1f2) are rejected — a king never needs disambiguation');
+const kLan = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ke1f2 *');
+check(kLan.valid && kLan.moves[0].san === 'Kf2', 'a full-origin king LAN move (Ke1f2) imports as Kf2', kLan.error);
+const kPlain = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Kf2 *');
+check(kPlain.valid && kPlain.moves[0].san === 'Kf2', 'a plain king move (Kf2) still imports');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
