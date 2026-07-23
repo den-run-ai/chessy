@@ -66,24 +66,24 @@ PASSED_EG [0, 69, 39, 24, 93, 300, 180]   (non-monotonic)
 (The λ = 0.05/0.1 fits move a single endgame passed-pawn weight by one centipawn —
 noise; they are not selected.)
 
-## Is the selected candidate admissible? No.
+## Is the selected candidate admissible? No — it fails tactics.
 
 A lower Texel loss is necessary but never sufficient — the outcome-labelled
 objective is not the playing objective — so a candidate is admissible only if it
-also clears the tactics suite and the predeclared clustered match (95 % lower
-bound above 50 %). The λ = 0 candidate:
+also clears the **tactics suite** and then the predeclared clustered match. The
+gate is ordered: tactics first, and a tactics failure is terminal.
 
-- **Fails the tactics suite** — 61/63, losing **K+Q vs K** and **K+R vs K**
-  conversions (baseline: 63/0). A distorted evaluation with no knight mobility and
-  a cap-pinned shield can no longer steer basic won endings to mate.
-- **Self-play vs baseline** (candidate = working tree, base = HEAD; 3000
-  nodes/move, 60 openings × both colours = 120 games, played to completion — no
-  interim stopping): the candidate trails the baseline and does not clear the
-  50 % lower bound. (Exact W/D/L, score, and clustered lower bound are recorded in
-  the commit that finalises this run.)
+The λ = 0 candidate **fails the tactics suite** — 61/63, losing **K+Q vs K** and
+**K+R vs K** conversions (baseline: 63/0). A distorted evaluation with a zero
+knight-mobility term and a cap-pinned shield can no longer steer even basic won
+endings to mate. That regression alone disqualifies it; a candidate that cannot
+mate with K+Q is not one whose playing strength is in question, so **no self-play
+match is run** — it would only spend compute to confirm a verdict tactics has
+already delivered. (This mirrors the converse shortcut: when the selection
+returns the baseline unchanged, no tactics run or match is needed either.)
 
-Either result alone disqualifies it. The candidate lowers Texel loss **and plays
-worse** — the definition of objective misalignment.
+So the candidate lowers held-out Texel loss by ~1 % **and cannot play a won
+K+Q ending** — the definition of objective misalignment.
 
 ## Conclusion
 

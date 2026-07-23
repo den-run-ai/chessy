@@ -799,9 +799,10 @@ function main() {
       ? 'candidate lowers the untouched test loss — a HYPOTHESIS only; admissible ONLY if it then clears tactics + benchmark + the predeclared clustered match'
       : 'candidate does not lower the untouched test loss — not admissible'));
   console.log('NOTE: a lower Texel loss is necessary, not sufficient — the outcome-labelled objective is not the');
-  console.log('      playing objective. Any candidate must clear the tactics suite, the benchmark, and the');
-  console.log('      predeclared clustered self-play match (lower bound > 50%) before it ships. Results are');
-  console.log('      specific to low-budget self-play from random ' + RAND_PLIES + '-ply openings, not a universal optimum.');
+  console.log('      playing objective. Gate a moved candidate in order: the tactics suite FIRST (a tactics');
+  console.log('      failure is terminal — no match needed), then the benchmark and the predeclared clustered');
+  console.log('      self-play match (lower bound > 50%). Results are specific to low-budget self-play from');
+  console.log('      random ' + RAND_PLIES + '-ply openings, not a universal optimum.');
 
   console.log('\nassets/ai.js constants for the selected candidate:');
   console.log("  const MOBILITY = { N: " + cand.mobN + ", B: " + cand.mobB + ", R: " + cand.mobR + ", Q: " + cand.mobQ + " };");
