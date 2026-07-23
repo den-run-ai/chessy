@@ -59,8 +59,17 @@
   // A candidate line's eval from the moving side's POV. A mate line reads as
   // +M/−M for the player to move; a centipawn line flips White-POV to that
   // side. `turn` is the side to move at the flagged position.
+  // A well-formed mate payload: a definite side and a finite, positive,
+  // whole-ply distance. A truthy-but-malformed mate ({} or inPlies:NaN) is NOT
+  // a mate — it must not render as "+Mundefined"/"−MNaN" or score a card.
+  function validMate(m) {
+    return !!m && typeof m.forWhite === 'boolean' &&
+      typeof m.inPlies === 'number' && isFinite(m.inPlies) &&
+      m.inPlies > 0 && Math.floor(m.inPlies) === m.inPlies;
+  }
+
   function fmtLineEval(line, turn) {
-    if (line.mate) {
+    if (validMate(line.mate)) {
       const goodForMover = line.mate.forWhite === (turn === 'w');
       return (goodForMover ? '+M' : '−M') + line.mate.inPlies;
     }
@@ -70,11 +79,11 @@
     return (s >= 0 ? '+' : '') + (s / 100).toFixed(1);
   }
 
-  // A usable line must carry a real evaluation — a valid mate payload OR a
+  // A usable line must carry a real evaluation — a WELL-FORMED mate payload OR a
   // finite white-POV centipawn score. A legal move with neither (a malformed
-  // worker/cache result) must not render as "+0.0" or found a card.
+  // worker/cache result) must not render as "+0.0"/"+Mundefined" or found a card.
   function validEval(line) {
-    return !!line && (!!line.mate ||
+    return !!line && (validMate(line.mate) ||
       (typeof line.scoreCpWhite === 'number' && isFinite(line.scoreCpWhite)));
   }
 
@@ -293,8 +302,13 @@
       // it fell outside the shown lines) — never as an error.
       let sentence;
       if (match) {
-        sentence = 'You played ' + entry.san + ' — it’s Chessy’s top line (' +
-          topEval + ' for ' + mover + ').';
+        // For a partial scan, "top line" only means it leads the searched
+        // prefix — qualify it just like the provisional ranks below.
+        sentence = partial
+          ? 'You played ' + entry.san + ' — it leads Chessy’s search so far (analysis' +
+            ' incomplete, ' + topEval + ' for ' + mover + ').'
+          : 'You played ' + entry.san + ' — it’s Chessy’s top line (' +
+            topEval + ' for ' + mover + ').';
       } else {
         const pl = res.playedLine;
         // Cite an EXACT rank only for a complete analysis: a partial scan ranks

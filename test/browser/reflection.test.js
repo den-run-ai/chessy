@@ -268,6 +268,65 @@ require('./helper').run('reflection', async function (t) {
   check((await cards()).length === 2, 'an invalid-evaluation result creates no card');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse; });
 
+  // A malformed MATE payload (truthy but no finite distance) is NOT a mate: it
+  // must be rejected, never rendered as "+Mundefined"/"−MNaN" or saved.
+  await page.evaluate(function () {
+    window.__realAnalyse2 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () {
+      const legal = Chess.legalMoves(Chess.parseFen(
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
+      const bad = { forWhite: false, inPlies: NaN };
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: null, scoreCpPlayer: null, mate: bad,
+        classification: 'unknown-equivalence', playedLine: null, stability: null,
+        bestLines: [{ move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
+          uci: 'x', san: '?', scoreCpWhite: null, scoreCpPlayer: null, mate: bad, pv: ['?'], pvUci: [] }]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'malformed mate');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a malformed mate payload is rejected (no +Mundefined, no card)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse2; });
+
+  // A partial (complete:false) result whose played move merely LEADS the
+  // searched prefix must not be presented as Chessy's settled "top line".
+  await page.evaluate(function () {
+    window.__realAnalyse3 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () {
+      const legal = Chess.legalMoves(Chess.parseFen(
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
+      const line = { move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
+        uci: 'lead', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['e4'], pvUci: [] };
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 3, nodes: 1, elapsedMs: 1, complete: false,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'same',
+        playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
+        bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'partial match');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('so far') &&
+        (await page.textContent('#verifyResult')).includes('incomplete') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a partial top-line claim is qualified as provisional (leads the search so far), not settled');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse3; });
+
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
   await page.click('#flagMoment'); // re-flag ply 0
