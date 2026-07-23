@@ -51,15 +51,24 @@
   // dividing that node ceiling by a deliberately CONSERVATIVE slow-device rate
   // yields a deadline a healthy slow phone beats. Overridable to a tiny value so
   // a test can exercise the timeout path without a multi-second wait.
+  //
+  // SLOW_NPS is empirically grounded, not a guess: a hard midgame (Kiwipete)
+  // measured ~78k nodes/s on a fast x86 CI runner under Chromium. WebKit and
+  // older phones run this hand-written JS search materially slower (roughly
+  // 2-4x), so the assumed device rate is set well BELOW the fast-runner figure
+  // — otherwise a healthy-but-slow phone that legitimately needs the full budget
+  // would be killed mid-search, retried, and finally fail. Erring long here only
+  // delays detection of a truly wedged worker (a background coaching probe, not
+  // a live move), which is the safe direction to err.
   function watchdogMs(opts) {
     var override = global.CHESSY_ANALYSIS_WATCHDOG_MS;
     if (typeof override === 'number' && override > 0) return override;
     var scanNodes = (opts && opts.nodeLimit) || 150000;
     var nodeBudget = (opts && opts.nodeBudget) || 8000000;
     var workNodes = scanNodes + 2 * nodeBudget; // scan + deep-verify + shallow-verify
-    var SLOW_NPS = 120000;                        // well below even a slow phone
-    var ms = Math.ceil(workNodes / SLOW_NPS * 1000) + 4000; // + fixed startup slack
-    return Math.min(Math.max(ms, DEFAULT_WATCHDOG_MS), 180000);
+    var SLOW_NPS = 30000;                         // ~1/3 of a fast runner; covers slow WebKit/mobile
+    var ms = Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
+    return Math.min(Math.max(ms, DEFAULT_WATCHDOG_MS), 240000);
   }
 
   function buildOpts(req) {

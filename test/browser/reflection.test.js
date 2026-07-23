@@ -393,6 +393,51 @@ require('./helper').run('reflection', async function (t) {
     'a partial analysis that never scored the played move makes no head-to-head claim');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse5; });
 
+  // A null result for the CURRENT request (no worker / wedged) must not leave a
+  // stuck "Analysing…": show a retryable failure and keep Save disabled.
+  await page.evaluate(function () {
+    window.__realAnalyse6 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () { return Promise.resolve(null); };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'null result');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not complete') &&
+        !(await page.textContent('#verifyResult')).includes('Analysing') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a null analysis shows a retryable failure, not a stuck “Analysing…”');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse6; });
+
+  // A result with a legal top move and a valid score but GARBLED provenance
+  // (no engine, non-numeric nodes/depth) is rejected — never shown as
+  // "vundefined · depth undefined · undefined nodes" or saved.
+  await page.evaluate(function () {
+    window.__realAnalyse7 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      return Promise.resolve({
+        turn: 'w', engine: null, depth: null, nodes: 'lots', elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+          uci: 'x', san: 'x', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['x'], pvUci: [] }]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'bad provenance');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a result with garbled provenance is rejected (no vundefined / undefined nodes)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse7; });
+
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
   await page.click('#flagMoment'); // re-flag ply 0

@@ -216,6 +216,19 @@
     if (pl && !playedShown) addLine(ol, pl, turn, pl.rank, true, exactRanks);
   }
 
+  // Clear any lines/provenance and show a retryable failure message: no verdict,
+  // Save disabled, cause hidden. Used for a null result (no worker / wedged) and
+  // for an unusable one (illegal move, no eval, garbled provenance).
+  function failVerify(message) {
+    verdict = null;
+    $('verifyLines').textContent = '';
+    $('verifyMeta').textContent = '';
+    $('verifyMeta').classList.remove('partial');
+    $('causeLabel').hidden = true;
+    $('saveCard').disabled = true;
+    $('verifyResult').textContent = message;
+  }
+
   $('reflectForm').addEventListener('submit', function (e) {
     e.preventDefault();
     // Whitespace is not reflection: native `required` accepts spaces, so trim
@@ -258,12 +271,21 @@
         nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
     }).then(function (res) {
       if (token === verifySeq) $('reflectVerify').disabled = false;
-      // null = superseded/no-worker/wedged; token & moment guards cover the
-      // user having flagged elsewhere or left the game meanwhile.
-      if (res === null || token !== verifySeq || !sameMoment(CoachReview.current())) return;
+      // A newer request superseded this one, or the user left the moment: drop
+      // it silently (the owning request/moment repaints the shared controls).
+      if (token !== verifySeq || !sameMoment(CoachReview.current())) return;
+      // null for the CURRENT request means no worker / a wedged-then-retried
+      // worker / an unrecoverable failure — NOT a supersede (that bumps the
+      // token). Replace the "Analysing…" placeholder with a retryable failure
+      // rather than leaving it hung forever.
+      if (res === null) {
+        failVerify('Chessy could not complete the analysis — Verify again.');
+        return;
+      }
       // Resolve the top line's move back to a legal move on this board. A
-      // result with no lines, or a top move that matches nothing here (a
-      // corrupt/garbage analysis), cannot found a lesson: report it, leave Save
+      // result with no lines, a top move that matches nothing here, a top line
+      // with no usable evaluation, or missing/garbled provenance (a corrupt
+      // worker/cache result) cannot found a lesson: report it, leave Save
       // disabled and let the player Verify again.
       const pos = Chess.parseFen(fenBefore);
       const legal = Chess.legalMoves(pos);
@@ -272,16 +294,10 @@
         return m.from === top.move.from && m.to === top.move.to &&
                (m.promotion || null) === (top.move.promotion || null);
       });
-      // No legal top move, or a top line with no usable evaluation (a malformed
-      // worker/cache result), cannot found a lesson.
-      if (!bm || !validEval(top)) {
-        verdict = null;
-        $('verifyLines').textContent = '';
-        $('verifyMeta').textContent = '';
-        $('causeLabel').hidden = true;
-        $('saveCard').disabled = true;
-        $('verifyResult').textContent =
-          'Chessy could not analyse this position — Verify again.';
+      const provOk = res.engine && typeof res.engine.version === 'string' &&
+        Number.isFinite(res.depth) && Number.isFinite(res.nodes) && Number.isFinite(res.elapsedMs);
+      if (!bm || !validEval(top) || !provOk) {
+        failVerify('Chessy could not analyse this position — Verify again.');
         return;
       }
       const playedUci = Chess.sqName(entry.move.from) + Chess.sqName(entry.move.to) +
