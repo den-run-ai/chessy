@@ -156,5 +156,20 @@
     });
   }
 
-  window.ChessyArchive = { record: record, reconcilePending: reconcilePending };
+  // The parked (awaiting-commit) game records, so a backup can include a
+  // finished game recoverable ONLY from the durability queue (its IndexedDB
+  // write failed): omitting it would silently drop an unrecomputable game.
+  function pendingRecords() {
+    const map = readPending();
+    if (!map) return [];
+    const out = [];
+    for (const id of Object.keys(map)) {
+      const rec = map[id] && map[id].rec;
+      if (rec && typeof rec.id === 'string' && Array.isArray(rec.sans)) out.push(rec);
+    }
+    return out;
+  }
+
+  window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
+    pendingRecords: pendingRecords };
 })();
