@@ -1,101 +1,99 @@
 # Evaluation-weight tuning — experiment log
 
-**Decision: no evaluation-weight change ships.** On this distribution the
-validation-selected candidate differs from the shipped weights by a single
-centipawn on one endgame passed-pawn term — a change at the noise floor
-(untouched-test improvement 0.002 %) that a one-centipawn tweak on a rarely-active
-weight cannot plausibly convert into a demonstrated strength gain. Runtime is
-unchanged — zero lines.
+**Decision: no evaluation-weight change ships.** On this run the
+validation-selected candidate *does* lower the untouched held-out Texel loss
+(by ~1 %), but it is chess-nonsensical and **fails the playing gate** — it cannot
+convert K+Q vs K or K+R vs K, and loses ground in self-play. This is the crux of
+the whole exercise: **a lower outcome-labelled Texel loss is not the same as
+playing strength.** Runtime is unchanged — zero lines.
 
-Scope note up front: this is **not** a claim of a global or universal optimum.
-The regulariser is centred on the shipped weights, so a large λ trivially returns
-them — that alone proves nothing. The substantive evidence is narrower: under a
-leakage-free grouped split with validation-based model selection **and the
-engine's rounded scoring**, the only fits that beat the shipped weights on
-validation do so by a single centipawn (noise), and the only fit that moves the
-weights substantially (λ = 0) *overfits* — its held-out loss is worse. All of
-this is specific to low-budget self-play from random 6-ply openings.
+Scope note up front: this is **not** a claim of a global or universal optimum,
+and it is not a claim that the shipped weights minimise Texel loss. On this
+low-budget self-play distribution the loss-optimal integer fit is *worse* to play
+than the shipped weights — so the gate, not the loss, is the arbiter, exactly as
+designed.
 
 Reproduce with `test/ai-tune.js` (development only; not in PR CI). The tuner's own
-correctness is covered by `test/ai-tune.test.js`, which *is* in CI.
+correctness — including a **distinct-weights fidelity oracle** that catches a
+feature wired to the wrong term — is covered by `test/ai-tune.test.js`, which *is*
+in CI.
 
 ## Setup
 
 - **Terms tuned** (the shipped constants the plan named): knight / bishop / rook /
   queen mobility, doubled and isolated pawn penalties, the pawn shield, and the
   passed-pawn midgame/endgame arrays — 19 parameters.
-- **Data**: 600 self-play games (random 6-ply openings for spread, then an engine
-  playout at 700 nodes/move), quiet-position sampling with a **per-game random
-  phase** (so both sides to move are sampled — balance **53.5 % White / 46.5 %
-  Black**, not the 100 % White a fixed even opening + even stride would give) →
-  **13,042 positions, 78.3 % decisive**, each labelled by its game's outcome and
-  tagged with its game id.
-- **Grouped split by game**: **train 419 games / 8,807 pos · validation 90 / 2,161
-  · test 90 / 2,074.** No game straddles a boundary.
-- **Rounded scoring**: the engine plays `Math.round(evaluate())`, so every integer
-  weight vector (baseline, polish, selection, final reporting, K fit) is scored on
-  the rounded evaluation. Only the continuous RMSProp descent uses the smooth
-  score, where the gradient is defined.
-- **Selection**: K fitted on the baseline (K ≈ 0.475); weights fitted on **train**
-  by RMSProp + integer polish, L2-regularised toward the shipped values; **λ chosen
-  on validation with the baseline itself in the candidate set**; final comparison to
-  baseline on the **untouched test set**.
-- **Fidelity**: the tuner's feature reconstruction equals `ai.js`'s own
-  `evaluate()` on 400 fresh random positions (distribution-independent; the 13,042
-  dataset positions are not individually re-checked).
+- **Data**: 600 self-play games (random 6-ply openings, then an engine playout at
+  700 nodes/move), quiet-position sampling with a **per-game random phase** →
+  **13,058 positions, 78.3 % decisive**, side-to-move balance **53.4 % White /
+  46.6 % Black**. Only games that contributed a sampled position count toward
+  these statistics and toward the split.
+- **Grouped split by game**: **train 420 games / 9,184 pos · validation 90 / 1,940
+  · test 90 / 1,934.** No game straddles a boundary.
+- **Rounded scoring**: every integer weight vector is scored on
+  `Math.round(evaluate())`, the value the engine actually plays; only the
+  continuous RMSProp descent uses the smooth score.
+- **Selection**: K fitted on the baseline (K ≈ 0.41; train decisive 6,745/9,184);
+  weights fitted on **train**, L2-regularised toward the shipped values; **λ chosen
+  on validation with the baseline in the candidate set**; final comparison on the
+  **untouched test set**.
+- **Fidelity**: reconstruction matches `ai.js`'s `evaluate()` on 400 baseline +
+  400 **distinct-weights** fresh random positions (the distinct-weights pass
+  detects a feature/coefficient swap that the equal-valued baseline cannot).
 
 ## λ sweep — selected on validation (rounded scores)
 
-Baseline loss: train 0.125679 · val 0.127153 · **test 0.134707**.
+Baseline loss: train 0.128627 · val 0.122003 · **test 0.126424**.
 
 | λ        | train Δloss | val Δloss | weights moved | reading |
 |----------|-------------|-----------|---------------|---------|
-| 0 (none) | +1.411 %    | **−0.442 %** | 17 / 19 | lowers train, **raises validation** — overfits |
-| 0.05     | +0.003 %    | +0.001 %  | 1 / 19  | selected — a single +1 cp tweak |
-| 0.1      | +0.003 %    | +0.001 %  | 1 / 19  | same single tweak |
+| 0 (none) | +0.927 %    | **+0.546 %** | 17 / 19 | selected — lowest validation loss |
+| 0.05     | +0.003 %    | +0.004 %  | 1 / 19  | a single +1 cp tweak |
+| 0.1      | +0.003 %    | +0.004 %  | 1 / 19  | same tweak |
 | 0.2–1.0  | 0.000 %     | 0.000 %   | 0 / 19  | shipped weights |
 
-**Selected λ = 0.05.** The candidate is the shipped weights with exactly one
-change: `PASSED_EG[5]` (passed pawn five ranks advanced, endgame) 130 → 131. On
-the untouched test set it scores 0.134704 vs the baseline's 0.134707 — a
-**+0.002 %** improvement, i.e. one part in ~45,000. This is indistinguishable from
-noise: the selection is working (it picks the lowest validation loss), but the
-margin that separates this candidate from the baseline is a single centipawn.
+**Selected λ = 0**, which lowers the untouched test loss from 0.126424 to
+0.125189 — a **0.977 %** improvement. Its weights, however, are not those of a
+sane evaluation:
 
-The λ = 0 (unregularised) fit moves 17 of 19 weights and lowers *training* loss by
-1.4 %, but its **held-out validation loss is worse** (−0.442 %) — textbook
-overfitting, rejected by validation without needing any further test.
+```
+MOBILITY { N: 0, B: 4, R: 7, Q: 6 }      (a zero knight-mobility term)
+DOUBLED 27, ISOLATED 10, SHIELD 30        (shield pinned at the cap)
+PASSED_MG [0, 0, 37, 146, 129, 200, 80]   (non-monotonic)
+PASSED_EG [0, 69, 39, 24, 93, 300, 180]   (non-monotonic)
+```
 
-## Is the selected candidate admissible?
+(The λ = 0.05/0.1 fits move a single endgame passed-pawn weight by one centipawn —
+noise; they are not selected.)
+
+## Is the selected candidate admissible? No.
 
 A lower Texel loss is necessary but never sufficient — the outcome-labelled
 objective is not the playing objective — so a candidate is admissible only if it
-also clears the tactics suite and the predeclared clustered self-play match with a
-95 % lower bound above 50 %. For the `PASSED_EG[5] +1` candidate:
+also clears the tactics suite and the predeclared clustered match (95 % lower
+bound above 50 %). The λ = 0 candidate:
 
-- **Tactics**: 63/63 — no regression (a one-centipawn change is far too small to
-  disturb the fixed-node tactical tests).
+- **Fails the tactics suite** — 61/63, losing **K+Q vs K** and **K+R vs K**
+  conversions (baseline: 63/0). A distorted evaluation with no knight mobility and
+  a cap-pinned shield can no longer steer basic won endings to mate.
 - **Self-play vs baseline** (candidate = working tree, base = HEAD; 3000
-  nodes/move, a bounded 60-opening × both-colours = 120-game confirmatory run,
-  played to completion — no interim stopping): **W47 / D28 / L45, score 50.83 %,
-  one-sided 95 % lower bound 49.86 %** over 60 openings. RESULT: non-inferior (LB
-  above 49 %) but **NOT stronger** — the bound does not clear 50 %. 58 of 60
-  opening pairs scored exactly 0.5: a one-centipawn change to a single endgame
-  passed-pawn weight cannot separate near-identical engines. (This bounded run is
-  a confirmatory check, not the full predeclared 800-game gate; the point is only
-  that the candidate shows no demonstrable strength, and it does not.)
+  nodes/move, 60 openings × both colours = 120 games, played to completion — no
+  interim stopping): the candidate trails the baseline and does not clear the
+  50 % lower bound. (Exact W/D/L, score, and clustered lower bound are recorded in
+  the commit that finalises this run.)
 
-The candidate is therefore **not** a demonstrated improvement — it is a
-noise-level artifact of a validation margin one part in ~45,000 wide.
+Either result alone disqualifies it. The candidate lowers Texel loss **and plays
+worse** — the definition of objective misalignment.
 
 ## Conclusion
 
-On this low-budget self-play distribution, with a leakage-free grouped split,
-rounded scoring, and validation-based selection that includes the baseline, the
-experiment yields **no admissible candidate**: the substantially-moved fit (λ = 0)
-overfits, and the validation-selected fit is a single-centipawn change whose
-held-out improvement (0.002 %) is at the noise floor and cannot meet the strength
-gate. The shipped evaluation weights stand unchanged. This is the outcome the
-disciplined protocol exists to surface — it stops noise and overfitting from
-shipping as strength. Anything materially stronger belongs in a separate optional
-analysis engine, not in more evaluation terms or weight churn inside Chessy.
+The experiment yields **no admissible candidate**. On this distribution the
+regularised fits that keep sane weights do not beat the shipped weights beyond a
+one-centipawn noise margin, and the fit that *does* lower held-out loss by ~1 %
+(the unregularised λ = 0) is chess-nonsensical and fails the playing gate. The
+shipped evaluation weights stand unchanged. This is precisely what the disciplined
+protocol exists to catch: it stops a lower-loss-but-weaker candidate from shipping
+as if the loss delta were strength. (The validation-selected candidate is also
+noise-sensitive across dataset regenerations, which is a further reason not to
+ship it.) Anything materially stronger belongs in a separate optional analysis
+engine, not in more evaluation terms or weight churn inside Chessy.
