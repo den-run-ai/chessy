@@ -26,6 +26,18 @@
     backupBtn.addEventListener('click', function () {
       setStatus('Preparing backup…', 'info');
       CoachStore.exportAll().then(function (data) {
+        // Include games recoverable ONLY from the durability queue (their
+        // IndexedDB write failed): exportAll reads IndexedDB, so a parked game
+        // would otherwise be silently dropped from the backup. Dedup by id —
+        // the committed IndexedDB copy wins over a stale parked one.
+        if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
+          const games = data.stores.games || (data.stores.games = []);
+          const have = {};
+          games.forEach(function (g) { have[g.id] = true; });
+          ChessyArchive.pendingRecords().forEach(function (rec) {
+            if (!have[rec.id]) { games.push(rec); have[rec.id] = true; }
+          });
+        }
         const json = JSON.stringify(data);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);

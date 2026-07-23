@@ -43,4 +43,18 @@ require('./helper').run('data-controls', async function (t) {
     'recomputable analyses / jobs are omitted from the backup');
   check(/Backed up 2 games and 1 card/.test(await page.$eval('#dataStatus', function (e) { return e.textContent; })),
     'the status reports what was backed up');
+
+  // A finished game recoverable ONLY from the durability queue (its IndexedDB
+  // write failed) must still be included in the backup, not silently dropped.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      parked: { w: 't', rec: { id: 'parked', source: 'play', sans: ['e4', 'e5'],
+        result: '*', reason: 'imported', mode: 'pvp', plies: 2, createdAt: 5 } }
+    }));
+  });
+  const [dl2] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup2 = JSON.parse(fs.readFileSync(await dl2.path(), 'utf8'));
+  check(backup2.stores.games.length === 3 &&
+        backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
+    'a parked (pending-queue) game is included in the backup');
 });
