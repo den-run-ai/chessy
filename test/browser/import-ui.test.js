@@ -111,7 +111,10 @@ require('./helper').run('import-ui', async function (t) {
   });
   check(submitBg === 'rgb(93, 122, 58)', 'the primary Import button uses the AA-contrast accent');
 
-  // An oversized file is rejected BEFORE reading — no freeze, no import.
+  // An oversized file is rejected BEFORE reading — and it invalidates the
+  // previous source (a valid PGN typed just before) so it can't be imported
+  // while the picker shows the rejected file.
+  await page.fill('#importText', '[Event "Prior"]\n\n1. e4 e5 *');
   await page.setInputFiles('#importFile', {
     name: 'huge.pgn', mimeType: 'application/x-chess-pgn',
     buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 0x20) // 5 MB + 1, over the limit
@@ -120,8 +123,11 @@ require('./helper').run('import-ui', async function (t) {
     return document.getElementById('importStatus').textContent.indexOf('too large') !== -1;
   }, { timeout: 5000 });
   check((await status()).kind === 'error' &&
-        (await page.$eval('#importText', function (e) { return e.value.length; })) < 1000,
-    'an oversized file is rejected and never read into the textarea');
+        (await page.$eval('#importText', function (e) { return e.value; })) === '',
+    'an oversized file is rejected AND clears the previous source');
+  await page.click('#importSubmit'); // the invalidated source can't be imported
+  check(/Paste a PGN or choose a file/.test((await status()).text),
+    'Import refuses after an oversized file cleared the source');
   check(await listCount() === 2, 'an oversized file imports nothing');
 
   await page.setInputFiles('#importFile', {

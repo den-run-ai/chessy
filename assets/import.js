@@ -105,18 +105,21 @@
   fileEl.addEventListener('change', function () {
     const file = fileEl.files && fileEl.files[0];
     if (!file) return;
-    // Reject an oversized file BEFORE reading it — do not touch the current
-    // reader or textarea, so a rejected pick leaves the dialog as it was.
+    // Choosing ANY file (accepted OR rejected) invalidates the previous source
+    // FIRST: abort a pending read and clear the textarea. Otherwise a rejected
+    // oversized pick would leave earlier text importable while the picker shows
+    // the rejected file, and a slower earlier read could still land its result.
+    if (reader) { try { reader.abort(); } catch (e) { /* already done */ } reader = null; }
+    reading = false;
+    textEl.value = '';
+    refreshBusy();
+    // Reject an oversized file before reading it (only the first game is
+    // imported anyway); the source is already cleared above, so Import refuses.
     if (file.size > MAX_IMPORT_BYTES) {
       setStatus('That file is too large (' + Math.round(file.size / 1048576) +
         ' MB). Import a single-game PGN (up to 5 MB).', 'error');
       return;
     }
-    if (reader) { try { reader.abort(); } catch (e) { /* already done */ } }
-    // Choosing a file makes THAT file the source of truth: clear any prior
-    // text (typed or from an earlier file) up front, so a still-pending or a
-    // FAILED read never leaves stale content that Import would silently save.
-    textEl.value = '';
     const myGen = generation;
     const r = new FileReader();
     reader = r;
