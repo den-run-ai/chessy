@@ -148,36 +148,48 @@
     $('reflectThreat').focus();
   });
 
-  // Render the candidate lines (best-first), marking the played move's line so
-  // the player sees where their choice ranked — without any line being called
-  // an error.
+  // One rendered candidate line: an explicit rank, SAN, the player-POV eval, a
+  // short PV, and a "your move" tag when it is the move actually played. The
+  // rank is shown explicitly (the list is unnumbered) so a played line appended
+  // from OUTSIDE the top MultiPV reads as e.g. "#14", not the next list index.
+  function addLine(ol, line, turn, rank, isPlayed) {
+    const li = document.createElement('li');
+    if (isPlayed) li.className = 'played';
+    li.appendChild(document.createTextNode('#' + rank + '  ' + line.san + ' '));
+    const ev = document.createElement('span');
+    ev.className = 'eval';
+    ev.textContent = fmtLineEval(line, turn);
+    li.appendChild(ev);
+    const pvTail = line.pv.slice(1, 1 + PV_TAIL).join(' ');
+    if (pvTail) {
+      const pv = document.createElement('span');
+      pv.className = 'pv';
+      pv.textContent = ' · ' + pvTail;
+      li.appendChild(pv);
+    }
+    if (isPlayed) {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = ' — your move';
+      li.appendChild(tag);
+    }
+    ol.appendChild(li);
+  }
+
+  // Render the candidate lines (best-first). When the played move ranked BELOW
+  // the shown MultiPV it is appended with its true rank, so the player always
+  // sees where their choice stood — without any line being called an error.
   function renderLines(res, turn, playedUci) {
     const ol = $('verifyLines');
     ol.textContent = '';
-    res.bestLines.forEach(function (line) {
-      const li = document.createElement('li');
+    let playedShown = false;
+    res.bestLines.forEach(function (line, i) {
       const isPlayed = line.uci === playedUci;
-      if (isPlayed) li.className = 'played';
-      const pvTail = line.pv.slice(1, 1 + PV_TAIL).join(' ');
-      li.appendChild(document.createTextNode(line.san + ' '));
-      const ev = document.createElement('span');
-      ev.className = 'eval';
-      ev.textContent = fmtLineEval(line, turn);
-      li.appendChild(ev);
-      if (pvTail) {
-        const pv = document.createElement('span');
-        pv.className = 'pv';
-        pv.textContent = ' · ' + pvTail;
-        li.appendChild(pv);
-      }
-      if (isPlayed) {
-        const tag = document.createElement('span');
-        tag.className = 'tag';
-        tag.textContent = ' — your move';
-        li.appendChild(tag);
-      }
-      ol.appendChild(li);
+      if (isPlayed) playedShown = true;
+      addLine(ol, line, turn, i + 1, isPlayed);
     });
+    const pl = res.playedLine;
+    if (pl && !playedShown) addLine(ol, pl, turn, pl.rank, true);
   }
 
   $('reflectForm').addEventListener('submit', function (e) {
@@ -252,26 +264,43 @@
       const mover = pos.turn === 'w' ? 'White' : 'Black';
       const topEval = fmtLineEval(top, pos.turn);
 
+      const partial = res.complete === false;
       renderLines(res, pos.turn, playedUci);
+      // Provenance as REAL text (not CSS-generated), so assistive tech exposes
+      // the partial qualification too — a budget-capped result must never read
+      // as a settled, exhaustive verdict.
       $('verifyMeta').textContent = 'Chessy v' + res.engine.version + ' · depth ' +
-        res.depth + ' · ' + res.nodes.toLocaleString() + ' nodes · ' + res.elapsedMs + ' ms';
-      // A budget-capped analysis is visibly partial (CSS appends the note): it
-      // must never read as a settled, exhaustive verdict.
-      if (res.complete === false) $('verifyMeta').classList.add('partial');
-      else $('verifyMeta').classList.remove('partial');
+        res.depth + ' · ' + res.nodes.toLocaleString() + ' nodes · ' + res.elapsedMs + ' ms' +
+        (partial ? ' · partial — node budget reached, these lines are incomplete' : '');
+      $('verifyMeta').classList.toggle('partial', partial);
 
+      // Played-move standing, ALWAYS reporting where the move ranked (even when
+      // it fell outside the shown lines) — never as an error.
       let sentence;
       if (match) {
         sentence = 'You played ' + entry.san + ' — it’s Chessy’s top line (' +
           topEval + ' for ' + mover + ').';
       } else {
-        const rank = res.playedLine ? res.playedLine.rank : null;
-        const alsoCandidate = res.playedLine && res.playedLine.amongCandidates && rank
-          ? ' — your move is a Chessy candidate too (line ' + rank + ')'
-          : '';
+        const pl = res.playedLine;
+        const standing = !pl ? ''
+          : pl.amongCandidates ? ' — your move is a Chessy candidate too (line ' + pl.rank + ')'
+          : ' — your move ranks #' + pl.rank + ' of Chessy’s ' + legal.length + ' legal moves here';
         sentence = 'You played ' + entry.san + ' — Chessy preferred ' + top.san + ' (' +
-          topEval + ' for ' + mover + ')' + alsoCandidate +
+          topEval + ' for ' + mover + ')' + standing +
           '. A different move is not necessarily an error — your call below.';
+      }
+
+      // A budget-capped verdict is NOT trustworthy enough to found a card: Train
+      // would otherwise drill an incomplete-scan best move as canonical. Show
+      // the partial lines, but leave Save disabled and found no card.
+      if (partial) {
+        verdict = null;
+        $('causeLabel').hidden = true;
+        $('saveCard').disabled = true;
+        $('verifyResult').textContent = sentence +
+          ' Chessy estimate, not authoritative analysis. This analysis was cut short at' +
+          ' its node budget, so no lesson card is founded on it.';
+        return;
       }
       $('verifyResult').textContent = sentence + ' Chessy estimate, not authoritative analysis.';
       $('causeLabel').hidden = match;
@@ -280,7 +309,7 @@
         gameId: flagged.gameId, ply: ply, fenBefore: fenBefore,
         playedSan: entry.san, bestSan: top.san,
         bestMove: { from: bm.from, to: bm.to, promotion: bm.promotion || null },
-        bestScore: cardScore(top), depth: res.depth,
+        bestScore: cardScore(top), depth: res.depth, complete: true,
         kind: match ? 'match' : 'differ',
         reflection: reflection
       };
@@ -311,7 +340,7 @@
     const fields = {
       gameId: v.gameId, ply: v.ply, fenBefore: v.fenBefore,
       playedSan: v.playedSan, bestSan: v.bestSan, bestMove: v.bestMove,
-      bestScore: v.bestScore, depth: v.depth, kind: v.kind,
+      bestScore: v.bestScore, depth: v.depth, complete: v.complete !== false, kind: v.kind,
       cause: cause, lesson: lesson, reflection: v.reflection,
       due: now,  // first review is immediate (the "learn" step)
       step: -1   // -1 = not yet on the day ladder (Train slice)

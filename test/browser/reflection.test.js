@@ -147,6 +147,18 @@ require('./helper').run('reflection', async function (t) {
   await verifyDone();
   check((await page.locator('#verifyMeta.partial').count()) >= 1,
     'a complete:false analysis is rendered visibly partial');
+  // Accessibility: the partial qualifier is in the element's TEXT, not only a
+  // CSS ::after that screen readers may not expose.
+  check((await page.textContent('#verifyMeta')).toLowerCase().includes('partial'),
+    'the partial warning is real text content (screen-reader accessible)');
+  // A partial verdict cannot found a card: Save stays disabled and even a
+  // forced click creates nothing (Train must never drill an incomplete scan).
+  const cardsBeforePartial = (await cards()).length;
+  check(await page.locator('#saveCard').isDisabled(),
+    'a partial analysis leaves Save disabled');
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === cardsBeforePartial,
+    'a partial analysis founds no lesson card');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realSvc; });
   await page.click('#revEnd'); // step away so the next section starts fresh at ply 0
 
@@ -168,6 +180,11 @@ require('./helper').run('reflection', async function (t) {
   // Ply 0 (f3) is a WHITE decision: the eval is labelled from White's side.
   check((await page.textContent('#verifyResult')).includes('for White'),
     'a White decision shows the eval from White’s perspective');
+  // The played move's standing is always reported, and its line is shown even
+  // when it ranked below the top MultiPV lines (appended with its true rank).
+  check((await page.textContent('#verifyResult')).includes('your move') &&
+        (await page.textContent('#verifyLines')).includes('f3'),
+    'the played move is ranked in the summary and shown in the lines (even outside the top MultiPV)');
   check(!(await page.locator('#causeLabel').isHidden()), 'cause picker shown for a differing move');
   await page.fill('#cardLesson', 'Do not weaken the king for nothing');
   await page.click('#saveCard');
