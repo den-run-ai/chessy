@@ -113,4 +113,71 @@ require('./helper').run('data-controls', async function (t) {
   const backup5 = JSON.parse(fs.readFileSync(await dl5.path(), 'utf8'));
   check(!backup5.stores.games.some(function (g) { return g.id === 'in-progress'; }),
     'an in-progress local save is not reconstructed into the backup');
+
+  // Clear the local-save / queue fixtures before the merge-semantics cases.
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-game-v1');
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
+  // IDENTICAL ending re-offered while parked: keep the committed row's EARLIER
+  // completion time (archiveGame's same-ending rule), not the parked later one.
+  const dateId = await page.evaluate(function () {
+    const g = { id: 'date-x', source: 'play', sans: ['e4'], result: '*', reason: 'imported',
+      mode: 'pvp', plies: 1, createdAt: 100 };
+    return CoachStore.putGame(g).then(function () {
+      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+        'date-x': { w: 't', rec: { id: 'date-x', source: 'play', sans: ['e4'], result: '*',
+          reason: 'imported', mode: 'pvp', plies: 1, createdAt: 200 } } }));
+      return 'date-x';
+    });
+  });
+  const [dl6] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup6 = JSON.parse(fs.readFileSync(await dl6.path(), 'utf8'));
+  const dated = backup6.stores.games.find(function (g) { return g.id === dateId; });
+  check(dated && dated.createdAt === 100,
+    'an identical parked ending keeps the earliest committed completion time');
+
+  // A parked REVISION prunes lesson cards from the abandoned continuation.
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    const g = { id: 'rev-x', source: 'play', sans: ['e4', 'e5', 'Nf3'], result: '*', reason: 'imported',
+      mode: 'pvp', plies: 3, createdAt: 1 };
+    const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+    return CoachStore.putGame(g)
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1, attempts: [], fenBefore: fen }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1, attempts: [], fenBefore: fen }); })
+      .then(function () {
+        // Revision diverges at ply 1 (e4 → d4), so both cards (ply 1 and 2) prune.
+        localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+          'rev-x': { w: 't', rec: { id: 'rev-x', source: 'play', sans: ['d4', 'd5'], result: '1-0',
+            reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 2 } } }));
+      });
+  });
+  const [dl7] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup7 = JSON.parse(fs.readFileSync(await dl7.path(), 'utf8'));
+  check(!backup7.stores.cards.some(function (c) { return c.gameId === 'rev-x'; }),
+    'a parked revision prunes lesson cards from the abandoned continuation');
+
+  // A finished local save that REVISES the committed game (no pending record —
+  // archive.js failed to load, say) still wins over the stale committed row.
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // fool's mate revision
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'save-rev', endedAt: 9 }));
+    // Committed row for the SAME id holds an abandoned, different ending.
+    return CoachStore.putGame({ id: 'save-rev', source: 'play', sans: ['e4', 'e5'], result: '*',
+      reason: 'imported', mode: 'pvp', plies: 2, createdAt: 1 });
+  });
+  const [dl8] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup8 = JSON.parse(fs.readFileSync(await dl8.path(), 'utf8'));
+  const saveRev = backup8.stores.games.find(function (g) { return g.id === 'save-rev'; });
+  check(saveRev && saveRev.result === '0-1' && saveRev.sans.length === 4,
+    'a finished local save revising the committed game wins over the stale row');
 });

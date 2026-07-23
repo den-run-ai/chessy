@@ -76,33 +76,78 @@
     };
   }
 
+  // The same ENDING (identical moves + result + reason) — as opposed to a
+  // REVISED completion of the instance. Mirrors store.js's sameEnding so the
+  // backup merge agrees with what archiveGame() would have done.
+  function sameEnding(a, b) {
+    return Array.isArray(a.sans) && Array.isArray(b.sans) &&
+      a.sans.length === b.sans.length &&
+      a.sans.every(function (s, i) { return s === b.sans[i]; }) &&
+      a.result === b.result && a.reason === b.reason;
+  }
+
+  // Drop cards for `id` at or after the first ply where the moves diverge —
+  // exactly what archiveGame() does when a revised ending replaces an old one
+  // (store.js pruneFromDivergence). Without this a backup carrying a parked
+  // revision would still ship lesson cards from the abandoned continuation.
+  function pruneCardsFromDivergence(cards, id, oldSans, newSans) {
+    let p = 0;
+    while (p < oldSans.length && p < newSans.length && oldSans[p] === newSans[p]) p++;
+    for (let i = cards.length - 1; i >= 0; i--) {
+      if (cards[i] && cards[i].gameId === id && cards[i].ply >= p) cards.splice(i, 1);
+    }
+  }
+
+  // Merge the recovery sources IndexedDB can't see into the exported snapshot,
+  // as one canonical routine so a backup can't silently drop or misrepresent a
+  // finished game. exportAll gives the committed rows; a parked durability-queue
+  // record (in-flight/failed write) and the finished local save (chessy-game-v1)
+  // may each hold a NEWER copy. For each such record, applied newest-last
+  // (committed < local save < pending):
+  //   - identical ending re-offered → keep the committed row, but retain the
+  //     EARLIEST createdAt (archiveGame's same-ending rule — never export a
+  //     later completion time that would reorder the list);
+  //   - a genuine REVISION (same id, different moves) → the recovery copy wins
+  //     AND its abandoned-continuation cards are pruned at the divergence;
+  //   - a new id → added.
+  // `keep(rec)` lets a caller veto a record (e.g. a fenced ending on the
+  // restore branch) before it is merged.
+  function mergeRecoverySources(data, keep) {
+    const games = data.stores.games || (data.stores.games = []);
+    const cards = data.stores.cards || (data.stores.cards = []);
+    const byId = {};
+    games.forEach(function (g) { byId[g.id] = g; });
+    function apply(rec) {
+      if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) return;
+      if (keep && !keep(rec)) return;
+      const cur = byId[rec.id];
+      if (cur && sameEnding(cur, rec)) {
+        if (Number.isFinite(rec.createdAt) && Number.isFinite(cur.createdAt)) {
+          cur.createdAt = Math.min(cur.createdAt, rec.createdAt);
+        }
+        return; // keep the committed record's moves and earliest date
+      }
+      if (cur) pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
+      byId[rec.id] = rec; // new id, or a revision that supersedes the committed row
+    }
+    // Local save first, pending queue last: a still-parked write is the most
+    // recent authoritative intent, so it wins over the live save on a genuine
+    // difference.
+    const saved = savedFinishedRecord();
+    if (saved) apply(saved);
+    if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
+      ChessyArchive.pendingRecords().forEach(apply);
+    }
+    data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
+  }
+
   // ---- Back up ----------------------------------------------------------
   const backupBtn = $('backupBtn');
   if (backupBtn) {
     backupBtn.addEventListener('click', function () {
       setStatus('Preparing backup…', 'info');
       CoachStore.exportAll().then(function (data) {
-        // Merge in games recoverable ONLY outside IndexedDB, so a backup can't
-        // silently omit an unrecomputable finished game. exportAll reads only
-        // IndexedDB; two other sources may hold a game it doesn't. Priority,
-        // highest first:
-        //   1. a parked durability-queue record — an in-flight/failed write is
-        //      the NEWEST authoritative copy (a revision whose commit failed),
-        //      so it REPLACES a stale committed row of the same id, not merely
-        //      fills a missing one;
-        //   2. the committed IndexedDB row (from exportAll);
-        //   3. the finished local save (chessy-game-v1) when the game reached
-        //      neither IndexedDB nor the queue (archive.js failed to load, or
-        //      both parking and the write failed) — added only if nothing above
-        //      already has that id.
-        const byId = {};
-        (data.stores.games || (data.stores.games = [])).forEach(function (g) { byId[g.id] = g; });
-        if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
-          ChessyArchive.pendingRecords().forEach(function (rec) { byId[rec.id] = rec; });
-        }
-        const saved = savedFinishedRecord();
-        if (saved && !byId[saved.id]) byId[saved.id] = saved;
-        data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
+        mergeRecoverySources(data);
         const json = JSON.stringify(data);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
