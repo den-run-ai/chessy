@@ -215,6 +215,14 @@
     showView: showView,
     registerView: registerView,
     openArchivedGame: openArchivedGame,
+    // Re-read the archive into the game list (used after an import commits a
+    // new game). Resolves when the list is rebuilt; a no-op while a game is
+    // open (reviewFlow visible), so an import launched from the list view
+    // never disturbs an in-progress reflection.
+    refreshGames: function () {
+      if ($('gameListWrap').hidden) return Promise.resolve();
+      return renderGameList();
+    },
     // The currently open game and shown ply (null on the game list) — the
     // reflection flow reads this instead of duplicating browser state.
     current: function () { return review; }

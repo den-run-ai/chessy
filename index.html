@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r37">
+  <link rel="stylesheet" href="assets/style.css?r=r38">
 </head>
 <body>
   <div class="app">
@@ -83,6 +83,9 @@
         <h2 id="reviewTitle">Review</h2>
       </div>
       <div id="gameListWrap">
+        <div class="buttons review-tools">
+          <button type="button" id="importOpen" class="btn">Import PGN…</button>
+        </div>
         <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
         <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
       </div>
@@ -227,6 +230,34 @@
     </div>
   </dialog>
 
+  <!-- Single-game PGN import (roadmap #23, Phase 4b1). Parse + validate in
+       memory (assets/pgn.js), then CoachStore.importGame commits once or not
+       at all, deduped. Side defaults to Unknown so every ply stays flaggable
+       when the player's colour can't be inferred. -->
+  <dialog id="importDialog" class="setup" aria-labelledby="importTitle">
+    <h2 id="importTitle">Import a game</h2>
+    <form id="importForm" class="coach-form">
+      <label>Paste PGN
+        <textarea id="importText" rows="7" autocomplete="off" spellcheck="false"
+                  placeholder='[Event "…"]&#10;&#10;1. e4 e5 2. Nf3 …'></textarea></label>
+      <label class="import-file">…or choose a .pgn file
+        <input type="file" id="importFile" accept=".pgn,.txt,application/x-chess-pgn,text/plain"></label>
+      <fieldset class="choice stack">
+        <legend>Which side were you?</legend>
+        <div class="choice-options">
+          <label><input type="radio" name="importSide" value="unknown" checked><span>Unknown / both</span></label>
+          <label><input type="radio" name="importSide" value="w"><span>White</span></label>
+          <label><input type="radio" name="importSide" value="b"><span>Black</span></label>
+        </div>
+      </fieldset>
+      <p class="coach-note" id="importStatus" role="status" aria-live="polite"></p>
+      <div class="buttons setup-actions">
+        <button type="submit" id="importSubmit" class="btn primary">Import</button>
+        <button type="button" id="importCancel" class="btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="promotionDialog" class="promotion" aria-label="Choose promotion piece">
     <div class="promotion-choices" id="promotionChoices"></div>
   </dialog>
@@ -252,25 +283,26 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r37';</script>
-  <script src="assets/engine.js?r=r37"></script>
-  <script src="assets/ai.js?r=r37"></script>
+  <script>window.CHESSY_RELEASE = 'r38';</script>
+  <script src="assets/engine.js?r=r38"></script>
+  <script src="assets/ai.js?r=r38"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r37"></script>
-  <script src="assets/archive.js?r=r37"></script>
-  <script src="assets/app.js?r=r37"></script>
-  <script src="assets/mini-board.js?r=r37"></script>
-  <script src="assets/review.js?r=r37"></script>
-  <script src="assets/analysis-core.js?r=r37"></script>
-  <script src="assets/analysis-service.js?r=r37"></script>
-  <script src="assets/pgn.js?r=r37"></script>
-  <script src="assets/reflection.js?r=r37"></script>
-  <script src="assets/train.js?r=r37"></script>
-  <script src="assets/progress.js?r=r37"></script>
+  <script src="assets/store.js?r=r38"></script>
+  <script src="assets/archive.js?r=r38"></script>
+  <script src="assets/app.js?r=r38"></script>
+  <script src="assets/mini-board.js?r=r38"></script>
+  <script src="assets/review.js?r=r38"></script>
+  <script src="assets/analysis-core.js?r=r38"></script>
+  <script src="assets/analysis-service.js?r=r38"></script>
+  <script src="assets/pgn.js?r=r38"></script>
+  <script src="assets/import.js?r=r38"></script>
+  <script src="assets/reflection.js?r=r38"></script>
+  <script src="assets/train.js?r=r38"></script>
+  <script src="assets/progress.js?r=r38"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.
