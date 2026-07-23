@@ -598,6 +598,25 @@
     });
   }
 
+  // ---- Delete all (Phase 4b4) ------------------------------------------
+  // Clear EVERY store — durable and recomputable alike — in one transaction.
+  // The fenced UI (dialog + explicit confirm) plus the recovery fence the
+  // caller applies ONLY on success (cancel analysis, suspend live writes, fence
+  // the cleared endings by signature, drop the durability queue) guarantee
+  // cleared games do not reappear, including after a reload.
+  function deleteAllData() {
+    var all = RESTORE_STORES; // games, cards, analyses, analysisJobs
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(all, 'readwrite');
+        all.forEach(function (name) { t.objectStore(name).clear(); });
+        t.oncomplete = function () { resolve(true); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('delete aborted')); };
+      });
+    });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
@@ -620,6 +639,7 @@
     deleteJob: deleteJob,
     exportAll: exportAll,
     validateBackup: validateBackup,
-    restoreAll: restoreAll
+    restoreAll: restoreAll,
+    deleteAllData: deleteAllData
   };
 })(typeof window !== 'undefined' ? window : globalThis);
