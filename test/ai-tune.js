@@ -425,24 +425,31 @@ function mse(samples, v, K, round) {
   return s / samples.length;
 }
 
+// Bounds on the fitted sigmoid scale. Real 600-game runs fit K ~ 0.4-0.5, well
+// inside these. K < K_MIN: the sigmoid is so flat the data carries essentially no
+// evaluation-weight signal (the optimum pushes predictions toward 0.5). K at the
+// top of the coarse grid: the split is (near-)separable, so the true optimum runs
+// off to saturation — a degenerate fit with negligible gradient. The caller
+// rejects either boundary.
+const K_MIN = 0.10, K_GRID_MAX = 3.0;
+
 // K is fitted on the baseline weights, which are integers the engine rounds — so
 // fit it on the rounded score, the quantity actually played. The search starts at
-// K = 0 (predict 0.5 everywhere): a split with little decisive signal has its Texel
-// optimum near zero, and only a search that reaches down there can reveal it — the
-// caller then rejects a near-zero optimum (K_MIN below) as "no signal to fit".
+// K = 0 (predict 0.5 everywhere), so a near-zero optimum is visible (and rejected
+// as no-signal). The fine pass refines a FIXED neighbourhood of the coarse optimum
+// (captured in `coarse`) — using the live `best` as the bound would let a
+// monotonically-improving (separable) split move the window every iteration and
+// search up to sigmoid saturation (K in the hundreds) instead of a bounded step.
 function fitK(samples, v) {
   let best = 0, bestE = Infinity;
-  for (let K = 0.0; K <= 3.0; K += 0.05) { const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; } }
-  for (let K = best - 0.05; K <= best + 0.05; K += 0.005) {
+  for (let K = 0.0; K <= K_GRID_MAX + 1e-9; K += 0.05) { const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; } }
+  const coarse = best;
+  for (let K = coarse - 0.05; K <= coarse + 0.05 + 1e-9; K += 0.005) {
     if (K < 0) continue;
     const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; }
   }
   return best;
 }
-// Below this fitted scale the sigmoid is so flat that the data carries essentially
-// no evaluation-weight signal (the optimum is pushing predictions toward 0.5, not
-// fitting structure). Real 600-game runs fit K ~ 0.4-0.5, well clear of this.
-const K_MIN = 0.10;
 
 // L2 regularisation toward the shipped weights, scaled per-parameter so a move
 // of one REG_SCALE unit costs the same penalty for every weight regardless of
@@ -781,6 +788,12 @@ function main() {
       'toward 0.5 rather than fitting evaluation structure). Raise --games / --nodes (or --max-plies).');
     process.exit(1);
   }
+  if (K >= K_GRID_MAX) {
+    console.error('fitted sigmoid scale K = ' + K.toFixed(4) + ' is at the search ceiling (' + K_GRID_MAX +
+      ') — the training split is (near-)separable, so the optimum runs to sigmoid saturation and the fit is ' +
+      'degenerate (negligible gradient). This only happens on tiny/pathological splits; raise --games.');
+    process.exit(1);
+  }
   console.log('sigmoid scale K (fitted on baseline, train split): ' + K.toFixed(4) +
     '  (train decisive ' + trainDecisive + '/' + train.length + ')');
   // All integer-vector scores are ROUNDED — the engine plays Math.round(eval).
@@ -868,7 +881,7 @@ if (require.main === module) {
     BASE_W: BASE_W, WORDER: WORDER, NW: NW, BASE_VEC: BASE_VEC, LO: LO, HI: HI, REG_SCALE: REG_SCALE,
     mulberry32: mulberry32, features: features, evalFeat: evalFeat, compile: compile, qVec: qVec,
     wToVec: wToVec, vecToW: vecToW, clampVec: clampVec,
-    sigmoid: sigmoid, mse: mse, fitK: fitK, K_MIN: K_MIN, regPenalty: regPenalty, objective: objective, gradient: gradient,
+    sigmoid: sigmoid, mse: mse, fitK: fitK, K_MIN: K_MIN, K_GRID_MAX: K_GRID_MAX, regPenalty: regPenalty, objective: objective, gradient: gradient,
     descend: descend, polish: polish, groupedSplit: groupedSplit,
     PINNED: PINNED, FIT_IDX: FIT_IDX, NFIT: NFIT,
     fidelityCheck: fidelityCheck, perturbedFidelityCheck: perturbedFidelityCheck,

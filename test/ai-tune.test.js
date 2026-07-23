@@ -214,5 +214,20 @@ function check(ok, label, detail) {
     'the fit leaves pinned weights (and all others) at baseline even under pinned-only data pressure');
 }
 
+// ---- 6. fitK stays inside its search window on a separable split ----
+// A (nearly) separable fixture makes the Texel loss fall monotonically as K
+// rises; the fine-refinement window must be FROZEN around the coarse optimum, or
+// it chases K to sigmoid saturation (hundreds). Assert the returned K is bounded
+// by the coarse ceiling (+ the fixed refinement step), i.e. flagged separable
+// rather than runaway.
+{
+  // Two samples, perfectly separable by sign of q: y=1 when q>0, y=0 when q<0.
+  const mk = function (base, y) { return { base: base, c: new Float64Array(T.NW), y: y }; };
+  const sep = [mk(300, 1), mk(-300, 0)];
+  const K = T.fitK(sep, T.BASE_VEC);
+  check(K <= T.K_GRID_MAX + 0.05 + 1e-9,
+    'fitK is bounded by its frozen search window on a separable split (K=' + K.toFixed(3) + ' <= ' + (T.K_GRID_MAX + 0.05) + ')');
+}
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
