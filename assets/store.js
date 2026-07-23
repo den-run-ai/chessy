@@ -493,7 +493,12 @@
       return 'backup has no valid database version';
     }
     if (data.dbVersion > DB_VERSION) return 'backup is from a newer database schema';
-    if (!data.stores || typeof data.stores !== 'object') return 'backup has no stores';
+    // Must be a plain object: an ARRAY passes `typeof === 'object'` but then
+    // every named store reads as absent, so a `stores: []` backup would clear
+    // the archive while "restoring" zero records.
+    if (!data.stores || typeof data.stores !== 'object' || Array.isArray(data.stores)) {
+      return 'backup has no stores';
+    }
     for (var i = 0; i < DURABLE_STORES.length; i++) {
       var name = DURABLE_STORES[i];
       var rows = data.stores[name];
@@ -535,6 +540,13 @@
           }
           if (!Number.isFinite(r.due)) {
             return 'store "cards" record ' + j + ' has a non-numeric due';
+          }
+          // Progress iterates `for (const a of attempts)` and Train grading
+          // does `(attempts || []).concat(...)`; a non-array (e.g. {}) is truthy
+          // so it slips the `|| []` guard and throws. Missing is fine (treated
+          // as empty); present-but-not-an-array is rejected.
+          if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
+            return 'store "cards" record ' + j + ' has a non-array attempts';
           }
         }
       }

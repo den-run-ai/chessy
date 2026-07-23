@@ -105,10 +105,19 @@
   // AI move that finishes the game BETWEEN the operation queuing its
   // transaction and its success handler must not queue archiveGame() on top of
   // the replacement — fencing only afterward cannot stop a write that already
-  // passed the fence check. record() short-circuits while suspended, so no such
-  // write is queued behind the operation's transaction.
-  let suspended = false;
-  function setSuspended(on) { suspended = !!on; }
+  // passed the fence check.
+  //
+  // REFERENCE-COUNTED, not a boolean: if two destructive operations ever
+  // overlap, the first to finish must not resume writes while the second is
+  // still replacing the store. Writes resume only when the LAST operation ends
+  // (depth 0). operationActive() lets the UI serialize operations as the
+  // primary guard; the refcount is defense in depth.
+  let suspendDepth = 0;
+  function setSuspended(on) {
+    if (on) suspendDepth++;
+    else if (suspendDepth > 0) suspendDepth--;
+  }
+  function operationActive() { return suspendDepth > 0; }
 
   function parkToken() {
     // Unique across reloads too: a stale entry must never token-match a
@@ -166,11 +175,6 @@
     if (!gameId || !status.over) {
       return Promise.resolve(null);
     }
-    // A destructive replace is in progress: dropping this write is what keeps a
-    // live game that finishes DURING a restore/Delete-all from landing on top
-    // of the replacement (the operation fences this ending afterward, so a boot
-    // reconcile won't re-add it either).
-    if (suspended) return Promise.resolve(null);
     const sans = state.history.map(function (h) { return h.san; });
     // Fenced ending: a specific finish cleared/replaced by Delete-all or
     // Restore must not be (re)archived — covers the boot re-archive of the
@@ -198,6 +202,16 @@
       plies: state.history.length,
       createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now()
     };
+    // A destructive replace is in progress: PARK the record but do NOT commit
+    // it onto the store being replaced. Parking (not dropping) is what keeps a
+    // game that finishes during the operation recoverable if the operation
+    // FAILS — the parked entry survives a Rematch overwriting the live save and
+    // boot-reconciles later. If the operation SUCCEEDS it fences this ending and
+    // drops the queue, so the parked copy can't resurrect either.
+    if (operationActive()) {
+      park(rec);
+      return Promise.resolve(null);
+    }
     return commit(rec, park(rec));
   }
 
@@ -275,5 +289,5 @@
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
     isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
     dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
-    pendingRecords: pendingRecords };
+    operationActive: operationActive, pendingRecords: pendingRecords };
 })();

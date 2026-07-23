@@ -350,12 +350,151 @@ require('./helper').run('data-controls', async function (t) {
   check(revised.revised === false, 'a revised ending of the same game instance is not fenced');
 
   // ---- Suspend: while a destructive replace is in flight, a live game that
-  // finishes must NOT queue an archive write that could land on top of it.
-  const suspendDropped = await page.evaluate(function () {
+  // finishes must NOT land on top of it — but it must be PARKED (not dropped)
+  // so a FAILED operation doesn't permanently lose it.
+  const suspended = await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
     ChessyArchive.setSuspended(true);
     const st = { over: true, result: '1-0', reason: 'checkmate' };
-    return ChessyArchive.record({ history: [{ san: 'e4' }] }, { mode: 'pvp' }, st, 'live-during-restore', {})
-      .then(function (id) { ChessyArchive.setSuspended(false); return id; });
+    return ChessyArchive.record({ history: [{ san: 'e4' }] }, { mode: 'pvp' }, st, 'live-during-op', {})
+      .then(function (id) {
+        ChessyArchive.setSuspended(false);
+        const q = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || '{}');
+        return { id: id, parked: !!q['live-during-op'] };
+      });
   });
-  check(suspendDropped === null, 'a live game finishing during a suspended replace is not archived');
+  check(suspended.id === null, 'a live game finishing during a suspended replace is not committed');
+  check(suspended.parked === true,
+    'the suspended finish is PARKED, so a failed operation does not lose it');
+
+  // Reference-counted suspension: writes resume only when the LAST overlapping
+  // operation ends, never after the first of two.
+  const refcounted = await page.evaluate(function () {
+    ChessyArchive.setSuspended(true);
+    ChessyArchive.setSuspended(true);   // two operations
+    const a = ChessyArchive.operationActive();
+    ChessyArchive.setSuspended(false);  // first ends
+    const b = ChessyArchive.operationActive();
+    ChessyArchive.setSuspended(false);  // second ends
+    const c = ChessyArchive.operationActive();
+    return { a: a, b: b, c: c };
+  });
+  check(refcounted.a === true && refcounted.b === true && refcounted.c === false,
+    'suspension is reference-counted across overlapping operations');
+
+  // ---- validateBackup: array-valued stores and non-array card attempts are
+  // rejected before the destructive transaction.
+  const moreRejects = await page.evaluate(function () {
+    const F = 'chessy-coach-backup';
+    return {
+      arrayStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: [] }),
+      badAttempts: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0,
+          fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', attempts: {} }] } })
+    };
+  });
+  check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
+  check(!!moreRejects.badAttempts, 'a card with a non-array attempts is rejected');
+
+  // ---- An oversized restore file is rejected before it is read.
+  const beforeHuge = await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); });
+  await page.setInputFiles('#restoreFile', {
+    name: 'huge.json', mimeType: 'application/json',
+    buffer: Buffer.alloc(32 * 1024 * 1024 + 1, 0x20) // 32 MB + 1, over the limit
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('too large') !== -1;
+  }, { timeout: 5000 });
+  check(await page.$eval('#restoreConfirmDialog', function (d) { return !d.open; }),
+    'an oversized restore file never opens the confirm dialog');
+  check(await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); }) === beforeHuge,
+    'an oversized restore file changes nothing');
+
+  // ---- A fenced ending is excluded from a later backup: a game a restore
+  // deliberately removed must not be silently carried back into an export.
+  const fencedOut = await page.evaluate(function () {
+    // A finished local save whose ending is already fenced.
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // fool's mate
+    const sans = s.history.map(function (h) { return h.san; });
+    ChessyArchive.fenceEnding('fenced-save', sans, '0-1', 'checkmate');
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'fenced-save', endedAt: 7 }));
+    localStorage.removeItem('chessy-pending-archive-v1');
+    return CoachStore.exportAll().then(function (data) { return data; });
+  });
+  const [dlF] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backupF = JSON.parse(fs.readFileSync(await dlF.path(), 'utf8'));
+  check(!backupF.stores.games.some(function (g) { return g.id === 'fenced-save'; }),
+    'a fenced ending is excluded from a later backup');
+
+  // ---- Durable fencing confirmation: if the queue cannot be neutralized, a
+  // successful restore reports a QUALIFIED success (not a clean one), so the
+  // user knows a reload could resurrect the surviving recovery source.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: 'x', history: [], mode: 'pvp', gameId: 'gone', endedAt: 1 }));
+    window.__realDrop = ChessyArchive.dropPendingQueue;
+    ChessyArchive.dropPendingQueue = function () { return false; }; // simulate blocked removal
+  });
+  await page.setInputFiles('#restoreFile', {
+    name: 'ok.json', mimeType: 'application/json', buffer: Buffer.from(backupJson)
+  });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  await page.click('#restoreConfirm');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('Restored') !== -1;
+  }, { timeout: 5000 });
+  const qualified = await page.evaluate(function () {
+    ChessyArchive.dropPendingQueue = window.__realDrop;
+    const el = document.getElementById('dataStatus');
+    return { text: el.textContent, kind: el.dataset.kind };
+  });
+  check(/Reload once storage is available/.test(qualified.text) && qualified.kind === 'error',
+    'a restore whose recovery could not be neutralized reports a qualified success');
+
+  // ---- Mutex: a second restore is refused while the first is still in flight
+  // (overlapping destructive operations would share one suspension and fence).
+  await page.evaluate(function () {
+    window.__realRestore = CoachStore.restoreAll;
+    let resolve1;
+    CoachStore.restoreAll = function () { return new Promise(function (r) { resolve1 = r; }); };
+    window.__finish1 = function () { resolve1({ games: 0, cards: 0 }); };
+  });
+  await page.setInputFiles('#restoreFile', { name: 'a.json', mimeType: 'application/json', buffer: Buffer.from(backupJson) });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  await page.click('#restoreConfirm'); // restore 1 → pending (deferred)
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('Restoring') !== -1;
+  }, { timeout: 5000 });
+  await page.setInputFiles('#restoreFile', { name: 'b.json', mimeType: 'application/json', buffer: Buffer.from(backupJson) });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  await page.click('#restoreConfirm'); // restore 2 → must be refused
+  check(/Another data operation/.test(await page.$eval('#dataStatus', function (e) { return e.textContent; })),
+    'a second restore is refused while one is in flight');
+  await page.evaluate(function () { window.__finish1(); CoachStore.restoreAll = window.__realRestore; });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('Restored') !== -1;
+  }, { timeout: 5000 });
+
+  // ---- Review invalidation: resetToList force-closes an open game so a stale
+  // review on a just-removed game can't keep taking Verify/Save actions.
+  const closed = await page.evaluate(function () {
+    return CoachStore.listGames().then(function (gs) {
+      if (!gs.length) return { skipped: true };
+      return Promise.resolve(CoachReview.openArchivedGame(gs[0].id)).then(function () {
+        const wasOpen = !document.getElementById('reviewFlow').hidden;
+        return Promise.resolve(CoachReview.resetToList()).then(function () {
+          return { wasOpen: wasOpen, nowList: !document.getElementById('gameListWrap').hidden &&
+            document.getElementById('reviewFlow').hidden };
+        });
+      });
+    });
+  });
+  check(closed.skipped || (closed.wasOpen && closed.nowList),
+    'resetToList force-closes an open review back to a fresh list');
 });

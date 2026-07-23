@@ -29,6 +29,12 @@
   // chronology. Only a FINISHED game is returned (an in-progress save is not
   // archived until it ends).
   const GAME_SAVE_KEY = 'chessy-game-v1';
+  const PENDING_KEY = 'chessy-pending-archive-v1';
+  // A destructive operation (restore / Delete-all) holds this mutex while it
+  // runs, so the two can never overlap: a second confirm is refused rather than
+  // racing a shared suspension and fence. archive.js reference-counts the
+  // suspension too, as defense in depth.
+  let opInFlight = false;
   function savedFinishedRecord() {
     if (typeof Chess === 'undefined') return null;
     let data;
@@ -147,7 +153,15 @@
     backupBtn.addEventListener('click', function () {
       setStatus('Preparing backup…', 'info');
       CoachStore.exportAll().then(function (data) {
-        mergeRecoverySources(data);
+        // Exclude fenced endings: a restore/Delete-all deliberately removed
+        // them, so a still-present saved/parked copy must not be carried back
+        // into an export (and thence a future restore).
+        mergeRecoverySources(data, function (rec) {
+          if (typeof ChessyArchive !== 'undefined' && ChessyArchive.isFencedEnding) {
+            return !ChessyArchive.isFencedEnding(rec.id, rec.sans, rec.result, rec.reason);
+          }
+          return true;
+        });
         const json = JSON.stringify(data);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -187,27 +201,47 @@
       try { ChessyAnalysisService.cancel(); } catch (e) { /* best effort */ }
     }
   }
-  // Fence every recovery source AFTER a successful clear/replace so no cleared
-  // game reappears — by ENDING SIGNATURE, not by bare game id or timestamp:
-  // fence each parked durability-queue ending, drop the queue, and tell the app
-  // to fence its live finished game (app.js listens on 'chessy:archivecleared'
-  // and, if it cannot persist the fence, removes the saved game and suppresses
-  // re-saving it). Fencing the ending (not the whole game instance) lets a
-  // later Undo → revised finish still archive. Even if dropPendingQueue fails,
-  // reconcilePending() honours the fence, so a fenced ending is never
-  // re-committed. Runs only on success — a failed/aborted restore never loses
-  // the queue or fences a live game.
+  // Fence AND neutralize every recovery source AFTER a successful clear/replace
+  // so no cleared game reappears. By ENDING SIGNATURE, not bare id or timestamp:
+  // fence each parked ending, REMOVE the durability queue, and tell the app to
+  // fence its live finished game (app.js listens on 'chessy:archivecleared'
+  // and, if it can't persist the fence, removes the saved game and suppresses
+  // re-saving it). Fencing the ending (not the whole instance) lets a later
+  // Undo → revised finish still archive.
+  //
+  // Returns true only if EVERY source was durably neutralized (fenced write
+  // persisted, or the source removed). A fence is only honoured if its write
+  // actually persisted, so on quota/blocked storage the removals — which free
+  // space and succeed anyway — are what guarantee neutralization; if even a
+  // removal fails the caller must NOT report an unqualified success, since a
+  // later reload could resurrect the surviving source. Runs only on success — a
+  // failed/aborted operation never loses the queue or fences a live game.
   function fenceRecovery() {
+    let ok = true;
     if (typeof ChessyArchive !== 'undefined') {
       try {
         if (ChessyArchive.fenceEndings && ChessyArchive.pendingRecords) {
-          ChessyArchive.fenceEndings(ChessyArchive.pendingRecords());
+          ChessyArchive.fenceEndings(ChessyArchive.pendingRecords()); // best effort
         }
-        if (ChessyArchive.dropPendingQueue) ChessyArchive.dropPendingQueue();
-      } catch (e) { /* best effort — reconcile honours the fence regardless */ }
+        // The queue must be REMOVED to be durably neutralized (a fence is only
+        // honoured while its own write persisted). removeItem frees space, so it
+        // succeeds even at quota; a false return means storage is fully blocked.
+        if (ChessyArchive.dropPendingQueue && !ChessyArchive.dropPendingQueue()) ok = false;
+      } catch (e) { ok = false; }
+    } else {
+      // Archive module absent (partial cache eviction): still neutralize the
+      // queue via raw localStorage, or a later boot with the module loaded would
+      // reconcile pre-clear games into the replacement.
+      try { localStorage.removeItem(PENDING_KEY); } catch (e) { ok = false; }
     }
-    try { document.dispatchEvent(new CustomEvent('chessy:archivecleared')); }
-    catch (e) { /* very old engines without CustomEvent constructor */ }
+    // The live saved finished game: app.js fences its ending or removes the
+    // save, reporting back through the event's MUTABLE detail (dispatch is
+    // synchronous, so detail is set on return).
+    const detail = { neutralized: true };
+    try { document.dispatchEvent(new CustomEvent('chessy:archivecleared', { detail: detail })); }
+    catch (e) { ok = false; } // very old engines without the CustomEvent constructor
+    if (!detail.neutralized) ok = false;
+    return ok;
   }
 
   // Suspend/resume live archive writes around a destructive replace, so a game
@@ -261,6 +295,7 @@
   let pendingRestore = null;
 
   let restoreGen = 0; // bumped per file choice; a stale read no longer applies
+  const MAX_RESTORE_BYTES = 32 * 1024 * 1024; // 32 MB — bounds a hostile/huge file
 
   if (restoreBtn && restoreFile && restoreDialog) {
     restoreBtn.addEventListener('click', function () { restoreFile.click(); });
@@ -270,6 +305,15 @@
       restoreFile.value = ''; // let the SAME file be chosen again later
       if (!file) return;
       const myGen = ++restoreGen; // a slower earlier read must not overwrite a newer choice
+      // Reject an oversized file BEFORE reading it: readAsText buffers the whole
+      // payload and JSON.parse is synchronous, so a huge (or hostile) file would
+      // freeze or OOM the page before the user could cancel. A real archive of
+      // thousands of clocked games is still well under this ceiling.
+      if (file.size > MAX_RESTORE_BYTES) {
+        setStatus('That file is too large (' + Math.round(file.size / 1048576) +
+          ' MB) to restore. Nothing was changed.', 'error');
+        return;
+      }
       const reader = new FileReader();
       reader.onload = function () {
         if (myGen !== restoreGen) return; // superseded by a newer file selection
@@ -301,34 +345,42 @@
       pendingRestore = null;
       closeDialog(restoreDialog);
       if (!data) return;
+      // Mutex: never let a restore overlap another restore or a Delete-all.
+      if (opInFlight) {
+        setStatus('Another data operation is already in progress. Try again once it finishes.', 'error');
+        return;
+      }
+      opInFlight = true;
       setStatus('Restoring…', 'info');
       cancelAnalysis(); // stop an in-flight analysis before replacing its inputs
       // Suspend live archive writes BEFORE the destructive transaction: a timed
       // game that flags or an AI move that finishes the game while the restore
-      // is in flight must not queue archiveGame() on top of the replacement —
-      // fencing only after the commit cannot stop a write that already passed
-      // the fence check.
+      // is in flight must be PARKED, not landed on top of the replacement.
       suspendArchive(true);
       CoachStore.restoreAll(data).then(function (counts) {
-        // Committed. Fence recovery ONLY now (on success): a failed/aborted
-        // restore leaves the durability queue and saved game untouched. Then
-        // resume live writes — a game that finishes AFTER this is a new result
-        // the user chose to keep.
-        fenceRecovery();
+        // Committed. Fence recovery ONLY now (on success); a failed/aborted
+        // restore leaves the durability queue and saved game untouched.
+        const neutralized = fenceRecovery();
         suspendArchive(false);
+        opInFlight = false;
         const msg = 'Restored ' + total(counts) + ' record' + (total(counts) === 1 ? '' : 's') +
-          ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards).';
-        // A post-commit refresh failure is COSMETIC — the restore already
-        // landed. Report success (never "failed / unchanged"), just note the
-        // view may be stale.
-        return refresh().then(
-          function () { setStatus(msg, 'info'); },
-          function () { setStatus(msg + ' Reopen Review to see them.', 'info'); }
+          ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards).' +
+          (neutralized ? '' : ' Reload once storage is available so the old game cannot return.');
+        // Force the Review panel back to a fresh list even if a stale game was
+        // left open (refreshGames no-ops then): otherwise a Verify/Save on that
+        // removed game could recreate an orphan card/analysis. A refresh failure
+        // is COSMETIC — the restore already landed.
+        return Promise.resolve(CoachReview.resetToList()).then(
+          function () { setStatus(msg, neutralized ? 'info' : 'error'); },
+          function () { setStatus(msg + ' Reopen Review to see them.', neutralized ? 'info' : 'error'); }
         );
       }).catch(function (err) {
         // restoreAll is atomic AND the fence runs only on success, so on
-        // failure the old archive and its recovery sources are all intact.
+        // failure the old archive and its recovery sources are all intact. A
+        // finish that arrived while suspended was PARKED, so it survives to the
+        // next boot rather than being lost.
         suspendArchive(false);
+        opInFlight = false;
         setStatus('Restore failed: ' + (err && err.message ? err.message : 'unknown error') +
           '. Your existing archive is unchanged.', 'error');
       });

@@ -986,7 +986,7 @@
   // the session so a later pagehide/visibilitychange save() can't recreate it
   // unfenced. An unfinished game is not a resurrection risk (not archived until
   // it finishes) and is left alone.
-  document.addEventListener('chessy:archivecleared', function () {
+  document.addEventListener('chessy:archivecleared', function (e) {
     if (!gameId) return;
     const st = fullStatus();
     if (!st.over) return;
@@ -996,11 +996,17 @@
       fenced = ChessyArchive.fenceEnding(gameId, sans, st.result, st.reason);
     }
     if (!fenced) {
-      try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* nothing else to do */ }
+      let removed = false;
+      try { localStorage.removeItem(STORAGE_KEY); removed = true; } catch (e2) { /* nothing else to do */ }
       if (window.ChessyArchive && ChessyArchive.fenceEnding) {
-        ChessyArchive.fenceEnding(gameId, sans, st.result, st.reason); // retry, space now freed
+        fenced = ChessyArchive.fenceEnding(gameId, sans, st.result, st.reason); // retry, space now freed
       }
       suppressedEndings.add(localEndingKey(gameId, sans, st.result, st.reason));
+      // Report back to the caller (data-controls fenceRecovery): the save is
+      // durably neutralized only if we FENCED it or REMOVED it. If neither
+      // persisted (localStorage fully unavailable), the caller qualifies its
+      // success so the user knows a reload could still resurrect it.
+      if (!fenced && !removed && e && e.detail) e.detail.neutralized = false;
     }
   });
 
