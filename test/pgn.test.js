@@ -328,5 +328,20 @@ check(!PGN.parseGame('[Result "*"]\n\n1. e4 e.p. e5 *').valid,
 check(!PGN.parseGame('[Result "*"]\n\ne.p. 1. e4 *').valid,
   'an e.p. suffix before the first move is rejected, not silently dropped');
 
+// Long-algebraic uses EITHER the quiet "-" OR the capture "x", never both:
+// "Ng1-xe2" is rejected; "Ng1xe2" and "Ng1-e2" import.
+const lanBoth = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/6NK w - - 0 1"]\n[SetUp "1"]\n\n1. Ng1-xe2 *');
+check(!lanBoth.valid, 'a long-algebraic token with both separators (Ng1-xe2) is rejected');
+const lanCap = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/6NK w - - 0 1"]\n[SetUp "1"]\n\n1. Ng1xe2 *');
+check(lanCap.valid && lanCap.moves[0].san === 'Nxe2', 'long-algebraic capture (Ng1xe2) imports as Nxe2');
+const lanQuiet = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/6NK w - - 0 1"]\n[SetUp "1"]\n\n1. Ng1-f3 *');
+check(lanQuiet.valid && lanQuiet.moves[0].san === 'Nf3', 'long-algebraic quiet move (Ng1-f3) imports as Nf3');
+
+// Internal annotation glyphs never form a shape (only trailing ones are stripped).
+check(!PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1!f3 *').valid &&
+  !PGN.parseGame('[Result "*"]\n\n1. e2?e4 *').valid &&
+  !PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"]\n[SetUp "1"]\n\n1. Ra!b1 *').valid,
+  'internal annotation glyphs (Ng1!f3, e2?e4, Ra!b1) do not form a relaxed match');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

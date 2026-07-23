@@ -80,14 +80,17 @@
     // ("e2!e4", "Ng!1f3", "e=2e4") cannot manufacture a recognised shape.
     const t = san.replace(/e\.p\.?$/i, '').replace(/[+#!?]+$/, '');
     let m;
-    // Piece, long-algebraic: piece + full origin square + optional hyphen + dest.
-    if ((m = /^([KQRBN])([a-h][1-8])-?(x)?([a-h][1-8])$/.exec(t)))
+    // Piece, long-algebraic: piece + full origin square + dest. The separator
+    // is EITHER the quiet "-" OR the capture "x", never both ("Ng1-xe2" is
+    // rejected); only the x form asserts a capture.
+    if ((m = /^([KQRBN])([a-h][1-8])(?:-|(x))?([a-h][1-8])$/.exec(t)))
       return { piece: m[1], file: m[2][0], rank: m[2][1], capture: !!m[3], dest: m[4], promo: null };
     // Piece, standard SAN with optional (possibly redundant) disambiguation.
     if ((m = /^([KQRBN])([a-h])?([1-8])?(x)?([a-h][1-8])$/.exec(t)))
       return { piece: m[1], file: m[2] || null, rank: m[3] || null, capture: !!m[4], dest: m[5], promo: null };
-    // Pawn, long-algebraic: full origin square + optional hyphen + dest + promo.
-    if ((m = /^([a-h][1-8])-?(x)?([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)))
+    // Pawn, long-algebraic: full origin square + dest + promo. Separator is
+    // EITHER "-" OR "x", never both ("e2-xe4" is rejected).
+    if ((m = /^([a-h][1-8])(?:-|(x))?([a-h][1-8])(?:=?([QRBNqrbn]))?$/.exec(t)))
       return { piece: 'P', file: m[1][0], rank: m[1][1], capture: !!m[2], dest: m[3],
         promo: m[4] ? m[4].toUpperCase() : null };
     // Pawn, short capture: origin FILE (differing from the destination file) +
