@@ -43,15 +43,18 @@
  * specific to the low-budget self-play distribution the data comes from, not a
  * universal evaluation optimum.
  *
- * First run's outcome is in test/ai-tune-findings.md: on a large grouped-split
- * self-play set this experiment produced NO ADMISSIBLE CANDIDATE (the
- * validation-selected lambda leaves the shipped weights unchanged, and the only
- * substantively-moved fit lowers Texel loss but fails the tactics suite —
- * objective misalignment, not mere overfitting). No weight change shipped.
+ * The recorded outcome is in test/ai-tune-findings.md (the canonical log): on a
+ * large grouped-split self-play set with rounded scoring, this experiment
+ * produced NO ADMISSIBLE CANDIDATE. The validation-selected fit differs from the
+ * shipped weights by a single centipawn on one endgame passed-pawn term (a
+ * noise-floor change that does not clear the strength gate), while the only
+ * substantially-moved fit (lambda 0) OVERFITS — its held-out loss is worse. No
+ * weight change shipped. See the findings file for the exact numbers.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 require('../assets/engine.js');
 require('../assets/ai.js');
 const Chess = globalThis.Chess;
@@ -331,13 +334,24 @@ function randomOpening(rng) {
 function generate() {
   const rng = mulberry32(SEED);
   const samples = [];
-  let games = 0, decisive = 0, whiteToMove = 0;
+  let games = 0, decisive = 0, whiteToMove = 0, attempts = 0;
+  // Bound total attempts so a mistyped --rand-plies (longer than any game can
+  // survive -> randomOpening always null) or an unsatisfiable sampling phase
+  // fails with a diagnostic instead of spinning forever. Generous headroom over
+  // the requested game count, plus a floor for tiny runs.
+  const MAX_ATTEMPTS = Math.max(GAMES * 100, 1000);
   const t0 = Date.now();
   for (let g = 0; games < GAMES; g++) {
+    if (++attempts > MAX_ATTEMPTS) {
+      process.stderr.write('\n');
+      console.error('generation gave up after ' + MAX_ATTEMPTS + ' attempts with only ' + games +
+        '/' + GAMES + ' sampled games — --rand-plies (' + RAND_PLIES + ') may exceed what a game survives, ' +
+        'or --sample-stride/--skip-plies/--max-plies leave no sampleable ply. Adjust the flags.');
+      process.exit(1);
+    }
     const gameSeed = (SEED * 1000003 + g * 2654435761) >>> 0;
     let state = randomOpening(rng);
     if (!state) continue;
-    games++;
     // Per-game sampling phase in [0, SAMPLE_STRIDE). Without it, a fixed even
     // opening length plus an even stride would sample only ONE side to move in
     // every game (e.g. 6 opening plies + stride 4 -> always White to move) — a
@@ -359,22 +373,28 @@ function generate() {
       state = Chess.playMove(state, local);
       ply++;
     }
+    // A game that contributed NO sampled position is not part of the fitted
+    // dataset — it must not inflate the reported game/decisive counts (which
+    // would then describe a different population than the split). Skip it
+    // entirely; only represented games get an id and count toward statistics.
+    if (pending.length === 0) continue;
+    const gid = games;
+    games++;
     const fin = Chess.gameStatus(state);
     // White-perspective result: decided games score 1/0; everything else (ply
     // cap, or a non-terminal break) is a half point.
     let result = 0.5;
     if (fin.over && fin.result === '1-0') { result = 1; decisive++; }
     else if (fin.over && fin.result === '0-1') { result = 0; decisive++; }
-    // `game` is the group key: every sample from one game shares it, so the
+    // `game` (gid) is the group key: every sample from one game shares it, so the
     // split can keep a whole game on one side and never leak a game's correlated,
     // identically-labelled positions across the train/val/test boundary.
-    const gid = games - 1;
     for (const p of pending) {
       if (p.stm === 'w') whiteToMove++;
       samples.push({ ft: p.ft, y: result, game: gid, stm: p.stm });
     }
     if (games % 25 === 0) {
-      process.stderr.write('\rgenerated ' + games + '/' + GAMES + ' games, ' +
+      process.stderr.write('\rgenerated ' + games + '/' + GAMES + ' sampled games, ' +
         samples.length + ' positions, ' + decisive + ' decisive, ' +
         Math.round((Date.now() - t0) / 1000) + 's   ');
     }
@@ -592,11 +612,60 @@ function fidelityCheck(n, seed) {
   return { checked: checked, bad: bad };
 }
 
+// A distinct-weights fidelity oracle. The baseline check above cannot catch a
+// feature/coefficient that is wired to the WRONG term, because several shipped
+// weights are equal (mobN==mobB==3, doubled==isolated==12): swap those features
+// and the baseline evaluation is unchanged. So load the engine with a set of 19
+// DISTINCT tuned constants — a genuinely independent evaluator (ai.js's own
+// evaluate() in a fresh realm) — and require it to match evalFeat() under the
+// SAME distinct weights. Any swapped or mis-scaled coefficient then diverges.
+const PERTURB_W = {
+  mobN: 4, mobB: 5, mobR: 6, mobQ: 7, doubled: 9, isolated: 11, shield: 13,
+  passedMg: [3, 17, 23, 29, 41, 53], passedEg: [8, 19, 31, 37, 47, 61]
+};
+function loadEngineWithWeights(w) {
+  const read = function (f) { return fs.readFileSync(path.join(__dirname, '..', f), 'utf8'); };
+  let src = read('assets/ai.js');
+  const subs = [
+    [/const MOBILITY = \{[^}]*\};/, 'const MOBILITY = { N: ' + w.mobN + ', B: ' + w.mobB + ', R: ' + w.mobR + ', Q: ' + w.mobQ + ' };'],
+    [/const DOUBLED = \d+, ISOLATED = \d+, SHIELD = \d+;/, 'const DOUBLED = ' + w.doubled + ', ISOLATED = ' + w.isolated + ', SHIELD = ' + w.shield + ';'],
+    [/const PASSED_MG = \[[^\]]*\];/, 'const PASSED_MG = [0, ' + w.passedMg.join(', ') + '];'],
+    [/const PASSED_EG = \[[^\]]*\];/, 'const PASSED_EG = [0, ' + w.passedEg.join(', ') + '];']
+  ];
+  for (const [re, rep] of subs) {
+    if (!re.test(src)) throw new Error('perturbed fidelity: could not locate constant to patch: ' + re);
+    src = src.replace(re, rep);
+  }
+  const ctx = vm.createContext({});
+  vm.runInContext(read('assets/engine.js'), ctx, { filename: 'engine.js' });
+  vm.runInContext(src, ctx, { filename: 'ai.js(perturbed)' });
+  return ctx;
+}
+function perturbedFidelityCheck(n, seed) {
+  const ctx = loadEngineWithWeights(PERTURB_W); // independent evaluator at DISTINCT weights
+  const rng = mulberry32(seed);
+  let checked = 0, bad = 0;
+  for (let t = 0; t < n; t++) {
+    let st = Chess.newGameState();
+    const plies = 4 + Math.floor(rng() * 40);
+    let ok = true;
+    for (let i = 0; i < plies; i++) {
+      if (Chess.gameStatus(st).over) { ok = false; break; }
+      const legal = Chess.legalMoves(st);
+      st = Chess.playMove(st, legal[Math.floor(rng() * legal.length)]);
+    }
+    if (!ok) continue;
+    checked++;
+    if (evalFeat(features(st.board), PERTURB_W, true) !== ctx.ChessAI.evaluate(st.board)) bad++;
+  }
+  return { checked: checked, bad: bad };
+}
+
 // Dataset cache/format version. Bump on ANY change to what generate() produces
 // or how a position's features are encoded, so a stale cache (e.g. one built
 // before the sampling-parity fix, or missing game ids / side-to-move) is refused
 // rather than silently tuned on. It is part of the cache identity below.
-const SCHEMA = 3;
+const SCHEMA = 4;
 
 function loadOrGenerate() {
   const want = { schema: SCHEMA, games: GAMES, nodes: PLAY_NODES, randPlies: RAND_PLIES, maxPlies: MAX_PLIES, sampleStride: SAMPLE_STRIDE, skipPlies: SKIP_PLIES, seed: SEED };
@@ -625,7 +694,10 @@ function loadOrGenerate() {
 const LAMBDA_GRID = (function () {
   if (args.includes('--lambdas')) return opt('lambdas', '').split(',').map(function (s) {
     const n = Number(s.trim());
-    if (!(n >= 0)) { console.error('--lambdas entries must be >= 0 (got "' + s + '")'); process.exit(2); }
+    // Number.isFinite, not just n >= 0: "Infinity" passes n >= 0 but then the
+    // penalty computes Infinity*0 = NaN at the baseline, silently freezing the
+    // fit at the shipped weights and printing a plausible unchanged verdict.
+    if (!(Number.isFinite(n) && n >= 0)) { console.error('--lambdas entries must be finite and >= 0 (got "' + s + '")'); process.exit(2); }
     return n;
   });
   if (args.includes('--lambda')) return [LAMBDA];
@@ -643,13 +715,15 @@ function main() {
   if (data.samples.length < 200) { console.error('too few positions (' + data.samples.length + ') — raise --games'); process.exit(1); }
 
   const fid = fidelityCheck(400, SEED ^ 0xdeadbeef);
-  if (fid.bad > 0) {
-    console.error('FAIL: feature reconstruction diverges from ai.js evaluate() on ' + fid.bad + '/' + fid.checked +
-      ' fresh positions — baseline weights or feature code are out of sync with assets/ai.js.');
+  const pfid = perturbedFidelityCheck(400, SEED ^ 0xbeefcafe); // detects feature/coefficient swaps
+  if (fid.bad > 0 || pfid.bad > 0) {
+    console.error('FAIL: feature reconstruction diverges from ai.js evaluate() — baseline ' + fid.bad + '/' + fid.checked +
+      ', distinct-weights ' + pfid.bad + '/' + pfid.checked + '. Feature code is out of sync with assets/ai.js.');
     process.exit(1);
   }
-  console.log('fidelity: reconstruction matches ai.js evaluate() on all ' + fid.checked +
-    ' fresh random positions (independent of the dataset; the ' + data.samples.length + ' dataset positions are not individually re-checked)');
+  console.log('fidelity: reconstruction matches ai.js evaluate() on all ' + fid.checked + ' baseline + ' +
+    pfid.checked + ' distinct-weights fresh random positions (independent of the dataset; the ' +
+    data.samples.length + ' dataset positions are not individually re-checked)');
 
   // Grouped split by GAME id — no game straddles a boundary, so correlated,
   // identically-labelled positions never leak across train/val/test.
@@ -665,8 +739,20 @@ function main() {
   console.log('grouped split (by game): train ' + sp.nGames.train + ' games/' + train.length + ' pos, ' +
     'val ' + sp.nGames.val + '/' + val.length + ', test ' + sp.nGames.test + '/' + test.length);
 
+  // A training split with no decided game (every label 0.5) carries no
+  // evaluation signal: the Texel optimum is K = 0 (predict 0.5 everywhere), and
+  // any "fit" merely pushes evaluations toward zero. Refuse it rather than emit a
+  // plausible but meaningless candidate.
+  const trainDecisive = train.reduce(function (a, s) { return a + (s.y !== 0.5 ? 1 : 0); }, 0);
+  if (trainDecisive === 0) {
+    console.error('training split has no decided games (all labels 0.5) — no evaluation signal to fit. ' +
+      'Raise --games / --nodes (or --max-plies) so games finish decisively.');
+    process.exit(1);
+  }
+
   const K = fitK(train, BASE_VEC);
-  console.log('sigmoid scale K (fitted on baseline, train split): ' + K.toFixed(4));
+  console.log('sigmoid scale K (fitted on baseline, train split): ' + K.toFixed(4) +
+    '  (train decisive ' + trainDecisive + '/' + train.length + ')');
   // All integer-vector scores are ROUNDED — the engine plays Math.round(eval).
   const baseTrain = mse(train, BASE_VEC, K, true), baseVal = mse(val, BASE_VEC, K, true), baseTest = mse(test, BASE_VEC, K, true);
   console.log('baseline loss (rounded): train ' + baseTrain.toFixed(6) + '  val ' + baseVal.toFixed(6) + '  test ' + baseTest.toFixed(6));
@@ -751,7 +837,9 @@ if (require.main === module) {
     mulberry32: mulberry32, features: features, evalFeat: evalFeat, compile: compile, qVec: qVec,
     wToVec: wToVec, vecToW: vecToW, clampVec: clampVec,
     sigmoid: sigmoid, mse: mse, fitK: fitK, regPenalty: regPenalty, objective: objective, gradient: gradient,
-    descend: descend, polish: polish, groupedSplit: groupedSplit, fidelityCheck: fidelityCheck,
+    descend: descend, polish: polish, groupedSplit: groupedSplit,
+    fidelityCheck: fidelityCheck, perturbedFidelityCheck: perturbedFidelityCheck,
+    loadEngineWithWeights: loadEngineWithWeights, PERTURB_W: PERTURB_W,
     Chess: Chess, ChessAI: ChessAI
   };
 }

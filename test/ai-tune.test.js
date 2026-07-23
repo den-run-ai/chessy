@@ -33,14 +33,42 @@ function check(ok, label, detail) {
     r.bad + ' mismatches');
 }
 
+// ---- 1b. feature IDENTITY via distinct weights ----
+// The baseline check can't catch a coefficient wired to the wrong term (mobN and
+// mobB are both 3, doubled and isolated both 12 — swapping those features is
+// invisible at baseline). perturbedFidelityCheck loads a fresh engine realm with
+// 19 DISTINCT tuned constants and requires evalFeat to match it, so any swap or
+// mis-scaling diverges.
+{
+  const r = T.perturbedFidelityCheck(600, 0x2468);
+  check(r.bad === 0 && r.checked > 100,
+    'feature identity holds under 19 distinct weights on all ' + r.checked + ' fresh positions',
+    r.bad + ' mismatches');
+  // Guard the guard: if the distinct-weights engine and evalFeat were somehow the
+  // SAME function as baseline, the check would be vacuous. Confirm the perturbed
+  // evaluator actually differs from baseline on a real position.
+  let st = Chess.newGameState();
+  const rng = T.mulberry32(7);
+  for (let i = 0; i < 20 && !Chess.gameStatus(st).over; i++) {
+    const legal = Chess.legalMoves(st); st = Chess.playMove(st, legal[Math.floor(rng() * legal.length)]);
+  }
+  const ctx = T.loadEngineWithWeights(T.PERTURB_W);
+  check(ctx.ChessAI.evaluate(st.board) !== T.ChessAI.evaluate(st.board),
+    'distinct-weights evaluator actually differs from the shipped one (check is not vacuous)');
+}
+
 // ---- 2. grouped splitting ----
 // Build synthetic samples tagged by game, split, and assert disjointness by game
 // plus exact coverage (every sample placed once, none dropped or duplicated).
 {
+  // Each sample carries a UNIQUE id, so coverage can assert exact identities
+  // (a routing bug that drops one sample and duplicates another from the same
+  // game would preserve lengths and game-sets but change the id multiset).
   const samples = [];
+  let uid = 0;
   for (let g = 0; g < 40; g++) {
     const n = 1 + (g % 7); // uneven group sizes
-    for (let k = 0; k < n; k++) samples.push({ game: g, base: 0, c: new Float64Array(T.NW), y: 0.5 });
+    for (let k = 0; k < n; k++) samples.push({ id: uid++, game: g, base: 0, c: new Float64Array(T.NW), y: 0.5 });
   }
   const sp = T.groupedSplit(samples, 0.15, 0.15, 42);
   const gid = function (arr) { return new Set(arr.map(function (s) { return s.game; })); };
@@ -48,14 +76,26 @@ function check(ok, label, detail) {
   const overlap = function (a, b) { return [...a].some(function (x) { return b.has(x); }); };
   check(!overlap(tr, va) && !overlap(tr, te) && !overlap(va, te),
     'train/val/test game sets are pairwise disjoint (no leakage)');
-  check(sp.train.length + sp.val.length + sp.test.length === samples.length,
-    'every sample placed exactly once (' + samples.length + ' total)');
+  // Exact coverage by IDENTITY: the union of ids equals {0..N-1}, each once.
+  const ids = sp.train.concat(sp.val, sp.test).map(function (s) { return s.id; }).sort(function (a, b) { return a - b; });
+  let exact = ids.length === samples.length;
+  for (let i = 0; i < ids.length; i++) if (ids[i] !== i) exact = false;
+  check(exact, 'every sample placed exactly once, by identity (' + samples.length + ' unique ids)');
   check(tr.size + va.size + te.size === 40 && va.size > 0 && te.size > 0,
     'all 40 games partitioned, val and test non-empty (' + tr.size + '/' + va.size + '/' + te.size + ')');
-  // Determinism: same seed -> same partition.
+  // Determinism: same seed -> identical MEMBERSHIP (not just equal sizes, which
+  // an unseeded shuffle would also satisfy).
   const sp2 = T.groupedSplit(samples, 0.15, 0.15, 42);
-  check(sp2.train.length === sp.train.length && sp2.test.length === sp.test.length,
-    'grouped split is deterministic under a fixed seed');
+  const sameMembership = function (a, b) {
+    const A = new Set(a.map(function (s) { return s.id; }));
+    return a.length === b.length && b.every(function (s) { return A.has(s.id); });
+  };
+  check(sameMembership(sp.train, sp2.train) && sameMembership(sp.val, sp2.val) && sameMembership(sp.test, sp2.test),
+    'grouped split is deterministic under a fixed seed (identical membership)');
+  // A different seed must change membership (guards against an ignored seed).
+  const sp3 = T.groupedSplit(samples, 0.15, 0.15, 43);
+  check(!sameMembership(sp.test, sp3.test),
+    'a different seed produces a different partition (seed is actually used)');
 }
 
 // ---- 3. dataset cache round-trip ----
