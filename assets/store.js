@@ -566,6 +566,14 @@
           if (!Number.isFinite(r.createdAt)) {
             return 'store "games" record ' + j + ' has a non-numeric createdAt';
           }
+          // The revision marker, if present, must stay in the SAFE incrementable
+          // range: a rev at/beyond Number.MAX_SAFE_INTEGER can't be strictly
+          // increased by nextRev() (x+1 === x past 2^53), so two later endings
+          // would share a rev and park()/archiveGame() would drop the newer one.
+          if (r.rev !== undefined &&
+              (!Number.isSafeInteger(r.rev) || r.rev < 0 || r.rev >= Number.MAX_SAFE_INTEGER)) {
+            return 'store "games" record ' + j + ' has an out-of-range rev';
+          }
         }
         if (name === 'cards') {
           if (typeof r.gameId !== 'string') {

@@ -258,5 +258,28 @@ require('./helper').run('revision-order', async function (t) {
     localStorage.removeItem('chessy-pending-archive-v1');
   });
 
+  // ── (Rh4) The floor is seeded from COMMITTED rows at boot. A revision can
+  // persist ONLY to IndexedDB (near quota, REV_KEY + the save + the pending
+  // entry all fail while the commit succeeds); after a reload the localStorage
+  // sources sit below it, so without a committed-row seed a new finish would mint
+  // a lower rev that archiveGame() then rejects.
+  await reset();
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'commit-only', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 5, rev: 50 })
+      .then(function () {
+        // The localStorage carriers of that rev all failed to persist.
+        localStorage.removeItem('chessy-archive-rev-v1');
+        localStorage.removeItem('chessy-game-v1');
+        localStorage.removeItem('chessy-pending-archive-v1');
+      });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(400); // let the async boot seed (listGames) settle
+  const seeded = await page.evaluate(function () { return ChessyArchive.nextRev(); });
+  check(seeded > 50,
+    'the revision floor is seeded from committed rows at boot (a commit-only rev is not lost)');
+
   await reset(); // leave a clean store for the console-error check
 });

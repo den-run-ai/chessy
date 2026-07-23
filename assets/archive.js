@@ -41,10 +41,22 @@
   // reloads; an in-memory floor keeps it monotonic even if a persist fails.
   const REV_KEY = 'chessy-archive-rev-v1';
   const GAME_SAVE_KEY = 'chessy-game-v1';
+  // The sequence lives in the SAFE integer range: a rev must stay below
+  // MAX_SAFE_INTEGER so nextRev()'s +1 is always a DISTINCT safe integer. Past
+  // 2^53, `x + 1` can equal `x`, which would hand two different endings the same
+  // rev and let park()/archiveGame() treat the newer one as stale. Untrusted
+  // values (a hand-edited save/queue, a crafted backup) are clamped out of the
+  // floor here, and validateBackup rejects a game rev at/above the ceiling.
+  const REV_MAX = Number.MAX_SAFE_INTEGER - 1;
   let memRev = 0;
+  // A usable floor contribution: a safe integer within the incrementable range,
+  // else -Infinity (ignored) — so a poisoned/huge rev can't push the counter
+  // into the range where it can no longer strictly increase.
+  function usableRev(v) {
+    return (Number.isSafeInteger(v) && v >= 0 && v <= REV_MAX) ? v : -Infinity;
+  }
   function readRevValue(raw) {
-    const n = typeof raw === 'number' ? raw : parseInt(raw, 10);
-    return Number.isFinite(n) ? n : -Infinity;
+    return usableRev(typeof raw === 'number' ? raw : parseInt(raw, 10));
   }
   // The highest rev any DURABLE, synchronously-readable source already carries.
   // REV_KEY is the primary persisted floor, but its setItem can be SILENTLY
@@ -53,27 +65,30 @@
   // Undo → revised finish would otherwise mint a rev BELOW one a recoverable
   // copy already uses and lose the ordering. Deriving the floor from the live
   // save and the durability queue too keeps the sequence monotonic across that
-  // failed write. (Committed IndexedDB rows can't be read synchronously; a
-  // restore seeds them explicitly via seedRev().)
+  // failed write. (Committed IndexedDB rows can't be read synchronously; each
+  // boot and every restore seed them explicitly via seedRev() — a revision that
+  // persisted ONLY to IndexedDB is thus not lost from the floor either.)
   function durableRevFloor() {
     let floor = memRev;
     try { floor = Math.max(floor, readRevValue(localStorage.getItem(REV_KEY))); }
     catch (e) { /* unreadable */ }
     try {
       const g = JSON.parse(localStorage.getItem(GAME_SAVE_KEY));
-      if (g && Number.isFinite(g.rev)) floor = Math.max(floor, g.rev);
+      if (g) floor = Math.max(floor, usableRev(g.rev));
     } catch (e) { /* absent/corrupt */ }
     const map = readPending();
     if (map) {
       for (const id of Object.keys(map)) {
         const rec = map[id] && map[id].rec;
-        if (rec && Number.isFinite(rec.rev)) floor = Math.max(floor, rec.rev);
+        if (rec) floor = Math.max(floor, usableRev(rec.rev));
       }
     }
     return floor;
   }
   function nextRev() {
-    const rev = durableRevFloor() + 1;
+    // Clamp the floor to REV_MAX so the return is always a safe integer even if
+    // some source sits at the ceiling; the caps above keep a real floor far below.
+    const rev = Math.min(durableRevFloor(), REV_MAX) + 1;
     memRev = rev;
     try { localStorage.setItem(REV_KEY, String(rev)); }
     catch (e) { /* quota: the floor is re-derived from durable sources next time */ }
@@ -84,7 +99,7 @@
   // finish minting a rev at or below a restored game's, which would let a stale
   // copy of that id outrank the restored one.
   function seedRev(rev) {
-    if (!Number.isFinite(rev) || rev <= memRev) return;
+    if (usableRev(rev) <= memRev) return; // ignore unusable/huge or not-newer
     memRev = rev;
     try {
       if (!(readRevValue(localStorage.getItem(REV_KEY)) >= rev)) {

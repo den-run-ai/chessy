@@ -1181,6 +1181,21 @@
     if (bootStatus.over) showArchiveFailure(archiveBootNoteEl, bootId);
     if (pendingParked) showArchiveFailure(archiveBootNoteEl);
   } else {
+    // Seed the revision floor from the COMMITTED rows. A revision can persist
+    // ONLY to IndexedDB — near quota, REV_KEY, the live save, and the pending
+    // entry can all fail while the independent commit succeeds — so without this
+    // the next session's floor (which reads only those localStorage sources)
+    // would sit below that committed rev and mint a LOWER rev for a new finish,
+    // which archiveGame() would then reject. Async, but a new finish needs moves
+    // first, so it settles well before one can occur. (nextRev() clamps to the
+    // safe range, so even a poisoned committed rev can't break the sequence.)
+    if (CoachStore.listGames && ChessyArchive.seedRev) {
+      CoachStore.listGames().then(function (games) {
+        let maxRev = -Infinity;
+        games.forEach(function (g) { if (Number.isFinite(g.rev) && g.rev > maxRev) maxRev = g.rev; });
+        if (Number.isFinite(maxRev)) ChessyArchive.seedRev(maxRev);
+      }).catch(function () { /* floor stays session-local; best effort */ });
+    }
     // Drain the durability queue FIRST (a Rematch may have replaced the
     // main save while a write was in flight), THEN re-offer the restored
     // game — SEQUENTIALLY, so two writes to the restored game's record

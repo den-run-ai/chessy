@@ -519,7 +519,17 @@ require('./helper').run('data-controls', async function (t) {
         games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [{ at: 1 }] }] } }),
       // A well-formed attempt entry still passes.
       goodAttempt: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
-        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [{ at: 1, grade: 'good', correct: false }] }] } })
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: [{ at: 1, grade: 'good', correct: false }] }] } }),
+      // A game rev at/beyond the safe incrementable range can't be strictly
+      // increased by nextRev() (x+1 === x past 2^53) → two endings collide.
+      hugeRev: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [{ id: 'g', sans: ['e4'], result: '1-0', plies: 1, createdAt: 1, rev: Number.MAX_SAFE_INTEGER }], cards: [] } }),
+      // A fractional / non-integer rev is likewise rejected.
+      fracRev: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [{ id: 'g', sans: ['e4'], result: '1-0', plies: 1, createdAt: 1, rev: 1.5 }], cards: [] } }),
+      // A normal small rev still passes.
+      okRev: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [{ id: 'g', sans: ['e4'], result: '1-0', plies: 1, createdAt: 1, rev: 42 }], cards: [] } })
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
@@ -532,6 +542,9 @@ require('./helper').run('data-controls', async function (t) {
   check(!!moreRejects.badAttemptTime, 'a card with a non-numeric attempt time is rejected');
   check(!!moreRejects.badAttemptCorrect, 'a card with a non-boolean attempt correctness is rejected');
   check(moreRejects.goodAttempt === null, 'a card with a well-formed attempt entry passes validation');
+  check(!!moreRejects.hugeRev, 'a game rev at/beyond the safe incrementable range is rejected');
+  check(!!moreRejects.fracRev, 'a game with a non-integer rev is rejected');
+  check(moreRejects.okRev === null, 'a game with a normal small rev passes validation');
 
   // ---- Write-lock: while a destructive operation is in flight, training/
   // derived writes are REJECTED so they can't commit behind the clear and
