@@ -78,7 +78,11 @@
       difficulty: data.difficulty,
       timeControl: data.timeControl,
       plies: sans.length,
-      createdAt: Number.isFinite(data.endedAt) ? data.endedAt : Date.now()
+      createdAt: Number.isFinite(data.endedAt) ? data.endedAt : Date.now(),
+      // The revision marker app.js persisted for this finish, so the merge can
+      // order this saved copy against a committed row or a parked entry of the
+      // same id. A pre-rev save (older build) has none — treated as the oldest.
+      rev: Number.isFinite(data.rev) ? data.rev : undefined
     };
   }
 
@@ -110,20 +114,21 @@
   // record (an UNCONFIRMED write) and the finished local save (chessy-game-v1,
   // the CURRENT live state) may each hold a newer copy.
   //
-  // Sources are applied in ASCENDING authority — committed < pending < local
-  // save — and the last to touch an id wins. Authority, NOT wall-clock: a
-  // backward system clock can stamp a REVISED finish with a LOWER createdAt than
-  // the original (both come from Date.now()), so completion time cannot order
-  // revisions. A surviving pending entry is genuinely newer than the committed
-  // row because a successful commit clears its own id's queue entry, even when
-  // its park failed (archive.js commit()), so a stale leftover can't masquerade
-  // as an unconfirmed newer write. The local save is the live current state and
-  // is authoritative for its id.
+  // Which copy of an id wins is decided by the REVISION SEQUENCE (rec.rev), a
+  // monotonic marker archive.js stamps on every finish and app.js carries into
+  // the committed row, the parked entry, AND the live save. The higher rev is
+  // the later finish — full stop. This is immune to the failures that defeat a
+  // wall-clock or an authority heuristic: a backward clock (a revised finish can
+  // have a SMALLER createdAt), a stale queue leftover (a failed park can outlive
+  // a newer committed revision), or a stale live save (its own save() failed at
+  // quota while a newer revision persisted only in the queue) — in every case
+  // the newer ending simply carries the higher rev. A record with no rev (a
+  // legacy/imported row, or a pre-rev save) is treated as the oldest.
   //   - identical ending re-offered → keep the EARLIEST createdAt (archiveGame's
   //     same-ending rule — never reorder the list by a later completion time)
   //     but adopt the re-offer's fresher, unrecomputable metadata (clocks);
-  //   - a genuine REVISION (same id, different moves) → the higher-authority
-  //     copy wins;
+  //   - a genuine REVISION (same id, different moves) → the higher-rev copy wins;
+  //     ties (both revless) fall back to application order (committed < recovery);
   //   - a new id → added.
   // Lesson cards are pruned ONCE at the end, against the ORIGINAL committed
   // moves and the FINAL winning ending — never against an intermediate revision
@@ -152,9 +157,20 @@
         byId[rec.id] = Object.assign({}, rec, { createdAt: earliest });
         return;
       }
-      byId[rec.id] = rec; // new id, or a higher-authority revision of this id
+      if (cur) {
+        // A genuine REVISION (same id, different ending): the higher rev is the
+        // later finish and wins. A strictly OLDER rev is kept out — so a stale
+        // queue leftover or a stale live save can't regress a newer committed
+        // revision (nor prune its cards). Equal/absent revs (legacy) fall back
+        // to application order, i.e. the later-applied recovery source wins.
+        const curRev = Number.isFinite(cur.rev) ? cur.rev : -Infinity;
+        const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
+        if (recRev < curRev) return; // rec is an older finish — keep the current winner
+      }
+      byId[rec.id] = rec; // new id, or a same-or-newer revision of this id
     }
-    // Pending queue first, then the finished LOCAL SAVE last (highest authority).
+    // Order of application only breaks rev ties (legacy revless records):
+    // committed is already in byId, then the queue, then the live save last.
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
       ChessyArchive.pendingRecords().forEach(apply);
     }

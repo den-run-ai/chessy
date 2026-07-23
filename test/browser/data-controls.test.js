@@ -65,48 +65,40 @@ require('./helper').run('data-controls', async function (t) {
         backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
     'a parked (pending-queue) game is included in the backup');
 
-  // A parked REVISION (same id as a committed row, but newer moves) is an
-  // UNCONFIRMED write — higher authority than the committed row — so it must
-  // REPLACE it in the backup, not be dropped as a duplicate id. (A surviving
-  // queue entry is genuinely unconfirmed: a successful commit clears its own
-  // id's entry, so a stale leftover can't reach here — see archive.test.js.)
-  const revId = await page.evaluate(function () {
-    const g = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 *'), { playerColor: 'w' });
-    return CoachStore.importGame(g).then(function () {
-      const map = {};
-      map[g.id] = { w: 't', rec: { id: g.id, source: 'play', sans: ['d4', 'd5', 'c4'],
-        result: '1-0', reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 9 } };
-      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify(map));
-      return g.id;
-    });
-  });
-  const [dl3] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
-  const backup3 = JSON.parse(fs.readFileSync(await dl3.path(), 'utf8'));
-  const revved = backup3.stores.games.find(function (g) { return g.id === revId; });
-  check(revved && revved.sans.join(',') === 'd4,d5,c4',
-    'a parked (unconfirmed) revision replaces the committed row of the same id');
-
-  // Revision order is by SOURCE AUTHORITY, never wall-clock: a backward system
-  // clock can stamp a REVISED finish with a LOWER createdAt than the original.
-  // A recovery revision must still win even when its createdAt is the smaller.
-  const clockId = await page.evaluate(function () {
+  // Revision order is decided by the monotonic `rev`, never wall-clock. Two ids
+  // in one backup:
+  //   clock-x — a backward clock stamped the REVISED finish (parked) with a
+  //     SMALLER createdAt than the committed original, but its rev is higher, so
+  //     the revision still wins;
+  //   ttr3w-x — the committed row is the newer revision (higher rev); a STALE
+  //     parked leftover has a lower rev and must NOT override it.
+  await page.evaluate(function () {
     localStorage.removeItem('chessy-pending-archive-v1');
-    // Committed = the ORIGINAL finish, stamped at a HIGHER time (100).
-    const g = { id: 'clock-x', source: 'play', sans: ['e4', 'e5'], result: '*',
-      reason: 'imported', mode: 'pvp', plies: 2, createdAt: 100 };
-    return CoachStore.putGame(g).then(function () {
-      // Parked = the later REVISION, but the clock moved back so its time is 20.
-      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-        'clock-x': { w: 't', rec: { id: 'clock-x', source: 'play', sans: ['d4', 'd5', 'c4'],
-          result: '1-0', reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 20 } } }));
-      return 'clock-x';
-    });
+    return CoachStore.putGame({ id: 'clock-x', source: 'play', sans: ['e4', 'e5'], result: '*',
+      reason: 'imported', mode: 'pvp', plies: 2, createdAt: 100, rev: 5 })
+      .then(function () {
+        return CoachStore.putGame({ id: 'ttr3w-x', source: 'play', sans: ['d4', 'd5', 'c4'],
+          result: '1-0', reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 10, rev: 9 });
+      })
+      .then(function () {
+        localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+          // Higher rev than the committed original despite the smaller createdAt.
+          'clock-x': { w: 't', rec: { id: 'clock-x', source: 'play', sans: ['d4', 'd5', 'c4'],
+            result: '1-0', reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 20, rev: 7 } },
+          // Lower rev than the committed revision — a demonstrably stale leftover.
+          'ttr3w-x': { w: 't', rec: { id: 'ttr3w-x', source: 'play', sans: ['e4', 'e5'],
+            result: '*', reason: 'imported', mode: 'pvp', plies: 2, createdAt: 50, rev: 4 } }
+        }));
+      });
   });
   const [dl3b] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
   const backup3b = JSON.parse(fs.readFileSync(await dl3b.path(), 'utf8'));
-  const clockRow = backup3b.stores.games.find(function (g) { return g.id === clockId; });
+  const clockRow = backup3b.stores.games.find(function (g) { return g.id === 'clock-x'; });
+  const ttrRow = backup3b.stores.games.find(function (g) { return g.id === 'ttr3w-x'; });
   check(clockRow && clockRow.sans.join(',') === 'd4,d5,c4',
-    'a recovery revision wins by authority even with a lower (clock-skewed) createdAt');
+    'a higher-rev parked revision wins even with a lower (clock-skewed) createdAt');
+  check(ttrRow && ttrRow.sans.join(',') === 'd4,d5,c4',
+    'a lower-rev stale parked leftover does not override a newer committed revision');
 
   // A finished game saved ONLY in chessy-game-v1 (not in IndexedDB, not parked)
   // is reconstructed into the backup, so an unrecomputable game is not dropped.
@@ -206,16 +198,17 @@ require('./helper').run('data-controls', async function (t) {
     }
     play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // final: fool's mate
     const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
-    // Final winner (local save): [f3,e5,g4,Qh4#].
+    // Final winner (local save): [f3,e5,g4,Qh4#], the HIGHEST rev.
     localStorage.setItem('chessy-game-v1', JSON.stringify({
-      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'prune2-x', endedAt: 9 }));
-    // Intermediate (pending) revision diverges at ply 1 — it must NOT drive pruning.
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'prune2-x', endedAt: 9, rev: 8 }));
+    // Intermediate (pending) revision (rev 5) diverges at ply 1 — it is neither
+    // the winner nor the pruning basis.
     localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
       'prune2-x': { w: 't', rec: { id: 'prune2-x', source: 'play', sans: ['f3', 'd5'],
-        result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 2 } } }));
-    // Committed row shares [f3,e5,g4] with the final ending, diverging at ply 3.
+        result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 2, rev: 5 } } }));
+    // Committed row (rev 3) shares [f3,e5,g4] with the final ending, diverges at ply 3.
     return CoachStore.putGame({ id: 'prune2-x', source: 'play', sans: ['f3', 'e5', 'g4', 'Nf6'],
-      result: '*', reason: 'imported', mode: 'pvp', plies: 4, createdAt: 1 })
+      result: '*', reason: 'imported', mode: 'pvp', plies: 4, createdAt: 1, rev: 3 })
       .then(function () { return CoachStore.addCard({ gameId: 'prune2-x', ply: 2, cause: 't', due: 1, attempts: [], fenBefore: fen }); });
   });
   const [dl7b] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
@@ -225,6 +218,39 @@ require('./helper').run('data-controls', async function (t) {
     'the finished local save wins the successive revision');
   check(backup7b.stores.cards.some(function (c) { return c.gameId === 'prune2-x' && c.ply === 2; }),
     'a card on the committed/final shared prefix survives an intermediate losing revision');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-game-v1');
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
+  // The live save is NOT unconditionally authoritative: when a revised finish
+  // could not update chessy-game-v1 (save() hit quota) but its smaller parked
+  // record persisted, the saved copy is the OLDER ending and the parked one is
+  // the only copy of the revision. The rev decides — the higher-rev parked
+  // revision wins, and the stale save (a lower rev) does not override it.
+  await page.evaluate(function () {
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // OLD finish, saved but stale
+    // The live save holds the OLD ending at rev 5 (its revision save failed).
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'p1-x', endedAt: 9, rev: 5 }));
+    // The parked record is the REVISION at a higher rev 7 — the only copy of it.
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'p1-x': { w: 't', rec: { id: 'p1-x', source: 'play', sans: ['d4', 'd5', 'Qd3'],
+        result: '1-0', reason: 'checkmate', mode: 'pvp', plies: 3, createdAt: 20, rev: 7 } } }));
+    // Committed row is the same OLD ending as the save (rev 5).
+    return CoachStore.putGame({ id: 'p1-x', source: 'play', sans: ['f3', 'e5', 'g4', 'Qh4#'],
+      result: '0-1', reason: 'checkmate', mode: 'pvp', plies: 4, createdAt: 9, rev: 5 });
+  });
+  const [dl7c] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup7c = JSON.parse(fs.readFileSync(await dl7c.path(), 'utf8'));
+  const p1 = backup7c.stores.games.find(function (g) { return g.id === 'p1-x'; });
+  check(p1 && p1.sans.join(',') === 'd4,d5,Qd3',
+    'a higher-rev parked revision beats a stale lower-rev live save of the same id');
   await page.evaluate(function () {
     localStorage.removeItem('chessy-game-v1');
     localStorage.removeItem('chessy-pending-archive-v1');

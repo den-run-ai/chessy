@@ -31,6 +31,26 @@
   const PENDING_KEY = 'chessy-pending-archive-v1';
   let writeSeq = 0;
 
+  // Monotonic REVISION SEQUENCE. Every finished ending recorded gets a strictly
+  // increasing `rev`, stamped onto the archive record AND (via app.js) the live
+  // save, so the three recovery sources a backup merges — the committed row, a
+  // parked queue entry, and the finished local save — can be ordered EXACTLY.
+  // Wall-clock completion time cannot order revisions (a backward clock stamps a
+  // later finish with a smaller time), and "still parked" / "is the live save"
+  // are not proof of newest either; the rev is. Persisted so it survives
+  // reloads; an in-memory floor keeps it monotonic even if a persist fails.
+  const REV_KEY = 'chessy-archive-rev-v1';
+  let memRev = 0;
+  function nextRev() {
+    let stored = 0;
+    try { stored = parseInt(localStorage.getItem(REV_KEY), 10); } catch (e) { /* unreadable */ }
+    if (!Number.isFinite(stored)) stored = 0;
+    const rev = Math.max(stored, memRev) + 1;
+    memRev = rev;
+    try { localStorage.setItem(REV_KEY, String(rev)); } catch (e) { /* quota: in-memory floor still holds this session */ }
+    return rev;
+  }
+
   // Archive-clear fence (Phase 4b3/4b4). A restore or Delete-all fences the
   // exact ENDINGS that could otherwise be re-archived from a recovery source —
   // the locally saved finished game and any parked durability-queue entries.
@@ -158,30 +178,15 @@
     }
   }
 
-  // Drop any parked entry for `id`, whatever its token. Used only when a commit
-  // SUCCEEDED but its own park had failed (null token), so clearPendingIf can't
-  // match: the durable write supersedes any earlier park for that id.
-  function clearPending(id) {
-    const map = readPending();
-    if (!map || !(id in map)) return;
-    delete map[id];
-    writePending(map);
-  }
-
   function commit(rec, token) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
-      if (token) {
-        clearPendingIf(rec.id, token);
-      } else {
-        // This write's park FAILED (null token — e.g. quota), so clearPendingIf
-        // would no-op and a PRIOR parked entry for this id would linger even
-        // though this newer ending is now durably committed. A finished game is
-        // revised sequentially (same tab, #44), so a successful commit
-        // supersedes any earlier park for the same id: drop it. Without this a
-        // stale queue leftover would later be treated as an unconfirmed newer
-        // write and regress the committed revision in a backup.
-        clearPending(rec.id);
-      }
+      // Clear ONLY the entry still holding this write's own token: a later
+      // revision that parked under the same id after this write began must keep
+      // its copy (its token differs). A stale queue leftover from a failed park
+      // is handled at MERGE time by the revision sequence (a lower rev loses),
+      // not by an unconditional clear here — that would race a concurrent newer
+      // park and could discard the only copy of the latest ending.
+      if (token) clearPendingIf(rec.id, token);
       return storedId;
     });
   }
@@ -221,7 +226,13 @@
       difficulty: settings.difficulty,
       timeControl: settings.timeControl,
       plies: state.history.length,
-      createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now()
+      createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now(),
+      // Revision order marker. app.js stamps a rev when the game first finishes
+      // and passes it here (and into the live save), so a committed row, a
+      // parked copy, and the saved game of the SAME id sort exactly. A caller
+      // that doesn't supply one (a boot reconcile of a pre-rev save) gets a
+      // fresh monotonic rev — still greater than any earlier finish's.
+      rev: (opts && Number.isFinite(opts.rev)) ? opts.rev : nextRev()
     };
     // A destructive replace is in progress: PARK the record but do NOT commit
     // it onto the store being replaced. Parking (not dropping) is what keeps a
@@ -310,5 +321,5 @@
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
     isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
     dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
-    operationActive: operationActive, pendingRecords: pendingRecords };
+    operationActive: operationActive, pendingRecords: pendingRecords, nextRev: nextRev };
 })();

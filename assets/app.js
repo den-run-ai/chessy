@@ -675,7 +675,16 @@
     // Stamp (and persist) the completion time on the FIRST presentation:
     // a re-shown ending keeps it, and a later boot's reconcile archives
     // under this time, not the restart time.
-    if (!gameEndedAt) { gameEndedAt = Date.now(); save(); }
+    if (!gameEndedAt) {
+      gameEndedAt = Date.now();
+      // A fresh revision marker for this finish (a revised finish, after undo,
+      // clears gameRev and so takes a new, higher rev). Guarded on the module
+      // being present — a missing archive can't order anything anyway.
+      if (window.ChessyArchive && ChessyArchive.nextRev) {
+        try { gameRev = ChessyArchive.nextRev(); } catch (e) { gameRev = null; }
+      }
+      save();
+    }
     // Open the dialog BEFORE the archive attempt: a SYNCHRONOUS failure
     // (missing archive module) must land in the now-open dialog's note,
     // not be routed behind it.
@@ -737,7 +746,7 @@
     const seqAtCall = ++archiveSeq;
     archiveAttempts.set(idAtCall, seqAtCall);
     archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall,
-      { endedAt: gameEndedAt })
+      { endedAt: gameEndedAt, rev: gameRev })
       .then(function (storedId) {
         // The game's record exists now — withdraw any page-note blame for
         // it. Only as the game's LATEST attempt: a superseded attempt's
@@ -774,6 +783,12 @@
   // createdAt must be the completion time even when the write is only
   // reconciled on a much later boot (chronology, not restart time).
   let gameEndedAt = null;
+  // The revision-sequence marker for THIS finish (from ChessyArchive.nextRev),
+  // persisted with the save and passed to record() so the committed row, a
+  // parked copy, and the saved game of the same id order exactly in a backup
+  // merge. Set when the game first finishes; cleared with gameEndedAt, so a
+  // revised finish (undo → different ending) takes a new, higher rev.
+  let gameRev = null;
   // Monotonic archive-attempt generation plus, per game id, the seq of
   // that game's LATEST attempt: a settlement (success or failure) may act
   // only while its attempt is still the game's newest — a superseded
@@ -793,6 +808,7 @@
   function startNewGame() {
     gameId = newGameId();
     gameEndedAt = null;
+    gameRev = null;
     cancelAi();
     state = Chess.newGameState();
     selected = null;
@@ -851,8 +867,11 @@
     selected = null;
     // Taking back an ending voids its completion time: a DIFFERENT finish
     // reached after this undo must archive under ITS OWN time (a replayed
-    // identical ending keeps the original createdAt in the store anyway).
+    // identical ending keeps the original createdAt in the store anyway) and
+    // its OWN revision marker, so it can't be misordered against the ending it
+    // replaced.
     gameEndedAt = null;
+    gameRev = null;
     render(); // persists the cleared endedAt via save()
     // If undo landed on the AI's turn (e.g. undoing the computer's opening
     // move while playing Black), let it move again instead of deadlocking.
@@ -1045,7 +1064,11 @@
         // instance and must keep its record key — and its original
         // completion time, for a boot-time reconcile's createdAt.
         gameId: gameId,
-        endedAt: gameEndedAt
+        endedAt: gameEndedAt,
+        // The revision marker for the current finish, so a backup that has to
+        // recover this game from the save alone can order it against a committed
+        // row or a parked copy of the same id (see data-controls merge).
+        rev: gameRev
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -1109,6 +1132,7 @@
       flipped = !!data.flipped;
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
       gameEndedAt = Number.isFinite(data.endedAt) ? data.endedAt : null;
+      gameRev = Number.isFinite(data.rev) ? data.rev : null;
       return true;
     } catch (e) {
       return false;
@@ -1138,6 +1162,7 @@
   const bootState = state;
   const bootId = gameId;
   const bootEndedAt = gameEndedAt;
+  const bootRev = gameRev;
   // settings is a shared mutable object — a New game started while the
   // drain below is in flight must not relabel the restored record.
   const bootSettings = Object.assign({}, settings);
@@ -1179,7 +1204,7 @@
         const seqAtCall = ++archiveSeq;
         archiveAttempts.set(bootId, seqAtCall);
         ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
-          { endedAt: bootEndedAt })
+          { endedAt: bootEndedAt, rev: bootRev })
           .then(function () {
             if (archiveAttempts.get(bootId) === seqAtCall) clearArchiveFailure(bootId);
           }, function () {
