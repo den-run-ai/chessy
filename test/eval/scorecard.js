@@ -16,6 +16,8 @@
  *                    insufficient-material verdict matches the engine
  *   specialMoves     en-passant / castling / promotion availability (and
  *                    restraint: absence where rights/paths forbid it)
+ *   expectedLegal    each corpus-labelled move (e.g. a puzzle's key move) is
+ *                    legal in its position — the corpus's own labels are valid
  *   pvReplay         every reported MultiPV line replays legally move-by-move
  *   perspectiveMate  analyse() mate distance + winning side match
  *   symmetry         best move is invariant under colour/rank mirroring
@@ -132,6 +134,16 @@ function checkSpecialMoves(rec, state) {
   return out;
 }
 
+function checkExpectedLegal(rec, state) {
+  const legal = Chess.legalMoves(state);
+  const out = [];
+  for (const u of rec.expected_moves) {
+    const ok = legal.some(m => uciOf(m) === u);
+    out.push({ ok: ok, detail: 'labelled ' + u + (ok ? ' legal' : ' NOT legal') });
+  }
+  return out;
+}
+
 function checkPvReplay(rec, state, res) {
   const fen = Chess.toFen(state);
   for (const line of res.bestLines) {
@@ -170,7 +182,7 @@ function checkDeterminism(rec, state, res, opts) {
 // ---------------------------------------------------------------------------
 // run
 // ---------------------------------------------------------------------------
-const AXES = ['legalRoot', 'terminalStatus', 'specialMoves', 'pvReplay', 'perspectiveMate', 'symmetry', 'determinism'];
+const AXES = ['legalRoot', 'terminalStatus', 'specialMoves', 'expectedLegal', 'pvReplay', 'perspectiveMate', 'symmetry', 'determinism'];
 
 function run(records, opts, mutate) {
   const axes = {};
@@ -188,6 +200,7 @@ function run(records, opts, mutate) {
     const todo = [['legalRoot', () => checkLegalRoot(rec, state)]];
     if (a.terminal) todo.push(['terminalStatus', () => checkTerminalStatus(rec, state)]);
     if (a.special) todo.push(['specialMoves', () => checkSpecialMoves(rec, state)]);
+    if (a.expectedLegal) todo.push(['expectedLegal', () => checkExpectedLegal(rec, state)]);
     if (a.pvReplay) todo.push(['pvReplay', () => checkPvReplay(rec, state, res)]);
     if (a.mate) todo.push(['perspectiveMate', () => checkPerspectiveMate(rec, res)]);
     if (a.symmetry) todo.push(['symmetry', () => checkSymmetry(rec, res, opts)]);

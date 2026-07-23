@@ -2,10 +2,9 @@
   "corpus": "eval-v1",
   "generator_version": "eval-v1.0.0",
   "retrieval_date": "2026-07-23",
-  "total": 66,
+  "total": 114,
   "shard_size": 64,
   "counts_by_category": {
-    "opening": 32,
     "en-passant": 4,
     "castling": 5,
     "promotion": 4,
@@ -16,14 +15,20 @@
     "threefold": 2,
     "insufficient-material": 3,
     "kpk": 1,
-    "rook-endgame": 1
+    "rook-endgame": 1,
+    "opening": 40,
+    "puzzle": 40
   },
   "counts_by_split": {
-    "train": 47,
-    "val": 7,
-    "test": 12
+    "train": 84,
+    "val": 15,
+    "test": 15
   },
-  "split_policy": "70/15/15 train/val/test by stable id hash; never tune on the test split",
+  "counts_by_license": {
+    "MIT": 34,
+    "CC0-1.0": 80
+  },
+  "split_policy": "70/15/15 train/val/test by stable id/game hash; same-game puzzles share a split; never tune on the test split",
   "analyse_opts": {
     "nodeLimit": 3000,
     "nodeBudget": 2000000,
@@ -32,10 +37,45 @@
     "quiesce": true
   },
   "ndjson": "eval-v1.ndjson",
-  "ndjson_sha256": "45da6706a5b878f3441ca9ab79c2e9df9a2895ade6eb3575c1bce1c2db7677e5",
-  "licenses": {
-    "CC0-1.0": "Opening theory positions (names/ECO from lichess chess-openings, CC0); FEN derived by replaying the line through the Chessy engine.",
-    "MIT": "Original stateful/adversarial + endgame fixtures authored for this repository (chessy-eval-generator), validated by the engine."
+  "ndjson_sha256": "9741d3dc09b8d24a26ceefdf50d542bc37ed5a0703c614cafbcfc45d4f07fef4",
+  "sources": {
+    "lichess-puzzles-v1.csv": {
+      "source_url": "https://database.lichess.org/lichess_db_puzzle.csv.zst",
+      "license": "CC0-1.0",
+      "dump_last_modified": "Wed, 01 Jul 2026 08:58:23 GMT",
+      "selection": "8 per rating band (<1000, 1000-1399, 1400-1799, 1800-2199, 2200+), sorted by PuzzleId",
+      "count": 40,
+      "sha256": "5fe613257220313a76f09435940b605d4c0c9139447a4ef89f357661c1533feb"
+    },
+    "openings-v1.tsv": {
+      "source_url": "https://raw.githubusercontent.com/lichess-org/chess-openings/master",
+      "license": "CC0-1.0",
+      "selection": "8 per ECO volume, 6-12 plies, even stride",
+      "count": 40,
+      "sha256": "6febbaa43f4c296f88940a567dfd7272b093643a0dafcda94cb8d3bbecbc8ec8",
+      "volumes": {
+        "a": {
+          "eligible": 366,
+          "picked": 8
+        },
+        "b": {
+          "eligible": 425,
+          "picked": 8
+        },
+        "c": {
+          "eligible": 743,
+          "picked": 8
+        },
+        "d": {
+          "eligible": 328,
+          "picked": 8
+        },
+        "e": {
+          "eligible": 179,
+          "picked": 8
+        }
+      }
+    }
   },
   "schema": [
     "id",
@@ -45,7 +85,10 @@
     "retrieval_date",
     "source_sha",
     "fen",
+    "source_fen",
+    "setup_move",
     "move_history",
+    "expected_moves",
     "phase",
     "themes",
     "rating_band",
@@ -57,5 +100,5 @@
     "shard",
     "assert"
   ],
-  "note": "Frozen, license-clean. No third-party game/puzzle databases vendored. See eval/LICENSE-REPORT.md."
+  "note": "Derived offline from committed CC0 sources (eval/corpus/sources/, fetched by test/eval/fetch-corpus.js) + engine-generated MIT fixtures. See eval/LICENSE-REPORT.md."
 }

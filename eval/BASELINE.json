@@ -26,6 +26,11 @@
       "pass": 19,
       "fail": 0
     },
+    "expectedLegal": {
+      "checked": 15,
+      "pass": 15,
+      "fail": 0
+    },
     "pvReplay": {
       "checked": 4,
       "pass": 4,
@@ -48,8 +53,8 @@
     }
   },
   "totals": {
-    "checks": 113,
-    "pass": 113,
+    "checks": 128,
+    "pass": 128,
     "fail": 0
   },
   "gate": "PASS"

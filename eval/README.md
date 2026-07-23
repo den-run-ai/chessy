@@ -13,15 +13,31 @@ shard)** and a working **correctness scorecard** (the E2 slice). The
 strength/position-quality baselines are deliberately deferred until the active
 engine changes in #72 settle.
 
+## Online eval, offline app
+
+Only the **shipped Chessy PWA** is offline — the **eval harness and CI are
+not**. So the corpus is built from *real* public-domain (CC0) chess data in two
+steps:
+
+1. **`fetch-corpus.js` (online, manual / nightly)** downloads a compact, frozen
+   CC0 sample — stratified Lichess Open Database puzzles and the lichess
+   `chess-openings` classification — into `corpus/sources/` with full
+   provenance.
+2. **`gen-corpus.js` (offline, deterministic — runs in PR CI)** derives the
+   corpus from those *committed* sources plus engine-generated fixtures, with no
+   network. Same committed sources → identical corpus, so CI is reproducible.
+
 ## What's here
 
 | Path | Purpose |
 | --- | --- |
+| `corpus/sources/` | Frozen raw CC0 samples (`lichess-puzzles-v1.csv`, `openings-v1.tsv`) + `PROVENANCE.json` (source URLs, licenses, dump date, sha256) |
 | `corpus/eval-v1.ndjson` | The frozen corpus — one JSON record per line, full provenance schema |
-| `corpus/manifest.json` | Counts, split policy, shared `analyse` opts, generator version, corpus sha256 |
+| `corpus/manifest.json` | Counts, split policy, shared `analyse` opts, generator version, corpus + source sha256 |
 | `BASELINE.md` / `BASELINE.json` | The first published correctness baseline (human + machine) |
 | `LICENSE-REPORT.md` | Per-source license provenance and the explicit exclusion list |
-| `../test/eval/gen-corpus.js` | Deterministic, self-validating generator that (re)builds the corpus |
+| `../test/eval/fetch-corpus.js` | **Online** fetcher: commits the frozen CC0 sample under `corpus/sources/` |
+| `../test/eval/gen-corpus.js` | **Offline** deterministic, self-validating generator that derives the corpus |
 | `../test/eval/scorecard.js` | Correctness score-vector runner (frozen 64-case PR shard + full mode) |
 
 ## Run it
@@ -31,11 +47,13 @@ node test/eval/scorecard.js            # frozen 64-case PR shard (runs in CI, <1
 node test/eval/scorecard.js --full     # the whole committed corpus
 node test/eval/scorecard.js --json --out run.json          # machine-readable vector
 node test/eval/scorecard.js --baseline eval/BASELINE.json   # before/after vs the baseline
-node test/eval/gen-corpus.js           # regenerate + re-validate the corpus
+node test/eval/gen-corpus.js           # regenerate the corpus offline from committed sources
+node test/eval/fetch-corpus.js         # (online) refresh the frozen CC0 sample under corpus/sources/
 ```
 
-The generator and the scorecard are **development/build-time Node tools** (they
-use `node:crypto`); they are never loaded by the browser app.
+The three tools are **development/build-time Node tools** (they use
+`node:crypto`, and the fetcher shells out to `curl`); they are never loaded by
+the browser app.
 
 ## The corpus (eval-v1)
 
@@ -43,29 +61,35 @@ A compact, frozen set carrying the tracker's provenance schema on every record:
 
 ```
 id, source_url, source_id, license, retrieval_date, source_sha,
-fen, move_history?, phase, themes, rating_band, branching, split_group,
-generator_version, seed?, assert
+fen, source_fen?, setup_move?, move_history?, expected_moves?, phase, themes,
+rating_band, branching, split_group, generator_version, seed?, assert
 ```
 
-- **Openings** — standard published opening theory (names/ECO from the CC0
-  lichess `chess-openings` project); each FEN is derived by replaying the line
-  through Chessy's own engine. License `CC0-1.0`.
-- **Stateful / adversarial + endgame fixtures** — original positions authored
-  for this repository (`chessy-eval-generator`) covering en passant, castling
-  rights (and restraint), promotion, stalemate, checkmate, mate-in-1 score
-  boundaries, the fifty-move boundary, threefold repetition, insufficient
-  material / dead positions, and long-range endgame legality. License `MIT`.
+**114 cases (80 CC0 + 34 MIT):**
 
-**No third-party game or puzzle databases are vendored.** The Lichess puzzle /
-evaluation corpus, Syzygy endgame fixtures, and later-month OOD sample described
-in the tracker require network downloads and build-time tooling and are staged
-for later E1 work; see `LICENSE-REPORT.md` for the license rationale and the
-explicit exclusion list.
+- **Puzzles (40, `CC0-1.0`)** — real Lichess Open Database puzzles, stratified
+  across five puzzle-difficulty bands (`<1000`, `1000–1399`, `1400–1799`,
+  `1800–2199`, `2200+`). Per the Lichess convention the source FEN precedes the
+  opponent's setup move, so the corpus stores the position **after** the setup
+  move (`fen`), keeps the labelled key move (`expected_moves`), and records
+  `source_fen` / `setup_move` for reproducibility.
+- **Openings (40, `CC0-1.0`)** — real ECO/name/line rows sampled across all five
+  ECO volumes from the CC0 lichess `chess-openings` project; each FEN is derived
+  by replaying the line through Chessy's own engine.
+- **Stateful / adversarial + endgame fixtures (34, `MIT`)** — original positions
+  authored for this repository (`chessy-eval-generator`) covering en passant,
+  castling rights (and restraint), promotion, stalemate, checkmate, mate-in-1
+  score boundaries, the fifty-move boundary, threefold repetition, insufficient
+  material / dead positions, and long-range endgame legality.
 
-`split_group` assigns a deterministic **70/15/15 train/val/test** split by
-hashing the record id. **Never tune on the test split.** The frozen **64-case
-PR shard** (`shard: true`) runs on every PR; the full corpus is for nightly /
-pre-release runs.
+Only a **compact frozen sample** of each CC0 database is committed — never the
+multi-million-row dumps. `split_group` assigns a deterministic **70/15/15
+train/val/test** split (puzzles hashed by *game id* so same-game puzzles share a
+split — split-before-extract). **Never tune on the test split.** The frozen
+**64-case PR shard** (`shard: true`, interleaving generated + opening + puzzle
+cases) runs on every PR; the full corpus is for nightly / pre-release runs. The
+Syzygy exact-WDL fixtures and the rotating later-month OOD sample are staged for
+later E1 work — see `LICENSE-REPORT.md`.
 
 ## The correctness scorecard (a score vector)
 
@@ -74,6 +98,7 @@ pre-release runs.
 | `legalRoot` | Differential legal-move set (pseudo-move re-derivation + unique SAN round-trip); non-empty iff live | strict |
 | `terminalStatus` | checkmate / stalemate / fifty-move / threefold / insufficient-material verdict | strict |
 | `specialMoves` | en-passant / castling / promotion availability **and restraint** (absent where forbidden) | strict |
+| `expectedLegal` | every corpus-labelled move (e.g. a puzzle's key move) is legal in its position | strict |
 | `pvReplay` | every reported MultiPV line replays legally, move by move | strict |
 | `perspectiveMate` | `analyse()` mate distance **and** winning side match | strict |
 | `symmetry` | best move is invariant under colour/rank mirroring | strict |
@@ -89,8 +114,9 @@ passing silently.
 
 ## Roadmap (per the tracker)
 
-- **E1** — corpus & provenance, frozen 64-case PR shard *(this slice; the
-  network-sourced Lichess/Syzygy/OOD tranches are staged next)*.
+- **E1** — corpus & provenance, frozen 64-case PR shard *(this slice: online
+  fetcher + offline generator, real CC0 Lichess puzzles + openings committed;
+  the Syzygy exact-WDL and rotating OOD tranches are staged next)*.
 - **E2** — correctness runner *(this slice: differential legality, PV replay,
   stateful cases, deterministic search signature)*.
 - **E3** — analysis scorecard: acceptable-move sets, top-3 recall, regret,
