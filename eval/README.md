@@ -7,8 +7,8 @@ directory adds the **separate scorecards** the strength match cannot provide —
 each measured on a **frozen, license-clean corpus** and reported as a **score
 vector, not one headline Elo number**.
 
-Tracker: *Evaluation v1 — license-clean corpus and release gates* (see the
-tracking issue). This first slice ships **E1 (corpus + provenance + frozen PR
+Tracker: [#87](https://github.com/den-run-ai/chessy/issues/87) — *Evaluation v1
+— license-clean corpus and release gates*. This first slice ships **E1 (corpus + provenance + frozen PR
 shard)** and a working **correctness scorecard** (the E2 slice). The
 strength/position-quality baselines are deliberately deferred until the active
 engine changes in #72 settle.

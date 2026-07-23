@@ -1,6 +1,7 @@
 # eval-v1 correctness baseline (first published)
 
-This is the **first published baseline** for the evaluation tracker: the
+This is the **first published baseline** for the evaluation tracker
+([#87](https://github.com/den-run-ai/chessy/issues/87)): the
 correctness score vector over the frozen, license-clean corpus. Per the tracker,
 strength and position-quality baselines are **deferred** until the active engine
 changes in #72 settle — but the **correctness** vector is version-independent (a
