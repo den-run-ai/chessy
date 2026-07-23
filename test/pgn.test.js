@@ -343,5 +343,25 @@ check(!PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1!f3 *').valid &&
   !PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"]\n[SetUp "1"]\n\n1. Ra!b1 *').valid,
   'internal annotation glyphs (Ng1!f3, e2?e4, Ra!b1) do not form a relaxed match');
 
+// An ATTACHED en-passant suffix is validated like the spaced form: only a real
+// en-passant capture keeps it; on any other move the game is rejected.
+const epAttachReal = PGN.parseGame('[FEN "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"]\n[SetUp "1"]\n\n1. exd6e.p. Kd8 *');
+check(epAttachReal.valid && epAttachReal.moves[0].san === 'exd6',
+  'an attached e.p. suffix on a real en-passant capture (exd6e.p.) imports', epAttachReal.error);
+check(!PGN.parseGame('[Result "*"]\n\n1. e4 e5 2. Ng1f3e.p. *').valid,
+  'an attached e.p. suffix on a non-en-passant move (Ng1f3e.p.) is rejected');
+check(!PGN.parseGame('[Result "*"]\n\n1. e4e.p. *').valid,
+  'an attached e.p. suffix on an ordinary pawn push (e4e.p.) is rejected');
+
+// The king never takes SAN disambiguation: "Kef2"/"K1f2" are rejected, while
+// its full-origin long-algebraic form (Ke1f2) and the plain move (Kf2) import.
+check(!PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Kef2 *').valid &&
+  !PGN.parseGame('[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. K1f2 *').valid,
+  'disambiguated king moves (Kef2, K1f2) are rejected — a king never needs disambiguation');
+const kLan = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ke1f2 *');
+check(kLan.valid && kLan.moves[0].san === 'Kf2', 'a full-origin king LAN move (Ke1f2) imports as Kf2', kLan.error);
+const kPlain = PGN.parseGame('[FEN "4k3/8/8/8/8/8/4p3/4K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Kf2 *');
+check(kPlain.valid && kPlain.moves[0].san === 'Kf2', 'a plain king move (Kf2) still imports');
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

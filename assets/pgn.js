@@ -86,7 +86,9 @@
     if ((m = /^([KQRBN])([a-h][1-8])(?:-|(x))?([a-h][1-8])$/.exec(t)))
       return { piece: m[1], file: m[2][0], rank: m[2][1], capture: !!m[3], dest: m[4], promo: null };
     // Piece, standard SAN with optional (possibly redundant) disambiguation.
-    if ((m = /^([KQRBN])([a-h])?([1-8])?(x)?([a-h][1-8])$/.exec(t)))
+    // The KING is excluded: it can never need disambiguation, so "Kef2"/"K1f2"
+    // are malformed (its only multi-square spelling is full-origin LAN above).
+    if ((m = /^([QRBN])([a-h])?([1-8])?(x)?([a-h][1-8])$/.exec(t)))
       return { piece: m[1], file: m[2] || null, rank: m[3] || null, capture: !!m[4], dest: m[5], promo: null };
     // Pawn, long-algebraic: full origin square + dest + promo. Separator is
     // EITHER "-" OR "x", never both ("e2-xe4" is rejected).
@@ -217,12 +219,21 @@
       let glued = false;
       const rm = tok.match(/^(.+?)(1-0|0-1|1\/2-1\/2|\*)$/);
       if (rm && !/^\d+$/.test(rm[1])) { tok = rm[1]; result = rm[2]; glued = true; }
+      // An en-passant suffix ATTACHED to the move ("exd6e.p." / "Ng1f3e.p.!")
+      // — as opposed to spaced — is stripped and flagged here (not silently by
+      // canon/sanFields), so parseGame validates it against the resolved move's
+      // en-passant flag exactly like the spaced form. A trailing glyph is kept
+      // on the token so its NAG is still captured below.
+      let epSuffix = false;
+      const gm = (tok.match(/[!?]+$/) || [])[0];
+      const bare = gm ? tok.slice(0, tok.length - gm.length) : tok;
+      if (/e\.p\.?$/i.test(bare)) { epSuffix = true; tok = bare.replace(/e\.p\.?$/i, '') + (gm || ''); }
       // A trailing !/? suffix glyph is a move annotation, not part of the SAN;
       // canon() strips it to match the legal move, so capture it as the
       // equivalent NAG here so the annotation is not silently lost.
       const glyph = (tok.match(/[!?]+$/) || [])[0];
       const nags = glyph && GLYPH_NAG[glyph] ? [GLYPH_NAG[glyph]] : [];
-      moves.push({ san: tok, nags: nags, comment: null, clkMs: null });
+      moves.push({ san: tok, nags: nags, comment: null, clkMs: null, epSuffix: epSuffix });
       if (glued) break;
     }
     return { moves: moves, result: result, pre: pre };
