@@ -327,6 +327,72 @@ require('./helper').run('reflection', async function (t) {
     'a partial top-line claim is qualified as provisional (leads the search so far), not settled');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse3; });
 
+  // cardScore must use validMate too: a malformed mate WITH a finite score is
+  // still usable (centipawn fallback) and must persist the score, not NaN.
+  await page.click('#revNext'); await page.click('#revNext'); // from ply 0 → ply 2 (g4)
+  await page.evaluate(function () {
+    window.__realAnalyse4 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lm = Chess.legalMoves(pos)[0];
+      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'x', san: 'x', scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, pv: ['x'], pvUci: [] };
+      return Promise.resolve({
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, classification: 'same',
+        playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
+        bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'malformed mate but finite score');
+  await page.fill('#reflectCandidates', 'g4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'a malformed mate with a finite score is still usable (centipawn fallback)');
+  await page.fill('#cardLesson', 'score fallback test');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.indexOf('saved') !== -1;
+  });
+  const scoreCard = (await cards()).find(function (c) { return c.ply === 2 && c.lesson === 'score fallback test'; });
+  check(scoreCard && scoreCard.bestScore === 20,
+    'cardScore uses validMate: a malformed mate persists the finite score, not NaN');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse4; });
+
+  // A partial result that never scored the played move (playedLine null) must
+  // NOT claim Chessy "preferred" the top line — there is no head-to-head.
+  await page.evaluate(function () {
+    window.__realAnalyse5 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lm = Chess.legalMoves(pos)[0];
+      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'x', san: 'x', scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, pv: ['x'], pvUci: [] };
+      return Promise.resolve({
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 3, nodes: 1, elapsedMs: 1, complete: false,
+        scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null, bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'partial, move not reached');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check(!(await page.textContent('#verifyResult')).includes('preferred') &&
+        (await page.textContent('#verifyResult')).includes('not reached') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a partial analysis that never scored the played move makes no head-to-head claim');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse5; });
+
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
   await page.click('#flagMoment'); // re-flag ply 0

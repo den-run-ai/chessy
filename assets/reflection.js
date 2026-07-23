@@ -91,7 +91,9 @@
   // collapsed to a sentinel beyond MATE_ISH (sign = who is mating) so the
   // card's own score formatter renders it as ±M.
   function cardScore(line) {
-    if (line.mate) return (line.mate.forWhite ? 1 : -1) * (MATE_ISH + line.mate.inPlies);
+    // Same well-formed-mate predicate as display/validation: a malformed mate
+    // object must fall back to the finite centipawn score, never persist NaN.
+    if (validMate(line.mate)) return (line.mate.forWhite ? 1 : -1) * (MATE_ISH + line.mate.inPlies);
     return line.scoreCpWhite;
   }
 
@@ -309,6 +311,12 @@
             ' incomplete, ' + topEval + ' for ' + mover + ').'
           : 'You played ' + entry.san + ' — it’s Chessy’s top line (' +
             topEval + ' for ' + mover + ').';
+      } else if (partial && !res.playedLine) {
+        // The node budget was exhausted before the played move was scored: there
+        // is NO head-to-head, so don't claim Chessy "preferred" anything over it.
+        sentence = 'You played ' + entry.san + ' — ' + top.san + ' leads Chessy’s search' +
+          ' so far (analysis incomplete, ' + topEval + ' for ' + mover + '); your move' +
+          ' was not reached. Your call below.';
       } else {
         const pl = res.playedLine;
         // Cite an EXACT rank only for a complete analysis: a partial scan ranks
