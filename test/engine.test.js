@@ -341,7 +341,14 @@ const withAncestor = ChessAI.search(perpX, 3, -Infinity, Infinity, false,
   { ctx: sharedCtx, ancestors: [Chess.toFen(perpRoot)] });
 assertEqual(withAncestor, 0, 'forced return to a seeded path ancestor scores 0');
 const cleanScore = ChessAI.search(perpX, 3, -Infinity, Infinity, false, { ctx: sharedCtx });
-assertEqual(cleanScore < -300, true,
+// The clean search must return the TRUE, materially-decisive score for Black
+// (two rooks + pawns vs a queen), NOT the path-dependent 0 the ancestor case
+// produced — that is the cache-contamination this guards against. The exact
+// magnitude depends on the material values (the tuned tapered set rates two
+// rooks vs a queen closer to balanced than the old flat values did), so the
+// threshold checks "decisively negative, nowhere near the cached 0", not a
+// specific centipawn figure.
+assertEqual(cleanScore < -150, true,
   'same TT without the ancestor: path-dependent 0 was not cached (got ' + cleanScore + ')');
 // Sanity: a fresh context agrees with the shared-context clean search.
 assertEqual(ChessAI.search(perpX, 3, -Infinity, Infinity, false), cleanScore,
