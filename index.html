@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r39">
+  <link rel="stylesheet" href="assets/style.css?r=r40">
 </head>
 <body>
   <div class="app">
@@ -86,7 +86,9 @@
         <div class="buttons review-tools">
           <button type="button" id="importOpen" class="btn">Import PGN…</button>
           <button type="button" id="backupBtn" class="btn">Back up (JSON)</button>
+          <button type="button" id="restoreBtn" class="btn">Restore…</button>
         </div>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
         <p class="coach-note" id="dataStatus" role="status" aria-live="polite"></p>
         <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
         <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
@@ -260,6 +262,20 @@
     </form>
   </dialog>
 
+  <!-- Restore replaces the WHOLE durable archive with a validated backup,
+       atomically (CoachStore.restoreAll). The confirm is the fence: nothing is
+       written until the player accepts the replacement, and a running analysis
+       plus the durability queue are fenced so cleared games can't reappear. -->
+  <dialog id="restoreConfirmDialog" class="setup" aria-labelledby="restoreConfirmTitle"
+          aria-describedby="restoreConfirmText">
+    <h2 id="restoreConfirmTitle">Restore from backup?</h2>
+    <p id="restoreConfirmText" class="coach-note"></p>
+    <div class="buttons setup-actions">
+      <button type="button" id="restoreConfirm" class="btn danger">Replace my archive</button>
+      <button type="button" id="restoreCancel" class="btn">Cancel</button>
+    </div>
+  </dialog>
+
   <dialog id="promotionDialog" class="promotion" aria-label="Choose promotion piece">
     <div class="promotion-choices" id="promotionChoices"></div>
   </dialog>
@@ -285,27 +301,27 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r39';</script>
-  <script src="assets/engine.js?r=r39"></script>
-  <script src="assets/ai.js?r=r39"></script>
+  <script>window.CHESSY_RELEASE = 'r40';</script>
+  <script src="assets/engine.js?r=r40"></script>
+  <script src="assets/ai.js?r=r40"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r39"></script>
-  <script src="assets/archive.js?r=r39"></script>
-  <script src="assets/app.js?r=r39"></script>
-  <script src="assets/mini-board.js?r=r39"></script>
-  <script src="assets/review.js?r=r39"></script>
-  <script src="assets/analysis-core.js?r=r39"></script>
-  <script src="assets/analysis-service.js?r=r39"></script>
-  <script src="assets/pgn.js?r=r39"></script>
-  <script src="assets/import.js?r=r39"></script>
-  <script src="assets/data-controls.js?r=r39"></script>
-  <script src="assets/reflection.js?r=r39"></script>
-  <script src="assets/train.js?r=r39"></script>
-  <script src="assets/progress.js?r=r39"></script>
+  <script src="assets/store.js?r=r40"></script>
+  <script src="assets/archive.js?r=r40"></script>
+  <script src="assets/app.js?r=r40"></script>
+  <script src="assets/mini-board.js?r=r40"></script>
+  <script src="assets/review.js?r=r40"></script>
+  <script src="assets/analysis-core.js?r=r40"></script>
+  <script src="assets/analysis-service.js?r=r40"></script>
+  <script src="assets/pgn.js?r=r40"></script>
+  <script src="assets/import.js?r=r40"></script>
+  <script src="assets/data-controls.js?r=r40"></script>
+  <script src="assets/reflection.js?r=r40"></script>
+  <script src="assets/train.js?r=r40"></script>
+  <script src="assets/progress.js?r=r40"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

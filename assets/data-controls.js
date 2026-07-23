@@ -170,4 +170,177 @@
       });
     });
   }
+
+  function refresh() { return Promise.resolve(CoachReview.refreshGames()); }
+  function total(counts) {
+    return Object.keys(counts || {}).reduce(function (n, k) { return n + counts[k]; }, 0);
+  }
+  function openDialog(d) {
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  }
+  function closeDialog(d) {
+    if (typeof d.close === 'function') d.close(); else d.removeAttribute('open');
+  }
+  // Stop an in-flight analysis before its inputs are replaced/cleared.
+  function cancelAnalysis() {
+    if (typeof ChessyAnalysisService !== 'undefined' && ChessyAnalysisService.cancel) {
+      try { ChessyAnalysisService.cancel(); } catch (e) { /* best effort */ }
+    }
+  }
+  // Fence every recovery source AFTER a successful clear/replace so no cleared
+  // game reappears — by ENDING SIGNATURE, not by bare game id or timestamp:
+  // fence each parked durability-queue ending, drop the queue, and tell the app
+  // to fence its live finished game (app.js listens on 'chessy:archivecleared'
+  // and, if it cannot persist the fence, removes the saved game and suppresses
+  // re-saving it). Fencing the ending (not the whole game instance) lets a
+  // later Undo → revised finish still archive. Even if dropPendingQueue fails,
+  // reconcilePending() honours the fence, so a fenced ending is never
+  // re-committed. Runs only on success — a failed/aborted restore never loses
+  // the queue or fences a live game.
+  function fenceRecovery() {
+    if (typeof ChessyArchive !== 'undefined') {
+      try {
+        if (ChessyArchive.fenceEndings && ChessyArchive.pendingRecords) {
+          ChessyArchive.fenceEndings(ChessyArchive.pendingRecords());
+        }
+        if (ChessyArchive.dropPendingQueue) ChessyArchive.dropPendingQueue();
+      } catch (e) { /* best effort — reconcile honours the fence regardless */ }
+    }
+    try { document.dispatchEvent(new CustomEvent('chessy:archivecleared')); }
+    catch (e) { /* very old engines without CustomEvent constructor */ }
+  }
+
+  // Suspend/resume live archive writes around a destructive replace, so a game
+  // that finishes DURING the restore can't queue a write on top of it. A
+  // missing/older archive module simply has nothing to suspend.
+  function suspendArchive(on) {
+    if (typeof ChessyArchive !== 'undefined' && ChessyArchive.setSuspended) {
+      try { ChessyArchive.setSuspended(on); } catch (e) { /* best effort */ }
+    }
+  }
+
+  // Replay every game in a backup from its own starting position before the
+  // destructive transaction: a record can have a valid key and `sans` array yet
+  // still be unreplayable (an illegal SAN, a corrupt SetUp/FEN), which Review
+  // would later reject — the user must not lose their archive to swap in a
+  // backup the app cannot actually open. Returns an error string or null.
+  function replayError(data) {
+    if (typeof Chess === 'undefined') return null; // cannot check here; structure was validated
+    const games = (data.stores && data.stores.games) || [];
+    for (let i = 0; i < games.length; i++) {
+      const g = games[i];
+      let s;
+      // Chess.parseFen is lenient (pgn.js documents this and validates
+      // structure separately): a setupFen like "bad" would parse to a broken
+      // position that an empty-sans replay then declares usable. Reject it
+      // up front with the same structural check pgn.js uses.
+      if (g.setupFen && typeof ChessyPGN !== 'undefined' && ChessyPGN.validFen &&
+          !ChessyPGN.validFen(g.setupFen)) {
+        return 'game ' + (i + 1) + ' has an invalid starting position';
+      }
+      try {
+        s = g.setupFen ? Chess.parseFen(g.setupFen) : Chess.newGameState();
+        if (!s.history) s.history = [];
+        if (!s.positions) { s.positions = {}; s.positions[Chess.positionKey(s)] = 1; }
+      } catch (e) { return 'game ' + (i + 1) + ' has an invalid starting position'; }
+      const sans = g.sans || [];
+      for (let k = 0; k < sans.length; k++) {
+        const legal = Chess.legalMoves(s);
+        const m = legal.find(function (mv) { return Chess.toSan(s, mv, legal) === sans[k]; });
+        if (!m) return 'game ' + (i + 1) + ', move ' + (k + 1) + ' ("' + sans[k] + '") is not legal';
+        s = Chess.playMove(s, m);
+      }
+    }
+    return null;
+  }
+
+  // ---- Restore ----------------------------------------------------------
+  const restoreBtn = $('restoreBtn');
+  const restoreFile = $('restoreFile');
+  const restoreDialog = $('restoreConfirmDialog');
+  let pendingRestore = null;
+
+  let restoreGen = 0; // bumped per file choice; a stale read no longer applies
+
+  if (restoreBtn && restoreFile && restoreDialog) {
+    restoreBtn.addEventListener('click', function () { restoreFile.click(); });
+
+    restoreFile.addEventListener('change', function () {
+      const file = restoreFile.files && restoreFile.files[0];
+      restoreFile.value = ''; // let the SAME file be chosen again later
+      if (!file) return;
+      const myGen = ++restoreGen; // a slower earlier read must not overwrite a newer choice
+      const reader = new FileReader();
+      reader.onload = function () {
+        if (myGen !== restoreGen) return; // superseded by a newer file selection
+        let data;
+        try { data = JSON.parse(String(reader.result || '')); }
+        catch (e) { setStatus('That file is not valid JSON — nothing was changed.', 'error'); return; }
+        const err = CoachStore.validateBackup(data);
+        if (err) { setStatus('Not a usable backup (' + err + '). Nothing was changed.', 'error'); return; }
+        const rErr = replayError(data);
+        if (rErr) { setStatus('Backup has an unplayable game (' + rErr + '). Nothing was changed.', 'error'); return; }
+        pendingRestore = data;
+        const g = (data.stores.games || []).length;
+        const c = (data.stores.cards || []).length;
+        $('restoreConfirmText').textContent =
+          'This replaces your entire archive with the backup: ' + g + ' game' +
+          (g === 1 ? '' : 's') + ' and ' + c + ' lesson card' + (c === 1 ? '' : 's') +
+          '. Your current games and cards will be removed. This cannot be undone.';
+        openDialog(restoreDialog);
+      };
+      reader.onerror = function () {
+        if (myGen !== restoreGen) return;
+        setStatus('Could not read that file.', 'error');
+      };
+      reader.readAsText(file);
+    });
+
+    $('restoreConfirm').addEventListener('click', function () {
+      const data = pendingRestore;
+      pendingRestore = null;
+      closeDialog(restoreDialog);
+      if (!data) return;
+      setStatus('Restoring…', 'info');
+      cancelAnalysis(); // stop an in-flight analysis before replacing its inputs
+      // Suspend live archive writes BEFORE the destructive transaction: a timed
+      // game that flags or an AI move that finishes the game while the restore
+      // is in flight must not queue archiveGame() on top of the replacement —
+      // fencing only after the commit cannot stop a write that already passed
+      // the fence check.
+      suspendArchive(true);
+      CoachStore.restoreAll(data).then(function (counts) {
+        // Committed. Fence recovery ONLY now (on success): a failed/aborted
+        // restore leaves the durability queue and saved game untouched. Then
+        // resume live writes — a game that finishes AFTER this is a new result
+        // the user chose to keep.
+        fenceRecovery();
+        suspendArchive(false);
+        const msg = 'Restored ' + total(counts) + ' record' + (total(counts) === 1 ? '' : 's') +
+          ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards).';
+        // A post-commit refresh failure is COSMETIC — the restore already
+        // landed. Report success (never "failed / unchanged"), just note the
+        // view may be stale.
+        return refresh().then(
+          function () { setStatus(msg, 'info'); },
+          function () { setStatus(msg + ' Reopen Review to see them.', 'info'); }
+        );
+      }).catch(function (err) {
+        // restoreAll is atomic AND the fence runs only on success, so on
+        // failure the old archive and its recovery sources are all intact.
+        suspendArchive(false);
+        setStatus('Restore failed: ' + (err && err.message ? err.message : 'unknown error') +
+          '. Your existing archive is unchanged.', 'error');
+      });
+    });
+    $('restoreCancel').addEventListener('click', function () {
+      pendingRestore = null;
+      closeDialog(restoreDialog);
+      setStatus('Restore cancelled — nothing was changed.', 'info');
+    });
+    restoreDialog.addEventListener('cancel', function () {
+      pendingRestore = null;
+      setStatus('Restore cancelled — nothing was changed.', 'info');
+    });
+  }
 })();

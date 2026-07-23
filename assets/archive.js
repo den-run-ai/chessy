@@ -31,6 +31,85 @@
   const PENDING_KEY = 'chessy-pending-archive-v1';
   let writeSeq = 0;
 
+  // Archive-clear fence (Phase 4b3/4b4). A restore or Delete-all fences the
+  // exact ENDINGS that could otherwise be re-archived from a recovery source —
+  // the locally saved finished game and any parked durability-queue entries.
+  // The fence key is a SIGNATURE of the specific ending (game id + its move
+  // list + result + reason), NOT the bare game UUID and NOT a wall-clock epoch.
+  //   - Signature (not epoch) is immune to a save with no/out-of-order
+  //     `endedAt`, a clock moved backward, or two events in the same
+  //     millisecond — the failures a timestamp fence has.
+  //   - Signature (not bare UUID) lets a REVISED ending of the same game
+  //     instance archive: the supported Undo flow keeps the UUID but changes
+  //     the continuation, so a different finish has a different signature and
+  //     is not fenced, while the exact cleared ending never reappears.
+  // record() refuses a fenced ending, so those games never come back, while a
+  // new game (or a revision) archives normally. Same-tab by design (#44).
+  const FENCE_KEY = 'chessy-archive-fenced-v1';
+  const FENCE_CAP = 200; // fenced endings never recur; cap only bounds storage
+  // A compact, low-collision signature over the ending that identifies it:
+  // the game id plus the moves, result and reason that make one finish
+  // distinct from a revision of the same instance (same djb-style double hash
+  // used for content ids in pgn.js).
+  function endingSig(id, sans, result, reason) {
+    const s = String(id) + '' + (Array.isArray(sans) ? sans.join(',') : '') +
+      '' + (result == null ? '' : result) + '' + (reason == null ? '' : reason);
+    let a = 5381, b = 52711;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      a = ((a << 5) + a + c) | 0;
+      b = ((b << 5) + b + (c ^ 0x5f)) | 0;
+    }
+    return (a >>> 0).toString(16) + (b >>> 0).toString(16);
+  }
+  function readFenced() {
+    try { const a = JSON.parse(localStorage.getItem(FENCE_KEY)); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function isFencedEnding(id, sans, result, reason) {
+    if (!id) return false;
+    return readFenced().indexOf(endingSig(id, sans, result, reason)) !== -1;
+  }
+  // Persist one ending as fenced. Returns true only if the signature is now in
+  // the stored set (so a caller can fall back — e.g. remove the saved game and
+  // suppress future saves — when localStorage is full and it could not write).
+  function fenceEnding(id, sans, result, reason) {
+    if (!id) return true; // nothing to fence
+    const sig = endingSig(id, sans, result, reason);
+    const set = readFenced();
+    if (set.indexOf(sig) !== -1) return true; // already fenced
+    set.push(sig);
+    while (set.length > FENCE_CAP) set.shift();
+    try { localStorage.setItem(FENCE_KEY, JSON.stringify(set)); return true; }
+    catch (e) { return false; } // quota/blocked — caller must fall back
+  }
+  // Fence a batch of ending records ({id, sans, result, reason} — e.g. the
+  // parked durability-queue records). Returns true only if every one persisted.
+  function fenceEndings(recs) {
+    let ok = true;
+    (recs || []).forEach(function (r) {
+      if (!fenceEnding(r.id, r.sans, r.result, r.reason)) ok = false;
+    });
+    return ok;
+  }
+  // Drop the durability queue (parked, awaiting-commit finished games), so they
+  // are not re-inserted after a clear/replace. Returns true on success. Even if
+  // this fails (storage momentarily blocked), reconcilePending() honours the
+  // fence, so a fenced ending is not re-committed when storage recovers.
+  function dropPendingQueue() {
+    try { localStorage.removeItem(PENDING_KEY); return true; } catch (e) { return false; }
+  }
+
+  // Suspend live archive writes while a destructive operation (restore /
+  // Delete-all) is replacing the store. A live game that flags on time or an
+  // AI move that finishes the game BETWEEN the operation queuing its
+  // transaction and its success handler must not queue archiveGame() on top of
+  // the replacement — fencing only afterward cannot stop a write that already
+  // passed the fence check. record() short-circuits while suspended, so no such
+  // write is queued behind the operation's transaction.
+  let suspended = false;
+  function setSuspended(on) { suspended = !!on; }
+
   function parkToken() {
     // Unique across reloads too: a stale entry must never token-match a
     // fresh run's write.
@@ -87,11 +166,25 @@
     if (!gameId || !status.over) {
       return Promise.resolve(null);
     }
+    // A destructive replace is in progress: dropping this write is what keeps a
+    // live game that finishes DURING a restore/Delete-all from landing on top
+    // of the replacement (the operation fences this ending afterward, so a boot
+    // reconcile won't re-add it either).
+    if (suspended) return Promise.resolve(null);
+    const sans = state.history.map(function (h) { return h.san; });
+    // Fenced ending: a specific finish cleared/replaced by Delete-all or
+    // Restore must not be (re)archived — covers the boot re-archive of the
+    // saved finished game and a reopened game-over. A REVISED ending of the
+    // same instance (Undo → different finish) has a different signature and is
+    // NOT fenced, so it archives normally.
+    if (isFencedEnding(gameId, sans, status.result, status.reason)) {
+      return Promise.resolve(null);
+    }
     const rec = {
       id: gameId,
       source: 'play',
       tags: {},
-      sans: state.history.map(function (h) { return h.san; }),
+      sans: sans,
       // The side the human played — later slices focus feedback on it.
       playerColor: settings.mode === 'ai-b' ? 'w' : settings.mode === 'ai-w' ? 'b' : 'both',
       // Per-move clock evidence ({thinkMs, wMs, bMs} or null): retained so
@@ -136,6 +229,15 @@
         dirty = true;
         continue;
       }
+      // A restore/Delete-all fenced this ending but couldn't drop the queue
+      // (storage momentarily blocked): honour the fence here so the cleared
+      // game is discarded, not re-committed on top of the restored archive when
+      // storage recovers.
+      if (isFencedEnding(rec.id, rec.sans, rec.result, rec.reason)) {
+        delete map[id];
+        dirty = true;
+        continue;
+      }
       drains.push(commit(rec, entry.w).then(
         function (v) { return { ok: true, v: v }; },
         function (e) { return { ok: false, e: e, id: id }; }));
@@ -171,5 +273,7 @@
   }
 
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
+    isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
+    dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
     pendingRecords: pendingRecords };
 })();
