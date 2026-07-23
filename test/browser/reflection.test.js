@@ -50,8 +50,8 @@ require('./helper').run('reflection', async function (t) {
   await page.click('#reflectVerify');
   check(await page.locator('#reflectVerify').isDisabled(), 'one probe at a time');
   await verifyDone();
-  check((await page.textContent('#verifyResult')).includes('agrees'),
-    'matching move reported as agreement');
+  check((await page.textContent('#verifyResult')).includes('top line'),
+    'a matching move is reported as Chessy’s top line (not an error)');
   // Ply 3 is a BLACK decision (…Qh4#): the eval is labelled from Black's
   // perspective, so a bare White-POV number can't be misread. Black delivers
   // mate here, which reads as a win FOR BLACK.
@@ -61,6 +61,20 @@ require('./helper').run('reflection', async function (t) {
   check(await page.locator('#causeLabel').isHidden(),
     'no cause asked when the move matches');
   check(!(await page.locator('#reflectVerify').isDisabled()), 'probe button re-enables');
+  // Review v2: Chessy shows a few candidate lines (not one verdict), the top
+  // line is the played mate, and it is marked as the player's move.
+  check(await page.locator('#verifyLines li').count() >= 1,
+    'candidate lines are listed (MultiPV, not a single line)');
+  check((await page.textContent('#verifyLines')).includes('Qh4') &&
+        (await page.locator('#verifyLines li.played').count()) >= 1,
+    'the played move appears in the lines and is marked as yours');
+  // Provenance is shown (engine version, depth, node count) and — since these
+  // budgets complete — the meta is NOT flagged partial.
+  const meta = await page.textContent('#verifyMeta');
+  check(meta.includes('Chessy v') && meta.includes('depth') && meta.includes('nodes'),
+    'provenance (engine version, depth, nodes) is shown with the lines');
+  check(!(await page.locator('#verifyMeta.partial').count()),
+    'a completed analysis is not flagged partial');
 
   // Lesson required; the reflection snapshot survives a post-verdict edit.
   await page.click('#saveCard');
@@ -106,55 +120,35 @@ require('./helper').run('reflection', async function (t) {
     'starting a new probe clears the previous save notice');
   await verifyDone();
 
-  // Without a Web Worker the probe resolves gracefully (null) — it must NEVER
-  // run the search on the main thread. (The search is deterministic by node
-  // count, not wall clock, so a 150k-node main-thread run froze the UI for
-  // seconds.) ChessAI.think is therefore never called here.
-  const noWorker = await page.evaluate(function () {
-    const realWorker = window.Worker;
-    const realThink = ChessAI.think;
-    window.Worker = undefined;
-    let calls = 0;
-    ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
-    const p = ChessyAnalysis.analyse(
-      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    ChessyAnalysis.cancel(); // canceling a job already settled null is a no-op
-    return p.then(function (res) {
-      return new Promise(function (r) {
-        setTimeout(function () {
-          window.Worker = realWorker;
-          ChessAI.think = realThink;
-          r({ res: res, calls: calls });
-        }, 100);
-      });
-    });
+  // A PARTIAL (node-budget-capped) analysis stays spoiler-gated and is shown
+  // as visibly partial — never dressed up as an exhaustive verdict. Stub the
+  // service to return a valid contract with complete:false, then confirm the
+  // engine output is still hidden until the reflection is submitted, and the
+  // provenance line is flagged partial afterwards. (No-worker / wedged / retry
+  // and the off-main-thread guarantee are covered by analysis-service.test.js.)
+  const partialGated = await page.evaluate(function () {
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const state = Chess.parseFen(fen);
+    const full = ChessyAnalysisCore.analyse(state, { maxDepth: 4, multiPV: 3, nodeLimit: 8000 });
+    full.complete = false; // pretend the node budget was reached
+    window.__realSvc = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () { return Promise.resolve(full); };
+    return true;
   });
-  check(noWorker.res === null && noWorker.calls === 0,
-    'no Web Worker resolves Verify gracefully without a main-thread search');
-
-  // A WEDGED worker (constructs fine, never answers) must also resolve
-  // gracefully — retried once in a fresh worker, then null — never recomputing
-  // the 150k-node search synchronously on the main thread (measured ~9s on
-  // Kiwipete). Forced with a silent stub Worker and a tiny watchdog override.
-  const wedged = await page.evaluate(function () {
-    const realWorker = window.Worker;
-    const realThink = ChessAI.think;
-    const realWd = window.CHESSY_VERIFY_WATCHDOG_MS;
-    let calls = 0;
-    ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
-    window.Worker = function () { this.postMessage = function () {}; this.terminate = function () {}; };
-    window.CHESSY_VERIFY_WATCHDOG_MS = 30;
-    return ChessyAnalysis.analyse(
-      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-    ).then(function (res) {
-      window.Worker = realWorker;
-      ChessAI.think = realThink;
-      window.CHESSY_VERIFY_WATCHDOG_MS = realWd;
-      return { res: res, calls: calls };
-    });
-  });
-  check(wedged.res === null && wedged.calls === 0,
-    'a wedged worker resolves Verify gracefully (null) without a main-thread search');
+  check(partialGated, 'partial-analysis stub installed');
+  await page.click('#revStart'); // ply 0
+  await page.click('#flagMoment');
+  check(await page.locator('#verifyBox').isHidden(),
+    'a partial result is still spoiler-gated: nothing shown before the reflection');
+  await page.fill('#reflectThreat', 'testing partial');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.locator('#verifyMeta.partial').count()) >= 1,
+    'a complete:false analysis is rendered visibly partial');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realSvc; });
+  await page.click('#revEnd'); // step away so the next section starts fresh at ply 0
 
   // A DIFFERING move: the player owns the call, including "also sound".
   await page.click('#revStart'); // ply 0: f3 was played here
@@ -189,30 +183,37 @@ require('./helper').run('reflection', async function (t) {
   check(both.length === 2 && both.some(function (c) { return c.cause === 'sound-alternative'; }),
     '"my move was also sound" is a first-class cause (2 cards total)');
 
-  // An ILLEGAL/unusable engine result must NOT be turned into a card: a move
-  // that matches nothing on the board (or a non-numeric score) leaves Save
-  // disabled and asks the player to Verify again.
+  // An ILLEGAL/unusable analysis must NOT be turned into a card: a top line
+  // whose move matches nothing on the board leaves Save disabled and asks the
+  // player to Verify again.
   await page.evaluate(function () {
-    window.__realAnalyse = ChessyAnalysis.analyse;
-    ChessyAnalysis.analyse = function () {
-      return Promise.resolve({ move: { from: -1, to: -1, promotion: null }, score: 40, depth: 5 });
+    window.__realAnalyse = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () {
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: 40, scoreCpPlayer: 40, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: -1, to: -1, promotion: null }, uci: '??', san: '?',
+          scoreCpWhite: 40, scoreCpPlayer: 40, mate: null, pv: ['?'], pvUci: [] }]
+      });
     };
   });
   await page.click('#flagMoment'); // re-flag ply 0
-  await page.fill('#reflectThreat', 'probe returns garbage');
+  await page.fill('#reflectThreat', 'analysis returns garbage');
   await page.fill('#reflectCandidates', 'e4');
   await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse'),
-    'an illegal engine move is reported, not scored');
+    'an illegal top-line move is reported, not scored');
   check(await page.locator('#saveCard').isDisabled(),
-    'an illegal engine move keeps Save disabled (no card can be founded on it)');
+    'an illegal analysis keeps Save disabled (no card can be founded on it)');
   // Even a click that bypasses the disabled attribute cannot force a card:
   // the handler re-checks disabled and the null verdict.
   await page.evaluate(function () { document.getElementById('saveCard').click(); });
   check((await cards()).length === 2, 'an illegal engine result creates no card');
-  await page.evaluate(function () { ChessyAnalysis.analyse = window.__realAnalyse; });
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse; });
 
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.

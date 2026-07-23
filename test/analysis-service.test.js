@@ -161,18 +161,36 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     'a superseding request cancels the in-flight one (its promise resolves null)');
   check(made[0].terminated === true, 'the superseded job\'s worker was terminated');
 
-  // --- Stale reply suppression: a late reply for a settled/foreign job is dropped ---
-  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }) });
-  const p1 = Svc.analyse(Object.assign({}, REQ, { gameId: 'S1' }));
+  // --- Stale reply suppression: a superseded/foreign reply arriving WHILE the
+  //     new job is still in flight must not settle or corrupt it; the new job
+  //     completes on its own reply. ---
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }) });
+  const s1 = Svc.analyse(Object.assign({}, REQ, { gameId: 'S1' }));
   const staleWorker = made[0];
   const p2 = Svc.analyse(Object.assign({}, REQ, { gameId: 'S2' })); // supersedes S1
-  await p1; // resolves null
-  const okB = await p2;
-  const before = okB && okB.turn;
-  staleWorker.terminated = false;                 // force a late delivery attempt
-  staleWorker.deliver({ v: PROTOCOL, jobId: 1, result: Core.analyse(Chess.parseFen(START), FAST) });
+  const activeWorker = made[1];
+  const staleId = staleWorker.posts[0].jobId;   // the superseded job's real id
+  const activeId = activeWorker.posts[0].jobId;  // the active job's real id
+  const goodResult = Core.analyse(Chess.parseFen(START), FAST);
+  check((await s1) === null, 'the superseded job resolves null');
+  // (a) a late, otherwise-valid reply carrying the SUPERSEDED job's id
+  staleWorker.terminated = false;
+  staleWorker.deliver({ v: PROTOCOL, jobId: staleId, result: goodResult });
+  // (b) a well-formed reply with a FOREIGN id on the active worker
+  activeWorker.deliver({ v: PROTOCOL, jobId: activeId + 1000, result: goodResult });
+  // (c) a wrong-protocol reply carrying the active id
+  activeWorker.deliver({ v: PROTOCOL + 998, jobId: activeId, result: goodResult });
   await delay(5);
-  check(before === 'w', 'a late reply from a superseded job does not disturb the active result');
+  let settledEarly = false;
+  p2.then(function () { settledEarly = true; });
+  await delay(5);
+  check(settledEarly === false,
+    'superseded-id, foreign-id and wrong-protocol replies never settle the active job');
+  // The active job settles ONLY on its own valid reply.
+  activeWorker.deliver({ v: PROTOCOL, jobId: activeId, result: goodResult });
+  const okB = await p2;
+  check(okB && okB.turn === 'w',
+    'the active job completes on its OWN reply, uncorrupted by the stale/foreign ones');
 
   // --- Cancel: an explicit cancel resolves the in-flight promise null ---
   reset({ factory: factoryOf({ mode: 'stall' }) });
