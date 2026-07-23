@@ -72,6 +72,50 @@
     return key + '|hm' + (state.halfmove || 0) + '|' + hash(rep);
   }
 
+  // The played move under evaluation, normalized for the config hash. It is an
+  // OUTPUT-affecting input: analyse() derives playedLine + classification from
+  // it, so two requests for the same position that differ only in playedMove
+  // must key DISTINCT cache entries (otherwise the second is served the first's
+  // playedLine/classification). null when no move is under evaluation.
+  function playedKey(move) {
+    return move ? (move.from + '-' + move.to + '=' + (move.promotion || '')) : null;
+  }
+
+  // The config hash folds EVERY output-affecting option (including the played
+  // move under evaluation), so two runs that would differ in
+  // bestLines/scores/classification/playedLine never collide in the cache. It is
+  // pure (no search): the analysis service computes the cache identity from it
+  // BEFORE dispatching, and analyse() reuses it, so the lookup key, the stored
+  // key and the key implied by the returned result are one and the same.
+  function configHashOf(opts) {
+    opts = opts || {};
+    return hash(JSON.stringify({
+      v: opts.engineVersion || ENGINE_VERSION,
+      quiesce: opts.quiesce !== false,
+      scanNodes: opts.nodeLimit || 150000,
+      maxDepth: opts.maxDepth || 30,
+      multiPV: Math.max(1, opts.multiPV || 3),
+      pvLen: opts.pvLen || 6,
+      nodeBudget: opts.nodeBudget || 8000000,
+      played: playedKey(opts.playedMove),
+      noDelta: true }));
+  }
+
+  // The full stored-analysis identity for a position under a configuration,
+  // WITHOUT running the search: engine id/version, the config hash, and the
+  // halfmove-and-repetition-aware position fingerprint. The service keys the
+  // cache on exactly these (plus game/ply), so a lookup can precede the worker.
+  function identity(state, opts) {
+    opts = opts || {};
+    const positions = opts.positions || state.positions || null;
+    return {
+      engineId: ENGINE_ID,
+      version: opts.engineVersion || ENGINE_VERSION,
+      configHash: configHashOf(opts),
+      positionFingerprint: positionFingerprint(state, positions)
+    };
+  }
+
   // Seed a shared analysis context: delta pruning OFF, the game's repetition
   // counts loaded so deep lines detect threefolds, and a safety node cap so a
   // pathological position can't run unbounded (its use flips `complete`).
@@ -177,10 +221,9 @@
     const version = opts.engineVersion || ENGINE_VERSION;
     const turn = state.turn, maximizing = turn === 'w';
 
-    // Hash EVERY output-affecting option.
-    const configHash = hash(JSON.stringify({ v: version, quiesce: quiesce,
-      scanNodes: scanNodes, maxDepth: maxDepth, multiPV: multiPV, pvLen: pvLen,
-      nodeBudget: nodeBudget, noDelta: true }));
+    // Hash EVERY output-affecting option (via the shared, pure helper so the
+    // service's pre-dispatch cache key matches the returned result exactly).
+    const configHash = configHashOf(opts);
     const out = {
       engine: { id: ENGINE_ID, version: version, configHash: configHash },
       turn: turn, positionFingerprint: positionFingerprint(state, positions),
@@ -275,6 +318,8 @@
   global.ChessyAnalysisCore = {
     analyse: analyse,
     positionFingerprint: positionFingerprint,
+    configHashOf: configHashOf,
+    identity: identity,
     ENGINE_ID: ENGINE_ID,
     ENGINE_VERSION: ENGINE_VERSION
   };
