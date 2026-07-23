@@ -95,8 +95,16 @@ require('./helper').run('import-ui', async function (t) {
   check(await listCount() === 2, 'the second valid import brings the list to two games');
 
   // The actual FILE-UPLOAD path (not only pasted text): choosing a .pgn file
-  // reads it into the textarea, and Import commits it like a paste.
+  // reads it into the textarea, and Import commits it like a paste. Prior text
+  // is cleared when a file is chosen, so the file — not stale content — is the
+  // source of truth.
   await page.click('#importOpen');
+  await page.fill('#importText', 'STALE typed content that must be discarded');
+  // The checked side pill uses the AA-contrast dark accent, not #7fa650.
+  const pillBg = await page.$eval('input[name="importSide"]:checked + span', function (s) {
+    return getComputedStyle(s).backgroundColor;
+  });
+  check(pillBg === 'rgb(93, 122, 58)', 'the selected side pill uses the AA-contrast accent');
   await page.setInputFiles('#importFile', {
     name: 'game.pgn', mimeType: 'application/x-chess-pgn',
     buffer: Buffer.from('[Event "File"]\n\n1. c4 c5 2. g3 g6 *')
@@ -104,6 +112,8 @@ require('./helper').run('import-ui', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('importText').value.indexOf('c4') !== -1;
   }, { timeout: 5000 });
+  check(!(await page.$eval('#importText', function (e) { return e.value; })).includes('STALE'),
+    'choosing a file discards the prior typed text');
   await page.click('input[name="importSide"][value="b"] + span');
   check(!(await page.$eval('#importSubmit', function (b) { return b.disabled; })),
     'Import is enabled once the file finished reading');

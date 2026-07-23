@@ -386,8 +386,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 .choice span:hover { border-color: #6a655f; }
 .choice input:checked + span {
-  background: var(--accent);
-  border-color: var(--accent);
+  /* --accent-dark (not --accent): white-on-#7fa650 is ~2.81:1, below WCAG AA;
+     white-on-#5d7a3a clears 4.5:1 for these normal-sized pill labels (side
+     picker, New Game options). */
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
   color: #fff;
 }
 .choice input:focus-visible + span {

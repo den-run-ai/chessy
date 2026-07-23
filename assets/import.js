@@ -101,6 +101,10 @@
     const file = fileEl.files && fileEl.files[0];
     if (!file) return;
     if (reader) { try { reader.abort(); } catch (e) { /* already done */ } }
+    // Choosing a file makes THAT file the source of truth: clear any prior
+    // text (typed or from an earlier file) up front, so a still-pending or a
+    // FAILED read never leaves stale content that Import would silently save.
+    textEl.value = '';
     const myGen = generation;
     const r = new FileReader();
     reader = r;
