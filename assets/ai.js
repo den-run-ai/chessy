@@ -224,7 +224,8 @@
     const pawnFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
     const pawnSquares = { w: [], b: [] };
     const kings = { w: -1, b: -1 };
-    const force = { w: 0, b: 0 }; // count of non-king men (pawns + pieces)
+    const force = { w: 0, b: 0 };  // count of non-king men (pawns + pieces)
+    const pieces = { w: 0, b: 0 }; // count of non-king, non-pawn material (mating force)
 
     for (let i = 0; i < 64; i++) {
       const p = board[i];
@@ -242,6 +243,7 @@
       } else if (type === 'K') {
         kings[color] = i;
       } else {
+        pieces[color]++;
         const mob = mobility(board, i, type, color) * MOBILITY[type];
         m += mob; e += mob;
       }
@@ -293,19 +295,21 @@
     const ph = Math.min(phase, PHASE_MAX);
     let score = Math.round((mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX);
 
-    // Mop-up: when one side is reduced to a bare king, add the classic
-    // mating gradient — drive the lone king toward a corner and march the
-    // winning king in. Material + piece-square tables alone give no such
-    // gradient, so a winning side can shuffle a basic K+R-vs-K into the
-    // fifty-move rule; this term restores the drive. It activates ONLY in
-    // lone-king endgames (one side has no men but the king), so ordinary play
-    // is untouched. If the strong side in fact cannot mate (e.g. K+N-vs-K) the
-    // position is already a draw by the fifty-move rule under both engines, so
-    // the harmless nudge costs nothing. Not tapered — a bare-king position is
-    // always deep endgame; it is added on top of the (endgame-dominated) score.
+    // Mop-up: when one side is reduced to a bare king, add the classic mating
+    // gradient — drive the lone king toward a corner and march the winning king
+    // in. Material + piece-square tables alone give no such gradient, so a
+    // winning side can shuffle a basic K+R-vs-K into the fifty-move rule; this
+    // term restores the drive. It activates ONLY when the STRONG side has a
+    // real mating PIECE (pieces > 0) and the weak side is a bare king
+    // (force === 0). Requiring a piece — not just any non-king material —
+    // excludes K+P-vs-K, where the win is to escort and promote the pawn, not
+    // to chase the enemy king (chasing there can even lose the pawn); once the
+    // pawn queens, the queen is a piece and the gradient re-engages. Not
+    // tapered — a bare-king position is always deep endgame; added on top of
+    // the (endgame-dominated) score.
     if (kings.w >= 0 && kings.b >= 0) {
-      if (force.w > 0 && force.b === 0) score += mopUp(kings.b, kings.w);
-      else if (force.b > 0 && force.w === 0) score -= mopUp(kings.w, kings.b);
+      if (pieces.w > 0 && force.b === 0) score += mopUp(kings.b, kings.w);
+      else if (pieces.b > 0 && force.w === 0) score -= mopUp(kings.w, kings.b);
     }
     return score;
   }
@@ -322,6 +326,11 @@
     const kd = Math.abs(lr - wr) + Math.abs(lf - wf);               // king manhattan 2..14
     return 8 * cmd + 2 * (14 - kd);
   }
+  // Upper bound on mopUp() (cmd<=6 -> 48, kings>=2 apart -> 2*(14-2)=24): the
+  // gain from a capture that leaves a bare king can jump by this much when the
+  // mating gradient switches on, which the quiescence delta-pruning margin
+  // must cover so it never prunes a capture that actually crosses the window.
+  const MOPUP_MAX = 72;
 
   // Mate scores are MATE minus the ply at which mate is delivered, so nearer
   // mates always outrank farther ones. Anything beyond MATE_NEAR is a mate.
@@ -618,7 +627,14 @@
       // (assets/analysis-core.js), whose candidate roots must be exact,
       // comparable full-window scores rather than delta-pruning artifacts.
       if (!ctx.noDelta && !inChk && !m.promotion && beta - alpha > 1) {
-        const gain = VALUES[m.captured[1]] + DELTA;
+        // The bound must cover the FULL evaluation swing a capture can produce,
+        // not just a flat piece value: the tapered eval can value a piece above
+        // the ordering constant (a queen up to VALUES_MG 1025), and capturing
+        // the opponent's last unit switches on the mop-up gradient (up to
+        // MOPUP_MAX). Using the larger phase value plus both margins keeps delta
+        // pruning from discarding a capture that actually crosses the window.
+        const cv = m.captured[1];
+        const gain = Math.max(VALUES_MG[cv], VALUES_EG[cv]) + DELTA + MOPUP_MAX;
         if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
             !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
           continue;

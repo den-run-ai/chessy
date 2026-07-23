@@ -34,7 +34,11 @@
   if (typeof Chess === 'undefined' || typeof ChessAI === 'undefined') return;
 
   const ENGINE_ID = 'chessy';
-  const ENGINE_VERSION = '1.0.0';
+  // 1.1.0: full tapered MG/EG piece-square tables + phase-specific material +
+  // lone-king mop-up. This evaluator change alters best lines, scores and
+  // classifications, so the version bump folds into configHashOf() and
+  // invalidates cached analyses from the previous (flat-endgame) evaluator.
+  const ENGINE_VERSION = '1.1.0';
   const MATE = ChessAI.MATE, MATE_NEAR = ChessAI.MATE_NEAR;
   const PROMO = { 1: 'Q', 2: 'R', 3: 'B', 4: 'N' };
   const ABORTED = {}; // sentinel: a candidate search hit the node-budget cap
