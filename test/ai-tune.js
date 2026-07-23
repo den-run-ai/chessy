@@ -282,8 +282,9 @@ function evalFeat(ft, w, round) {
 }
 
 // ---- linear/vector form of the evaluation ----
-// The 19 tuned weights, in a fixed order. Since the evaluation is linear in
-// them, a position compiles to (base, coeff[19]) and eval = base + coeff·w. The
+// 19 weight SLOTS in a fixed order (of which 17 are actually fitted — pMg5/pEg5
+// are pinned, see PINNED below). Since the evaluation is linear in them, a
+// position compiles to (base, coeff[19]) and eval = base + coeff·w. The
 // coefficients FOLD IN the taper, so the optimiser and the fidelity path agree
 // to the centipawn: a phase-independent term (mobility, doubled, isolated) has
 // coefficient = its feature; a midgame-only term (shield, passedMg) is scaled by
@@ -425,16 +426,23 @@ function mse(samples, v, K, round) {
 }
 
 // K is fitted on the baseline weights, which are integers the engine rounds — so
-// fit it on the rounded score, the quantity actually played.
+// fit it on the rounded score, the quantity actually played. The search starts at
+// K = 0 (predict 0.5 everywhere): a split with little decisive signal has its Texel
+// optimum near zero, and only a search that reaches down there can reveal it — the
+// caller then rejects a near-zero optimum (K_MIN below) as "no signal to fit".
 function fitK(samples, v) {
-  let best = 1, bestE = Infinity;
-  for (let K = 0.2; K <= 3.0; K += 0.05) { const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; } }
+  let best = 0, bestE = Infinity;
+  for (let K = 0.0; K <= 3.0; K += 0.05) { const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; } }
   for (let K = best - 0.05; K <= best + 0.05; K += 0.005) {
-    if (K <= 0) continue;
+    if (K < 0) continue;
     const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; }
   }
   return best;
 }
+// Below this fitted scale the sigmoid is so flat that the data carries essentially
+// no evaluation-weight signal (the optimum is pushing predictions toward 0.5, not
+// fitting structure). Real 600-game runs fit K ~ 0.4-0.5, well clear of this.
+const K_MIN = 0.10;
 
 // L2 regularisation toward the shipped weights, scaled per-parameter so a move
 // of one REG_SCALE unit costs the same penalty for every weight regardless of
@@ -442,10 +450,25 @@ function fitK(samples, v) {
 // shipped value when the data pays for the penalty.
 const BASE_VEC = wToVec(BASE_W);
 const REG_SCALE = Float64Array.from([3,3,2,2, 8,8, 6, 30,30,30,30,30,30, 40,40,40,40,40,40]);
+
+// PINNED weights are held fixed at their shipped value and NOT fitted. Indices 12
+// (passedMg[5]) and 18 (passedEg[5]) score a passed pawn six ranks advanced —
+// which for either colour is the promotion rank. A pawn there is immediately
+// replaced by its promotion piece (see Chess.playMove / applyMove), so NO legal
+// position sampled here ever carries that feature: its coefficient is identically
+// zero, the two weights are unidentifiable from this data, and the descent/polish
+// gradients for them are zero. Fitting them would be dishonest (they cannot move
+// on evidence), so the fit is over the 17 IDENTIFIABLE parameters; regularisation
+// normalises by that count.
+const PINNED = new Set([12, 18]);
+const FIT_IDX = [];
+for (let j = 0; j < NW; j++) if (!PINNED.has(j)) FIT_IDX.push(j);
+const NFIT = FIT_IDX.length; // 17
+
 function regPenalty(v, lambda) {
   let p = 0;
-  for (let j = 0; j < NW; j++) { const d = (v[j] - BASE_VEC[j]) / REG_SCALE[j]; p += d * d; }
-  return lambda * p / NW;
+  for (const j of FIT_IDX) { const d = (v[j] - BASE_VEC[j]) / REG_SCALE[j]; p += d * d; }
+  return lambda * p / NFIT;
 }
 function objective(samples, v, K, lambda, round) { return mse(samples, v, K, round) + regPenalty(v, lambda); }
 
@@ -474,7 +497,8 @@ function gradient(samples, v, K, lambda) {
     const c = smp.c;
     for (let j = 0; j < NW; j++) g[j] += f * c[j];
   }
-  for (let j = 0; j < NW; j++) g[j] += (2 * lambda / NW) * (v[j] - BASE_VEC[j]) / (REG_SCALE[j] * REG_SCALE[j]);
+  for (let j = 0; j < NW; j++) g[j] += (2 * lambda / NFIT) * (v[j] - BASE_VEC[j]) / (REG_SCALE[j] * REG_SCALE[j]);
+  for (const j of PINNED) g[j] = 0; // pinned weights never move
   return g;
 }
 
@@ -522,7 +546,7 @@ function polish(train, v0, K, lambda, quiet) {
   let converged = false;
   for (let pass = 0; pass < PASSES; pass++) {
     let improved = false;
-    for (let j = 0; j < NW; j++) {
+    for (const j of FIT_IDX) { // pinned weights are unidentifiable — never polished
       for (const dir of [1, -1]) {
         let step = 1;
         for (;;) {
@@ -751,6 +775,12 @@ function main() {
   }
 
   const K = fitK(train, BASE_VEC);
+  if (K < K_MIN) {
+    console.error('fitted sigmoid scale K = ' + K.toFixed(4) + ' is below K_MIN = ' + K_MIN +
+      ' — the training split carries too little decisive signal (its Texel optimum pushes predictions ' +
+      'toward 0.5 rather than fitting evaluation structure). Raise --games / --nodes (or --max-plies).');
+    process.exit(1);
+  }
   console.log('sigmoid scale K (fitted on baseline, train split): ' + K.toFixed(4) +
     '  (train decisive ' + trainDecisive + '/' + train.length + ')');
   // All integer-vector scores are ROUNDED — the engine plays Math.round(eval).
@@ -760,7 +790,8 @@ function main() {
   // Sweep lambda; SELECT on validation loss. The BASELINE is a candidate in the
   // selection (seeded below), so a grid of only-worse fits still selects the
   // shipped weights instead of the least-bad move. Selection never looks at test.
-  console.log('\nlambda sweep (fit on train, selected on val; rounded scores):');
+  console.log('\nlambda sweep (fit on train, selected on val; rounded scores; ' + NFIT +
+    ' fitted params, pMg5/pEg5 pinned — promotion rank unreachable):');
   console.log('  lambda   trainΔ%   valΔ%   moved  weights-off-baseline');
   let bestLam = 'baseline', bestValLoss = baseVal, bestVec = Float64Array.from(BASE_VEC);
   for (const lambda of LAMBDA_GRID) {
@@ -820,7 +851,7 @@ function main() {
         lambdaGrid: LAMBDA_GRID, schema: SCHEMA
       },
       K: K, selectedLambda: bestLam, moved: moved, baseline: BASE_W, candidate: cand,
-      split: sp.nGames, rounded: true,
+      split: sp.nGames, rounded: true, fittedParams: NFIT, pinned: ['pMg5', 'pEg5'],
       loss: { baseTrain: baseTrain, baseVal: baseVal, baseTest: baseTest, candTrain: candTrain, candVal: candVal, candTest: candTest }
     }, null, 2) + '\n');
     console.log('\nwrote ' + EMIT);
@@ -837,8 +868,9 @@ if (require.main === module) {
     BASE_W: BASE_W, WORDER: WORDER, NW: NW, BASE_VEC: BASE_VEC, LO: LO, HI: HI, REG_SCALE: REG_SCALE,
     mulberry32: mulberry32, features: features, evalFeat: evalFeat, compile: compile, qVec: qVec,
     wToVec: wToVec, vecToW: vecToW, clampVec: clampVec,
-    sigmoid: sigmoid, mse: mse, fitK: fitK, regPenalty: regPenalty, objective: objective, gradient: gradient,
+    sigmoid: sigmoid, mse: mse, fitK: fitK, K_MIN: K_MIN, regPenalty: regPenalty, objective: objective, gradient: gradient,
     descend: descend, polish: polish, groupedSplit: groupedSplit,
+    PINNED: PINNED, FIT_IDX: FIT_IDX, NFIT: NFIT,
     fidelityCheck: fidelityCheck, perturbedFidelityCheck: perturbedFidelityCheck,
     loadEngineWithWeights: loadEngineWithWeights, PERTURB_W: PERTURB_W,
     Chess: Chess, ChessAI: ChessAI

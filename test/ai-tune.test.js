@@ -153,6 +153,19 @@ function check(ok, label, detail) {
   const rec = T.polish(samples, T.clampVec(Float64Array.from(cont, Math.round)), K, 0, true);
   const recMse = T.mse(samples, rec, K, true);
 
+  // Descent-only coverage: the continuous stage must do real work BEFORE polish,
+  // otherwise these recovery assertions pass even if descend() regressed to
+  // returning its start (polish alone can solve this fixture from BASE_VEC).
+  const startSmooth = T.objective(samples, T.BASE_VEC, K, 0, false);
+  const contSmooth = T.objective(samples, cont, K, 0, false);
+  let contErr = 0;
+  for (let j = 0; j < T.NW; j++) contErr = Math.max(contErr, Math.abs(Math.round(cont[j]) - wTrue[j]));
+  check(contSmooth < startSmooth * 0.25,
+    'continuous descent materially lowers the smooth objective before polish (' +
+    startSmooth.toExponential(2) + ' -> ' + contSmooth.toExponential(2) + ')');
+  check(contErr <= 3,
+    'continuous descent alone lands near the true weights before polish (max error ' + contErr + ')');
+
   let maxErr = 0;
   for (let j = 0; j < T.NW; j++) maxErr = Math.max(maxErr, Math.abs(rec[j] - wTrue[j]));
   check(recMse < baseMse * 0.05,
@@ -172,6 +185,33 @@ function check(ok, label, detail) {
   check(afterObj < beforeObj && afterObj < 1e-9,
     'polish lowers the rounded objective from a perturbed start toward the optimum (' +
     beforeObj.toExponential(2) + ' -> ' + afterObj.toExponential(2) + ')');
+}
+
+// ---- 5. pinned weights are never fitted ----
+// pMg5/pEg5 (promotion-rank passed pawns) are unidentifiable on legal positions,
+// so they are pinned. Even a synthetic fixture whose ONLY signal lives in those
+// dimensions must leave them — and everything else — at the baseline.
+{
+  check(T.NFIT === 17 && T.PINNED.has(12) && T.PINNED.has(18),
+    'pMg5/pEg5 are pinned; 17 identifiable parameters fitted (NFIT=' + T.NFIT + ')');
+  const K = 0.5;
+  const wTrue = Float64Array.from(T.BASE_VEC);
+  wTrue[12] = T.BASE_VEC[12] + 20; wTrue[18] = T.BASE_VEC[18] + 20; // "true" differs only in pinned dims
+  const rng = T.mulberry32(555);
+  const samples = [];
+  for (let i = 0; i < 800; i++) {
+    const c = new Float64Array(T.NW);
+    c[12] = Math.round(-2 + 4 * rng()); c[18] = Math.round(-2 + 4 * rng()); // only pinned dims carry signal
+    const s = { base: -100 + 200 * rng(), c: c, game: i, y: 0 };
+    s.y = T.sigmoid(Math.round(T.qVec(s, wTrue)), K);
+    samples.push(s);
+  }
+  const cont = T.descend(samples, K, 0, { quiet: true, iters: 2000, lr: 0.2 });
+  const rec = T.polish(samples, T.clampVec(Float64Array.from(cont, Math.round)), K, 0, true);
+  let movedAny = false;
+  for (let j = 0; j < T.NW; j++) if (rec[j] !== T.BASE_VEC[j]) movedAny = true;
+  check(rec[12] === T.BASE_VEC[12] && rec[18] === T.BASE_VEC[18] && !movedAny,
+    'the fit leaves pinned weights (and all others) at baseline even under pinned-only data pressure');
 }
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

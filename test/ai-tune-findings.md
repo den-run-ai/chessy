@@ -3,9 +3,10 @@
 **Decision: no evaluation-weight change ships.** On this run the
 validation-selected candidate *does* lower the untouched held-out Texel loss
 (by ~1 %), but it is chess-nonsensical and **fails the playing gate** — it cannot
-convert K+Q vs K or K+R vs K, and loses ground in self-play. This is the crux of
-the whole exercise: **a lower outcome-labelled Texel loss is not the same as
-playing strength.** Runtime is unchanged — zero lines.
+convert K+Q vs K or K+R vs K. That tactics failure is terminal (see the gate
+section), so no self-play match was run. This is the crux of the whole exercise:
+**a lower outcome-labelled Texel loss is not the same as playing strength.**
+Runtime is unchanged — zero lines.
 
 Scope note up front: this is **not** a claim of a global or universal optimum,
 and it is not a claim that the shipped weights minimise Texel loss. On this
@@ -33,6 +34,11 @@ in CI.
 - **Rounded scoring**: every integer weight vector is scored on
   `Math.round(evaluate())`, the value the engine actually plays; only the
   continuous RMSProp descent uses the smooth score.
+- **Parameters**: 17 of the 19 weight slots are fitted; `passedMg[5]` and
+  `passedEg[5]` (a passed pawn six ranks advanced = the promotion rank) are
+  **pinned** — a pawn there is immediately promoted, so no legal sampled position
+  carries that feature and the two weights are unidentifiable. ("17/19 moved"
+  below therefore means all fitted weights moved.)
 - **Selection**: K fitted on the baseline (K ≈ 0.41; train decisive 6,745/9,184);
   weights fitted on **train**, L2-regularised toward the shipped values; **λ chosen
   on validation with the baseline in the candidate set**; final comparison on the
