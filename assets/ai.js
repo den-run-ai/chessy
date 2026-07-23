@@ -31,11 +31,23 @@
   const VALUES_EG = { P: 94, N: 281, B: 297, R: 512, Q: 936, K: 0 };
 
   // Piece-square tables from White's perspective, index 0 = a8. A coherent,
-  // tuned tapered set (PeSTO / Rofchade lineage): every piece — not just pawns
-  // and the king — now has a distinct endgame table, and the two phases are
-  // blended by remaining non-pawn material. Values are centipawns and already
-  // include their phase-specific piece value's positional intent; the raw
-  // material value (VALUES_MG / VALUES_EG) is added on top in evaluate().
+  // tuned tapered set: every piece — not just pawns and the king — now has a
+  // distinct endgame table, and the two phases are blended by remaining
+  // non-pawn material. Values are centipawns and already include their
+  // phase-specific piece value's positional intent; the raw material value
+  // (VALUES_MG / VALUES_EG) is added on top in evaluate().
+  //
+  // PROVENANCE / LICENSE (must be resolved before release): these twelve
+  // tables and the VALUES_MG/VALUES_EG piece values above are the verbatim
+  // "PeSTO" coefficients by Ronald Friederich (author of the RofChade engine),
+  // as published on the Chess Programming Wiki "PeSTO's Evaluation Function"
+  // (https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function). CPW text
+  // is CC BY-SA 3.0; Chessy is MIT. Whether short numeric tuning constants are
+  // copyrightable is debatable, but the lineage must be recorded and the grant
+  // confirmed. Options for the maintainer: (a) confirm/obtain an explicit
+  // permissive grant from the author and add attribution, (b) rely on the
+  // data/non-copyrightability position with documented legal review, or
+  // (c) replace these with independently retuned tables. Tracked in #72.
   const PST = {
     P: [
         0,   0,   0,   0,   0,   0,   0,   0,

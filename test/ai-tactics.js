@@ -67,14 +67,15 @@ const SPECS = [
   ['queen double attack', 'r5k1/8/8/8/8/8/8/3Q2K1 w - - 0 1', ['d1d5'], 8000],
   ['K+R opposition mate in 1', '3k4/8/3K4/8/8/8/8/7R w - - 0 1', ['h1h8'], 4000],
   ['back-rank mate by capture', '3r2k1/5ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 1', ['d1d8'], 4000],
-  // f8=Q stalemates, f8=B/N cannot win; f8=R and Kf6 both force mate — the
-  // test is that the engine keeps a forced win (mate score) without the
-  // losing promotions. The engine plays the winning Kf6 well under budget;
-  // proving the full mate SCORE from here takes ~20k nodes under the tuned
-  // tapered evaluation (its deeper endgame tables spend the horizon
-  // differently), so the budget is 20000 — the move choice, not the budget,
-  // is the substantive assertion.
-  ['underpromotion or outflank, never f8=Q', '8/5P1k/8/5K2/8/8/8/8 w - - 0 1', null, 20000,
+  // f8=Q stalemates, f8=B/N cannot win; f8=R and Kf6 both force mate. Two
+  // separate facts are asserted so neither is overstated (a 12k budget change
+  // must not hide a regression): at the ORIGINAL 12000-node budget the engine
+  // still avoids the losing promotions and returns a legal winning move, and
+  // only at 20000 nodes does the tuned tapered eval (deeper endgame tables
+  // spend the horizon differently) also PROVE the mate score.
+  ['restraint at 12k budget, never f8=Q', '8/5P1k/8/5K2/8/8/8/8 w - - 0 1', null, 12000,
+    ['f7f8Q', 'f7f8B', 'f7f8N']],
+  ['proves mate at 20k budget, never f8=Q', '8/5P1k/8/5K2/8/8/8/8 w - - 0 1', null, 20000,
     ['f7f8Q', 'f7f8B', 'f7f8N'], true],
   ['underpromote N, royal fork', '8/2q1P1k1/8/8/8/8/P7/4K3 w - - 0 1', ['e7e8N'], 12000],
   ['take the rook, not the knight', '6k1/8/8/2r3n1/8/4B3/8/6K1 w - - 0 1', ['e3c5'], 8000],
@@ -208,11 +209,12 @@ console.log('quiescence repetition');
     'value ' + vFree + ' (expected ' + matVal + ')');
 })();
 
-// --- Null-window scout vs a warm, wide-window TT (regression). A score a WIDER
-// search produced with delta pruning active is not a sound null-window bound;
-// the TT must withhold it from a quiescent null scout (offering only the hash
-// move). Invariant: a null scout that reuses a warm, wide-window-populated
-// context must return exactly what a FRESH-context scout returns.
+// --- Null-window scout vs a warm, wide-window TT (regression). With delta
+// pruning removed, a quiescence-derived TT score is a sound alpha-beta bound
+// servable to any window; this pins that invariant so a future selective
+// pruning cannot silently reintroduce window-sensitive TT scores. Invariant: a
+// null scout that reuses a warm, wide-window-populated context must return
+// exactly what a FRESH-context scout returns.
 console.log('null-scout TT safety');
 (function () {
   const cases = [
@@ -253,16 +255,17 @@ for (const [name, fen] of [
 }
 
 // --- PVS soundness vs an INDEPENDENT minimax oracle (regression) ---
-// The property that must hold: PVS introduces no false fail-low/high. With
-// delta pruning absent (quiescence OFF) the search is exact alpha-beta, so
-// ChessAI.search's full-window value must equal the true minimax value and a
-// null-window scout must correctly bracket it. A future change that corrupted
-// PVS could bend the full-window value AND both scouts consistently, so the
-// reference must NOT come from the code under test. `oracle()` below is a
-// plain, self-contained alpha-beta (no PVS, no TT, no quiescence, no delta
-// pruning) over the engine's own evaluation — an independent witness. It DOES
-// reproduce the engine's search-path repetition rule, so it solves the same
-// minimax problem the engine does (see the comment in oracle()).
+// The property that must hold: PVS introduces no false fail-low/high. Scope:
+// with delta pruning removed the search is an EXACT transform of full-window
+// alpha-beta over Chessy's SAME completed, bounded tree — not exact chess
+// minimax (quiescence still has the QMAX horizon, stand-pat, and the deliberate
+// twofold path-repetition rule). So ChessAI.search's full-window value must
+// equal a plain alpha-beta over the same tree and a null-window scout must
+// bracket it. The reference must NOT come from the code under test. `oracle()`
+// below is a plain, self-contained alpha-beta (no PVS, no TT, quiescence OFF)
+// over the engine's own evaluation; the quiescence-ON exactness block that
+// follows adds a second independent oracle that DOES descend into captures.
+// Both reproduce the engine's search-path repetition rule.
 console.log('PVS soundness (independent minimax oracle)');
 // `path` carries the repetition keys of the search-path ancestors (the root
 // included, exactly as ChessAI.search pushes the root before recursing).
@@ -314,6 +317,109 @@ check(scoutAbove <= vOracle, 'null-window scout above the true value fails low',
 const pvsMove = solve(PVS_FEN, 60000);
 check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
   'sharp position returns a legal move (quiescence on)', 'got ' + pvsMove.uci);
+
+// --- PVS + aspiration exactness WITH QUIESCENCE (permanent regression) ---
+// The play search runs quiescence; delta pruning removed, it must equal a
+// plain alpha-beta that itself descends into captures. `oracleQ` is that
+// independent witness: alpha-beta to the horizon, then a self-contained
+// quiescence mirroring quiesceNode's rules (insufficient material, terminal
+// mate/stalemate, 50-move, QMAX=16, stand-pat, capture/promotion filter, check
+// evasions) — but with NO delta pruning, NO TT, NO move ordering. It has no
+// pruning so it is exponential; the positions are kept shallow/small. Includes
+// BOTH delta-review witnesses, the exact regressions that motivated removing
+// delta pruning. Unpruned, so kept to fast positions.
+const QMAX_ORACLE = 16;
+function oracleQuiesce(state, alpha, beta, ply, qply, path) {
+  if (Chess.insufficientMaterial(state.board)) return 0;
+  const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+  const kingSq = state.board.indexOf(turn + 'K');
+  const maximizing = turn === 'w';
+  const inChk = Chess.isAttacked(state.board, kingSq, enemy);
+  const key = ChessAI.repKey(state);
+  for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
+  const legal = [];
+  for (const m of Chess.pseudoMoves(state)) {
+    const nx = Chess.applyMove(state, m);
+    const ks = m.piece[1] === 'K' ? m.to : kingSq;
+    if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push([m, nx]);
+  }
+  if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
+  if (state.halfmove >= 100) return 0;
+  if (qply >= QMAX_ORACLE) return ChessAI.evaluate(state.board);
+  let best;
+  if (inChk) { best = maximizing ? -Infinity : Infinity; }
+  else {
+    best = ChessAI.evaluate(state.board);
+    if (maximizing) { if (best >= beta) return best; if (best > alpha) alpha = best; }
+    else { if (best <= alpha) return best; if (best < beta) beta = best; }
+  }
+  path.push(key);
+  const moves = inChk ? legal : legal.filter(function (e) { return e[0].captured || e[0].promotion; });
+  for (const e of moves) {
+    const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path);
+    if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
+    else { if (s < best) best = s; if (best < beta) beta = best; }
+    if (beta <= alpha) break;
+  }
+  path.pop();
+  return best;
+}
+function oracleQ(state, depth, alpha, beta, ply, path) {
+  const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+  const kingSq = state.board.indexOf(turn + 'K');
+  const maximizing = turn === 'w';
+  const inChk = Chess.isAttacked(state.board, kingSq, enemy);
+  if (state.halfmove >= 100 && !inChk) return 0;
+  if (Chess.insufficientMaterial(state.board)) return 0;
+  const key = ChessAI.repKey(state);
+  for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
+  if (depth <= 0) return oracleQuiesce(state, alpha, beta, ply, 0, path);
+  const legal = [];
+  for (const m of Chess.pseudoMoves(state)) {
+    const nx = Chess.applyMove(state, m);
+    const ks = m.piece[1] === 'K' ? m.to : kingSq;
+    if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push(nx);
+  }
+  if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
+  let best = maximizing ? -Infinity : Infinity;
+  path.push(key);
+  for (const nx of legal) {
+    const s = oracleQ(nx, depth - 1, alpha, beta, ply + 1, path);
+    if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
+    else { if (s < best) best = s; if (best < beta) beta = best; }
+    if (beta <= alpha) break;
+  }
+  path.pop();
+  return best;
+}
+console.log('PVS + aspiration exactness (quiescence on)');
+const Q_CASES = [
+  // both delta-review witnesses (d0 = pure quiescence, the exact regressions;
+  // d1/d2 = alpha-beta feeding quiescence)
+  ['k7/2K5/8/8/4q3/3P4/PP3PPP/RNBQ1BNR w - - 0 1', 0],
+  ['k7/2K5/8/8/4q3/3P4/PP3PPP/RNBQ1BNR w - - 0 1', 1],
+  ['k7/2K5/8/8/4q3/3P4/PP3PPP/RNBQ1BNR w - - 0 1', 2],
+  ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 0],
+  ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 1],
+  ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 2],
+  [PVS_FEN, 2]
+];
+for (const [fen, d] of Q_CASES) {
+  const st = Chess.parseFen(fen);
+  const vO = oracleQ(st, d, -Infinity, Infinity, 0, []);
+  const vP = ChessAI.search(st, d, -Infinity, Infinity, true);       // PVS, quiescence on
+  check(vP === vO, 'PVS+quiescence value equals independent AB+quiescence (' + fen.slice(0, 16) + ' d' + d + ')',
+    'oracle=' + vO + ' pvs=' + vP);
+  // null-window scouts must bracket the true value
+  check(ChessAI.search(st, d, vO - 1, vO, true) >= vO,
+    'q-scout below the true value fails high (' + fen.slice(0, 12) + ' d' + d + ')', 'v=' + vO);
+  check(ChessAI.search(st, d, vO, vO + 1, true) <= vO,
+    'q-scout above the true value fails low (' + fen.slice(0, 12) + ' d' + d + ')', 'v=' + vO);
+  // aspiration (think's root loop) must reproduce the same completed-depth score
+  const t = ChessAI.think(st, { maxDepth: d < 1 ? 1 : d, quiesce: true, randomize: false });
+  if (d >= 1) check(t.score === vO, 'aspiration completed-depth score equals the oracle (' + fen.slice(0, 12) + ' d' + d + ')',
+    'oracle=' + vO + ' think=' + t.score);
+}
 
 // --- ABORT unwind: a finite node budget that runs out mid-search must not
 // leave stale ancestor keys on a REUSED context, or the next search treats
