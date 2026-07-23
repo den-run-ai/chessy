@@ -395,4 +395,41 @@
       setStatus('Restore cancelled — nothing was changed.', 'info');
     });
   }
+
+  // ---- Delete all (fenced) ---------------------------------------------
+  const deleteBtn = $('deleteAllBtn');
+  const deleteDialog = $('deleteAllDialog');
+  if (deleteBtn && deleteDialog) {
+    deleteBtn.addEventListener('click', function () { openDialog(deleteDialog); });
+    $('deleteAllCancel').addEventListener('click', function () { closeDialog(deleteDialog); });
+    $('deleteAllConfirm').addEventListener('click', function () {
+      closeDialog(deleteDialog);
+      setStatus('Deleting…', 'info');
+      cancelAnalysis();
+      // Suspend live archive writes so a game that finishes DURING the clear
+      // can't queue a write on top of the emptied store. Fence the recovery
+      // sources ONLY AFTER the clear COMMITS: a parked durability-queue entry
+      // can be the only recoverable copy of a game precisely when IndexedDB is
+      // failing, so a rejected clear must leave the queue and the saved game
+      // intact — reporting "Delete failed" while discarding them would be the
+      // very data loss the delete is meant to prevent. On success, fence the
+      // exact cleared endings (by signature, so a later Undo → revised finish
+      // still archives) and drop the queue; reconcilePending() honours the
+      // fence even if the drop is momentarily blocked.
+      suspendArchive(true);
+      CoachStore.deleteAllData().then(function () {
+        fenceRecovery();
+        suspendArchive(false);
+        // The clear landed; a cosmetic refresh failure must not report failure.
+        return refresh().then(
+          function () { setStatus('All training data deleted.', 'info'); },
+          function () { setStatus('All training data deleted. Reopen Review to refresh.', 'info'); }
+        );
+      }).catch(function (err) {
+        // Nothing was fenced or dropped — every recovery source is intact.
+        suspendArchive(false);
+        setStatus('Delete failed: ' + (err && err.message ? err.message : 'storage unavailable'), 'error');
+      });
+    });
+  }
 })();
