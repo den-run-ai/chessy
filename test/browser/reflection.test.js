@@ -50,8 +50,8 @@ require('./helper').run('reflection', async function (t) {
   await page.click('#reflectVerify');
   check(await page.locator('#reflectVerify').isDisabled(), 'one probe at a time');
   await verifyDone();
-  check((await page.textContent('#verifyResult')).includes('agrees'),
-    'matching move reported as agreement');
+  check((await page.textContent('#verifyResult')).includes('top line'),
+    'a matching move is reported as Chessy’s top line (not an error)');
   // Ply 3 is a BLACK decision (…Qh4#): the eval is labelled from Black's
   // perspective, so a bare White-POV number can't be misread. Black delivers
   // mate here, which reads as a win FOR BLACK.
@@ -61,6 +61,20 @@ require('./helper').run('reflection', async function (t) {
   check(await page.locator('#causeLabel').isHidden(),
     'no cause asked when the move matches');
   check(!(await page.locator('#reflectVerify').isDisabled()), 'probe button re-enables');
+  // Review v2: Chessy shows a few candidate lines (not one verdict), the top
+  // line is the played mate, and it is marked as the player's move.
+  check(await page.locator('#verifyLines li').count() >= 1,
+    'candidate lines are listed (MultiPV, not a single line)');
+  check((await page.textContent('#verifyLines')).includes('Qh4') &&
+        (await page.locator('#verifyLines li.played').count()) >= 1,
+    'the played move appears in the lines and is marked as yours');
+  // Provenance is shown (engine version, depth, node count) and — since these
+  // budgets complete — the meta is NOT flagged partial.
+  const meta = await page.textContent('#verifyMeta');
+  check(meta.includes('Chessy v') && meta.includes('depth') && meta.includes('nodes'),
+    'provenance (engine version, depth, nodes) is shown with the lines');
+  check(!(await page.locator('#verifyMeta.partial').count()),
+    'a completed analysis is not flagged partial');
 
   // Lesson required; the reflection snapshot survives a post-verdict edit.
   await page.click('#saveCard');
@@ -106,55 +120,56 @@ require('./helper').run('reflection', async function (t) {
     'starting a new probe clears the previous save notice');
   await verifyDone();
 
-  // Without a Web Worker the probe resolves gracefully (null) — it must NEVER
-  // run the search on the main thread. (The search is deterministic by node
-  // count, not wall clock, so a 150k-node main-thread run froze the UI for
-  // seconds.) ChessAI.think is therefore never called here.
-  const noWorker = await page.evaluate(function () {
-    const realWorker = window.Worker;
-    const realThink = ChessAI.think;
-    window.Worker = undefined;
-    let calls = 0;
-    ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
-    const p = ChessyAnalysis.analyse(
-      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    ChessyAnalysis.cancel(); // canceling a job already settled null is a no-op
-    return p.then(function (res) {
-      return new Promise(function (r) {
-        setTimeout(function () {
-          window.Worker = realWorker;
-          ChessAI.think = realThink;
-          r({ res: res, calls: calls });
-        }, 100);
-      });
-    });
+  // A PARTIAL (node-budget-capped) analysis stays spoiler-gated and is shown
+  // as visibly partial — never dressed up as an exhaustive verdict. Stub the
+  // service to return a valid contract with complete:false, then confirm the
+  // engine output is still hidden until the reflection is submitted, and the
+  // provenance line is flagged partial afterwards. (No-worker / wedged / retry
+  // and the off-main-thread guarantee are covered by analysis-service.test.js.)
+  const partialGated = await page.evaluate(function () {
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const state = Chess.parseFen(fen);
+    // Include the ACTUAL played move (f3) so playedLine is populated: a partial
+    // scan must NOT report its rank as exact.
+    const played = { from: Chess.sqIndex('f2'), to: Chess.sqIndex('f3'), promotion: null };
+    const full = ChessyAnalysisCore.analyse(state,
+      { maxDepth: 4, multiPV: 3, nodeLimit: 8000, playedMove: played });
+    full.complete = false; // pretend the node budget was reached
+    window.__realSvc = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () { return Promise.resolve(full); };
+    return true;
   });
-  check(noWorker.res === null && noWorker.calls === 0,
-    'no Web Worker resolves Verify gracefully without a main-thread search');
-
-  // A WEDGED worker (constructs fine, never answers) must also resolve
-  // gracefully — retried once in a fresh worker, then null — never recomputing
-  // the 150k-node search synchronously on the main thread (measured ~9s on
-  // Kiwipete). Forced with a silent stub Worker and a tiny watchdog override.
-  const wedged = await page.evaluate(function () {
-    const realWorker = window.Worker;
-    const realThink = ChessAI.think;
-    const realWd = window.CHESSY_VERIFY_WATCHDOG_MS;
-    let calls = 0;
-    ChessAI.think = function () { calls++; return realThink.apply(this, arguments); };
-    window.Worker = function () { this.postMessage = function () {}; this.terminate = function () {}; };
-    window.CHESSY_VERIFY_WATCHDOG_MS = 30;
-    return ChessyAnalysis.analyse(
-      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-    ).then(function (res) {
-      window.Worker = realWorker;
-      ChessAI.think = realThink;
-      window.CHESSY_VERIFY_WATCHDOG_MS = realWd;
-      return { res: res, calls: calls };
-    });
-  });
-  check(wedged.res === null && wedged.calls === 0,
-    'a wedged worker resolves Verify gracefully (null) without a main-thread search');
+  check(partialGated, 'partial-analysis stub installed');
+  await page.click('#revStart'); // ply 0
+  await page.click('#flagMoment');
+  check(await page.locator('#verifyBox').isHidden(),
+    'a partial result is still spoiler-gated: nothing shown before the reflection');
+  await page.fill('#reflectThreat', 'testing partial');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.locator('#verifyMeta.partial').count()) >= 1,
+    'a complete:false analysis is rendered visibly partial');
+  // Accessibility: the partial qualifier is in the element's TEXT, not only a
+  // CSS ::after that screen readers may not expose.
+  check((await page.textContent('#verifyMeta')).toLowerCase().includes('partial'),
+    'the partial warning is real text content (screen-reader accessible)');
+  // A partial scan must not present an EXACT rank: the summary says "provisional"
+  // and the lines use bullets, never "#n" that unsearched moves could displace.
+  check((await page.textContent('#verifyResult')).includes('provisional') &&
+        !(await page.textContent('#verifyLines')).includes('#'),
+    'a partial analysis withholds exact ranks (provisional standing, bulleted lines)');
+  // A partial verdict cannot found a card: Save stays disabled and even a
+  // forced click creates nothing (Train must never drill an incomplete scan).
+  const cardsBeforePartial = (await cards()).length;
+  check(await page.locator('#saveCard').isDisabled(),
+    'a partial analysis leaves Save disabled');
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === cardsBeforePartial,
+    'a partial analysis founds no lesson card');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realSvc; });
+  await page.click('#revEnd'); // step away so the next section starts fresh at ply 0
 
   // A DIFFERING move: the player owns the call, including "also sound".
   await page.click('#revStart'); // ply 0: f3 was played here
@@ -174,6 +189,11 @@ require('./helper').run('reflection', async function (t) {
   // Ply 0 (f3) is a WHITE decision: the eval is labelled from White's side.
   check((await page.textContent('#verifyResult')).includes('for White'),
     'a White decision shows the eval from White’s perspective');
+  // The played move's standing is always reported, and its line is shown even
+  // when it ranked below the top MultiPV lines (appended with its true rank).
+  check((await page.textContent('#verifyResult')).includes('your move') &&
+        (await page.textContent('#verifyLines')).includes('f3'),
+    'the played move is ranked in the summary and shown in the lines (even outside the top MultiPV)');
   check(!(await page.locator('#causeLabel').isHidden()), 'cause picker shown for a differing move');
   await page.fill('#cardLesson', 'Do not weaken the king for nothing');
   await page.click('#saveCard');
@@ -189,30 +209,295 @@ require('./helper').run('reflection', async function (t) {
   check(both.length === 2 && both.some(function (c) { return c.cause === 'sound-alternative'; }),
     '"my move was also sound" is a first-class cause (2 cards total)');
 
-  // An ILLEGAL/unusable engine result must NOT be turned into a card: a move
-  // that matches nothing on the board (or a non-numeric score) leaves Save
-  // disabled and asks the player to Verify again.
+  // An ILLEGAL/unusable analysis must NOT be turned into a card: a top line
+  // whose move matches nothing on the board leaves Save disabled and asks the
+  // player to Verify again.
   await page.evaluate(function () {
-    window.__realAnalyse = ChessyAnalysis.analyse;
-    ChessyAnalysis.analyse = function () {
-      return Promise.resolve({ move: { from: -1, to: -1, promotion: null }, score: 40, depth: 5 });
+    window.__realAnalyse = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () {
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: 40, scoreCpPlayer: 40, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: -1, to: -1, promotion: null }, uci: '??', san: '?',
+          scoreCpWhite: 40, scoreCpPlayer: 40, mate: null, pv: ['?'], pvUci: [] }]
+      });
     };
   });
   await page.click('#flagMoment'); // re-flag ply 0
-  await page.fill('#reflectThreat', 'probe returns garbage');
+  await page.fill('#reflectThreat', 'analysis returns garbage');
   await page.fill('#reflectCandidates', 'e4');
   await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse'),
-    'an illegal engine move is reported, not scored');
+    'an illegal top-line move is reported, not scored');
   check(await page.locator('#saveCard').isDisabled(),
-    'an illegal engine move keeps Save disabled (no card can be founded on it)');
+    'an illegal analysis keeps Save disabled (no card can be founded on it)');
   // Even a click that bypasses the disabled attribute cannot force a card:
   // the handler re-checks disabled and the null verdict.
   await page.evaluate(function () { document.getElementById('saveCard').click(); });
   check((await cards()).length === 2, 'an illegal engine result creates no card');
-  await page.evaluate(function () { ChessyAnalysis.analyse = window.__realAnalyse; });
+
+  // A LEGAL top move but an unusable evaluation (no mate, non-finite score)
+  // must also be rejected — never rendered as "+0.0" or persisted into a card.
+  await page.evaluate(function () {
+    ChessyAnalysisService.analyse = function () {
+      const legal = Chess.legalMoves(Chess.parseFen(
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: null, scoreCpPlayer: null, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
+          uci: 'x', san: '?', scoreCpWhite: null, scoreCpPlayer: null, mate: null, pv: ['?'], pvUci: [] }]
+      });
+    };
+  });
+  await page.click('#flagMoment'); // re-flag ply 0
+  await page.fill('#reflectThreat', 'legal move, no eval');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a legal move with an invalid evaluation is rejected, not shown as +0.0 or saved');
+  check((await cards()).length === 2, 'an invalid-evaluation result creates no card');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse; });
+
+  // A malformed MATE payload (truthy but no finite distance) is NOT a mate: it
+  // must be rejected, never rendered as "+Mundefined"/"−MNaN" or saved.
+  await page.evaluate(function () {
+    window.__realAnalyse2 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () {
+      const legal = Chess.legalMoves(Chess.parseFen(
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
+      const bad = { forWhite: false, inPlies: NaN };
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: null, scoreCpPlayer: null, mate: bad,
+        classification: 'unknown-equivalence', playedLine: null, stability: null,
+        bestLines: [{ move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
+          uci: 'x', san: '?', scoreCpWhite: null, scoreCpPlayer: null, mate: bad, pv: ['?'], pvUci: [] }]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'malformed mate');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a malformed mate payload is rejected (no +Mundefined, no card)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse2; });
+
+  // A partial (complete:false) result whose played move merely LEADS the
+  // searched prefix must not be presented as Chessy's settled "top line".
+  await page.evaluate(function () {
+    window.__realAnalyse3 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () {
+      const legal = Chess.legalMoves(Chess.parseFen(
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'))[0];
+      const line = { move: { from: legal.from, to: legal.to, promotion: legal.promotion || null },
+        uci: 'lead', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['e4'], pvUci: [] };
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 3, nodes: 1, elapsedMs: 1, complete: false,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'same',
+        playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
+        bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'partial match');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('so far') &&
+        (await page.textContent('#verifyResult')).includes('incomplete') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a partial top-line claim is qualified as provisional (leads the search so far), not settled');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse3; });
+
+  // cardScore must use validMate too: a malformed mate WITH a finite score is
+  // still usable (centipawn fallback) and must persist the score, not NaN.
+  await page.click('#revNext'); await page.click('#revNext'); // from ply 0 → ply 2 (g4)
+  await page.evaluate(function () {
+    window.__realAnalyse4 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lm = Chess.legalMoves(pos)[0];
+      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'x', san: 'x', scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, pv: ['x'], pvUci: [] };
+      return Promise.resolve({
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, classification: 'same',
+        playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
+        bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'malformed mate but finite score');
+  await page.fill('#reflectCandidates', 'g4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'a malformed mate with a finite score is still usable (centipawn fallback)');
+  await page.fill('#cardLesson', 'score fallback test');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () {
+    return document.getElementById('cardSaved').textContent.indexOf('saved') !== -1;
+  });
+  const scoreCard = (await cards()).find(function (c) { return c.ply === 2 && c.lesson === 'score fallback test'; });
+  check(scoreCard && scoreCard.bestScore === 20,
+    'cardScore uses validMate: a malformed mate persists the finite score, not NaN');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse4; });
+
+  // A partial result that never scored the played move (playedLine null) must
+  // NOT claim Chessy "preferred" the top line — there is no head-to-head.
+  await page.evaluate(function () {
+    window.__realAnalyse5 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const pos = Chess.parseFen(req.fen);
+      const lm = Chess.legalMoves(pos)[0];
+      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'x', san: 'x', scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, pv: ['x'], pvUci: [] };
+      return Promise.resolve({
+        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
+        depth: 3, nodes: 1, elapsedMs: 1, complete: false,
+        scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null, bestLines: [line]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'partial, move not reached');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check(!(await page.textContent('#verifyResult')).includes('preferred') &&
+        (await page.textContent('#verifyResult')).includes('not reached') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a partial analysis that never scored the played move makes no head-to-head claim');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse5; });
+
+  // A null result for the CURRENT request (no worker / wedged) must not leave a
+  // stuck "Analysing…": show a retryable failure and keep Save disabled.
+  await page.evaluate(function () {
+    window.__realAnalyse6 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function () { return Promise.resolve(null); };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'null result');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not complete') &&
+        !(await page.textContent('#verifyResult')).includes('Analysing') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a null analysis shows a retryable failure, not a stuck “Analysing…”');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse6; });
+
+  // A result with a legal top move and a valid score but GARBLED provenance
+  // (no engine, non-numeric nodes/depth) is rejected — never shown as
+  // "vundefined · depth undefined · undefined nodes" or saved.
+  await page.evaluate(function () {
+    window.__realAnalyse7 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      return Promise.resolve({
+        turn: 'w', engine: null, depth: null, nodes: 'lots', elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'unknown-equivalence',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+          uci: 'x', san: 'x', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['x'], pvUci: [] }]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'bad provenance');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a result with garbled provenance is rejected (no vundefined / undefined nodes)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse7; });
+
+  // A garbled cached line with a non-array pv must NOT throw while rendering
+  // (which would hang on "Analysing…"): it renders as an empty continuation.
+  await page.evaluate(function () {
+    window.__realAnalyse8 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
+        depth: 5, nodes: 100, elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'different-candidate',
+        playedLine: null, stability: null,
+        bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+          uci: 'x', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: null, pvUci: null }]
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'malformed pv');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check((await page.locator('#verifyLines li').count()) >= 1 &&
+        !(await page.textContent('#verifyResult')).includes('could not'),
+    'a malformed candidate pv renders as an empty continuation (no throw / hang)');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse8; });
+
+  // A valid top line followed by a NULL (or otherwise malformed) LATER
+  // candidate must be rejected as unusable — renderLines dereferences EVERY
+  // candidate, so an unchecked null would throw mid-render and hang Review on
+  // "Analysing…". Every candidate is validated centrally, not just the top.
+  await page.evaluate(function () {
+    window.__realAnalyse9 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      const top = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'x', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['e4'], pvUci: [] };
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
+        depth: 5, nodes: 100, elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'different-candidate',
+        playedLine: null, stability: null,
+        bestLines: [top, null] // valid top, malformed later candidate
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'null later candidate');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  const cardsBeforeNull = (await cards()).length;
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a valid top line with a null later candidate is rejected, not thrown (no stuck “Analysing…”)');
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === cardsBeforeNull,
+    'a malformed later candidate founds no card');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse9; });
 
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.

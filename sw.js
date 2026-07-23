@@ -39,7 +39,6 @@ const ASSETS = [
   './assets/archive.js?r=' + RELEASE,
   './assets/mini-board.js?r=' + RELEASE,
   './assets/review.js?r=' + RELEASE,
-  './assets/analysis.js?r=' + RELEASE,
   './assets/analysis-core.js?r=' + RELEASE,
   './assets/analysis-service.js?r=' + RELEASE,
   './assets/pgn.js?r=' + RELEASE,

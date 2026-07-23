@@ -539,6 +539,22 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .coach-form h3 { font-size: 1rem; }
 .coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
 
+/* Chessy's candidate lines (Review v2): SAN + player-POV eval + a short PV,
+   best-first. The played move's line is marked so the player can see where
+   their choice ranked without any move being labelled an error. */
+/* Ranks are rendered as explicit "#n" text (a played line appended from below
+   the shown MultiPV keeps its true rank), so the list itself is unnumbered. */
+.verify-lines { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
+.verify-lines li { color: var(--text); }
+.verify-lines li.played { font-weight: 700; }
+.verify-lines .eval { font-variant-numeric: tabular-nums; color: var(--muted); }
+.verify-lines .pv { color: var(--muted); }
+.verify-lines .tag { color: var(--muted); font-size: 0.8rem; }
+/* The partial qualifier lives in #verifyMeta's TEXT (accessible); this only
+   emphasises it visually. */
+#verifyMeta.partial { color: var(--danger, #d9534f); }
+
 .stats {
   display: grid;
   /* minmax(0, max-content), NOT max-content: the label column must be

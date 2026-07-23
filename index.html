@@ -124,9 +124,11 @@
             </form>
 
             <div id="verifyBox" class="coach-form" hidden>
-              <h3>Chessy’s line</h3>
+              <h3>Chessy’s lines</h3>
               <p id="verifyResult" aria-live="polite"></p>
-              <label id="causeLabel">Cause (your call — the engine only offered one line):
+              <ol id="verifyLines" class="verify-lines" aria-label="Chessy candidate lines"></ol>
+              <p id="verifyMeta" class="coach-note"></p>
+              <label id="causeLabel">Cause (your call — Chessy offers a few candidate lines, not a verdict):
                 <select id="cardCause">
                   <option value="" selected disabled>Your call…</option>
                   <option value="threat-scan">Missed a threat</option>
@@ -263,7 +265,6 @@
   <script src="assets/app.js?r=r35"></script>
   <script src="assets/mini-board.js?r=r35"></script>
   <script src="assets/review.js?r=r35"></script>
-  <script src="assets/analysis.js?r=r35"></script>
   <script src="assets/analysis-core.js?r=r35"></script>
   <script src="assets/analysis-service.js?r=r35"></script>
   <script src="assets/pgn.js?r=r35"></script>

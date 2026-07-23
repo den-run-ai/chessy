@@ -174,8 +174,10 @@ gated on the engine *and* browser suites.
 | `assets/archive.js` | Records finished games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser |
-| `assets/analysis.js` | One bounded engine analysis request at a time (reflection probe) |
-| `assets/reflection.js` | Manual reflection flow: flag → answer → probe → lesson card |
+| `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance) |
+| `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract off the main thread |
+| `assets/analysis-service.js` | Analysis transport: one interactive job, cancellation, watchdog + retry, validated IndexedDB result cache |
+| `assets/reflection.js` | Manual reflection flow: flag → answer → contract analysis → lesson card |
 | `assets/train.js` | Train view: due-card queue on the fixed spaced-review ladder |
 | `assets/progress.js` | Progress view: read-only descriptive counts |
 | `assets/style.css` | Styling |
