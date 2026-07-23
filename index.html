@@ -273,14 +273,17 @@
     <p id="restoreConfirmText" class="coach-note"></p>
     <div class="buttons setup-actions">
       <button type="button" id="restoreConfirm" class="btn danger">Replace my archive</button>
-      <button type="button" id="restoreCancel" class="btn">Cancel</button>
+      <!-- autofocus the non-destructive action: showModal() would otherwise
+           focus the first button (Replace), so an Enter/Space on open would
+           perform the irreversible replace without an intentional move to it. -->
+      <button type="button" id="restoreCancel" class="btn" autofocus>Cancel</button>
     </div>
   </dialog>
 
   <!-- Fenced Delete-all: opening this dialog is the first fence, the confirm
        button the explicit second confirm. On confirm the UI cancels analysis,
-       drops the durability queue and stamps the clear epoch, so cleared games
-       cannot reappear — including after a reload. -->
+       clears every store, and fences the recovery sources by ending signature
+       so cleared games cannot reappear — including after a reload. -->
   <dialog id="deleteAllDialog" class="setup" aria-labelledby="deleteAllTitle"
           aria-describedby="deleteAllText">
     <h2 id="deleteAllTitle">Delete all training data?</h2>
@@ -288,7 +291,8 @@
       lesson card and saved analysis. It cannot be undone. Consider backing up first.</p>
     <div class="buttons setup-actions">
       <button type="button" id="deleteAllConfirm" class="btn danger">Delete everything</button>
-      <button type="button" id="deleteAllCancel" class="btn">Cancel</button>
+      <!-- autofocus Cancel: don't let Enter-on-open trigger the destructive clear. -->
+      <button type="button" id="deleteAllCancel" class="btn" autofocus>Cancel</button>
     </div>
   </dialog>
 

@@ -173,4 +173,77 @@ require('./helper').run('delete-all', async function (t) {
   });
   check(/Reload once storage is available/.test(qualified.text) && qualified.kind === 'error',
     'a delete whose recovery could not be neutralized reports a qualified success');
+
+  // ---- P1 (persisted-save resurrection): chessy-game-v1 can hold a DIFFERENT
+  // finished game than the live in-memory one — e.g. save() failed (quota) when
+  // a new game started, so the persisted record is a PRIOR finish while the live
+  // game is the new one. The app.js listener only fences the LIVE game's id; a
+  // stale save carrying a different id would slip past it and re-archive on the
+  // next boot. Delete-all must reconstruct and fence the PERSISTED save directly.
+  // Build the stale blob from a REAL finished save (its move format is the app's
+  // own), only swapping in an id that no live game can ever hold — so fencing
+  // THAT id can only have come from the persisted-save path, not the listener. --
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4'); // fool's mate again
+  await page.waitForSelector('#gameOverDialog[open]');
+  const staleBlob = await page.evaluate(function () {
+    var real = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    real.gameId = 'stale-finished-game'; // distinct from any live game's id
+    return JSON.stringify(real);
+  });
+  await page.click('#gameOverReview'); // dismiss the game-over dialog
+  await page.waitForSelector('#viewReview:not([hidden])');
+  await page.click('#reviewBack');
+  await page.waitForSelector('#gameListWrap:not([hidden])');
+  const persistedP1 = await page.evaluate(function (blob) {
+    localStorage.setItem('chessy-game-v1', blob);
+    return new Promise(function (resolve) {
+      document.getElementById('deleteAllBtn').click();
+      document.getElementById('deleteAllConfirm').click();
+      setTimeout(function () {
+        resolve({
+          fenced: ChessyArchive.isFencedEnding('stale-finished-game',
+            ['f3', 'e5', 'g4', 'Qh4#'], '0-1', 'checkmate'),
+          removed: localStorage.getItem('chessy-game-v1') === null
+        });
+      }, 300);
+    });
+  }, staleBlob);
+  check(persistedP1.fenced === true || persistedP1.removed === true,
+    'Delete-all neutralizes a DIFFERENT finished game persisted in chessy-game-v1, not just the live game');
+  // And it stays gone across a reload — the actual resurrection guarantee.
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(1200);
+  check((await counts()).games === 0,
+    'the stale persisted save does not resurrect after reload');
+
+  // ---- TT8GM: a training/derived write fired DURING an in-flight delete is
+  // rejected, so it cannot commit behind the clear and recreate cleared data.
+  // The delete engages the store write-lock (via suspendArchive) for its whole
+  // duration, before deleteAllData resolves. ----
+  const writeDuringDelete = await page.evaluate(function () {
+    var realDelete = CoachStore.deleteAllData;
+    var release;
+    CoachStore.deleteAllData = function () {
+      return new Promise(function (res) { release = res; })
+        .then(function () { return realDelete(); });
+    };
+    return new Promise(function (resolve) {
+      document.getElementById('deleteAllBtn').click();
+      document.getElementById('deleteAllConfirm').click();
+      // The delete is now in-flight and the write-lock is held.
+      setTimeout(function () {
+        CoachStore.gradeCard('anything', 3).then(
+          function () { return 'accepted'; }, function () { return 'rejected'; }
+        ).then(function (outcome) {
+          release(); // let the (stubbed) delete complete
+          setTimeout(function () { CoachStore.deleteAllData = realDelete; resolve(outcome); }, 150);
+        });
+      }, 50);
+    });
+  });
+  check(writeDuringDelete === 'rejected',
+    'a training write during an in-flight delete is rejected (cannot recreate cleared data)');
 });

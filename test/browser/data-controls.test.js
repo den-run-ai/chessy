@@ -20,7 +20,7 @@ require('./helper').run('data-controls', async function (t) {
     const a = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 2. Nf3 Nc6 *'), { playerColor: 'w' });
     const b = ChessyPGN.toRecord(ChessyPGN.parseGame('1. d4 d5 *'), { playerColor: 'b' });
     return CoachStore.importGame(a).then(function () { return CoachStore.importGame(b); })
-      .then(function () { return CoachStore.addCard({ gameId: a.id, ply: 2, cause: 'test', due: 1, attempts: [],
+      .then(function () { return CoachStore.addCard({ gameId: a.id, ply: 2, cause: 'test', due: 1, step: -1, attempts: [],
         fenBefore: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
         playedSan: 'e5', bestSan: 'e5', bestMove: { from: 52, to: 36, promotion: null } }); })
       .then(function () {
@@ -69,7 +69,9 @@ require('./helper').run('data-controls', async function (t) {
   // authoritative copy when its write failed, so it must REPLACE the stale
   // committed row in the backup, not be dropped as a duplicate id.
   const revId = await page.evaluate(function () {
-    const g = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 *'), { playerColor: 'w' });
+    // The committed row is the OLD ending (earlier completion); the parked
+    // revision finished LATER, so it is the authoritative copy.
+    const g = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 *'), { playerColor: 'w', createdAt: 1 });
     return CoachStore.importGame(g).then(function () {
       const map = {};
       map[g.id] = { w: 't', rec: { id: g.id, source: 'play', sans: ['d4', 'd5', 'c4'],
@@ -83,6 +85,28 @@ require('./helper').run('data-controls', async function (t) {
   const revved = backup3.stores.games.find(function (g) { return g.id === revId; });
   check(revved && revved.sans.join(',') === 'd4,d5,c4',
     'a parked revision replaces the stale committed row of the same id');
+
+  // The converse: a DEMONSTRABLY STALE pending entry (park() failed at quota,
+  // leaving an OLDER same-id entry, while the revision's own commit succeeded)
+  // must NOT override the newer committed row. Disambiguated by completion time.
+  const staleId = await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    // Committed row = the CURRENT revision, finished later (createdAt 50).
+    const g = { id: 'stale-x', source: 'play', sans: ['d4', 'd5', 'c4'], result: '1-0',
+      reason: 'resignation', mode: 'pvp', plies: 3, createdAt: 50 };
+    return CoachStore.putGame(g).then(function () {
+      // A leftover parked entry holds the OLD ending, finished earlier (10).
+      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+        'stale-x': { w: 't', rec: { id: 'stale-x', source: 'play', sans: ['e4', 'e5'],
+          result: '*', reason: 'imported', mode: 'pvp', plies: 2, createdAt: 10 } } }));
+      return 'stale-x';
+    });
+  });
+  const [dl3b] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup3b = JSON.parse(fs.readFileSync(await dl3b.path(), 'utf8'));
+  const staleRow = backup3b.stores.games.find(function (g) { return g.id === staleId; });
+  check(staleRow && staleRow.sans.join(',') === 'd4,d5,c4' && staleRow.result === '1-0',
+    'a stale older pending entry does not override a newer committed revision');
 
   // A finished game saved ONLY in chessy-game-v1 (not in IndexedDB, not parked)
   // is reconstructed into the backup, so an unrecomputable game is not dropped.
@@ -127,23 +151,25 @@ require('./helper').run('data-controls', async function (t) {
     localStorage.removeItem('chessy-pending-archive-v1');
   });
 
-  // IDENTICAL ending re-offered while parked: keep the committed row's EARLIER
-  // completion time (archiveGame's same-ending rule), not the parked later one.
+  // IDENTICAL ending re-offered while parked: keep the EARLIEST completion time
+  // (archiveGame's same-ending rule, so the list can't be reordered by a later
+  // clock) BUT adopt the re-offer's newer metadata (e.g. recorded clocks) — the
+  // parked record is the fresher write of the same finish.
   const dateId = await page.evaluate(function () {
     const g = { id: 'date-x', source: 'play', sans: ['e4'], result: '*', reason: 'imported',
-      mode: 'pvp', plies: 1, createdAt: 100 };
+      mode: 'pvp', plies: 1, createdAt: 100, clocks: ['stale'] };
     return CoachStore.putGame(g).then(function () {
       localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
         'date-x': { w: 't', rec: { id: 'date-x', source: 'play', sans: ['e4'], result: '*',
-          reason: 'imported', mode: 'pvp', plies: 1, createdAt: 200 } } }));
+          reason: 'imported', mode: 'pvp', plies: 1, createdAt: 200, clocks: ['fresh'] } } }));
       return 'date-x';
     });
   });
   const [dl6] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
   const backup6 = JSON.parse(fs.readFileSync(await dl6.path(), 'utf8'));
   const dated = backup6.stores.games.find(function (g) { return g.id === dateId; });
-  check(dated && dated.createdAt === 100,
-    'an identical parked ending keeps the earliest committed completion time');
+  check(dated && dated.createdAt === 100 && dated.clocks && dated.clocks[0] === 'fresh',
+    'an identical parked ending keeps the earliest date but adopts the re-offer\'s newer metadata');
 
   // A parked REVISION prunes lesson cards from the abandoned continuation.
   await page.evaluate(function () {
@@ -187,6 +213,37 @@ require('./helper').run('data-controls', async function (t) {
   const saveRev = backup8.stores.games.find(function (g) { return g.id === 'save-rev'; });
   check(saveRev && saveRev.result === '0-1' && saveRev.sans.length === 4,
     'a finished local save revising the committed game wins over the stale row');
+
+  // Ordering: the finished LOCAL SAVE is authoritative over a STALE PENDING
+  // record of the same id. The pending write may have been superseded (the
+  // player finished the game again after the parked attempt), so the merge
+  // applies the local save LAST. Both differ from the committed row here, so
+  // whichever is applied last visibly wins.
+  await page.evaluate(function () {
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // fool's mate (true current finish)
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'ord-x', endedAt: 9 }));
+    // A stale parked record for the SAME id holds a DIFFERENT, superseded finish.
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'ord-x': { w: 't', rec: { id: 'ord-x', source: 'play', sans: ['e4', 'e5'], result: '1-0',
+        reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 2 } } }));
+    return CoachStore.putGame({ id: 'ord-x', source: 'play', sans: ['e4'], result: '*',
+      reason: 'imported', mode: 'pvp', plies: 1, createdAt: 1 });
+  });
+  const [dl9] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const backup9 = JSON.parse(fs.readFileSync(await dl9.path(), 'utf8'));
+  const ord = backup9.stores.games.find(function (g) { return g.id === 'ord-x'; });
+  check(ord && ord.result === '0-1' && ord.sans.length === 4,
+    'the finished local save wins over a stale pending record of the same id');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-game-v1');
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
   // ---- Restore replaces the archive from a validated backup (UI path). ----
   // Add another game and a PARKED durability-queue entry, then restore the
   // 2-game backup: the extra games go, and the parked ending is fenced. (The
@@ -386,15 +443,52 @@ require('./helper').run('data-controls', async function (t) {
   // rejected before the destructive transaction.
   const moreRejects = await page.evaluate(function () {
     const F = 'chessy-coach-backup';
+    const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     return {
       arrayStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: [] }),
       badAttempts: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
-        games: [], cards: [{ id: 1, gameId: 'g', due: 0,
-          fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', attempts: {} }] } })
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0, fenBefore: startFen, attempts: {} }] } }),
+      // A truncated `stores: {}` must be refused (both durable arrays required).
+      emptyStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {} }),
+      // A card without a numeric scheduling step would grade to due:NaN.
+      noStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, fenBefore: startFen, attempts: [] }] } })
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
   check(!!moreRejects.badAttempts, 'a card with a non-array attempts is rejected');
+  check(!!moreRejects.emptyStores, 'a backup missing the games/cards arrays is rejected');
+  check(!!moreRejects.noStep, 'a card with a non-numeric scheduling step is rejected');
+
+  // ---- Write-lock: while a destructive operation is in flight, training/
+  // derived writes are REJECTED so they can't commit behind the clear and
+  // recreate cleared data. CoachStore.setOpLock is the gate.
+  const locked = await page.evaluate(function () {
+    CoachStore.setOpLock(true);
+    return Promise.all([
+      CoachStore.addCard({ gameId: 'x', ply: 0, due: 1, step: -1, attempts: [],
+        fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' })
+        .then(function () { return 'ok'; }, function () { return 'rejected'; }),
+      CoachStore.putAnalysis({ key: 'z', gameId: 'x', ply: 0 })
+        .then(function () { return 'ok'; }, function () { return 'rejected'; })
+    ]).then(function (r) {
+      CoachStore.setOpLock(false);
+      return r;
+    });
+  });
+  check(locked[0] === 'rejected' && locked[1] === 'rejected',
+    'training/derived writes are rejected while a data operation is locked');
+
+  // The restore confirm dialog focuses the NON-destructive action, so an
+  // Enter/Space on open cannot trigger the irreversible replace.
+  await page.setInputFiles('#restoreFile', {
+    name: 'focus.json', mimeType: 'application/json', buffer: Buffer.from(backupJson)
+  });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  check(await page.evaluate(function () {
+    return document.activeElement && document.activeElement.id === 'restoreCancel';
+  }), 'the restore confirm dialog focuses Cancel, not the destructive Replace');
+  await page.click('#restoreCancel');
 
   // ---- An oversized restore file is rejected before it is read.
   const beforeHuge = await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); });

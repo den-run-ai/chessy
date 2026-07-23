@@ -128,22 +128,43 @@
       if (keep && !keep(rec)) return;
       const cur = byId[rec.id];
       if (cur && sameEnding(cur, rec)) {
-        if (Number.isFinite(rec.createdAt) && Number.isFinite(cur.createdAt)) {
-          cur.createdAt = Math.min(cur.createdAt, rec.createdAt);
-        }
-        return; // keep the committed record's moves and earliest date
+        // Identical ending re-offered: archiveGame() overwrites ALL fields from
+        // the re-offered record (newer clocks/metadata are unrecomputable) but
+        // retains the EARLIEST completion time. Mirror that — take the recovery
+        // record, keep the minimum createdAt — rather than keeping the committed
+        // row wholesale (which would drop the newer metadata).
+        const earliest = Number.isFinite(cur.createdAt) &&
+          (!Number.isFinite(rec.createdAt) || cur.createdAt < rec.createdAt)
+          ? cur.createdAt : rec.createdAt;
+        byId[rec.id] = Object.assign({}, rec, { createdAt: earliest });
+        return;
       }
-      if (cur) pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
+      if (cur) {
+        // A genuine REVISION (same id, different ending). A still-parked queue
+        // entry is NOT proof of "newest": park() can fail at quota and leave an
+        // OLDER same-id entry behind while the revision's own save AND commit
+        // succeeded (archive.js park()/commit at :144-166). Disambiguate by
+        // completion time — the recovery copy replaces the committed row only
+        // when it is at least as new; a demonstrably older entry (the committed
+        // row finished later) is a stale queue leftover and is kept out, so the
+        // backup can't silently regress the game or prune the newer copy's cards.
+        const curDate = Number.isFinite(cur.createdAt) ? cur.createdAt : -Infinity;
+        const recDate = Number.isFinite(rec.createdAt) ? rec.createdAt : -Infinity;
+        if (recDate < curDate) return; // stale queue entry — keep the committed revision
+        pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
+      }
       byId[rec.id] = rec; // new id, or a revision that supersedes the committed row
     }
-    // Local save first, pending queue last: a still-parked write is the most
-    // recent authoritative intent, so it wins over the live save on a genuine
-    // difference.
-    const saved = savedFinishedRecord();
-    if (saved) apply(saved);
+    // Apply pending-queue records first, then the finished LOCAL SAVE last, so
+    // for an IDENTICAL ending the fresher local-save metadata is adopted. Which
+    // copy wins a genuine REVISION no longer depends on order — apply() compares
+    // completion times — so a demonstrably stale queue entry never overrides a
+    // newer committed revision, whichever source is applied first.
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
       ChessyArchive.pendingRecords().forEach(apply);
     }
+    const saved = savedFinishedRecord();
+    if (saved) apply(saved);
     data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
   }
 
@@ -241,13 +262,40 @@
     try { document.dispatchEvent(new CustomEvent('chessy:archivecleared', { detail: detail })); }
     catch (e) { ok = false; } // very old engines without the CustomEvent constructor
     if (!detail.neutralized) ok = false;
+    // Neutralize the PERSISTED finished save directly, too. The event above
+    // only covers the app's IN-MEMORY ending, but chessy-game-v1 can hold a
+    // DIFFERENT finished game — e.g. save() failed (quota) when a new game
+    // started, so the persisted record is the previous finish while the live
+    // game is the new, unfinished one. That stale finished save would re-archive
+    // on the next boot. Reconstruct it and fence its ending; if the fence can't
+    // persist (or the archive module is absent), remove the save. If the live
+    // event already fenced the same ending this is a no-op.
+    const persisted = savedFinishedRecord();
+    if (persisted) {
+      let done = false;
+      if (typeof ChessyArchive !== 'undefined' && ChessyArchive.isFencedEnding &&
+          ChessyArchive.fenceEnding) {
+        if (ChessyArchive.isFencedEnding(persisted.id, persisted.sans, persisted.result, persisted.reason)) {
+          done = true;
+        } else {
+          done = ChessyArchive.fenceEnding(persisted.id, persisted.sans, persisted.result, persisted.reason);
+        }
+      }
+      if (!done) {
+        try { localStorage.removeItem(GAME_SAVE_KEY); } catch (e) { ok = false; }
+      }
+    }
     return ok;
   }
 
-  // Suspend/resume live archive writes around a destructive replace, so a game
-  // that finishes DURING the restore can't queue a write on top of it. A
-  // missing/older archive module simply has nothing to suspend.
+  // Suspend/resume live archive writes AND training/derived writes around a
+  // destructive replace: a live game finishing can't land on top of it
+  // (ChessyArchive parks the write), and a card grade / import / analysis
+  // queued behind the slow clear can't commit afterwards and recreate cleared
+  // data (CoachStore rejects such writes while locked). Both toggle together at
+  // every operation boundary. A missing/older module simply has nothing to gate.
   function suspendArchive(on) {
+    if (CoachStore.setOpLock) { try { CoachStore.setOpLock(on); } catch (e) { /* best effort */ } }
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.setSuspended) {
       try { ChessyArchive.setSuspended(on); } catch (e) { /* best effort */ }
     }
@@ -264,12 +312,12 @@
     for (let i = 0; i < games.length; i++) {
       const g = games[i];
       let s;
-      // Chess.parseFen is lenient (pgn.js documents this and validates
-      // structure separately): a setupFen like "bad" would parse to a broken
-      // position that an empty-sans replay then declares usable. Reject it
-      // up front with the same structural check pgn.js uses.
-      if (g.setupFen && typeof ChessyPGN !== 'undefined' && ChessyPGN.validFen &&
-          !ChessyPGN.validFen(g.setupFen)) {
+      // Chess.parseFen is lenient: a setupFen like "bad" would parse to a
+      // broken position that an empty-sans replay then declares usable. Reject
+      // it with a strict structural check. Use CoachStore.validFen — a hard
+      // dependency of this module — NOT ChessyPGN.validFen, so the check still
+      // runs if pgn.js alone failed to load.
+      if (g.setupFen && CoachStore.validFen && !CoachStore.validFen(g.setupFen)) {
         return 'game ' + (i + 1) + ' has an invalid starting position';
       }
       try {

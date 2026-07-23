@@ -48,6 +48,18 @@
 
   let dbPromise = null;
 
+  // While a destructive operation (restore / Delete-all) is replacing the
+  // stores, REJECT training/derived writes. IndexedDB serializes transactions,
+  // so a gradeCard / addCard / putAnalysis / import queued behind a slow clear
+  // would commit AFTER it and recreate the cleared data, defeating the
+  // operation. The destructive ops themselves (restoreAll / deleteAllData) run
+  // through open() directly and are deliberately NOT gated; reads aren't gated.
+  let opLock = false;
+  function setOpLock(on) { opLock = !!on; }
+  function opLocked() {
+    return opLock ? Promise.reject(new Error('a data operation is in progress')) : null;
+  }
+
   function open() {
     if (!dbPromise) {
       dbPromise = new Promise(function (resolve, reject) {
@@ -114,6 +126,7 @@
   // Run `fn(objectStore)` in a transaction; resolves with the result of the
   // request `fn` returns (or undefined) once the transaction commits.
   function tx(storeName, mode, fn) {
+    if (mode === 'readwrite' && opLock) return opLocked();
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction(storeName, mode);
@@ -156,7 +169,7 @@
   // the rest of the app (last-writer-wins localStorage save). Divergent
   // cloned-tab completions are out of scope — tracked in #44.
   function archiveGame(game) {
-    return open().then(function (db) {
+    return opLocked() || open().then(function (db) {
       return new Promise(function (resolve, reject) {
         // Includes 'cards'/'analyses'/'analysisJobs': revising an ending in
         // place must ATOMICALLY remove the derived data (lesson cards,
@@ -237,7 +250,7 @@
   // record must already be fully validated — this only persists it (commit
   // once, atomically).
   function importGame(record) {
-    return open().then(function (db) {
+    return opLocked() || open().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction('games', 'readwrite');
         const s = t.objectStore('games');
@@ -284,7 +297,7 @@
   // Resolves with the updated record, 'stale' when the expected revision
   // was already consumed, or null when the card is gone.
   function gradeCard(id, expect, mutate) {
-    return open().then(function (db) {
+    return opLocked() || open().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction('cards', 'readwrite');
         const s = t.objectStore('cards');
@@ -314,7 +327,7 @@
   // two cards — the loser of the race updates the winner's card instead.
   // Resolves 'updated' when a card for the moment existed, else 'saved'.
   function upsertCardByMoment(fields, freshDefaults) {
-    return open().then(function (db) {
+    return opLocked() || open().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction('cards', 'readwrite');
         const s = t.objectStore('cards');
@@ -499,6 +512,13 @@
     if (!data.stores || typeof data.stores !== 'object' || Array.isArray(data.stores)) {
       return 'backup has no stores';
     }
+    // Every v1 export includes BOTH durable arrays. Require them explicitly: a
+    // truncated `stores: {}` (each named store merely absent) would otherwise
+    // pass, report zero records, and let restoreAll() clear all four stores
+    // while adding nothing.
+    if (!Array.isArray(data.stores.games) || !Array.isArray(data.stores.cards)) {
+      return 'backup is missing the games or cards array';
+    }
     for (var i = 0; i < DURABLE_STORES.length; i++) {
       var name = DURABLE_STORES[i];
       var rows = data.stores[name];
@@ -547,6 +567,13 @@
           // as empty); present-but-not-an-array is rejected.
           if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
             return 'store "cards" record ' + j + ' has a non-array attempts';
+          }
+          // Train.schedule() does arithmetic on card.step; a missing/non-numeric
+          // step yields step:NaN and due:NaN, which the IndexedDB `due` index
+          // cannot schedule. Every saved card carries a numeric step (reflection
+          // sets step:-1 for the immediate-learn rung).
+          if (!Number.isFinite(r.step)) {
+            return 'store "cards" record ' + j + ' has a non-numeric step';
           }
         }
       }
@@ -639,7 +666,9 @@
     deleteJob: deleteJob,
     exportAll: exportAll,
     validateBackup: validateBackup,
+    validFen: validFen,
     restoreAll: restoreAll,
-    deleteAllData: deleteAllData
+    deleteAllData: deleteAllData,
+    setOpLock: setOpLock
   };
 })(typeof window !== 'undefined' ? window : globalThis);
