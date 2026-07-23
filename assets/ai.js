@@ -17,11 +17,10 @@
 (function (global) {
   'use strict';
 
-  // Material for MOVE ORDERING and delta pruning (MVV-LVA, quiescence margins).
-  // Deliberately a single representative value per type: ordering only needs a
-  // stable ranking and delta pruning a safe margin, so keeping these constant
-  // isolates the evaluation change below to eval alone (search behaviour that
-  // reads VALUES is unchanged).
+  // Material for MOVE ORDERING (MVV-LVA). Deliberately a single representative
+  // value per type: ordering only needs a stable ranking, so keeping these
+  // constant isolates the evaluation change below to eval alone (the ordering
+  // that reads VALUES is unchanged).
   const VALUES = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 0 };
 
   // Phase-specific material for EVALUATION. The endgame revalues pieces the
@@ -326,11 +325,6 @@
     const kd = Math.abs(lr - wr) + Math.abs(lf - wf);               // king manhattan 2..14
     return 8 * cmd + 2 * (14 - kd);
   }
-  // Upper bound on mopUp() (cmd<=6 -> 48, kings>=2 apart -> 2*(14-2)=24): the
-  // gain from a capture that leaves a bare king can jump by this much when the
-  // mating gradient switches on, which the quiescence delta-pruning margin
-  // must cover so it never prunes a capture that actually crosses the window.
-  const MOPUP_MAX = 72;
 
   // Mate scores are MATE minus the ply at which mate is delivered, so nearer
   // mates always outrank farther ones. Anything beyond MATE_NEAR is a mate.
@@ -459,14 +453,13 @@
   // ---- Transposition table ----
   const EXACT = 0, LOWER = 1, UPPER = 2;
 
-  function ttStore(ctx, h1, h2, depth, ply, score, flag, movePk, nullSafe) {
+  function ttStore(ctx, h1, h2, depth, ply, score, flag, movePk) {
     // Mate scores are stored relative to THIS node (distance-to-mate), so an
     // entry stays correct no matter what ply the position recurs at.
     if (score > MATE_NEAR) score += ply;
     else if (score < -MATE_NEAR) score -= ply;
     if (ctx.tt.size >= TT_MAX && !ctx.tt.has(h1)) return;
-    // ns: the score is a sound null-window bound (see the probe/store notes).
-    ctx.tt.set(h1, { h2: h2, depth: depth, score: score, flag: flag, move: movePk, ns: nullSafe });
+    ctx.tt.set(h1, { h2: h2, depth: depth, score: score, flag: flag, move: movePk });
   }
 
   // Pack a move into one int for TT/killer storage and identity checks.
@@ -595,11 +588,11 @@
     if (state.halfmove >= 100) return 0;
     if (qply >= QMAX) return evaluate(state.board);
 
-    let best, standPat = 0;
+    let best;
     if (inChk) {
       best = maximizing ? -Infinity : Infinity; // must evade — no stand-pat
     } else {
-      best = standPat = evaluate(state.board); // stand pat: may decline all captures
+      best = evaluate(state.board); // stand pat: may decline all captures
       if (maximizing) { if (best >= beta) return best; if (best > alpha) alpha = best; }
       else { if (best <= alpha) return best; if (best < beta) beta = best; }
     }
@@ -609,37 +602,21 @@
     if (trackRep) { ctx.path1.push(rr1); ctx.path2.push(rr2); }
     let repMin = Infinity;
 
-    const DELTA = 200; // delta pruning margin
+    // No delta (futility) pruning here: with the tapered evaluation a single
+    // capture's score swing is dominated by positional terms (an advanced or
+    // passed pawn's endgame value, the mover's placement, freed mobility, the
+    // lone-king mop-up gradient), not the captured piece's material, so a
+    // material-based delta margin cannot be both sound and useful — any margin
+    // large enough to never discard a window-crossing capture (~1700 cp over
+    // material) effectively never fires. Since delta pruning saved <0.5% of
+    // nodes here anyway, it is removed; every capture is searched, which also
+    // makes quiescence scores exact (no window-sensitive pruning artifacts).
     const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
 
     for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
-      // Delta pruning: even winning this capture outright can't affect the
-      // window, so don't bother searching it — UNLESS it gives check (a
-      // checking capture can be mate, e.g. Qxg7#, regardless of material gain).
-      // Only on a REAL window (width > 1): under a null window the delta-pruned
-      // value is not a sound bound, so a PVS scout could miss a better move
-      // (false fail-low). Disabling it there keeps the scout a plain, sound
-      // alpha-beta bound (see the residual-unsoundness note in searchNode).
-      // ctx.noDelta additionally disables it ENTIRELY for the analysis contract
-      // (assets/analysis-core.js), whose candidate roots must be exact,
-      // comparable full-window scores rather than delta-pruning artifacts.
-      if (!ctx.noDelta && !inChk && !m.promotion && beta - alpha > 1) {
-        // The bound must cover the FULL evaluation swing a capture can produce,
-        // not just a flat piece value: the tapered eval can value a piece above
-        // the ordering constant (a queen up to VALUES_MG 1025), and capturing
-        // the opponent's last unit switches on the mop-up gradient (up to
-        // MOPUP_MAX). Using the larger phase value plus both margins keeps delta
-        // pruning from discarding a capture that actually crosses the window.
-        const cv = m.captured[1];
-        const gain = Math.max(VALUES_MG[cv], VALUES_EG[cv]) + DELTA + MOPUP_MAX;
-        if ((maximizing ? standPat + gain <= alpha : standPat - gain >= beta) &&
-            !Chess.isAttacked(next.board, next.board.indexOf(enemy + 'K'), turn)) {
-          continue;
-        }
-      }
       const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx);
       if (ctx.repPly < repMin) repMin = ctx.repPly; // min over searched children
       if (maximizing) {
@@ -713,23 +690,17 @@
     // bound) could cross the 100-halfmove boundary, where the clock changes
     // the score. Scores are only trusted at the SAME draft (entry.depth ===
     // depth): depth-pure values keep the search equivalent to plain minimax
-    // (up to path-dependent repetition draws inside subtrees, and — with
-    // quiescence on — the window-sensitivity of delta pruning, which makes
-    // leaf values depend on the alpha/beta they were searched under); the
-    // stored best move is useful for ordering at any draft.
+    // (up to path-dependent repetition draws inside subtrees); the stored best
+    // move is useful for ordering at any draft. With delta pruning removed,
+    // quiescence-derived scores are sound alpha-beta bounds, so — like main-
+    // search entries — they are served to any window, including null scouts.
     const useTT = state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
     let ttPk = 0;
     if (useTT) {
       const e = ctx.tt.get(h1);
       if (e && e.h2 === h2) {
         ttPk = e.move;
-        // Null-window-scout safety. A score a WIDER search produced with delta
-        // pruning active is not a sound scout bound (delta pruning bounds a
-        // capture by material + margin, which a null window's tight alpha can
-        // expose as false — see quiesceNode). Withhold such a score from a
-        // quiescent null scout; the hash move above is still used for ordering.
-        const scoreSafe = e.ns || !(ctx.quiesce && beta - alpha <= 1);
-        if (e.depth === depth && scoreSafe) {
+        if (e.depth === depth) {
           let s = e.score;
           if (s > MATE_NEAR) s -= ply;
           else if (s < -MATE_NEAR) s += ply;
@@ -764,26 +735,15 @@
       // dependency is the MINIMUM over its scout and re-search — a path-
       // dependent draw seen by either must reach the TT guard below.
       //
-      // PVS is a SELECTIVE heuristic, not a bit-exact minimax transform, and
-      // its exactness is validated empirically rather than proven. Two things
-      // keep a scout from silently discarding a better move at the leaves it
-      // searches itself: quiescence delta pruning is disabled under a null
-      // window (see quiesceNode), so those leaves are plain alpha-beta bounds
-      // (without that guard, depth-2 quiescent PVS picked b8c6 -7 over the true
-      // best d7d5 -307 — pinned in test/ai-tactics.js against an independent
-      // minimax oracle). The residual, deliberately-accepted unsoundness:
-      //   (1) a scout may return a TT entry stored by a WIDER, delta-pruned
-      //       search of the same node — that cached value is not a guaranteed
-      //       sound bound, so the null-window guard does not make every scout
-      //       exact, only the ones that reach their own leaves;
-      //   (2) delta pruning's leaf values are window-sensitive in general (a
-      //       value depends on the window a move was searched under — a
-      //       property plain alpha-beta shares, not a PVS defect).
-      // So exact centipawns can differ from a hypothetical no-delta-pruning
-      // search. We keep the tradeoff (sound over fast) at the null-window
-      // guard and do not restore delta pruning there; the 16-position bench
-      // (--exact: 0 move/score divergences vs the no-PVS baseline) and the
-      // tactics suite are the empirical evidence that move selection holds.
+      // With no delta pruning anywhere, every leaf (main search and
+      // quiescence) is a plain alpha-beta bound, so PVS here is a sound
+      // transform of alpha-beta: a scout never silently discards a better move
+      // (an earlier quiescent-delta-pruning variant did — depth-2 PVS picked
+      // b8c6 -7 over the true best d7d5 -307, pinned in test/ai-tactics.js
+      // against an independent minimax oracle; removing delta pruning removes
+      // that whole failure mode). Move selection is confirmed by the 16-position
+      // bench (--exact) and the tactics suite. The only remaining path
+      // dependence is repetition draws, tracked via childRep/repPly below.
       let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
@@ -839,11 +799,7 @@
     // inherit a draw (or bound) that its own history does not justify.
     if (useTT && repMin >= ply) {
       const flag = best <= alphaOrig ? UPPER : best >= betaOrig ? LOWER : EXACT;
-      // Null-window-safe only when no delta pruning could have shaped this
-      // score: quiescence disabled, or this node itself ran under a (null)
-      // window that disables delta pruning throughout its subtree.
-      const nullSafe = !ctx.quiesce || betaOrig - alphaOrig <= 1;
-      ttStore(ctx, h1, h2, depth, ply, best, flag, bestPk, nullSafe);
+      ttStore(ctx, h1, h2, depth, ply, best, flag, bestPk);
     }
     return best;
   }
@@ -935,21 +891,13 @@
       // near the previous one. A wrong guess fails the whole root — then
       // the failed side re-searches doubled, eventually falling back to
       // the full window; a root fail-low/high never trusts the bound, it
-      // widens and re-searches. Like PVS (which it sits on top of),
-      // aspiration is a SELECTIVE heuristic, not a proven-exact transform:
-      // delta pruning still runs UNDER the finite aspiration window at PV
-      // nodes, and that window is not null (delta pruning is disabled only
-      // when beta - alpha <= 1). So an in-window value can be a delta-pruning
-      // artifact that a full-window search would not produce, and aspiration
-      // may accept it without widening — it reproduces the full-window RESULT
-      // in practice, but that is validated empirically (on the reviewer's FEN
-      // r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq - 2 15 the
-      // accepted value matches the independent full-window score; the
-      // 16-position --exact bench shows 0 move/score divergences vs no
-      // aspiration), not guaranteed. This window-sensitivity is a property of
-      // delta pruning that plain alpha-beta shares, not an aspiration defect;
-      // we keep it rather than restore faster, more aggressive pruning. Mate
-      // scores never aspire.
+      // widens and re-searches. A root fail-low/high never trusts the bound,
+      // it widens and re-searches. Sitting on top of a now-exact PVS (delta
+      // pruning removed), aspiration reproduces the full-window result — the
+      // reviewer's FEN r1b1kr2/p4pp1/np6/2pqp2P/P3PBBP/NPP1PN2/5P2/R3K2R b KQq
+      // - 2 15 gives the same value as an independent full-window search, and
+      // the 16-position --exact bench shows 0 move/score divergences vs no
+      // aspiration. Mate scores never aspire.
       let delta = 50;
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
@@ -1069,9 +1017,11 @@
   }
 
   // --- Analysis hook. Orchestration (MultiPV, PV walk, provenance) lives in
-  // analysis-core.js; the engine exposes only two minimal seams. (1) Set
-  // ctx.noDelta before a search to disable quiescence delta pruning, so
-  // candidate roots are exact, comparable full-window scores. (2)
+  // analysis-core.js; the engine exposes only two minimal seams. (1) ctx.noDelta
+  // requested that quiescence be searched without delta pruning for exact,
+  // comparable full-window scores; delta pruning has since been removed
+  // entirely, so quiescence is always exact and the flag is a retained no-op
+  // (a defensive seam should selective pruning ever return). (2)
   // ttPackedMove() returns the raw PACKED best move stored for `state`
   // (from<<9 | to<<3 | promoIdx, with promoIdx Q=1 R=2 B=3 N=4), or 0 — the
   // PV walk (decode, legal replay, cycle termination) is done by the caller,
