@@ -570,6 +570,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .coach-subhead { font-size: 0.95rem; margin-top: 0.25rem; }
 
 .coach-form input[type="text"],
+.coach-form textarea,
 .coach-form select {
   background: var(--panel);
   color: var(--text);
@@ -580,3 +581,13 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   font-size: 0.9rem;
   min-height: 40px;
 }
+/* PGN paste box (Phase 4b1): monospace so tag pairs and movetext line up. */
+.coach-form textarea {
+  resize: vertical;
+  min-height: 8em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.import-file { font-size: 0.85rem; }
+.review-tools { margin-bottom: 0.6rem; }
+#importStatus[data-kind="error"] { color: var(--danger, #d9534f); }
+#importStatus[data-kind="info"] { color: var(--text); }
