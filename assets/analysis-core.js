@@ -18,11 +18,13 @@
  *   line = { move:{from,to,promotion}, uci, san,
  *            scoreCpWhite, scoreCpPlayer, mate, pv:[san], pvUci:[uci] }
  *
- * WHY a separate path from play. The play search (PVS + aspiration + delta
- * pruning) returns BOUNDS and window-sensitive values that are not comparable
- * move-to-move. So EVERY legal root move is re-scored under a FULL window with
- * delta pruning OFF at one fixed depth — bestLines is therefore real MultiPV,
- * not a shortlist. The search is seeded with the game's COMPLETE repetition
+ * WHY a separate path from play. The play search (PVS + aspiration) returns
+ * window-relative BOUNDS that are not comparable move-to-move. So EVERY legal
+ * root move is re-scored under a FULL window at one fixed depth — bestLines is
+ * therefore real MultiPV, not a shortlist. (Quiescence is exact since delta
+ * pruning was removed from the engine; the ctx.noDelta seam below is retained
+ * as a defensive no-op should selective pruning ever return.) The search is
+ * seeded with the game's COMPLETE repetition
  * table (and the pre-move position as a path ancestor), so deeper candidate
  * lines see threefold draws; the play POV is mirrored from the side to move.
  *
@@ -34,7 +36,11 @@
   if (typeof Chess === 'undefined' || typeof ChessAI === 'undefined') return;
 
   const ENGINE_ID = 'chessy';
-  const ENGINE_VERSION = '1.0.0';
+  // 1.1.0: full tapered MG/EG piece-square tables + phase-specific material +
+  // lone-king mop-up. This evaluator change alters best lines, scores and
+  // classifications, so the version bump folds into configHashOf() and
+  // invalidates cached analyses from the previous (flat-endgame) evaluator.
+  const ENGINE_VERSION = '1.1.0';
   const MATE = ChessAI.MATE, MATE_NEAR = ChessAI.MATE_NEAR;
   const PROMO = { 1: 'Q', 2: 'R', 3: 'B', 4: 'N' };
   const ABORTED = {}; // sentinel: a candidate search hit the node-budget cap
@@ -116,9 +122,10 @@
     };
   }
 
-  // Seed a shared analysis context: delta pruning OFF, the game's repetition
-  // counts loaded so deep lines detect threefolds, and a safety node cap so a
-  // pathological position can't run unbounded (its use flips `complete`).
+  // Seed a shared analysis context: the game's repetition counts loaded so deep
+  // lines detect threefolds, and a safety node cap so a pathological position
+  // can't run unbounded (its use flips `complete`). ctx.noDelta is set as a
+  // retained no-op seam (delta pruning has been removed; quiescence is exact).
   function analysisCtx(quiesce, positions, nodeBudget) {
     const ctx = ChessAI.makeCtx(quiesce, Infinity, nodeBudget);
     ctx.noDelta = true;
