@@ -102,21 +102,36 @@ function check(ok, label, detail) {
     for (let j = 0; j < T.NW; j++) c[j] = Math.round(rand(-3, 3)); // all params excited -> identifiable
     const base = rand(-150, 150);
     const s = { base: base, c: c, game: i, y: 0 };
-    s.y = T.sigmoid(T.qVec(s, wTrue), K); // noiseless label from the true weights
+    // Labels from the ROUNDED score at the true weights — the exact quantity the
+    // fit scores (rounded, as the engine plays), so the global optimum is wTrue.
+    s.y = T.sigmoid(Math.round(T.qVec(s, wTrue)), K);
     samples.push(s);
   }
 
-  const baseMse = T.mse(samples, T.BASE_VEC, K);
+  const baseMse = T.mse(samples, T.BASE_VEC, K, true);
   const cont = T.descend(samples, K, 0, { quiet: true, iters: 4000, lr: 0.2 });
-  const rec = T.polish(samples, T.clampVec(Float64Array.from(cont, Math.round)), 0, 0, true);
-  const recMse = T.mse(samples, rec, K);
+  const rec = T.polish(samples, T.clampVec(Float64Array.from(cont, Math.round)), K, 0, true);
+  const recMse = T.mse(samples, rec, K, true);
 
   let maxErr = 0;
   for (let j = 0; j < T.NW; j++) maxErr = Math.max(maxErr, Math.abs(rec[j] - wTrue[j]));
   check(recMse < baseMse * 0.05,
-    'optimizer drives synthetic MSE far below baseline (' + recMse.toExponential(2) + ' vs ' + baseMse.toExponential(2) + ')');
+    'optimizer drives synthetic (rounded) MSE far below baseline (' + recMse.toExponential(2) + ' vs ' + baseMse.toExponential(2) + ')');
   check(maxErr <= 2,
     'optimizer recovers the known weights within ±2 on every parameter (max error ' + maxErr + ')');
+
+  // Dedicated polish check: from a deliberately-perturbed integer start, polish
+  // must LOWER the rounded objective (K=0.5, so predictions are not the constant
+  // 0.5 that a K=0 objective would give — that would make polish a no-op).
+  const perturbed = Float64Array.from(wTrue);
+  perturbed[4] = Math.max(T.LO[4], perturbed[4] + 3);
+  perturbed[7] = Math.min(T.HI[7], perturbed[7] + 4);
+  const beforeObj = T.objective(samples, perturbed, K, 0, true);
+  const polished = T.polish(samples, perturbed, K, 0, true);
+  const afterObj = T.objective(samples, polished, K, 0, true);
+  check(afterObj < beforeObj && afterObj < 1e-9,
+    'polish lowers the rounded objective from a perturbed start toward the optimum (' +
+    beforeObj.toExponential(2) + ' -> ' + afterObj.toExponential(2) + ')');
 }
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

@@ -331,18 +331,24 @@ function randomOpening(rng) {
 function generate() {
   const rng = mulberry32(SEED);
   const samples = [];
-  let games = 0, decisive = 0;
+  let games = 0, decisive = 0, whiteToMove = 0;
   const t0 = Date.now();
   for (let g = 0; games < GAMES; g++) {
     const gameSeed = (SEED * 1000003 + g * 2654435761) >>> 0;
     let state = randomOpening(rng);
     if (!state) continue;
     games++;
+    // Per-game sampling phase in [0, SAMPLE_STRIDE). Without it, a fixed even
+    // opening length plus an even stride would sample only ONE side to move in
+    // every game (e.g. 6 opening plies + stride 4 -> always White to move) — a
+    // parity bias. A random per-game phase spreads sampled positions across
+    // both sides; the white/black balance is reported below.
+    const phase = Math.floor(rng() * SAMPLE_STRIDE);
     const pending = [];
     let ply = 0, status;
     while (ply < MAX_PLIES && !(status = Chess.gameStatus(state)).over) {
-      if (ply >= SKIP_PLIES && !status.check && (ply % SAMPLE_STRIDE === 0)) {
-        pending.push(features(state.board));
+      if (ply >= SKIP_PLIES && !status.check && (ply % SAMPLE_STRIDE === phase)) {
+        pending.push({ ft: features(state.board), stm: state.turn });
       }
       const r = ChessAI.think(state, { maxDepth: 30, nodeLimit: PLAY_NODES, quiesce: true, seed: (gameSeed + ply) >>> 0 });
       const legal = Chess.legalMoves(state);
@@ -363,7 +369,10 @@ function generate() {
     // split can keep a whole game on one side and never leak a game's correlated,
     // identically-labelled positions across the train/val/test boundary.
     const gid = games - 1;
-    for (const ft of pending) samples.push({ ft: ft, y: result, game: gid });
+    for (const p of pending) {
+      if (p.stm === 'w') whiteToMove++;
+      samples.push({ ft: p.ft, y: result, game: gid, stm: p.stm });
+    }
     if (games % 25 === 0) {
       process.stderr.write('\rgenerated ' + games + '/' + GAMES + ' games, ' +
         samples.length + ' positions, ' + decisive + ' decisive, ' +
@@ -371,7 +380,7 @@ function generate() {
     }
   }
   process.stderr.write('\n');
-  return { samples: samples, games: games, decisive: decisive };
+  return { samples: samples, games: games, decisive: decisive, whiteToMove: whiteToMove };
 }
 
 // ---- Texel loss (vector form) ----
@@ -379,21 +388,30 @@ function generate() {
 // fitted once on the baseline weights, then held fixed while the weights move.
 function sigmoid(q, K) { return 1 / (1 + Math.pow(10, -K * q / 400)); }
 
-function mse(samples, v, K) {
+// The engine PLAYS with Math.round(evaluate()), so an integer candidate must be
+// scored on rounded q — that is the value it will actually act on. `round` is
+// true for every score of an INTEGER weight vector (baseline, polish, selection,
+// final reporting) and false only inside the continuous RMSProp descent, whose
+// gradient needs the smooth (unrounded) surface (Math.round is non-differentiable
+// and its subgradient is zero almost everywhere).
+function mse(samples, v, K, round) {
   let s = 0;
   for (const smp of samples) {
-    const d = smp.y - sigmoid(qVec(smp, v), K);
+    const q = qVec(smp, v);
+    const d = smp.y - sigmoid(round ? Math.round(q) : q, K);
     s += d * d;
   }
   return s / samples.length;
 }
 
+// K is fitted on the baseline weights, which are integers the engine rounds — so
+// fit it on the rounded score, the quantity actually played.
 function fitK(samples, v) {
   let best = 1, bestE = Infinity;
-  for (let K = 0.2; K <= 3.0; K += 0.05) { const e = mse(samples, v, K); if (e < bestE) { bestE = e; best = K; } }
+  for (let K = 0.2; K <= 3.0; K += 0.05) { const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; } }
   for (let K = best - 0.05; K <= best + 0.05; K += 0.005) {
     if (K <= 0) continue;
-    const e = mse(samples, v, K); if (e < bestE) { bestE = e; best = K; }
+    const e = mse(samples, v, K, true); if (e < bestE) { bestE = e; best = K; }
   }
   return best;
 }
@@ -409,7 +427,7 @@ function regPenalty(v, lambda) {
   for (let j = 0; j < NW; j++) { const d = (v[j] - BASE_VEC[j]) / REG_SCALE[j]; p += d * d; }
   return lambda * p / NW;
 }
-function objective(samples, v, K, lambda) { return mse(samples, v, K) + regPenalty(v, lambda); }
+function objective(samples, v, K, lambda, round) { return mse(samples, v, K, round) + regPenalty(v, lambda); }
 
 // Integer bounds — domain sanity so the fit can't wander into nonsense.
 const LO = Float64Array.from([0,0,0,0, 0,0, 0, 0,0,0,0,0,0, 0,0,0,0,0,0]);
@@ -454,14 +472,16 @@ function descend(train, K, lambda, opts) {
   const quiet = !!opts.quiet;
   let v = Float64Array.from(start);
   const cache = new Float64Array(NW);
-  let best = Float64Array.from(v), bestObj = objective(train, v, K, lambda);
+  // Descent works the SMOOTH (unrounded) objective — the gradient is defined
+  // there; rounding happens later, in polish and scoring.
+  let best = Float64Array.from(v), bestObj = objective(train, v, K, lambda, false);
   for (let it = 0; it < iters; it++) {
     const g = gradient(train, v, K, lambda);
     for (let j = 0; j < NW; j++) {
       cache[j] = 0.9 * cache[j] + 0.1 * g[j] * g[j];
       v[j] = Math.max(LO[j], Math.min(HI[j], v[j] - lr * g[j] / (Math.sqrt(cache[j]) + 1e-8)));
     }
-    const o = objective(train, v, K, lambda);
+    const o = objective(train, v, K, lambda, false);
     if (o < bestObj) { bestObj = o; best = Float64Array.from(v); }
     if (!quiet && (it & 255) === 0) process.stderr.write('\rRMSProp it ' + it + '/' + iters + ', train obj ' + o.toFixed(6) + '   ');
   }
@@ -470,13 +490,16 @@ function descend(train, K, lambda, opts) {
 }
 
 // Integer coordinate-descent polish around a starting vector: nudge each weight
-// ±1 (widening to ±step on success) while it lowers the regularised objective.
-// Applied to the rounded continuous optimum so the frozen candidate sits at an
-// integer local optimum — the clean constants assets/ai.js uses, with no move
-// left on the table.
+// ±1 (widening to ±step on success) while it lowers the ROUNDED regularised
+// objective — the same quantity the engine plays. Applied to the rounded
+// continuous optimum so the frozen candidate sits at an integer local optimum.
+// Returns .converged=false (and warns) if it exhausted PASSES while still
+// improving, so a truncated, non-locally-optimal candidate is never presented
+// as final without notice.
 function polish(train, v0, K, lambda, quiet) {
   const v = Float64Array.from(v0);
-  let cur = objective(train, v, K, lambda);
+  let cur = objective(train, v, K, lambda, true);
+  let converged = false;
   for (let pass = 0; pass < PASSES; pass++) {
     let improved = false;
     for (let j = 0; j < NW; j++) {
@@ -486,16 +509,22 @@ function polish(train, v0, K, lambda, quiet) {
           const nv = Math.max(LO[j], Math.min(HI[j], v[j] + dir * step));
           if (nv === v[j]) break;
           const save = v[j]; v[j] = nv;
-          const e = objective(train, v, K, lambda);
+          const e = objective(train, v, K, lambda, true);
           if (e < cur - 1e-13) { cur = e; improved = true; step *= 2; }
           else { v[j] = save; break; }
         }
       }
     }
     if (!quiet) process.stderr.write('\rinteger polish pass ' + (pass + 1) + '/' + PASSES + ', train obj ' + cur.toFixed(6) + '   ');
-    if (!improved) break;
+    if (!improved) { converged = true; break; }
   }
   if (!quiet) process.stderr.write('\n');
+  if (!converged) {
+    // Surface non-convergence loudly even in quiet mode — this is a correctness
+    // signal (the candidate is not a verified integer local optimum), not progress.
+    process.stderr.write('WARNING: integer polish still improving after ' + PASSES +
+      ' passes (lambda ' + lambda + ') — candidate is NOT a verified local optimum; raise --passes.\n');
+  }
   return v;
 }
 
@@ -509,7 +538,17 @@ function groupedSplit(samples, valFrac, testFrac, seed) {
   const ids = Array.from(new Set(samples.map(function (s) { return s.game; })));
   const rng = mulberry32(seed);
   for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
-  const nTest = Math.round(ids.length * testFrac), nVal = Math.round(ids.length * valFrac);
+  // Round to game counts, but never let a requested split round down to zero
+  // games: on a small custom run, Math.round(3 * 0.15) = 0 would silently make
+  // val or test empty (a broken holdout that looks fine). Guarantee >= 1 game
+  // for any positive fraction when enough games exist, and leave train non-empty.
+  let nTest = Math.round(ids.length * testFrac), nVal = Math.round(ids.length * valFrac);
+  if (testFrac > 0 && nTest === 0) nTest = 1;
+  if (valFrac > 0 && nVal === 0) nVal = 1;
+  if (nTest + nVal >= ids.length) {
+    throw new Error('grouped split leaves no training games: ' + ids.length + ' games, ' +
+      'val ' + nVal + ' + test ' + nTest + ' >= all. Raise --games or lower --val-frac/--test-frac.');
+  }
   const testSet = new Set(ids.slice(0, nTest));
   const valSet = new Set(ids.slice(nTest, nTest + nVal));
   const train = [], val = [], test = [];
@@ -553,13 +592,19 @@ function fidelityCheck(n, seed) {
   return { checked: checked, bad: bad };
 }
 
+// Dataset cache/format version. Bump on ANY change to what generate() produces
+// or how a position's features are encoded, so a stale cache (e.g. one built
+// before the sampling-parity fix, or missing game ids / side-to-move) is refused
+// rather than silently tuned on. It is part of the cache identity below.
+const SCHEMA = 3;
+
 function loadOrGenerate() {
-  const want = { games: GAMES, nodes: PLAY_NODES, randPlies: RAND_PLIES, maxPlies: MAX_PLIES, sampleStride: SAMPLE_STRIDE, skipPlies: SKIP_PLIES, seed: SEED };
+  const want = { schema: SCHEMA, games: GAMES, nodes: PLAY_NODES, randPlies: RAND_PLIES, maxPlies: MAX_PLIES, sampleStride: SAMPLE_STRIDE, skipPlies: SKIP_PLIES, seed: SEED };
   if (DATA && fs.existsSync(path.resolve(DATA))) {
     const cached = JSON.parse(fs.readFileSync(path.resolve(DATA), 'utf8'));
     if (JSON.stringify(cached.config) !== JSON.stringify(want)) {
-      console.error('cache ' + DATA + ' was built with a different config; delete it or match the flags.\n  cache: ' +
-        JSON.stringify(cached.config) + '\n  want:  ' + JSON.stringify(want));
+      console.error('cache ' + DATA + ' is stale or built with a different config (schema/flags mismatch); ' +
+        'delete it or match the flags.\n  cache: ' + JSON.stringify(cached.config) + '\n  want:  ' + JSON.stringify(want));
       process.exit(1);
     }
     console.log('loaded ' + cached.data.samples.length + ' positions from ' + DATA +
@@ -590,8 +635,9 @@ const LAMBDA_GRID = (function () {
 function main() {
   console.log('# Chessy evaluation tuner');
   console.log('config: games=' + GAMES + ' nodes=' + PLAY_NODES + ' rand-plies=' + RAND_PLIES +
-    ' sample-stride=' + SAMPLE_STRIDE + ' seed=' + SEED + ' passes=' + PASSES +
-    ' lr=' + LR + ' iters=' + ITERS);
+    ' sample-stride=' + SAMPLE_STRIDE + ' skip-plies=' + SKIP_PLIES + ' max-plies=' + MAX_PLIES +
+    ' seed=' + SEED + ' passes=' + PASSES + ' lr=' + LR + ' iters=' + ITERS +
+    ' val-frac=' + VAL_FRAC + ' test-frac=' + TEST_FRAC);
 
   const data = loadOrGenerate();
   if (data.samples.length < 200) { console.error('too few positions (' + data.samples.length + ') — raise --games'); process.exit(1); }
@@ -611,39 +657,44 @@ function main() {
   const sp = groupedSplit(compiled, VAL_FRAC, TEST_FRAC, SEED ^ 0x1234abcd);
   const train = sp.train, val = sp.val, test = sp.test;
   const decPct = (100 * data.decisive / data.games).toFixed(1);
+  const wtm = data.whiteToMove != null ? data.whiteToMove : data.samples.filter(function (s) { return s.stm === 'w'; }).length;
+  const wtmPct = (100 * wtm / data.samples.length).toFixed(1);
   console.log('data: ' + data.games + ' games (' + data.decisive + ' decisive, ' + decPct + '%), ' +
-    data.samples.length + ' positions');
+    data.samples.length + ' positions; side-to-move balance ' + wtmPct + '% White / ' +
+    (100 - wtmPct).toFixed(1) + '% Black');
   console.log('grouped split (by game): train ' + sp.nGames.train + ' games/' + train.length + ' pos, ' +
     'val ' + sp.nGames.val + '/' + val.length + ', test ' + sp.nGames.test + '/' + test.length);
 
   const K = fitK(train, BASE_VEC);
   console.log('sigmoid scale K (fitted on baseline, train split): ' + K.toFixed(4));
-  const baseTrain = mse(train, BASE_VEC, K), baseVal = mse(val, BASE_VEC, K), baseTest = mse(test, BASE_VEC, K);
-  console.log('baseline loss: train ' + baseTrain.toFixed(6) + '  val ' + baseVal.toFixed(6) + '  test ' + baseTest.toFixed(6));
+  // All integer-vector scores are ROUNDED — the engine plays Math.round(eval).
+  const baseTrain = mse(train, BASE_VEC, K, true), baseVal = mse(val, BASE_VEC, K, true), baseTest = mse(test, BASE_VEC, K, true);
+  console.log('baseline loss (rounded): train ' + baseTrain.toFixed(6) + '  val ' + baseVal.toFixed(6) + '  test ' + baseTest.toFixed(6));
 
-  // Sweep lambda; SELECT on validation loss. Selection never looks at test.
-  console.log('\nlambda sweep (fit on train, selected on val):');
+  // Sweep lambda; SELECT on validation loss. The BASELINE is a candidate in the
+  // selection (seeded below), so a grid of only-worse fits still selects the
+  // shipped weights instead of the least-bad move. Selection never looks at test.
+  console.log('\nlambda sweep (fit on train, selected on val; rounded scores):');
   console.log('  lambda   trainΔ%   valΔ%   moved  weights-off-baseline');
-  let bestLam = null, bestValLoss = Infinity, bestVec = null;
-  const rows = [];
+  let bestLam = 'baseline', bestValLoss = baseVal, bestVec = Float64Array.from(BASE_VEC);
   for (const lambda of LAMBDA_GRID) {
     const vec = fitCandidate(train, K, lambda, true);
-    const vTrain = mse(train, vec, K), vVal = mse(val, vec, K);
+    const vTrain = mse(train, vec, K, true), vVal = mse(val, vec, K, true);
     const nOff = WORDER.reduce(function (a, _, j) { return a + (vec[j] !== BASE_VEC[j] ? 1 : 0); }, 0);
-    rows.push({ lambda: lambda, vec: vec, vTrain: vTrain, vVal: vVal, nOff: nOff });
     console.log('  ' + String(lambda).padEnd(7) +
       ' ' + (100 * (baseTrain - vTrain) / baseTrain).toFixed(3).padStart(8) +
       ' ' + (100 * (baseVal - vVal) / baseVal).toFixed(3).padStart(7) +
       '   ' + String(nOff).padStart(2) + '/' + NW +
       '   ' + (nOff ? WORDER.filter(function (_, j) { return vec[j] !== BASE_VEC[j]; }).join(',') : '(none)'));
-    if (vVal < bestValLoss) { bestValLoss = vVal; bestLam = lambda; bestVec = vec; }
+    if (vVal < bestValLoss - 1e-15) { bestValLoss = vVal; bestLam = lambda; bestVec = vec; }
   }
 
   const candVec = bestVec, cand = vecToW(candVec);
-  const candTrain = mse(train, candVec, K), candVal = mse(val, candVec, K), candTest = mse(test, candVec, K);
+  const candTrain = mse(train, candVec, K, true), candVal = mse(val, candVec, K, true), candTest = mse(test, candVec, K, true);
   const moved = WORDER.some(function (_, j) { return candVec[j] !== BASE_VEC[j]; });
-  console.log('\nselected lambda = ' + bestLam + ' (lowest validation loss)');
-  console.log('FINAL (untouched test set): baseline ' + baseTest.toFixed(6) + '  candidate ' + candTest.toFixed(6) +
+  console.log('\nselected: ' + (moved ? 'lambda = ' + bestLam : 'BASELINE (no swept lambda beat the shipped weights on validation)') +
+    ' — lowest validation loss');
+  console.log('FINAL (untouched test set, rounded): baseline ' + baseTest.toFixed(6) + '  candidate ' + candTest.toFixed(6) +
     '  ->  ' + (100 * (baseTest - candTest) / baseTest).toFixed(3) + '% ' +
     (candTest < baseTest ? 'lower (better)' : candTest > baseTest ? 'higher (worse)' : 'equal'));
 
@@ -674,9 +725,15 @@ function main() {
 
   if (EMIT) {
     fs.writeFileSync(path.resolve(EMIT), JSON.stringify({
-      config: { games: GAMES, nodes: PLAY_NODES, randPlies: RAND_PLIES, sampleStride: SAMPLE_STRIDE, seed: SEED, lambdaGrid: LAMBDA_GRID },
-      K: K, selectedLambda: bestLam, baseline: BASE_W, candidate: cand,
-      split: sp.nGames,
+      // Every result-affecting option, so a candidate JSON fully reproduces its run.
+      config: {
+        games: GAMES, nodes: PLAY_NODES, randPlies: RAND_PLIES, maxPlies: MAX_PLIES,
+        sampleStride: SAMPLE_STRIDE, skipPlies: SKIP_PLIES, seed: SEED,
+        valFrac: VAL_FRAC, testFrac: TEST_FRAC, lr: LR, iters: ITERS, passes: PASSES,
+        lambdaGrid: LAMBDA_GRID, schema: SCHEMA
+      },
+      K: K, selectedLambda: bestLam, moved: moved, baseline: BASE_W, candidate: cand,
+      split: sp.nGames, rounded: true,
       loss: { baseTrain: baseTrain, baseVal: baseVal, baseTest: baseTest, candTrain: candTrain, candVal: candVal, candTest: candTest }
     }, null, 2) + '\n');
     console.log('\nwrote ' + EMIT);
