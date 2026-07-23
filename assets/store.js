@@ -393,6 +393,36 @@
     return tx('analysisJobs', 'readwrite', function (s) { return s.delete(gameId); });
   }
 
+  // ---- Backup (Phase 4b2) ----------------------------------------------
+  // A versioned JSON snapshot of the DURABLE stores only. games and cards
+  // carry everything the user cannot recompute — archived games with clocked
+  // moves, and lesson cards with their reflections, attempt history and
+  // spaced-review scheduling. `analyses`/`analysisJobs` are engine caches and
+  // resumable scan progress: recomputable from the games, so they are OMITTED
+  // to keep backups small and portable. `version` is the backup-format
+  // version; `dbVersion` is the schema the backup was taken from, so a restore
+  // can refuse a backup from a FUTURE schema it cannot understand.
+  var BACKUP_FORMAT = 'chessy-coach-backup';
+  var BACKUP_VERSION = 1;
+  var DURABLE_STORES = ['games', 'cards'];
+
+  function exportAll() {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(DURABLE_STORES, 'readonly');
+        var out = { format: BACKUP_FORMAT, version: BACKUP_VERSION, dbVersion: DB_VERSION,
+          exportedAt: Date.now(), stores: {} };
+        DURABLE_STORES.forEach(function (name) {
+          var req = t.objectStore(name).getAll();
+          req.onsuccess = function () { out.stores[name] = req.result; };
+        });
+        t.oncomplete = function () { resolve(out); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+      });
+    });
+  }
+
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
@@ -412,6 +442,7 @@
     listAnalysesForGame: listAnalysesForGame,
     putJob: putJob,
     getJob: getJob,
-    deleteJob: deleteJob
+    deleteJob: deleteJob,
+    exportAll: exportAll
   };
 })(typeof window !== 'undefined' ? window : globalThis);
