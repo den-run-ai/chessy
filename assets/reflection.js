@@ -87,6 +87,16 @@
       (typeof line.scoreCpWhite === 'number' && isFinite(line.scoreCpWhite)));
   }
 
+  // A renderable candidate line: an object carrying a SAN string and a usable
+  // evaluation. renderLines dereferences EVERY bestLines entry (and any
+  // appended playedLine), so a null or shapeless LATER candidate — not only a
+  // bad top line — would throw inside the promise callback and hang Review on
+  // "Analysing…". Every candidate is validated centrally before rendering.
+  function validLine(line) {
+    return !!line && typeof line === 'object' &&
+      typeof line.san === 'string' && line.san.length > 0 && validEval(line);
+  }
+
   // The white-POV centipawn number a card stores for its best move. A mate is
   // collapsed to a sentinel beyond MATE_ISH (sign = who is mating) so the
   // card's own score formatter renders it as ±M.
@@ -298,7 +308,14 @@
       });
       const provOk = res.engine && typeof res.engine.version === 'string' &&
         Number.isFinite(res.depth) && Number.isFinite(res.nodes) && Number.isFinite(res.elapsedMs);
-      if (!bm || !validEval(top) || !provOk) {
+      // EVERY rendered candidate must be well-formed, not just the top line:
+      // renderLines dereferences each bestLines entry and any appended
+      // playedLine, so a null/malformed LATER candidate would throw mid-render
+      // and hang on "Analysing…". Reject the whole result as unusable instead.
+      const linesOk = Array.isArray(res.bestLines) && res.bestLines.every(validLine) &&
+        (res.playedLine == null ||
+          (validLine(res.playedLine) && Number.isFinite(res.playedLine.rank)));
+      if (!bm || !validEval(top) || !provOk || !linesOk) {
         failVerify('Chessy could not analyse this position — Verify again.');
         return;
       }

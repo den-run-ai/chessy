@@ -465,6 +465,40 @@ require('./helper').run('reflection', async function (t) {
     'a malformed candidate pv renders as an empty continuation (no throw / hang)');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse8; });
 
+  // A valid top line followed by a NULL (or otherwise malformed) LATER
+  // candidate must be rejected as unusable — renderLines dereferences EVERY
+  // candidate, so an unchecked null would throw mid-render and hang Review on
+  // "Analysing…". Every candidate is validated centrally, not just the top.
+  await page.evaluate(function () {
+    window.__realAnalyse9 = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      const lm = Chess.legalMoves(Chess.parseFen(req.fen))[0];
+      const top = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
+        uci: 'x', san: 'e4', scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: ['e4'], pvUci: [] };
+      return Promise.resolve({
+        turn: 'w', engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
+        depth: 5, nodes: 100, elapsedMs: 1, complete: true,
+        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'different-candidate',
+        playedLine: null, stability: null,
+        bestLines: [top, null] // valid top, malformed later candidate
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'null later candidate');
+  await page.fill('#reflectCandidates', 'x');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  const cardsBeforeNull = (await cards()).length;
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a valid top line with a null later candidate is rejected, not thrown (no stuck “Analysing…”)');
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === cardsBeforeNull,
+    'a malformed later candidate founds no card');
+  await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse9; });
+
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
   await page.click('#flagMoment'); // re-flag ply 0
