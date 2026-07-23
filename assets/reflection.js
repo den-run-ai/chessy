@@ -301,21 +301,40 @@
       // disabled and let the player Verify again.
       const pos = Chess.parseFen(fenBefore);
       const legal = Chess.legalMoves(pos);
+      // Resolve a line's ROOT move to a legal move on THIS board, returning that
+      // move — but only when the line's SAN is the canonical SAN for it. A
+      // corrupt cache/worker line can carry a well-formed eval yet an illegal
+      // move, or a SAN that names a different move than its from/to; such a line
+      // must never be shown as a Chessy candidate or used to diagnose the
+      // player's decision (Gate 0, roadmap #23). SAN comes from the same
+      // Chess.toSan the analysis core uses on the same position, so a genuine
+      // line always verifies.
+      function resolveLine(line) {
+        if (!validLine(line) || !line.move) return null;
+        const m = legal.find(function (mv) {
+          return mv.from === line.move.from && mv.to === line.move.to &&
+                 (mv.promotion || null) === (line.move.promotion || null);
+        });
+        return m && Chess.toSan(pos, m, legal) === line.san ? m : null;
+      }
       const top = res.bestLines && res.bestLines[0];
-      const bm = top && top.move && legal.find(function (m) {
-        return m.from === top.move.from && m.to === top.move.to &&
-               (m.promotion || null) === (top.move.promotion || null);
-      });
+      const bm = top ? resolveLine(top) : null;
       const provOk = res.engine && typeof res.engine.version === 'string' &&
         Number.isFinite(res.depth) && Number.isFinite(res.nodes) && Number.isFinite(res.elapsedMs);
-      // EVERY rendered candidate must be well-formed, not just the top line:
-      // renderLines dereferences each bestLines entry and any appended
-      // playedLine, so a null/malformed LATER candidate would throw mid-render
-      // and hang on "Analysing…". Reject the whole result as unusable instead.
-      const linesOk = Array.isArray(res.bestLines) && res.bestLines.every(validLine) &&
+      // Completeness must be an EXPLICIT boolean: a payload that omits `complete`
+      // or carries a non-boolean (e.g. the string "false") has unknown standing
+      // and must not be treated as a settled, card-founding analysis.
+      const completeOk = typeof res.complete === 'boolean';
+      // EVERY rendered line — each candidate AND any appended played line — must
+      // be legally resolved and SAN-verified, not just the top move: renderLines
+      // dereferences each entry, and a bogus-but-plausible candidate would
+      // otherwise mislead the diagnosis even though it cannot occur here. Reject
+      // the whole result as unusable rather than show or save part of it.
+      const linesOk = Array.isArray(res.bestLines) && res.bestLines.length > 0 &&
+        res.bestLines.every(function (l) { return resolveLine(l) !== null; }) &&
         (res.playedLine == null ||
-          (validLine(res.playedLine) && Number.isFinite(res.playedLine.rank)));
-      if (!bm || !validEval(top) || !provOk || !linesOk) {
+          (resolveLine(res.playedLine) !== null && Number.isFinite(res.playedLine.rank)));
+      if (!bm || !provOk || !completeOk || !linesOk) {
         failVerify('Chessy could not analyse this position — Verify again.');
         return;
       }
