@@ -589,5 +589,8 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 .import-file { font-size: 0.85rem; }
 .review-tools { margin-bottom: 0.6rem; }
-#importStatus[data-kind="error"] { color: var(--danger, #d9534f); }
+/* A lighter red than --danger (a button/border colour): on the dark dialog
+   background (--bg #312e2b) #d9534f is only ~2.9:1, below WCAG AA. #f28b82
+   clears 4.5:1 for this status text. */
+#importStatus[data-kind="error"] { color: #f28b82; }
 #importStatus[data-kind="info"] { color: var(--text); }

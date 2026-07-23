@@ -93,4 +93,42 @@ require('./helper').run('import-ui', async function (t) {
   });
   check(unknown === null, 'Unknown side stores playerColor null');
   check(await listCount() === 2, 'the second valid import brings the list to two games');
+
+  // The actual FILE-UPLOAD path (not only pasted text): choosing a .pgn file
+  // reads it into the textarea, and Import commits it like a paste.
+  await page.click('#importOpen');
+  await page.setInputFiles('#importFile', {
+    name: 'game.pgn', mimeType: 'application/x-chess-pgn',
+    buffer: Buffer.from('[Event "File"]\n\n1. c4 c5 2. g3 g6 *')
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('importText').value.indexOf('c4') !== -1;
+  }, { timeout: 5000 });
+  await page.click('input[name="importSide"][value="b"] + span');
+  check(!(await page.$eval('#importSubmit', function (b) { return b.disabled; })),
+    'Import is enabled once the file finished reading');
+  await page.click('#importSubmit');
+  await page.waitForSelector('#importDialog:not([open])', { timeout: 5000 }).catch(function () {});
+  check(await listCount() === 3, 'a game chosen via file upload imports');
+
+  // A SetUp/FEN game reports the REAL board move number on error, not "move 1":
+  // this position starts at move 20, White to move, with an illegal first ply.
+  await page.click('#importOpen');
+  await page.fill('#importText',
+    '[SetUp "1"]\n[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 20"]\n\n20. Kzz *');
+  await page.click('#importSubmit');
+  await page.waitForFunction(function () {
+    return document.getElementById('importStatus').dataset.kind === 'error';
+  }, { timeout: 5000 }).catch(function () {});
+  const setupErr = await status();
+  check(/move 20/.test(setupErr.text),
+    'a SetUp/FEN game reports the real move number (20), not move 1');
+  // Error text uses the AA-contrast red, not the low-contrast --danger.
+  const errColor = await page.$eval('#importStatus', function (e) {
+    return getComputedStyle(e).color;
+  });
+  check(errColor === 'rgb(242, 139, 130)', 'the error status uses the AA-contrast colour');
+  await page.click('#importCancel');
+  check(!(await dialogOpen()), 'cancel closes the dialog');
+  check(await listCount() === 3, 'a rejected SetUp/FEN import adds no game');
 });
