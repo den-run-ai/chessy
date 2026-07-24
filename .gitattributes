@@ -1,0 +1,10 @@
+# The eval corpus and its raw CC0 sources are sha256-verified against
+# manifest.json / PROVENANCE.json. Pin them to LF so the digests stay stable
+# across checkout configurations (e.g. Windows core.autocrlf), independent of
+# the tools' defensive CRLF→LF normalization.
+eval/corpus/eval-v1.ndjson       text eol=lf
+eval/corpus/manifest.json        text eol=lf
+eval/corpus/sources/*.csv        text eol=lf
+eval/corpus/sources/*.tsv        text eol=lf
+eval/corpus/sources/*.json       text eol=lf
+eval/BASELINE.json               text eol=lf

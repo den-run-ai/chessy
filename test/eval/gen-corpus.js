@@ -74,11 +74,14 @@ function splitGroupOf(key) {
   return h < 70 ? 'train' : h < 85 ? 'val' : 'test';
 }
 
+// Normalize CRLF→LF so hashing/parsing is stable across checkout configurations
+// (Windows core.autocrlf); .gitattributes also pins these files to LF.
+function lf(s) { return s.replace(/\r\n/g, '\n'); }
+function readSource(file) { return lf(fs.readFileSync(path.join(SRC_DIR, file), 'utf8')); }
 function loadProvenance() {
   const prov = JSON.parse(fs.readFileSync(path.join(SRC_DIR, 'PROVENANCE.json'), 'utf8'));
   for (const [file, meta] of Object.entries(prov.sources)) {
-    const raw = fs.readFileSync(path.join(SRC_DIR, file), 'utf8');
-    if (sha256(raw) !== meta.sha256) {
+    if (sha256(readSource(file)) !== meta.sha256) {
       throw new Error('source ' + file + ' sha256 != PROVENANCE.json — re-run test/eval/fetch-corpus.js');
     }
   }
@@ -173,7 +176,7 @@ function replayPvs(fen, res) {
 function sansOf(pgn) { return pgn.replace(/\d+\.(\.\.)?/g, ' ').trim().split(/\s+/).filter(Boolean); }
 
 function buildOpenings(prov) {
-  const tsv = fs.readFileSync(path.join(SRC_DIR, 'openings-v1.tsv'), 'utf8');
+  const tsv = readSource('openings-v1.tsv');
   const rows = tsv.split('\n').slice(1).filter(Boolean).map(l => l.split('\t'));
   const out = [], seenFen = new Set();
   let skipped = 0;
@@ -206,7 +209,7 @@ function buildOpenings(prov) {
 // AFTER the setup move as `fen`, keep the key move as the labelled expectation,
 // and record source_fen/setup_move for reproducibility.
 function buildPuzzles(prov) {
-  const csv = fs.readFileSync(path.join(SRC_DIR, 'lichess-puzzles-v1.csv'), 'utf8');
+  const csv = readSource('lichess-puzzles-v1.csv');
   const rows = csv.split('\n').slice(1).filter(Boolean);
   const out = [];
   let skipped = 0;
@@ -362,18 +365,34 @@ function build() {
   }
 
   // Frozen PR shard: all correctness-critical generated cases, then fill to
-  // exactly SHARD_SIZE with the CC0 sample (sorted by id for stability).
+  // exactly SHARD_SIZE with the CC0 sample.
   const core = records.filter(r => r.core).sort((a, b) => a.id < b.id ? -1 : 1);
   const sortId = (a, b) => a.id < b.id ? -1 : 1;
   const shardOpenings = records.filter(r => !r.core && r.id.startsWith('open-')).sort(sortId);
   const shardPuzzles = records.filter(r => !r.core && r.id.startsWith('puzzle-')).sort(sortId);
   if (core.length > SHARD_SIZE) throw new Error('core cases exceed shard size');
-  // Interleave openings and puzzles so the frozen shard exercises both CC0
-  // categories (and the expectedLegal axis) in PR CI, not just openings.
+  // STRATIFIED fill: round-robin across ECO volumes (openings) and rating bands
+  // (puzzles) so the shard — the only suite the PR gate runs — represents every
+  // collected stratum, not just the globally id-sorted prefix (which would draw
+  // openings from volumes A/B only and omit the lowest puzzle band).
+  const roundRobin = (items, keyFn) => {
+    const buckets = new Map();
+    for (const it of items) { const k = keyFn(it); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(it); }
+    const keys = [...buckets.keys()].sort();
+    const out = [];
+    for (let more = true; more;) {
+      more = false;
+      for (const k of keys) { const b = buckets.get(k); if (b.length) { out.push(b.shift()); more = true; } }
+    }
+    return out;
+  };
+  const volOf = r => (r.themes.find(t => t.startsWith('eco-')) || 'eco-z');
+  const openingsRR = roundRobin(shardOpenings, volOf);
+  const puzzlesRR = roundRobin(shardPuzzles, r => r.rating_band || 'none');
   const fill = [], need = SHARD_SIZE - core.length;
-  for (let i = 0, j = 0; fill.length < need && (i < shardOpenings.length || j < shardPuzzles.length);) {
-    if (i < shardOpenings.length && fill.length < need) fill.push(shardOpenings[i++]);
-    if (j < shardPuzzles.length && fill.length < need) fill.push(shardPuzzles[j++]);
+  for (let i = 0, j = 0; fill.length < need && (i < openingsRR.length || j < puzzlesRR.length);) {
+    if (i < openingsRR.length && fill.length < need) fill.push(openingsRR[i++]);
+    if (j < puzzlesRR.length && fill.length < need) fill.push(puzzlesRR[j++]);
   }
   const shardIds = new Set(core.concat(fill).map(r => r.id));
   for (const rec of records) rec.shard = shardIds.has(rec.id);

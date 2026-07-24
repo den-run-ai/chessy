@@ -63,16 +63,26 @@ function mirrorFen(fen) {
   return p.join(' ');
 }
 function mirrorUci(u) { return u[0] + (9 - Number(u[1])) + u[2] + (9 - Number(u[3])) + u.slice(4); }
+// Build the position from the FROZEN, hash-verified `fen` whenever one is
+// committed — do NOT re-derive it from move_history through the engine under
+// test (a SAN/apply regression could otherwise be graded against a different,
+// still-legal position than the one whose hash was verified). Only history-only
+// fixtures (the threefold cases, which need the replayed repetition table) fall
+// back to replay.
 function stateOf(rec) {
-  return rec.move_history ? Chess.replaySans(rec.move_history) : Chess.newGameState(rec.fen);
+  return rec.fen ? Chess.newGameState(rec.fen) : Chess.replaySans(rec.move_history);
 }
 
 // ---------------------------------------------------------------------------
 // corpus load + integrity
 // ---------------------------------------------------------------------------
+// Normalize CRLF→LF before hashing so the digest is stable across checkout
+// configurations (Windows core.autocrlf) — the .gitattributes rules pin these
+// files to LF, and this is the defensive backstop.
+function lf(s) { return s.replace(/\r\n/g, '\n'); }
 function loadCorpus() {
   const manifest = JSON.parse(fs.readFileSync(path.join(CORPUS_DIR, 'manifest.json'), 'utf8'));
-  const raw = fs.readFileSync(path.join(CORPUS_DIR, manifest.ndjson), 'utf8');
+  const raw = lf(fs.readFileSync(path.join(CORPUS_DIR, manifest.ndjson), 'utf8'));
   if (sha256(raw) !== manifest.ndjson_sha256) {
     throw new Error('corpus integrity check FAILED: ' + manifest.ndjson +
       ' sha256 does not match manifest — regenerate with test/eval/gen-corpus.js');
@@ -165,16 +175,27 @@ function checkExpectedLegal(rec, state) {
 }
 
 function checkPvReplay(rec, state, res) {
+  // Lost PV output is a failure, not a vacuous pass: a live position must
+  // report at least one line to replay.
+  if (!res.bestLines.length) return [{ ok: false, detail: 'analyse returned no bestLines to replay' }];
   const fen = Chess.toFen(state);
+  let maxLen = 0;
   for (const line of res.bestLines) {
     let s = Chess.newGameState(fen);
-    for (const u of (line.pvUci || [])) {
+    const pv = line.pvUci || [];
+    maxLen = Math.max(maxLen, pv.length);
+    for (const u of pv) {
       const m = Chess.legalMoves(s).find(mv => uciOf(mv) === u);
       if (!m) return [{ ok: false, detail: 'illegal PV move ' + u + ' from ' + Chess.toFen(s) }];
       s = Chess.applyMove(s, m);
     }
   }
-  return [{ ok: true, detail: res.bestLines.length + ' PV lines replay legally' }];
+  // Fixtures marked multiPly must actually exercise a >1-ply continuation, so
+  // a regression that truncates PVs to the root move is caught here too.
+  if (rec.assert.multiPly && maxLen < 2) {
+    return [{ ok: false, detail: 'multiPly expected but longest PV is ' + maxLen + ' ply' }];
+  }
+  return [{ ok: true, detail: res.bestLines.length + ' PV lines replay legally (max ' + maxLen + ' ply)' }];
 }
 
 function checkPerspectiveMate(rec, res) {

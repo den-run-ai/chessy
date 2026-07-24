@@ -67,10 +67,13 @@ function streamPuzzles(onRow) {
       if (stopped) return;
       if (!headed) {
         headBuf = Buffer.concat([headBuf, chunk]);
-        if (headBuf.length < 12) return;
+        if (headBuf.length < 12) return; // need magic(4)+size(4) to decide
         let start = 0;
         if (headBuf[0] === 0x50 && headBuf[1] === 0x2a && headBuf[2] === 0x4d && (headBuf[3] & 0xf0) === 0x10) {
           start = 8 + headBuf.readUInt32LE(4); // magic(4)+size(4)+content
+          // Keep buffering until the WHOLE skippable frame is present — curl's
+          // chunk boundaries are arbitrary, so slicing early would drop bytes.
+          if (headBuf.length < start) return;
         }
         headed = true;
         dec.write(headBuf.slice(start));

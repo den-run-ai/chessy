@@ -37,7 +37,7 @@
     "quiesce": true
   },
   "ndjson": "eval-v1.ndjson",
-  "ndjson_sha256": "94336132552bf9f4fe6e551d0b7907b98203fbe237fe83542a6b9423da8ea801",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
   "sources": {
     "lichess-puzzles-v1.csv": {
       "source_url": "https://database.lichess.org/lichess_db_puzzle.csv.zst",
