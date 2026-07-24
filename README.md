@@ -21,7 +21,7 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   running in a Web Worker so the UI never blocks. The evaluation is tapered
   between midgame and endgame (the king hides, then centralizes) and scores
   mobility, doubled/isolated/passed pawns, and king safety — the pawn shield,
-  open/semi-open files near the king, and a bounded non-linear king-danger term
+  open/semi-open files near the king, and a bounded coordinated king-ring term
   for coordinated attacks. The
   search knows about draws: repetitions of game or search-path positions and
   dead positions score 0, so it avoids repeating when winning, heads for

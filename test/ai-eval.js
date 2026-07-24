@@ -51,15 +51,15 @@ if (failed) {
 }
 
 // Exact curve boundaries. A lone attacker is ordinary activity; coordination
-// activates the quadratic pressure, and the result is bounded at 300 cp.
+// activates the linear pressure, and the result is bounded at 150 cp.
 console.log('king-ring curve');
 const penalty = hooks.kingAttackPenalty;
 equal(penalty(12, 0), 0, 'zero attackers score zero');
 equal(penalty(12, 1), 0, 'one attacker scores zero');
-equal(penalty(12, 2), 144, 'two attackers activate king danger');
-equal(penalty(12, 3), 216, 'three attackers use the nonlinear multiplier');
+equal(penalty(12, 2), 36, 'two attackers activate king danger');
+equal(penalty(12, 3), 54, 'three attackers use the count multiplier');
 equal(penalty(3, 3), 14, 'fractional positive pressure rounds exactly');
-equal(penalty(30, 4), 300, 'king-ring pressure is capped');
+equal(penalty(60, 4), 150, 'king-ring pressure is capped');
 
 // Natural full-phase boards pin the accumulation walk as well as the pure
 // curve. They differ only in how many White pieces reach Black's king ring.
@@ -67,9 +67,9 @@ console.log('king-ring board accumulation');
 const RING_CASES = [
   ['zero',  'rnbqrbnk/pppppppp/8/Q7/8/8/PPPPPPPP/RNB1KBNR w - - 0 1', 0, 0, 0],
   ['one',   'rnbqrbnk/pppppppp/8/7Q/8/8/PPPPPPPP/RNB1KBNR w - - 0 1', 1, 5, 0],
-  ['two',   'rnbqrbnk/pppppppp/8/7Q/8/3B4/PPPPPPPP/RNB1K1NR w - - 0 1', 2, 7, 49],
-  ['three', 'rnbqrbnk/pppppppp/5N2/7Q/8/3B4/PPPPPPPP/RNB1K2R w - - 0 1', 3, 11, 182],
-  ['cap',   '2rq3k/Q5pp/4B3/4Q1QQ/8/3Q4/PP6/K7 w - - 0 1', 6, 27, 300]
+  ['two',   'rnbqrbnk/pppppppp/8/7Q/8/3B4/PPPPPPPP/RNB1K1NR w - - 0 1', 2, 7, 21],
+  ['three', 'rnbqrbnk/pppppppp/5N2/7Q/8/3B4/PPPPPPPP/RNB1K2R w - - 0 1', 3, 11, 50],
+  ['cap',   '2rq3k/Q5pp/4B3/4Q1QQ/8/3Q4/PP6/K7 w - - 0 1', 6, 27, 150]
 ];
 for (const [name, fen, count, weight, applied] of RING_CASES) {
   const t = inspect(fen);
@@ -81,7 +81,7 @@ for (const [name, fen, count, weight, applied] of RING_CASES) {
 
 // The boards in each pair deliberately had equal scores before king safety.
 // These differences therefore isolate application of the traced ring penalty;
-// setting the term to zero makes the 49/133 assertions fail.
+// setting the term to zero makes the 21/29 assertions fail.
 console.log('king-ring integration');
 const ZERO_MATCH = 'rnb1rbnk/pppppppp/Rq6/Q7/8/8/PPPPPPPP/RNB1KBN1 w - - 0 1';
 const ONE_MATCH  = 'rnb1rbnk/pppppppp/8/2R4Q/8/5q2/PPPPPPPP/RNB1KBN1 w - - 0 1';
@@ -90,14 +90,14 @@ equal(inspect(ONE_MATCH).score - inspect(ZERO_MATCH).score, 0,
 
 const ONE_FOR_TWO = 'rnb1rbnk/pppppppp/R1q5/7Q/8/8/PPPPPPPP/RNB1KBN1 w - - 0 1';
 const TWO_MATCH    = 'rnb1rbnk/pppppppp/8/1R5Q/8/3Bq3/PPPPPPPP/RNB1K1N1 w - - 0 1';
-equal(inspect(TWO_MATCH).score - inspect(ONE_FOR_TWO).score, 49,
+equal(inspect(TWO_MATCH).score - inspect(ONE_FOR_TWO).score, 21,
   'second attacker contributes the exact board penalty');
 
 const TWO_FOR_THREE = 'rnb1rbnk/pppppppp/q1R5/7Q/8/3B4/PPPPPPPP/RNB1K1N1 w - - 0 1';
 const THREE_MATCH    = 'rnb1rbnk/pppppppp/5N2/7Q/8/R2B1q2/PPPPPPPP/RNB1K3 w - - 0 1';
-equal(inspect(THREE_MATCH).score - inspect(TWO_FOR_THREE).score, 133,
-  'third attacker raises 49 cp pressure to 182 cp');
-equal(inspect(RING_CASES[4][1]).score, 4292,
+equal(inspect(THREE_MATCH).score - inspect(TWO_FOR_THREE).score, 29,
+  'third attacker raises 21 cp pressure to 50 cp');
+equal(inspect(RING_CASES[4][1]).score, 4142,
   'capped ring penalty is included in the final evaluation');
 
 console.log('open-file shelter and blocker semantics');

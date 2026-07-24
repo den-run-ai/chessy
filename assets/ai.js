@@ -186,14 +186,13 @@
   const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
 
   // ---- King safety (bounded midgame terms; #72) ----
-  // Ring pressure weights attacked king-zone squares by piece and coordinated
-  // attacker count. A lone attacker scores zero; the quadratic curve is capped
-  // below a minor piece.
+  // Ring pressure weights king-zone attacks by piece and coordinated attacker
+  // count; a lone attacker scores zero and the cap stays below half a minor.
   const KING_ATK_WEIGHT = { P: 0, N: 2, B: 2, R: 3, Q: 5, K: 0 };
   // Percent multiplier by distinct attacker count; saturates at seven.
   const KING_ATK_COUNT_MUL = [0, 0, 50, 75, 88, 94, 97, 99];
-  const KING_ATK_QUAD = 2;     // quadratic scale: coordinated pressure accelerates
-  const KING_ATK_CAP = 300;    // hard per-king ceiling (< a minor piece)
+  const KING_ATK_SCALE = 6;
+  const KING_ATK_CAP = 150;
   // Open/semi-open shelter covers the king file and its neighbours; a clear
   // enemy heavy-piece ray through the front ring adds danger.
   const SHELTER_OPEN = 10;     // per king-adjacent file lacking a friendly pawn
@@ -392,11 +391,11 @@
     return score;
   }
 
-  // Quadratic coordinated ring pressure, count-gated and capped.
+  // Linear coordinated ring pressure, count-gated and capped.
   function kingAttackPenalty(weight, count) {
     if (count < 2) return 0;
     const mul = KING_ATK_COUNT_MUL[count < 7 ? count : 7];
-    const v = Math.round(weight * weight * KING_ATK_QUAD * mul / 100);
+    const v = Math.round(weight * KING_ATK_SCALE * mul / 100);
     return v > KING_ATK_CAP ? KING_ATK_CAP : v;
   }
 
@@ -429,10 +428,8 @@
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
   const QMAX = 16;          // quiescence ply bound: cut off runaway lines
-  // Quiet-check extension bound: always at the horizon, with a selective second
-  // layer after a forced check evasion (see quiesceNode). That second layer
-  // reveals the tracked final quiet mating check without widening every branch.
-  const QCHECK_PLIES = 2;
+  // At most two forcing quiet checks and their single-reply evasions.
+  const QCHECK_PLIES = 4;
   const TT_MAX = 1 << 21;   // transposition table entry cap
   const ABORT = { timeUp: true }; // thrown to unwind when the budget expires
 
@@ -605,6 +602,24 @@
     }
     return false;
   }
+  // Classify zero, one, or multiple legal replies, stopping at `limit`.
+  function legalMoveCountUpTo(state, pseudo, limit, ctx) {
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    const timed = ctx && ctx.deadline !== Infinity;
+    let found = 0;
+    if (timed && Date.now() >= ctx.deadline) throw ABORT;
+    for (const m of (pseudo || Chess.pseudoMoves(state))) {
+      // Uncounted move generation must still honor the real deadline.
+      if (timed && Date.now() >= ctx.deadline) throw ABORT;
+      const next = Chess.applyMove(state, m);
+      const ks = m.piece[1] === 'K' ? m.to : kingSq;
+      if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      found++;
+      if (found >= limit) return found;
+    }
+    return found;
+  }
 
   function checkTime(ctx) {
     // Check the node budget BEFORE counting this node, so exactly nodeLimit
@@ -616,8 +631,8 @@
     if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
   }
 
-  // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,
-  // then quiet moves by history score.
+  // Move ordering: hash move, promotions, forcing quiescence checks, captures
+  // (MVV-LVA), killer moves, then quiet moves by history score.
   function orderMoves(moves, ttPk, ply, ctx, turn) {
     const killers = ctx.killers[ply];
     const hist = turn === 'w' ? ctx.histW : ctx.histB;
@@ -626,6 +641,7 @@
       let s;
       if (pk === ttPk) s = 2e9;
       else if (m.promotion) s = 1e9 + VALUES[m.promotion];
+      else if (m.qcheck) s = 5e8;
       else if (m.captured) s = 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
       else if (killers && pk === killers[0]) s = 1e7;
       else if (killers && pk === killers[1]) s = 1e7 - 1;
@@ -717,16 +733,10 @@
     // material) effectively never fires. Every capture is searched, which also
     // makes quiescence scores exact (no window-sensitive pruning artifacts).
     //
-    // Quiet-check extension: for the first QCHECK_PLIES quiescence plies, also
-    // search quiet (non-capture, non-promotion) moves that give check. Plain
-    // quiescence resolves only captures/promotions, so a QUIET mating check one
-    // ply past the horizon is invisible — the miss that let a depth-5 Master
-    // search play 27...Rxa2?? into the forced 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#
-    // (game log chessy202607240238), whose final blow is the quiet check Qh8#.
-    // The check forces the opponent straight into the (already full-width)
-    // evasion branch, proving the mate without completing a whole extra main-
-    // search ply. Stand-pat stays the floor above, so the added moves keep this
-    // node a sound alpha-beta bound (extra options never invalidate stand-pat).
+    // Within QCHECK_PLIES, search an immediate quiet mate or a quiet check with
+    // exactly one legal reply. One follow-up is admitted after the first check
+    // evasion; later layers admit only mate. This proves the tracked
+    // 27...Rxa2?? 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8# without ordinary checks.
     // Preferred over a stand-pat mate scan: the recursion is counted as nodes
     // and alpha-beta-pruned, where a per-leaf mate scan's movegen is uncounted
     // work that roughly quartered the node rate under the same time budget.
@@ -735,15 +745,20 @@
       moves = pseudo;
     } else {
       moves = [];
-      // After an evasion, the second layer admits only an immediate quiet mate.
+      // At the horizon and after the first evasion, admit a non-mating quiet
+      // check only when it has one legal reply; later layers admit only mate.
       const genChecks = qply < QCHECK_PLIES && (qply === 0 || afterCheck);
       for (const m of pseudo) {
         if (m.captured || m.promotion) { moves.push(m); continue; }
         if (!genChecks) continue;
         const nb = Chess.applyMove(state, m);
         if (!Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) continue;
-        // Non-mating follow-up checks belong to a deeper main-search draft.
-        if (qply === 0 || !hasLegalMove(nb)) moves.push(m);
+        const replies = legalMoveCountUpTo(nb, null, 2, ctx);
+        const forceLayer = qply === 0 || (afterCheck && qply === 1);
+        if (replies === 0 || (forceLayer && replies === 1)) {
+          m.qcheck = 1;
+          moves.push(m);
+        }
       }
     }
 

@@ -249,6 +249,10 @@ console.log('horizon quiet-mate defence (game chessy202607240238)');
   // avoid a forced mate inside the tracked five-ply horizon.
   const safe = new Set(['f7f6', 'g7g6', 'g7g5', 'e6f8', 'e6g5']);
   const safeMirror = new Set(['f2f3', 'g2g3', 'g2g4', 'e3f1', 'e3g4']);
+  function uci(m) {
+    return Chess.sqName(m.from) + Chess.sqName(m.to) + (m.promotion || '');
+  }
+  function setKey(s) { return Array.from(s).sort().join(','); }
   // Independent deterministic ceilings per completed depth. The mirrored
   // position gets separate headroom because generation-order node counts are
   // not mirror invariant. These are algorithmic gates, not a wall-clock proxy;
@@ -271,16 +275,29 @@ console.log('horizon quiet-mate defence (game chessy202607240238)');
       'solver did not confirm the known mate');
 
     const allowed = flip ? safeMirror : safe;
+    // Derive the complete root classification from the independent solver.
+    // This keeps the cheap search gates below from trusting a stale allowlist.
+    const derivedSafe = new Set();
+    for (const m of Chess.legalMoves(st)) {
+      if (!forcesMate(Chess.applyMove(st, m), MATE_PLIES)) derivedSafe.add(uci(m));
+    }
+    check(setKey(derivedSafe) === setKey(allowed),
+      'solver derives the complete safe-move set' + (flip ? ' (mirrored)' : ''),
+      'expected {' + setKey(allowed) + '}, got {' + setKey(derivedSafe) + '}');
+
     const budget = flip ? limits.mirror : limits.original;
     for (let depth = 2; depth <= 5; depth++) {
-      // Depth 3 is the production-critical shallow decision, so also vary the
-      // seeded root shuffle. Deeper iterations converge to the same order.
-      const seeds = depth === 3 ? [null, 0, 1, 0xC0FFEE] : [null];
+      // Production shuffles roots. Exercise representative seeded orders at
+      // every completed depth Master can return, while retaining one separately
+      // budgeted deterministic-order tail gate per depth.
+      const seeds = [null, 0, 1, 0xC0FFEE];
       for (const seed of seeds) {
-        const r = solveDepth(f, depth, budget[depth], seed);
+        const capped = seed == null;
+        const r = solveDepth(f, depth, capped ? budget[depth] : null, seed);
         const suffix = (flip ? ' mirrored' : '') + ' d' + depth +
           (seed == null ? '' : ' seed ' + seed);
-        check(r.depth === depth, 'move 27 completes' + suffix + ' within ' + budget[depth] + ' nodes',
+        check(r.depth === depth, 'move 27 completes' + suffix +
+          (capped ? ' within ' + budget[depth] + ' nodes' : ''),
           'completed d' + r.depth + ' in ' + r.nodes + ' nodes');
         check(isLegal(f, r.move) && allowed.has(r.uci),
           'move 27 chooses a solver-safe defence at' + suffix,
@@ -519,7 +536,7 @@ check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
 // independent witness: alpha-beta to the horizon, then a self-contained
 // quiescence mirroring quiesceNode's rules (insufficient material, terminal
 // mate/stalemate, 50-move, QMAX=16, stand-pat, capture/promotion filter, check
-// evasions and the selective follow-up quiet-mate layer) — but with NO
+// evasions and the selective single-reply quiet-check layers) — but with NO
 // delta pruning, NO TT, NO move ordering.
 // Ordinary alpha-beta cutoffs and quiescence stand-pat remain (that is what it
 // shares with production); it just lacks the selective pruning and TT that make
@@ -527,7 +544,7 @@ check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
 // shallow/small. Includes BOTH delta-review witnesses, the exact regressions
 // that motivated removing delta pruning.
 const QMAX_ORACLE = 16;
-const QCHECK_PLIES_ORACLE = 2; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
+const QCHECK_PLIES_ORACLE = 4; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
 function oracleQuiesce(state, alpha, beta, ply, qply, path, afterCheck) {
   if (Chess.insufficientMaterial(state.board)) return 0;
   const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
@@ -553,15 +570,17 @@ function oracleQuiesce(state, alpha, beta, ply, qply, path, afterCheck) {
     else { if (best <= alpha) return best; if (best < beta) beta = best; }
   }
   path.push(key);
-  // Same selective quiet-check extension as quiesceNode: all quiet checks at
-  // qply 0; after a forced check evasion, only an immediate quiet mate at qply 1.
-  // `legal` already carries each move's applied state.
+  // Same selective quiet-check extension as quiesceNode: at qply 0 and after
+  // the first check evasion, admit immediate mate or a check with one reply;
+  // later layers admit only mate. `legal` carries each move's applied state.
   const genChecks = qply < QCHECK_PLIES_ORACLE && (qply === 0 || afterCheck);
   const moves = inChk ? legal : legal.filter(function (e) {
     if (e[0].captured || e[0].promotion) return true;
     if (!genChecks) return false;
     if (!Chess.isAttacked(e[1].board, e[1].board.indexOf(enemy + 'K'), turn)) return false;
-    return qply === 0 || Chess.legalMoves(e[1]).length === 0;
+    const replies = Chess.legalMoves(e[1]).length;
+    const forceLayer = qply === 0 || (afterCheck && qply === 1);
+    return replies === 0 || (forceLayer && replies === 1);
   });
   for (const e of moves) {
     const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path, inChk);

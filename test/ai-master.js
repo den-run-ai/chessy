@@ -13,6 +13,7 @@ const Chess = globalThis.Chess;
 const ChessAI = globalThis.ChessAI;
 
 const FEN = 'r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27';
+const WATCHDOG_MS = 8000; // assets/app.js: cfg.timeMs + 3000
 // Exhaustive independent mate-in-5 enumeration: every other legal move lets
 // White force 28.Ne7+ ... 29.Qh7+ ... 30.Qh8# (or an equivalent mate).
 const SAFE = new Set(['f7f6', 'g7g6', 'g7g5', 'e6f8', 'e6g5']);
@@ -51,9 +52,15 @@ if (!SAFE.has(move)) {
 } else {
   console.log('  ok  Master avoids the forced mate with ' + move);
 }
+if (elapsed >= WATCHDOG_MS) {
+  failed++;
+  console.error('FAIL  Master returns before the production watchdog — took ' +
+    elapsed + ' ms (limit ' + WATCHDOG_MS + ' ms)');
+} else {
+  console.log('  ok  Master returns before the production watchdog');
+}
 
-// Depth and elapsed time are telemetry, not additional timing assertions:
-// the result under the literal deadline is the production contract.
+// Depth and node count are telemetry; the move and watchdog are the contracts.
 console.log('Master telemetry: ' + move + ', depth ' + result.depth +
   ', score ' + result.score + ', nodes ' + result.nodes +
   ', qnodes ' + result.qnodes + ', researches ' + result.researches +
