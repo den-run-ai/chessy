@@ -320,6 +320,8 @@ require('./helper').run('migration', async function (t) {
     };
     ChessyAnalysisService.cancel = function () { window.__scanCancelOrder.push('analysis'); };
   });
+  await page.click('#tabReview');
+  await page.waitForSelector('#gameListWrap:not([hidden])');
   await page.click('#deleteAllBtn');
   await page.click('#deleteAllConfirm');
   await page.waitForFunction(function () {

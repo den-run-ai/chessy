@@ -108,34 +108,23 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     'an identical repeat request is served from cache with no new worker dispatch');
   check(store._map.size === 1, 'the validated result was persisted to the cache');
 
-  // A result is not published before its best-effort cache attempt settles.
-  // Phase 5 can expose a suggestion immediately after deep analysis; the
-  // clicked reflection must queue behind that write and hit the same result,
-  // not race it into a duplicate worker dispatch.
+  // A broken cache adapter must not hold the interactive lane forever. Keep a
+  // bounded in-memory handoff so an immediate reflection still reuses the scan
+  // result without a second worker dispatch while putAnalysis never settles.
   const heldStore = makeStore();
-  let releasePut = null;
-  heldStore.putAnalysis = function (rec) {
-    return new Promise(function (resolve) {
-      releasePut = function () {
-        heldStore._map.set(rec.key, rec);
-        resolve();
-      };
-    });
-  };
+  heldStore.putAnalysis = function () { return new Promise(function () {}); };
   reset({ factory: factoryOf({ mode: 'normal' }), store: heldStore });
-  const heldResult = Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache' }));
-  while (!releasePut) await delay(0);
-  let publishedBeforeCache = false;
-  heldResult.then(function () { publishedBeforeCache = true; });
-  await delay(5);
-  check(!publishedBeforeCache,
-    'analysis waits for the cache attempt before publishing a clickable result');
-  releasePut();
-  const cachedFirst = await heldResult;
+  const heldRace = await Promise.race([
+    Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache' })),
+    delay(100).then(function () { return 'timed-out'; })
+  ]);
+  check(heldRace !== 'timed-out' && heldRace !== null,
+    'a never-settling best-effort cache write cannot hang analysis');
+  const cachedFirst = heldRace;
   const dHeld = Svc.stats().dispatches;
   const cachedSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache' }));
   check(cachedFirst && cachedSecond && Svc.stats().dispatches === dHeld,
-    'an immediate follow-up reuses the just-persisted result without redispatch');
+    'an immediate follow-up reuses the in-memory handoff without redispatch');
 
   const failingStore = makeStore();
   failingStore.putAnalysis = function () { return Promise.reject(new Error('quota')); };

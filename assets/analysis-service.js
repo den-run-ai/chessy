@@ -45,6 +45,13 @@
   var active = null;
   var seq = 0;
   var dispatches = 0;         // worker postMessages (tests assert cache hits skip these)
+  // A tiny process-local cache closes the handoff between a scan result and an
+  // immediately opened reflection without making analysis completion depend on
+  // IndexedDB. A storage write is best-effort and, under a broken adapter, may
+  // never settle; keeping the validated result here lets the next identical
+  // request reuse it while the persistent write remains non-blocking.
+  var recent = new Map();
+  var RECENT_CAP = 16;
 
   function nowMs() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
 
@@ -86,6 +93,13 @@
     if (!global.CoachStore || !global.CoachStore.analysisKey) return null;
     return global.CoachStore.analysisKey(
       req.gameId, req.ply, ident.positionFingerprint, ident.engineId, ident.configHash);
+  }
+
+  function remember(job, result) {
+    if (!job.key) return;
+    recent.delete(job.key);
+    recent.set(job.key, { gameRev: job.req.gameRev, result: result });
+    while (recent.size > RECENT_CAP) recent.delete(recent.keys().next().value);
   }
 
   // A reply is trustworthy only if it describes the SAME position/config/turn
@@ -153,14 +167,12 @@
     if (msg.error) { recover(job); return; }   // worker-side failure → retry/give up
     var result = msg.result;
     if (!validMatch(result, job)) { settle(job, null); return; }
-    // Complete the best-effort cache attempt before exposing the result. The
-    // scan may publish a clickable suggestion as soon as analyse() resolves;
-    // waiting here guarantees an immediate reflect-first probe queues behind
-    // (and can reuse) the deep cache write instead of racing it into a second
-    // worker dispatch. A failed write is still non-fatal.
-    persist(job, result).then(function () {
-      if (job === active && !job.done) settle(job, result);
-    });
+    // Publish from a bounded in-memory handoff, then persist without blocking
+    // the analysis lane. The next identical request can reuse `recent` even if
+    // IndexedDB is slow, rejected, or never settles.
+    remember(job, result);
+    persist(job, result);
+    settle(job, result);
   }
 
   // A wedged worker (watchdog) or a crashed one (onerror / error reply): retry
@@ -214,6 +226,12 @@
       job.ident = ChessyAnalysisCore.identity(job.state, job.opts);
       job.key = keyFor(job.req, job.ident);
     } catch (e) { settle(job, null); return; }
+
+    var hot = !job.req.fresh && job.key && recent.get(job.key);
+    if (hot && hot.gameRev === job.req.gameRev) {
+      settle(job, hot.result);
+      return;
+    }
 
     // req.fresh bypasses the cache read entirely: the reflection layer sets it
     // on a retry after it rejected a served result as unusable, so the retry
@@ -269,13 +287,15 @@
   // key exactly as run() does. Best-effort; resolves when the entry is gone.
   function invalidate(req) {
     var store = global.CoachStore;
-    if (!store || !store.deleteAnalysis || !req) return Promise.resolve();
+    if (!req) return Promise.resolve();
     try {
       var state = Chess.parseFen(req.fen);
       var opts = buildOpts(req);
       var ident = ChessyAnalysisCore.identity(state, opts);
       var key = keyFor(req, ident);
       if (!key) return Promise.resolve();
+      recent.delete(key);
+      if (!store || !store.deleteAnalysis) return Promise.resolve();
       return Promise.resolve(store.deleteAnalysis(key)).catch(function () {});
     } catch (e) { return Promise.resolve(); }
   }

@@ -128,10 +128,31 @@
     if (!map || typeof map !== 'object' || Array.isArray(map)) {
       throw new Error('the pending-game recovery queue is malformed');
     }
-    return Object.keys(map).map(function (id) {
+    const out = [];
+    Object.keys(map).forEach(function (id) {
       const entry = map[id];
-      return entry && typeof entry === 'object' ? entry.rec : null;
-    }).filter(Boolean);
+      const rec = entry && entry.rec;
+      // This queue can hold the only durable copy of a finished game. Treat
+      // any damaged entry as unknown queue state instead of filtering it out
+      // and advertising a successful (but incomplete) backup. Validate the
+      // wrapper written by archive.js, its keyed identity, and the same fields
+      // restore requires for a usable game row.
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+          typeof entry.w !== 'string' || !entry.w ||
+          !rec || typeof rec !== 'object' || Array.isArray(rec) ||
+          typeof rec.id !== 'string' || rec.id !== id ||
+          !Array.isArray(rec.sans) ||
+          !rec.sans.every(function (san) {
+            return typeof san === 'string' && san.length > 0;
+          }) ||
+          typeof rec.result !== 'string' || !rec.result ||
+          !Number.isInteger(rec.plies) || rec.plies !== rec.sans.length ||
+          !Number.isFinite(rec.createdAt)) {
+        throw new Error('the pending-game recovery queue is malformed');
+      }
+      out.push(rec);
+    });
+    return out;
   }
 
   // Backup must be able to honour archive-clear fences even when archive.js is
