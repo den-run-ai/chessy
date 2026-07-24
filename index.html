@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r51">
+  <link rel="stylesheet" href="assets/style.css?r=r52">
 </head>
 <body>
   <div class="app">
@@ -111,6 +111,38 @@
           </div>
 
           <div class="coach-side">
+            <section id="momentScan" class="coach-form scan-panel"
+                     aria-labelledby="momentScanTitle">
+              <h3 id="momentScanTitle">Find moments to revisit</h3>
+              <p class="coach-note">Chessy checks the game in the background,
+                but keeps every engine score and alternative move hidden until
+                you reflect first.</p>
+              <fieldset id="scanSideChoice" class="scan-side" hidden>
+                <legend>Whose moves should Chessy check?</legend>
+                <div class="scan-side-options">
+                  <label><input type="radio" name="scanColor" value="w"> White</label>
+                  <label><input type="radio" name="scanColor" value="b"> Black</label>
+                  <label><input type="radio" name="scanColor" value="both"> Both</label>
+                </div>
+              </fieldset>
+              <div class="buttons scan-actions">
+                <button type="button" id="scanStart" class="btn primary">Start scan</button>
+                <button type="button" id="scanResume" class="btn primary" hidden>Resume scan</button>
+                <button type="button" id="scanPause" class="btn" hidden>Pause scan</button>
+              </div>
+              <progress id="scanMeter" class="scan-meter" max="1" value="0"
+                        aria-label="Critical-moment scan progress" hidden></progress>
+              <p id="scanProgress" class="coach-note" role="status" tabindex="-1"
+                 aria-live="polite">Not scanned yet.</p>
+              <div id="scanSuggestions" hidden>
+                <h4>Moments to revisit</h4>
+                <p class="coach-note">Choose one and write down what you saw
+                  before asking Chessy for any lines.</p>
+                <ol id="scanMomentList" class="scan-moments"
+                    aria-label="Suggested reflection moments"></ol>
+              </div>
+            </section>
+
             <!-- Engine output stays hidden until the player has answered. -->
             <form id="reflectForm" class="coach-form" hidden>
               <h3>Before the engine speaks…</h3>
@@ -317,30 +349,30 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r51';</script>
-  <script src="assets/engine.js?r=r51"></script>
-  <script src="assets/ai.js?r=r51"></script>
+  <script>window.CHESSY_RELEASE = 'r52';</script>
+  <script src="assets/engine.js?r=r52"></script>
+  <script src="assets/ai.js?r=r52"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r51"></script>
-  <script src="assets/archive.js?r=r51"></script>
-  <script src="assets/app.js?r=r51"></script>
-  <script src="assets/mini-board.js?r=r51"></script>
-  <script src="assets/review.js?r=r51"></script>
-  <script src="assets/analysis-core.js?r=r51"></script>
-  <script src="assets/analysis-service.js?r=r51"></script>
-  <script src="assets/analysis-result.js?r=r51"></script>
-  <script src="assets/moment-selector.js?r=r51"></script>
-  <script src="assets/moment-scan.js?r=r51"></script>
-  <script src="assets/pgn.js?r=r51"></script>
-  <script src="assets/import.js?r=r51"></script>
-  <script src="assets/data-controls.js?r=r51"></script>
-  <script src="assets/reflection.js?r=r51"></script>
-  <script src="assets/train.js?r=r51"></script>
-  <script src="assets/progress.js?r=r51"></script>
+  <script src="assets/store.js?r=r52"></script>
+  <script src="assets/archive.js?r=r52"></script>
+  <script src="assets/app.js?r=r52"></script>
+  <script src="assets/mini-board.js?r=r52"></script>
+  <script src="assets/review.js?r=r52"></script>
+  <script src="assets/analysis-core.js?r=r52"></script>
+  <script src="assets/analysis-service.js?r=r52"></script>
+  <script src="assets/analysis-result.js?r=r52"></script>
+  <script src="assets/moment-selector.js?r=r52"></script>
+  <script src="assets/moment-scan.js?r=r52"></script>
+  <script src="assets/pgn.js?r=r52"></script>
+  <script src="assets/import.js?r=r52"></script>
+  <script src="assets/data-controls.js?r=r52"></script>
+  <script src="assets/reflection.js?r=r52"></script>
+  <script src="assets/train.js?r=r52"></script>
+  <script src="assets/progress.js?r=r52"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.
