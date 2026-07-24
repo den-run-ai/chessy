@@ -45,52 +45,183 @@
   //     is not fenced, while the exact cleared ending never reappears.
   // record() refuses a fenced ending, so those games never come back, while a
   // new game (or a revision) archives normally. Same-tab by design (#44).
-  const FENCE_KEY = 'chessy-archive-fenced-v1';
+  const LEGACY_FENCE_KEY = 'chessy-archive-fenced-v1';
+  const FENCE_KEY = 'chessy-archive-fenced-v2';
   const FENCE_CAP = 200; // fenced endings never recur; cap only bounds storage
-  // A compact, low-collision signature over the ending that identifies it:
-  // the game id plus the moves, result and reason that make one finish
-  // distinct from a revision of the same instance (same djb-style double hash
-  // used for content ids in pgn.js).
+  // v1 concatenated two UNPADDED hashes, so a truncated/replaced 2–16 digit
+  // string still looked syntactically valid and could make Backup miss a
+  // deliberately cleared ending. v2 uses an unambiguous canonical payload,
+  // two fixed-width hashes, and a checksum over the whole versioned envelope.
+  // Missing/reordered/replaced entries therefore make the fence UNKNOWN
+  // instead of looking like an empty/non-matching set.
+  function hex32(n) { return (n >>> 0).toString(16).padStart(8, '0'); }
   function endingSig(id, sans, result, reason) {
-    const s = String(id) + '' + (Array.isArray(sans) ? sans.join(',') : '') +
-      '' + (result == null ? '' : result) + '' + (reason == null ? '' : reason);
+    const s = JSON.stringify([String(id), Array.isArray(sans) ? sans : [],
+      result == null ? '' : String(result), reason == null ? '' : String(reason)]);
     let a = 5381, b = 52711;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
       a = ((a << 5) + a + c) | 0;
       b = ((b << 5) + b + (c ^ 0x5f)) | 0;
     }
-    return (a >>> 0).toString(16) + (b >>> 0).toString(16);
+    return hex32(a) + hex32(b);
+  }
+  function fenceChecksum(entries) {
+    const s = JSON.stringify([2, entries]);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return hex32(h);
+  }
+  function fenceEnvelope(entries) {
+    return { version: 2, entries: entries.slice(), checksum: fenceChecksum(entries) };
+  }
+  function validEnvelope(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        value.version !== 2 || !Array.isArray(value.entries) ||
+        value.entries.length > FENCE_CAP ||
+        typeof value.checksum !== 'string' || !/^[0-9a-f]{8}$/.test(value.checksum)) {
+      return false;
+    }
+    const seen = Object.create(null);
+    if (!value.entries.every(function (sig) {
+      if (typeof sig !== 'string' || !/^[0-9a-f]{16}$/.test(sig) || seen[sig]) return false;
+      seen[sig] = true;
+      return true;
+    })) return false;
+    return value.checksum === fenceChecksum(value.entries);
+  }
+  function readV2() {
+    try {
+      const raw = localStorage.getItem(FENCE_KEY);
+      if (raw === null) return { known: true, entries: [] };
+      const value = JSON.parse(raw);
+      return validEnvelope(value)
+        ? { known: true, entries: value.entries.slice() }
+        : { known: false, entries: [] };
+    } catch (e) {
+      return { known: false, entries: [] };
+    }
   }
   function readFenced() {
-    try { const a = JSON.parse(localStorage.getItem(FENCE_KEY)); return Array.isArray(a) ? a : []; }
-    catch (e) { return []; }
+    try {
+      // A v1 entry has neither recoverable hash boundaries nor integrity
+      // metadata. Even alongside a valid v2 envelope it is unverifiable, so
+      // fail closed until a successful destructive operation neutralizes all
+      // recovery sources and explicitly resets the fence.
+      if (localStorage.getItem(LEGACY_FENCE_KEY) !== null) {
+        return { known: false, entries: [] };
+      }
+      return readV2();
+    } catch (e) {
+      return { known: false, entries: [] };
+    }
+  }
+  function fenceMatch(id, sans, result, reason) {
+    const state = readFenced();
+    if (!state.known) return null;
+    return state.entries.indexOf(endingSig(id, sans, result, reason)) !== -1;
   }
   function isFencedEnding(id, sans, result, reason) {
     if (!id) return false;
-    return readFenced().indexOf(endingSig(id, sans, result, reason)) !== -1;
+    // Boolean callers must fail closed. Internal record/reconcile paths use
+    // fenceMatch's tri-state so UNKNOWN work is preserved rather than deleted.
+    return fenceMatch(id, sans, result, reason) !== false;
+  }
+  function writeFenced(entries) {
+    try {
+      localStorage.setItem(FENCE_KEY, JSON.stringify(fenceEnvelope(entries)));
+      const state = readV2();
+      return state.known && state.entries.length === entries.length &&
+        state.entries.every(function (sig, i) { return sig === entries[i]; });
+    } catch (e) {
+      return false;
+    }
   }
   // Persist one ending as fenced. Returns true only if the signature is now in
   // the stored set (so a caller can fall back — e.g. remove the saved game and
   // suppress future saves — when localStorage is full and it could not write).
   function fenceEnding(id, sans, result, reason) {
     if (!id) return true; // nothing to fence
+    const state = readFenced();
+    if (!state.known) return false;
     const sig = endingSig(id, sans, result, reason);
-    const set = readFenced();
+    const set = state.entries;
     if (set.indexOf(sig) !== -1) return true; // already fenced
     set.push(sig);
     while (set.length > FENCE_CAP) set.shift();
-    try { localStorage.setItem(FENCE_KEY, JSON.stringify(set)); return true; }
-    catch (e) { return false; } // quota/blocked — caller must fall back
+    return writeFenced(set);
   }
   // Fence a batch of ending records ({id, sans, result, reason} — e.g. the
   // parked durability-queue records). Returns true only if every one persisted.
   function fenceEndings(recs) {
-    let ok = true;
-    (recs || []).forEach(function (r) {
-      if (!fenceEnding(r.id, r.sans, r.result, r.reason)) ok = false;
+    if (!Array.isArray(recs)) return false;
+    const state = readFenced();
+    if (!state.known) return false;
+    const set = state.entries;
+    const required = [];
+    let valid = true;
+    recs.forEach(function (r) {
+      if (!r || typeof r.id !== 'string' || !r.id || !Array.isArray(r.sans)) {
+        valid = false;
+        return;
+      }
+      const sig = endingSig(r.id, r.sans, r.result, r.reason);
+      if (required.indexOf(sig) === -1) required.push(sig);
+      if (set.indexOf(sig) === -1) set.push(sig);
     });
-    return ok;
+    if (!valid) return false;
+    // Do not claim that every source is fenced after the cap evicted one of
+    // this batch. The caller will fall back to removing the queue.
+    if (required.length > FENCE_CAP) return false;
+    while (set.length > FENCE_CAP) set.shift();
+    if (!required.every(function (sig) { return set.indexOf(sig) !== -1; })) return false;
+    return writeFenced(set);
+  }
+  // During a successful destructive operation, stage the currently readable
+  // pending sources in v2 while leaving an unverifiable v1 fence in place.
+  // Only resetFence may retire v1, after live/saved sources are neutralized.
+  function stageFenceEndings(recs) {
+    if (!Array.isArray(recs)) return false;
+    const prior = readV2();
+    const set = prior.known ? prior.entries : [];
+    const required = [];
+    let valid = true;
+    recs.forEach(function (r) {
+      if (!r || typeof r.id !== 'string' || !r.id || !Array.isArray(r.sans)) {
+        valid = false;
+        return;
+      }
+      const sig = endingSig(r.id, r.sans, r.result, r.reason);
+      if (required.indexOf(sig) === -1) required.push(sig);
+      if (set.indexOf(sig) === -1) set.push(sig);
+    });
+    if (!valid) return false;
+    if (required.length > FENCE_CAP) return false;
+    while (set.length > FENCE_CAP) set.shift();
+    if (!required.every(function (sig) { return set.indexOf(sig) !== -1; })) return false;
+    return writeFenced(set);
+  }
+  function fenceKnown() { return readFenced().known; }
+  // Called only after a successful destructive replacement has durably
+  // neutralized every pending/live/saved recovery source. Write the verified
+  // v2 envelope BEFORE retiring v1; a failure leaves UNKNOWN in place.
+  function resetFence() {
+    const prior = readV2();
+    const entries = prior.known ? prior.entries : [];
+    // Verify the v2 replacement while v1 is still present (readV2 deliberately
+    // ignores the legacy key for this staged migration check).
+    if (!writeFenced(entries)) return false;
+    try {
+      localStorage.removeItem(LEGACY_FENCE_KEY);
+      const state = readFenced();
+      return state.known && state.entries.length === entries.length &&
+        state.entries.every(function (sig, i) { return sig === entries[i]; });
+    } catch (e) {
+      return false;
+    }
   }
   // Drop the durability queue (parked, awaiting-commit finished games), so they
   // are not re-inserted after a clear/replace. Returns true on success. Even if
@@ -143,7 +274,12 @@
 
   function park(rec) {
     const token = parkToken();
-    const map = readPending() || {};
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return null; }
+    const map = raw === null ? {} : readPending();
+    // Present-but-unreadable is UNKNOWN, not an empty queue. Never overwrite
+    // older recoverable bytes just to park the newer ending.
+    if (!map) return null;
     map[rec.id] = { w: token, rec: rec };
     return writePending(map) ? token : null; // quota/blocked → best effort
   }
@@ -181,7 +317,8 @@
     // saved finished game and a reopened game-over. A REVISED ending of the
     // same instance (Undo → different finish) has a different signature and is
     // NOT fenced, so it archives normally.
-    if (isFencedEnding(gameId, sans, status.result, status.reason)) {
+    const fence = fenceMatch(gameId, sans, status.result, status.reason);
+    if (fence === true) {
       return Promise.resolve(null);
     }
     const rec = {
@@ -202,6 +339,14 @@
       plies: state.history.length,
       createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now()
     };
+    // An unreadable/legacy fence is UNKNOWN: park this ending and surface a
+    // failure, but never commit it and never silently discard its only copy.
+    if (fence === null) {
+      park(rec);
+      const err = new Error('archive-clear fence is unavailable');
+      err.failedGameIds = [gameId];
+      return Promise.reject(err);
+    }
     // A destructive replace is in progress: PARK the record but do NOT commit
     // it onto the store being replaced. Parking (not dropping) is what keeps a
     // game that finishes during the operation recoverable if the operation
@@ -232,6 +377,14 @@
     if (!map) { // unparseable — nothing recoverable
       try { localStorage.removeItem(PENDING_KEY); } catch (e) { /* gone */ }
       return Promise.resolve(null);
+    }
+    // UNKNOWN may represent a damaged signature for one of these exact
+    // records. Leave the queue untouched and surface the block; treating every
+    // entry as fenced would destroy unrelated recoverable games.
+    if (!readFenced().known) {
+      const err = new Error('archive-clear fence is unavailable');
+      err.failedGameIds = Object.keys(map);
+      return Promise.reject(err);
     }
     const drains = [];
     let dirty = false;
@@ -288,6 +441,7 @@
 
   window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
     isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
+    stageFenceEndings: stageFenceEndings, fenceKnown: fenceKnown, resetFence: resetFence,
     dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
     operationActive: operationActive, pendingRecords: pendingRecords };
 })();

@@ -161,14 +161,20 @@ require('./helper').run('delete-all', async function (t) {
   // successful clear reports a QUALIFIED success, not a clean one. ----
   const qualified = await page.evaluate(function () {
     localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-      x: { w: 't', rec: { id: 'x', sans: [], result: '*', reason: 'imported' } } }));
+      x: { w: 't', rec: {
+        id: 'x', source: 'play', sans: [], result: '*', reason: 'imported',
+        mode: 'pvp', plies: 0, createdAt: 1
+      } } }));
     var realDrop = ChessyArchive.dropPendingQueue;
+    var realFenceBatch = ChessyArchive.fenceEndings;
+    ChessyArchive.fenceEndings = function () { return false; }; // blocked fence write
     ChessyArchive.dropPendingQueue = function () { return false; }; // blocked removal
     return new Promise(function (resolve) {
       document.getElementById('deleteAllBtn').click();
       document.getElementById('deleteAllConfirm').click();
       setTimeout(function () {
         ChessyArchive.dropPendingQueue = realDrop;
+        ChessyArchive.fenceEndings = realFenceBatch;
         var el = document.getElementById('dataStatus');
         resolve({ text: el.textContent, kind: el.dataset.kind });
       }, 300);

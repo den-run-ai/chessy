@@ -65,6 +65,304 @@ require('./helper').run('data-controls', async function (t) {
         backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
     'a parked (pending-queue) game is included in the backup');
 
+  // Backup still reads the raw durability queue when archive.js is absent
+  // (partial offline release), honours the persisted ending fence without the
+  // archive helper, and keeps prototype-sensitive ids as data.
+  await page.evaluate(function () {
+    ChessyArchive.fenceEnding(
+      'raw-fenced', ['Nf3'], '*', 'imported');
+    window.__archiveForBackup = window.ChessyArchive;
+    window.ChessyArchive = undefined;
+    const map = Object.create(null);
+    map['raw-only'] = { w: 't1', rec: { id: 'raw-only', source: 'play',
+      sans: ['d4'], result: '*', reason: 'imported', mode: 'pvp',
+      plies: 1, createdAt: 6 } };
+    map['__proto__'] = { w: 't2', rec: { id: '__proto__', source: 'play',
+      sans: ['c4'], result: '*', reason: 'imported', mode: 'pvp',
+      plies: 1, createdAt: 7 } };
+    map['raw-fenced'] = { w: 't3', rec: { id: 'raw-fenced', source: 'play',
+      sans: ['Nf3'], result: '*', reason: 'imported', mode: 'pvp',
+      plies: 1, createdAt: 8 } };
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify(map));
+  });
+  const [rawDl] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const rawBackup = JSON.parse(fs.readFileSync(await rawDl.path(), 'utf8'));
+  check(rawBackup.stores.games.some(function (g) { return g.id === 'raw-only'; }),
+    'backup includes a raw pending record when ChessyArchive is unavailable');
+  check(rawBackup.stores.games.some(function (g) { return g.id === '__proto__'; }),
+    'backup round-trips a prototype-sensitive game id');
+  check(!rawBackup.stores.games.some(function (g) { return g.id === 'raw-fenced'; }),
+    'backup excludes a fenced raw pending record when ChessyArchive is unavailable');
+  await page.evaluate(function () {
+    window.ChessyArchive = window.__archiveForBackup;
+    delete window.__archiveForBackup;
+    localStorage.removeItem('chessy-pending-archive-v1');
+    localStorage.removeItem('chessy-archive-fenced-v2');
+  });
+
+  // An unreadable queue is unknown, not empty: fail the backup rather than
+  // claim success while potentially omitting its only finished game.
+  await page.evaluate(function () {
+    const realGet = Storage.prototype.getItem;
+    window.__restorePendingRead = function () {
+      Storage.prototype.getItem = realGet;
+      delete window.__restorePendingRead;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === 'chessy-pending-archive-v1') throw new Error('blocked');
+      return realGet.call(this, key);
+    };
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error';
+  }, { timeout: 5000 });
+  check(/pending-game recovery queue/.test(await page.textContent('#dataStatus')),
+    'backup fails safely when the pending recovery queue cannot be read');
+  await page.evaluate(function () { window.__restorePendingRead(); });
+
+  // A corrupt entry must make the whole queue unknown. Silently filtering it
+  // would claim a complete backup while dropping what may be the only copy of
+  // that finished game. The map key is also part of the queue's identity
+  // contract: a mismatched rec.id cannot be guessed safely.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1',
+      JSON.stringify({ 'lost-game': null }));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'pending-game recovery queue is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/pending-game recovery queue is malformed/.test(
+    await page.textContent('#dataStatus')),
+  'backup rejects a corrupt pending-queue entry instead of silently dropping it');
+
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'map-id': { w: 't', rec: { id: 'different-id', source: 'play',
+        sans: ['e4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 8 } }
+    }));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'pending-game recovery queue is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/pending-game recovery queue is malformed/.test(
+    await page.textContent('#dataStatus')),
+  'backup rejects a pending record whose id disagrees with its map key');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
+  // An unreadable fence is likewise unknown, not empty. With a recoverable
+  // parked ending present, fail rather than exporting a possibly-cleared game.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'fence-unknown': { w: 't', rec: { id: 'fence-unknown', source: 'play',
+        sans: ['e4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 8 } }
+    }));
+    const realGet = Storage.prototype.getItem;
+    window.__restoreFenceRead = function () {
+      Storage.prototype.getItem = realGet;
+      delete window.__restoreFenceRead;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === 'chessy-archive-fenced-v2') throw new Error('blocked');
+      return realGet.call(this, key);
+    };
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf('archive-clear fence') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence/.test(await page.textContent('#dataStatus')),
+    'backup fails safely when the persisted ending fence cannot be read');
+  await page.evaluate(function () {
+    window.__restoreFenceRead();
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
+  // A v2 envelope is not enough: its version, fixed-width entries, and checksum
+  // must all verify. Corrupt state is unknown and therefore fails closed.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'fence-malformed': { w: 't', rec: { id: 'fence-malformed', source: 'play',
+        sans: ['d4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 9 } }
+    }));
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify({
+      version: 2, entries: [null], checksum: '00000000'
+    }));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects malformed entries inside the persisted fence array');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    localStorage.removeItem('chessy-archive-fenced-v2');
+  });
+
+  // The P2 regression: v1 accepted any 2–16 digit lowercase hex string, so a
+  // truncated or same-width replacement silently stopped matching and Backup
+  // exported the cleared ending. v2's width and envelope checksum detect both.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'fence-corrupt': { w: 't', rec: { id: 'fence-corrupt', source: 'play',
+        sans: ['c4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 10 } }
+    }));
+    ChessyArchive.fenceEnding('fence-corrupt', ['c4'], '*', 'imported');
+    ChessyArchive.fenceEnding('fence-other', ['d4'], '*', 'imported');
+    const valid = JSON.parse(localStorage.getItem('chessy-archive-fenced-v2'));
+    window.__validFenceV2 = JSON.stringify(valid);
+    valid.entries[0] = valid.entries[0].slice(0, -1);
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects a truncated fixed-width fence signature');
+
+  await page.evaluate(function () {
+    const valid = JSON.parse(window.__validFenceV2);
+    const first = valid.entries[0][0];
+    valid.entries[0] = (first === '0' ? '1' : '0') + valid.entries[0].slice(1);
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects a same-width replacement whose envelope checksum no longer matches');
+
+  await page.evaluate(function () {
+    const valid = JSON.parse(window.__validFenceV2);
+    valid.checksum = (valid.checksum[0] === '0' ? '1' : '0') + valid.checksum.slice(1);
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects altered v2 validation metadata');
+
+  await page.evaluate(function () {
+    const valid = JSON.parse(window.__validFenceV2);
+    valid.entries.pop();
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects a dropped entry from the checksummed fence envelope');
+
+  // Deployed v1 entries have no validation metadata. Treat even plausible hex
+  // as UNKNOWN: Backup fails, runtime does not append/commit, and a pending
+  // record stays parked rather than being mistaken for a fenced match.
+  const legacyRuntime = await page.evaluate(function () {
+    localStorage.removeItem('chessy-archive-fenced-v2');
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify(['deadbeef']));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'legacy-pending': { w: 't', rec: { id: 'legacy-pending', source: 'play',
+        sans: ['Nf3'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 11 } }
+    }));
+    document.getElementById('backupBtn').click();
+    return ChessyArchive.reconcilePending().then(function () {
+      return { rejected: false };
+    }, function () {
+      return CoachStore.getGame('legacy-pending').then(function (game) {
+        return {
+          rejected: true,
+          parked: localStorage.getItem('chessy-pending-archive-v1') !== null,
+          committed: !!game,
+          append: ChessyArchive.fenceEnding('fresh', ['e4'], '*', 'imported')
+        };
+      });
+    });
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'unverifiable legacy format') !== -1;
+  }, { timeout: 5000 });
+  check(/unverifiable legacy format/.test(await page.textContent('#dataStatus')),
+    'backup fails closed on an unverifiable legacy v1 entry');
+  check(legacyRuntime.rejected && legacyRuntime.parked &&
+      !legacyRuntime.committed && legacyRuntime.append === false,
+    'runtime preserves pending work and refuses writes while legacy fence state is unknown');
+  const malformedPark = await page.evaluate(function () {
+    const raw = '{"older-recovery":';
+    localStorage.setItem('chessy-pending-archive-v1', raw);
+    return ChessyArchive.record(
+      { history: [{ san: 'e4' }] },
+      { mode: 'pvp', difficulty: '2', timeControl: 'none' },
+      { over: true, result: '*', reason: 'imported' },
+      'new-while-unknown'
+    ).then(function () {
+      return { rejected: false };
+    }, function () {
+      return {
+        rejected: true,
+        unchanged: localStorage.getItem('chessy-pending-archive-v1') === raw
+      };
+    });
+  });
+  check(malformedPark.rejected && malformedPark.unchanged,
+    'parking under an unknown fence never overwrites an older unreadable recovery queue');
+  const blockedRetire = await page.evaluate(function () {
+    ChessyArchive.stageFenceEndings([{
+      id: 'staged-before-retire', sans: ['d4'], result: '*', reason: 'imported'
+    }]);
+    const realRemove = Storage.prototype.removeItem;
+    Storage.prototype.removeItem = function (key) {
+      if (key === 'chessy-archive-fenced-v1') throw new Error('blocked');
+      return realRemove.call(this, key);
+    };
+    const reset = ChessyArchive.resetFence();
+    Storage.prototype.removeItem = realRemove;
+    return {
+      reset: reset,
+      legacy: localStorage.getItem('chessy-archive-fenced-v1'),
+      known: ChessyArchive.fenceKnown()
+    };
+  });
+  check(blockedRetire.reset === false && blockedRetire.legacy !== null &&
+      blockedRetire.known === false,
+    'a blocked legacy-key removal leaves the verified v2 staging fail-closed as UNKNOWN');
+  await page.evaluate(function () {
+    delete window.__validFenceV2;
+    localStorage.removeItem('chessy-pending-archive-v1');
+    localStorage.removeItem('chessy-archive-fenced-v1');
+    localStorage.removeItem('chessy-archive-fenced-v2');
+  });
+
   // A parked REVISION (same id as a committed row, but newer moves) is the
   // authoritative copy when its write failed, so it must REPLACE the stale
   // committed row in the backup, not be dropped as a duplicate id.
@@ -194,8 +492,15 @@ require('./helper').run('data-controls', async function (t) {
   // archive is replaced DOWN to the backup rather than a fixed pre-count.)
   await page.evaluate(function () {
     localStorage.removeItem('chessy-game-v1'); // clear the reconstructed-save fixtures above
+    // Simulate upgrading a deployed v1 fence. The successful destructive
+    // replace must keep v1 fail-closed until current sources are staged/removed,
+    // then retire it behind a verified v2 envelope.
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify(['deadbeef']));
     localStorage.setItem('chessy-pending-archive-v1',
-      JSON.stringify({ ghost: { w: 't', rec: { id: 'ghost', sans: [], result: '*', reason: 'imported' } } }));
+      JSON.stringify({ ghost: { w: 't', rec: {
+        id: 'ghost', source: 'play', sans: [], result: '*', reason: 'imported',
+        mode: 'pvp', plies: 0, createdAt: 12
+      } } }));
     return CoachStore.importGame(ChessyPGN.toRecord(ChessyPGN.parseGame('1. f4 f5 *'), { playerColor: 'w' }));
   });
   check(await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); }) > 2,
@@ -212,15 +517,61 @@ require('./helper').run('data-controls', async function (t) {
   }, { timeout: 5000 });
   const restored = await page.evaluate(function () {
     return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+      let fence = null;
+      try { fence = JSON.parse(localStorage.getItem('chessy-archive-fenced-v2')); } catch (e) {}
       return { g: r[0].length, c: r[1].length,
         pending: localStorage.getItem('chessy-pending-archive-v1'),
-        ghostFenced: ChessyArchive.isFencedEnding('ghost', [], '*', 'imported') };
+        ghostFenced: ChessyArchive.isFencedEnding('ghost', [], '*', 'imported'),
+        legacy: localStorage.getItem('chessy-archive-fenced-v1'),
+        v2: fence };
     });
   });
   check(restored.g === 2 && restored.c === 1,
     'restore replaces the archive with the backup (third game removed)');
   check(restored.pending === null && restored.ghostFenced === true,
     'restore fences recovery: the durability queue is dropped and its parked ending is fenced');
+  check(restored.legacy === null && restored.v2 && restored.v2.version === 2 &&
+      Array.isArray(restored.v2.entries) && restored.v2.entries.length > 0 &&
+      /^[0-9a-f]{16}$/.test(restored.v2.entries[0]) &&
+      /^[0-9a-f]{8}$/.test(restored.v2.checksum),
+    'restore retires legacy v1 only after writing a fixed-width checksummed v2 envelope');
+
+  // A verified staged v2 fence is itself durable neutralization. If queue
+  // removal is blocked, migration can still retire v1 cleanly because boot
+  // reconcile will discard the exact surviving ending from the valid envelope.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify(['cafebabe']));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      staged: { w: 't', rec: {
+        id: 'staged', source: 'play', sans: ['e4'], result: '*',
+        reason: 'imported', mode: 'pvp', plies: 1, createdAt: 14
+      } }
+    }));
+    window.__migrationDrop = ChessyArchive.dropPendingQueue;
+    ChessyArchive.dropPendingQueue = function () { return false; };
+  });
+  await page.setInputFiles('#restoreFile', {
+    name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backupJson)
+  });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  await page.click('#restoreConfirm');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('Restored') !== -1;
+  }, { timeout: 5000 });
+  const stagedMigration = await page.evaluate(function () {
+    const result = {
+      pending: localStorage.getItem('chessy-pending-archive-v1'),
+      fenced: ChessyArchive.isFencedEnding('staged', ['e4'], '*', 'imported'),
+      legacy: localStorage.getItem('chessy-archive-fenced-v1'),
+      kind: document.getElementById('dataStatus').dataset.kind
+    };
+    ChessyArchive.dropPendingQueue = window.__migrationDrop;
+    ChessyArchive.dropPendingQueue();
+    return result;
+  });
+  check(stagedMigration.pending !== null && stagedMigration.fenced &&
+      stagedMigration.legacy === null && stagedMigration.kind !== 'error',
+    'verified v2 staging safely retires v1 even when the fenced queue cannot be removed');
 
   // ---- P1: a SYNCHRONOUS enqueue failure aborts the whole restore, leaving
   // the existing archive intact — the preceding clear() must not commit. ----
@@ -395,8 +746,14 @@ require('./helper').run('data-controls', async function (t) {
   const moreRejects = await page.evaluate(function () {
     const F = 'chessy-coach-backup';
     const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const game = { id: 'g', sans: ['e4'], result: '*', plies: 1, createdAt: 1 };
     function card(step) {
-      return { id: 1, gameId: 'g', due: 0, step: step, fenBefore: startFen, attempts: [] };
+      return { id: 1, gameId: 'g', ply: 0, due: 0, step: step,
+        fenBefore: startFen, attempts: [] };
+    }
+    function backup(c, games) {
+      return { format: F, version: 1, dbVersion: 6,
+        stores: { games: games === undefined ? [game] : games, cards: [c] } };
     }
     return {
       arrayStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: [] }),
@@ -405,25 +762,31 @@ require('./helper').run('data-controls', async function (t) {
           fenBefore: startFen, attempts: {} }] } }),
       emptyStores: CoachStore.validateBackup({
         format: F, version: 1, dbVersion: 6, stores: {} }),
-      noStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(undefined)] } }),
-      fractionalStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(0.5)] } }),
-      belowLadder: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(-2)] } }),
-      learnStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(-1)] } }),
-      dayStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(0)] } })
+      noStep: CoachStore.validateBackup(backup(card(undefined))),
+      fractionalStep: CoachStore.validateBackup(backup(card(0.5))),
+      belowLadder: CoachStore.validateBackup(backup(card(-2))),
+      aboveLadder: CoachStore.validateBackup(backup(card(6))),
+      badAttemptEntry: CoachStore.validateBackup(backup(Object.assign(card(0), {
+        attempts: [{ at: 'yesterday', correct: 'yes' }]
+      }))),
+      missingGame: CoachStore.validateBackup(backup(card(0), [])),
+      missingPly: CoachStore.validateBackup(backup(Object.assign(card(0), { ply: 1 }))),
+      learnStep: CoachStore.validateBackup(backup(card(-1))),
+      lastDayStep: CoachStore.validateBackup(backup(card(5)))
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
   check(!!moreRejects.badAttempts, 'a card with a non-array attempts is rejected');
   check(!!moreRejects.emptyStores, 'a backup missing the games/cards arrays is rejected');
-  check(!!moreRejects.noStep && !!moreRejects.fractionalStep && !!moreRejects.belowLadder,
-    'missing, fractional, and below-ladder card steps are rejected');
-  check(moreRejects.learnStep === null && moreRejects.dayStep === null,
-    'the supported -1 and 0 card steps remain valid');
+  check(!!moreRejects.noStep && !!moreRejects.fractionalStep &&
+      !!moreRejects.belowLadder && !!moreRejects.aboveLadder,
+    'missing, fractional, and out-of-ladder card steps are rejected');
+  check(!!moreRejects.badAttemptEntry,
+    'malformed attempt entries are rejected before Progress reads them');
+  check(!!moreRejects.missingGame && !!moreRejects.missingPly,
+    'cards must reference a restored game and one of its played plies');
+  check(moreRejects.learnStep === null && moreRejects.lastDayStep === null,
+    'the supported -1 through 5 card steps remain valid');
 
   // All read-write entry points share the same destructive-operation barrier;
   // reads and the destructive transaction itself remain available.
@@ -505,7 +868,15 @@ require('./helper').run('data-controls', async function (t) {
   await page.evaluate(function () {
     localStorage.setItem('chessy-game-v1', JSON.stringify({
       fen: 'x', history: [], mode: 'pvp', gameId: 'gone', endedAt: 1 }));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'unfenced-queue': { w: 't', rec: {
+        id: 'unfenced-queue', source: 'play', sans: ['e4'], result: '*',
+        reason: 'imported', mode: 'pvp', plies: 1, createdAt: 13
+      } }
+    }));
     window.__realDrop = ChessyArchive.dropPendingQueue;
+    window.__realFenceBatch = ChessyArchive.fenceEndings;
+    ChessyArchive.fenceEndings = function () { return false; }; // fence write blocked too
     ChessyArchive.dropPendingQueue = function () { return false; }; // simulate blocked removal
   });
   await page.setInputFiles('#restoreFile', {
@@ -518,6 +889,7 @@ require('./helper').run('data-controls', async function (t) {
   }, { timeout: 5000 });
   const qualified = await page.evaluate(function () {
     ChessyArchive.dropPendingQueue = window.__realDrop;
+    ChessyArchive.fenceEndings = window.__realFenceBatch;
     const el = document.getElementById('dataStatus');
     return { text: el.textContent, kind: el.dataset.kind };
   });
