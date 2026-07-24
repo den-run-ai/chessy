@@ -185,30 +185,19 @@
   const PASSED_MG = [0, 5, 10, 20, 35, 60, 80];   // by ranks advanced from home
   const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
 
-  // ---- King safety (midgame only; #72, motivated by game chessy202607240238) ----
-  // Two bounded, symmetric terms, added to the MIDGAME score only so the taper
-  // retires them as material comes off (identical treatment to the pawn shield).
-  //
-  // (1) King-ring attacks. For each king, sum the enemy pieces bearing on its
-  // 3x3 ring (Chebyshev distance <= 1), weighted by piece type and by how many
-  // ring squares each attacks, then scale NON-LINEARLY by the number of distinct
-  // attacking pieces: a lone attacker is normal piece activity (multiplier 0), a
-  // coordinated swarm is dangerous. This is what the depth-limited search missed
-  // when White's Q+B+B+N massed on Black's castled king in the game — the
-  // material score stayed "winning" while the king was in fact under a mating
-  // attack. Capped well below a minor piece so it steers, never overriding
-  // material judgement.
+  // ---- King safety (bounded midgame terms; #72) ----
+  // Ring pressure weights attacked king-zone squares by piece and coordinated
+  // attacker count. A lone attacker scores zero; the quadratic curve is capped
+  // below a minor piece.
   const KING_ATK_WEIGHT = { P: 0, N: 2, B: 2, R: 3, Q: 5, K: 0 };
-  // Multiplier (percent) by number of distinct attacking pieces. [0]=[1]=0 so a
-  // single attacker never scores; ramps toward saturation as attackers pile on.
+  // Percent multiplier by distinct attacker count; saturates at seven.
   const KING_ATK_COUNT_MUL = [0, 0, 50, 75, 88, 94, 97, 99];
-  const KING_ATK_SCALE = 6;    // centipawns per weight-unit before the multiplier
-  const KING_ATK_CAP = 150;    // hard per-king ceiling (< half a minor piece)
-  // (2) Open/semi-open file shelter. A king on a file with no friendly pawn is
-  // exposed down that file; an enemy rook/queen already on it is worse. Applied
-  // to the king's own file and its two neighbours, capped.
+  const KING_ATK_QUAD = 2;     // quadratic scale: coordinated pressure accelerates
+  const KING_ATK_CAP = 300;    // hard per-king ceiling (< a minor piece)
+  // Open/semi-open shelter covers the king file and its neighbours; a clear
+  // enemy heavy-piece ray through the front ring adds danger.
   const SHELTER_OPEN = 10;     // per king-adjacent file lacking a friendly pawn
-  const SHELTER_HEAVY = 12;    // extra when an enemy rook/queen bears down it
+  const SHELTER_RAY = 12;      // extra for a clear enemy rook/queen ray
   const SHELTER_CAP = 60;
 
   const DIAG = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
@@ -216,14 +205,8 @@
   const ALL_DIRS = DIAG.concat(ORTHO);
   const N_JUMPS = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
 
-  // Squares a piece can move to (empty or enemy-occupied), and — as a side
-  // effect written to the module-level RING out-param — how many squares of the
-  // enemy king's 3x3 ring it attacks. Folding the ring count into the mobility
-  // walk keeps king-attack detection free of extra ray scans on the eval hot
-  // path (no per-call allocation). Pawns and kings are excluded from mobility:
-  // pawn play is scored by the structure terms, king freedom is not a midgame
-  // asset. `ekr`/`ekc` are the enemy king's row/col (the king this piece could
-  // attack); pass -8 to disable ring counting.
+  // Count mobility and, through RING, attacked enemy-king-ring squares in one
+  // walk. Pawns/kings are excluded; `ekr`/`ekc` use -8 to disable ring tallying.
   let RING = 0;
   function mobility(board, i, type, color, ekr, ekc) {
     const r = Math.floor(i / 8), c = i % 8;
@@ -266,27 +249,23 @@
   // midgame tables in the endgame. Terms: phase material + PST, mobility,
   // doubled/isolated/passed pawns, a midgame pawn shield in front of the
   // king, and a lone-king mop-up gradient so basic mates convert.
-  function evaluate(board) {
+  // `out` is an optional caller-owned trace used by feature-sensitive tests.
+  // Normal search omits it, so tracing adds no allocation on the eval hot path.
+  function evaluate(board, out) {
     let mg = 0, eg = 0, phase = 0;
     const pawnFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
     const pawnSquares = { w: [], b: [] };
     const kings = { w: -1, b: -1 };
     const force = { w: 0, b: 0 };  // count of non-king men (pawns + pieces)
     const pieces = { w: 0, b: 0 }; // count of non-king, non-pawn material (mating force)
-    // King-safety accumulators, indexed by the DEFENDING king's color: the
-    // weighted ring-attack pressure against that king and the number of distinct
-    // enemy pieces contributing to it. Enemy rooks/queens per file feed the
-    // open-file shelter term below.
-    const ringWeight = { w: 0, b: 0 };
-    const ringCount = { w: 0, b: 0 };
-    const heavyFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
-    // Enemy king coordinates are needed before the sliding walk can tally ring
-    // attacks, so locate both kings up front (a bare indexOf, cheaper than the
-    // ray walks it feeds). -8 sentinels keep ring counting inert if a king is
-    // absent (malformed board): no on-board square is within a ring of -8.
+    // Allocation-free king-safety accumulators, indexed by defending color.
+    let ringWeightW = 0, ringWeightB = 0;
+    let ringCountW = 0, ringCountB = 0;
+    let shelterW = 0, shelterB = 0;
+    // Locate both kings before the mobility walk; -8 disables malformed boards.
     const wk = board.indexOf('wK'), bk = board.indexOf('bK');
-    const ekr = { w: bk >= 0 ? bk >> 3 : -8, b: wk >= 0 ? wk >> 3 : -8 };
-    const ekc = { w: bk >= 0 ? bk & 7 : -8, b: wk >= 0 ? wk & 7 : -8 };
+    const bkr = bk >= 0 ? bk >> 3 : -8, bkc = bk >= 0 ? bk & 7 : -8;
+    const wkr = wk >= 0 ? wk >> 3 : -8, wkc = wk >= 0 ? wk & 7 : -8;
 
     for (let i = 0; i < 64; i++) {
       const p = board[i];
@@ -306,12 +285,14 @@
         kings[color] = i;
       } else {
         pieces[color]++;
-        if (type === 'R' || type === 'Q') heavyFiles[color][i % 8]++;
-        const mob = mobility(board, i, type, color, ekr[color], ekc[color]) * MOBILITY[type];
+        const mob = mobility(board, i, type, color,
+          color === 'w' ? bkr : wkr, color === 'w' ? bkc : wkc) * MOBILITY[type];
         m += mob; e += mob;
-        // RING (set by mobility) is this piece's attack count on the enemy
-        // king's ring; accrue it to that king's danger tally.
-        if (RING > 0) { ringWeight[def] += KING_ATK_WEIGHT[type] * RING; ringCount[def]++; }
+        // RING is this piece's attacked-square count on the enemy king ring.
+        if (RING > 0) {
+          if (def === 'w') { ringWeightW += KING_ATK_WEIGHT[type] * RING; ringCountW++; }
+          else { ringWeightB += KING_ATK_WEIGHT[type] * RING; ringCountB++; }
+        }
       }
       if (color === 'w') { mg += m; eg += e; } else { mg -= m; eg -= e; }
     }
@@ -356,36 +337,39 @@
             if (cc >= 0 && cc < 8 && board[kr * 8 + cc] === color + 'P') mg += sign * SHIELD;
           }
         }
-        // Open/semi-open file shelter (midgame): the king's own file and its two
-        // neighbours are weaknesses when they carry no friendly pawn, worse yet
-        // when an enemy rook or queen already occupies the file. Bounded.
-        const enemyHeavy = heavyFiles[color === 'w' ? 'b' : 'w'];
+        // Penalize pawnless king-adjacent files and clear enemy heavy-piece rays.
         let shelter = 0;
         for (let dc = -1; dc <= 1; dc++) {
           const cc = kc + dc;
           if (cc < 0 || cc > 7 || files[cc]) continue; // friendly pawn shields it
           shelter += SHELTER_OPEN;
-          if (enemyHeavy[cc]) shelter += SHELTER_HEAVY;
+          shelter += shelterRay(board, k, cc, color);
         }
         if (shelter > SHELTER_CAP) shelter = SHELTER_CAP;
+        if (color === 'w') shelterW = shelter; else shelterB = shelter;
         mg -= sign * shelter;
       }
     }
 
-    // King-ring attack pressure (midgame): scale each king's summed ring-attack
-    // weight by the non-linear multiplier for the number of distinct attackers,
-    // cap it, and apply from White's perspective — danger to White's king is bad
-    // for White, danger to Black's king is good for White.
-    mg += kingAttackPenalty(ringWeight.b, ringCount.b);
-    mg -= kingAttackPenalty(ringWeight.w, ringCount.w);
+    // Apply capped ring pressure from White's perspective.
+    const ringPenaltyW = kingAttackPenalty(ringWeightW, ringCountW);
+    const ringPenaltyB = kingAttackPenalty(ringWeightB, ringCountB);
+    mg += ringPenaltyB;
+    mg -= ringPenaltyW;
 
     const ph = Math.min(phase, PHASE_MAX);
-    // Round half AWAY from zero, not Math.round's half-up: king safety is added
-    // to mg but not eg, so the tapered value can land on a half-integer, and
-    // Math.round(-x) !== -Math.round(x) there (round(2.5)=3 but round(-2.5)=-2)
-    // would break the exact color antisymmetry evaluate() must hold (the eval
-    // scorecard's symmetry axis, the mirrored tactics twins). This form is
-    // antisymmetric by construction.
+    if (out) {
+      out.phase = ph;
+      out.wRingWeight = ringWeightW;
+      out.bRingWeight = ringWeightB;
+      out.wRingCount = ringCountW;
+      out.bRingCount = ringCountB;
+      out.wRingPenalty = ringPenaltyW;
+      out.bRingPenalty = ringPenaltyB;
+      out.wShelter = shelterW;
+      out.bShelter = shelterB;
+    }
+    // Half-away-from-zero rounding preserves exact color antisymmetry.
     const tapered = (mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX;
     let score = tapered < 0 ? -Math.round(-tapered) : Math.round(tapered);
 
@@ -408,15 +392,23 @@
     return score;
   }
 
-  // King-ring attack penalty: the summed ring-attack weight against one king,
-  // scaled by how many distinct enemy pieces attack (non-linear — a swarm is
-  // far more dangerous than the sum of its parts), then capped. Returns 0 for
-  // fewer than two attackers, so ordinary single-piece pressure never scores.
+  // Quadratic coordinated ring pressure, count-gated and capped.
   function kingAttackPenalty(weight, count) {
     if (count < 2) return 0;
     const mul = KING_ATK_COUNT_MUL[count < 7 ? count : 7];
-    const v = Math.round(weight * KING_ATK_SCALE * mul / 100);
+    const v = Math.round(weight * weight * KING_ATK_QUAD * mul / 100);
     return v > KING_ATK_CAP ? KING_ATK_CAP : v;
+  }
+
+  // Scan the pawn-shield direction for a clear enemy rook/queen ray.
+  function shelterRay(board, king, file, color) {
+    const step = color === 'w' ? -1 : 1;
+    for (let r = (king >> 3) + step; r >= 0 && r < 8; r += step) {
+      const p = board[r * 8 + file];
+      if (!p) continue;
+      return p[0] !== color && (p[1] === 'R' || p[1] === 'Q') ? SHELTER_RAY : 0;
+    }
+    return 0;
   }
 
   // Mating gradient for a lone king (loser) hunted by the winner's king.
@@ -437,11 +429,10 @@
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
   const QMAX = 16;          // quiescence ply bound: cut off runaway lines
-  // Quiet-check extension depth: for the first QCHECK_PLIES quiescence plies,
-  // quiescence also searches quiet (non-capturing) checks (see quiesceNode).
-  // 1 = only the horizon leaf itself, which is exactly where a quiet mating
-  // check would otherwise be missed, at minimum added width.
-  const QCHECK_PLIES = 1;
+  // Quiet-check extension bound: always at the horizon, with a selective second
+  // layer after a forced check evasion (see quiesceNode). That second layer
+  // reveals the tracked final quiet mating check without widening every branch.
+  const QCHECK_PLIES = 2;
   const TT_MAX = 1 << 21;   // transposition table entry cap
   const ABORT = { timeUp: true }; // thrown to unwind when the budget expires
 
@@ -656,7 +647,7 @@
   // (and check evasions) until the position is quiet, so the evaluation never
   // stops in the middle of an exchange (the "horizon effect"). Bounded to
   // QMAX plies so pathological lines can't run away.
-  function quiesceNode(state, alpha, beta, ply, qply, ctx) {
+  function quiesceNode(state, alpha, beta, ply, qply, ctx, afterCheck) {
     checkTime(ctx);
     ctx.qnodes++;
     // Repetition-dependency out-param, same contract as searchNode: the
@@ -744,12 +735,15 @@
       moves = pseudo;
     } else {
       moves = [];
-      const genChecks = qply < QCHECK_PLIES;
+      // After an evasion, the second layer admits only an immediate quiet mate.
+      const genChecks = qply < QCHECK_PLIES && (qply === 0 || afterCheck);
       for (const m of pseudo) {
         if (m.captured || m.promotion) { moves.push(m); continue; }
         if (!genChecks) continue;
         const nb = Chess.applyMove(state, m);
-        if (Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) moves.push(m);
+        if (!Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) continue;
+        // Non-mating follow-up checks belong to a deeper main-search draft.
+        if (qply === 0 || !hasLegalMove(nb)) moves.push(m);
       }
     }
 
@@ -757,7 +751,7 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
-      const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx);
+      const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx, inChk);
       if (ctx.repPly < repMin) repMin = ctx.repPly; // min over searched children
       if (maximizing) {
         if (score > best) best = score;
@@ -817,7 +811,7 @@
     // tell a checkmate from a quiet position or a stalemate from a won one,
     // which let shallow searches walk into (or refuse) forced mates.
     if (depth <= 0) {
-      if (ctx.quiesce) return quiesceNode(state, alpha, beta, ply, 0, ctx);
+      if (ctx.quiesce) return quiesceNode(state, alpha, beta, ply, 0, ctx, false);
       if (!hasLegalMove(state)) {
         return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
       }
@@ -1024,7 +1018,7 @@
       };
     });
 
-    let best = null, bestScore = 0, completed = 0, prevScore = 0;
+    let best = null, bestScore = 0, completed = 0;
 
     for (let d = 1; d <= maxDepth; d++) {
       // Aspiration window: from depth 2, expect this iteration to score
@@ -1037,19 +1031,7 @@
       // same value as an independent full-window search, and the 16-position
       // --exact bench shows 0 move/score divergences vs no aspiration. Mate
       // scores never aspire.
-      //
-      // The initial width ADAPTS to score volatility: the jump between the
-      // last two completed iterations (|score(d-1) - score(d-2)|) predicts how
-      // far this iteration may move, so a position whose score is swinging with
-      // depth — a tactic resolving past the horizon, exactly where a fixed
-      // narrow window pays a fail-and-widen re-search tail — starts wide enough
-      // to land the first attempt. On the game chessy202607240238 defence this
-      // cut the nodes-to-depth-5 roughly in half (the king-safety term makes
-      // that position swing ~180 cp as the mating attack resolves), keeping the
-      // depth that sees the mate inside the Master time budget. Stable positions
-      // keep the tight 50 cp window and its sharper pruning.
-      const swing = Math.abs(bestScore - prevScore);
-      let delta = Math.min(400, Math.max(50, Math.round(swing * 1.5)));
+      let delta = 50;
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
         lo = bestScore - delta; hi = bestScore + delta;
@@ -1108,7 +1090,6 @@
         break;
       }
       best = iterBest;
-      prevScore = bestScore;   // remember the prior completed score for volatility
       bestScore = iterScore;
       completed = d;
       // Order the whole root by this iteration's scores (fail-low moves
@@ -1194,6 +1175,10 @@
     hashKey: hashKey,
     repKey: repKey,
     MATE: MATE,
-    MATE_NEAR: MATE_NEAR
+    MATE_NEAR: MATE_NEAR,
+    _test: Object.freeze({
+      kingAttackPenalty: kingAttackPenalty,
+      shelterRay: shelterRay
+    })
   };
 })(typeof window !== 'undefined' ? window : globalThis);

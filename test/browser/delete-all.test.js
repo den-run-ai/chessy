@@ -48,6 +48,9 @@ require('./helper').run('delete-all', async function (t) {
   await page.click('#deleteAllBtn');
   check(await page.$eval('#deleteAllDialog', function (d) { return d.open === true; }),
     'Delete all opens a confirm dialog (first fence)');
+  check(await page.evaluate(function () {
+    return document.activeElement && document.activeElement.id === 'deleteAllCancel';
+  }), 'Delete all initially focuses Cancel, not Delete');
   await page.click('#deleteAllConfirm');
   await page.waitForFunction(function () {
     return document.getElementById('dataStatus').textContent.indexOf('deleted') !== -1;
@@ -173,4 +176,157 @@ require('./helper').run('delete-all', async function (t) {
   });
   check(/Reload once storage is available/.test(qualified.text) && qualified.kind === 'error',
     'a delete whose recovery could not be neutralized reports a qualified success');
+
+  // The persisted save can be older than the live state when a later save
+  // failed. Delete-all must neutralize that on-disk finished game too, even
+  // when the live game is new and unfinished.
+  await t.newGame({ mode: 'pvp' });
+  const staleBlob = await page.evaluate(function () {
+    let s = Chess.newGameState();
+    function play(from, to) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (m) {
+        return Chess.sqName(m.from) === from && Chess.sqName(m.to) === to;
+      }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4');
+    const blob = JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', difficulty: '2',
+      timeControl: 'none', clocks: null, timeForfeit: null, flipped: false,
+      gameId: 'stale-finished-game', endedAt: 42
+    });
+    localStorage.setItem('chessy-game-v1', blob);
+    localStorage.removeItem('chessy-pending-archive-v1');
+    return blob;
+  });
+
+  // A temporary read failure is not proof that the persisted recovery source
+  // is absent. If it cannot be removed either, success must be qualified.
+  await page.evaluate(function () {
+    const realGet = Storage.prototype.getItem;
+    const realRemove = Storage.prototype.removeItem;
+    window.__restoreSavedGameStorage = function () {
+      Storage.prototype.getItem = realGet;
+      Storage.prototype.removeItem = realRemove;
+      delete window.__restoreSavedGameStorage;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === 'chessy-game-v1') throw new Error('read blocked');
+      return realGet.call(this, key);
+    };
+    Storage.prototype.removeItem = function (key) {
+      if (key === 'chessy-game-v1') throw new Error('remove blocked');
+      return realRemove.call(this, key);
+    };
+    document.getElementById('deleteAllBtn').click();
+    document.getElementById('deleteAllConfirm').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent
+      .indexOf('Reload once storage is available') !== -1;
+  }, { timeout: 5000 });
+  const unreadable = await page.evaluate(function () {
+    window.__restoreSavedGameStorage();
+    const el = document.getElementById('dataStatus');
+    return { text: el.textContent, kind: el.dataset.kind,
+      saveStillPresent: localStorage.getItem('chessy-game-v1') !== null };
+  });
+  check(/Reload once storage is available/.test(unreadable.text) &&
+      unreadable.kind === 'error' && unreadable.saveStillPresent,
+    'an unreadable and unremovable saved game yields qualified success');
+
+  await page.evaluate(function () {
+    document.getElementById('deleteAllBtn').click();
+    document.getElementById('deleteAllConfirm').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('deleted') !== -1;
+  }, { timeout: 5000 });
+  check(await page.evaluate(function () {
+    return ChessyArchive.isFencedEnding(
+      'stale-finished-game', ['f3', 'e5', 'g4', 'Qh4#'], '0-1', 'checkmate') ||
+      localStorage.getItem('chessy-game-v1') === null;
+  }), 'Delete-all neutralizes a different finished game in the persisted save');
+
+  // Recreate that exact stale blob from outside the app so pagehide cannot
+  // overwrite the fixture. Its persisted fence must still prevent recovery.
+  await t.inject(function (blob) {
+    localStorage.setItem('chessy-game-v1', blob);
+  }, staleBlob);
+  await page.waitForTimeout(500);
+  check((await counts()).games === 0,
+    'the separately persisted stale finish stays deleted after a fresh boot');
+
+  // The UI holds the store write barrier for the whole destructive operation.
+  const blockedDuringDelete = await page.evaluate(function () {
+    const realDelete = CoachStore.deleteAllData;
+    let release;
+    CoachStore.deleteAllData = function () {
+      return new Promise(function (resolve) { release = resolve; });
+    };
+    document.getElementById('deleteAllBtn').click();
+    document.getElementById('deleteAllConfirm').click();
+    return Promise.all([
+      CoachStore.addCard({ gameId: 'late', ply: 0, due: 0, step: -1, attempts: [],
+        fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' })
+        .then(function () { return 'accepted'; }, function () { return 'rejected'; }),
+      CoachStore.importGame({ id: 'late', sans: [], result: '*', createdAt: 1 })
+        .then(function () { return 'accepted'; }, function () { return 'rejected'; })
+    ]).then(function (outcomes) {
+      release(true);
+      return new Promise(function (resolve) {
+        setTimeout(function () {
+          CoachStore.deleteAllData = realDelete;
+          resolve(outcomes);
+        }, 100);
+      });
+    });
+  });
+  check(blockedDuringDelete.every(function (v) { return v === 'rejected'; }),
+    'transaction and direct writes are rejected until Delete-all settles');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('deleted') !== -1;
+  }, { timeout: 5000 });
+
+  // Delay the boot re-offer, replace its live save with a new unfinished game,
+  // then clear the archive. Releasing recovery afterward must not reinsert the
+  // pre-clear boot snapshot.
+  await t.newGame({ mode: 'pvp' });
+  await mv('f2', 'f3'); await mv('e7', 'e5');
+  await mv('g2', 'g4'); await mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.addInitScript(function () {
+    Object.defineProperty(window, 'ChessyArchive', {
+      configurable: true,
+      set: function (value) {
+        const realReconcile = value.reconcilePending;
+        value.reconcilePending = function () {
+          return new Promise(function (resolve, reject) {
+            window.__releaseBootRecovery = function () {
+              delete window.__releaseBootRecovery;
+              Promise.resolve(realReconcile.call(value)).then(resolve, reject);
+            };
+          });
+        };
+        Object.defineProperty(window, 'ChessyArchive', {
+          configurable: true, writable: true, value: value
+        });
+      }
+    });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForFunction(function () { return typeof window.__releaseBootRecovery === 'function'; });
+  await t.newGame({ mode: 'pvp' });
+  await page.evaluate(function () {
+    document.getElementById('deleteAllBtn').click();
+    document.getElementById('deleteAllConfirm').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('deleted') !== -1;
+  }, { timeout: 5000 });
+  await page.evaluate(function () { window.__releaseBootRecovery(); });
+  await page.waitForTimeout(300);
+  check((await counts()).games === 0,
+    'a delayed pre-clear boot snapshot is invalidated instead of reinserted');
 });

@@ -47,6 +47,21 @@
   const DB_VERSION = 6;
 
   let dbPromise = null;
+  let opLock = false;
+
+  function setOpLock(on) {
+    opLock = !!on;
+  }
+
+  function openForWrite() {
+    if (opLock) return Promise.reject(new Error('a data operation is in progress'));
+    return open().then(function (db) {
+      // Recheck after a potentially slow database open. A write requested
+      // before the lock must not create its transaction behind the clear.
+      if (opLock) throw new Error('a data operation is in progress');
+      return db;
+    });
+  }
 
   function open() {
     if (!dbPromise) {
@@ -114,7 +129,7 @@
   // Run `fn(objectStore)` in a transaction; resolves with the result of the
   // request `fn` returns (or undefined) once the transaction commits.
   function tx(storeName, mode, fn) {
-    return open().then(function (db) {
+    return (mode === 'readwrite' ? openForWrite() : open()).then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction(storeName, mode);
         const req = fn(t.objectStore(storeName));
@@ -156,7 +171,7 @@
   // the rest of the app (last-writer-wins localStorage save). Divergent
   // cloned-tab completions are out of scope — tracked in #44.
   function archiveGame(game) {
-    return open().then(function (db) {
+    return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
         // Includes 'cards'/'analyses'/'analysisJobs': revising an ending in
         // place must ATOMICALLY remove the derived data (lesson cards,
@@ -237,7 +252,7 @@
   // record must already be fully validated — this only persists it (commit
   // once, atomically).
   function importGame(record) {
-    return open().then(function (db) {
+    return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction('games', 'readwrite');
         const s = t.objectStore('games');
@@ -284,7 +299,7 @@
   // Resolves with the updated record, 'stale' when the expected revision
   // was already consumed, or null when the card is gone.
   function gradeCard(id, expect, mutate) {
-    return open().then(function (db) {
+    return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction('cards', 'readwrite');
         const s = t.objectStore('cards');
@@ -314,7 +329,7 @@
   // two cards — the loser of the race updates the winner's card instead.
   // Resolves 'updated' when a card for the moment existed, else 'saved'.
   function upsertCardByMoment(fields, freshDefaults) {
-    return open().then(function (db) {
+    return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction('cards', 'readwrite');
         const s = t.objectStore('cards');
@@ -499,6 +514,9 @@
     if (!data.stores || typeof data.stores !== 'object' || Array.isArray(data.stores)) {
       return 'backup has no stores';
     }
+    if (!Array.isArray(data.stores.games) || !Array.isArray(data.stores.cards)) {
+      return 'backup is missing the games or cards array';
+    }
     for (var i = 0; i < DURABLE_STORES.length; i++) {
       var name = DURABLE_STORES[i];
       var rows = data.stores[name];
@@ -527,6 +545,9 @@
           if (!Number.isFinite(r.createdAt)) {
             return 'store "games" record ' + j + ' has a non-numeric createdAt';
           }
+          if (r.setupFen && !validFen(r.setupFen)) {
+            return 'store "games" record ' + j + ' has an invalid setupFen';
+          }
         }
         if (name === 'cards') {
           if (typeof r.gameId !== 'string') {
@@ -547,6 +568,9 @@
           // as empty); present-but-not-an-array is rejected.
           if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
             return 'store "cards" record ' + j + ' has a non-array attempts';
+          }
+          if (!Number.isInteger(r.step) || r.step < -1) {
+            return 'store "cards" record ' + j + ' has an invalid step';
           }
         }
       }
@@ -640,6 +664,7 @@
     exportAll: exportAll,
     validateBackup: validateBackup,
     restoreAll: restoreAll,
-    deleteAllData: deleteAllData
+    deleteAllData: deleteAllData,
+    setOpLock: setOpLock
   };
 })(typeof window !== 'undefined' ? window : globalThis);

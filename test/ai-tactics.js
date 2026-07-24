@@ -49,6 +49,17 @@ function solve(fen, nodes, positions) {
   };
 }
 
+function solveDepth(fen, depth, nodes, seed) {
+  const opts = { maxDepth: depth, quiesce: true };
+  if (nodes != null) opts.nodeLimit = nodes;
+  if (seed == null) opts.randomize = false; else opts.seed = seed;
+  const r = ChessAI.think(Chess.parseFen(fen), opts);
+  return {
+    uci: r.move ? Chess.sqName(r.move.from) + Chess.sqName(r.move.to) + (r.move.promotion || '') : '-',
+    score: r.score, depth: r.depth, nodes: r.nodes, move: r.move
+  };
+}
+
 // Is `move` (an engine result move object) actually legal in this position?
 // Existence alone (`!!move`) would let a broken engine pass an avoid-only or
 // smoke-test spec by returning a non-null but illegal move, so every spec
@@ -128,6 +139,51 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
   }
 }
 
+// --- Original-game positional decisions before the final tactical blunder.
+// Moves 18 and 25 are restraint guards: current main already avoids the two
+// historical choices, so the evaluation change must not reopen them. Move 26
+// is the direct oracle-regret correction: only ...g6 is independently accepted.
+console.log('tracked Master decisions (game chessy202607240238)');
+(function () {
+  const decisions = [
+    {
+      name: 'move 18 avoids ...Qg5',
+      fen: 'r3r1k1/1pp2ppp/4n2q/p1bpPN2/8/2PB2B1/PP4PP/R3Q2K b - - 1 18',
+      avoid: 'h6g5'
+    },
+    {
+      name: 'move 25 avoids ...Bb6',
+      fen: 'r3r1k1/1ppq1ppp/4n3/3pPN2/1P1b3B/3B3P/P3Q1P1/2R4K b - - 4 25',
+      avoid: 'd4b6'
+    }
+  ];
+  for (const spec of decisions) {
+    for (const flip of [false, true]) {
+      const fen = flip ? mirrorFen(spec.fen) : spec.fen;
+      const bad = flip ? mirrorMove(spec.avoid) : spec.avoid;
+      const r = solveDepth(fen, 5);
+      const suffix = flip ? ' (mirrored)' : '';
+      check(r.depth === 5, spec.name + suffix + ' [depth 5 completes]',
+        'completed d' + r.depth + ' in ' + r.nodes + ' nodes');
+      check(isLegal(fen, r.move) && r.uci !== bad, spec.name + suffix,
+        'played ' + r.uci + ' in ' + r.nodes + ' nodes');
+    }
+  }
+
+  const fen26 = 'r3r1k1/1ppq1ppp/1b2n3/3pPN2/1P4QB/3B3P/P5P1/2R4K b - - 6 26';
+  for (const flip of [false, true]) {
+    const fen = flip ? mirrorFen(fen26) : fen26;
+    const required = flip ? 'g2g3' : 'g7g6';
+    const r = solveDepth(fen, 5, 190000);
+    const suffix = flip ? ' (mirrored)' : '';
+    check(r.depth === 5, 'move 26 completes depth 5 within 190k nodes' + suffix,
+      'completed d' + r.depth + ' in ' + r.nodes + ' nodes');
+    check(isLegal(fen, r.move) && r.uci === required,
+      'move 26 chooses the accepted defence ' + required + suffix,
+      'played ' + r.uci + ' (d' + r.depth + ', ' + r.nodes + ' nodes)');
+  }
+})();
+
 // --- Horizon quiet-mate defence (regression for game log chessy202607240238).
 // At the old 2s Master budget the engine completed only depth 5 and played
 // 27...Rxa2??, walking into the forced 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#. The
@@ -189,6 +245,19 @@ console.log('horizon quiet-mate defence (game chessy202607240238)');
   const fen = 'r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27';
   const MATE_PLIES = 5;      // 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#
   const blunder = 'a8a2';    // 27...Rxa2??
+  // Exhaustive use of the independent solver above found exactly these moves
+  // avoid a forced mate inside the tracked five-ply horizon.
+  const safe = new Set(['f7f6', 'g7g6', 'g7g5', 'e6f8', 'e6g5']);
+  const safeMirror = new Set(['f2f3', 'g2g3', 'g2g4', 'e3f1', 'e3g4']);
+  // Independent deterministic ceilings per completed depth. The mirrored
+  // position gets separate headroom because generation-order node counts are
+  // not mirror invariant. These are algorithmic gates, not a wall-clock proxy;
+  // test/ai-master.js separately runs the literal production 5-second budget.
+  const limits = {
+    original: [0, 0, 5500, 12000, 50000, 200000],
+    mirror:   [0, 0, 6000, 12000, 57000, 200000]
+  };
+  let finalOriginal = null;
   for (const flip of [false, true]) {
     const f = flip ? mirrorFen(fen) : fen;
     const bad = flip ? mirrorMove(blunder) : blunder;
@@ -200,40 +269,33 @@ console.log('horizon quiet-mate defence (game chessy202607240238)');
     check(!!badMove && forcesMate(Chess.applyMove(st, badMove), MATE_PLIES),
       'solver: ' + bad + ' allows a forced mate in ' + MATE_PLIES + (flip ? ' (mirrored)' : ''),
       'solver did not confirm the known mate');
-    // (2) The engine, at a budget that completes depth 5, does not play it.
-    const r = solve(f, 400000);
-    check(r.uci !== bad && isLegal(f, r.move),
-      'engine avoids the mate-allowing ' + bad + (flip ? ' (mirrored)' : ''),
-      'played ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
-    // (2b) Tail-cost gate (original only — search node-count is not mirror
-    // invariant: move ordering explores in generation order, so a position and
-    // its colour-swapped twin complete the same depth at different node counts,
-    // and pinning a single tight budget to the canonical position is what keeps
-    // the guard meaningful). The Master loss was not that the engine COULDN'T
-    // see the defence but that seeing it — depth 5, the quiet-check horizon —
-    // cost more nodes than the 5 s budget covered, so time-budgeted play stopped
-    // at depth 4 and blundered. At ~60k nodes/s that budget is ~300k nodes, so
-    // depth 5 MUST complete, and the blunder be avoided, inside 300k nodes, or
-    // real Master play regresses even though the generous 400k check above still
-    // passes. This is the guard that bit when the #72 king-safety eval term
-    // first landed: it made this position score near-equal, and the resulting
-    // depth-4->5 swing inflated the aspiration re-search tail past the budget
-    // until a volatility-adaptive aspiration window brought it back under.
-    if (!flip) {
-      const rt = solve(f, 300000);
-      check(rt.depth >= 5 && rt.uci !== bad && isLegal(f, rt.move),
-        'depth 5 completes and avoids ' + bad + ' within the ~5 s (300k-node) budget',
-        'played ' + rt.uci + ' (d' + rt.depth + ' ' + rt.score + ')');
-    }
-    // (3) Exact guarantee (original only — the no-mate proof is full-width and
-    // ~5s): the move actually chosen allows NO forced mate in MATE_PLIES, so
-    // this catches any mate-allowing choice, not just the historical blunder.
-    if (!flip) {
-      check(!forcesMate(Chess.applyMove(st, r.move), MATE_PLIES),
-        'engine choice ' + r.uci + ' allows no forced mate in ' + MATE_PLIES,
-        'chose ' + r.uci + ', still allows mate');
+
+    const allowed = flip ? safeMirror : safe;
+    const budget = flip ? limits.mirror : limits.original;
+    for (let depth = 2; depth <= 5; depth++) {
+      // Depth 3 is the production-critical shallow decision, so also vary the
+      // seeded root shuffle. Deeper iterations converge to the same order.
+      const seeds = depth === 3 ? [null, 0, 1, 0xC0FFEE] : [null];
+      for (const seed of seeds) {
+        const r = solveDepth(f, depth, budget[depth], seed);
+        const suffix = (flip ? ' mirrored' : '') + ' d' + depth +
+          (seed == null ? '' : ' seed ' + seed);
+        check(r.depth === depth, 'move 27 completes' + suffix + ' within ' + budget[depth] + ' nodes',
+          'completed d' + r.depth + ' in ' + r.nodes + ' nodes');
+        check(isLegal(f, r.move) && allowed.has(r.uci),
+          'move 27 chooses a solver-safe defence at' + suffix,
+          'played ' + r.uci + ' (' + r.nodes + ' nodes)');
+        if (!flip && depth === 5) finalOriginal = { state: st, result: r };
+      }
     }
   }
+  // Exact full-width proof on the canonical depth-5 choice. The static safe
+  // set makes every shallower/mirrored gate cheap; this guards the set's use
+  // against a future search returning an unclassified mate-allowing move.
+  check(finalOriginal && !forcesMate(
+    Chess.applyMove(finalOriginal.state, finalOriginal.result.move), MATE_PLIES),
+  'canonical depth-5 choice allows no forced mate in ' + MATE_PLIES,
+  finalOriginal ? 'chose ' + finalOriginal.result.uci : 'depth 5 did not complete');
 })();
 
 // --- Conversion: play out a won ending against itself under a small budget.
@@ -333,11 +395,13 @@ console.log('quiescence repetition');
   check(ctx.repPly === Infinity, 'quiescence game-history draw stays cacheable (repPly=Infinity)',
     'repPly ' + ctx.repPly);
 
-  // (c) Control: with neither seeded, the same evasion is a plain material leaf.
+  // (c) Control: with neither repetition seeded, the same evasion remains a
+  // decisive non-draw. It need not equal the immediate static evaluation:
+  // bounded quiet checks may improve the quiescence value beyond that leaf.
   ctx = ChessAI.makeCtx(true, Infinity);
   const vFree = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx });
-  check(vFree === matVal, 'without a repetition the quiescence leaf is material',
-    'value ' + vFree + ' (expected ' + matVal + ')');
+  check(vFree > 0, 'without a repetition quiescence keeps the winning score',
+    'value ' + vFree + ' (static evaluation ' + matVal + ')');
 })();
 
 // --- Null-window scout vs a warm, wide-window TT (regression). With delta
@@ -455,15 +519,16 @@ check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
 // independent witness: alpha-beta to the horizon, then a self-contained
 // quiescence mirroring quiesceNode's rules (insufficient material, terminal
 // mate/stalemate, 50-move, QMAX=16, stand-pat, capture/promotion filter, check
-// evasions) — but with NO selective/delta pruning, NO TT, NO move ordering.
+// evasions and the selective follow-up quiet-mate layer) — but with NO
+// delta pruning, NO TT, NO move ordering.
 // Ordinary alpha-beta cutoffs and quiescence stand-pat remain (that is what it
 // shares with production); it just lacks the selective pruning and TT that make
 // production fast, so it is near-exponential and the positions are kept
 // shallow/small. Includes BOTH delta-review witnesses, the exact regressions
 // that motivated removing delta pruning.
 const QMAX_ORACLE = 16;
-const QCHECK_PLIES_ORACLE = 1; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
-function oracleQuiesce(state, alpha, beta, ply, qply, path) {
+const QCHECK_PLIES_ORACLE = 2; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
+function oracleQuiesce(state, alpha, beta, ply, qply, path, afterCheck) {
   if (Chess.insufficientMaterial(state.board)) return 0;
   const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
   const kingSq = state.board.indexOf(turn + 'K');
@@ -488,18 +553,18 @@ function oracleQuiesce(state, alpha, beta, ply, qply, path) {
     else { if (best <= alpha) return best; if (best < beta) beta = best; }
   }
   path.push(key);
-  // Same bounded quiet-check extension as quiesceNode: captures/promotions
-  // always, plus quiet (non-capturing) checks for the first QCHECK_PLIES_ORACLE
-  // plies. `legal` already carries each move's applied state, so the check test
-  // needs no extra applyMove.
-  const genChecks = qply < QCHECK_PLIES_ORACLE;
+  // Same selective quiet-check extension as quiesceNode: all quiet checks at
+  // qply 0; after a forced check evasion, only an immediate quiet mate at qply 1.
+  // `legal` already carries each move's applied state.
+  const genChecks = qply < QCHECK_PLIES_ORACLE && (qply === 0 || afterCheck);
   const moves = inChk ? legal : legal.filter(function (e) {
     if (e[0].captured || e[0].promotion) return true;
     if (!genChecks) return false;
-    return Chess.isAttacked(e[1].board, e[1].board.indexOf(enemy + 'K'), turn);
+    if (!Chess.isAttacked(e[1].board, e[1].board.indexOf(enemy + 'K'), turn)) return false;
+    return qply === 0 || Chess.legalMoves(e[1]).length === 0;
   });
   for (const e of moves) {
-    const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path);
+    const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path, inChk);
     if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
     else { if (s < best) best = s; if (best < beta) beta = best; }
     if (beta <= alpha) break;
@@ -516,7 +581,7 @@ function oracleQ(state, depth, alpha, beta, ply, path) {
   if (Chess.insufficientMaterial(state.board)) return 0;
   const key = ChessAI.repKey(state);
   for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
-  if (depth <= 0) return oracleQuiesce(state, alpha, beta, ply, 0, path);
+  if (depth <= 0) return oracleQuiesce(state, alpha, beta, ply, 0, path, false);
   const legal = [];
   for (const m of Chess.pseudoMoves(state)) {
     const nx = Chess.applyMove(state, m);
