@@ -35,10 +35,16 @@
   // racing a shared suspension and fence. archive.js reference-counts the
   // suspension too, as defense in depth.
   let opInFlight = false;
-  function savedFinishedRecord() {
+  function savedFinishedRecord(readState) {
     if (typeof Chess === 'undefined') return null;
+    let raw;
+    try { raw = localStorage.getItem(GAME_SAVE_KEY); }
+    catch (e) {
+      if (readState) readState.failed = true;
+      return null;
+    }
     let data;
-    try { data = JSON.parse(localStorage.getItem(GAME_SAVE_KEY)); }
+    try { data = JSON.parse(raw); }
     catch (e) { return null; }
     if (!data || typeof data.gameId !== 'string' || !Array.isArray(data.history)) return null;
     let s = Chess.newGameState();
@@ -241,13 +247,43 @@
     try { document.dispatchEvent(new CustomEvent('chessy:archivecleared', { detail: detail })); }
     catch (e) { ok = false; } // very old engines without the CustomEvent constructor
     if (!detail.neutralized) ok = false;
+
+    // The persisted save can be a different finished game from the live one
+    // when a later save failed. Neutralize that actual on-disk recovery source
+    // too; otherwise it can reappear on the next boot.
+    const saveRead = { failed: false };
+    const persisted = savedFinishedRecord(saveRead);
+    if (saveRead.failed) {
+      // Unknown is not the same as absent: remove the unreadable recovery
+      // source, or qualify success if storage will not let us neutralize it.
+      try { localStorage.removeItem(GAME_SAVE_KEY); }
+      catch (e) { ok = false; }
+    } else if (persisted) {
+      let neutralized = false;
+      if (typeof ChessyArchive !== 'undefined' && ChessyArchive.fenceEnding) {
+        neutralized = ChessyArchive.isFencedEnding &&
+          ChessyArchive.isFencedEnding(
+            persisted.id, persisted.sans, persisted.result, persisted.reason);
+        if (!neutralized) {
+          neutralized = ChessyArchive.fenceEnding(
+            persisted.id, persisted.sans, persisted.result, persisted.reason);
+        }
+      }
+      if (!neutralized) {
+        try { localStorage.removeItem(GAME_SAVE_KEY); }
+        catch (e) { ok = false; }
+      }
+    }
     return ok;
   }
 
-  // Suspend/resume live archive writes around a destructive replace, so a game
-  // that finishes DURING the restore can't queue a write on top of it. A
-  // missing/older archive module simply has nothing to suspend.
-  function suspendArchive(on) {
+  // Block every store write while a destructive replacement is in flight.
+  // Restore/Delete-all bypass the store lock internally; archive writes are
+  // parked separately so a failed operation does not lose a finished game.
+  function suspendWrites(on) {
+    if (CoachStore.setOpLock) {
+      try { CoachStore.setOpLock(on); } catch (e) { /* best effort */ }
+    }
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.setSuspended) {
       try { ChessyArchive.setSuspended(on); } catch (e) { /* best effort */ }
     }
@@ -264,14 +300,6 @@
     for (let i = 0; i < games.length; i++) {
       const g = games[i];
       let s;
-      // Chess.parseFen is lenient (pgn.js documents this and validates
-      // structure separately): a setupFen like "bad" would parse to a broken
-      // position that an empty-sans replay then declares usable. Reject it
-      // up front with the same structural check pgn.js uses.
-      if (g.setupFen && typeof ChessyPGN !== 'undefined' && ChessyPGN.validFen &&
-          !ChessyPGN.validFen(g.setupFen)) {
-        return 'game ' + (i + 1) + ' has an invalid starting position';
-      }
       try {
         s = g.setupFen ? Chess.parseFen(g.setupFen) : Chess.newGameState();
         if (!s.history) s.history = [];
@@ -332,6 +360,7 @@
           (g === 1 ? '' : 's') + ' and ' + c + ' lesson card' + (c === 1 ? '' : 's') +
           '. Your current games and cards will be removed. This cannot be undone.';
         openDialog(restoreDialog);
+        $('restoreCancel').focus();
       };
       reader.onerror = function () {
         if (myGen !== restoreGen) return;
@@ -356,12 +385,12 @@
       // Suspend live archive writes BEFORE the destructive transaction: a timed
       // game that flags or an AI move that finishes the game while the restore
       // is in flight must be PARKED, not landed on top of the replacement.
-      suspendArchive(true);
+      suspendWrites(true);
       CoachStore.restoreAll(data).then(function (counts) {
         // Committed. Fence recovery ONLY now (on success); a failed/aborted
         // restore leaves the durability queue and saved game untouched.
         const neutralized = fenceRecovery();
-        suspendArchive(false);
+        suspendWrites(false);
         opInFlight = false;
         const msg = 'Restored ' + total(counts) + ' record' + (total(counts) === 1 ? '' : 's') +
           ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards).' +
@@ -379,7 +408,7 @@
         // failure the old archive and its recovery sources are all intact. A
         // finish that arrived while suspended was PARKED, so it survives to the
         // next boot rather than being lost.
-        suspendArchive(false);
+        suspendWrites(false);
         opInFlight = false;
         setStatus('Restore failed: ' + (err && err.message ? err.message : 'unknown error') +
           '. Your existing archive is unchanged.', 'error');
@@ -400,7 +429,10 @@
   const deleteBtn = $('deleteAllBtn');
   const deleteDialog = $('deleteAllDialog');
   if (deleteBtn && deleteDialog) {
-    deleteBtn.addEventListener('click', function () { openDialog(deleteDialog); });
+    deleteBtn.addEventListener('click', function () {
+      openDialog(deleteDialog);
+      $('deleteAllCancel').focus();
+    });
     $('deleteAllCancel').addEventListener('click', function () { closeDialog(deleteDialog); });
     $('deleteAllConfirm').addEventListener('click', function () {
       closeDialog(deleteDialog);
@@ -422,10 +454,10 @@
       // exact cleared endings (by signature, so a later Undo → revised finish
       // still archives) and drop the queue; reconcilePending() honours the
       // fence even if the drop is momentarily blocked.
-      suspendArchive(true);
+      suspendWrites(true);
       CoachStore.deleteAllData().then(function () {
         const neutralized = fenceRecovery();
-        suspendArchive(false);
+        suspendWrites(false);
         opInFlight = false;
         const msg = 'All training data deleted.' +
           (neutralized ? '' : ' Reload once storage is available so the old game cannot return.');
@@ -439,7 +471,7 @@
       }).catch(function (err) {
         // Nothing was fenced or dropped — every recovery source is intact. A
         // finish that arrived while suspended was PARKED, so it survives.
-        suspendArchive(false);
+        suspendWrites(false);
         opInFlight = false;
         setStatus('Delete failed: ' + (err && err.message ? err.message : 'storage unavailable'), 'error');
       });
