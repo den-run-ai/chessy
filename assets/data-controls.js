@@ -161,8 +161,12 @@
     // has no such key to collide with; Object.keys still enumerates own keys.
     const byId = Object.create(null);
     const committedSans = Object.create(null); // original committed moves per id
+    // Ids whose current winner is an UNCONFIRMED pending-queue record. The
+    // finished live save may not displace one it can't prove is strictly newer
+    // (see the guard below) — the same rule park() enforces at boot.
+    const pendingWon = Object.create(null);
     games.forEach(function (g) { byId[g.id] = g; committedSans[g.id] = g.sans; });
-    function apply(rec) {
+    function apply(rec, fromSaved) {
       if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) return;
       if (keep && !keep(rec)) return;
       const cur = byId[rec.id];
@@ -185,26 +189,37 @@
         // A genuine REVISION (same id, different ending): the higher rev is the
         // later finish and wins. A strictly OLDER rev is kept out — so a stale
         // queue leftover or a stale live save can't regress a newer committed
-        // revision (nor prune its cards). Equal/absent revs (legacy) fall back
-        // to application order, i.e. the later-applied recovery source wins.
+        // revision (nor prune its cards).
         const curRev = Number.isFinite(cur.rev) ? cur.rev : -Infinity;
         const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
         if (recRev < curRev) return; // rec is an older finish — keep the current winner
+        // The finished LIVE SAVE must not displace a same-id PENDING recovery
+        // record it cannot prove is STRICTLY newer — the same guard park() uses
+        // when a boot re-offer meets a pending entry. On a pre-rev upgrade both
+        // are revless (equal -Infinity): the pending queue holds the
+        // deliberately-recorded finish (B) while the live save can be the OLDER
+        // ending (A) whose save() happened to succeed when B's failed. Keep the
+        // pending copy — dropping it would silently omit the only recoverable copy
+        // of the revision. (A committed winner is NOT shielded this way: a revless
+        // live save legitimately supersedes a revless committed row, by
+        // application order.)
+        if (fromSaved && pendingWon[rec.id] && recRev === curRev) return;
       }
       byId[rec.id] = rec; // new id, or a same-or-newer revision of this id
+      pendingWon[rec.id] = !fromSaved; // a pending apply won; a saved apply cleared it
     }
     // Order of application only breaks rev ties (legacy revless records):
     // committed is already in byId, then the queue, then the live save last.
     if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
-      ChessyArchive.pendingRecords().forEach(apply);
+      ChessyArchive.pendingRecords().forEach(function (r) { apply(r, false); });
     } else {
       // Archive module absent (partial cache eviction lost archive.js): read the
       // durability queue straight from localStorage so a finished game
       // recoverable ONLY from the queue is still exported, not silently dropped.
-      rawPendingRecords().forEach(apply);
+      rawPendingRecords().forEach(function (r) { apply(r, false); });
     }
     const saved = savedFinishedRecord();
-    if (saved) apply(saved);
+    if (saved) apply(saved, true);
     // Prune cards ONCE now that the winner per id is known: against the ORIGINAL
     // committed moves (what the stored cards were cut for) and the FINAL ending.
     // Doing it per-apply would let an intermediate revision that later loses

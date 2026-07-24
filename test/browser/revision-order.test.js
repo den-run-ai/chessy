@@ -19,6 +19,7 @@ require('./helper').run('revision-order', async function (t) {
     await page.evaluate(function () {
       localStorage.removeItem('chessy-pending-archive-v1');
       localStorage.removeItem('chessy-game-v1');
+      localStorage.removeItem('chessy-archive-rev-v1'); // the persisted REV_KEY floor
       return new Promise(function (resolve) {
         const req = indexedDB.deleteDatabase('chessy-coach');
         req.onsuccess = req.onerror = req.onblocked = function () { resolve(); };
@@ -258,6 +259,42 @@ require('./helper').run('revision-order', async function (t) {
     localStorage.removeItem('chessy-pending-archive-v1');
   });
 
+  // ── (legacy save vs pending) A pre-rev upgrade: saving revised ending B
+  // failed but PARKING B succeeded, so chessy-game-v1 still holds the OLDER
+  // ending A under the same id; both are legitimately revless. The saved copy is
+  // applied LAST in the merge, but it must NOT displace the pending revision — the
+  // same preservation park() enforces at boot, so the only recoverable copy of
+  // the revision is not silently omitted from the backup.
+  await reset();
+  await page.click('#tabReview');
+  await page.waitForSelector('#gameListWrap:not([hidden])');
+  await page.waitForTimeout(200);
+  await page.evaluate(function () {
+    // Pending B: the revless revision, recoverable only from the queue.
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'legacy-save-x': { w: 't', rec: { id: 'legacy-save-x', source: 'play',
+        sans: ['d4', 'd5', 'Qd3'], result: '1-0', reason: 'checkmate', mode: 'pvp',
+        plies: 3, clocks: [null, null, null], createdAt: 20 } } })); // no rev — legacy
+    // Live save A: a valid finished game of a DIFFERENT ending, also revless.
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // fool's mate
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'legacy-save-x',
+      endedAt: 300 })); // no rev — legacy
+  });
+  const [ml] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const mbl = JSON.parse(fs.readFileSync(await ml.path(), 'utf8'));
+  const legacyMerge = mbl.stores.games.find(function (g) { return g.id === 'legacy-save-x'; });
+  check(legacyMerge && legacyMerge.sans.join(',') === 'd4,d5,Qd3',
+    'merge: a revless live save does not displace a same-id revless pending revision');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-game-v1'); localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
   // ── (Rh4) The floor is seeded from COMMITTED rows at boot. A revision can
   // persist ONLY to IndexedDB (near quota, REV_KEY + the save + the pending
   // entry all fail while the commit succeeds); after a reload the localStorage
@@ -280,6 +317,112 @@ require('./helper').run('revision-order', async function (t) {
   const seeded = await page.evaluate(function () { return ChessyArchive.nextRev(); });
   check(seeded > 50,
     'the revision floor is seeded from committed rows at boot (a commit-only rev is not lost)');
+
+  // ── (P2 exhaustion) The counter FAILS EXPLICITLY at the ceiling instead of
+  // repeating a value. Seeded one below REV_MAX, nextRev() issues that last
+  // distinct rev once; the next call — which could only re-emit the same
+  // (unincrementable) integer — throws rather than handing two endings one rev.
+  const exhaust = await page.evaluate(function () {
+    const REV_MAX = Number.MAX_SAFE_INTEGER - 1;
+    ChessyArchive.seedRev(REV_MAX - 1);
+    const first = ChessyArchive.nextRev(); // the last issuable rev
+    let threw = false, repeated = false;
+    try {
+      const second = ChessyArchive.nextRev();
+      repeated = (second === first || second >= Number.MAX_SAFE_INTEGER);
+    } catch (e) { threw = true; }
+    return { first: first, threw: threw, repeated: repeated };
+  });
+  check(exhaust.first === Number.MAX_SAFE_INTEGER - 1 && exhaust.threw && !exhaust.repeated,
+    'nextRev issues the last distinct rev once, then fails explicitly rather than repeating at the ceiling');
+
+  // ── (needsRev) A finish that could not be assigned a rev because the archive
+  // module was missing is persisted with a `needsRev` marker (rev:null). It is
+  // NOT pre-rev legacy data: on the next boot (module present) the boot re-offer
+  // mints a real rev ABOVE the committed floor, so archiveGame() ranks the
+  // genuinely-newer finish over an older committed row instead of discarding it.
+  await reset();
+  await page.evaluate(function () {
+    // The older committed ending under the same id (a numeric rev).
+    return CoachStore.putGame({ id: 'needsrev-x', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 3 });
+  });
+  await t.inject(function () {
+    // The newer finish, saved but never archived (module was gone): needsRev, no rev.
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: 'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3',
+      history: [
+        { move: { from: 53, to: 45, piece: 'wP', captured: null, promotion: null, ep: false, castle: null, double: false }, san: 'f3' },
+        { move: { from: 12, to: 28, piece: 'bP', captured: null, promotion: null, ep: false, castle: null, double: true }, san: 'e5' },
+        { move: { from: 54, to: 38, piece: 'wP', captured: null, promotion: null, ep: false, castle: null, double: true }, san: 'g4' },
+        { move: { from: 3, to: 39, piece: 'bQ', captured: null, promotion: null, ep: false, castle: null, double: false }, san: 'Qh4#' }
+      ],
+      positions: {
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -': 1,
+        'rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq -': 1,
+        'rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq -': 1,
+        'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq -': 1,
+        'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq -': 1
+      },
+      mode: 'pvp', difficulty: '2', timeControl: 'none', clocks: null, timeForfeit: null,
+      flipped: false, gameId: 'needsrev-x', endedAt: 40, needsRev: true
+    }));
+  });
+  await page.waitForTimeout(600); // let the boot seed → re-offer mint + record settle
+  const needsRev = await page.evaluate(function () { return CoachStore.getGame('needsrev-x'); });
+  check(needsRev && needsRev.sans.join(',') === 'f3,e5,g4,Qh4#' &&
+    Number.isFinite(needsRev.rev) && needsRev.rev > 3,
+    'a module-absent finish (needsRev) is minted a rev on boot and archived over an older committed row');
+
+  // ── (await floor) A finish must not obtain a rev until the committed-row floor
+  // seed settles. listGames is made SLOW so the seed is still pending when the
+  // game finishes; the finish awaits revReady, so its rev is minted ABOVE the
+  // committed floor (50) — never the low value a pre-seed nextRev() would issue.
+  await reset();
+  await page.evaluate(function () {
+    // An unrelated committed row at a high rev the localStorage floor can't see.
+    return CoachStore.putGame({ id: 'floor-other', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 50 })
+      .then(function () {
+        localStorage.removeItem('chessy-archive-rev-v1');
+        localStorage.removeItem('chessy-game-v1');
+        localStorage.removeItem('chessy-pending-archive-v1');
+      });
+  });
+  // Wrap CoachStore.listGames to resolve slowly, BEFORE store.js defines it, so
+  // the boot floor seed is still in flight while the game below finishes.
+  await page.addInitScript(function () {
+    let real;
+    Object.defineProperty(window, 'CoachStore', {
+      configurable: true,
+      get: function () { return real; },
+      set: function (v) {
+        real = v;
+        if (v && typeof v.listGames === 'function' && !v.__slowListGames) {
+          const orig = v.listGames.bind(v);
+          v.listGames = function () {
+            return new Promise(function (r) { setTimeout(r, 1000); }).then(function () { return orig(); });
+          };
+          v.__slowListGames = true;
+        }
+      }
+    });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // fool's mate finishes before the slow seed
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForTimeout(1400); // slow seed settles, then the deferred rev is minted + recorded
+  const awaited = await page.evaluate(function () {
+    const save = JSON.parse(localStorage.getItem('chessy-game-v1') || 'null');
+    return CoachStore.getGame(save && save.gameId).then(function (g) {
+      return { committedRev: g && g.rev, savedRev: save && save.rev };
+    });
+  });
+  check(Number.isFinite(awaited.committedRev) && awaited.committedRev > 50 && awaited.savedRev > 50,
+    'a finish during a slow boot seed waits for revReady and mints a rev above the committed floor');
 
   await reset(); // leave a clean store for the console-error check
 });

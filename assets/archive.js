@@ -86,9 +86,19 @@
     return floor;
   }
   function nextRev() {
-    // Clamp the floor to REV_MAX so the return is always a safe integer even if
-    // some source sits at the ceiling; the caps above keep a real floor far below.
-    const rev = Math.min(durableRevFloor(), REV_MAX) + 1;
+    const floor = durableRevFloor();
+    // Exhaustion, handled EXPLICITLY rather than clamped: past REV_MAX the +1
+    // reaches MAX_SAFE_INTEGER, where `x + 1 === x`, so clamping would hand two
+    // different endings the SAME rev on every later call and let park()/
+    // archiveGame() treat the newer one as stale. When the floor has reached the
+    // ceiling there is no distinct safe integer left to issue, so THROW — the
+    // callers (showGameOver, the boot re-offer, reconcile migration) already
+    // treat a failed allocation as "leave this finish revless" rather than mint a
+    // duplicate. Unreachable by real play (2^53 finishes); only a hand-edited
+    // localStorage value could approach it, and validateBackup rejects a restored
+    // rev at/above the ceiling.
+    if (floor >= REV_MAX) throw new Error('revision sequence exhausted');
+    const rev = floor + 1;
     memRev = rev;
     try { localStorage.setItem(REV_KEY, String(rev)); }
     catch (e) { /* quota: the floor is re-derived from durable sources next time */ }
@@ -374,7 +384,11 @@
       // overwrite this committed copy (revless vs revless cannot be ordered). A
       // revision awaiting recovery thereby outranks its stale saved twin once it
       // commits. Live entries already carry a rev; this only touches legacy ones.
-      if (!Number.isFinite(rec.rev)) rec.rev = nextRev();
+      // If the sequence is exhausted (nextRev throws — astronomically unlikely),
+      // the entry stays revless and still commits, rather than aborting the drain.
+      if (!Number.isFinite(rec.rev)) {
+        try { rec.rev = nextRev(); } catch (e) { /* exhausted: commit revless */ }
+      }
       drains.push(commit(rec, entry.w).then(
         function (v) { return { ok: true, v: v }; },
         function (e) { return { ok: false, e: e, id: id }; }));

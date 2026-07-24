@@ -674,15 +674,14 @@
       'By ' + status.reason + ' · ' + status.result;
     // Stamp (and persist) the completion time on the FIRST presentation:
     // a re-shown ending keeps it, and a later boot's reconcile archives
-    // under this time, not the restart time.
+    // under this time, not the restart time. The revision marker is NOT minted
+    // here: it is allocated in archiveCurrentGame AFTER the committed-row floor
+    // seed settles (revReady), so a finish during a slow boot cannot mint a rev
+    // below a committed row and be rejected by archiveGame(). The ending is
+    // persisted now regardless (the tab can die before the rev lands); the save
+    // is rewritten with the rev once it is allocated.
     if (!gameEndedAt) {
       gameEndedAt = Date.now();
-      // A fresh revision marker for this finish (a revised finish, after undo,
-      // clears gameRev and so takes a new, higher rev). Guarded on the module
-      // being present — a missing archive can't order anything anyway.
-      if (window.ChessyArchive && ChessyArchive.nextRev) {
-        try { gameRev = ChessyArchive.nextRev(); } catch (e) { gameRev = null; }
-      }
       save();
     }
     // Open the dialog BEFORE the archive attempt: a SYNCHRONOUS failure
@@ -731,47 +730,77 @@
   let archiveAttempt = Promise.resolve(null);
 
   function archiveCurrentGame(status) {
+    const idAtCall = gameId;
     // A missing archive module (e.g. partial cache eviction took store.js
     // or archive.js) is a FAILURE, not silence — the game will not be
-    // recorded. (Synchronous, so showGameOver opens the dialog FIRST.)
+    // recorded. (Synchronous, so showGameOver opens the dialog FIRST.) It also
+    // cannot be assigned a revision: mark the save as NEEDING one so a later
+    // boot where the module is present mints a fresh rev for it. A genuinely
+    // newer finish that lost its rev to a missing module is NOT pre-rev legacy
+    // data — leaving it revless would let an older committed row outrank it and
+    // hide the revised game forever.
     if (!window.ChessyArchive) {
-      showArchiveFailure(archiveNoteEl, gameId);
+      gameNeedsRev = true;
+      save();
+      showArchiveFailure(archiveNoteEl, idAtCall);
       archiveAttempt = Promise.resolve(null);
       return;
     }
     // The dialog's note resets per presentation; the page note clears
     // only through ownership (see clearArchiveFailure).
     archiveNoteEl.hidden = true;
-    const idAtCall = gameId;
     const seqAtCall = ++archiveSeq;
     archiveAttempts.set(idAtCall, seqAtCall);
-    archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall,
-      { endedAt: gameEndedAt, rev: gameRev })
-      .then(function (storedId) {
-        // The game's record exists now — withdraw any page-note blame for
-        // it. Only as the game's LATEST attempt: a superseded attempt's
-        // success says nothing about the revision that replaced it.
-        if (archiveAttempts.get(idAtCall) === seqAtCall) clearArchiveFailure(idAtCall);
-        return storedId;
-      }, function () {
-        if (archiveAttempts.get(idAtCall) !== seqAtCall) {
-          // A NEWER attempt superseded this one (undo → revised finish
-          // re-archived under the SAME game id). That attempt owns the
-          // outcome — reporting this stale failure would blame a dialog
-          // whose own (revised) record may have committed fine.
-          return;
+    // Pin the finished position: the rev is allocated and the record written
+    // only AFTER revReady, and an Undo could reassign `state`/`settings`
+    // meanwhile — the snapshot keeps this attempt tied to the ending it is for.
+    const recState = state;
+    const recSettings = Object.assign({}, settings);
+    archiveAttempt = revReady.then(function () {
+      // A NEWER attempt for this same id (undo → revised finish re-archived under
+      // the SAME id) has taken ownership — it will record the current ending.
+      // Recording the superseded snapshot now would be a wasted write racing the
+      // winner; skip it and resolve null (Review then falls back to the list).
+      if (archiveAttempts.get(idAtCall) !== seqAtCall) return null;
+      // Allocate the revision now that the committed-row floor is seeded — never
+      // before, so this finish outranks every committed row. Reuse a rev already
+      // stamped for this live finish; otherwise mint one (persisting it onto the
+      // live save only while this id is still the live game).
+      let recRev = (gameId === idAtCall && Number.isFinite(gameRev)) ? gameRev : null;
+      if (recRev == null && ChessyArchive.nextRev) {
+        try { recRev = ChessyArchive.nextRev(); }
+        catch (e) { recRev = null; } // sequence exhausted → record revless
+        if (gameId === idAtCall) {
+          gameRev = recRev; gameNeedsRev = false; save();
         }
-        if (gameId !== idAtCall) {
-          // A failure landing after a NEWER game replaced this one must
-          // not show inside the newer game's dialog — that would blame
-          // the wrong game. Route it to the page note (the record stays
-          // parked for boot recovery either way).
-          showArchiveFailure(archiveBootNoteEl, idAtCall);
-        } else {
-          showArchiveFailure(archiveNoteEl, idAtCall);
-        }
-        return null;
-      });
+      }
+      return ChessyArchive.record(recState, recSettings, status, idAtCall,
+        { endedAt: gameEndedAt, rev: Number.isFinite(recRev) ? recRev : undefined });
+    }).then(function (storedId) {
+      // The game's record exists now — withdraw any page-note blame for
+      // it. Only as the game's LATEST attempt: a superseded attempt's
+      // success says nothing about the revision that replaced it.
+      if (archiveAttempts.get(idAtCall) === seqAtCall) clearArchiveFailure(idAtCall);
+      return storedId;
+    }, function () {
+      if (archiveAttempts.get(idAtCall) !== seqAtCall) {
+        // A NEWER attempt superseded this one (undo → revised finish
+        // re-archived under the SAME game id). That attempt owns the
+        // outcome — reporting this stale failure would blame a dialog
+        // whose own (revised) record may have committed fine.
+        return;
+      }
+      if (gameId !== idAtCall) {
+        // A failure landing after a NEWER game replaced this one must
+        // not show inside the newer game's dialog — that would blame
+        // the wrong game. Route it to the page note (the record stays
+        // parked for boot recovery either way).
+        showArchiveFailure(archiveBootNoteEl, idAtCall);
+      } else {
+        showArchiveFailure(archiveNoteEl, idAtCall);
+      }
+      return null;
+    });
   }
 
   // ---- Controls ----
@@ -789,6 +818,19 @@
   // merge. Set when the game first finishes; cleared with gameEndedAt, so a
   // revised finish (undo → different ending) takes a new, higher rev.
   let gameRev = null;
+  // A finish that could NOT be assigned a rev because the archive module was
+  // absent (partial cache eviction). Persisted with the save so the next boot —
+  // where the module is present — mints a real rev for it instead of treating
+  // this genuinely-newer finish as pre-rev (revless) data that an older
+  // committed row would outrank. Cleared once a rev is allocated, and on
+  // undo/New game with gameRev.
+  let gameNeedsRev = false;
+  // Resolves once the revision floor has been seeded from the committed rows at
+  // boot (see the boot section). Revision allocation for a live finish AWAITS
+  // this, so a finish during a slow IndexedDB read cannot mint a rev below a
+  // committed row (which archiveGame() would then reject, losing the finish).
+  // Initialised resolved so a finish that somehow precedes boot never hangs.
+  let revReady = Promise.resolve();
   // Monotonic archive-attempt generation plus, per game id, the seq of
   // that game's LATEST attempt: a settlement (success or failure) may act
   // only while its attempt is still the game's newest — a superseded
@@ -809,6 +851,7 @@
     gameId = newGameId();
     gameEndedAt = null;
     gameRev = null;
+    gameNeedsRev = false;
     cancelAi();
     state = Chess.newGameState();
     selected = null;
@@ -872,6 +915,7 @@
     // replaced.
     gameEndedAt = null;
     gameRev = null;
+    gameNeedsRev = false;
     render(); // persists the cleared endedAt via save()
     // If undo landed on the AI's turn (e.g. undoing the computer's opening
     // move while playing Black), let it move again instead of deadlocking.
@@ -1068,7 +1112,11 @@
         // The revision marker for the current finish, so a backup that has to
         // recover this game from the save alone can order it against a committed
         // row or a parked copy of the same id (see data-controls merge).
-        rev: gameRev
+        rev: gameRev,
+        // Set only when a finish could not be assigned a rev because the archive
+        // module was missing: a boot with the module present mints one instead
+        // of ranking this finish as pre-rev legacy data (see the boot re-offer).
+        needsRev: gameNeedsRev || undefined
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
   }
@@ -1133,6 +1181,7 @@
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
       gameEndedAt = Number.isFinite(data.endedAt) ? data.endedAt : null;
       gameRev = Number.isFinite(data.rev) ? data.rev : null;
+      gameNeedsRev = data.needsRev === true && gameRev == null;
       return true;
     } catch (e) {
       return false;
@@ -1163,6 +1212,9 @@
   const bootId = gameId;
   const bootEndedAt = gameEndedAt;
   const bootRev = gameRev;
+  // A restored finish whose rev was never assigned (module missing when it
+  // ended): the boot re-offer mints one now that the module is back.
+  const bootNeedsRev = gameNeedsRev;
   // settings is a shared mutable object — a New game started while the
   // drain below is in flight must not relabel the restored record.
   const bootSettings = Object.assign({}, settings);
@@ -1181,28 +1233,32 @@
     if (bootStatus.over) showArchiveFailure(archiveBootNoteEl, bootId);
     if (pendingParked) showArchiveFailure(archiveBootNoteEl);
   } else {
-    // Seed the revision floor from the COMMITTED rows. A revision can persist
-    // ONLY to IndexedDB — near quota, REV_KEY, the live save, and the pending
-    // entry can all fail while the independent commit succeeds — so without this
-    // the next session's floor (which reads only those localStorage sources)
-    // would sit below that committed rev and mint a LOWER rev for a new finish,
-    // which archiveGame() would then reject. Async, but a new finish needs moves
-    // first, so it settles well before one can occur. (nextRev() clamps to the
-    // safe range, so even a poisoned committed rev can't break the sequence.)
+    // Seed the revision floor from the COMMITTED rows, AWAITED as `revReady`. A
+    // revision can persist ONLY to IndexedDB — near quota, REV_KEY, the live
+    // save, and the pending entry can all fail while the independent commit
+    // succeeds — so without this the next session's floor (which reads only those
+    // localStorage sources) would sit below that committed rev and mint a LOWER
+    // rev for a new finish, which archiveGame() would then reject. Every rev
+    // allocation (a live finish, the boot re-offer, the reconcile migration)
+    // waits on this, so a finish during a SLOW IndexedDB read cannot obtain a rev
+    // below a committed row. (nextRev() caps to the safe range, so even a
+    // poisoned committed rev can't break the sequence.) Never rejects — a failed
+    // read simply leaves the floor session-local.
     if (CoachStore.listGames && ChessyArchive.seedRev) {
-      CoachStore.listGames().then(function (games) {
+      revReady = CoachStore.listGames().then(function (games) {
         let maxRev = -Infinity;
         games.forEach(function (g) { if (Number.isFinite(g.rev) && g.rev > maxRev) maxRev = g.rev; });
         if (Number.isFinite(maxRev)) ChessyArchive.seedRev(maxRev);
       }).catch(function () { /* floor stays session-local; best effort */ });
     }
-    // Drain the durability queue FIRST (a Rematch may have replaced the
-    // main save while a write was in flight), THEN re-offer the restored
-    // game — SEQUENTIALLY, so two writes to the restored game's record
-    // never race, but INDEPENDENTLY: queue entries are per game, and one
-    // game failing to commit must not cost the restored game its
-    // reconcile (failed entries stay parked for the next boot).
-    ChessyArchive.reconcilePending()
+    // Drain the durability queue AFTER the floor seed (so a reconcile migration
+    // of a legacy entry also mints above the committed floor), THEN re-offer the
+    // restored game — SEQUENTIALLY, so two writes to the restored game's record
+    // never race, but INDEPENDENTLY: queue entries are per game, and one game
+    // failing to commit must not cost the restored game its reconcile (failed
+    // entries stay parked for the next boot).
+    revReady
+      .then(function () { return ChessyArchive.reconcilePending(); })
       .then(null, function (err) {
         // Blame the specific game where one is attributable, so a later
         // successful replacement write can withdraw the note.
@@ -1218,8 +1274,21 @@
         if (archiveAttempts.has(bootId)) return;
         const seqAtCall = ++archiveSeq;
         archiveAttempts.set(bootId, seqAtCall);
+        // A finish that could not be assigned a rev because the archive module
+        // was missing (needsRev) is NOT legacy pre-rev data: mint it a fresh rev
+        // now that the module is back and the floor is seeded, so archiveGame()
+        // ranks it as the newer finish it is instead of oldest (revless). Persist
+        // the rev onto the live save too, while this is still the live game.
+        let useRev = bootRev;
+        if (bootNeedsRev && !Number.isFinite(useRev) && ChessyArchive.nextRev) {
+          try { useRev = ChessyArchive.nextRev(); } catch (e) { useRev = null; }
+          if (Number.isFinite(useRev) && gameId === bootId &&
+              archiveAttempts.get(bootId) === seqAtCall) {
+            gameRev = useRev; gameNeedsRev = false; save();
+          }
+        }
         ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
-          { endedAt: bootEndedAt, rev: bootRev })
+          { endedAt: bootEndedAt, rev: Number.isFinite(useRev) ? useRev : undefined })
           .then(function () {
             if (archiveAttempts.get(bootId) === seqAtCall) clearArchiveFailure(bootId);
           }, function () {
