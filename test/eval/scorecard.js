@@ -279,6 +279,9 @@ function scoreVector(mode, records, result, manifest) {
   return {
     corpus: manifest.corpus,
     generator_version: manifest.generator_version,
+    // The exact frozen-corpus digest: a same-label, same-size REPLACEMENT
+    // corpus (different positions) must not compare clean against the baseline.
+    ndjson_sha256: manifest.ndjson_sha256,
     mode: mode,
     cases: records.length,
     analyse_opts: manifest.analyse_opts,
@@ -310,14 +313,18 @@ function compareBaseline(baseline, sv, log) {
   log = log || console.log;
   log('\nbefore/after vs baseline (' + baseline.mode + '):');
   let regressed = false;
-  // A comparison across different corpora, modes, or ANALYSE OPTIONS is not
-  // apples-to-apples — refuse it rather than silently "pass". Equal pass counts
-  // under a changed nodeLimit/multiPV/pvLen/quiesce evaluated a different search.
+  // A comparison across different corpora, modes, ANALYSE OPTIONS, generator
+  // versions, or a DIFFERENT frozen corpus (same label, different positions) is
+  // not apples-to-apples — refuse it rather than silently "pass". Equal pass
+  // counts under a changed search config or a swapped corpus are meaningless.
   const optsEq = JSON.stringify(baseline.analyse_opts) === JSON.stringify(sv.analyse_opts);
-  if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode || !optsEq) {
-    log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.mode +
-      ' opts=' + JSON.stringify(baseline.analyse_opts) + ' vs ' + sv.corpus + '/' + sv.mode +
-      ' opts=' + JSON.stringify(sv.analyse_opts) + '  ← REGRESSION');
+  if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode || !optsEq ||
+      baseline.generator_version !== sv.generator_version ||
+      baseline.ndjson_sha256 !== sv.ndjson_sha256) {
+    log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.generator_version + '/' + baseline.mode +
+      ' digest=' + String(baseline.ndjson_sha256).slice(0, 12) + ' opts=' + JSON.stringify(baseline.analyse_opts) +
+      ' vs ' + sv.corpus + '/' + sv.generator_version + '/' + sv.mode +
+      ' digest=' + String(sv.ndjson_sha256).slice(0, 12) + ' opts=' + JSON.stringify(sv.analyse_opts) + '  ← REGRESSION');
     return false;
   }
   for (const axis of AXES) {

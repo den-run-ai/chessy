@@ -1,6 +1,7 @@
 {
   "corpus": "eval-v1",
   "generator_version": "eval-v1.0.0",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
   "mode": "shard",
   "cases": 64,
   "analyse_opts": {
