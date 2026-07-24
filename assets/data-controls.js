@@ -30,7 +30,9 @@
   // archived until it ends).
   const GAME_SAVE_KEY = 'chessy-game-v1';
   const PENDING_KEY = 'chessy-pending-archive-v1';
-  const FENCE_KEY = 'chessy-archive-fenced-v1';
+  const LEGACY_FENCE_KEY = 'chessy-archive-fenced-v1';
+  const FENCE_KEY = 'chessy-archive-fenced-v2';
+  const FENCE_CAP = 200;
   // A destructive operation (restore / Delete-all) holds this mutex while it
   // runs, so the two can never overlap: a second confirm is refused rather than
   // racing a shared suspension and fence. archive.js reference-counts the
@@ -140,7 +142,7 @@
       if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
           typeof entry.w !== 'string' || !entry.w ||
           !rec || typeof rec !== 'object' || Array.isArray(rec) ||
-          typeof rec.id !== 'string' || rec.id !== id ||
+          typeof rec.id !== 'string' || !rec.id || rec.id !== id ||
           !Array.isArray(rec.sans) ||
           !rec.sans.every(function (san) {
             return typeof san === 'string' && san.length > 0;
@@ -156,42 +158,84 @@
   }
 
   // Backup must be able to honour archive-clear fences even when archive.js is
-  // missing (for example, a partial offline release). This is the exact
-  // ending-signature scheme used by archive.js: id + moves + result + reason,
-  // separated by U+0001 and passed through the same double djb-style hash.
-  // Unlike archive.js's best-effort runtime reader, backup treats an unreadable
-  // fence as UNKNOWN and fails closed: exporting a parked/saved fenced ending
-  // would let a later restore resurrect data the user deliberately cleared.
+  // missing (for example, a partial offline release). This exactly mirrors its
+  // v2 encoding: canonical fields, two fixed-width hashes, and an envelope
+  // checksum that covers version, count, order, and every entry. Unlike the
+  // old unpadded v1 strings, truncation/replacement/removal is detectable.
+  function hex32(n) { return (n >>> 0).toString(16).padStart(8, '0'); }
   function endingSig(id, sans, result, reason) {
-    const s = String(id) + '\x01' + (Array.isArray(sans) ? sans.join(',') : '') +
-      '\x01' + (result == null ? '' : result) + '\x01' + (reason == null ? '' : reason);
+    const s = JSON.stringify([String(id), Array.isArray(sans) ? sans : [],
+      result == null ? '' : String(result), reason == null ? '' : String(reason)]);
     let a = 5381, b = 52711;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
       a = ((a << 5) + a + c) | 0;
       b = ((b << 5) + b + (c ^ 0x5f)) | 0;
     }
-    return (a >>> 0).toString(16) + (b >>> 0).toString(16);
+    return hex32(a) + hex32(b);
+  }
+  function fenceChecksum(entries) {
+    const s = JSON.stringify([2, entries]);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return hex32(h);
+  }
+  function fenceEnvelope(entries) {
+    return { version: 2, entries: entries.slice(), checksum: fenceChecksum(entries) };
+  }
+  function validFenceEnvelope(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        value.version !== 2 || !Array.isArray(value.entries) ||
+        value.entries.length > FENCE_CAP ||
+        typeof value.checksum !== 'string' || !/^[0-9a-f]{8}$/.test(value.checksum)) {
+      return false;
+    }
+    const seen = Object.create(null);
+    if (!value.entries.every(function (sig) {
+      if (typeof sig !== 'string' || !/^[0-9a-f]{16}$/.test(sig) || seen[sig]) return false;
+      seen[sig] = true;
+      return true;
+    })) return false;
+    return value.checksum === fenceChecksum(value.entries);
   }
 
   function rawFenceSignatures() {
-    let raw;
-    try { raw = localStorage.getItem(FENCE_KEY); }
+    let legacy, raw;
+    try {
+      legacy = localStorage.getItem(LEGACY_FENCE_KEY);
+      raw = localStorage.getItem(FENCE_KEY);
+    }
     catch (e) { throw new Error('could not read the archive-clear fence'); }
+    if (legacy !== null) {
+      throw new Error('the archive-clear fence uses an unverifiable legacy format');
+    }
     if (raw == null) return [];
-    let signatures;
-    try { signatures = JSON.parse(raw); }
+    let value;
+    try { value = JSON.parse(raw); }
     catch (e) { throw new Error('the archive-clear fence is unreadable'); }
-    if (!Array.isArray(signatures) || !signatures.every(function (sig) {
-      // endingSig() concatenates two lower-case uint32 hex strings, each
-      // one to eight characters. Anything else is unknown fence state, not
-      // an ignorable value: accepting it could export a deliberately-cleared
-      // recovery record whose actual signature was replaced/corrupted.
-      return typeof sig === 'string' && /^[0-9a-f]{2,16}$/.test(sig);
-    })) {
+    if (!validFenceEnvelope(value)) {
       throw new Error('the archive-clear fence is malformed');
     }
-    return signatures;
+    return value.entries;
+  }
+  // Partial-cache fallback for retiring UNKNOWN fence state after every
+  // recovery source was durably removed. Write v2 first; never remove v1 when
+  // the replacement cannot be persisted and verified.
+  function resetRawFence() {
+    try {
+      localStorage.setItem(FENCE_KEY, JSON.stringify(fenceEnvelope([])));
+      const value = JSON.parse(localStorage.getItem(FENCE_KEY));
+      if (!validFenceEnvelope(value) || value.entries.length !== 0) return false;
+      localStorage.removeItem(LEGACY_FENCE_KEY);
+      const verified = JSON.parse(localStorage.getItem(FENCE_KEY));
+      return localStorage.getItem(LEGACY_FENCE_KEY) === null &&
+        validFenceEnvelope(verified) && verified.entries.length === 0;
+    } catch (e) {
+      return false;
+    }
   }
 
   // Merge the recovery sources IndexedDB can't see into the exported snapshot,
@@ -321,22 +365,62 @@
   // failed/aborted operation never loses the queue or fences a live game.
   function fenceRecovery() {
     let ok = true;
+    let fenceWasKnown = true;
+    let pendingSafe = false;
+    let pendingRemoved = false;
     if (typeof ChessyArchive !== 'undefined') {
+      const v2Capable = typeof ChessyArchive.fenceKnown === 'function' &&
+        typeof ChessyArchive.stageFenceEndings === 'function' &&
+        typeof ChessyArchive.resetFence === 'function';
+      if (!v2Capable) {
+        // A mixed cached release may expose the old v1-only archive module.
+        // Do not mistake its writes for verified v2 state or retire v1 while
+        // that older app may still be preserving a live save behind it.
+        fenceWasKnown = false;
+        ok = false;
+      }
       try {
-        if (ChessyArchive.fenceEndings && ChessyArchive.pendingRecords) {
-          ChessyArchive.fenceEndings(ChessyArchive.pendingRecords()); // best effort
+        if (v2Capable) fenceWasKnown = ChessyArchive.fenceKnown();
+        // Use the strict transport reader, not archive.js's best-effort boot
+        // view: a damaged/blocked queue cannot be mistaken for empty while a
+        // destructive operation is deciding whether it is safe to retire v1.
+        const pending = rawPendingRecords();
+        if (pending.length === 0) {
+          pendingSafe = true;
+        } else if (fenceWasKnown && ChessyArchive.fenceEndings) {
+          pendingSafe = ChessyArchive.fenceEndings(pending);
+        } else if (!fenceWasKnown && v2Capable) {
+          // Stage a verified v2 envelope without retiring v1. The legacy
+          // unknown remains fail-closed until live/saved sources below are
+          // durably neutralized.
+          pendingSafe = ChessyArchive.stageFenceEndings(pending);
         }
-        // The queue must be REMOVED to be durably neutralized (a fence is only
-        // honoured while its own write persisted). removeItem frees space, so it
-        // succeeds even at quota; a false return means storage is fully blocked.
-        if (ChessyArchive.dropPendingQueue && !ChessyArchive.dropPendingQueue()) ok = false;
-      } catch (e) { ok = false; }
+      } catch (e) {
+        pendingSafe = false;
+        if (v2Capable) {
+          try { fenceWasKnown = ChessyArchive.fenceKnown(); } catch (e2) { fenceWasKnown = false; }
+        }
+      }
+      // Removal is the fallback when the fence/queue cannot be read or written.
+      // It also frees quota before the app fences the live saved ending.
+      try {
+        if (ChessyArchive.dropPendingQueue && ChessyArchive.dropPendingQueue()) {
+          pendingSafe = true;
+          pendingRemoved = true;
+        }
+      } catch (e) { /* pendingSafe decides below */ }
     } else {
       // Archive module absent (partial cache eviction): still neutralize the
       // queue via raw localStorage, or a later boot with the module loaded would
       // reconcile pre-clear games into the replacement.
-      try { localStorage.removeItem(PENDING_KEY); } catch (e) { ok = false; }
+      try { rawFenceSignatures(); } catch (e) { fenceWasKnown = false; }
+      try {
+        localStorage.removeItem(PENDING_KEY);
+        pendingSafe = localStorage.getItem(PENDING_KEY) === null;
+        pendingRemoved = pendingSafe;
+      } catch (e) { pendingSafe = false; }
     }
+    if (!pendingSafe && !pendingRemoved) ok = false;
     // The live saved finished game: app.js fences its ending or removes the
     // save, reporting back through the event's MUTABLE detail (dispatch is
     // synchronous, so detail is set on return).
@@ -358,18 +442,32 @@
     } else if (persisted) {
       let neutralized = false;
       if (typeof ChessyArchive !== 'undefined' && ChessyArchive.fenceEnding) {
-        neutralized = ChessyArchive.isFencedEnding &&
-          ChessyArchive.isFencedEnding(
-            persisted.id, persisted.sans, persisted.result, persisted.reason);
-        if (!neutralized) {
-          neutralized = ChessyArchive.fenceEnding(
-            persisted.id, persisted.sans, persisted.result, persisted.reason);
-        }
+        // fenceEnding returns true for an exact already-persisted v2 entry,
+        // but false for UNKNOWN. Do not let isFencedEnding's fail-closed
+        // boolean masquerade as proof of durable neutralization.
+        neutralized = ChessyArchive.fenceEnding(
+          persisted.id, persisted.sans, persisted.result, persisted.reason);
       }
       if (!neutralized) {
-        try { localStorage.removeItem(GAME_SAVE_KEY); }
+        try {
+          localStorage.removeItem(GAME_SAVE_KEY);
+          neutralized = localStorage.getItem(GAME_SAVE_KEY) === null;
+        }
         catch (e) { ok = false; }
       }
+      if (!neutralized) ok = false;
+    }
+
+    // A legacy/malformed fence may be retired only AFTER all possible recovery
+    // sources above were fenced, removed, or session-suppressed. resetFence
+    // writes and verifies the v2 envelope before removing v1. If anything was
+    // not neutralized, leave UNKNOWN intact so runtime and Backup keep failing
+    // closed.
+    if (!fenceWasKnown && ok) {
+      const reset = (typeof ChessyArchive !== 'undefined' && ChessyArchive.resetFence)
+        ? ChessyArchive.resetFence()
+        : resetRawFence();
+      if (!reset) ok = false;
     }
     return ok;
   }

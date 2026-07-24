@@ -113,16 +113,25 @@ require('./helper').run('moment-scan', async function (t) {
   // Reload destroys the in-memory controller owner but not the durable job.
   await page.reload();
   await page.waitForSelector('#board .square');
+  await page.evaluate(function () {
+    return CoachReview.openArchivedGame('phase5-browser');
+  });
+  await page.waitForFunction(function () {
+    const state = ChessyMomentScan.state();
+    return state && state.state === 'done' &&
+      document.getElementById('scanProgress').textContent
+        .indexOf('Scan complete') !== -1;
+  });
   const reloaded = await page.evaluate(async function () {
-    await CoachReview.openArchivedGame('phase5-browser');
-    const state = await ChessyMomentScan.load(CoachReview.current());
+    const state = ChessyMomentScan.state();
     return {
       state: state && state.state,
       moments: state && state.moments,
       stored: await CoachStore.getJob('phase5-browser')
     };
   });
-  check(reloaded.state === 'done' && reloaded.stored.state === 'done' &&
+  check(reloaded.state === 'done' && reloaded.stored &&
+        reloaded.stored.state === 'done' &&
         reloaded.moments.length === 2,
     'completed spoiler-safe proposals survive a real page reload');
 });

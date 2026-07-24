@@ -355,7 +355,7 @@ require('./helper').run('moment-review', async function (t) {
   await page.click('#scanStart');
   await page.waitForSelector('#scanPause:not([hidden])');
   await page.click('#tabPlay');
-  await t.newGame({ mode: 'pvp', timeControl: '5+3' });
+  await t.newGame({ mode: 'pvp', timeControl: '300+3' });
   await page.evaluate(function () {
     CoachReview.showView('review');
     return CoachReview.openArchivedGame('phase5-review-ui');

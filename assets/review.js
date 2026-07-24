@@ -214,6 +214,7 @@
   let scanLivePausing = false;
   let scanStopPromise = Promise.resolve();
   let scanNeedsReopen = false;
+  let scanFocusFallback = false;
 
   function hasScanUi() {
     return !!$('momentScan') && typeof ChessyMomentScan !== 'undefined';
@@ -371,14 +372,21 @@
     document.querySelectorAll('#scanMomentList .scan-moment').forEach(function (button) {
       button.disabled = reflecting;
     });
-    // Changing hidden on the focused Start/Pause/Resume control can otherwise
-    // strand focus on an invisible node (or drop it to <body>). Move it to the
-    // next usable action; when every action is temporarily gated, the live
-    // status is a stable, named fallback.
-    if (focusedControl && focusedControl.hidden) {
-      const next = [$('scanPause'), $('scanResume'), $('scanStart')]
-        .find(function (button) { return !button.hidden && !button.disabled; });
+    // Hiding OR disabling a focused control may drop Chromium's focus to
+    // <body>. Keep a deliberate status fallback while work is gated, then
+    // promote focus to the next usable action as soon as it appears.
+    const next = [$('scanPause'), $('scanResume'), $('scanStart')]
+      .find(function (button) { return !button.hidden && !button.disabled; });
+    if (focusedControl && (focusedControl.hidden || focusedControl.disabled)) {
       (next || $('scanProgress')).focus();
+      scanFocusFallback = !next;
+    } else if (scanFocusFallback && document.activeElement === $('scanProgress')) {
+      if (next) {
+        next.focus();
+        scanFocusFallback = false;
+      }
+    } else if (document.activeElement !== $('scanProgress')) {
+      scanFocusFallback = false;
     }
   }
 
@@ -390,6 +398,7 @@
     scanLivePausing = false;
     scanStopPromise = Promise.resolve();
     scanNeedsReopen = false;
+    scanFocusFallback = false;
     scanState = null;
     scanBusy = false;
     scanNotice = null;
@@ -406,6 +415,7 @@
     const token = ++scanSeq;
     scanAcceptEvents = false;
     scanNeedsReopen = false;
+    scanFocusFallback = false;
     scanBusy = true;
     scanState = null;
     scanNotice = null;

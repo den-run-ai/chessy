@@ -214,11 +214,12 @@ require('./helper').run('reflection', async function (t) {
   // CSS ::after that screen readers may not expose.
   check((await page.textContent('#verifyMeta')).toLowerCase().includes('partial'),
     'the partial warning is real text content (screen-reader accessible)');
-  // A partial scan must not present an EXACT rank: the summary says "provisional"
-  // and the lines use bullets, never "#n" that unsearched moves could displace.
-  check((await page.textContent('#verifyResult')).includes('provisional') &&
+  // A partial scan must not present an EXACT rank: the summary qualifies the
+  // lead as "search so far" and lines use bullets, never "#n" that unsearched
+  // moves could displace.
+  check((await page.textContent('#verifyResult')).includes('search so far') &&
         !(await page.textContent('#verifyLines')).includes('#'),
-    'a partial analysis withholds exact ranks (provisional standing, bulleted lines)');
+    'a partial analysis withholds exact ranks (qualified standing, bulleted lines)');
   // A partial verdict cannot found a card: Save stays disabled and even a
   // forced click creates nothing (Train must never drill an incomplete scan).
   const cardsBeforePartial = (await cards()).length;
@@ -683,7 +684,6 @@ require('./helper').run('reflection', async function (t) {
   await page.fill('#reflectThreat', 'cached identity mismatch');
   await page.fill('#reflectCandidates', 'e4');
   await page.selectOption('#reflectEval', 'equal');
-  await page.fill('#cardLesson', 'must not overwrite the real card');
 
   const d0 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
   await page.click('#reflectVerify'); // serves the corrupted cache entry
@@ -693,6 +693,7 @@ require('./helper').run('reflection', async function (t) {
         !(await page.textContent('#verifyResult')).includes('top line') &&
         await page.locator('#saveCard').isDisabled() && d1 === d0,
     'a mismatched cached result cannot claim the played move was Chessy’s top line');
+  await page.fill('#cardLesson', 'must not overwrite the real card');
   await page.evaluate(function () { document.getElementById('saveCard').click(); });
   await page.waitForTimeout(100);
   const cardAfterMismatch = await page.evaluate(function (gid) {

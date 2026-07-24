@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r51">
+  <link rel="stylesheet" href="assets/style.css?r=r52">
 </head>
 <body>
   <div class="app">
@@ -349,30 +349,30 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r51';</script>
-  <script src="assets/engine.js?r=r51"></script>
-  <script src="assets/ai.js?r=r51"></script>
+  <script>window.CHESSY_RELEASE = 'r52';</script>
+  <script src="assets/engine.js?r=r52"></script>
+  <script src="assets/ai.js?r=r52"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r51"></script>
-  <script src="assets/archive.js?r=r51"></script>
-  <script src="assets/app.js?r=r51"></script>
-  <script src="assets/mini-board.js?r=r51"></script>
-  <script src="assets/review.js?r=r51"></script>
-  <script src="assets/analysis-core.js?r=r51"></script>
-  <script src="assets/analysis-service.js?r=r51"></script>
-  <script src="assets/analysis-result.js?r=r51"></script>
-  <script src="assets/moment-selector.js?r=r51"></script>
-  <script src="assets/moment-scan.js?r=r51"></script>
-  <script src="assets/pgn.js?r=r51"></script>
-  <script src="assets/import.js?r=r51"></script>
-  <script src="assets/data-controls.js?r=r51"></script>
-  <script src="assets/reflection.js?r=r51"></script>
-  <script src="assets/train.js?r=r51"></script>
-  <script src="assets/progress.js?r=r51"></script>
+  <script src="assets/store.js?r=r52"></script>
+  <script src="assets/archive.js?r=r52"></script>
+  <script src="assets/app.js?r=r52"></script>
+  <script src="assets/mini-board.js?r=r52"></script>
+  <script src="assets/review.js?r=r52"></script>
+  <script src="assets/analysis-core.js?r=r52"></script>
+  <script src="assets/analysis-service.js?r=r52"></script>
+  <script src="assets/analysis-result.js?r=r52"></script>
+  <script src="assets/moment-selector.js?r=r52"></script>
+  <script src="assets/moment-scan.js?r=r52"></script>
+  <script src="assets/pgn.js?r=r52"></script>
+  <script src="assets/import.js?r=r52"></script>
+  <script src="assets/data-controls.js?r=r52"></script>
+  <script src="assets/reflection.js?r=r52"></script>
+  <script src="assets/train.js?r=r52"></script>
+  <script src="assets/progress.js?r=r52"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.
