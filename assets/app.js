@@ -751,31 +751,38 @@
     archiveNoteEl.hidden = true;
     const seqAtCall = ++archiveSeq;
     archiveAttempts.set(idAtCall, seqAtCall);
-    // Pin the finished position: the rev is allocated and the record written
-    // only AFTER revReady, and an Undo could reassign `state`/`settings`
-    // meanwhile — the snapshot keeps this attempt tied to the ending it is for.
+    // Pin EVERYTHING this record needs at finish time: the rev is allocated and
+    // the record written only AFTER revReady, and an Undo or a later game could
+    // reassign `state`/`settings`/`gameEndedAt` meanwhile. The snapshot keeps
+    // this attempt tied to the ending it is for — including its completion time,
+    // so a later live game's clock (or a null after undo) can't restamp it.
     const recState = state;
     const recSettings = Object.assign({}, settings);
+    const recEndedAt = gameEndedAt;
     archiveAttempt = revReady.then(function () {
       // A NEWER attempt for this same id (undo → revised finish re-archived under
       // the SAME id) has taken ownership — it will record the current ending.
       // Recording the superseded snapshot now would be a wasted write racing the
       // winner; skip it and resolve null (Review then falls back to the list).
       if (archiveAttempts.get(idAtCall) !== seqAtCall) return null;
-      // Allocate the revision now that the committed-row floor is seeded — never
-      // before, so this finish outranks every committed row. Reuse a rev already
-      // stamped for this live finish; otherwise mint one (persisting it onto the
-      // live save only while this id is still the live game).
-      let recRev = (gameId === idAtCall && Number.isFinite(gameRev)) ? gameRev : null;
+      // Is this snapshot STILL the live game's current finish? Only then may the
+      // rev be stamped onto the live save. An Undo clears gameEndedAt (and a later
+      // finish sets a new one), so a stray callback must NOT stamp this rev onto
+      // the now-unfinished game — that would leak it to the next finish, which
+      // would reuse it instead of taking a higher one. The record itself is still
+      // written (with its own snapshot time + a distinct rev), matching the
+      // pre-defer flow where the finish was archived before an Undo could occur.
+      const stillLive = gameId === idAtCall && gameEndedAt === recEndedAt;
+      let recRev = (stillLive && Number.isFinite(gameRev)) ? gameRev : null;
       if (recRev == null && ChessyArchive.nextRev) {
         try { recRev = ChessyArchive.nextRev(); }
         catch (e) { recRev = null; } // sequence exhausted → record revless
-        if (gameId === idAtCall) {
+        if (stillLive) {
           gameRev = recRev; gameNeedsRev = false; save();
         }
       }
       return ChessyArchive.record(recState, recSettings, status, idAtCall,
-        { endedAt: gameEndedAt, rev: Number.isFinite(recRev) ? recRev : undefined });
+        { endedAt: recEndedAt, rev: Number.isFinite(recRev) ? recRev : undefined });
     }).then(function (storedId) {
       // The game's record exists now — withdraw any page-note blame for
       // it. Only as the game's LATEST attempt: a superseded attempt's
@@ -1282,7 +1289,13 @@
         let useRev = bootRev;
         if (bootNeedsRev && !Number.isFinite(useRev) && ChessyArchive.nextRev) {
           try { useRev = ChessyArchive.nextRev(); } catch (e) { useRev = null; }
+          // Stamp the rev onto the live save only if the restored finish is still
+          // the live game (same id, same completion time) — an Undo during the
+          // seed/reconcile window clears gameEndedAt, so a stray stamp would leak
+          // this rev onto the now-unfinished game. The record itself still lands
+          // with the boot snapshot's own time.
           if (Number.isFinite(useRev) && gameId === bootId &&
+              gameEndedAt === bootEndedAt &&
               archiveAttempts.get(bootId) === seqAtCall) {
             gameRev = useRev; gameNeedsRev = false; save();
           }

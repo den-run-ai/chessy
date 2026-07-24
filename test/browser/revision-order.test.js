@@ -374,23 +374,11 @@ require('./helper').run('revision-order', async function (t) {
     Number.isFinite(needsRev.rev) && needsRev.rev > 3,
     'a module-absent finish (needsRev) is minted a rev on boot and archived over an older committed row');
 
-  // ── (await floor) A finish must not obtain a rev until the committed-row floor
-  // seed settles. listGames is made SLOW so the seed is still pending when the
-  // game finishes; the finish awaits revReady, so its rev is minted ABOVE the
-  // committed floor (50) — never the low value a pre-seed nextRev() would issue.
-  await reset();
-  await page.evaluate(function () {
-    // An unrelated committed row at a high rev the localStorage floor can't see.
-    return CoachStore.putGame({ id: 'floor-other', source: 'play', sans: ['e4', 'e5'],
-      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 50 })
-      .then(function () {
-        localStorage.removeItem('chessy-archive-rev-v1');
-        localStorage.removeItem('chessy-game-v1');
-        localStorage.removeItem('chessy-pending-archive-v1');
-      });
-  });
-  // Wrap CoachStore.listGames to resolve slowly, BEFORE store.js defines it, so
-  // the boot floor seed is still in flight while the game below finishes.
+  // ── The next three sections exercise the deferred rev allocation while the
+  // committed-row floor seed (revReady) is still in flight. `CoachStore.listGames`
+  // is wrapped BEFORE store.js defines it to HOLD while `localStorage.__lgHold`
+  // is '1', so a finish (and the boot re-offer) reliably occurs with revReady
+  // still pending; the test releases the hold, then asserts the settled state.
   await page.addInitScript(function () {
     let real;
     Object.defineProperty(window, 'CoachStore', {
@@ -398,23 +386,49 @@ require('./helper').run('revision-order', async function (t) {
       get: function () { return real; },
       set: function (v) {
         real = v;
-        if (v && typeof v.listGames === 'function' && !v.__slowListGames) {
+        if (v && typeof v.listGames === 'function' && !v.__heldListGames) {
           const orig = v.listGames.bind(v);
           v.listGames = function () {
-            return new Promise(function (r) { setTimeout(r, 1000); }).then(function () { return orig(); });
+            const self = this, args = arguments;
+            function held() { try { return localStorage.getItem('__lgHold') === '1'; } catch (e) { return false; } }
+            function run() { return orig.apply(self, args); }
+            if (!held()) return run();
+            return new Promise(function (resolve, reject) {
+              (function wait() {
+                if (!held()) return run().then(resolve, reject);
+                setTimeout(wait, 20);
+              })();
+            });
           };
-          v.__slowListGames = true;
+          v.__heldListGames = true;
         }
       }
     });
+  });
+
+  // (await floor) A finish must not obtain a rev until the committed-row floor
+  // seed settles. The seed is HELD while a fool's mate finishes, so revReady is
+  // still pending at finish; after release the rev is minted ABOVE the committed
+  // floor (50) — never the low value a pre-seed nextRev() would issue.
+  await reset();
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'floor-other', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 50 })
+      .then(function () {
+        localStorage.removeItem('chessy-archive-rev-v1');
+        localStorage.removeItem('chessy-game-v1');
+        localStorage.removeItem('chessy-pending-archive-v1');
+        localStorage.setItem('__lgHold', '1'); // hold the boot floor seed
+      });
   });
   await page.reload();
   await page.waitForSelector('#board .square');
   await t.newGame({ mode: 'pvp' });
   await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
-  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // fool's mate finishes before the slow seed
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // finishes while the seed is held
   await page.waitForSelector('#gameOverDialog[open]');
-  await page.waitForTimeout(1400); // slow seed settles, then the deferred rev is minted + recorded
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '0'); }); // release → seed, then mint
+  await page.waitForTimeout(400);
   const awaited = await page.evaluate(function () {
     const save = JSON.parse(localStorage.getItem('chessy-game-v1') || 'null');
     return CoachStore.getGame(save && save.gameId).then(function (g) {
@@ -422,7 +436,55 @@ require('./helper').run('revision-order', async function (t) {
     });
   });
   check(Number.isFinite(awaited.committedRev) && awaited.committedRev > 50 && awaited.savedRev > 50,
-    'a finish during a slow boot seed waits for revReady and mints a rev above the committed floor');
+    'a finish while the boot seed is pending waits for revReady and mints a rev above the committed floor');
+
+  // (undo during pending revReady) The player finishes A, closes the dialog and
+  // undoes it while revReady is still held. The deferred callback must NOT stamp
+  // A's rev onto the now-unfinished live save — otherwise the next finish would
+  // reuse it instead of taking a higher one.
+  await reset();
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '1'); });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // A finishes while revReady is held
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.click('#gameOverClose');
+  await page.click('#undo'); // takes A back; clears gameEndedAt/gameRev
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '0'); }); // release → A's stray callback runs
+  await page.waitForTimeout(400);
+  const undoLeak = await page.evaluate(function () {
+    const save = JSON.parse(localStorage.getItem('chessy-game-v1') || 'null');
+    return { savedRev: save && save.rev, over: !!(save && Number.isFinite(save.endedAt)) };
+  });
+  check(undoLeak.savedRev == null && !undoLeak.over,
+    'an Undo while revReady is pending does not leak the finish rev onto the now-unfinished live save');
+
+  // (rematch during pending revReady) A finishes, then Rematch starts a NEW game
+  // before revReady settles. A is still recorded for durability, but with its OWN
+  // completion time — not the later game's (or callback time). The completion time
+  // is snapshotted at finish, so the archive chronology can't be corrupted.
+  await reset();
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '1'); });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // A finishes while revReady is held
+  await page.waitForSelector('#gameOverDialog[open]');
+  const aInfo = await page.evaluate(function () {
+    const save = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return { id: save.gameId, endedAt: save.endedAt };
+  });
+  await page.click('#gameOverRematch'); // new game (new id); gameEndedAt reset to null
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '0'); }); // release → A recorded for durability
+  await page.waitForTimeout(400);
+  const rematchTime = await page.evaluate(function (id) { return CoachStore.getGame(id); }, aInfo.id);
+  check(rematchTime && rematchTime.sans.join(',') === 'f3,e5,g4,Qh4#' &&
+    rematchTime.createdAt === aInfo.endedAt,
+    'a finish archived after a Rematch keeps its own completion time, not the later game\'s');
+  await page.evaluate(function () { localStorage.removeItem('__lgHold'); });
 
   await reset(); // leave a clean store for the console-error check
 });
