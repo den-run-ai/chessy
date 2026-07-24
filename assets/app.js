@@ -569,11 +569,17 @@
 
   // Difficulty select values are search depths, except the named top level:
   // Master searches with quiescence (captures are resolved past the horizon,
-  // eliminating exchange blunders) under a per-move time budget, iteratively
-  // deepening as far as the clock allows. The fixed-depth levels carry a
-  // generous budget purely as a safety net for pathological positions.
+  // and a bounded quiet-check extension catches mating checks one ply beyond
+  // it) under a per-move time budget, iteratively deepening as far as the clock
+  // allows. The budget is 5s, not 2s: the quiet-check extension makes the
+  // horizon-ply search sound but ~20% heavier, and on sharp positions the
+  // depth that first sees a forced mate (e.g. the mate that followed
+  // 27...Rxa2?? in game log chessy202607240238) only COMPLETES with the larger
+  // budget — 2s stopped one depth short and returned the blunder. The
+  // fixed-depth levels carry a generous budget purely as a safety net for
+  // pathological positions.
   function aiConfig() {
-    if (settings.difficulty === 'master') return { maxDepth: 30, timeMs: 2000, quiesce: true };
+    if (settings.difficulty === 'master') return { maxDepth: 30, timeMs: 5000, quiesce: true };
     return { maxDepth: Number(settings.difficulty), timeMs: 10000, quiesce: false };
   }
 

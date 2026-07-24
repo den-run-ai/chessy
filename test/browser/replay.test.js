@@ -46,7 +46,7 @@ require('./helper').run('replay', async function (t) {
   await mv('f1', 'b5');
   check(await page.locator('#moveList .ply').count() === 5, 'game continues correctly after replay browsing');
 
-  // Undo while the AI is thinking (Master's 2s budget keeps it "thinking").
+  // Undo while the AI is thinking (Master's per-move budget keeps it "thinking").
   await t.newGame({ mode: 'ai-b', difficulty: 'master' });
   await mv('e2', 'e4');
   await page.waitForFunction(function () {

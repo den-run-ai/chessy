@@ -116,9 +116,12 @@ require('./helper').run('setup', async function (t) {
 
   await page.evaluate(function () { window.__chessyTestWorkerMode = 'silent'; });
   await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
+  // The silent-worker fallback waits the full watchdog (Master timeMs + 3000 =
+  // 8s) and THEN runs a synchronous think for the same budget, so allow well
+  // beyond that combined wait.
   await page.waitForFunction(function () {
     return document.querySelectorAll('#moveList .ply').length >= 1;
-  }, null, { timeout: 20000 });
+  }, null, { timeout: 30000 });
   check(true, 'silent worker: the watchdog falls back and the computer still moves');
   check(!(await page.textContent('#status')).includes('thinking'),
     'status leaves "thinking" after the fallback move');
