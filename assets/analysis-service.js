@@ -153,8 +153,14 @@
     if (msg.error) { recover(job); return; }   // worker-side failure → retry/give up
     var result = msg.result;
     if (!validMatch(result, job)) { settle(job, null); return; }
-    persist(job, result);                       // best-effort; complete + partial
-    settle(job, result);
+    // Complete the best-effort cache attempt before exposing the result. The
+    // scan may publish a clickable suggestion as soon as analyse() resolves;
+    // waiting here guarantees an immediate reflect-first probe queues behind
+    // (and can reuse) the deep cache write instead of racing it into a second
+    // worker dispatch. A failed write is still non-fatal.
+    persist(job, result).then(function () {
+      if (job === active && !job.done) settle(job, result);
+    });
   }
 
   // A wedged worker (watchdog) or a crashed one (onerror / error reply): retry
@@ -183,7 +189,7 @@
 
   function persist(job, result) {
     var store = global.CoachStore;
-    if (!store || !store.putAnalysis || !job.key) return;
+    if (!store || !store.putAnalysis || !job.key) return Promise.resolve();
     var rec = {
       key: job.key, gameId: job.req.gameId, ply: job.req.ply,
       gameRev: job.req.gameRev,
@@ -193,9 +199,10 @@
       result: result, createdAt: nowMs()
     };
     try {
-      var p = store.putAnalysis(rec);
-      if (p && typeof p.catch === 'function') p.catch(function () {});
-    } catch (e) { /* cache write is best-effort */ }
+      return Promise.resolve(store.putAnalysis(rec)).catch(function () {});
+    } catch (e) {
+      return Promise.resolve(); // cache write is best-effort
+    }
   }
 
   function run(job) {
