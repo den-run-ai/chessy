@@ -174,13 +174,16 @@ gated on the engine *and* browser suites.
 | `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
 | `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `assets/app.js` | Board UI, game flow, persistence |
-| `assets/store.js` | IndexedDB coaching store (games, lesson cards) |
+| `assets/store.js` | IndexedDB coaching store (games, lesson cards, analysis cache, resumable scan jobs) |
 | `assets/archive.js` | Records finished games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser |
 | `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance) |
 | `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract off the main thread |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, cancellation, watchdog + retry, validated IndexedDB result cache |
+| `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |
+| `assets/moment-selector.js` | Pure, deterministic critical-moment evidence, collapse suppression, clustering and deep-admission policy |
+| `assets/moment-scan.js` | Explicit, sequential two-pass scan controller with durable checkpoints, pause/resume and spoiler-safe public state |
 | `assets/reflection.js` | Manual reflection flow: flag → answer → contract analysis → lesson card |
 | `assets/train.js` | Train view: due-card queue on the fixed spaced-review ladder |
 | `assets/progress.js` | Progress view: read-only descriptive counts |

@@ -199,6 +199,31 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   check((await cancelled) === null && made[0].terminated === true,
     'cancel() terminates the worker and resolves the in-flight promise null');
 
+  // --- Owner-scoped cancel: a stale scan pause cannot kill a newer reflection.
+  //     Global cancel remains available to destructive data controls. ---
+  reset({ factory: factoryOf({ mode: 'stall' }) });
+  const owned = Svc.analyse(Object.assign({}, REQ, { gameId: 'owned' }), 'reflection');
+  const ownedWorker = made[0];
+  Svc.cancel('moment-scan');
+  let ownedSettled = false;
+  owned.then(function () { ownedSettled = true; });
+  await delay(5);
+  check(!ownedSettled && ownedWorker.terminated === false,
+    'cancel(owner) leaves another subsystem owner running');
+  Svc.cancel('reflection');
+  check((await owned) === null && ownedWorker.terminated === true,
+    'cancel(owner) terminates and settles only its matching job');
+
+  // Starting a new request still supersedes regardless of owners: interactive
+  // reflection must never queue behind a background scan.
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }) });
+  const scanJob = Svc.analyse(Object.assign({}, REQ, { gameId: 'scan' }), 'moment-scan');
+  const reflectionJob = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'reflection' }), 'reflection');
+  check((await scanJob) === null && (await reflectionJob) !== null &&
+    made[0].terminated === true,
+    'a newer owner supersedes the active job instead of waiting in a queue');
+
   // --- Watchdog: a wedged worker is retried once in a fresh worker ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }), watchdog: 25 });
   const recovered = await Svc.analyse(Object.assign({}, REQ, { gameId: 'W' }));

@@ -26,6 +26,12 @@ jobs:
         run: node test/engine.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
+      - name: Run coaching scan unit tests
+        run: |
+          node test/analysis-service.test.js
+          node test/analysis-result.test.js
+          node test/moment-selector.test.js
+          node test/moment-scan.test.js
       - name: Install Playwright (pinned)
         run: npm install --no-save playwright@1.61.1
       - name: Install Chromium

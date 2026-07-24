@@ -45,11 +45,18 @@
   // service derives its watchdog from exactly these numbers.
   const CFG = { maxDepth: 10, multiPV: 3, nodeLimit: 80000, nodeBudget: 1200000, pvLen: 6 };
   const PV_TAIL = 3; // continuation plies shown after each candidate move
+  const ANALYSIS_OWNER = 'reflection';
 
-  // Stable djb2 hash of the game's move list: the cache's game-revision token.
-  // A game revised in place (same id, different ending) yields a different
-  // token, so a stale analysis of the old continuation is never reused.
+  // The scan and manual reflection MUST share this revision token: their deep
+  // profiles are identical, so accepting a suggested moment should reuse the
+  // already validated result instead of recomputing it. The shared revision
+  // includes SetUp/FEN as well as SANs; the fallback keeps this module usable
+  // in an intentionally partial/older release.
   function gameRevOf(game) {
+    if (typeof ChessyMomentScan !== 'undefined' &&
+        ChessyMomentScan.analysisRevision) {
+      return ChessyMomentScan.analysisRevision(game);
+    }
     const s = (game.sans || []).join(',');
     let h = 5381;
     for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -140,7 +147,7 @@
     saveSeq++;
     flagged = null;
     verdict = null;
-    ChessyAnalysisService.cancel();
+    ChessyAnalysisService.cancel(ANALYSIS_OWNER);
     $('reflectForm').hidden = true;
     $('verifyBox').hidden = true;
   }
@@ -291,7 +298,7 @@
       opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
         nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
     };
-    ChessyAnalysisService.analyse(analysisReq).then(function (res) {
+    ChessyAnalysisService.analyse(analysisReq, ANALYSIS_OWNER).then(function (res) {
       if (token === verifySeq) $('reflectVerify').disabled = false;
       // A newer request superseded this one, or the user left the moment: drop
       // it silently (the owning request/moment repaints the shared controls).

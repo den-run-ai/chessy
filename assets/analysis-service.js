@@ -24,7 +24,10 @@
  *     request (same fingerprint, config and side to move); complete AND partial
  *     (complete:false) results are stored, with the completeness flag preserved.
  *
- * A request is { gameId, ply, gameRev, fen, positions, opts }. analyse()
+ * A request is { gameId, ply, gameRev, fen, positions, opts }. analyse(req,
+ * owner?) accepts an optional subsystem owner; cancel(owner) then abandons
+ * only that owner's job, while cancel() remains the global teardown.
+ * analyse()
  * resolves with the analysis contract, or null (superseded/cancelled, no worker
  * available, or an unrecoverable worker). The heavy ChessyAnalysisCore.analyse
  * runs ONLY inside the worker — this module calls only the pure identity() to
@@ -107,8 +110,14 @@
 
   // Kill the in-flight job outright (supersede/cancel/navigation/game revision):
   // stop the worker burning its budget and resolve the abandoned promise null.
-  function abandon() {
+  function abandon(owner) {
     if (!active) return;
+    // A subsystem may relinquish only the work it owns. This matters when a
+    // reflection has just superseded a background moment scan: the scan's
+    // delayed pause callback must not terminate the newer interactive job.
+    // No owner keeps the historic/global behavior used by destructive data
+    // controls and legacy callers.
+    if (arguments.length && active.owner !== owner) return;
     var job = active;
     if (worker) { worker.terminate(); worker = null; }
     settle(job, null);
@@ -224,9 +233,12 @@
 
   // Start (or supersede) the single interactive analysis. Resolves with the
   // analysis contract, or null when superseded/cancelled or no worker could run.
-  function analyse(req) {
+  function analyse(req, owner) {
     abandon(); // one active job: kill any predecessor before starting
-    var job = { id: ++seq, req: req || {}, attempts: 0, done: false, watchdog: null };
+    var job = {
+      id: ++seq, req: req || {}, owner: owner || null,
+      attempts: 0, done: false, watchdog: null
+    };
     return new Promise(function (resolve) {
       job.resolve = resolve;
       active = job;
@@ -236,7 +248,10 @@
 
   // Abandon the in-flight analysis (leaving Review, navigating, or the game
   // being revised): terminate the worker and resolve its promise null.
-  function cancel() { abandon(); }
+  function cancel(owner) {
+    if (arguments.length) abandon(owner || null);
+    else abandon();
+  }
 
   // Evict the cached result for a request. The service caches any reply that
   // matches the request's position/config/turn, but the reflection layer
