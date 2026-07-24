@@ -1,11 +1,13 @@
 /*
- * Chessy PGN import (roadmap #23, Phase 4) — a single-game PGN parser and
- * validator. Pure and side-effect free: it parses tags, mainline moves,
- * comments, NAGs, %clk clock annotations and SetUp/FEN, validates every move
- * through the rules engine, and produces an archive-ready record with
- * canonical moves (UCI + from/to/promotion) ALONGSIDE display SAN. The store
- * commits it once or not at all (CoachStore.importGame), deduped by external
- * id or a content hash — so a repeated import yields ONE game.
+ * Chessy PGN import/export (roadmap #23, Phase 4) — a single-game PGN parser,
+ * validator and archive-record serializer. Pure and side-effect free: it
+ * parses tags, mainline moves, comments, NAGs, %clk clock annotations and
+ * SetUp/FEN, validates every move through the rules engine, and produces an
+ * archive-ready record with canonical moves (UCI + from/to/promotion)
+ * ALONGSIDE display SAN. The store commits it once or not at all
+ * (CoachStore.importGame), deduped by external id or a content hash — so a
+ * repeated import yields ONE game. serializeRecord() writes that durable
+ * record back to a standards-usable PGN without needing the live Play state.
  *
  * Variations are skipped (mainline only). Nothing here writes or prompts:
  * when the player's side cannot be inferred it is left null for the caller
@@ -15,7 +17,10 @@
   'use strict';
   if (typeof Chess === 'undefined') return;
 
-  const RESULTS = { '1-0': 1, '0-1': 1, '1/2-1/2': 1, '*': 1 };
+  // Prototype-free because result tokens also cross restore/raw-IDB
+  // boundaries; inherited names such as "constructor" are not PGN results.
+  const RESULTS = Object.freeze(Object.assign(Object.create(null),
+    { '1-0': 1, '0-1': 1, '1/2-1/2': 1, '*': 1 }));
   // Standard NAG codes for the symbolic suffix glyphs, so `e4!` / `e5?!`
   // keep their annotation meaning instead of being stripped away.
   const GLYPH_NAG = { '!': '$1', '?': '$2', '!!': '$3', '??': '$4', '!?': '$5', '?!': '$6' };
@@ -462,12 +467,167 @@
     };
   }
 
+  // Serialize one durable archive record. Unlike Chess.toPgn (the live-game
+  // exporter), this owns the archive shape: imported tag pairs, annotations,
+  // pre-comments and custom starting positions all survive the round trip.
+  // `overrides` supplies display metadata that old Play records do not store
+  // as PGN tags (player labels, derived date/time control). The record's
+  // validated result and setup position always win over either tag source.
+  function serializeRecord(record, overrides) {
+    if (!record || !Array.isArray(record.sans)) {
+      throw new Error('archive record has no move list');
+    }
+
+    if (record.setupFen &&
+        (typeof record.setupFen !== 'string' || !validFen(record.setupFen))) {
+      throw new Error('archive record has an invalid starting position');
+    }
+    let start = record.setupFen ? Chess.parseFen(record.setupFen) : Chess.newGameState();
+    if (!start.history) start.history = [];
+    if (!start.positions) {
+      start.positions = {};
+      start.positions[Chess.positionKey(start)] = 1;
+    }
+    // Revalidate the durable SAN list at the export boundary. Besides keeping
+    // the public serializer safe for legacy/raw IndexedDB rows, this lets the
+    // board rules correct a contradictory restored Result for terminal games;
+    // non-terminal outcomes (resignation/time forfeit/import) remain archival.
+    let finalState = start;
+    record.sans.forEach(function (san) {
+      if (typeof san !== 'string' || !san ||
+          Chess.gameStatus(finalState).over) {
+        throw new Error('archive record has an invalid move list');
+      }
+      const legal = Chess.legalMoves(finalState);
+      const move = legal.find(function (candidate) {
+        return Chess.toSan(finalState, candidate, legal) === san;
+      });
+      if (!move) throw new Error('archive record has an invalid move list');
+      finalState = Chess.playMove(finalState, move);
+    });
+    const finalStatus = Chess.gameStatus(finalState);
+    // Clock adjudication is app-level and authoritative even if the move left
+    // on the board also happens to be terminal: Play records the move before
+    // punchClock() determines that its mover had already flagged.
+    const clockEnding = typeof record.reason === 'string' &&
+      record.reason.indexOf('time forfeit') === 0 &&
+      record.result !== '*' && !!RESULTS[record.result];
+    const result = clockEnding
+      ? record.result
+      : (finalStatus.over
+          ? finalStatus.result
+          : (RESULTS[record.result] ? record.result : '*'));
+    const endingReason = clockEnding
+      ? record.reason
+      : (finalStatus.over ? finalStatus.reason : record.reason);
+
+    // Prototype-free: restored/custom tag names are data, never setters such
+    // as Object.prototype.__proto__.
+    const roster = Object.create(null);
+    Object.assign(roster, {
+      Event: 'Chessy game',
+      Site: 'Chessy offline PWA',
+      Date: '????.??.??',
+      Round: '-',
+      White: 'White',
+      Black: 'Black',
+      Result: result
+    });
+    function mergeTags(tags) {
+      if (!tags || typeof tags !== 'object' || Array.isArray(tags)) return;
+      Object.keys(tags).forEach(function (key) {
+        // PGN tag names are word tokens. Ignore malformed restored extras
+        // rather than letting them break the whole download.
+        if (/^\w+$/.test(key)) roster[key] = tags[key];
+      });
+    }
+    mergeTags(record.tags);
+    mergeTags(overrides);
+    roster.Result = result;
+    if (record.setupFen) {
+      roster.SetUp = '1';
+      roster.FEN = record.setupFen;
+    } else {
+      // A malformed restored record must not smuggle a conflicting raw FEN
+      // tag when Review actually replayed it from the standard start.
+      delete roster.SetUp;
+      delete roster.FEN;
+    }
+
+    function tagValue(value) {
+      return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        .replace(/[\r\n]+/g, ' ');
+    }
+    function commentValue(value) {
+      // Brace comments have no escaping for a literal closing brace. Keep the
+      // text readable and the output parseable by normalising braces to
+      // brackets; whitespace is folded because movetext is line-wrapped below.
+      return String(value == null ? '' : value)
+        .replace(/\{/g, '[').replace(/\}/g, ']')
+        .replace(/\s+/g, ' ').trim();
+    }
+
+    let head = '';
+    Object.keys(roster).forEach(function (key) {
+      head += '[' + key + ' "' + tagValue(roster[key]) + '"]\n';
+    });
+
+    let turn = start.turn;
+    let fullmove = Number.isInteger(start.fullmove) && start.fullmove > 0
+      ? start.fullmove : 1;
+    const parts = [];
+    const pre = typeof record.preComment === 'string'
+      ? commentValue(record.preComment) : '';
+    if (pre) parts.push('{' + pre + '}');
+
+    record.sans.forEach(function (san, i) {
+      if (turn === 'w') parts.push(fullmove + '.');
+      else if (i === 0) parts.push(fullmove + '...');
+      parts.push(String(san));
+
+      const meta = Array.isArray(record.moves) &&
+        record.moves[i] && typeof record.moves[i] === 'object'
+        ? record.moves[i] : null;
+      if (meta && Array.isArray(meta.nags)) {
+        meta.nags.forEach(function (nag) {
+          if (typeof nag === 'string' && /^\$\d+$/.test(nag)) parts.push(nag);
+        });
+      }
+      const note = meta && typeof meta.comment === 'string'
+        ? commentValue(meta.comment) : '';
+      if (note) parts.push('{' + note + '}');
+
+      if (turn === 'b') fullmove++;
+      turn = turn === 'w' ? 'b' : 'w';
+    });
+    // Match the clean Play export's useful ending note without inventing an
+    // "imported" comment that was never present in the source PGN.
+    const ending = record.source === 'play' && typeof endingReason === 'string'
+      ? commentValue(endingReason) : '';
+    if (ending) parts.push('{' + ending + '}');
+    parts.push(result);
+
+    // Wrap movetext at roughly 80 columns, matching the live exporter.
+    let text = '', line = '';
+    parts.forEach(function (part) {
+      if (line && line.length + 1 + part.length > 80) {
+        text += line + '\n';
+        line = part;
+      } else {
+        line += (line ? ' ' : '') + part;
+      }
+    });
+    return head + '\n' + text + line + '\n';
+  }
+
   global.ChessyPGN = {
     parseGame: parseGame,
     parseTags: parseTags,
     parseClk: parseClk,
     contentHash: contentHash,
     validFen: validFen,
-    toRecord: toRecord
+    toRecord: toRecord,
+    serializeRecord: serializeRecord
   };
 })(typeof window !== 'undefined' ? window : globalThis);

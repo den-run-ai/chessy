@@ -53,6 +53,100 @@
     return { pvp: 'Two players', 'ai-b': 'You vs computer', 'ai-w': 'Computer vs you' }[g.mode] || 'Game';
   }
 
+  const DIFF_LABELS = Object.freeze(Object.assign(Object.create(null), {
+    1: 'Easy', 2: 'Medium', 3: 'Hard', 5: 'Expert', master: 'Master'
+  }));
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function dateTag(d) {
+    if (!Number.isFinite(d.getTime())) return null;
+    return d.getFullYear() + '.' + pad2(d.getMonth() + 1) + '.' + pad2(d.getDate());
+  }
+
+  // Metadata absent from older Play archive rows is reconstructed the same
+  // way as Play's clean PGN export. Imported tags stay intact; serializeRecord
+  // later forces the archive's authoritative Result and SetUp/FEN over them.
+  function exportTags(game) {
+    const tags = {};
+    const stored = game.tags && typeof game.tags === 'object' &&
+      !Array.isArray(game.tags) ? game.tags : {};
+    if (game.mode === 'ai-b' || game.mode === 'ai-w') {
+      const level = DIFF_LABELS[game.difficulty];
+      const ai = 'Chessy AI' + (level ? ' (' + level + ')' : '');
+      tags.White = game.mode === 'ai-b' ? 'Human' : ai;
+      tags.Black = game.mode === 'ai-b' ? ai : 'Human';
+    } else if (game.mode === 'pvp') {
+      tags.White = 'Human';
+      tags.Black = 'Human';
+    }
+
+    if (typeof stored.Date !== 'string' || !stored.Date) {
+      if (typeof stored.UTCDate === 'string' &&
+          /^\d{4}\.\d{2}\.\d{2}$/.test(stored.UTCDate)) {
+        tags.Date = stored.UTCDate;
+      } else {
+        // Import time is not play time: an undated imported game must keep an
+        // unknown PGN Date instead of acquiring the day it entered Chessy.
+        const at = Number.isFinite(game.playedAt) ? game.playedAt
+          : (game.source === 'play' ? game.createdAt : null);
+        const derived = Number.isFinite(at) ? dateTag(new Date(at)) : null;
+        if (derived) tags.Date = derived;
+      }
+    }
+    if ((typeof stored.TimeControl !== 'string' || !stored.TimeControl) &&
+        typeof game.timeControl === 'string' && game.timeControl !== 'unknown') {
+      tags.TimeControl = game.timeControl === 'none' ? '-' : game.timeControl;
+    }
+    if (typeof game.reason === 'string' &&
+        game.reason.indexOf('time forfeit') === 0) {
+      tags.Termination = 'time forfeit';
+    }
+    return tags;
+  }
+
+  function downloadReviewPgn() {
+    // Export the exact in-memory snapshot being shown. A same-id archive
+    // revision landing concurrently must not make the file differ from the
+    // board the user chose to save.
+    const opened = review;
+    if (!opened || !opened.game) return;
+    if (typeof ChessyPGN === 'undefined' ||
+        typeof ChessyPGN.serializeRecord !== 'function') {
+      $('reviewStatus').textContent =
+        'PGN export is unavailable. Reload after the offline update finishes.';
+      return;
+    }
+    let pgn;
+    try {
+      pgn = ChessyPGN.serializeRecord(opened.game, exportTags(opened.game));
+    } catch (e) {
+      $('reviewStatus').textContent = 'This archived game could not be exported.';
+      return;
+    }
+
+    const at = Number.isFinite(opened.game.playedAt)
+      ? opened.game.playedAt : opened.game.createdAt;
+    let stamp = new Date(Number.isFinite(at) ? at : Date.now());
+    if (!Number.isFinite(stamp.getTime())) stamp = new Date();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([pgn], {
+      type: 'application/x-chess-pgn'
+    }));
+    a.download = 'chessy-' + stamp.getFullYear() +
+      pad2(stamp.getMonth() + 1) + pad2(stamp.getDate()) + '-' +
+      pad2(stamp.getHours()) + pad2(stamp.getMinutes()) + '.pgn';
+    // This transport-only link exists for one second; keep it out of keyboard
+    // order and the accessibility tree while the visible button retains focus.
+    a.tabIndex = -1;
+    a.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(a);
+    a.click();
+    // Safari can cancel a just-started download if its object URL is revoked
+    // synchronously; keep the same short grace period as Play and Backup.
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
   function renderGameList() {
     review = null; // leaving a game abandons its (unsaved) reflection state
     resetScanUi();
@@ -582,6 +676,7 @@
       (firstItem || $('tabReview')).focus();
     });
   });
+  $('reviewExportPgn').addEventListener('click', downloadReviewPgn);
   $('revStart').addEventListener('click', function () { stepReview(0); });
   $('revPrev').addEventListener('click', function () { stepReview(review.ply - 1); });
   $('revNext').addEventListener('click', function () { stepReview(review.ply + 1); });
