@@ -432,6 +432,27 @@ console.log('quiescence repetition');
   const vFree = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx });
   check(vFree > 0, 'without a repetition quiescence keeps the winning score',
     'value ' + vFree + ' (static evaluation ' + matVal + ')');
+
+  // (d) A qply-0 quiet check can now be followed by its evasion, a second
+  // forcing check at qply 2, and a second evasion. That is a complete
+  // four-ply reversible cycle even when the horizon's halfmove clock is zero,
+  // so the initial horizon position must be present on the path before the
+  // quiet-check tail starts. The reviewed line is
+  // Ra3-b3+ Kb1-a1 Rb3-a3+ Ka1-b1; test both colour orientations.
+  const cycleFen = '4r3/8/K4n2/8/5Np1/R3Pq2/3RN3/1k6 w - - 0 1';
+  for (const flip of [false, true]) {
+    const f = flip ? mirrorFen(cycleFen) : cycleFen;
+    ctx = ChessAI.makeCtx(true, Infinity);
+    const vCycle = ChessAI.search(
+      Chess.parseFen(f), 0, -Infinity, Infinity, true, { ctx: ctx });
+    const suffix = flip ? ' (mirrored)' : '';
+    check(vCycle === 0,
+      'quiet-check tail detects a cycle back to the low-halfmove horizon' + suffix,
+      'value ' + vCycle);
+    check(ctx.repPly === 0,
+      'low-halfmove horizon cycle propagates repPly' + suffix,
+      'repPly ' + ctx.repPly + ' (expected 0)');
+  }
 })();
 
 // --- Null-window scout vs a warm, wide-window TT (regression). With delta
@@ -557,7 +578,7 @@ check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
 // shallow/small. Includes BOTH delta-review witnesses, the exact regressions
 // that motivated removing delta pruning.
 const QMAX_ORACLE = 16;
-const QCHECK_PLIES_ORACLE = 4; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
+const QCHECK_PLIES_ORACLE = 5; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
 function oracleQuiesce(state, alpha, beta, ply, qply, path, afterCheck) {
   if (Chess.insufficientMaterial(state.board)) return 0;
   const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
@@ -584,16 +605,27 @@ function oracleQuiesce(state, alpha, beta, ply, qply, path, afterCheck) {
   }
   path.push(key);
   // Same selective quiet-check extension as quiesceNode: at qply 0 and after
-  // the first check evasion, admit immediate mate or a check with one reply;
-  // later layers admit only mate. `legal` carries each move's applied state.
+  // a check evasion, admit immediate mate or a check with one reply through
+  // the next attacker node (qply 1 when the horizon starts in check, qply 2
+  // after a qply-0 check). The losing side's direct qply-0 knight check may
+  // have up to three replies; later layers admit only mate. `legal` carries
+  // each move's applied state, while the full reply count here stays
+  // independent of production's early-exit legalMoveCountUpTo helper.
   const genChecks = qply < QCHECK_PLIES_ORACLE && (qply === 0 || afterCheck);
   const moves = inChk ? legal : legal.filter(function (e) {
     if (e[0].captured || e[0].promotion) return true;
     if (!genChecks) return false;
-    if (!Chess.isAttacked(e[1].board, e[1].board.indexOf(enemy + 'K'), turn)) return false;
+    const ek = e[1].board.indexOf(enemy + 'K');
+    if (!Chess.isAttacked(e[1].board, ek, turn)) return false;
+    const dr = Math.abs((e[0].to >> 3) - (ek >> 3));
+    const dc = Math.abs((e[0].to & 7) - (ek & 7));
+    const knightRescue = qply === 0 && e[0].piece[1] === 'N' &&
+      ((dr === 1 && dc === 2) || (dr === 2 && dc === 1)) &&
+      (maximizing ? best < 0 : best > 0);
     const replies = Chess.legalMoves(e[1]).length;
-    const forceLayer = qply === 0 || (afterCheck && qply === 1);
-    return replies === 0 || (forceLayer && replies === 1);
+    const forceLayer = qply === 0 || (afterCheck && qply <= 2);
+    return replies === 0 || (forceLayer && replies === 1) ||
+      (knightRescue && replies <= 3);
   });
   for (const e of moves) {
     const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path, inChk);
@@ -636,6 +668,28 @@ function oracleQ(state, depth, alpha, beta, ply, path) {
   path.pop();
   return best;
 }
+
+// The independent quiescence oracle must prove the same complete five-ply
+// quiet-mate tail as production. Each of the three bounded-selection rules
+// above is necessary here: the direct knight rescue at qply 0, the second
+// single-reply check at qply 2, and the final quiet mate at qply 4.
+const QUIET_TAIL_FEN =
+  '4r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/r5P1/2R4K w - - 0 28';
+for (const flip of [false, true]) {
+  const f = flip ? mirrorFen(QUIET_TAIL_FEN) : QUIET_TAIL_FEN;
+  const expected = flip ? -(MATE - 5) : (MATE - 5);
+  const vO = oracleQ(Chess.parseFen(f), 0, -Infinity, Infinity, 0, []);
+  const vP = ChessAI.search(
+    Chess.parseFen(f), 0, -Infinity, Infinity, true);
+  const suffix = flip ? ' (mirrored)' : '';
+  check(vO === expected,
+    'independent oracle proves the full quiet mate in 5' + suffix,
+    'expected ' + expected + ', got ' + vO);
+  check(vP === vO,
+    'production pure quiescence equals the quiet-mate oracle' + suffix,
+    'oracle=' + vO + ' production=' + vP);
+}
+
 console.log('PVS + aspiration exactness (quiescence on)');
 const Q_CASES = [
   // both delta-review witnesses (d0 = pure quiescence, the exact regressions;
@@ -647,6 +701,11 @@ const Q_CASES = [
   ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 1],
   ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 2],
   [PVS_FEN, 2],
+  // The reviewed four-ply quiet-check recurrence. These parity cases ensure
+  // the independent oracle admits the qply-2 check while production anchors
+  // the low-halfmove horizon; the two bugs formerly masked one another at -173.
+  ['4r3/8/K4n2/8/5Np1/R3Pq2/3RN3/1k6 w - - 0 1', 0],
+  [mirrorFen('4r3/8/K4n2/8/5Np1/R3Pq2/3RN3/1k6 w - - 0 1'), 0],
   // in check AT the 50-move boundary with a legal evasion (Kxg2): checkmate
   // would outrank the rule, but a mere evasion leaves the draw standing, so
   // both oracle and production must score 0 — exercises oracleQ's fifty-move

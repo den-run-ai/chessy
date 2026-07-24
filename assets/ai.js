@@ -663,7 +663,8 @@
   // (and check evasions) until the position is quiet, so the evaluation never
   // stops in the middle of an exchange (the "horizon effect"). Bounded to
   // QMAX plies so pathological lines can't run away.
-  function quiesceNode(state, alpha, beta, ply, qply, ctx, afterCheck) {
+  function quiesceNode(state, alpha, beta, ply, qply, ctx, afterCheck,
+                       knownR1, knownR2) {
     checkTime(ctx);
     ctx.qnodes++;
     // Repetition-dependency out-param, same contract as searchNode: the
@@ -677,19 +678,23 @@
     const inChk = Chess.isAttacked(state.board, kingSq, enemy);
 
     // Repetition awareness inside quiescence (shared prelude with searchNode).
-    // A capture or promotion — quiescence's staple — is irreversible and resets
-    // the halfmove clock, and no position can recur without a >=4-ply reversible
-    // round trip, so below halfmove 4 no path cycle or game-history threefold is
-    // possible and the hash/scan/push is skipped entirely. Above it (a check-
-    // evasion chain) a repetition must score 0 exactly as in the main search:
-    // otherwise a threefold first seen past the horizon (e.g. a check evasion
-    // into it) is scored by its material, and a path-dependent draw would leave
-    // repPly = Infinity and let an ancestor cache a score its history can't hold.
-    let rr1 = 0, rr2 = 0;
+    // A current position cannot already recur below halfmove 4, so the entry
+    // scan remains avoidable there. It can still ANCHOR a future four-ply
+    // check/evasion cycle, however: each reversible edge below lazily pushes
+    // its parent even when that parent's clock is 0..3. Captures, pawn moves,
+    // and promotions reset the clock and cannot return to their parent, so
+    // those edges need no anchor. At the main-search horizon, reuse the
+    // repetition hash searchNode already computed rather than walking 64
+    // squares again.
+    let rr1 = knownR1, rr2 = knownR2;
+    let haveRepKey = knownR1 !== undefined;
     const trackRep = state.halfmove >= 4;
     if (trackRep) {
-      hashState(state);
-      rr1 = R1; rr2 = R2;
+      if (!haveRepKey) {
+        hashState(state);
+        rr1 = R1; rr2 = R2;
+        haveRepKey = true;
+      }
       checkRep(ctx, rr1, rr2);
       if (REP_DRAW) { ctx.repPly = REP_PLY; return 0; }
     }
@@ -715,9 +720,6 @@
       else { if (best <= alpha) return best; if (best < beta) beta = best; }
     }
 
-    // Only a node that survives to explore children joins the search path, so a
-    // deeper quiescence line can detect a cycle back to here.
-    if (trackRep) { ctx.path1.push(rr1); ctx.path2.push(rr2); }
     let repMin = Infinity;
 
     // Move set. In check: every evasion (the full pseudo list; the loop filters
@@ -779,7 +781,20 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      // Anchor the parent only across a reversible edge. This catches a cycle
+      // rooted below a capture-reset clock without paying a hash/path cost for
+      // the irreversible capture/pawn/promotion branches that dominate qsearch.
+      const anchorRep = next.halfmove === state.halfmove + 1;
+      if (anchorRep) {
+        if (!haveRepKey) {
+          hashState(state);
+          rr1 = R1; rr2 = R2;
+          haveRepKey = true;
+        }
+        ctx.path1.push(rr1); ctx.path2.push(rr2);
+      }
       const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx, inChk);
+      if (anchorRep) { ctx.path1.pop(); ctx.path2.pop(); }
       if (ctx.repPly < repMin) repMin = ctx.repPly; // min over searched children
       if (maximizing) {
         if (score > best) best = score;
@@ -790,7 +805,6 @@
       }
       if (beta <= alpha) break;
     }
-    if (trackRep) { ctx.path1.pop(); ctx.path2.pop(); }
     ctx.repPly = repMin; // propagate the subtree's repetition dependency upward
     return best;
   }
@@ -839,7 +853,9 @@
     // tell a checkmate from a quiet position or a stalemate from a won one,
     // which let shallow searches walk into (or refuse) forced mates.
     if (depth <= 0) {
-      if (ctx.quiesce) return quiesceNode(state, alpha, beta, ply, 0, ctx, false);
+      if (ctx.quiesce) {
+        return quiesceNode(state, alpha, beta, ply, 0, ctx, false, r1, r2);
+      }
       if (!hasLegalMove(state)) {
         return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
       }
