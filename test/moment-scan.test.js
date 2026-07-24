@@ -339,6 +339,16 @@ function reset() {
   reset();
   const staleReview = autoReview('stale', 2, 'b');
   const staleReply = deferred();
+  const staleEvents = [];
+  const realDocument = globalThis.document;
+  const realCustomEvent = globalThis.CustomEvent;
+  globalThis.document = {
+    dispatchEvent: function (event) { staleEvents.push(event.detail); }
+  };
+  globalThis.CustomEvent = function (type, init) {
+    this.type = type;
+    this.detail = init.detail;
+  };
   replies = [staleReply];
   const staleRun = Scan.start(staleReview, { restart: true });
   while (!activeDeferred) await new Promise(function (r) { setTimeout(r, 0); });
@@ -348,8 +358,13 @@ function reset() {
   games.set('stale', replacement);
   staleReply.resolve({ valid: true, complete: true, loss: 300 });
   await staleRun;
-  check(puts === putsBeforeReplace && Scan.state() === null,
-    'a changed source revision is detected before checkpointing a worker result');
+  if (realDocument === undefined) delete globalThis.document;
+  else globalThis.document = realDocument;
+  if (realCustomEvent === undefined) delete globalThis.CustomEvent;
+  else globalThis.CustomEvent = realCustomEvent;
+  check(puts === putsBeforeReplace && Scan.state() === null &&
+      staleEvents[staleEvents.length - 1] === null,
+    'a changed source revision clears subscribers before checkpointing a worker result');
 
   // Imported games with unknown ownership require an explicit choice.
   reset();
