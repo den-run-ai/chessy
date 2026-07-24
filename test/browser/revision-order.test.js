@@ -328,6 +328,44 @@ require('./helper').run('revision-order', async function (t) {
     'merge: a needsRev live save outranks an older committed row and exports clean');
   await page.evaluate(function () { localStorage.removeItem('chessy-game-v1'); });
 
+  // ── (same-ending pending authority) A committed row B and a legacy revless
+  // pending record CONFIRM the same ending B, while the live save holds a
+  // DIFFERENT stale ending A (also revless). The saved A, applied last, must not
+  // replace B on the revless tie — the pending record's confirmation of the
+  // committed ending is authoritative (the same-ending branch records that win).
+  await reset();
+  await page.click('#tabReview');
+  await page.waitForSelector('#gameListWrap:not([hidden])');
+  await page.waitForTimeout(200);
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'agree-x', source: 'play', sans: ['d4', 'd5', 'Qd3'],
+      result: '1-0', reason: 'checkmate', mode: 'pvp', plies: 3, createdAt: 10 }) // committed B, revless
+      .then(function () {
+        // Pending record confirms the SAME ending B (revless).
+        localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+          'agree-x': { w: 't', rec: { id: 'agree-x', source: 'play', sans: ['d4', 'd5', 'Qd3'],
+            result: '1-0', reason: 'checkmate', mode: 'pvp', plies: 3, clocks: [null, null, null],
+            createdAt: 12 } } }));
+        // Live save holds a DIFFERENT stale ending A (fool's mate), revless.
+        let s = Chess.newGameState();
+        function play(f, t) {
+          const legal = Chess.legalMoves(s);
+          s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+        }
+        play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4');
+        localStorage.setItem('chessy-game-v1', JSON.stringify({
+          fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'agree-x', endedAt: 300 }));
+      });
+  });
+  const [ma] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const mba = JSON.parse(fs.readFileSync(await ma.path(), 'utf8'));
+  const agree = mba.stores.games.find(function (g) { return g.id === 'agree-x'; });
+  check(agree && agree.sans.join(',') === 'd4,d5,Qd3',
+    'merge: a pending record confirming the committed ending keeps authority over a stale live save');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-game-v1'); localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
   // ── (Rh4) The floor is seeded from COMMITTED rows at boot. A revision can
   // persist ONLY to IndexedDB (near quota, REV_KEY + the save + the pending
   // entry all fail while the commit succeeds); after a reload the localStorage
@@ -425,6 +463,15 @@ require('./helper').run('revision-order', async function (t) {
             const self = this, args = arguments;
             function held() { try { return localStorage.getItem('__lgHold') === '1'; } catch (e) { return false; } }
             function run() { return orig.apply(self, args); }
+            // Transient-failure injection: reject the first `__lgFailN` calls
+            // (decrementing the counter) so the boot floor-seed retry is exercised.
+            try {
+              const n = parseInt(localStorage.getItem('__lgFailN') || '0', 10);
+              if (n > 0) {
+                localStorage.setItem('__lgFailN', String(n - 1));
+                return Promise.reject(new Error('listGames transient fail'));
+              }
+            } catch (e) { /* ignore */ }
             if (!held()) return run();
             return new Promise(function (resolve, reject) {
               (function wait() {
@@ -518,6 +565,37 @@ require('./helper').run('revision-order', async function (t) {
     rematchTime.createdAt === aInfo.endedAt,
     'a finish archived after a Rematch keeps its own completion time, not the later game\'s');
   await page.evaluate(function () { localStorage.removeItem('__lgHold'); });
+
+  // (seed retry) A TRANSIENT listGames() rejection must not fulfil revReady
+  // without the committed floor — a finish would then mint a rev BELOW an existing
+  // committed row, which archiveGame() keeps (resolving + clearing the pending
+  // token), permanently outranking the genuine latest ending. The read fails twice,
+  // the retry then seeds the floor (50), and the finish mints ABOVE it.
+  await reset();
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'retry-other', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 50 })
+      .then(function () {
+        localStorage.removeItem('chessy-archive-rev-v1');
+        localStorage.removeItem('chessy-game-v1');
+        localStorage.removeItem('chessy-pending-archive-v1');
+        localStorage.setItem('__lgFailN', '2'); // first two boot floor-reads reject
+      });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4');
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForTimeout(700); // retries (~2×150ms) settle, then the rev is minted + recorded
+  const retried = await page.evaluate(function () {
+    const save = JSON.parse(localStorage.getItem('chessy-game-v1') || 'null');
+    return CoachStore.getGame(save && save.gameId).then(function (g) { return { committedRev: g && g.rev }; });
+  });
+  check(Number.isFinite(retried.committedRev) && retried.committedRev > 50,
+    'a transient floor-read failure is retried so a finish still mints above the committed floor');
+  await page.evaluate(function () { localStorage.removeItem('__lgFailN'); });
 
   await reset(); // leave a clean store for the console-error check
 });

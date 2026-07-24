@@ -1249,14 +1249,31 @@
     // allocation (a live finish, the boot re-offer, the reconcile migration)
     // waits on this, so a finish during a SLOW IndexedDB read cannot obtain a rev
     // below a committed row. (nextRev() caps to the safe range, so even a
-    // poisoned committed rev can't break the sequence.) Never rejects — a failed
-    // read simply leaves the floor session-local.
+    // poisoned committed rev can't break the sequence.)
+    //
+    // A TRANSIENT listGames() rejection must not fulfil revReady without the
+    // floor: doing so would let an Undo → revised finish mint a rev BELOW an
+    // existing committed row, which archiveGame() then keeps (resolving
+    // successfully and clearing the pending token), permanently outranking the
+    // genuine latest ending. So RETRY a failed read a few times before giving up.
+    // If reads stay broken the floor is left session-local — but in that state
+    // archiveGame() writes are failing too, so a low-rev finish stays parked
+    // rather than being silently lost.
     if (CoachStore.listGames && ChessyArchive.seedRev) {
-      revReady = CoachStore.listGames().then(function (games) {
-        let maxRev = -Infinity;
-        games.forEach(function (g) { if (Number.isFinite(g.rev) && g.rev > maxRev) maxRev = g.rev; });
-        if (Number.isFinite(maxRev)) ChessyArchive.seedRev(maxRev);
-      }).catch(function () { /* floor stays session-local; best effort */ });
+      const seedFloor = function (retriesLeft) {
+        return CoachStore.listGames().then(function (games) {
+          let maxRev = -Infinity;
+          games.forEach(function (g) { if (Number.isFinite(g.rev) && g.rev > maxRev) maxRev = g.rev; });
+          if (Number.isFinite(maxRev)) ChessyArchive.seedRev(maxRev);
+        }, function (err) {
+          if (retriesLeft > 0) {
+            return new Promise(function (r) { setTimeout(r, 150); })
+              .then(function () { return seedFloor(retriesLeft - 1); });
+          }
+          /* reads persistently unavailable → floor stays session-local */
+        });
+      };
+      revReady = seedFloor(5);
     }
     // Drain the durability queue AFTER the floor seed (so a reconcile migration
     // of a legacy entry also mints above the committed floor), THEN re-offer the

@@ -199,6 +199,11 @@
         const curRev = effRev(cur, false);
         const recRev = effRev(rec, fromSaved);
         byId[rec.id] = Object.assign({}, recRev >= curRev ? rec : cur, { createdAt: earliest });
+        // Record pending authority here too: when a pending record CONFIRMS the
+        // committed ending (both agree on B), the later live save must not be able
+        // to replace B with a different stale ending A on the revless tie. Without
+        // this the same-ending return would bypass the pendingWon marker.
+        pendingWon[rec.id] = !fromSaved;
         return;
       }
       if (cur) {
