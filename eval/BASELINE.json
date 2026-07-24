@@ -17,8 +17,8 @@
       "fail": 0
     },
     "terminalStatus": {
-      "checked": 14,
-      "pass": 14,
+      "checked": 60,
+      "pass": 60,
       "fail": 0
     },
     "specialMoves": {
@@ -53,8 +53,8 @@
     }
   },
   "totals": {
-    "checks": 128,
-    "pass": 128,
+    "checks": 174,
+    "pass": 174,
     "fail": 0
   },
   "gate": "PASS"

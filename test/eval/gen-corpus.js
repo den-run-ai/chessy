@@ -132,13 +132,15 @@ function validate(rec) {
       if (mirrorUci(best) !== mbest) throw new Error(rec.id + ': symmetry broke (' + best + ' -> ' + mbest + ')');
     }
     if (a.determinism) {
-      const res2 = AC.analyse(state, ANALYSE_OPTS);
-      if (JSON.stringify([res.bestLines[0], res.scoreCpWhite]) !== JSON.stringify([res2.bestLines[0], res2.scoreCpWhite])) {
+      if (analysisSignature(res) !== analysisSignature(AC.analyse(state, ANALYSE_OPTS))) {
         throw new Error(rec.id + ': analyse not deterministic');
       }
     }
   }
 }
+// Full analysis signature (every stable field, excluding only elapsedMs) — the
+// same determinism signature the scorecard uses.
+function analysisSignature(res) { const c = Object.assign({}, res); delete c.elapsedMs; return JSON.stringify(c); }
 function replayPvs(fen, res) {
   for (const line of res.bestLines) {
     let s = Chess.newGameState(fen);
@@ -212,7 +214,12 @@ function buildPuzzles(prov) {
     const themes = themesStr ? themesStr.split(' ') : [];
     const phase = themes.includes('opening') ? 'opening' : themes.includes('endgame') ? 'endgame' : 'middlegame';
     // split-before-extract: keep same-game puzzles together via the game id.
-    const gameId = (gameUrl.split('#')[0].split('/').filter(Boolean).pop() || pid).replace(/^(white|black)$/, pid);
+    // Lichess URLs may be side-qualified (/GAMEID/black#ply): take the segment
+    // BEFORE a trailing white/black, not the side word itself.
+    const segs = gameUrl.split('#')[0].split('/').filter(Boolean);
+    let last = segs.pop();
+    if ((last === 'white' || last === 'black') && segs.length) last = segs.pop();
+    const gameId = last || pid;
     const id = 'puzzle-' + pid;
     out.push({
       id: id, source_url: prov.sources['lichess-puzzles-v1.csv'].source_url, source_id: pid,

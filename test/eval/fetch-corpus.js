@@ -121,11 +121,20 @@ async function fetchPuzzles() {
   });
 
   if (!headerSeen) throw new Error('puzzle stream: header row not seen');
+  // Abort rather than publish an underfilled stratum: writing a partial sample
+  // while PROVENANCE claims "8 per band" would be false metadata, and the
+  // generator (which accepts any total ≥ 20) would silently lose a difficulty
+  // band. Raise MAX_SCAN and re-run if a band is genuinely sparse.
+  const short = RATING_BANDS.filter(([name]) => bands.get(name).length < PER_BAND)
+    .map(([name]) => name + ' (' + bands.get(name).length + '/' + PER_BAND + ')');
+  if (short.length) {
+    throw new Error('underfilled rating band(s) within MAX_SCAN=' + MAX_SCAN + ': ' + short.join(', ') +
+      ' — raise MAX_SCAN and re-run');
+  }
   const selected = [];
   for (const [name] of RATING_BANDS) {
     const rows = bands.get(name).slice().sort(); // deterministic by PuzzleId prefix
     selected.push(...rows.slice(0, PER_BAND));
-    if (rows.length < PER_BAND) console.warn('  band ' + name + ': only ' + rows.length + ' rows');
   }
   const csv = header + '\n' + selected.join('\n') + '\n';
   fs.writeFileSync(path.join(OUT_DIR, 'lichess-puzzles-v1.csv'), csv);

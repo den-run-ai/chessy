@@ -22,7 +22,7 @@ before this change.
 | Release questions answered | 1 — *"did the engine change win a paired match?"* | 2 — win-rate **plus** an 8-axis correctness score vector |
 | Correctness axes measured on a frozen corpus | 0 | **8** (`legalRoot`, `terminalStatus`, `specialMoves`, `expectedLegal`, `pvReplay`, `perspectiveMate`, `symmetry`, `determinism`) |
 | License-clean frozen eval cases | 0 (tactics/match positions are inline, unprovenanced) | **114** committed with full provenance — **80 real CC0** (40 Lichess puzzles + 40 openings) + 34 MIT fixtures (shard: **64**) |
-| Correctness checks per PR (deterministic) | 0 | **128** on the frozen 64-case shard, `<1 s` wall time |
+| Correctness checks per PR (deterministic) | 0 | **174** on the frozen 64-case shard, `<1 s` wall time |
 | Corpus integrity / provenance | none | sha256-verified ndjson + per-record `license`/`source`/`sha`, and sha256-verified raw CC0 sources |
 | Gate on a broken PV / mate-sign / colour-symmetry regression | none | **strict, blocks the PR** |
 
@@ -31,18 +31,18 @@ Score vector on the frozen shard (this PR):
 ```
 eval-v1 correctness scorecard — shard (64 cases)
   legalRoot        ok  64/64
-  terminalStatus   ok  14/14
+  terminalStatus   ok  60/60
   specialMoves     ok  19/19
   expectedLegal    ok  15/15
   pvReplay         ok  4/4
   perspectiveMate  ok  4/4
   symmetry         ok  4/4
   determinism      ok  4/4
-  TOTAL                 128/128 checks  →  gate PASS
+  TOTAL                 174/174 checks  →  gate PASS
 ```
 
-Full corpus (`--full`): **203/203** checks across all 114 cases (adds the
-remaining 25 puzzle key-move and opening legality checks), gate PASS.
+Full corpus (`--full`): **299/299** checks across all 114 cases (adds the
+remaining live-position, puzzle key-move and opening legality checks), gate PASS.
 
 ### The gate has teeth (not a vacuous 100%)
 

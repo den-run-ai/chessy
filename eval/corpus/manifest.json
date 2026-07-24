@@ -20,9 +20,9 @@
     "puzzle": 40
   },
   "counts_by_split": {
-    "train": 84,
-    "val": 15,
-    "test": 15
+    "train": 79,
+    "val": 21,
+    "test": 14
   },
   "counts_by_license": {
     "MIT": 34,
@@ -37,7 +37,7 @@
     "quiesce": true
   },
   "ndjson": "eval-v1.ndjson",
-  "ndjson_sha256": "9741d3dc09b8d24a26ceefdf50d542bc37ed5a0703c614cafbcfc45d4f07fef4",
+  "ndjson_sha256": "d32df64c882985422ea05de7d9fa76ae936afaa82a96c87640d4c45fefaf047c",
   "sources": {
     "lichess-puzzles-v1.csv": {
       "source_url": "https://database.lichess.org/lichess_db_puzzle.csv.zst",

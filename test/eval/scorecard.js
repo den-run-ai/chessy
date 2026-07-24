@@ -90,8 +90,12 @@ function checkLegalRoot(rec, state) {
   const legal = Chess.legalMoves(state);
   // Independent re-derivation: pseudo moves that do not leave the mover in check.
   const rederived = Chess.pseudoMoves(state).filter(m => !Chess.inCheck(Chess.applyMove(state, m), state.turn));
-  if (rederived.length !== legal.length) {
-    return [{ ok: false, detail: 'legal count ' + legal.length + ' != re-derived ' + rederived.length }];
+  // Compare the canonical UCI SETS (not just sizes): a regression that swaps one
+  // legal root for a different illegal one while preserving the count must fail.
+  const legalSet = legal.map(uciOf).sort();
+  const rederivedSet = rederived.map(uciOf).sort();
+  if (legalSet.length !== rederivedSet.length || legalSet.some((u, i) => u !== rederivedSet[i])) {
+    return [{ ok: false, detail: 'legal set {' + legalSet.join(',') + '} != re-derived {' + rederivedSet.join(',') + '}' }];
   }
   // Non-empty iff live (mate/stalemate are the only zero-move terminals).
   const zeroMove = status.over && (status.reason === 'checkmate' || status.reason === 'stalemate');
@@ -110,8 +114,14 @@ function checkLegalRoot(rec, state) {
 }
 
 function checkTerminalStatus(rec, state) {
-  const t = rec.assert.terminal;
   const s = Chess.gameStatus(state);
+  // Live-position expectation: fifty-move / repetition / insufficient-material
+  // terminals keep legal moves, so legalRoot cannot catch a wrongly-drawn
+  // "notTerminal" record — score it here and require the game is NOT over.
+  if (rec.assert.notTerminal) {
+    return [{ ok: !s.over, detail: s.over ? 'expected live, engine over (' + s.reason + ')' : 'live' }];
+  }
+  const t = rec.assert.terminal;
   if (!s.over) return [{ ok: false, detail: 'expected ' + t.reason + ', engine live' }];
   if (s.reason !== t.reason) return [{ ok: false, detail: 'reason ' + s.reason + ' != ' + t.reason }];
   if (t.result && s.result !== t.result) return [{ ok: false, detail: 'result ' + s.result + ' != ' + t.result }];
@@ -172,11 +182,17 @@ function checkSymmetry(rec, res, opts) {
   return [{ ok: ok, detail: best + ' mirrors to ' + mirrorUci(best) + (ok ? ' = ' + mbest : ' != ' + mbest) }];
 }
 
+// Full analysis signature: every stable field of the analyse() result — all
+// MultiPV lines, scores, mate, depth/nodes, stability — excluding only the
+// inherently variable elapsedMs. Shared with gen-corpus.js.
+function analysisSignature(res) {
+  const copy = Object.assign({}, res);
+  delete copy.elapsedMs;
+  return JSON.stringify(copy);
+}
 function checkDeterminism(rec, state, res, opts) {
-  const res2 = AC.analyse(state, opts);
-  const k1 = JSON.stringify([res.bestLines[0], res.scoreCpWhite]);
-  const k2 = JSON.stringify([res2.bestLines[0], res2.scoreCpWhite]);
-  return [{ ok: k1 === k2, detail: k1 === k2 ? 'stable' : 'DIVERGED across runs' }];
+  const ok = analysisSignature(res) === analysisSignature(AC.analyse(state, opts));
+  return [{ ok: ok, detail: ok ? 'stable (full MultiPV signature)' : 'DIVERGED across runs' }];
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +214,7 @@ function run(records, opts, mutate) {
     const res = needAnalyse ? AC.analyse(state, opts) : null;
 
     const todo = [['legalRoot', () => checkLegalRoot(rec, state)]];
-    if (a.terminal) todo.push(['terminalStatus', () => checkTerminalStatus(rec, state)]);
+    if (a.terminal || a.notTerminal) todo.push(['terminalStatus', () => checkTerminalStatus(rec, state)]);
     if (a.special) todo.push(['specialMoves', () => checkSpecialMoves(rec, state)]);
     if (a.expectedLegal) todo.push(['expectedLegal', () => checkExpectedLegal(rec, state)]);
     if (a.pvReplay) todo.push(['pvReplay', () => checkPvReplay(rec, state, res)]);
@@ -257,16 +273,26 @@ function printReport(sv, failures) {
 function compareBaseline(baseline, sv) {
   console.log('\nbefore/after vs baseline (' + baseline.mode + '):');
   let regressed = false;
+  // A comparison across different corpora or shard/full modes is not
+  // apples-to-apples — refuse it rather than silently "pass".
+  if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode) {
+    console.log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.mode +
+      ' vs ' + sv.corpus + '/' + sv.mode + '  ← REGRESSION');
+    return false;
+  }
   for (const axis of AXES) {
-    const b = baseline.axes[axis] || { pass: 0, checked: 0 };
+    const b = baseline.axes[axis] || { pass: 0, checked: 0, fail: 0 };
     const a = sv.axes[axis];
     if (!a.checked && !b.checked) continue;
     const bStr = b.pass + '/' + b.checked, aStr = a.pass + '/' + a.checked;
     const delta = (a.pass - a.fail) - (b.pass - (b.fail || 0));
-    const mark = a.fail > (b.fail || 0) ? '  ← REGRESSION' : '';
-    if (a.fail > (b.fail || 0)) regressed = true;
+    // Regression = any new failure OR any LOSS of coverage/passes. Dropping a
+    // case or an entire assertion category (checked/pass falling — even to 0)
+    // must fail the guard, not slip through because fail stayed 0.
+    const bad = a.fail > (b.fail || 0) || a.pass < b.pass || a.checked < b.checked;
+    if (bad) regressed = true;
     console.log('  ' + (axis + '                ').slice(0, 16) + ' ' + bStr + ' → ' + aStr +
-      (delta ? '  (' + (delta > 0 ? '+' : '') + delta + ')' : '') + mark);
+      (delta ? '  (' + (delta > 0 ? '+' : '') + delta + ')' : '') + (bad ? '  ← REGRESSION' : ''));
   }
   return !regressed;
 }
