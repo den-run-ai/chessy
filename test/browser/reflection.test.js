@@ -18,7 +18,9 @@ require('./helper').run('reflection', async function (t) {
   // derives provenance from the full Review state and the request's complete
   // options (including positions + playedMove), so those tests exercise the
   // intended partial nuance rather than slipping past a weaker trust boundary.
-  await page.evaluate(function () {
+  // Install it for both the current document and later navigations: the
+  // poisoned-cache regression deliberately leaves/re-enters the app.
+  const installReflectionFixture = function () {
     window.__reflectionFixture = function (req, settings) {
       settings = settings || {};
       const review = CoachReview.current();
@@ -72,7 +74,9 @@ require('./helper').run('reflection', async function (t) {
         bestLines: [line]
       };
     };
-  });
+  };
+  await page.addInitScript(installReflectionFixture);
+  await page.evaluate(installReflectionFixture);
 
   // Archive a fool's mate and open it in Review.
   await t.newGame({ mode: 'pvp' });
