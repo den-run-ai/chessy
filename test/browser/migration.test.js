@@ -322,6 +322,10 @@ require('./helper').run('migration', async function (t) {
   });
   await page.click('#tabReview');
   await page.waitForSelector('#gameListWrap:not([hidden])');
+  // Navigating away from Play legitimately cancels foreground analysis. The
+  // assertion below is specifically about the destructive operation's own
+  // ordering, so start its trace after that navigation-side cancellation.
+  await page.evaluate(function () { window.__scanCancelOrder.length = 0; });
   await page.click('#deleteAllBtn');
   await page.click('#deleteAllConfirm');
   await page.waitForFunction(function () {
