@@ -366,6 +366,12 @@ function reset() {
   const remembered = await Scan.load(unknown);
   check(remembered.state === 'done' && jobs.get('unknown').scanColor === 'w',
     'the explicit imported-side choice survives reload in the durable job');
+  Scan.invalidate();
+  requests = [];
+  const restarted = await Scan.start(unknown, { restart: true });
+  check(restarted.state === 'done' && jobs.get('unknown').scanColor === 'w' &&
+      requests.length > 0,
+    'restart discards old work but reuses the imported-side choice after reload');
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);

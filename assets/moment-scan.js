@@ -522,7 +522,14 @@
     current = null;
     currentSource = null;
     var token = generation;
-    var get = global.CoachStore && CoachStore.getJob && !opts.restart
+    // A restart discards prior WORK, but an imported game may still need the
+    // explicit White/Black/Both choice saved with that work. Read only for a
+    // normal resume/load or when restart has no known/explicit side; known-side
+    // games and explicit restart choices do not acquire a needless read
+    // dependency.
+    var needsStoredChoice = !scanColorFor(review.game, opts.scanColor);
+    var shouldRead = !opts.restart || needsStoredChoice;
+    var get = global.CoachStore && CoachStore.getJob && shouldRead
       ? Promise.resolve(CoachStore.getJob(review.game.id)) : Promise.resolve(null);
     return get.then(function (stored) {
       if (token !== generation) return null;
@@ -537,7 +544,7 @@
       if (!scanColor) {
         throw new Error('choose White, Black or both before scanning this game');
       }
-      var job = normalizeLoaded(stored, review, scanColor);
+      var job = opts.restart ? null : normalizeLoaded(stored, review, scanColor);
       if (!job) job = freshJob(review, scanColor);
       currentSource = sourceSnapshot(review.game);
       current = job;
