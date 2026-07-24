@@ -43,8 +43,8 @@ console.log('test seams');
 const hooks = ChessAI._test || {};
 check(typeof hooks.kingAttackPenalty === 'function',
   'kingAttackPenalty test seam is available');
-check(typeof hooks.shelterRay === 'function',
-  'shelterRay test seam is available');
+check(typeof hooks.shelterFilePenalty === 'function',
+  'shelterFilePenalty test seam is available');
 if (failed) {
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(1);
@@ -116,14 +116,17 @@ const OWN_BLOCK  = '2qqq1k1/6pp/5N2/8/8/5R2/PP6/K1QQQ3 w - - 0 1';
 const OWN_OFF    = '2qqq1k1/6pp/5N2/8/8/1R6/PP6/K1QQQ3 w - - 0 1';
 const ENEMY_BLOCK= '2qqq1k1/6pp/5b2/8/8/5R2/PP6/K1QQQ3 w - - 0 1';
 const ENEMY_OFF  = '2qqq1k1/6pp/5b2/8/8/1R6/PP6/K1QQQ3 w - - 0 1';
-function ray(fen) {
+const DEEP_PAWN  = '2qqq1k1/5Rpp/8/8/8/8/5p2/K1QQQ3 w - - 0 1';
+function filePenalty(fen) {
   const board = Chess.parseFen(fen).board;
-  return hooks.shelterRay(board, Chess.sqIndex('g8'), 5, 'b');
+  return hooks.shelterFilePenalty(board, Chess.sqIndex('g8'), 5, 'b');
 }
-const heavy = ray(CLEAR);
+const heavy = filePenalty(CLEAR) - 10;
 check(heavy > 0, 'clear enemy heavy-piece ray adds shelter danger', 'bonus ' + heavy);
-equal(ray(OWN_BLOCK), 0, 'attacker-side blocker stops the heavy-piece ray');
-equal(ray(ENEMY_BLOCK), 0, 'defender-side blocker stops the heavy-piece ray');
+equal(filePenalty(OWN_BLOCK), 10, 'attacker-side blocker stops the heavy-piece ray');
+equal(filePenalty(ENEMY_BLOCK), 10, 'defender-side blocker stops the heavy-piece ray');
+equal(filePenalty(DEEP_PAWN), 22, 'enemy rook before a distant pawn keeps the ray open');
+equal(inspect(DEEP_PAWN).bShelter, 22, 'distant pawn cannot suppress the shelter penalty');
 
 const clear = inspect(CLEAR), off = inspect(OFF_FILE);
 equal(clear.bShelter, 10 + heavy, 'clear heavy ray is included in shelter');

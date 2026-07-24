@@ -336,13 +336,11 @@
             if (cc >= 0 && cc < 8 && board[kr * 8 + cc] === color + 'P') mg += sign * SHIELD;
           }
         }
-        // Penalize pawnless king-adjacent files and clear enemy heavy-piece rays.
+        // From the king outward, only the first blocker can shelter a file.
         let shelter = 0;
         for (let dc = -1; dc <= 1; dc++) {
           const cc = kc + dc;
-          if (cc < 0 || cc > 7 || files[cc]) continue; // friendly pawn shields it
-          shelter += SHELTER_OPEN;
-          shelter += shelterRay(board, k, cc, color);
+          if (cc >= 0 && cc < 8) shelter += shelterFilePenalty(board, k, cc, color);
         }
         if (shelter > SHELTER_CAP) shelter = SHELTER_CAP;
         if (color === 'w') shelterW = shelter; else shelterB = shelter;
@@ -399,15 +397,17 @@
     return v > KING_ATK_CAP ? KING_ATK_CAP : v;
   }
 
-  // Scan the pawn-shield direction for a clear enemy rook/queen ray.
-  function shelterRay(board, king, file, color) {
+  // Shelter on one file: the nearest piece is all that can block a direct ray.
+  function shelterFilePenalty(board, king, file, color) {
     const step = color === 'w' ? -1 : 1;
     for (let r = (king >> 3) + step; r >= 0 && r < 8; r += step) {
       const p = board[r * 8 + file];
       if (!p) continue;
-      return p[0] !== color && (p[1] === 'R' || p[1] === 'Q') ? SHELTER_RAY : 0;
+      if (p === color + 'P') return 0;
+      return SHELTER_OPEN +
+        (p[0] !== color && (p[1] === 'R' || p[1] === 'Q') ? SHELTER_RAY : 0);
     }
-    return 0;
+    return SHELTER_OPEN;
   }
 
   // Mating gradient for a lone king (loser) hunted by the winner's king.
@@ -1193,7 +1193,7 @@
     MATE_NEAR: MATE_NEAR,
     _test: Object.freeze({
       kingAttackPenalty: kingAttackPenalty,
-      shelterRay: shelterRay
+      shelterFilePenalty: shelterFilePenalty
     })
   };
 })(typeof window !== 'undefined' ? window : globalThis);
