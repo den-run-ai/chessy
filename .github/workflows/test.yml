@@ -75,11 +75,19 @@ jobs:
         run: node test/engine.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
+      - name: Install chess.js (dev-only independent legal-move oracle)
+        # A SEPARATE rules implementation so the eval legalRoot axis is a true
+        # differential, not the engine agreeing with itself. Dev/CI only; never
+        # bundled into the offline app.
+        run: npm install --no-save chess.js@1.4.0
       - name: Run eval-v1 correctness scorecard (frozen 64-case shard)
-        run: node test/eval/scorecard.js
+        # --baseline makes lost checks / a vacuous axis / a changed analysis
+        # config fail the gate, not just new assertion failures.
+        run: node test/eval/scorecard.js --baseline eval/BASELINE.json
       - name: Verify eval corpus is up to date with its generator
-        # The committed ndjson/manifest must match a fresh generation (and the
-        # scorecard verifies the ndjson sha256 against the manifest at runtime).
+        # The committed ndjson/manifest must match a fresh generation (with the
+        # oracle installed above), and the scorecard verifies the ndjson sha256
+        # against the manifest at runtime.
         run: |
           node test/eval/gen-corpus.js
           if ! git diff --quiet -- eval/corpus/; then

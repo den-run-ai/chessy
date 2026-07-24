@@ -38,6 +38,7 @@ const crypto = require('crypto');
 require('../../assets/engine.js');
 require('../../assets/ai.js');
 require('../../assets/analysis-core.js');
+const oracle = require('./oracle.js');
 const Chess = globalThis.Chess;
 const AC = globalThis.ChessyAnalysisCore;
 
@@ -110,7 +111,16 @@ function checkLegalRoot(rec, state) {
       return [{ ok: false, detail: 'SAN "' + san + '" is not a unique round-trip' }];
     }
   }
-  return [{ ok: true, detail: legal.length + ' legal roots' }];
+  // Independent oracle (chess.js, a separate rules implementation) when
+  // available: a bug in Chessy's shared move-gen primitives cannot pass by
+  // agreeing with itself. Count-stable — one result per case whether or not
+  // the oracle ran; it only makes the check stricter. Skips a FEN chess.js
+  // parses differently rather than failing spuriously.
+  const oracleSet = oracle.legalUci(Chess.toFen(state));
+  if (oracleSet && (oracleSet.length !== legalSet.length || oracleSet.some((u, i) => u !== legalSet[i]))) {
+    return [{ ok: false, detail: 'chess.js oracle {' + oracleSet.join(',') + '} != engine {' + legalSet.join(',') + '}' }];
+  }
+  return [{ ok: true, detail: legal.length + ' legal roots' + (oracleSet ? ' (oracle✓)' : '') }];
 }
 
 function checkTerminalStatus(rec, state) {
@@ -270,14 +280,18 @@ function printReport(sv, failures) {
   }
 }
 
-function compareBaseline(baseline, sv) {
-  console.log('\nbefore/after vs baseline (' + baseline.mode + '):');
+function compareBaseline(baseline, sv, log) {
+  log = log || console.log;
+  log('\nbefore/after vs baseline (' + baseline.mode + '):');
   let regressed = false;
-  // A comparison across different corpora or shard/full modes is not
-  // apples-to-apples — refuse it rather than silently "pass".
-  if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode) {
-    console.log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.mode +
-      ' vs ' + sv.corpus + '/' + sv.mode + '  ← REGRESSION');
+  // A comparison across different corpora, modes, or ANALYSE OPTIONS is not
+  // apples-to-apples — refuse it rather than silently "pass". Equal pass counts
+  // under a changed nodeLimit/multiPV/pvLen/quiesce evaluated a different search.
+  const optsEq = JSON.stringify(baseline.analyse_opts) === JSON.stringify(sv.analyse_opts);
+  if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode || !optsEq) {
+    log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.mode +
+      ' opts=' + JSON.stringify(baseline.analyse_opts) + ' vs ' + sv.corpus + '/' + sv.mode +
+      ' opts=' + JSON.stringify(sv.analyse_opts) + '  ← REGRESSION');
     return false;
   }
   for (const axis of AXES) {
@@ -291,7 +305,7 @@ function compareBaseline(baseline, sv) {
     // must fail the guard, not slip through because fail stayed 0.
     const bad = a.fail > (b.fail || 0) || a.pass < b.pass || a.checked < b.checked;
     if (bad) regressed = true;
-    console.log('  ' + (axis + '                ').slice(0, 16) + ' ' + bStr + ' → ' + aStr +
+    log('  ' + (axis + '                ').slice(0, 16) + ' ' + bStr + ' → ' + aStr +
       (delta ? '  (' + (delta > 0 ? '+' : '') + delta + ')' : '') + (bad ? '  ← REGRESSION' : ''));
   }
   return !regressed;
@@ -316,6 +330,10 @@ function main() {
   const result = run(records, opts, null);
   const sv = scoreVector(mode, records, result, manifest);
 
+  // In --json mode stdout must be ONLY the JSON document; all human-readable
+  // diagnostics (baseline report, self-test prose, notices) go to stderr so the
+  // command's stdout stays machine-parseable even with --baseline/--self-test.
+  const diag = asJson ? console.error : console.log;
   if (asJson) {
     console.log(JSON.stringify(sv, null, 2));
   } else {
@@ -325,11 +343,11 @@ function main() {
   let baselineOk = true;
   if (baseIdx >= 0) {
     const baseline = JSON.parse(fs.readFileSync(args[baseIdx + 1], 'utf8'));
-    baselineOk = compareBaseline(baseline, sv);
+    baselineOk = compareBaseline(baseline, sv, diag);
   }
   if (outIdx >= 0) {
     fs.writeFileSync(args[outIdx + 1], JSON.stringify(sv, null, 2) + '\n');
-    if (!asJson) console.log('\nscore vector written to ' + args[outIdx + 1]);
+    diag('\nscore vector written to ' + args[outIdx + 1]);
   }
 
   // Self-test: corrupt one expectation and confirm the gate FAILS. Guards
@@ -343,7 +361,7 @@ function main() {
     };
     const sr = run(records, opts, mutate);
     const detected = sr.totals.fail > 0;
-    console.log('\nself-test (inject a wrong mate expectation): gate ' +
+    diag('\nself-test (inject a wrong mate expectation): gate ' +
       (detected ? 'correctly went RED ✓' : 'stayed green ✗ — GATE HAS NO TEETH'));
     if (!detected) process.exit(3);
   }

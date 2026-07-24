@@ -37,8 +37,13 @@ source's license tag when added:
 | [Lichess Open Database](https://database.lichess.org/) — evaluated positions | `CC0` | Evaluated middlegame positions (the puzzle tranche already ships) | Eval FENs omit move counters/history, so they cannot test repetition or fifty-move behaviour |
 | Stockfish opening books | `CC0` | Diverse opening seeds, closed/endgame positions | Freeze a small manifest; do not vendor multi-million-position books |
 | Fathom + Syzygy | `MIT` probing code | Build-time generation of exact WDL/DTZ endgame fixtures | Tablebases stay build-time tooling; only compact derived fixtures are committed |
-| `chess.js` | `BSD-2-Clause` | Development-only differential oracle | Dev-only; **never** a runtime dependency |
 | Stockfish binary | `GPL` | Optional pinned local oracle (version/checksum/threads/hash/node-limit/MultiPV pinned) | GPL — used as an external binary only; **never vendored or linked** into the MIT app |
+
+**Now in use (dev/CI only):**
+
+| Tool | License | Use | Caveat honored |
+| --- | --- | --- | --- |
+| [`chess.js`](https://github.com/jhlywa/chess.js) `@1.4.0` | `BSD-2-Clause` | Independent legal-move oracle for the `legalRoot` axis (a separate rules implementation). CI runs `npm install --no-save chess.js`. | Dev/CI only, `--no-save`, not committed; **never** a runtime dependency of the app, and the corpus regenerates identically without it (validation-only). |
 
 `wdl` is kept `null` until Chessy has its own calibrated WDL model — Stockfish's
 WDL describes its self-play model, not human win probability.

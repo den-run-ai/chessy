@@ -91,6 +91,10 @@ function streamPuzzles(onRow) {
         if (onRow(line, rows) === 'STOP') { stop(); return; }
       }
     });
+    // Clean EOF before targets were hit (short dump / small MAX_SCAN): settle
+    // the promise so the caller reaches band validation instead of hanging and
+    // letting Node exit without writing the files.
+    dec.on('end', () => { if (!stopped) { stopped = true; resolve(rows); } });
     dec.on('error', e => { if (!stopped) { stopped = true; reject(e); } });
   });
 }
@@ -156,6 +160,12 @@ async function fetchOpenings() {
     const step = Math.max(1, Math.floor(eligible.length / PER_VOLUME));
     const pick = [];
     for (let i = 0; i < eligible.length && pick.length < PER_VOLUME; i += step) pick.push(eligible[i]);
+    // Abort rather than publish a short volume while PROVENANCE claims
+    // "PER_VOLUME per ECO volume" and the README describes a 40-opening corpus.
+    if (pick.length < PER_VOLUME) {
+      throw new Error('ECO volume ' + vol + ' yielded only ' + pick.length + '/' + PER_VOLUME +
+        ' eligible openings (' + OPENING_MIN_PLIES + '-' + OPENING_MAX_PLIES + ' plies)');
+    }
     for (const c of pick) rows.push(c[0] + '\t' + c[1] + '\t' + c[2]);
     meta[vol] = { eligible: eligible.length, picked: pick.length };
   }

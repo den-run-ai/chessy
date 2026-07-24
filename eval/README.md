@@ -65,7 +65,7 @@ fen, source_fen?, setup_move?, move_history?, expected_moves?, phase, themes,
 rating_band, branching, split_group, generator_version, seed?, assert
 ```
 
-**114 cases (80 CC0 + 34 MIT):**
+**117 cases (80 CC0 + 37 MIT):**
 
 - **Puzzles (40, `CC0-1.0`)** — real Lichess Open Database puzzles, stratified
   across five puzzle-difficulty bands (`<1000`, `1000–1399`, `1400–1799`,
@@ -76,11 +76,12 @@ rating_band, branching, split_group, generator_version, seed?, assert
 - **Openings (40, `CC0-1.0`)** — real ECO/name/line rows sampled across all five
   ECO volumes from the CC0 lichess `chess-openings` project; each FEN is derived
   by replaying the line through Chessy's own engine.
-- **Stateful / adversarial + endgame fixtures (34, `MIT`)** — original positions
-  authored for this repository (`chessy-eval-generator`) covering en passant,
-  castling rights (and restraint), promotion, stalemate, checkmate, mate-in-1
-  score boundaries, the fifty-move boundary, threefold repetition, insufficient
-  material / dead positions, and long-range endgame legality.
+- **Stateful / adversarial + endgame fixtures (37, `MIT`)** — original positions
+  authored for this repository (`chessy-eval-generator`) covering en passant
+  (incl. restraint: no-square and pin-illegal), castling rights (and restraint),
+  promotion (and restraint), stalemate, checkmate, mate-in-1 score boundaries,
+  the fifty-move boundary, threefold repetition, insufficient material / dead
+  positions, and long-range endgame legality (with multi-ply PV replay).
 
 Only a **compact frozen sample** of each CC0 database is committed — never the
 multi-million-row dumps. `split_group` assigns a deterministic **70/15/15
@@ -95,8 +96,8 @@ later E1 work — see `LICENSE-REPORT.md`.
 
 | Axis | What it checks | Gate |
 | --- | --- | --- |
-| `legalRoot` | Differential legal-move set (pseudo-move re-derivation + unique SAN round-trip); non-empty iff live | strict |
-| `terminalStatus` | checkmate / stalemate / fifty-move / threefold / insufficient-material verdict | strict |
+| `legalRoot` | Differential legal-move set — an **independent oracle** (chess.js, a separate rules implementation) when available, plus pseudo-move re-derivation + unique SAN round-trip; non-empty iff live | strict |
+| `terminalStatus` | checkmate / stalemate / fifty-move / threefold / insufficient-material verdict **and** live-position (`notTerminal`) expectations | strict |
 | `specialMoves` | en-passant / castling / promotion availability **and restraint** (absent where forbidden) | strict |
 | `expectedLegal` | every corpus-labelled move (e.g. a puzzle's key move) is legal in its position | strict |
 | `pvReplay` | every reported MultiPV line replays legally, move by move | strict |
@@ -111,6 +112,18 @@ strength baselines. The generator validates every committed expectation against
 the engine at build time, and the scorecard verifies the corpus sha256 against
 the manifest before running, so a corrupted fixture fails loudly rather than
 passing silently.
+
+**Independent oracle.** `legalRoot` cross-checks Chessy's legal-move set against
+[`chess.js`](https://github.com/jhlywa/chess.js) (BSD-2-Clause) — a *separate*
+rules implementation — so a bug in Chessy's own move-gen can't pass by agreeing
+with itself. It is a **dev/CI-only** tool (CI runs `npm install --no-save
+chess.js`), never bundled into the offline app; when it is absent the check
+degrades to the self-consistency form and the corpus regenerates identically
+(the oracle only validates, it never alters records).
+
+**Baseline gate in CI.** The PR job runs `scorecard.js --baseline
+eval/BASELINE.json`, so a lost check, a vacuous axis, or a changed analysis
+config fails the gate — not just a new assertion failure.
 
 ## Roadmap (per the tracker)
 

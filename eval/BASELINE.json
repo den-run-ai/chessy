@@ -22,18 +22,18 @@
       "fail": 0
     },
     "specialMoves": {
-      "checked": 19,
-      "pass": 19,
+      "checked": 22,
+      "pass": 22,
       "fail": 0
     },
     "expectedLegal": {
-      "checked": 15,
-      "pass": 15,
+      "checked": 13,
+      "pass": 13,
       "fail": 0
     },
     "pvReplay": {
-      "checked": 4,
-      "pass": 4,
+      "checked": 6,
+      "pass": 6,
       "fail": 0
     },
     "perspectiveMate": {
@@ -53,8 +53,8 @@
     }
   },
   "totals": {
-    "checks": 174,
-    "pass": 174,
+    "checks": 177,
+    "pass": 177,
     "fail": 0
   },
   "gate": "PASS"

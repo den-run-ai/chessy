@@ -33,6 +33,7 @@ const crypto = require('crypto');
 require('../../assets/engine.js');
 require('../../assets/ai.js');
 require('../../assets/analysis-core.js');
+const oracle = require('./oracle.js');
 const Chess = globalThis.Chess;
 const AC = globalThis.ChessyAnalysisCore;
 
@@ -114,6 +115,16 @@ function validate(rec) {
   if (a.special) for (const [kind, want] of Object.entries(a.special)) {
     if (hasSpecial(state, kind) !== want) throw new Error(rec.id + ': special ' + kind + ' != ' + want);
   }
+  // Independent oracle (chess.js) cross-check of the legal-move set, when
+  // available — catches a bug in the engine's own move-gen that a self-check
+  // would miss. Skips a FEN chess.js parses differently.
+  const oracleSet = oracle.legalUci(Chess.toFen(state));
+  if (oracleSet) {
+    const engineSet = Chess.legalMoves(state).map(uciOf).sort();
+    if (oracleSet.length !== engineSet.length || oracleSet.some((u, i) => u !== engineSet[i])) {
+      throw new Error(rec.id + ': chess.js oracle {' + oracleSet.join(',') + '} != engine {' + engineSet.join(',') + '}');
+    }
+  }
   if (a.expectedLegal) for (const u of rec.expected_moves) {
     if (!findUci(state, u)) throw new Error(rec.id + ': labelled move ' + u + ' is not legal');
   }
@@ -125,6 +136,10 @@ function validate(rec) {
       }
     }
     if (a.pvReplay) replayPvs(rec.fen || Chess.toFen(state), res);
+    if (a.multiPly) { // guarantee this fixture actually exercises a >1-ply PV
+      const maxLen = Math.max(0, ...res.bestLines.map(l => (l.pvUci || []).length));
+      if (maxLen < 2) throw new Error(rec.id + ': expected a multi-ply PV, longest is ' + maxLen);
+    }
     if (a.symmetry) {
       const best = res.bestLines[0] ? res.bestLines[0].uci : '-';
       const mres = AC.analyse(Chess.newGameState(mirrorFen(rec.fen)), ANALYSE_OPTS);
@@ -242,6 +257,11 @@ const GEN_CASES = [
   ['ep-black-open', 'rnbqkbnr/1ppppppp/8/8/pP6/8/P1PPPPPP/RNBQKBNR b KQkq b3 0 2', 'opening', ['en-passant'], { special: { enPassant: true }, notTerminal: true }],
   ['ep-white-endgame', '4k3/8/8/2pP4/8/8/8/4K3 w - c6 0 1', 'endgame', ['en-passant'], { special: { enPassant: true }, notTerminal: true }],
   ['ep-black-endgame', '4k3/8/8/8/2Pp4/8/8/4K3 b - c3 0 1', 'endgame', ['en-passant'], { special: { enPassant: true }, notTerminal: true }],
+  // Restraint: adjacent enemy pawns but NO ep square set — ep must be absent.
+  ['ep-none-no-square', '4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1', 'endgame', ['en-passant', 'restraint'], { special: { enPassant: false }, notTerminal: true }],
+  // Restraint: an ep square is offered but the capture is illegal (it would
+  // discover check on the 5th rank) — the engine must withhold it.
+  ['ep-pin-illegal', '8/8/8/K2pP2r/8/8/8/7k w - d6 0 1', 'endgame', ['en-passant', 'restraint', 'pin'], { special: { enPassant: false }, notTerminal: true }],
 
   ['castle-both-white', 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1', 'middlegame', ['castling'], { special: { castleK: true, castleQ: true }, notTerminal: true }],
   ['castle-both-black', 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1', 'middlegame', ['castling'], { special: { castleK: true, castleQ: true }, notTerminal: true }],
@@ -253,6 +273,8 @@ const GEN_CASES = [
   ['promo-capture', '3r1k2/4P3/8/8/8/8/8/4K3 w - - 0 1', 'endgame', ['promotion'], { special: { promotion: true, promotionCapture: true }, notTerminal: true }],
   ['promo-underpromo-fork', '8/2q1P1k1/8/8/8/8/P7/4K3 w - - 0 1', 'endgame', ['promotion', 'underpromotion'], { special: { promotion: true }, notTerminal: true }],
   ['promo-black', '4k3/8/8/8/8/8/7p/4K3 b - - 0 1', 'endgame', ['promotion'], { special: { promotion: true }, notTerminal: true }],
+  // Restraint: a pawn far from the last rank — promotion must be unavailable.
+  ['promo-none', '4k3/8/8/8/8/8/P7/4K3 w - - 0 1', 'endgame', ['promotion', 'restraint'], { special: { promotion: false }, notTerminal: true }],
 
   ['stalemate-qf7', '7k/5Q2/6K1/8/8/8/8/8 b - - 0 1', 'endgame', ['stalemate'], { terminal: { reason: 'stalemate', result: '1/2-1/2' } }, { mirror: true }],
   ['stalemate-qb6', 'k7/8/1Q6/8/8/8/8/K7 b - - 0 1', 'endgame', ['stalemate'], { terminal: { reason: 'stalemate', result: '1/2-1/2' } }, { mirror: true }],
@@ -275,8 +297,10 @@ const GEN_CASES = [
   ['insufficient-kbk', '4k3/8/8/8/8/8/5B2/4K3 w - - 0 1', 'endgame', ['insufficient-material', 'dead-position'], { terminal: { reason: 'insufficient material', result: '1/2-1/2' } }],
   ['insufficient-knk', '4k3/8/8/8/8/8/5N2/4K3 w - - 0 1', 'endgame', ['insufficient-material', 'dead-position'], { terminal: { reason: 'insufficient material', result: '1/2-1/2' } }],
 
-  ['endgame-kpk-live', '4k3/8/3K4/4P3/8/8/8/8 w - - 0 1', 'endgame', ['kpk'], { notTerminal: true }],
-  ['endgame-lucena-live', '1K6/1P1k4/8/8/8/8/r7/2R5 w - - 0 1', 'endgame', ['rook-endgame'], { notTerminal: true }]
+  // pvReplay on live (non-mate) endgames exercises MULTI-PLY continuations, not
+  // just a single root move — a later illegal PV move must fail the axis.
+  ['endgame-kpk-live', '4k3/8/3K4/4P3/8/8/8/8 w - - 0 1', 'endgame', ['kpk'], { notTerminal: true, pvReplay: true, multiPly: true }],
+  ['endgame-lucena-live', '1K6/1P1k4/8/8/8/8/r7/2R5 w - - 0 1', 'endgame', ['rook-endgame'], { notTerminal: true, pvReplay: true }]
 ];
 
 function genCase(spec) {
@@ -303,7 +327,10 @@ function mirrorCase(rec) {
   if (a.symmetry) ma.symmetry = true;
   if (a.determinism) ma.determinism = true;
   const fen = mirrorFen(rec.fen);
-  const twin = Object.assign({}, rec, { id: rec.id + '-mir', fen: fen, source_sha: sha256(fen + '|'), split_group: splitGroupOf(rec.id + '-mir'), assert: ma });
+  // Leakage rule: a colour/rank mirror is a transposition of its source and
+  // must stay in the SAME split — inherit the source record's split_group
+  // rather than hashing the twin's new id independently.
+  const twin = Object.assign({}, rec, { id: rec.id + '-mir', fen: fen, source_sha: sha256(fen + '|'), split_group: rec.split_group, assert: ma });
   twin.branching = branchingOf(Chess.newGameState(fen));
   return twin;
 }

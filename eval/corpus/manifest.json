@@ -2,12 +2,12 @@
   "corpus": "eval-v1",
   "generator_version": "eval-v1.0.0",
   "retrieval_date": "2026-07-23",
-  "total": 114,
+  "total": 117,
   "shard_size": 64,
   "counts_by_category": {
-    "en-passant": 4,
+    "en-passant": 6,
     "castling": 5,
-    "promotion": 4,
+    "promotion": 5,
     "stalemate": 4,
     "checkmate": 3,
     "mate-in-1": 4,
@@ -20,12 +20,12 @@
     "puzzle": 40
   },
   "counts_by_split": {
-    "train": 79,
+    "train": 82,
     "val": 21,
     "test": 14
   },
   "counts_by_license": {
-    "MIT": 34,
+    "MIT": 37,
     "CC0-1.0": 80
   },
   "split_policy": "70/15/15 train/val/test by stable id/game hash; same-game puzzles share a split; never tune on the test split",
@@ -37,7 +37,7 @@
     "quiesce": true
   },
   "ndjson": "eval-v1.ndjson",
-  "ndjson_sha256": "d32df64c882985422ea05de7d9fa76ae936afaa82a96c87640d4c45fefaf047c",
+  "ndjson_sha256": "94336132552bf9f4fe6e551d0b7907b98203fbe237fe83542a6b9423da8ea801",
   "sources": {
     "lichess-puzzles-v1.csv": {
       "source_url": "https://database.lichess.org/lichess_db_puzzle.csv.zst",
