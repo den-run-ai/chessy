@@ -978,6 +978,7 @@
   // onto the restored data. Keyed by a local ending signature so an Undo →
   // different finish (a new ending) still saves normally.
   const suppressedEndings = new Set();
+  let bootRecoveryInvalidated = false;
   function localEndingKey(id, sans, result, reason) {
     return String(id) + '' + sans.join(',') + '' +
       (result || '') + '' + (reason || '');
@@ -993,6 +994,7 @@
   // unfenced. An unfinished game is not a resurrection risk (not archived until
   // it finishes) and is left alone.
   document.addEventListener('chessy:archivecleared', function (e) {
+    bootRecoveryInvalidated = true;
     if (!gameId) return;
     const st = fullStatus();
     if (!st.over) return;
@@ -1170,7 +1172,7 @@
         showArchiveFailure(archiveBootNoteEl, ids.length === 1 ? ids[0] : null);
       })
       .then(function () {
-        if (!bootStatus.over) return;
+        if (!bootStatus.over || bootRecoveryInvalidated) return;
         // A LIVE attempt for the restored game (undo → revised finish
         // completed while the drain was slow) supersedes the boot
         // snapshot: recording the snapshot now would overwrite the newer

@@ -20,7 +20,7 @@ require('./helper').run('data-controls', async function (t) {
     const a = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 2. Nf3 Nc6 *'), { playerColor: 'w' });
     const b = ChessyPGN.toRecord(ChessyPGN.parseGame('1. d4 d5 *'), { playerColor: 'b' });
     return CoachStore.importGame(a).then(function () { return CoachStore.importGame(b); })
-      .then(function () { return CoachStore.addCard({ gameId: a.id, ply: 2, cause: 'test', due: 1, attempts: [],
+      .then(function () { return CoachStore.addCard({ gameId: a.id, ply: 2, cause: 'test', due: 1, step: -1, attempts: [],
         fenBefore: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
         playedSan: 'e5', bestSan: 'e5', bestMove: { from: 52, to: 36, promotion: null } }); })
       .then(function () {
@@ -304,8 +304,12 @@ require('./helper').run('data-controls', async function (t) {
   check(!!rejects.thinGame, 'a game missing result/plies/createdAt is rejected');
   check(!!rejects.badCardFen, 'a card with an unparseable fenBefore is rejected');
 
-  // A structurally-invalid setupFen ("bad", empty sans) is rejected BEFORE the
-  // destructive transaction — the lenient parseFen would otherwise accept it.
+  // A structurally-invalid setupFen is rejected by store validation even when
+  // the optional PGN module is unavailable.
+  await page.evaluate(function () {
+    window.__savedChessyPGN = window.ChessyPGN;
+    window.ChessyPGN = undefined;
+  });
   await page.setInputFiles('#restoreFile', {
     name: 'badfen.json', mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify({ format: 'chessy-coach-backup', version: 1, dbVersion: 6,
@@ -313,10 +317,14 @@ require('./helper').run('data-controls', async function (t) {
         mode: 'import', plies: 0, createdAt: 1 }], cards: [] } }))
   });
   await page.waitForFunction(function () {
-    return document.getElementById('dataStatus').textContent.indexOf('invalid starting position') !== -1;
+    return document.getElementById('dataStatus').textContent.indexOf('invalid setupFen') !== -1;
   }, { timeout: 5000 });
+  await page.evaluate(function () {
+    window.ChessyPGN = window.__savedChessyPGN;
+    delete window.__savedChessyPGN;
+  });
   check(await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); }) === 2,
-    'a structurally-invalid setup FEN leaves the archive untouched');
+    'store-side FEN validation works without pgn.js and leaves the archive untouched');
 
   // ---- Restore clears the recomputable caches (analyses + jobs) in the SAME
   // transaction, so orphaned engine data for removed games can't hoard quota.
@@ -386,15 +394,74 @@ require('./helper').run('data-controls', async function (t) {
   // rejected before the destructive transaction.
   const moreRejects = await page.evaluate(function () {
     const F = 'chessy-coach-backup';
+    const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    function card(step) {
+      return { id: 1, gameId: 'g', due: 0, step: step, fenBefore: startFen, attempts: [] };
+    }
     return {
       arrayStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: [] }),
       badAttempts: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
-        games: [], cards: [{ id: 1, gameId: 'g', due: 0,
-          fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', attempts: {} }] } })
+        games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0,
+          fenBefore: startFen, attempts: {} }] } }),
+      emptyStores: CoachStore.validateBackup({
+        format: F, version: 1, dbVersion: 6, stores: {} }),
+      noStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [card(undefined)] } }),
+      fractionalStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [card(0.5)] } }),
+      belowLadder: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [card(-2)] } }),
+      learnStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [card(-1)] } }),
+      dayStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [card(0)] } })
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
   check(!!moreRejects.badAttempts, 'a card with a non-array attempts is rejected');
+  check(!!moreRejects.emptyStores, 'a backup missing the games/cards arrays is rejected');
+  check(!!moreRejects.noStep && !!moreRejects.fractionalStep && !!moreRejects.belowLadder,
+    'missing, fractional, and below-ladder card steps are rejected');
+  check(moreRejects.learnStep === null && moreRejects.dayStep === null,
+    'the supported -1 and 0 card steps remain valid');
+
+  // All read-write entry points share the same destructive-operation barrier;
+  // reads and the destructive transaction itself remain available.
+  const locked = await page.evaluate(function () {
+    function outcome(p) {
+      return p.then(function () { return 'accepted'; }, function () { return 'rejected'; });
+    }
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    CoachStore.setOpLock(true);
+    return Promise.all([
+      outcome(CoachStore.addCard({ gameId: 'locked', ply: 0, due: 0, step: -1,
+        attempts: [], fenBefore: fen })),
+      outcome(CoachStore.putAnalysis({ key: 'locked', gameId: 'locked', ply: 0 })),
+      outcome(CoachStore.importGame({ id: 'locked-import', sans: [], result: '*', createdAt: 1 })),
+      outcome(CoachStore.archiveGame({ id: 'locked-archive', sans: [], result: '*',
+        reason: 'imported', createdAt: 1 })),
+      outcome(CoachStore.gradeCard('missing', null, function (c) { return c; })),
+      outcome(CoachStore.upsertCardByMoment({ gameId: 'locked', ply: 0 }, {
+        due: 0, step: -1, attempts: [], fenBefore: fen
+      }))
+    ]).then(function (results) {
+      CoachStore.setOpLock(false);
+      return CoachStore.putAnalysis({ key: 'unlocked', gameId: 'g', ply: 0 })
+        .then(function () { return results.concat('resumed'); });
+    });
+  });
+  check(locked.slice(0, 6).every(function (v) { return v === 'rejected'; }),
+    'direct and shared transaction write paths reject while the barrier is held');
+  check(locked[6] === 'resumed', 'writes resume after the barrier is released');
+
+  await page.setInputFiles('#restoreFile', {
+    name: 'focus.json', mimeType: 'application/json', buffer: Buffer.from(backupJson)
+  });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  check(await page.evaluate(function () {
+    return document.activeElement && document.activeElement.id === 'restoreCancel';
+  }), 'Restore initially focuses Cancel, not Replace');
+  await page.click('#restoreCancel');
 
   // ---- An oversized restore file is rejected before it is read.
   const beforeHuge = await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); });
