@@ -357,43 +357,80 @@
     });
   }
 
+  // A reflection verdict is derived from one exact replay source. When the
+  // caller supplies that source, check it in the SAME transaction as the card
+  // write: a separate getGame() would leave a TOCTOU window in which a revised
+  // ending could replace the same id before the stale card lands.
+  function sameCardSource(game, expected) {
+    if (!game || !expected || game.id !== expected.id) return false;
+    const gameSans = Array.isArray(game.sans) ? game.sans : [];
+    const expectedSans = Array.isArray(expected.sans) ? expected.sans : [];
+    return (game.setupFen || null) === (expected.setupFen || null) &&
+      (game.playerColor || null) === (expected.playerColor || null) &&
+      gameSans.length === expectedSans.length &&
+      gameSans.every(function (san, i) { return san === expectedSans[i]; });
+  }
+
   // ONE card per moment (gameId + ply), enforced atomically: the index
   // lookup and the write share a single readwrite transaction, so two
   // saves racing on the same moment (double-fire, second tab) cannot mint
   // two cards — the loser of the race updates the winner's card instead.
-  // Resolves 'updated' when a card for the moment existed, else 'saved'.
-  function upsertCardByMoment(fields, freshDefaults) {
+  // With expectedGame, the transaction also proves the archived source is
+  // still exact. Resolves 'stale' without writing on a source mismatch,
+  // 'updated' when a card for the moment existed, else 'saved'.
+  function upsertCardByMoment(fields, freshDefaults, expectedGame) {
     return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
-        const t = db.transaction('cards', 'readwrite');
+        const guarded = !!expectedGame;
+        const t = db.transaction(guarded ? ['games', 'cards'] : 'cards', 'readwrite');
         const s = t.objectStore('cards');
-        const cur = s.index('gameId').openCursor(IDBKeyRange.only(fields.gameId));
-        let outcome = 'saved';
-        cur.onsuccess = function () {
-          const c = cur.result;
-          if (c) {
-            if (c.value.ply !== fields.ply) { c.continue(); return; }
-            outcome = 'updated';
-            const merged = Object.assign({}, c.value, fields);
-            // Attempt history is only meaningful against the move it was
-            // graded on: if a re-save changed the card's canonical move,
-            // the old attempts' correct/incorrect flags would silently be
-            // read against the NEW move (Train, Progress). Start the
-            // history over.
-            const oldBest = c.value.bestMove || null;
-            const newBest = fields.bestMove || null;
-            const sameBest = (!oldBest && !newBest) || (!!oldBest && !!newBest &&
-              oldBest.from === newBest.from && oldBest.to === newBest.to &&
-              (oldBest.promotion || null) === (newBest.promotion || null));
-            if (!sameBest) merged.attempts = [];
-            s.put(merged);
-          } else {
-            s.add(Object.assign({}, freshDefaults, fields));
-          }
-        };
+        let cur = null;
+        let guardReq = null;
+        let outcome = guarded ? 'stale' : 'saved';
+
+        function beginUpsert() {
+          outcome = 'saved';
+          cur = s.index('gameId').openCursor(IDBKeyRange.only(fields.gameId));
+          cur.onsuccess = function () {
+            const c = cur.result;
+            if (c) {
+              if (c.value.ply !== fields.ply) { c.continue(); return; }
+              outcome = 'updated';
+              const merged = Object.assign({}, c.value, fields);
+              // Attempt history is only meaningful against the move it was
+              // graded on: if a re-save changed the card's canonical move,
+              // the old attempts' correct/incorrect flags would silently be
+              // read against the NEW move (Train, Progress). Start the
+              // history over.
+              const oldBest = c.value.bestMove || null;
+              const newBest = fields.bestMove || null;
+              const sameBest = (!oldBest && !newBest) || (!!oldBest && !!newBest &&
+                oldBest.from === newBest.from && oldBest.to === newBest.to &&
+                (oldBest.promotion || null) === (newBest.promotion || null));
+              if (!sameBest) merged.attempts = [];
+              s.put(merged);
+            } else {
+              s.add(Object.assign({}, freshDefaults, fields));
+            }
+          };
+        }
+
+        if (guarded) {
+          guardReq = t.objectStore('games').get(fields.gameId);
+          guardReq.onsuccess = function () {
+            if (sameCardSource(guardReq.result, expectedGame)) beginUpsert();
+          };
+        } else {
+          beginUpsert();
+        }
         t.oncomplete = function () { resolve(outcome); };
-        t.onerror = function () { reject(t.error); };
-        t.onabort = function () { reject(t.error || new Error('transaction aborted')); };
+        t.onerror = function () {
+          reject((cur && cur.error) || (guardReq && guardReq.error) || t.error);
+        };
+        t.onabort = function () {
+          reject((cur && cur.error) || (guardReq && guardReq.error) || t.error ||
+            new Error('transaction aborted'));
+        };
       });
     });
   }

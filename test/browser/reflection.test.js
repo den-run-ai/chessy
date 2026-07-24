@@ -14,6 +14,66 @@ require('./helper').run('reflection', async function (t) {
     }, null, { timeout: 60000 });
   }
 
+  // Small, exact-contract fixture for the partial-result UI cases below. It
+  // derives provenance from the full Review state and the request's complete
+  // options (including positions + playedMove), so those tests exercise the
+  // intended partial nuance rather than slipping past a weaker trust boundary.
+  await page.evaluate(function () {
+    window.__reflectionFixture = function (req, settings) {
+      settings = settings || {};
+      const review = CoachReview.current();
+      const state = review.states[req.ply];
+      const legal = Chess.legalMoves(state);
+      const requested = req.opts.playedMove;
+      const sameMove = function (a, b) {
+        return !!a && !!b && a.from === b.from && a.to === b.to &&
+          (a.promotion || null) === (b.promotion || null);
+      };
+      const played = legal.find(function (move) { return sameMove(move, requested); });
+      const includePlayed = settings.includePlayed !== false;
+      const top = includePlayed ? played :
+        (legal.find(function (move) { return !sameMove(move, requested); }) || legal[0]);
+      if (!top) throw new Error('reflection fixture needs a legal root move');
+      const san = Chess.toSan(state, top, legal);
+      const uci = ChessyAnalysisResult.uciOf(top);
+      const score = settings.score === undefined ? 20 : settings.score;
+      const playerScore = state.turn === 'w' ? score : -score;
+      const line = {
+        move: { from: top.from, to: top.to, promotion: top.promotion || null },
+        uci: uci,
+        san: san,
+        scoreCpWhite: score,
+        scoreCpPlayer: playerScore,
+        mate: null,
+        pv: [san],
+        pvUci: [uci]
+      };
+      const identity = ChessyAnalysisCore.identity(state,
+        Object.assign({}, req.opts, { positions: req.positions }));
+      return {
+        turn: state.turn,
+        engine: {
+          id: identity.engineId,
+          version: identity.version,
+          configHash: identity.configHash
+        },
+        positionFingerprint: identity.positionFingerprint,
+        depth: 3,
+        nodes: 1,
+        elapsedMs: 1,
+        complete: settings.complete !== false,
+        scoreCpWhite: score,
+        scoreCpPlayer: playerScore,
+        mate: null,
+        classification: includePlayed ? 'same' : 'unknown-equivalence',
+        playedLine: includePlayed ?
+          Object.assign({ rank: 1, amongCandidates: true }, line) : null,
+        stability: null,
+        bestLines: [line]
+      };
+    };
+  });
+
   // Archive a fool's mate and open it in Review.
   await t.newGame({ mode: 'pvp' });
   await mv('f2', 'f3'); await mv('e7', 'e5');
@@ -127,16 +187,15 @@ require('./helper').run('reflection', async function (t) {
   // provenance line is flagged partial afterwards. (No-worker / wedged / retry
   // and the off-main-thread guarantee are covered by analysis-service.test.js.)
   const partialGated = await page.evaluate(function () {
-    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    const state = Chess.parseFen(fen);
-    // Include the ACTUAL played move (f3) so playedLine is populated: a partial
-    // scan must NOT report its rank as exact.
-    const played = { from: Chess.sqIndex('f2'), to: Chess.sqIndex('f3'), promotion: null };
-    const full = ChessyAnalysisCore.analyse(state,
-      { maxDepth: 4, multiPV: 3, nodeLimit: 8000, playedMove: played });
-    full.complete = false; // pretend the node budget was reached
     window.__realSvc = ChessyAnalysisService.analyse;
-    ChessyAnalysisService.analyse = function () { return Promise.resolve(full); };
+    ChessyAnalysisService.analyse = function (req) {
+      // Include the ACTUAL played move (f3) so playedLine is populated: a
+      // partial scan must NOT report its rank as exact.
+      return Promise.resolve(window.__reflectionFixture(req, {
+        complete: false,
+        includePlayed: true
+      }));
+    };
     return true;
   });
   check(partialGated, 'partial-analysis stub installed');
@@ -369,21 +428,10 @@ require('./helper').run('reflection', async function (t) {
   await page.evaluate(function () {
     window.__realAnalyse3 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const pos = Chess.parseFen(req.fen);
-      const lg = Chess.legalMoves(pos);
-      const lm = lg[0];
-      // A SAN-consistent line: Gate 0 rejects any line whose SAN names a
-      // different move than its from/to.
-      const sn = Chess.toSan(pos, lm, lg);
-      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-        uci: 'lead', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: [sn], pvUci: [] };
-      return Promise.resolve({
-        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
-        depth: 3, nodes: 1, elapsedMs: 1, complete: false,
-        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'same',
-        playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
-        bestLines: [line]
-      });
+      return Promise.resolve(window.__reflectionFixture(req, {
+        complete: false,
+        includePlayed: true
+      }));
     };
   });
   await page.click('#flagMoment');
@@ -398,25 +446,22 @@ require('./helper').run('reflection', async function (t) {
     'a partial top-line claim is qualified as provisional (leads the search so far), not settled');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse3; });
 
-  // cardScore must use validMate too: a malformed mate WITH a finite score is
-  // still usable (centipawn fallback) and must persist the score, not NaN.
+  // The shared contract permits exactly one evaluation representation. A
+  // truthy malformed mate alongside centipawns is rejected at the boundary,
+  // never interpreted as a score or persisted into a card.
   await page.click('#revNext'); await page.click('#revNext'); // from ply 0 → ply 2 (g4)
   await page.evaluate(function () {
     window.__realAnalyse4 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const pos = Chess.parseFen(req.fen);
-      const lg = Chess.legalMoves(pos);
-      const lm = lg[0];
-      const sn = Chess.toSan(pos, lm, lg);
-      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-        uci: 'x', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, pv: [sn], pvUci: [] };
-      return Promise.resolve({
-        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
-        depth: 5, nodes: 1, elapsedMs: 1, complete: true,
-        scoreCpWhite: 20, scoreCpPlayer: 20, mate: {}, classification: 'same',
-        playedLine: Object.assign({ rank: 1, amongCandidates: true }, line), stability: null,
-        bestLines: [line]
+      const result = window.__reflectionFixture(req, {
+        complete: true,
+        includePlayed: true,
+        score: 20
       });
+      result.mate = {};
+      result.bestLines[0].mate = {};
+      result.playedLine.mate = {};
+      return Promise.resolve(result);
     };
   });
   await page.click('#flagMoment');
@@ -425,16 +470,14 @@ require('./helper').run('reflection', async function (t) {
   await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await verifyDone();
-  check(!(await page.locator('#saveCard').isDisabled()),
-    'a malformed mate with a finite score is still usable (centipawn fallback)');
+  const cardsBeforeBadMate = (await cards()).length;
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a malformed mate with a finite score is rejected by the shared contract');
   await page.fill('#cardLesson', 'score fallback test');
-  await page.click('#saveCard');
-  await page.waitForFunction(function () {
-    return document.getElementById('cardSaved').textContent.indexOf('saved') !== -1;
-  });
-  const scoreCard = (await cards()).find(function (c) { return c.ply === 2 && c.lesson === 'score fallback test'; });
-  check(scoreCard && scoreCard.bestScore === 20,
-    'cardScore uses validMate: a malformed mate persists the finite score, not NaN');
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  check((await cards()).length === cardsBeforeBadMate,
+    'a malformed mate cannot found a lesson card');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse4; });
 
   // A partial result that never scored the played move (playedLine null) must
@@ -442,18 +485,11 @@ require('./helper').run('reflection', async function (t) {
   await page.evaluate(function () {
     window.__realAnalyse5 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const pos = Chess.parseFen(req.fen);
-      const lg = Chess.legalMoves(pos);
-      const lm = lg[0];
-      const sn = Chess.toSan(pos, lm, lg);
-      const line = { move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-        uci: 'x', san: sn, scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, pv: [sn], pvUci: [] };
-      return Promise.resolve({
-        turn: pos.turn, engine: { id: 'chessy', version: 'x', configHash: 'x' },
-        depth: 3, nodes: 1, elapsedMs: 1, complete: false,
-        scoreCpWhite: 15, scoreCpPlayer: 15, mate: null, classification: 'unknown-equivalence',
-        playedLine: null, stability: null, bestLines: [line]
-      });
+      return Promise.resolve(window.__reflectionFixture(req, {
+        complete: false,
+        includePlayed: false,
+        score: 15
+      }));
     };
   });
   await page.click('#flagMoment');
@@ -516,25 +552,20 @@ require('./helper').run('reflection', async function (t) {
     'a result with garbled provenance is rejected (no vundefined / undefined nodes)');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse7; });
 
-  // A garbled cached line with a non-array pv must NOT throw while rendering
-  // (which would hang on "Analysing…"): it renders as an empty continuation.
+  // A garbled cached line with a non-array pv is rejected by the shared
+  // contract before rendering (and therefore cannot throw/hang the UI).
   await page.evaluate(function () {
     window.__realAnalyse8 = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req) {
-      const pos = Chess.parseFen(req.fen);
-      const lg = Chess.legalMoves(pos);
-      const lm = lg[0];
-      // The line is otherwise valid (legal, SAN-consistent) — only its `pv` is
-      // malformed, which is the thing under test.
-      const sn = Chess.toSan(pos, lm, lg);
-      return Promise.resolve({
-        turn: pos.turn, engine: { id: 'chessy', version: '1.0.0', configHash: 'x' },
-        depth: 5, nodes: 100, elapsedMs: 1, complete: true,
-        scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, classification: 'different-candidate',
-        playedLine: null, stability: null,
-        bestLines: [{ move: { from: lm.from, to: lm.to, promotion: lm.promotion || null },
-          uci: 'x', san: sn, scoreCpWhite: 20, scoreCpPlayer: 20, mate: null, pv: null, pvUci: null }]
+      const result = window.__reflectionFixture(req, {
+        complete: true,
+        includePlayed: true
       });
+      result.bestLines[0].pv = null;
+      result.bestLines[0].pvUci = null;
+      result.playedLine.pv = null;
+      result.playedLine.pvUci = null;
+      return Promise.resolve(result);
     };
   });
   await page.click('#flagMoment');
@@ -543,9 +574,9 @@ require('./helper').run('reflection', async function (t) {
   await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await verifyDone();
-  check((await page.locator('#verifyLines li').count()) >= 1 &&
-        !(await page.textContent('#verifyResult')).includes('could not'),
-    'a malformed candidate pv renders as an empty continuation (no throw / hang)');
+  check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        await page.locator('#saveCard').isDisabled(),
+    'a malformed candidate pv is rejected before rendering (no throw / hang)');
   await page.evaluate(function () { ChessyAnalysisService.analyse = window.__realAnalyse8; });
 
   // A valid top line followed by a NULL (or otherwise malformed) LATER
@@ -606,25 +637,39 @@ require('./helper').run('reflection', async function (t) {
   check(!(await page.locator('#saveCard').isDisabled()),
     'a fresh probe after the abandoned one works normally');
 
-  // Integration (real service + worker, no stub): a malformed CACHED result is
-  // rejected safely, and "Verify again" bypasses/evicts the bad cache and
-  // dispatches a fresh worker run that replaces it — not the same bad entry
-  // served forever. The Verify above cached a VALID analysis for this moment.
+  // Integration (real service + worker, no stub): poison a valid CACHED result
+  // so its playedLine is Chessy's top candidate (e4/d4/etc.) rather than the
+  // move actually played here (f3), while classification falsely says "same".
+  // The old ad-hoc checks accepted this fully legal/coherent-looking payload,
+  // claimed f3 was top, and could overwrite the moment's card as a false match.
+  // The exact shared contract must reject it, then a fresh retry must replace it.
   const gid = await page.evaluate(function () { return CoachReview.current().game.id; });
-  const corrupted = await page.evaluate(function (gid) {
+  const cardBeforeMismatch = await page.evaluate(function (gid) {
+    return CoachStore.listCards().then(function (all) {
+      return all.find(function (card) { return card.gameId === gid && card.ply === 0; });
+    });
+  }, gid);
+  const poisoned = await page.evaluate(function (gid) {
     return CoachStore.listAnalysesForGame(gid).then(function (recs) {
       const rec = recs.find(function (r) { return r.ply === 0; });
       if (!rec) return false;
-      // Break the top line's move so it can no longer resolve to a legal move,
-      // leaving engine/fingerprint/turn intact so the service still serves it.
-      rec.result.bestLines[0].move = { from: -1, to: -1, promotion: null };
+      const top = rec.result && rec.result.bestLines && rec.result.bestLines[0];
+      const actualFrom = Chess.sqIndex('f2');
+      const actualTo = Chess.sqIndex('f3');
+      if (!top || (top.move.from === actualFrom && top.move.to === actualTo)) return false;
+      rec.result.playedLine = Object.assign({
+        rank: 1,
+        amongCandidates: true
+      }, JSON.parse(JSON.stringify(top)));
+      rec.result.classification = 'same';
       return CoachStore.putAnalysis(rec).then(function () { return true; });
     });
   }, gid);
-  check(corrupted, 'a valid analysis was cached, then corrupted in place');
+  check(poisoned,
+    'a valid analysis was cached, then poisoned with a mismatched played move');
 
-  // Clear the service's bounded in-memory handoff so the next request
-  // demonstrably exercises the corrupted IndexedDB row.
+  // Clear the service's bounded in-memory handoff so this request demonstrably
+  // comes from IndexedDB. The archived game and poisoned cache survive.
   await page.goto(t.url + 'blank');
   await page.goto(t.url);
   await page.waitForSelector('#board .square');
@@ -635,17 +680,28 @@ require('./helper').run('reflection', async function (t) {
     return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'cached malformed line');
+  await page.fill('#reflectThreat', 'cached identity mismatch');
   await page.fill('#reflectCandidates', 'e4');
   await page.selectOption('#reflectEval', 'equal');
+  await page.fill('#cardLesson', 'must not overwrite the real card');
 
   const d0 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
   await page.click('#reflectVerify'); // serves the corrupted cache entry
   await verifyDone();
   const d1 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
+        !(await page.textContent('#verifyResult')).includes('top line') &&
         await page.locator('#saveCard').isDisabled() && d1 === d0,
-    'a malformed cached result is served, rejected, and dispatches no worker');
+    'a mismatched cached result cannot claim the played move was Chessy’s top line');
+  await page.evaluate(function () { document.getElementById('saveCard').click(); });
+  await page.waitForTimeout(100);
+  const cardAfterMismatch = await page.evaluate(function (gid) {
+    return CoachStore.listCards().then(function (all) {
+      return all.find(function (card) { return card.gameId === gid && card.ply === 0; });
+    });
+  }, gid);
+  check(JSON.stringify(cardAfterMismatch) === JSON.stringify(cardBeforeMismatch),
+    'a mismatched cached result cannot overwrite the moment with a false match card');
 
   await page.click('#reflectVerify'); // retry: bypasses the evicted cache
   await verifyDone();
@@ -653,14 +709,14 @@ require('./helper').run('reflection', async function (t) {
   check(d2 > d1, 'Verify again after a rejected cache dispatches a fresh worker run');
   check(!(await page.locator('#saveCard').isDisabled()),
     'the fresh run yields a valid, saveable result');
-  const replaced = await page.evaluate(function (gid) {
+  await page.waitForFunction(function (gid) {
     return CoachStore.listAnalysesForGame(gid).then(function (recs) {
       const rec = recs.find(function (r) { return r.ply === 0; });
-      const mv = rec && rec.result.bestLines[0].move;
-      return !!mv && mv.from >= 0 && mv.to >= 0;
+      const mv = rec && rec.result.playedLine && rec.result.playedLine.move;
+      return !!mv && mv.from === Chess.sqIndex('f2') && mv.to === Chess.sqIndex('f3');
     });
-  }, gid);
-  check(replaced, 'the valid re-run replaced the corrupted cache entry');
+  }, gid, { timeout: 10000 });
+  check(true, 'the valid re-run replaced the poisoned cache with f3 as the played move');
 
   // Reflection is about YOUR decisions: in a vs-computer game only the
   // human's moves are flaggable.
@@ -693,6 +749,141 @@ require('./helper').run('reflection', async function (t) {
   await page.locator('.game-item').first().click();
   check(await page.locator('#reflectForm').isHidden(),
     'leaving Review abandons the reflection (form closed on return)');
+
+  // Same-id archive revisions are a distinct source even at the same ply.
+  // First hold Verify, revise the durable record underneath the still-open
+  // Review object, then release the old result: it must not paint a verdict.
+  await page.evaluate(function () {
+    window.__sameIdRecord = function (sans, reason, createdAt) {
+      return {
+        id: 'same-id-reflection-owner',
+        source: 'play',
+        tags: {},
+        sans: sans,
+        playerColor: 'both',
+        clocks: sans.map(function () { return null; }),
+        result: '*',
+        reason: reason,
+        mode: 'pvp',
+        difficulty: '2',
+        timeControl: null,
+        plies: sans.length,
+        createdAt: createdAt
+      };
+    };
+    return CoachStore.archiveGame(window.__sameIdRecord(
+      ['f3', 'e5', 'g4', 'Qh4#'], 'revision-a', Date.now() + 70000));
+  });
+  await page.evaluate(function () {
+    return CoachReview.openArchivedGame('same-id-reflection-owner');
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/4') !== -1;
+  });
+  await page.evaluate(function () {
+    window.__sameIdRealAnalyse = ChessyAnalysisService.analyse;
+    ChessyAnalysisService.analyse = function (req) {
+      window.__sameIdVerifyReq = req;
+      return new Promise(function (resolve) {
+        window.__sameIdVerifyResolve = resolve;
+      });
+    };
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'old source threat');
+  await page.fill('#reflectCandidates', 'old source candidate');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return typeof window.__sameIdVerifyResolve === 'function';
+  });
+  await page.evaluate(async function () {
+    const oldResult = window.__reflectionFixture(window.__sameIdVerifyReq, {
+      complete: true,
+      includePlayed: true
+    });
+    await CoachStore.archiveGame(window.__sameIdRecord(
+      ['e4', 'e5', 'Nf3', 'Nc6'], 'revision-b', Date.now() + 71000));
+    window.__sameIdVerifyResolve(oldResult);
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('reflectForm').hidden;
+  });
+  const staleVerify = await page.evaluate(function () {
+    return CoachStore.listCards().then(function (all) {
+      return {
+        verifyHidden: document.getElementById('verifyBox').hidden,
+        cards: all.filter(function (card) {
+          return card.gameId === 'same-id-reflection-owner';
+        }).length
+      };
+    });
+  });
+  check(staleVerify.verifyHidden && staleVerify.cards === 0,
+    'a deferred Verify cannot paint or found a card after a same-id source revision');
+
+  // Now produce a valid verdict for revision B, defer the card upsert itself,
+  // replace/reopen the same id as revision C, and release the write. The store's
+  // source check shares the card transaction, so the stale card cannot land
+  // after the replacement.
+  await page.evaluate(function () {
+    ChessyAnalysisService.analyse = function (req) {
+      return Promise.resolve(window.__reflectionFixture(req, {
+        complete: true,
+        includePlayed: true
+      }));
+    };
+    return CoachReview.openArchivedGame('same-id-reflection-owner');
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/4') !== -1;
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'revision b threat');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+  await page.click('#reflectVerify');
+  await verifyDone();
+  check(!(await page.locator('#saveCard').isDisabled()),
+    'revision B owns a valid verdict before its save is deferred');
+  await page.evaluate(function () {
+    window.__sameIdRealUpsert = CoachStore.upsertCardByMoment;
+    CoachStore.upsertCardByMoment = function (fields, defaults, expectedGame) {
+      window.__sameIdSaveStarted = true;
+      return new Promise(function (resolve, reject) {
+        window.__sameIdSaveRelease = function () {
+          const pending = window.__sameIdRealUpsert(fields, defaults, expectedGame);
+          pending.then(function (outcome) {
+            window.__sameIdSaveOutcome = outcome;
+            resolve(outcome);
+          }, reject);
+          return pending;
+        };
+      });
+    };
+  });
+  await page.fill('#cardLesson', 'must stay with revision B only');
+  await page.click('#saveCard');
+  await page.waitForFunction(function () { return window.__sameIdSaveStarted === true; });
+  const staleSaveOutcome = await page.evaluate(async function () {
+    await CoachStore.archiveGame(window.__sameIdRecord(
+      ['d4', 'd5', 'c4', 'e6'], 'revision-c', Date.now() + 72000));
+    await CoachReview.openArchivedGame('same-id-reflection-owner');
+    await window.__sameIdSaveRelease();
+    return window.__sameIdSaveOutcome;
+  });
+  const staleSaveCards = await page.evaluate(function () {
+    ChessyAnalysisService.analyse = window.__sameIdRealAnalyse;
+    CoachStore.upsertCardByMoment = window.__sameIdRealUpsert;
+    return CoachStore.listCards().then(function (all) {
+      return all.filter(function (card) {
+        return card.gameId === 'same-id-reflection-owner';
+      }).length;
+    });
+  });
+  check(staleSaveOutcome === 'stale' && staleSaveCards === 0 &&
+        await page.locator('#reflectForm').isHidden(),
+    'a deferred Save cannot land or repaint after the same id is replaced and reopened');
 
   // The one-card-per-moment rule holds even for RACING saves (two tabs):
   // the store's upsert does its lookup and write in one transaction.

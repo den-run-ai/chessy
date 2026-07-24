@@ -532,6 +532,55 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 
 .coach-side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
 
+.scan-panel .coach-note { line-height: 1.4; }
+.scan-side {
+  border: 0;
+  min-width: 0;
+}
+.scan-side legend {
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.scan-side-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.scan-side-options label {
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  flex-direction: row;
+  align-items: center;
+  border: 1px solid #4a4642;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+}
+.scan-side-options input { min-width: 1rem; min-height: 1rem; }
+.scan-actions .btn { min-height: 44px; }
+.scan-panel .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.scan-meter {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.scan-moments {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+.scan-moment {
+  min-height: 44px;
+  width: 100%;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
 .coach-form {
   display: flex;
   flex-direction: column;

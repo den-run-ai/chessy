@@ -365,14 +365,25 @@
   // persistent banner that returns to Play (#34). Untimed games need no
   // banner: nothing in Play can end without the player acting there.
   const liveNoteEl = document.getElementById('liveGameNote');
+  let lastLiveRunning = null;
 
   function updateLiveNote() {
     const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
     const running = clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over;
-    if (inPlay || !running) { liveNoteEl.hidden = true; return; }
-    liveNoteEl.hidden = false;
-    liveNoteEl.textContent = '⏱ Timed game running — White ' + fmtClock(liveRemaining('w')) +
-      ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
+    liveNoteEl.dataset.active = running ? 'true' : 'false';
+    if (inPlay || !running) {
+      liveNoteEl.hidden = true;
+    } else {
+      liveNoteEl.hidden = false;
+      liveNoteEl.textContent = '⏱ Timed game running — White ' + fmtClock(liveRemaining('w')) +
+        ' · Black ' + fmtClock(liveRemaining('b')) + ' — return to Play';
+    }
+    if (running !== lastLiveRunning) {
+      lastLiveRunning = running;
+      document.dispatchEvent(new CustomEvent('chessy:livegamechange', {
+        detail: { active: running }
+      }));
+    }
   }
 
   // Moved-on generation: bumped on every view change AND on Undo (a

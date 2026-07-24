@@ -79,6 +79,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   accessible mini board (same ARIA grid model as the Play board,
   inspection-only). A running timed game stays visible from the coach views
   via a live-clock banner that returns to Play.
+- **Critical-moment suggestions** — Review can explicitly start, pause, and
+  resume a durable two-pass scan of the player's decisions. Imported games
+  with no known player side ask for White, Black, or Both first. The scan shows
+  accessible progress and at most two move-location suggestions; scores,
+  categories, and alternative moves remain hidden. Opening a suggestion
+  navigates to that position and starts a fresh blank reflection, and scanning
+  is unavailable while a live timed game is running.
 - **Reflection → lesson cards** — flag one of your own positions in Review;
   the engine stays hidden until you answer the reflection questions, and each
   probe snapshots the answers as submitted (a rewrite after the verdict can't
@@ -100,8 +107,7 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **Coaching data controls** — paste or upload one PGN into the archive
   (legality-validated and deduplicated), back up games/cards to versioned JSON,
   atomically restore a validated backup, or Delete All behind a recovery fence.
-  Automatic two-pass critical-moment scanning, bulk/Lichess import, and an
-  optional language coach remain future work (roadmap
+  Bulk/Lichess import and an optional language coach remain future work (roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23), scan tracker
   [#73](https://github.com/den-run-ai/chessy/issues/73)).
 - **PWA** — a service worker precaches every asset on first load; afterwards
@@ -177,7 +183,7 @@ gated on the engine *and* browser suites.
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards, analysis cache, resumable scan jobs) |
 | `assets/archive.js` | Records finished games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
-| `assets/review.js` | Review view: tabs, archived-game list, position browser |
+| `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
 | `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance) |
 | `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract off the main thread |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, cancellation, watchdog + retry, validated IndexedDB result cache |

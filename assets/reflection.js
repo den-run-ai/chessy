@@ -24,7 +24,10 @@
 (function () {
   'use strict';
   if (typeof CoachStore === 'undefined' || typeof CoachReview === 'undefined' ||
-      typeof ChessyAnalysisService === 'undefined' || typeof Chess === 'undefined') return;
+      typeof ChessyAnalysisService === 'undefined' ||
+      typeof ChessyAnalysisCore === 'undefined' ||
+      typeof ChessyAnalysisResult === 'undefined' ||
+      typeof Chess === 'undefined') return;
 
   const $ = function (id) { return document.getElementById(id); };
 
@@ -63,6 +66,30 @@
     return (h >>> 0).toString(16);
   }
 
+  // Reflection ownership is an exact opened source, not merely gameId + ply.
+  // A revised ending keeps the same game id, and may keep the same displayed
+  // ply, while changing the decision/result underneath an in-flight Verify or
+  // Save. Keep the replay inputs (plus player ownership) as an immutable local
+  // snapshot so same-id replacement cannot inherit the old flow.
+  function sourceSnapshotOf(game) {
+    return {
+      id: game.id,
+      setupFen: game.setupFen || null,
+      playerColor: game.playerColor || null,
+      sans: Array.isArray(game.sans) ? game.sans.slice() : []
+    };
+  }
+
+  function sameSource(game, source) {
+    if (!game || !source || game.id !== source.id ||
+        (game.setupFen || null) !== source.setupFen ||
+        (game.playerColor || null) !== source.playerColor ||
+        !Array.isArray(game.sans) || game.sans.length !== source.sans.length) {
+      return false;
+    }
+    return game.sans.every(function (san, i) { return san === source.sans[i]; });
+  }
+
   // A candidate line's eval from the moving side's POV. A mate line reads as
   // +M/−M for the player to move; a centipawn line flips White-POV to that
   // side. `turn` is the side to move at the flagged position.
@@ -86,24 +113,6 @@
     return (s >= 0 ? '+' : '') + (s / 100).toFixed(1);
   }
 
-  // A usable line must carry a real evaluation — a WELL-FORMED mate payload OR a
-  // finite white-POV centipawn score. A legal move with neither (a malformed
-  // worker/cache result) must not render as "+0.0"/"+Mundefined" or found a card.
-  function validEval(line) {
-    return !!line && (validMate(line.mate) ||
-      (typeof line.scoreCpWhite === 'number' && isFinite(line.scoreCpWhite)));
-  }
-
-  // A renderable candidate line: an object carrying a SAN string and a usable
-  // evaluation. renderLines dereferences EVERY bestLines entry (and any
-  // appended playedLine), so a null or shapeless LATER candidate — not only a
-  // bad top line — would throw inside the promise callback and hang Review on
-  // "Analysing…". Every candidate is validated centrally before rendering.
-  function validLine(line) {
-    return !!line && typeof line === 'object' &&
-      typeof line.san === 'string' && line.san.length > 0 && validEval(line);
-  }
-
   // The white-POV centipawn number a card stores for its best move. A mate is
   // collapsed to a sentinel beyond MATE_ISH (sign = who is mating) so the
   // card's own score formatter renders it as ±M.
@@ -118,7 +127,7 @@
   // ownership tokens guard the two async steps: an analysis or card write that
   // settles after the user moved on must not repaint or re-enable the shared
   // controls.
-  let flagged = null;  // { gameId, ply }
+  let flagged = null;  // { gameId, ply, gameRev, review, source }
   let verdict = null;
   let verifySeq = 0;
   let saveSeq = 0;
@@ -127,13 +136,20 @@
   let retryFresh = null;
 
   function sameMoment(r) {
-    return !!r && !!flagged && r.game.id === flagged.gameId && r.ply === flagged.ply;
+    return !!r && !!flagged && r === flagged.review &&
+      r.game.id === flagged.gameId && r.ply === flagged.ply &&
+      gameRevOf(r.game) === flagged.gameRev &&
+      sameSource(r.game, flagged.source);
   }
 
   // Only YOUR decisions can be flagged: reflection is about the player's own
   // move, not the opponent's or the computer's.
   function flaggable(r) {
     if (!r || r.ply >= r.gs.history.length) return false; // end position: nothing was played
+    // A terminal source has no decision to revisit even if a malformed
+    // imported record somehow carries a later SAN.
+    try { if (Chess.gameStatus(r.states[r.ply]).over) return false; }
+    catch (e) { return false; }
     const pc = r.game.playerColor;
     if (pc !== 'w' && pc !== 'b') return true;
     return r.states[r.ply].turn === pc;
@@ -150,6 +166,9 @@
     ChessyAnalysisService.cancel(ANALYSIS_OWNER);
     $('reflectForm').hidden = true;
     $('verifyBox').hidden = true;
+    document.dispatchEvent(new CustomEvent('chessy:reflectionchange', {
+      detail: { active: false }
+    }));
   }
 
   // Review re-rendered: keep the flag button in step with the shown position,
@@ -168,12 +187,27 @@
     if (flagged && document.body.dataset.view !== 'review') cancelReflection();
   });
 
-  $('flagMoment').addEventListener('click', function () {
+  function beginCurrent() {
     const r = CoachReview.current();
-    if (!flaggable(r)) return;
+    if (!flaggable(r)) return false;
+    // Reflection owns the foreground analysis lane. Pause the batch first;
+    // owner-scoped cancellation ensures its late continuation cannot cancel a
+    // reflection request that the player submits next.
+    if (typeof ChessyMomentScan !== 'undefined' && ChessyMomentScan.pause) {
+      ChessyMomentScan.pause();
+    }
+    // Re-flagging the same ply does not trigger reviewrender/cancelReflection,
+    // so explicitly stop that moment's older verification worker too.
+    ChessyAnalysisService.cancel(ANALYSIS_OWNER);
     verifySeq++; // an in-flight analysis for another moment is now stale
     saveSeq++;   // so is any card write still owning the shared UI
-    flagged = { gameId: r.game.id, ply: r.ply };
+    flagged = {
+      gameId: r.game.id,
+      ply: r.ply,
+      gameRev: gameRevOf(r.game),
+      review: r,
+      source: sourceSnapshotOf(r.game)
+    };
     verdict = null;
     // Fresh moment, fresh answers: reflection AND card fields reset, so a stale
     // cause/lesson from the previous moment can never carry over.
@@ -186,8 +220,14 @@
     $('reflectVerify').disabled = false;
     $('verifyBox').hidden = true;
     $('cardSaved').hidden = true;
+    document.dispatchEvent(new CustomEvent('chessy:reflectionchange', {
+      detail: { active: true }
+    }));
     $('reflectThreat').focus();
-  });
+    return true;
+  }
+
+  $('flagMoment').addEventListener('click', beginCurrent);
 
   // One rendered candidate line: an explicit rank, SAN, the player-POV eval, a
   // short PV, and a "your move" tag when it is the move actually played. The
@@ -273,8 +313,9 @@
     saveSeq++; // this verdict owns the card controls now
     const ply = r.ply;
     const fenBefore = r.fens[ply];
+    const sourceState = r.states[ply];
     const entry = r.gs.history[ply];
-    const gameRev = gameRevOf(r.game);
+    const gameRev = flagged.gameRev;
     $('verifyBox').hidden = false;
     $('verifyResult').textContent = 'Analysing…';
     $('verifyLines').textContent = '';
@@ -289,20 +330,49 @@
     // If the previous analysis for THIS moment was rejected as unusable, bypass
     // the cache on this run (consume the flag). `fresh` lives on the request,
     // not in opts, so it never perturbs the analysis identity / cache key.
-    const momentKey = flagged.gameId + ':' + ply;
+    const momentKey = flagged.gameId + ':' + gameRev + ':' + ply;
     const wantFresh = retryFresh === momentKey;
     retryFresh = null;
+    const analysisSource = flagged.source;
     const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
-      fen: fenBefore, positions: r.states[ply].positions, fresh: wantFresh,
+      fen: fenBefore, positions: sourceState.positions, fresh: wantFresh,
       opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
         nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
     };
     ChessyAnalysisService.analyse(analysisReq, ANALYSIS_OWNER).then(function (res) {
+      // The currently rendered Review object can remain the old in-memory
+      // replay while archiveGame() atomically revises that id underneath it.
+      // Re-read the durable source before accepting a late result; Save has its
+      // own atomic guard below for the later read/write boundary.
+      if (token !== verifySeq) return { abandoned: true };
+      if (!sameMoment(CoachReview.current())) {
+        cancelReflection();
+        return { abandoned: true };
+      }
+      if (!CoachStore.getGame) return { res: res, sourceCurrent: false };
+      return Promise.resolve(CoachStore.getGame(analysisSource.id)).then(
+        function (game) {
+          return { res: res, sourceCurrent: sameSource(game, analysisSource) };
+        },
+        function () { return { res: res, sourceCurrent: false }; });
+    }).then(function (out) {
+      if (!out || out.abandoned) return;
       if (token === verifySeq) $('reflectVerify').disabled = false;
       // A newer request superseded this one, or the user left the moment: drop
       // it silently (the owning request/moment repaints the shared controls).
-      if (token !== verifySeq || !sameMoment(CoachReview.current())) return;
+      if (token !== verifySeq) return;
+      if (!sameMoment(CoachReview.current())) {
+        cancelReflection();
+        return;
+      }
+      // The archive was revised/deleted while the old Review object stayed
+      // open. Close the stale flow before it can paint a verdict.
+      if (!out.sourceCurrent) {
+        cancelReflection();
+        return;
+      }
+      const res = out.res;
       // null for the CURRENT request means no worker / a wedged-then-retried
       // worker / an unrecoverable failure — NOT a supersede (that bumps the
       // token). Replace the "Analysing…" placeholder with a retryable failure
@@ -311,59 +381,50 @@
         failVerify('Chessy could not complete the analysis — Verify again.');
         return;
       }
-      // Resolve the top line's move back to a legal move on this board. A
-      // result with no lines, a top move that matches nothing here, a top line
-      // with no usable evaluation, or missing/garbled provenance (a corrupt
-      // worker/cache result) cannot found a lesson: report it, leave Save
-      // disabled and let the player Verify again.
-      const pos = Chess.parseFen(fenBefore);
-      const legal = Chess.legalMoves(pos);
-      // Resolve a line's ROOT move to a legal move on THIS board, returning that
-      // move — but only when the line's SAN is the canonical SAN for it. A
-      // corrupt cache/worker line can carry a well-formed eval yet an illegal
-      // move, or a SAN that names a different move than its from/to; such a line
-      // must never be shown as a Chessy candidate or used to diagnose the
-      // player's decision (Gate 0, roadmap #23). SAN comes from the same
-      // Chess.toSan the analysis core uses on the same position, so a genuine
-      // line always verifies.
-      function resolveLine(line) {
-        if (!validLine(line) || !line.move) return null;
-        const m = legal.find(function (mv) {
-          return mv.from === line.move.from && mv.to === line.move.to &&
-                 (mv.promotion || null) === (line.move.promotion || null);
+      // Reflection is a second trust boundary after transport. Validate against
+      // the FULL replay state (history + repetition counts), the exact request
+      // identity, and the move that was actually played. A partial analysis may
+      // legitimately omit playedLine when its node budget ran out before that
+      // move was reached; if it does include one, it must still be the played
+      // move. Complete results always require it.
+      let checked = { ok: false };
+      try {
+        const identityOpts = Object.assign({}, analysisReq.opts, {
+          positions: analysisReq.positions
         });
-        return m && Chess.toSan(pos, m, legal) === line.san ? m : null;
+        const expected = {
+          identity: ChessyAnalysisCore.identity(sourceState, identityOpts),
+          requireComplete: false,
+          requirePlayed: res.complete === true,
+          minDepth: 1
+        };
+        if (res.complete === true || res.playedLine != null) {
+          expected.playedMove = entry.move;
+        }
+        checked = ChessyAnalysisResult.validate(res, sourceState, expected);
+      } catch (e) {
+        checked = { ok: false };
       }
-      const top = res.bestLines && res.bestLines[0];
-      const bm = top ? resolveLine(top) : null;
-      const provOk = res.engine && typeof res.engine.version === 'string' &&
-        Number.isFinite(res.depth) && Number.isFinite(res.nodes) && Number.isFinite(res.elapsedMs);
-      // Completeness must be an EXPLICIT boolean: a payload that omits `complete`
-      // or carries a non-boolean (e.g. the string "false") has unknown standing
-      // and must not be treated as a settled, card-founding analysis.
-      const completeOk = typeof res.complete === 'boolean';
-      // EVERY rendered line — each candidate AND any appended played line — must
-      // be legally resolved and SAN-verified, not just the top move: renderLines
-      // dereferences each entry, and a bogus-but-plausible candidate would
-      // otherwise mislead the diagnosis even though it cannot occur here. Reject
-      // the whole result as unusable rather than show or save part of it.
-      const linesOk = Array.isArray(res.bestLines) && res.bestLines.length > 0 &&
-        res.bestLines.every(function (l) { return resolveLine(l) !== null; }) &&
-        (res.playedLine == null ||
-          (resolveLine(res.playedLine) !== null && Number.isFinite(res.playedLine.rank)));
-      if (!bm || !provOk || !completeOk || !linesOk) {
+      if (!checked.ok) {
         // This unusable result may have come from the IndexedDB cache; evict it
         // AND mark the moment so the next Verify bypasses the cache and
         // dispatches a fresh worker run instead of serving the same bad entry.
         // A valid re-run then overwrites the cache.
         ChessyAnalysisService.invalidate(analysisReq);
-        retryFresh = flagged.gameId + ':' + ply;
+        retryFresh = momentKey;
         failVerify('Chessy could not analyse this position — Verify again.');
         return;
       }
+      const pos = sourceState;
+      const legal = Chess.legalMoves(pos);
+      const top = res.bestLines[0];
+      const bm = checked.topMove;
       const playedUci = Chess.sqName(entry.move.from) + Chess.sqName(entry.move.to) +
         (entry.move.promotion ? entry.move.promotion.toLowerCase() : '');
-      const match = res.classification === 'same';
+      // A partial result with no playedLine has no head-to-head standing. Even
+      // if a corrupt payload claims classification:"same", it cannot be called
+      // a match without a validated played move.
+      const match = !!checked.playedMove && res.classification === 'same';
       const mover = pos.turn === 'w' ? 'White' : 'Black';
       const topEval = fmtLineEval(top, pos.turn);
 
@@ -424,6 +485,7 @@
 
       verdict = {
         gameId: flagged.gameId, ply: ply, fenBefore: fenBefore,
+        gameRev: gameRev, review: flagged.review, source: analysisSource,
         playedSan: entry.san, bestSan: top.san,
         bestMove: { from: bm.from, to: bm.to, promotion: bm.promotion || null },
         bestScore: cardScore(top), depth: res.depth, complete: true,
@@ -437,7 +499,9 @@
   $('saveCard').addEventListener('click', function () {
     const v = verdict;
     if (!v || $('saveCard').disabled) return;
-    if (!flagged || v.gameId !== flagged.gameId || v.ply !== flagged.ply) return;
+    if (!flagged || v.gameId !== flagged.gameId || v.ply !== flagged.ply ||
+        v.gameRev !== flagged.gameRev || v.review !== flagged.review ||
+        v.source !== flagged.source || !sameMoment(CoachReview.current())) return;
     // Every card needs a one-sentence lesson; a differing move also needs the
     // player's cause call ("my move was also sound" included).
     const lesson = $('cardLesson').value.trim();
@@ -466,9 +530,13 @@
     // existing card (back to the immediate learning step, history kept) instead
     // of minting a duplicate — atomically in the store, so even saves racing
     // from two tabs cannot create two cards.
-    CoachStore.upsertCardByMoment(fields, { createdAt: now, attempts: [] })
+    CoachStore.upsertCardByMoment(fields, { createdAt: now, attempts: [] }, v.source)
       .then(function (outcome) {
       if (token !== saveSeq || verdict !== v) return;
+      if (outcome === 'stale') {
+        cancelReflection();
+        return;
+      }
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = outcome === 'updated'
         ? 'Updated this moment’s existing card.'
@@ -481,5 +549,12 @@
     });
   });
 
-  window.CoachReflection = { CAUSE_LABELS: CAUSE_LABELS };
+  const reflectionApi = {
+    CAUSE_LABELS: CAUSE_LABELS,
+    beginCurrent: beginCurrent
+  };
+  // Keep the established CoachReflection name for Train/Progress, and expose
+  // a Chessy-prefixed seam for the scan suggestion handoff.
+  window.CoachReflection = reflectionApi;
+  window.ChessyReflection = reflectionApi;
 })();
