@@ -765,7 +765,7 @@
     const recState = state;
     const recSettings = Object.assign({}, settings);
     const recEndedAt = gameEndedAt;
-    archiveAttempt = revReady.then(function () {
+    archiveAttempt = revReady.then(function (seeded) {
       // A NEWER attempt for this same id (undo → revised finish re-archived under
       // the SAME id) has taken ownership — it will record the current ending.
       // Recording the superseded snapshot now would be a wasted write racing the
@@ -780,11 +780,19 @@
       // pre-defer flow where the finish was archived before an Undo could occur.
       const stillLive = gameId === idAtCall && gameEndedAt === recEndedAt;
       let recRev = (stillLive && Number.isFinite(gameRev)) ? gameRev : null;
-      if (recRev == null && ChessyArchive.nextRev) {
-        try { recRev = ChessyArchive.nextRev(); }
-        catch (e) { recRev = null; } // sequence exhausted → record revless
-        if (stillLive) {
-          gameRev = recRev; gameNeedsRev = false; save();
+      if (recRev == null) {
+        // The committed floor could not be read this session (revReady `false`):
+        // minting now risks a rev BELOW a committed row that archiveGame() would
+        // keep, clearing the pending token and outranking this genuine finish.
+        // Defer instead — the finish stays needsRev (set in showGameOver) and a
+        // later boot that CAN seed mints its rev. Don't clear needsRev here.
+        if (!seeded) return null;
+        if (ChessyArchive.nextRev) {
+          try { recRev = ChessyArchive.nextRev(); }
+          catch (e) { recRev = null; } // sequence exhausted → record revless
+          if (stillLive) {
+            gameRev = recRev; gameNeedsRev = false; save();
+          }
         }
       }
       return ChessyArchive.record(recState, recSettings, status, idAtCall,
@@ -838,12 +846,16 @@
   // committed row would outrank. Cleared once a rev is allocated, and on
   // undo/New game with gameRev.
   let gameNeedsRev = false;
-  // Resolves once the revision floor has been seeded from the committed rows at
-  // boot (see the boot section). Revision allocation for a live finish AWAITS
-  // this, so a finish during a slow IndexedDB read cannot mint a rev below a
-  // committed row (which archiveGame() would then reject, losing the finish).
-  // Initialised resolved so a finish that somehow precedes boot never hangs.
-  let revReady = Promise.resolve();
+  // Resolves to whether the revision floor is KNOWN — i.e. the committed rows
+  // were read and seeded (see the boot section). Revision allocation for a live
+  // finish AWAITS this: a finish during a slow IndexedDB read cannot mint a rev
+  // below a committed row, and if the read never succeeds (resolves `false`) NO
+  // rev is minted at all — the finish is left needsRev and deferred to a boot
+  // that can seed, rather than minting a low rev that archiveGame() would keep
+  // (clearing the pending token and outranking the genuine latest ending).
+  // Initialised `true` (no committed store to undershoot) so a finish that
+  // somehow precedes boot never hangs.
+  let revReady = Promise.resolve(true);
   // Monotonic archive-attempt generation plus, per game id, the seq of
   // that game's LATEST attempt: a settlement (success or failure) may act
   // only while its attempt is still the game's newest — a superseded
@@ -1257,45 +1269,56 @@
     // below a committed row. (nextRev() caps to the safe range, so even a
     // poisoned committed rev can't break the sequence.)
     //
-    // A TRANSIENT listGames() rejection must not fulfil revReady without the
+    // A listGames() rejection must not fulfil revReady as `true` without the
     // floor: doing so would let an Undo → revised finish mint a rev BELOW an
     // existing committed row, which archiveGame() then keeps (resolving
     // successfully and clearing the pending token), permanently outranking the
-    // genuine latest ending. So RETRY a failed read a few times before giving up.
-    // If reads stay broken the floor is left session-local — but in that state
-    // archiveGame() writes are failing too, so a low-rev finish stays parked
-    // rather than being silently lost.
+    // genuine latest ending. So RETRY a failed read; only resolve `true` once a
+    // read succeeds. If reads stay broken through every retry, resolve `false` —
+    // revision allocation then stays BLOCKED (no minting anywhere this session),
+    // and every finish is left needsRev for a boot that can seed. Reads and
+    // writes share IndexedDB, so a session that can't read usually can't archive
+    // either; deferring loses nothing (the needsRev save + durability queue carry
+    // the finishes forward), whereas minting a low rev would clobber.
     if (CoachStore.listGames && ChessyArchive.seedRev) {
       const seedFloor = function (retriesLeft) {
         return CoachStore.listGames().then(function (games) {
           let maxRev = -Infinity;
           games.forEach(function (g) { if (Number.isFinite(g.rev) && g.rev > maxRev) maxRev = g.rev; });
           if (Number.isFinite(maxRev)) ChessyArchive.seedRev(maxRev);
+          return true; // floor known — allocation may proceed
         }, function (err) {
           if (retriesLeft > 0) {
             return new Promise(function (r) { setTimeout(r, 150); })
               .then(function () { return seedFloor(retriesLeft - 1); });
           }
-          /* reads persistently unavailable → floor stays session-local */
+          return false; // floor never read — block allocation this session
         });
       };
       revReady = seedFloor(5);
     }
-    // Drain the durability queue AFTER the floor seed (so a reconcile migration
-    // of a legacy entry also mints above the committed floor), THEN re-offer the
-    // restored game — SEQUENTIALLY, so two writes to the restored game's record
-    // never race, but INDEPENDENTLY: queue entries are per game, and one game
-    // failing to commit must not cost the restored game its reconcile (failed
-    // entries stay parked for the next boot).
+    // Drain the durability queue (reconcile ALWAYS runs — its legacy migration
+    // mints only for pre-rev entries, which are genuinely oldest, so a low rev is
+    // safe there; and a dead-store reconcile FAILS at the write and reports,
+    // rather than clobbering), THEN re-offer the restored game — SEQUENTIALLY, so
+    // two writes to the restored game's record never race, but INDEPENDENTLY:
+    // queue entries are per game, and one game failing to commit must not cost the
+    // restored game its reconcile (failed entries stay parked for the next boot).
+    // `seeded` is threaded through so the re-offer's needsRev MINT — for a
+    // genuinely-new finish — is deferred when the floor is unknown.
     revReady
-      .then(function () { return ChessyArchive.reconcilePending(); })
-      .then(null, function (err) {
-        // Blame the specific game where one is attributable, so a later
-        // successful replacement write can withdraw the note.
-        const ids = (err && err.failedGameIds) || [];
-        showArchiveFailure(archiveBootNoteEl, ids.length === 1 ? ids[0] : null);
+      .then(function (seeded) {
+        return ChessyArchive.reconcilePending().then(
+          function () { return seeded; },
+          function (err) {
+            // Blame the specific game where one is attributable, so a later
+            // successful replacement write can withdraw the note.
+            const ids = (err && err.failedGameIds) || [];
+            showArchiveFailure(archiveBootNoteEl, ids.length === 1 ? ids[0] : null);
+            return seeded;
+          });
       })
-      .then(function () {
+      .then(function (seeded) {
         if (!bootStatus.over) return;
         // A LIVE attempt for the restored game (undo → revised finish
         // completed while the drain was slow) supersedes the boot
@@ -1310,17 +1333,24 @@
         // ranks it as the newer finish it is instead of oldest (revless). Persist
         // the rev onto the live save too, while this is still the live game.
         let useRev = bootRev;
-        if (bootNeedsRev && !Number.isFinite(useRev) && ChessyArchive.nextRev) {
-          try { useRev = ChessyArchive.nextRev(); } catch (e) { useRev = null; }
-          // Stamp the rev onto the live save only if the restored finish is still
-          // the live game (same id, same completion time) — an Undo during the
-          // seed/reconcile window clears gameEndedAt, so a stray stamp would leak
-          // this rev onto the now-unfinished game. The record itself still lands
-          // with the boot snapshot's own time.
-          if (Number.isFinite(useRev) && gameId === bootId &&
-              gameEndedAt === bootEndedAt &&
-              archiveAttempts.get(bootId) === seqAtCall) {
-            gameRev = useRev; gameNeedsRev = false; save();
+        if (bootNeedsRev && !Number.isFinite(useRev)) {
+          // Floor unknown → can't safely mint a rev for this genuinely-new finish
+          // (a low rev would be kept-and-cleared by archiveGame). Defer: leave the
+          // needsRev save for a boot that can seed. A restored game that already
+          // carries a numeric bootRev is unaffected (no mint needed).
+          if (!seeded) return;
+          if (ChessyArchive.nextRev) {
+            try { useRev = ChessyArchive.nextRev(); } catch (e) { useRev = null; }
+            // Stamp the rev onto the live save only if the restored finish is
+            // still the live game (same id, same completion time) — an Undo during
+            // the seed/reconcile window clears gameEndedAt, so a stray stamp would
+            // leak this rev onto the now-unfinished game. The record itself still
+            // lands with the boot snapshot's own time.
+            if (Number.isFinite(useRev) && gameId === bootId &&
+                gameEndedAt === bootEndedAt &&
+                archiveAttempts.get(bootId) === seqAtCall) {
+              gameRev = useRev; gameNeedsRev = false; save();
+            }
           }
         }
         ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,

@@ -623,5 +623,40 @@ require('./helper').run('revision-order', async function (t) {
     'a finish that died before rev allocation is minted a rev on the next boot (not left legacy)');
   await page.evaluate(function () { localStorage.removeItem('__lgHold'); });
 
+  // (floor read fails ALL retries) If listGames() stays unavailable through every
+  // retry, revReady resolves `false` and revision allocation is BLOCKED — a finish
+  // must NOT mint a low rev (which would clobber a committed row). The finish is
+  // deferred (kept needsRev); once reads recover on a later boot it mints ABOVE
+  // the committed floor (50).
+  await reset();
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'perm-other', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 50 })
+      .then(function () {
+        localStorage.removeItem('chessy-archive-rev-v1');
+        localStorage.removeItem('chessy-game-v1');
+        localStorage.removeItem('chessy-pending-archive-v1');
+        localStorage.setItem('__lgFailN', '99'); // every boot floor-read this session rejects
+      });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // finishes while the floor is unreadable
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForTimeout(1200); // retries exhaust → allocation BLOCKED (deferred, not clobbering)
+  const permId = await page.evaluate(function () { return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId; });
+  // Reads recover; a later boot seeds the floor and mints ABOVE it.
+  await page.evaluate(function () { localStorage.setItem('__lgFailN', '0'); });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(500);
+  const permGame = await page.evaluate(function (id) { return CoachStore.getGame(id); }, permId);
+  check(permGame && permGame.sans.join(',') === 'f3,e5,g4,Qh4#' &&
+    Number.isFinite(permGame.rev) && permGame.rev > 50,
+    'a finish blocked by an unreadable floor is deferred, then minted above the floor once reads recover');
+  await page.evaluate(function () { localStorage.removeItem('__lgFailN'); });
+
   await reset(); // leave a clean store for the console-error check
 });
