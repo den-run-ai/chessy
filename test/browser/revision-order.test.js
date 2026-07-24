@@ -597,5 +597,31 @@ require('./helper').run('revision-order', async function (t) {
     'a transient floor-read failure is retried so a finish still mints above the committed floor');
   await page.evaluate(function () { localStorage.removeItem('__lgFailN'); });
 
+  // (finish awaiting rev survives a tab close) A finish occurs while revReady is
+  // held, so no rev is allocated yet; the tab then closes (reload) BEFORE the
+  // deferred allocation. The save must carry a needsRev marker so the next boot
+  // mints a rev for it rather than treating this genuinely-new finish as pre-rev
+  // legacy data (which an older numeric-rev committed row would outrank forever).
+  await reset();
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '1'); });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // finishes while revReady is held (no rev allocated)
+  await page.waitForSelector('#gameOverDialog[open]');
+  const awaitingId = await page.evaluate(function () {
+    const save = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return save.gameId; // rev not yet allocated; needsRev must be persisted
+  });
+  await page.reload(); // tab closes before archiveCurrentGame() allocates the rev
+  await page.waitForSelector('#board .square');
+  await page.evaluate(function () { localStorage.setItem('__lgHold', '0'); }); // release → boot re-offer mints
+  await page.waitForTimeout(500);
+  const awaited2 = await page.evaluate(function (id) { return CoachStore.getGame(id); }, awaitingId);
+  check(awaited2 && awaited2.sans.join(',') === 'f3,e5,g4,Qh4#' && Number.isFinite(awaited2.rev),
+    'a finish that died before rev allocation is minted a rev on the next boot (not left legacy)');
+  await page.evaluate(function () { localStorage.removeItem('__lgHold'); });
+
   await reset(); // leave a clean store for the console-error check
 });

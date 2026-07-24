@@ -679,9 +679,15 @@
     // seed settles (revReady), so a finish during a slow boot cannot mint a rev
     // below a committed row and be rejected by archiveGame(). The ending is
     // persisted now regardless (the tab can die before the rev lands); the save
-    // is rewritten with the rev once it is allocated.
+    // is rewritten with the rev once it is allocated. Mark it as AWAITING a rev so
+    // that if the tab closes before archiveCurrentGame() allocates one, the next
+    // boot mints a rev via the needsRev path instead of treating this genuinely
+    // new finish as pre-rev legacy data (which an older numeric-rev committed row
+    // would then outrank forever). Cleared when the rev is allocated, and on
+    // undo/New game with gameRev.
     if (!gameEndedAt) {
       gameEndedAt = Date.now();
+      gameNeedsRev = true;
       save();
     }
     // Open the dialog BEFORE the archive attempt: a SYNCHRONOUS failure
