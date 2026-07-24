@@ -66,8 +66,11 @@ require('./helper').run('data-controls', async function (t) {
     'a parked (pending-queue) game is included in the backup');
 
   // Backup still reads the raw durability queue when archive.js is absent
-  // (partial offline release), and prototype-sensitive ids remain data.
+  // (partial offline release), honours the persisted ending fence without the
+  // archive helper, and keeps prototype-sensitive ids as data.
   await page.evaluate(function () {
+    ChessyArchive.fenceEnding(
+      'raw-fenced', ['Nf3'], '*', 'imported');
     window.__archiveForBackup = window.ChessyArchive;
     window.ChessyArchive = undefined;
     const map = Object.create(null);
@@ -77,6 +80,9 @@ require('./helper').run('data-controls', async function (t) {
     map['__proto__'] = { w: 't2', rec: { id: '__proto__', source: 'play',
       sans: ['c4'], result: '*', reason: 'imported', mode: 'pvp',
       plies: 1, createdAt: 7 } };
+    map['raw-fenced'] = { w: 't3', rec: { id: 'raw-fenced', source: 'play',
+      sans: ['Nf3'], result: '*', reason: 'imported', mode: 'pvp',
+      plies: 1, createdAt: 8 } };
     localStorage.setItem('chessy-pending-archive-v1', JSON.stringify(map));
   });
   const [rawDl] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
@@ -85,10 +91,13 @@ require('./helper').run('data-controls', async function (t) {
     'backup includes a raw pending record when ChessyArchive is unavailable');
   check(rawBackup.stores.games.some(function (g) { return g.id === '__proto__'; }),
     'backup round-trips a prototype-sensitive game id');
+  check(!rawBackup.stores.games.some(function (g) { return g.id === 'raw-fenced'; }),
+    'backup excludes a fenced raw pending record when ChessyArchive is unavailable');
   await page.evaluate(function () {
     window.ChessyArchive = window.__archiveForBackup;
     delete window.__archiveForBackup;
     localStorage.removeItem('chessy-pending-archive-v1');
+    localStorage.removeItem('chessy-archive-fenced-v1');
   });
 
   // An unreadable queue is unknown, not empty: fail the backup rather than
@@ -111,6 +120,36 @@ require('./helper').run('data-controls', async function (t) {
   check(/pending-game recovery queue/.test(await page.textContent('#dataStatus')),
     'backup fails safely when the pending recovery queue cannot be read');
   await page.evaluate(function () { window.__restorePendingRead(); });
+
+  // An unreadable fence is likewise unknown, not empty. With a recoverable
+  // parked ending present, fail rather than exporting a possibly-cleared game.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'fence-unknown': { w: 't', rec: { id: 'fence-unknown', source: 'play',
+        sans: ['e4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 8 } }
+    }));
+    const realGet = Storage.prototype.getItem;
+    window.__restoreFenceRead = function () {
+      Storage.prototype.getItem = realGet;
+      delete window.__restoreFenceRead;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === 'chessy-archive-fenced-v1') throw new Error('blocked');
+      return realGet.call(this, key);
+    };
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf('archive-clear fence') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence/.test(await page.textContent('#dataStatus')),
+    'backup fails safely when the persisted ending fence cannot be read');
+  await page.evaluate(function () {
+    window.__restoreFenceRead();
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
 
   // A parked REVISION (same id as a committed row, but newer moves) is the
   // authoritative copy when its write failed, so it must REPLACE the stale

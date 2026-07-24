@@ -30,6 +30,7 @@
   // archived until it ends).
   const GAME_SAVE_KEY = 'chessy-game-v1';
   const PENDING_KEY = 'chessy-pending-archive-v1';
+  const FENCE_KEY = 'chessy-archive-fenced-v1';
   // A destructive operation (restore / Delete-all) holds this mutex while it
   // runs, so the two can never overlap: a second confirm is refused rather than
   // racing a shared suspension and fence. archive.js reference-counts the
@@ -133,6 +134,39 @@
     }).filter(Boolean);
   }
 
+  // Backup must be able to honour archive-clear fences even when archive.js is
+  // missing (for example, a partial offline release). This is the exact
+  // ending-signature scheme used by archive.js: id + moves + result + reason,
+  // separated by U+0001 and passed through the same double djb-style hash.
+  // Unlike archive.js's best-effort runtime reader, backup treats an unreadable
+  // fence as UNKNOWN and fails closed: exporting a parked/saved fenced ending
+  // would let a later restore resurrect data the user deliberately cleared.
+  function endingSig(id, sans, result, reason) {
+    const s = String(id) + '\x01' + (Array.isArray(sans) ? sans.join(',') : '') +
+      '\x01' + (result == null ? '' : result) + '\x01' + (reason == null ? '' : reason);
+    let a = 5381, b = 52711;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      a = ((a << 5) + a + c) | 0;
+      b = ((b << 5) + b + (c ^ 0x5f)) | 0;
+    }
+    return (a >>> 0).toString(16) + (b >>> 0).toString(16);
+  }
+
+  function rawFenceSignatures() {
+    let raw;
+    try { raw = localStorage.getItem(FENCE_KEY); }
+    catch (e) { throw new Error('could not read the archive-clear fence'); }
+    if (raw == null) return [];
+    let signatures;
+    try { signatures = JSON.parse(raw); }
+    catch (e) { throw new Error('the archive-clear fence is unreadable'); }
+    if (!Array.isArray(signatures)) {
+      throw new Error('the archive-clear fence is malformed');
+    }
+    return signatures;
+  }
+
   // Merge the recovery sources IndexedDB can't see into the exported snapshot,
   // as one canonical routine so a backup can't silently drop or misrepresent a
   // finished game. exportAll gives the committed rows; a parked durability-queue
@@ -188,12 +222,14 @@
       CoachStore.exportAll().then(function (data) {
         // Exclude fenced endings: a restore/Delete-all deliberately removed
         // them, so a still-present saved/parked copy must not be carried back
-        // into an export (and thence a future restore).
+        // into an export (and thence a future restore). Read the persisted
+        // fence directly so this remains true when archive.js is absent, and
+        // so an unreadable fence fails closed instead of being mistaken for an
+        // empty set.
+        const fenced = rawFenceSignatures();
         mergeRecoverySources(data, function (rec) {
-          if (typeof ChessyArchive !== 'undefined' && ChessyArchive.isFencedEnding) {
-            return !ChessyArchive.isFencedEnding(rec.id, rec.sans, rec.result, rec.reason);
-          }
-          return true;
+          return fenced.indexOf(endingSig(
+            rec.id, rec.sans, rec.result, rec.reason)) === -1;
         });
         const json = JSON.stringify(data);
         const blob = new Blob([json], { type: 'application/json' });
