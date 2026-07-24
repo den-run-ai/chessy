@@ -82,7 +82,13 @@
       // The revision marker app.js persisted for this finish, so the merge can
       // order this saved copy against a committed row or a parked entry of the
       // same id. A pre-rev save (older build) has none — treated as the oldest.
-      rev: Number.isFinite(data.rev) ? data.rev : undefined
+      rev: Number.isFinite(data.rev) ? data.rev : undefined,
+      // Set when this finish could not be assigned a rev because archive.js was
+      // absent (see app.js). Unlike a pre-rev legacy save, it is a genuinely
+      // NEWER finish than any committed row of its id (its real rev is minted on
+      // the next boot with the module present), so the merge must rank it ABOVE
+      // committed numeric revs — not as the oldest. Only meaningful when no rev.
+      needsRev: (data.needsRev === true && !Number.isFinite(data.rev)) || undefined
     };
   }
 
@@ -166,6 +172,16 @@
     // (see the guard below) — the same rule park() enforces at boot.
     const pendingWon = Object.create(null);
     games.forEach(function (g) { byId[g.id] = g; committedSans[g.id] = g.sans; });
+    // Effective rev for ordering. A `needsRev` LIVE SAVE (archive.js was absent
+    // when it finished, so no rev was assigned) is a genuinely NEWER finish than
+    // any committed row of its id — its real rev is minted on the next boot — so
+    // it ranks ABOVE every numeric rev, not as the oldest. Honoured ONLY from the
+    // saved source: a committed row must never be elevated (a restored copy could
+    // carry a stale needsRev field).
+    function effRev(rec, fromSaved) {
+      if (fromSaved && rec.needsRev === true && !Number.isFinite(rec.rev)) return Infinity;
+      return Number.isFinite(rec.rev) ? rec.rev : -Infinity;
+    }
     function apply(rec, fromSaved) {
       if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) return;
       if (keep && !keep(rec)) return;
@@ -180,8 +196,8 @@
         const earliest = Number.isFinite(cur.createdAt) &&
           (!Number.isFinite(rec.createdAt) || cur.createdAt < rec.createdAt)
           ? cur.createdAt : rec.createdAt;
-        const curRev = Number.isFinite(cur.rev) ? cur.rev : -Infinity;
-        const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
+        const curRev = effRev(cur, false);
+        const recRev = effRev(rec, fromSaved);
         byId[rec.id] = Object.assign({}, recRev >= curRev ? rec : cur, { createdAt: earliest });
         return;
       }
@@ -190,8 +206,8 @@
         // later finish and wins. A strictly OLDER rev is kept out — so a stale
         // queue leftover or a stale live save can't regress a newer committed
         // revision (nor prune its cards).
-        const curRev = Number.isFinite(cur.rev) ? cur.rev : -Infinity;
-        const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
+        const curRev = effRev(cur, false);
+        const recRev = effRev(rec, fromSaved);
         if (recRev < curRev) return; // rec is an older finish — keep the current winner
         // The finished LIVE SAVE must not displace a same-id PENDING recovery
         // record it cannot prove is STRICTLY newer — the same guard park() uses
@@ -233,7 +249,14 @@
         pruneCardsFromDivergence(cards, id, oldSans, finalSans);
       }
     });
-    data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
+    data.stores.games = Object.keys(byId).map(function (id) {
+      const g = byId[id];
+      // needsRev is a live-save-only ordering marker (see effRev); once the merge
+      // has resolved the winner it must not leak into the exported/committed row,
+      // where a later merge would ignore it anyway and it would only mislead.
+      if (g && g.needsRev !== undefined) { const c = Object.assign({}, g); delete c.needsRev; return c; }
+      return g;
+    });
   }
 
   // ---- Back up ----------------------------------------------------------

@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r46">
+  <link rel="stylesheet" href="assets/style.css?r=r47">
 </head>
 <body>
   <div class="app">
@@ -321,27 +321,27 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r46';</script>
-  <script src="assets/engine.js?r=r46"></script>
-  <script src="assets/ai.js?r=r46"></script>
+  <script>window.CHESSY_RELEASE = 'r47';</script>
+  <script src="assets/engine.js?r=r47"></script>
+  <script src="assets/ai.js?r=r47"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r46"></script>
-  <script src="assets/archive.js?r=r46"></script>
-  <script src="assets/app.js?r=r46"></script>
-  <script src="assets/mini-board.js?r=r46"></script>
-  <script src="assets/review.js?r=r46"></script>
-  <script src="assets/analysis-core.js?r=r46"></script>
-  <script src="assets/analysis-service.js?r=r46"></script>
-  <script src="assets/pgn.js?r=r46"></script>
-  <script src="assets/import.js?r=r46"></script>
-  <script src="assets/data-controls.js?r=r46"></script>
-  <script src="assets/reflection.js?r=r46"></script>
-  <script src="assets/train.js?r=r46"></script>
-  <script src="assets/progress.js?r=r46"></script>
+  <script src="assets/store.js?r=r47"></script>
+  <script src="assets/archive.js?r=r47"></script>
+  <script src="assets/app.js?r=r47"></script>
+  <script src="assets/mini-board.js?r=r47"></script>
+  <script src="assets/review.js?r=r47"></script>
+  <script src="assets/analysis-core.js?r=r47"></script>
+  <script src="assets/analysis-service.js?r=r47"></script>
+  <script src="assets/pgn.js?r=r47"></script>
+  <script src="assets/import.js?r=r47"></script>
+  <script src="assets/data-controls.js?r=r47"></script>
+  <script src="assets/reflection.js?r=r47"></script>
+  <script src="assets/train.js?r=r47"></script>
+  <script src="assets/progress.js?r=r47"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

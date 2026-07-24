@@ -295,6 +295,39 @@ require('./helper').run('revision-order', async function (t) {
     localStorage.removeItem('chessy-game-v1'); localStorage.removeItem('chessy-pending-archive-v1');
   });
 
+  // ── (needsRev merge) A needsRev live save (archive.js was absent when it
+  // finished, so no rev was assigned) is a genuinely NEWER finish than an OLDER
+  // committed row of the same id. The backup must export the save's newer ending,
+  // NOT the stale committed one it outranks numerically — else a restore of that
+  // backup would fence away the actual latest ending.
+  await reset();
+  await page.click('#tabReview');
+  await page.waitForSelector('#gameListWrap:not([hidden])');
+  await page.waitForTimeout(200);
+  await page.evaluate(function () {
+    // The older committed ending under this id, with a numeric rev.
+    return CoachStore.putGame({ id: 'needsrev-merge', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 5 })
+      .then(function () {
+        // The newer finish, saved but never archived (module absent): needsRev, no rev.
+        let s = Chess.newGameState();
+        function play(f, t) {
+          const legal = Chess.legalMoves(s);
+          s = Chess.playMove(s, legal.find(function (x) { return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t; }));
+        }
+        play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4'); // fool's mate
+        localStorage.setItem('chessy-game-v1', JSON.stringify({
+          fen: Chess.toFen(s), history: s.history, mode: 'pvp', gameId: 'needsrev-merge',
+          endedAt: 300, needsRev: true })); // no rev
+      });
+  });
+  const [mnr] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const mbnr = JSON.parse(fs.readFileSync(await mnr.path(), 'utf8'));
+  const nrMerge = mbnr.stores.games.find(function (g) { return g.id === 'needsrev-merge'; });
+  check(nrMerge && nrMerge.sans.join(',') === 'f3,e5,g4,Qh4#' && nrMerge.needsRev === undefined,
+    'merge: a needsRev live save outranks an older committed row and exports clean');
+  await page.evaluate(function () { localStorage.removeItem('chessy-game-v1'); });
+
   // ── (Rh4) The floor is seeded from COMMITTED rows at boot. A revision can
   // persist ONLY to IndexedDB (near quota, REV_KEY + the save + the pending
   // entry all fail while the commit succeeds); after a reload the localStorage
