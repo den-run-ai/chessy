@@ -658,5 +658,72 @@ require('./helper').run('revision-order', async function (t) {
     'a finish blocked by an unreadable floor is deferred, then minted above the floor once reads recover');
   await page.evaluate(function () { localStorage.removeItem('__lgFailN'); });
 
+  // (deferred finish survives a Rematch) A finish deferred because the floor is
+  // unreadable must be PARKED, not merely left in the live save — otherwise a
+  // Rematch overwrites the save and the game is lost. After the Rematch and a
+  // later boot that CAN seed, the parked finish is minted a rev (above 50) and
+  // archived.
+  await reset();
+  await page.evaluate(function () {
+    return CoachStore.putGame({ id: 'rematch-other', source: 'play', sans: ['e4', 'e5'],
+      result: '1-0', reason: 'resignation', mode: 'pvp', plies: 2, createdAt: 1, rev: 50 })
+      .then(function () {
+        localStorage.removeItem('chessy-archive-rev-v1');
+        localStorage.removeItem('chessy-game-v1');
+        localStorage.removeItem('chessy-pending-archive-v1');
+        localStorage.setItem('__lgFailN', '99'); // floor unreadable this session
+      });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // finishes, deferred + PARKED
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForTimeout(1200); // retries exhaust → the finish is parked (needsRev)
+  const rematchDeferredId = await page.evaluate(function () { return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId; });
+  const parked = await page.evaluate(function (id) {
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+    return !!(map && map[id] && map[id].rec.needsRev === true);
+  }, rematchDeferredId);
+  check(parked, 'a finish deferred by an unreadable floor is parked with a needsRev marker');
+  await page.click('#gameOverRematch'); // overwrites the live save with a new game
+  await page.waitForTimeout(100);
+  // Reads recover; a later boot drains the parked finish and mints above the floor.
+  await page.evaluate(function () { localStorage.setItem('__lgFailN', '0'); });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForTimeout(500);
+  const rematchSurvived = await page.evaluate(function (id) { return CoachStore.getGame(id); }, rematchDeferredId);
+  check(rematchSurvived && rematchSurvived.sans.join(',') === 'f3,e5,g4,Qh4#' &&
+    Number.isFinite(rematchSurvived.rev) && rematchSurvived.rev > 50,
+    'a deferred finish survives a Rematch via the durability queue and is minted a rev on a seeded boot');
+  await page.evaluate(function () { localStorage.removeItem('__lgFailN'); });
+
+  // (rev sequence exhausted) When the floor sits at the ceiling, nextRev() throws
+  // on the next finish. The finish must NOT be committed revless (which a numeric
+  // committed row would outrank, clearing the pending token) — it is parked with
+  // needsRev and the live save stays marked, exactly like the unreadable-floor case.
+  await reset();
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.evaluate(function () { ChessyArchive.seedRev(Number.MAX_SAFE_INTEGER - 1); }); // floor at REV_MAX
+  await t.newGame({ mode: 'pvp' });
+  await t.mv('f2', 'f3'); await t.mv('e7', 'e5');
+  await t.mv('g2', 'g4'); await t.mv('d8', 'h4'); // nextRev() throws → must defer, not commit revless
+  await page.waitForSelector('#gameOverDialog[open]');
+  await page.waitForTimeout(400);
+  const exhaustState = await page.evaluate(function () {
+    const save = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+    return CoachStore.getGame(save.gameId).then(function (g) {
+      return { committed: !!g, saveNeedsRev: save.needsRev === true, saveRev: save.rev,
+        parkedNeedsRev: !!(map && map[save.gameId] && map[save.gameId].rec.needsRev === true) };
+    });
+  });
+  check(!exhaustState.committed && exhaustState.saveNeedsRev && exhaustState.saveRev == null &&
+    exhaustState.parkedNeedsRev,
+    'a finish at sequence exhaustion is parked needsRev, not committed revless (no clobber)');
+
   await reset(); // leave a clean store for the console-error check
 });

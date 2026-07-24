@@ -781,18 +781,25 @@
       const stillLive = gameId === idAtCall && gameEndedAt === recEndedAt;
       let recRev = (stillLive && Number.isFinite(gameRev)) ? gameRev : null;
       if (recRev == null) {
-        // The committed floor could not be read this session (revReady `false`):
-        // minting now risks a rev BELOW a committed row that archiveGame() would
-        // keep, clearing the pending token and outranking this genuine finish.
-        // Defer instead — the finish stays needsRev (set in showGameOver) and a
-        // later boot that CAN seed mints its rev. Don't clear needsRev here.
-        if (!seeded) return null;
-        if (ChessyArchive.nextRev) {
+        // Try to mint — but ONLY if the committed floor is known (revReady
+        // `true`). Minting with an unknown floor (or an exhausted sequence) risks
+        // a rev BELOW a committed row that archiveGame() would keep, clearing the
+        // pending token and outranking this genuine finish.
+        if (seeded && ChessyArchive.nextRev) {
           try { recRev = ChessyArchive.nextRev(); }
-          catch (e) { recRev = null; } // sequence exhausted → record revless
-          if (stillLive) {
-            gameRev = recRev; gameNeedsRev = false; save();
-          }
+          catch (e) { recRev = null; } // sequence exhausted → defer below
+        }
+        if (recRev == null) {
+          // Can't safely allocate a rev. PARK the finish (needsRev) for durability
+          // — it survives a Rematch overwriting the live save — but do NOT commit
+          // it revless (that would let archiveGame keep a stale committed row and
+          // clear the pending token). Keep gameNeedsRev so the live save stays
+          // marked too; a later boot that CAN seed mints its rev and commits it.
+          return ChessyArchive.record(recState, recSettings, status, idAtCall,
+            { endedAt: recEndedAt, parkOnly: true, needsRev: true });
+        }
+        if (stillLive) {
+          gameRev = recRev; gameNeedsRev = false; save();
         }
       }
       return ChessyArchive.record(recState, recSettings, status, idAtCall,
@@ -1308,7 +1315,7 @@
     // genuinely-new finish — is deferred when the floor is unknown.
     revReady
       .then(function (seeded) {
-        return ChessyArchive.reconcilePending().then(
+        return ChessyArchive.reconcilePending({ floorKnown: seeded }).then(
           function () { return seeded; },
           function (err) {
             // Blame the specific game where one is attributable, so a later
@@ -1335,10 +1342,16 @@
         let useRev = bootRev;
         if (bootNeedsRev && !Number.isFinite(useRev)) {
           // Floor unknown → can't safely mint a rev for this genuinely-new finish
-          // (a low rev would be kept-and-cleared by archiveGame). Defer: leave the
-          // needsRev save for a boot that can seed. A restored game that already
-          // carries a numeric bootRev is unaffected (no mint needed).
-          if (!seeded) return;
+          // (a low rev would be kept-and-cleared by archiveGame). Defer, but PARK
+          // the finish (needsRev) for durability so it survives a Rematch
+          // overwriting the save; a later boot that CAN seed mints its rev via
+          // reconcile. A restored game that already carries a numeric bootRev is
+          // unaffected (no mint needed).
+          if (!seeded) {
+            ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
+              { endedAt: bootEndedAt, parkOnly: true, needsRev: true });
+            return;
+          }
           if (ChessyArchive.nextRev) {
             try { useRev = ChessyArchive.nextRev(); } catch (e) { useRev = null; }
             // Stamp the rev onto the live save only if the restored finish is

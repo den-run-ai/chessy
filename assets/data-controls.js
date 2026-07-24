@@ -171,15 +171,22 @@
     // finished live save may not displace one it can't prove is strictly newer
     // (see the guard below) — the same rule park() enforces at boot.
     const pendingWon = Object.create(null);
-    games.forEach(function (g) { byId[g.id] = g; committedSans[g.id] = g.sans; });
-    // Effective rev for ordering. A `needsRev` LIVE SAVE (archive.js was absent
-    // when it finished, so no rev was assigned) is a genuinely NEWER finish than
-    // any committed row of its id — its real rev is minted on the next boot — so
-    // it ranks ABOVE every numeric rev, not as the oldest. Honoured ONLY from the
-    // saved source: a committed row must never be elevated (a restored copy could
-    // carry a stale needsRev field).
-    function effRev(rec, fromSaved) {
-      if (fromSaved && rec.needsRev === true && !Number.isFinite(rec.rev)) return Infinity;
+    // Committed rows are the ordering BASELINE, never a "genuinely-new" finish, so
+    // strip any stale `needsRev` off them as they seed byId — a restored old-format
+    // backup could carry one, and effRev() (below) elevates needsRev uniformly.
+    games.forEach(function (g) {
+      if (g && g.needsRev !== undefined) delete g.needsRev;
+      byId[g.id] = g; committedSans[g.id] = g.sans;
+    });
+    // Effective rev for ordering. A `needsRev` RECOVERY record — a parked queue
+    // entry OR the live save from a finish that could not be assigned a rev yet
+    // (archive absent, floor unreadable, sequence exhausted) — is a genuinely
+    // NEWER finish than any committed row of its id: its real rev is minted on a
+    // later boot, so it ranks ABOVE every numeric rev, not as the oldest. Only a
+    // recovery record ever carries needsRev here (committed rows were stripped
+    // above), so honour it uniformly.
+    function effRev(rec) {
+      if (rec.needsRev === true && !Number.isFinite(rec.rev)) return Infinity;
       return Number.isFinite(rec.rev) ? rec.rev : -Infinity;
     }
     function apply(rec, fromSaved) {
@@ -196,8 +203,8 @@
         const earliest = Number.isFinite(cur.createdAt) &&
           (!Number.isFinite(rec.createdAt) || cur.createdAt < rec.createdAt)
           ? cur.createdAt : rec.createdAt;
-        const curRev = effRev(cur, false);
-        const recRev = effRev(rec, fromSaved);
+        const curRev = effRev(cur);
+        const recRev = effRev(rec);
         byId[rec.id] = Object.assign({}, recRev >= curRev ? rec : cur, { createdAt: earliest });
         // Record pending authority here too: when a pending record CONFIRMS the
         // committed ending (both agree on B), the later live save must not be able
@@ -211,8 +218,8 @@
         // later finish and wins. A strictly OLDER rev is kept out — so a stale
         // queue leftover or a stale live save can't regress a newer committed
         // revision (nor prune its cards).
-        const curRev = effRev(cur, false);
-        const recRev = effRev(rec, fromSaved);
+        const curRev = effRev(cur);
+        const recRev = effRev(rec);
         if (recRev < curRev) return; // rec is an older finish — keep the current winner
         // The finished LIVE SAVE must not displace a same-id PENDING recovery
         // record it cannot prove is STRICTLY newer — the same guard park() uses

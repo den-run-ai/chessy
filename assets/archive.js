@@ -327,15 +327,24 @@
       // awaiting recovery in the queue (a fresh nextRev() beats a revless
       // pending entry), permanently discarding the revision. reconcilePending()
       // migrates a genuinely-recovered legacy entry into the sequence instead.
-      rev: (opts && Number.isFinite(opts.rev)) ? opts.rev : undefined
+      rev: (opts && Number.isFinite(opts.rev)) ? opts.rev : undefined,
+      // A genuinely-NEW finish that could not be assigned a rev yet (the archive
+      // module was absent when it finished, or the committed floor was unreadable
+      // / the sequence exhausted). NOT pre-rev legacy data: reconcilePending()
+      // mints its rev — ONLY once the floor is known — instead of ranking it
+      // oldest. Distinguishes such an entry from a revless legacy entry in the
+      // queue, which is genuinely oldest and migrated unconditionally.
+      needsRev: (opts && opts.needsRev) ? true : undefined
     };
-    // A destructive replace is in progress: PARK the record but do NOT commit
-    // it onto the store being replaced. Parking (not dropping) is what keeps a
-    // game that finishes during the operation recoverable if the operation
-    // FAILS — the parked entry survives a Rematch overwriting the live save and
-    // boot-reconciles later. If the operation SUCCEEDS it fences this ending and
-    // drops the queue, so the parked copy can't resurrect either.
-    if (operationActive()) {
+    // PARK the record but do NOT commit it. Used both while a destructive replace
+    // is in progress (opts NOT passed — operationActive) and when a live finish
+    // must be DEFERRED because a rev can't be safely allocated yet (parkOnly).
+    // Parking (not dropping) is what keeps a finish recoverable across a Rematch
+    // overwriting the live save: the parked entry boot-reconciles later. A
+    // destructive op that SUCCEEDS fences this ending and drops the queue, so the
+    // parked copy can't resurrect; a deferred finish is minted a rev and committed
+    // by a later boot's reconcile once the floor is known.
+    if (operationActive() || (opts && opts.parkOnly)) {
       park(rec);
       return Promise.resolve(null);
     }
@@ -351,7 +360,15 @@
   // null when nothing was pending. Entries are independent games (one per
   // id), so drain order does not matter and one entry failing never stops
   // another from committing.
-  function reconcilePending() {
+  function reconcilePending(opts) {
+    // Whether the committed revision floor is known this boot (see app.js). When
+    // it is NOT, a `needsRev` entry (a genuinely-new finish awaiting a floor-safe
+    // rev) is LEFT PARKED rather than minted — minting a rev below a committed row
+    // would let archiveGame() keep the stale row and clear this entry's token.
+    // Defaults true so a direct reconcilePending() (and the pre-floor callers)
+    // behave as before. Legacy revless entries are migrated regardless (genuinely
+    // oldest — a low rev is harmless).
+    const floorKnown = !(opts && opts.floorKnown === false);
     let raw = null;
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { /* unavailable */ }
     if (raw === null) return Promise.resolve(null);
@@ -379,14 +396,19 @@
         dirty = true;
         continue;
       }
-      // Migrate a legacy (revless) queued finish INTO the rev sequence as it is
-      // recovered, so a later revless boot re-offer of the same id can no longer
-      // overwrite this committed copy (revless vs revless cannot be ordered). A
-      // revision awaiting recovery thereby outranks its stale saved twin once it
-      // commits. Live entries already carry a rev; this only touches legacy ones.
-      // If the sequence is exhausted (nextRev throws — astronomically unlikely),
-      // the entry stays revless and still commits, rather than aborting the drain.
-      if (!Number.isFinite(rec.rev)) {
+      if (rec.needsRev) {
+        // A genuinely-new finish parked because a rev couldn't be safely allocated
+        // when it finished. Mint its rev NOW — but only if the floor is known this
+        // boot; otherwise leave it parked (untouched) for a boot that can seed.
+        if (!floorKnown) continue;
+        try { rec.rev = nextRev(); delete rec.needsRev; }
+        catch (e) { continue; } // sequence exhausted → leave parked for a later boot
+      } else if (!Number.isFinite(rec.rev)) {
+        // Migrate a legacy (revless) queued finish INTO the rev sequence as it is
+        // recovered, so a later revless boot re-offer of the same id can no longer
+        // overwrite this committed copy (revless vs revless cannot be ordered). A
+        // legacy entry is genuinely oldest, so a low rev is harmless. If the
+        // sequence is exhausted (nextRev throws), commit revless rather than abort.
         try { rec.rev = nextRev(); } catch (e) { /* exhausted: commit revless */ }
       }
       drains.push(commit(rec, entry.w).then(
