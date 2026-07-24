@@ -97,7 +97,7 @@ require('./helper').run('data-controls', async function (t) {
     window.ChessyArchive = window.__archiveForBackup;
     delete window.__archiveForBackup;
     localStorage.removeItem('chessy-pending-archive-v1');
-    localStorage.removeItem('chessy-archive-fenced-v1');
+    localStorage.removeItem('chessy-archive-fenced-v2');
   });
 
   // An unreadable queue is unknown, not empty: fail the backup rather than
@@ -173,7 +173,7 @@ require('./helper').run('data-controls', async function (t) {
       delete window.__restoreFenceRead;
     };
     Storage.prototype.getItem = function (key) {
-      if (key === 'chessy-archive-fenced-v1') throw new Error('blocked');
+      if (key === 'chessy-archive-fenced-v2') throw new Error('blocked');
       return realGet.call(this, key);
     };
     document.getElementById('backupBtn').click();
@@ -189,16 +189,17 @@ require('./helper').run('data-controls', async function (t) {
     localStorage.removeItem('chessy-pending-archive-v1');
   });
 
-  // A JSON array is not enough: every entry must have the exact compact
-  // signature shape produced by archive.js. Corrupt/mixed entries make fence
-  // state unknown and therefore fail backup closed.
+  // A v2 envelope is not enough: its version, fixed-width entries, and checksum
+  // must all verify. Corrupt state is unknown and therefore fails closed.
   await page.evaluate(function () {
     localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
       'fence-malformed': { w: 't', rec: { id: 'fence-malformed', source: 'play',
         sans: ['d4'], result: '*', reason: 'imported', mode: 'pvp',
         plies: 1, createdAt: 9 } }
     }));
-    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify([null]));
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify({
+      version: 2, entries: [null], checksum: '00000000'
+    }));
     document.getElementById('backupBtn').click();
   });
   await page.waitForFunction(function () {
@@ -210,7 +211,156 @@ require('./helper').run('data-controls', async function (t) {
     'backup rejects malformed entries inside the persisted fence array');
   await page.evaluate(function () {
     localStorage.removeItem('chessy-pending-archive-v1');
+    localStorage.removeItem('chessy-archive-fenced-v2');
+  });
+
+  // The P2 regression: v1 accepted any 2–16 digit lowercase hex string, so a
+  // truncated or same-width replacement silently stopped matching and Backup
+  // exported the cleared ending. v2's width and envelope checksum detect both.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'fence-corrupt': { w: 't', rec: { id: 'fence-corrupt', source: 'play',
+        sans: ['c4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 10 } }
+    }));
+    ChessyArchive.fenceEnding('fence-corrupt', ['c4'], '*', 'imported');
+    ChessyArchive.fenceEnding('fence-other', ['d4'], '*', 'imported');
+    const valid = JSON.parse(localStorage.getItem('chessy-archive-fenced-v2'));
+    window.__validFenceV2 = JSON.stringify(valid);
+    valid.entries[0] = valid.entries[0].slice(0, -1);
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects a truncated fixed-width fence signature');
+
+  await page.evaluate(function () {
+    const valid = JSON.parse(window.__validFenceV2);
+    const first = valid.entries[0][0];
+    valid.entries[0] = (first === '0' ? '1' : '0') + valid.entries[0].slice(1);
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects a same-width replacement whose envelope checksum no longer matches');
+
+  await page.evaluate(function () {
+    const valid = JSON.parse(window.__validFenceV2);
+    valid.checksum = (valid.checksum[0] === '0' ? '1' : '0') + valid.checksum.slice(1);
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects altered v2 validation metadata');
+
+  await page.evaluate(function () {
+    const valid = JSON.parse(window.__validFenceV2);
+    valid.entries.pop();
+    localStorage.setItem('chessy-archive-fenced-v2', JSON.stringify(valid));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects a dropped entry from the checksummed fence envelope');
+
+  // Deployed v1 entries have no validation metadata. Treat even plausible hex
+  // as UNKNOWN: Backup fails, runtime does not append/commit, and a pending
+  // record stays parked rather than being mistaken for a fenced match.
+  const legacyRuntime = await page.evaluate(function () {
+    localStorage.removeItem('chessy-archive-fenced-v2');
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify(['deadbeef']));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'legacy-pending': { w: 't', rec: { id: 'legacy-pending', source: 'play',
+        sans: ['Nf3'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 11 } }
+    }));
+    document.getElementById('backupBtn').click();
+    return ChessyArchive.reconcilePending().then(function () {
+      return { rejected: false };
+    }, function () {
+      return CoachStore.getGame('legacy-pending').then(function (game) {
+        return {
+          rejected: true,
+          parked: localStorage.getItem('chessy-pending-archive-v1') !== null,
+          committed: !!game,
+          append: ChessyArchive.fenceEnding('fresh', ['e4'], '*', 'imported')
+        };
+      });
+    });
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'unverifiable legacy format') !== -1;
+  }, { timeout: 5000 });
+  check(/unverifiable legacy format/.test(await page.textContent('#dataStatus')),
+    'backup fails closed on an unverifiable legacy v1 entry');
+  check(legacyRuntime.rejected && legacyRuntime.parked &&
+      !legacyRuntime.committed && legacyRuntime.append === false,
+    'runtime preserves pending work and refuses writes while legacy fence state is unknown');
+  const malformedPark = await page.evaluate(function () {
+    const raw = '{"older-recovery":';
+    localStorage.setItem('chessy-pending-archive-v1', raw);
+    return ChessyArchive.record(
+      { history: [{ san: 'e4' }] },
+      { mode: 'pvp', difficulty: '2', timeControl: 'none' },
+      { over: true, result: '*', reason: 'imported' },
+      'new-while-unknown'
+    ).then(function () {
+      return { rejected: false };
+    }, function () {
+      return {
+        rejected: true,
+        unchanged: localStorage.getItem('chessy-pending-archive-v1') === raw
+      };
+    });
+  });
+  check(malformedPark.rejected && malformedPark.unchanged,
+    'parking under an unknown fence never overwrites an older unreadable recovery queue');
+  const blockedRetire = await page.evaluate(function () {
+    ChessyArchive.stageFenceEndings([{
+      id: 'staged-before-retire', sans: ['d4'], result: '*', reason: 'imported'
+    }]);
+    const realRemove = Storage.prototype.removeItem;
+    Storage.prototype.removeItem = function (key) {
+      if (key === 'chessy-archive-fenced-v1') throw new Error('blocked');
+      return realRemove.call(this, key);
+    };
+    const reset = ChessyArchive.resetFence();
+    Storage.prototype.removeItem = realRemove;
+    return {
+      reset: reset,
+      legacy: localStorage.getItem('chessy-archive-fenced-v1'),
+      known: ChessyArchive.fenceKnown()
+    };
+  });
+  check(blockedRetire.reset === false && blockedRetire.legacy !== null &&
+      blockedRetire.known === false,
+    'a blocked legacy-key removal leaves the verified v2 staging fail-closed as UNKNOWN');
+  await page.evaluate(function () {
+    delete window.__validFenceV2;
+    localStorage.removeItem('chessy-pending-archive-v1');
     localStorage.removeItem('chessy-archive-fenced-v1');
+    localStorage.removeItem('chessy-archive-fenced-v2');
   });
 
   // A parked REVISION (same id as a committed row, but newer moves) is the
@@ -342,8 +492,15 @@ require('./helper').run('data-controls', async function (t) {
   // archive is replaced DOWN to the backup rather than a fixed pre-count.)
   await page.evaluate(function () {
     localStorage.removeItem('chessy-game-v1'); // clear the reconstructed-save fixtures above
+    // Simulate upgrading a deployed v1 fence. The successful destructive
+    // replace must keep v1 fail-closed until current sources are staged/removed,
+    // then retire it behind a verified v2 envelope.
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify(['deadbeef']));
     localStorage.setItem('chessy-pending-archive-v1',
-      JSON.stringify({ ghost: { w: 't', rec: { id: 'ghost', sans: [], result: '*', reason: 'imported' } } }));
+      JSON.stringify({ ghost: { w: 't', rec: {
+        id: 'ghost', source: 'play', sans: [], result: '*', reason: 'imported',
+        mode: 'pvp', plies: 0, createdAt: 12
+      } } }));
     return CoachStore.importGame(ChessyPGN.toRecord(ChessyPGN.parseGame('1. f4 f5 *'), { playerColor: 'w' }));
   });
   check(await page.evaluate(function () { return CoachStore.listGames().then(function (g) { return g.length; }); }) > 2,
@@ -360,15 +517,61 @@ require('./helper').run('data-controls', async function (t) {
   }, { timeout: 5000 });
   const restored = await page.evaluate(function () {
     return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+      let fence = null;
+      try { fence = JSON.parse(localStorage.getItem('chessy-archive-fenced-v2')); } catch (e) {}
       return { g: r[0].length, c: r[1].length,
         pending: localStorage.getItem('chessy-pending-archive-v1'),
-        ghostFenced: ChessyArchive.isFencedEnding('ghost', [], '*', 'imported') };
+        ghostFenced: ChessyArchive.isFencedEnding('ghost', [], '*', 'imported'),
+        legacy: localStorage.getItem('chessy-archive-fenced-v1'),
+        v2: fence };
     });
   });
   check(restored.g === 2 && restored.c === 1,
     'restore replaces the archive with the backup (third game removed)');
   check(restored.pending === null && restored.ghostFenced === true,
     'restore fences recovery: the durability queue is dropped and its parked ending is fenced');
+  check(restored.legacy === null && restored.v2 && restored.v2.version === 2 &&
+      Array.isArray(restored.v2.entries) && restored.v2.entries.length > 0 &&
+      /^[0-9a-f]{16}$/.test(restored.v2.entries[0]) &&
+      /^[0-9a-f]{8}$/.test(restored.v2.checksum),
+    'restore retires legacy v1 only after writing a fixed-width checksummed v2 envelope');
+
+  // A verified staged v2 fence is itself durable neutralization. If queue
+  // removal is blocked, migration can still retire v1 cleanly because boot
+  // reconcile will discard the exact surviving ending from the valid envelope.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify(['cafebabe']));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      staged: { w: 't', rec: {
+        id: 'staged', source: 'play', sans: ['e4'], result: '*',
+        reason: 'imported', mode: 'pvp', plies: 1, createdAt: 14
+      } }
+    }));
+    window.__migrationDrop = ChessyArchive.dropPendingQueue;
+    ChessyArchive.dropPendingQueue = function () { return false; };
+  });
+  await page.setInputFiles('#restoreFile', {
+    name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backupJson)
+  });
+  await page.waitForSelector('#restoreConfirmDialog[open]', { timeout: 5000 });
+  await page.click('#restoreConfirm');
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').textContent.indexOf('Restored') !== -1;
+  }, { timeout: 5000 });
+  const stagedMigration = await page.evaluate(function () {
+    const result = {
+      pending: localStorage.getItem('chessy-pending-archive-v1'),
+      fenced: ChessyArchive.isFencedEnding('staged', ['e4'], '*', 'imported'),
+      legacy: localStorage.getItem('chessy-archive-fenced-v1'),
+      kind: document.getElementById('dataStatus').dataset.kind
+    };
+    ChessyArchive.dropPendingQueue = window.__migrationDrop;
+    ChessyArchive.dropPendingQueue();
+    return result;
+  });
+  check(stagedMigration.pending !== null && stagedMigration.fenced &&
+      stagedMigration.legacy === null && stagedMigration.kind !== 'error',
+    'verified v2 staging safely retires v1 even when the fenced queue cannot be removed');
 
   // ---- P1: a SYNCHRONOUS enqueue failure aborts the whole restore, leaving
   // the existing archive intact — the preceding clear() must not commit. ----
@@ -665,7 +868,15 @@ require('./helper').run('data-controls', async function (t) {
   await page.evaluate(function () {
     localStorage.setItem('chessy-game-v1', JSON.stringify({
       fen: 'x', history: [], mode: 'pvp', gameId: 'gone', endedAt: 1 }));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'unfenced-queue': { w: 't', rec: {
+        id: 'unfenced-queue', source: 'play', sans: ['e4'], result: '*',
+        reason: 'imported', mode: 'pvp', plies: 1, createdAt: 13
+      } }
+    }));
     window.__realDrop = ChessyArchive.dropPendingQueue;
+    window.__realFenceBatch = ChessyArchive.fenceEndings;
+    ChessyArchive.fenceEndings = function () { return false; }; // fence write blocked too
     ChessyArchive.dropPendingQueue = function () { return false; }; // simulate blocked removal
   });
   await page.setInputFiles('#restoreFile', {
@@ -678,6 +889,7 @@ require('./helper').run('data-controls', async function (t) {
   }, { timeout: 5000 });
   const qualified = await page.evaluate(function () {
     ChessyArchive.dropPendingQueue = window.__realDrop;
+    ChessyArchive.fenceEndings = window.__realFenceBatch;
     const el = document.getElementById('dataStatus');
     return { text: el.textContent, kind: el.dataset.kind };
   });
