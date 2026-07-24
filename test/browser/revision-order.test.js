@@ -763,5 +763,41 @@ require('./helper').run('revision-order', async function (t) {
   check(parkFail === 'rejected',
     'a deferred finish whose park cannot persist rejects rather than reporting false success');
 
+  // (boot re-offer exhaustion) A restored needsRev finish whose nextRev() throws
+  // at the ceiling must be DEFERRED on boot (parked needsRev), not recorded
+  // revless — else a numeric committed row would outrank it and the resolving
+  // commit would clear its token, and a Rematch could then erase it.
+  await reset();
+  await t.inject(function () {
+    localStorage.setItem('chessy-archive-rev-v1', String(Number.MAX_SAFE_INTEGER - 1)); // floor at REV_MAX
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: 'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3',
+      history: [
+        { move: { from: 53, to: 45, piece: 'wP', captured: null, promotion: null, ep: false, castle: null, double: false }, san: 'f3' },
+        { move: { from: 12, to: 28, piece: 'bP', captured: null, promotion: null, ep: false, castle: null, double: true }, san: 'e5' },
+        { move: { from: 54, to: 38, piece: 'wP', captured: null, promotion: null, ep: false, castle: null, double: true }, san: 'g4' },
+        { move: { from: 3, to: 39, piece: 'bQ', captured: null, promotion: null, ep: false, castle: null, double: false }, san: 'Qh4#' }
+      ],
+      positions: {
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -': 1,
+        'rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq -': 1,
+        'rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq -': 1,
+        'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq -': 1,
+        'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq -': 1
+      },
+      mode: 'pvp', difficulty: '2', timeControl: 'none', clocks: null, timeForfeit: null,
+      flipped: false, gameId: 'exh-boot', endedAt: 40, needsRev: true
+    }));
+  });
+  await page.waitForTimeout(500); // let the boot re-offer run (nextRev throws → defer)
+  const exhBoot = await page.evaluate(function () {
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+    return CoachStore.getGame('exh-boot').then(function (g) {
+      return { committed: !!g, parkedNeedsRev: !!(map && map['exh-boot'] && map['exh-boot'].rec.needsRev === true) };
+    });
+  });
+  check(!exhBoot.committed && exhBoot.parkedNeedsRev,
+    'a restored needsRev finish at sequence exhaustion is parked on boot, not committed revless');
+
   await reset(); // leave a clean store for the console-error check
 });

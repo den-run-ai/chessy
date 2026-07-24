@@ -1341,23 +1341,11 @@
         // the rev onto the live save too, while this is still the live game.
         let useRev = bootRev;
         if (bootNeedsRev && !Number.isFinite(useRev)) {
-          // Floor unknown → can't safely mint a rev for this genuinely-new finish
-          // (a low rev would be kept-and-cleared by archiveGame). Defer, but PARK
-          // the finish (needsRev) for durability so it survives a Rematch
-          // overwriting the save; a later boot that CAN seed mints its rev via
-          // reconcile. A restored game that already carries a numeric bootRev is
-          // unaffected (no mint needed).
-          if (!seeded) {
-            ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
-              { endedAt: bootEndedAt, parkOnly: true, needsRev: true })
-              .then(null, function () {
-                // Park failed (storage full/blocked) — the deferred finish is not
-                // durable; surface it on the always-visible page note.
-                if (archiveAttempts.get(bootId) === seqAtCall) showArchiveFailure(archiveBootNoteEl, bootId);
-              });
-            return;
-          }
-          if (ChessyArchive.nextRev) {
+          // Mint a rev for this genuinely-new finish — but ONLY if the floor is
+          // known (seeded). If not seeded, OR the sequence is exhausted (nextRev
+          // throws), the finish must NOT be recorded revless: a numeric committed
+          // row would outrank it and the resolving commit would clear its token.
+          if (seeded && ChessyArchive.nextRev) {
             try { useRev = ChessyArchive.nextRev(); } catch (e) { useRev = null; }
             // Stamp the rev onto the live save only if the restored finish is
             // still the live game (same id, same completion time) — an Undo during
@@ -1369,6 +1357,19 @@
                 archiveAttempts.get(bootId) === seqAtCall) {
               gameRev = useRev; gameNeedsRev = false; save();
             }
+          }
+          if (!Number.isFinite(useRev)) {
+            // DEFER: PARK the finish (needsRev) for durability so it survives a
+            // Rematch overwriting the save; a later boot that CAN seed (and whose
+            // sequence is not exhausted) mints its rev via reconcile.
+            ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
+              { endedAt: bootEndedAt, parkOnly: true, needsRev: true })
+              .then(null, function () {
+                // Park failed (storage full/blocked) — the deferred finish is not
+                // durable; surface it on the always-visible page note.
+                if (archiveAttempts.get(bootId) === seqAtCall) showArchiveFailure(archiveBootNoteEl, bootId);
+              });
+            return;
           }
         }
         ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
