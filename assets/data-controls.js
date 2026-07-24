@@ -161,7 +161,13 @@
     let signatures;
     try { signatures = JSON.parse(raw); }
     catch (e) { throw new Error('the archive-clear fence is unreadable'); }
-    if (!Array.isArray(signatures)) {
+    if (!Array.isArray(signatures) || !signatures.every(function (sig) {
+      // endingSig() concatenates two lower-case uint32 hex strings, each
+      // one to eight characters. Anything else is unknown fence state, not
+      // an ignorable value: accepting it could export a deliberately-cleared
+      // recovery record whose actual signature was replaced/corrupted.
+      return typeof sig === 'string' && /^[0-9a-f]{2,16}$/.test(sig);
+    })) {
       throw new Error('the archive-clear fence is malformed');
     }
     return signatures;

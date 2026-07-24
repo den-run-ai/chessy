@@ -151,6 +151,30 @@ require('./helper').run('data-controls', async function (t) {
     localStorage.removeItem('chessy-pending-archive-v1');
   });
 
+  // A JSON array is not enough: every entry must have the exact compact
+  // signature shape produced by archive.js. Corrupt/mixed entries make fence
+  // state unknown and therefore fail backup closed.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'fence-malformed': { w: 't', rec: { id: 'fence-malformed', source: 'play',
+        sans: ['d4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 9 } }
+    }));
+    localStorage.setItem('chessy-archive-fenced-v1', JSON.stringify([null]));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'archive-clear fence is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/archive-clear fence is malformed/.test(await page.textContent('#dataStatus')),
+    'backup rejects malformed entries inside the persisted fence array');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    localStorage.removeItem('chessy-archive-fenced-v1');
+  });
+
   // A parked REVISION (same id as a committed row, but newer moves) is the
   // authoritative copy when its write failed, so it must REPLACE the stale
   // committed row in the backup, not be dropped as a duplicate id.
