@@ -249,6 +249,10 @@ function buildPuzzles(prov) {
     });
   }
   if (out.length < 20) throw new Error('too few usable puzzles (' + out.length + ', skipped ' + skipped + ')');
+  // Every collected rating band must survive derivation, or the stratified shard
+  // would silently drop a difficulty stratum while still reaching 64 cases.
+  const empty = RATING_BANDS.map(b => b[0]).filter(name => !out.some(r => r.rating_band === name));
+  if (empty.length) throw new Error('puzzle rating band(s) lost in derivation: ' + empty.join(', ') + ' (skipped ' + skipped + ')');
   return out;
 }
 

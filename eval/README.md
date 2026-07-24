@@ -87,8 +87,9 @@ Only a **compact frozen sample** of each CC0 database is committed — never the
 multi-million-row dumps. `split_group` assigns a deterministic **70/15/15
 train/val/test** split (puzzles hashed by *game id* so same-game puzzles share a
 split — split-before-extract). **Never tune on the test split.** The frozen
-**64-case PR shard** (`shard: true`, interleaving generated + opening + puzzle
-cases) runs on every PR; the full corpus is for nightly / pre-release runs. The
+**64-case PR shard** (`shard: true`: every correctness-critical generated case,
+then a fill stratified round-robin across ECO volumes and puzzle rating bands)
+runs on every PR; the full corpus is for nightly / pre-release runs. The
 Syzygy exact-WDL fixtures and the rotating later-month OOD sample are staged for
 later E1 work — see `LICENSE-REPORT.md`.
 

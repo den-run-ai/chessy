@@ -183,6 +183,11 @@ function checkPvReplay(rec, state, res) {
   for (const line of res.bestLines) {
     let s = Chess.newGameState(fen);
     const pv = line.pvUci || [];
+    // EVERY reported line must carry at least its own root move and start with
+    // it — a line whose PV vanished can't be waved through just because another
+    // line still has a continuation.
+    if (!pv.length) return [{ ok: false, detail: 'line ' + line.uci + ' has an empty PV' }];
+    if (pv[0] !== line.uci) return [{ ok: false, detail: 'PV head ' + pv[0] + ' != line move ' + line.uci }];
     maxLen = Math.max(maxLen, pv.length);
     for (const u of pv) {
       const m = Chess.legalMoves(s).find(mv => uciOf(mv) === u);

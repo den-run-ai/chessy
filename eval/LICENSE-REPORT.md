@@ -21,7 +21,7 @@ sample; the generator re-checks those shas before building.
 | --- | --- | --- |
 | Lichess Open Database puzzles (40) | `CC0-1.0` | [database.lichess.org](https://database.lichess.org/) is released **CC0**. A compact, stratified sample (8 per difficulty band) is committed as `corpus/sources/lichess-puzzles-v1.csv` — never the multi-million-row dump. The puzzle FEN precedes the opponent's setup move, so the corpus stores the post-setup position and keeps the labelled key move; `source_id` is the Lichess `PuzzleId`. |
 | Opening positions (40) | `CC0-1.0` | Real ECO/name/line rows sampled across all five ECO volumes from the CC0 lichess [`chess-openings`](https://github.com/lichess-org/chess-openings) project (`corpus/sources/openings-v1.tsv`); each FEN is derived by replaying the line through Chessy's own MIT engine. |
-| Stateful / adversarial + endgame fixtures (34) | `MIT` | Original positions authored for this repository (`source_id: chessy-eval-generator`) and validated against the engine. Covered by this repository's own MIT license. |
+| Stateful / adversarial + endgame fixtures (37) | `MIT` | Original positions authored for this repository (`source_id: chessy-eval-generator`) and validated against the engine. Covered by this repository's own MIT license. |
 
 Every committed expectation is checked against the Chessy engine at generation
 time (`test/eval/gen-corpus.js`), and the scorecard verifies the ndjson sha256
