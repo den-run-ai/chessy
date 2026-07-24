@@ -163,7 +163,14 @@
     // A file still being read would submit STALE textarea content — refuse.
     if (reading) { setStatus('Still reading the file — one moment…', 'info'); return; }
     if (importing) return;
-    const text = textEl.value.trim();
+    const rawText = textEl.value;
+    // The same 5 MB bound applies to paste as to file upload. Check bytes
+    // before trim/parse so an oversized textarea is not repeatedly copied.
+    if (new Blob([rawText]).size > MAX_IMPORT_BYTES) {
+      setStatus('That pasted PGN is too large. Import a single game (up to 5 MB).', 'error');
+      return;
+    }
+    const text = rawText.trim();
     if (!text) { setStatus('Paste a PGN or choose a file first.', 'error'); textEl.focus(); return; }
 
     let game;

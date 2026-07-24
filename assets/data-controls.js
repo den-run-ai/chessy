@@ -110,6 +110,29 @@
     }
   }
 
+  // Read the durability queue without archive.js. A partial offline release
+  // can leave this transport module available while ChessyArchive is absent;
+  // backup must still include the only copy of a finished game.
+  function rawPendingRecords() {
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); }
+    catch (e) { throw new Error('could not read the pending-game recovery queue'); }
+    if (raw == null) return [];
+    let map;
+    try {
+      map = JSON.parse(raw);
+    } catch (e) {
+      throw new Error('the pending-game recovery queue is unreadable');
+    }
+    if (!map || typeof map !== 'object' || Array.isArray(map)) {
+      throw new Error('the pending-game recovery queue is malformed');
+    }
+    return Object.keys(map).map(function (id) {
+      const entry = map[id];
+      return entry && typeof entry === 'object' ? entry.rec : null;
+    }).filter(Boolean);
+  }
+
   // Merge the recovery sources IndexedDB can't see into the exported snapshot,
   // as one canonical routine so a backup can't silently drop or misrepresent a
   // finished game. exportAll gives the committed rows; a parked durability-queue
@@ -127,7 +150,9 @@
   function mergeRecoverySources(data, keep) {
     const games = data.stores.games || (data.stores.games = []);
     const cards = data.stores.cards || (data.stores.cards = []);
-    const byId = {};
+    // Game ids are user-controlled strings (imports/restores included).
+    // A null-prototype map keeps "__proto__" enumerable and round-trippable.
+    const byId = Object.create(null);
     games.forEach(function (g) { byId[g.id] = g; });
     function apply(rec) {
       if (!rec || typeof rec.id !== 'string' || !Array.isArray(rec.sans)) return;
@@ -147,9 +172,11 @@
     // difference.
     const saved = savedFinishedRecord();
     if (saved) apply(saved);
-    if (typeof ChessyArchive !== 'undefined' && ChessyArchive.pendingRecords) {
-      ChessyArchive.pendingRecords().forEach(apply);
-    }
+    // Read the durable source directly even when archive.js is present:
+    // pendingRecords() intentionally turns an unreadable queue into [], which
+    // is fine for best-effort boot recovery but unsafe for an advertised
+    // backup. Unknown must fail the backup, not be mistaken for empty.
+    rawPendingRecords().forEach(apply);
     data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
   }
 

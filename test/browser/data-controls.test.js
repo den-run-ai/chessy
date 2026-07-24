@@ -65,6 +65,53 @@ require('./helper').run('data-controls', async function (t) {
         backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
     'a parked (pending-queue) game is included in the backup');
 
+  // Backup still reads the raw durability queue when archive.js is absent
+  // (partial offline release), and prototype-sensitive ids remain data.
+  await page.evaluate(function () {
+    window.__archiveForBackup = window.ChessyArchive;
+    window.ChessyArchive = undefined;
+    const map = Object.create(null);
+    map['raw-only'] = { w: 't1', rec: { id: 'raw-only', source: 'play',
+      sans: ['d4'], result: '*', reason: 'imported', mode: 'pvp',
+      plies: 1, createdAt: 6 } };
+    map['__proto__'] = { w: 't2', rec: { id: '__proto__', source: 'play',
+      sans: ['c4'], result: '*', reason: 'imported', mode: 'pvp',
+      plies: 1, createdAt: 7 } };
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify(map));
+  });
+  const [rawDl] = await Promise.all([page.waitForEvent('download'), page.click('#backupBtn')]);
+  const rawBackup = JSON.parse(fs.readFileSync(await rawDl.path(), 'utf8'));
+  check(rawBackup.stores.games.some(function (g) { return g.id === 'raw-only'; }),
+    'backup includes a raw pending record when ChessyArchive is unavailable');
+  check(rawBackup.stores.games.some(function (g) { return g.id === '__proto__'; }),
+    'backup round-trips a prototype-sensitive game id');
+  await page.evaluate(function () {
+    window.ChessyArchive = window.__archiveForBackup;
+    delete window.__archiveForBackup;
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
+  // An unreadable queue is unknown, not empty: fail the backup rather than
+  // claim success while potentially omitting its only finished game.
+  await page.evaluate(function () {
+    const realGet = Storage.prototype.getItem;
+    window.__restorePendingRead = function () {
+      Storage.prototype.getItem = realGet;
+      delete window.__restorePendingRead;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === 'chessy-pending-archive-v1') throw new Error('blocked');
+      return realGet.call(this, key);
+    };
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error';
+  }, { timeout: 5000 });
+  check(/pending-game recovery queue/.test(await page.textContent('#dataStatus')),
+    'backup fails safely when the pending recovery queue cannot be read');
+  await page.evaluate(function () { window.__restorePendingRead(); });
+
   // A parked REVISION (same id as a committed row, but newer moves) is the
   // authoritative copy when its write failed, so it must REPLACE the stale
   // committed row in the backup, not be dropped as a duplicate id.
@@ -395,8 +442,14 @@ require('./helper').run('data-controls', async function (t) {
   const moreRejects = await page.evaluate(function () {
     const F = 'chessy-coach-backup';
     const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const game = { id: 'g', sans: ['e4'], result: '*', plies: 1, createdAt: 1 };
     function card(step) {
-      return { id: 1, gameId: 'g', due: 0, step: step, fenBefore: startFen, attempts: [] };
+      return { id: 1, gameId: 'g', ply: 0, due: 0, step: step,
+        fenBefore: startFen, attempts: [] };
+    }
+    function backup(c, games) {
+      return { format: F, version: 1, dbVersion: 6,
+        stores: { games: games === undefined ? [game] : games, cards: [c] } };
     }
     return {
       arrayStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: [] }),
@@ -405,25 +458,31 @@ require('./helper').run('data-controls', async function (t) {
           fenBefore: startFen, attempts: {} }] } }),
       emptyStores: CoachStore.validateBackup({
         format: F, version: 1, dbVersion: 6, stores: {} }),
-      noStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(undefined)] } }),
-      fractionalStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(0.5)] } }),
-      belowLadder: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(-2)] } }),
-      learnStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(-1)] } }),
-      dayStep: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6,
-        stores: { games: [], cards: [card(0)] } })
+      noStep: CoachStore.validateBackup(backup(card(undefined))),
+      fractionalStep: CoachStore.validateBackup(backup(card(0.5))),
+      belowLadder: CoachStore.validateBackup(backup(card(-2))),
+      aboveLadder: CoachStore.validateBackup(backup(card(6))),
+      badAttemptEntry: CoachStore.validateBackup(backup(Object.assign(card(0), {
+        attempts: [{ at: 'yesterday', correct: 'yes' }]
+      }))),
+      missingGame: CoachStore.validateBackup(backup(card(0), [])),
+      missingPly: CoachStore.validateBackup(backup(Object.assign(card(0), { ply: 1 }))),
+      learnStep: CoachStore.validateBackup(backup(card(-1))),
+      lastDayStep: CoachStore.validateBackup(backup(card(5)))
     };
   });
   check(!!moreRejects.arrayStores, 'a backup whose stores is an array is rejected');
   check(!!moreRejects.badAttempts, 'a card with a non-array attempts is rejected');
   check(!!moreRejects.emptyStores, 'a backup missing the games/cards arrays is rejected');
-  check(!!moreRejects.noStep && !!moreRejects.fractionalStep && !!moreRejects.belowLadder,
-    'missing, fractional, and below-ladder card steps are rejected');
-  check(moreRejects.learnStep === null && moreRejects.dayStep === null,
-    'the supported -1 and 0 card steps remain valid');
+  check(!!moreRejects.noStep && !!moreRejects.fractionalStep &&
+      !!moreRejects.belowLadder && !!moreRejects.aboveLadder,
+    'missing, fractional, and out-of-ladder card steps are rejected');
+  check(!!moreRejects.badAttemptEntry,
+    'malformed attempt entries are rejected before Progress reads them');
+  check(!!moreRejects.missingGame && !!moreRejects.missingPly,
+    'cards must reference a restored game and one of its played plies');
+  check(moreRejects.learnStep === null && moreRejects.lastDayStep === null,
+    'the supported -1 through 5 card steps remain valid');
 
   // All read-write entry points share the same destructive-operation barrier;
   // reads and the destructive transaction itself remain available.

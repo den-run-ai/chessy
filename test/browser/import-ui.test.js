@@ -80,6 +80,16 @@ require('./helper').run('import-ui', async function (t) {
     'an illegal move is reported as invalid');
   check(await listCount() === 1, 'a rejected import adds no game');
 
+  // The 5 MB transport bound covers pasted text too, before parser work.
+  await page.evaluate(function () {
+    document.getElementById('importText').value = 'x'.repeat(5 * 1024 * 1024 + 1);
+  });
+  await page.click('#importSubmit');
+  const hugePaste = await status();
+  check(hugePaste.kind === 'error' && /pasted PGN is too large/.test(hugePaste.text),
+    'an oversized pasted PGN is rejected before parsing');
+  check(await listCount() === 1, 'an oversized paste imports nothing');
+
   // Unknown side leaves playerColor null (every ply stays flaggable).
   await page.fill('#importText', '[Event "Unk"]\n\n1. d4 d5 2. c4 e6 *');
   await page.click('input[name="importSide"][value="unknown"] + span');

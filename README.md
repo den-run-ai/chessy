@@ -97,10 +97,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   cards, due-now, 30-day reviews, and per-cause tallies. The one narrow signal
   ("matched Chessy's saved move on first try") is labelled as exactly that —
   **no headline accuracy**, weakness ranking, or confidence claims.
-- Coaching-data import (PGN/Lichess), automatic scanning, archive
-  export/restore + Delete All, and a language coach remain future work
-  (roadmap [#23](https://github.com/den-run-ai/chessy/issues/23)). Standard PGN
-  export and the validated single-game restore, described above, already ship.
+- **Coaching data controls** — paste or upload one PGN into the archive
+  (legality-validated and deduplicated), back up games/cards to versioned JSON,
+  atomically restore a validated backup, or Delete All behind a recovery fence.
+  Automatic two-pass critical-moment scanning, bulk/Lichess import, and an
+  optional language coach remain future work (roadmap
+  [#23](https://github.com/den-run-ai/chessy/issues/23), scan tracker
+  [#73](https://github.com/den-run-ai/chessy/issues/73)).
 - **PWA** — a service worker precaches every asset on first load; afterwards
   the app works with no network at all, and can be installed to the home
   screen / desktop via the web app manifest. Assets load as **release

@@ -517,6 +517,10 @@
     if (!Array.isArray(data.stores.games) || !Array.isArray(data.stores.cards)) {
       return 'backup is missing the games or cards array';
     }
+    // Cross-store validation needs the complete restored game set. Use a
+    // prototype-free lookup so a string id such as "__proto__" remains
+    // ordinary data rather than mutating the lookup.
+    var gamesById = Object.create(null);
     for (var i = 0; i < DURABLE_STORES.length; i++) {
       var name = DURABLE_STORES[i];
       var rows = data.stores[name];
@@ -534,13 +538,18 @@
           if (typeof r.id !== 'string' || !Array.isArray(r.sans)) {
             return 'store "games" record ' + j + ' is missing required fields';
           }
+          if (!r.sans.every(function (san) {
+            return typeof san === 'string' && san.length > 0;
+          })) {
+            return 'store "games" record ' + j + ' has an invalid move list';
+          }
           // Review renders result / plies / createdAt directly; missing values
           // show as "undefined", "NaN moves", "Invalid Date".
           if (typeof r.result !== 'string' || !r.result) {
             return 'store "games" record ' + j + ' is missing a result';
           }
-          if (!Number.isFinite(r.plies)) {
-            return 'store "games" record ' + j + ' has a non-numeric plies';
+          if (!Number.isInteger(r.plies) || r.plies !== r.sans.length) {
+            return 'store "games" record ' + j + ' has an invalid plies count';
           }
           if (!Number.isFinite(r.createdAt)) {
             return 'store "games" record ' + j + ' has a non-numeric createdAt';
@@ -548,6 +557,7 @@
           if (r.setupFen && !validFen(r.setupFen)) {
             return 'store "games" record ' + j + ' has an invalid setupFen';
           }
+          gamesById[r.id] = r;
         }
         if (name === 'cards') {
           if (typeof r.gameId !== 'string') {
@@ -569,8 +579,23 @@
           if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
             return 'store "cards" record ' + j + ' has a non-array attempts';
           }
-          if (!Number.isInteger(r.step) || r.step < -1) {
+          if (Array.isArray(r.attempts) && !r.attempts.every(function (a) {
+            return !!a && typeof a === 'object' && Number.isFinite(a.at) &&
+              typeof a.correct === 'boolean';
+          })) {
+            return 'store "cards" record ' + j + ' has an invalid attempt';
+          }
+          // -1 is immediate learning; 0..5 are the fixed
+          // 1/3/7/14/30/90-day ladder.
+          if (!Number.isInteger(r.step) || r.step < -1 || r.step > 5) {
             return 'store "cards" record ' + j + ' has an invalid step';
+          }
+          var game = gamesById[r.gameId];
+          if (!game) {
+            return 'store "cards" record ' + j + ' references a missing game';
+          }
+          if (!Number.isInteger(r.ply) || r.ply < 0 || r.ply >= game.sans.length) {
+            return 'store "cards" record ' + j + ' references a missing ply';
           }
         }
       }
