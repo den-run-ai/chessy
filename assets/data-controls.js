@@ -335,8 +335,15 @@
   function closeDialog(d) {
     if (typeof d.close === 'function') d.close(); else d.removeAttribute('open');
   }
-  // Stop an in-flight analysis before its inputs are replaced/cleared.
+  // Invalidate scan ownership BEFORE stopping the shared worker. cancel()
+  // resolves the abandoned analysis promise; without the generation bump its
+  // continuation could later checkpoint/restart after Restore/Delete-all has
+  // replaced the source game. The scan module is optional (older releases and
+  // partial caches do not have it), so this remains a guarded best effort.
   function cancelAnalysis() {
+    if (typeof ChessyMomentScan !== 'undefined' && ChessyMomentScan.invalidate) {
+      try { ChessyMomentScan.invalidate(); } catch (e) { /* best effort */ }
+    }
     if (typeof ChessyAnalysisService !== 'undefined' && ChessyAnalysisService.cancel) {
       try { ChessyAnalysisService.cancel(); } catch (e) { /* best effort */ }
     }

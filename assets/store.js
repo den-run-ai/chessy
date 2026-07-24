@@ -204,21 +204,55 @@
             if (a.value.ply >= p) a.delete();
             a.continue();
           };
-          // The resumable scan: drop found moments past the divergence and
-          // rewind the cursor to it so a resume re-scans the changed tail. A
-          // job whose progress is entirely within the shared prefix
-          // (cursorPly <= p, no later moments) is left untouched.
+          // The resumable scan: every ply-bearing collection may contain work
+          // derived from the abandoned continuation. Keep only entries from
+          // the shared prefix, rewind pass 1 to the divergence, and discard all
+          // transient pass-2/retry ownership. This reset is unconditional for
+          // a revised ending: even if the cursor had not reached `p`, a stale
+          // source revision must never make old work render as current.
+          //
+          // Be deliberately defensive here. analysisJobs is recomputable
+          // cache state and an older/partial release may have left a malformed
+          // list in it. Archive correctness must not depend on being able to
+          // call `.filter()` on that value: malformed lists are emptied rather
+          // than aborting the transaction that stores the revised game.
           const jr = t.objectStore('analysisJobs').get(id);
           jr.onsuccess = function () {
             const job = jr.result;
             if (!job) return;
-            const moments = (job.moments || []).filter(function (m) { return m.ply < p; });
-            const cursorPly = typeof job.cursorPly === 'number'
-              ? Math.min(job.cursorPly, p) : job.cursorPly;
-            if (moments.length === (job.moments || []).length && cursorPly === job.cursorPly) return;
-            job.moments = moments;
-            job.cursorPly = cursorPly;
-            if (job.state === 'done') job.state = 'paused'; // reached removed territory: resume
+            function plyOf(item) {
+              if (Number.isInteger(item)) return item;
+              return item && typeof item === 'object' && Number.isInteger(item.ply)
+                ? item.ply : null;
+            }
+            function pruneList(name) {
+              if (job[name] === undefined) return;
+              if (!Array.isArray(job[name])) { job[name] = []; return; }
+              job[name] = job[name].filter(function (item) {
+                const ply = plyOf(item);
+                return ply !== null && ply >= 0 && ply < p;
+              });
+            }
+            ['candidates', 'shortlist', 'moments', 'unresolved'].forEach(pruneList);
+
+            job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
+              ? Math.min(job.cursorPly, p) : p;
+            job.state = 'paused';
+            job.pass = 1;
+            job.verifyIndex = 0;
+            if (Object.prototype.hasOwnProperty.call(job, 'checked')) {
+              job.checked = Number.isInteger(job.checked) && job.checked >= 0
+                ? Math.min(job.checked, p) : 0;
+            }
+
+            // The next controller run must bind itself to the revised game
+            // before doing or displaying work. Both revisions are cache
+            // metadata, never user data.
+            job.sourceRev = null;
+            if (Object.prototype.hasOwnProperty.call(job, 'analysisRev')) job.analysisRev = null;
+            delete job.retry;
+            delete job.error;
+            job.updatedAt = Date.now();
             t.objectStore('analysisJobs').put(job);
           };
         }
@@ -394,12 +428,56 @@
 
   // ---- analysisJobs (Phase 5) ------------------------------------------
   // One resumable, reload-safe two-pass scan per game, keyed on gameId:
-  //   { gameId, state, cursorPly, moments: [{ ply, ... }], engine, config,
-  //     updatedAt }
+  //   { schema, algorithm, gameId, sourceRev, analysisRev, scanColor,
+  //     state, pass, cursorPly, checked, total, candidates, shortlist,
+  //     verifyIndex, moments: [{ ply, playedSan }], unresolved, updatedAt }
   // archiveGame() prunes a job from the first divergent ply when its game is
   // revised, so a resume never trusts progress over positions that changed.
   function putJob(job) {
     return tx('analysisJobs', 'readwrite', function (s) { return s.put(job); });
+  }
+  // Atomically checkpoint a scan only while its archived source is still the
+  // exact game the controller opened. A separate getGame() followed by
+  // putJob() has a TOCTOU window: a same-id revised ending can commit between
+  // them, after which the stale job write would land on the replacement.
+  // Sharing one readwrite transaction with `games` gives IndexedDB a single
+  // serialization point:
+  //   checkpoint first  -> a later archive revision prunes/invalidates it
+  //   archive first     -> the guard sees a mismatch and writes nothing
+  function sameJobSource(game, expected) {
+    if (!game || !expected || game.id !== expected.id) return false;
+    function sameArray(a, b) {
+      return JSON.stringify(Array.isArray(a) ? a : []) ===
+        JSON.stringify(Array.isArray(b) ? b : []);
+    }
+    return (game.setupFen || null) === (expected.setupFen || null) &&
+      (game.playerColor || null) === (expected.playerColor || null) &&
+      (game.timeControl || null) === (expected.timeControl || null) &&
+      sameArray(game.sans, expected.sans) &&
+      sameArray(game.clocks, expected.clocks);
+  }
+  function putJobIfGame(job, expectedGame) {
+    return openForWrite().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(['games', 'analysisJobs'], 'readwrite');
+        const getReq = t.objectStore('games').get(job.gameId);
+        let putReq = null;
+        let wrote = false;
+        getReq.onsuccess = function () {
+          if (!sameJobSource(getReq.result, expectedGame)) return;
+          putReq = t.objectStore('analysisJobs').put(job);
+          wrote = true;
+        };
+        t.oncomplete = function () { resolve(wrote); };
+        t.onerror = function () {
+          reject((putReq && putReq.error) || getReq.error || t.error);
+        };
+        t.onabort = function () {
+          reject((putReq && putReq.error) || getReq.error || t.error ||
+            new Error('transaction aborted'));
+        };
+      });
+    });
   }
   function getJob(gameId) {
     return tx('analysisJobs', 'readonly', function (s) { return s.get(gameId); });
@@ -684,6 +762,7 @@
     deleteAnalysis: deleteAnalysis,
     listAnalysesForGame: listAnalysesForGame,
     putJob: putJob,
+    putJobIfGame: putJobIfGame,
     getJob: getJob,
     deleteJob: deleteJob,
     exportAll: exportAll,

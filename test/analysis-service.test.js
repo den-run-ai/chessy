@@ -108,6 +108,30 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     'an identical repeat request is served from cache with no new worker dispatch');
   check(store._map.size === 1, 'the validated result was persisted to the cache');
 
+  // A broken cache adapter must not hold the interactive lane forever. Keep a
+  // bounded in-memory handoff so an immediate reflection still reuses the scan
+  // result without a second worker dispatch while putAnalysis never settles.
+  const heldStore = makeStore();
+  heldStore.putAnalysis = function () { return new Promise(function () {}); };
+  reset({ factory: factoryOf({ mode: 'normal' }), store: heldStore });
+  const heldRace = await Promise.race([
+    Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache' })),
+    delay(100).then(function () { return 'timed-out'; })
+  ]);
+  check(heldRace !== 'timed-out' && heldRace !== null,
+    'a never-settling best-effort cache write cannot hang analysis');
+  const cachedFirst = heldRace;
+  const dHeld = Svc.stats().dispatches;
+  const cachedSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache' }));
+  check(cachedFirst && cachedSecond && Svc.stats().dispatches === dHeld,
+    'an immediate follow-up reuses the in-memory handoff without redispatch');
+
+  const failingStore = makeStore();
+  failingStore.putAnalysis = function () { return Promise.reject(new Error('quota')); };
+  reset({ factory: factoryOf({ mode: 'normal' }), store: failingStore });
+  check((await Svc.analyse(Object.assign({}, REQ, { gameId: 'cache-fails' }))) !== null,
+    'a failed best-effort cache write does not hide a valid analysis result');
+
   // --- Cache separates configurations, halfmove clocks and repetition histories ---
   reset({ factory: factoryOf({ mode: 'normal' }), store: store });
   await Svc.analyse(Object.assign({}, REQ, { opts: Object.assign({}, FAST, { multiPV: 2 }) }));
@@ -198,6 +222,31 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   Svc.cancel();
   check((await cancelled) === null && made[0].terminated === true,
     'cancel() terminates the worker and resolves the in-flight promise null');
+
+  // --- Owner-scoped cancel: a stale scan pause cannot kill a newer reflection.
+  //     Global cancel remains available to destructive data controls. ---
+  reset({ factory: factoryOf({ mode: 'stall' }) });
+  const owned = Svc.analyse(Object.assign({}, REQ, { gameId: 'owned' }), 'reflection');
+  const ownedWorker = made[0];
+  Svc.cancel('moment-scan');
+  let ownedSettled = false;
+  owned.then(function () { ownedSettled = true; });
+  await delay(5);
+  check(!ownedSettled && ownedWorker.terminated === false,
+    'cancel(owner) leaves another subsystem owner running');
+  Svc.cancel('reflection');
+  check((await owned) === null && ownedWorker.terminated === true,
+    'cancel(owner) terminates and settles only its matching job');
+
+  // Starting a new request still supersedes regardless of owners: interactive
+  // reflection must never queue behind a background scan.
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }) });
+  const scanJob = Svc.analyse(Object.assign({}, REQ, { gameId: 'scan' }), 'moment-scan');
+  const reflectionJob = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'reflection' }), 'reflection');
+  check((await scanJob) === null && (await reflectionJob) !== null &&
+    made[0].terminated === true,
+    'a newer owner supersedes the active job instead of waiting in a queue');
 
   // --- Watchdog: a wedged worker is retried once in a fresh worker ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }), watchdog: 25 });

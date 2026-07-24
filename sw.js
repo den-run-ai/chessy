@@ -24,7 +24,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const RELEASE = 'r50';
+const RELEASE = 'r51';
 const CACHE = 'chessy-' + RELEASE;
 const ASSETS = [
   './',
@@ -41,6 +41,9 @@ const ASSETS = [
   './assets/review.js?r=' + RELEASE,
   './assets/analysis-core.js?r=' + RELEASE,
   './assets/analysis-service.js?r=' + RELEASE,
+  './assets/analysis-result.js?r=' + RELEASE,
+  './assets/moment-selector.js?r=' + RELEASE,
+  './assets/moment-scan.js?r=' + RELEASE,
   './assets/pgn.js?r=' + RELEASE,
   './assets/import.js?r=' + RELEASE,
   './assets/data-controls.js?r=' + RELEASE,

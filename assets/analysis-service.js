@@ -24,7 +24,10 @@
  *     request (same fingerprint, config and side to move); complete AND partial
  *     (complete:false) results are stored, with the completeness flag preserved.
  *
- * A request is { gameId, ply, gameRev, fen, positions, opts }. analyse()
+ * A request is { gameId, ply, gameRev, fen, positions, opts }. analyse(req,
+ * owner?) accepts an optional subsystem owner; cancel(owner) then abandons
+ * only that owner's job, while cancel() remains the global teardown.
+ * analyse()
  * resolves with the analysis contract, or null (superseded/cancelled, no worker
  * available, or an unrecoverable worker). The heavy ChessyAnalysisCore.analyse
  * runs ONLY inside the worker — this module calls only the pure identity() to
@@ -42,6 +45,13 @@
   var active = null;
   var seq = 0;
   var dispatches = 0;         // worker postMessages (tests assert cache hits skip these)
+  // A tiny process-local cache closes the handoff between a scan result and an
+  // immediately opened reflection without making analysis completion depend on
+  // IndexedDB. A storage write is best-effort and, under a broken adapter, may
+  // never settle; keeping the validated result here lets the next identical
+  // request reuse it while the persistent write remains non-blocking.
+  var recent = new Map();
+  var RECENT_CAP = 16;
 
   function nowMs() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
 
@@ -85,6 +95,13 @@
       req.gameId, req.ply, ident.positionFingerprint, ident.engineId, ident.configHash);
   }
 
+  function remember(job, result) {
+    if (!job.key) return;
+    recent.delete(job.key);
+    recent.set(job.key, { gameRev: job.req.gameRev, result: result });
+    while (recent.size > RECENT_CAP) recent.delete(recent.keys().next().value);
+  }
+
   // A reply is trustworthy only if it describes the SAME position/config/turn
   // the request asked about — a last guard against a mismatched or corrupt
   // result being cached or shown.
@@ -107,8 +124,14 @@
 
   // Kill the in-flight job outright (supersede/cancel/navigation/game revision):
   // stop the worker burning its budget and resolve the abandoned promise null.
-  function abandon() {
+  function abandon(owner) {
     if (!active) return;
+    // A subsystem may relinquish only the work it owns. This matters when a
+    // reflection has just superseded a background moment scan: the scan's
+    // delayed pause callback must not terminate the newer interactive job.
+    // No owner keeps the historic/global behavior used by destructive data
+    // controls and legacy callers.
+    if (arguments.length && active.owner !== owner) return;
     var job = active;
     if (worker) { worker.terminate(); worker = null; }
     settle(job, null);
@@ -144,7 +167,11 @@
     if (msg.error) { recover(job); return; }   // worker-side failure → retry/give up
     var result = msg.result;
     if (!validMatch(result, job)) { settle(job, null); return; }
-    persist(job, result);                       // best-effort; complete + partial
+    // Publish from a bounded in-memory handoff, then persist without blocking
+    // the analysis lane. The next identical request can reuse `recent` even if
+    // IndexedDB is slow, rejected, or never settles.
+    remember(job, result);
+    persist(job, result);
     settle(job, result);
   }
 
@@ -174,7 +201,7 @@
 
   function persist(job, result) {
     var store = global.CoachStore;
-    if (!store || !store.putAnalysis || !job.key) return;
+    if (!store || !store.putAnalysis || !job.key) return Promise.resolve();
     var rec = {
       key: job.key, gameId: job.req.gameId, ply: job.req.ply,
       gameRev: job.req.gameRev,
@@ -184,9 +211,10 @@
       result: result, createdAt: nowMs()
     };
     try {
-      var p = store.putAnalysis(rec);
-      if (p && typeof p.catch === 'function') p.catch(function () {});
-    } catch (e) { /* cache write is best-effort */ }
+      return Promise.resolve(store.putAnalysis(rec)).catch(function () {});
+    } catch (e) {
+      return Promise.resolve(); // cache write is best-effort
+    }
   }
 
   function run(job) {
@@ -198,6 +226,12 @@
       job.ident = ChessyAnalysisCore.identity(job.state, job.opts);
       job.key = keyFor(job.req, job.ident);
     } catch (e) { settle(job, null); return; }
+
+    var hot = !job.req.fresh && job.key && recent.get(job.key);
+    if (hot && hot.gameRev === job.req.gameRev) {
+      settle(job, hot.result);
+      return;
+    }
 
     // req.fresh bypasses the cache read entirely: the reflection layer sets it
     // on a retry after it rejected a served result as unusable, so the retry
@@ -224,9 +258,12 @@
 
   // Start (or supersede) the single interactive analysis. Resolves with the
   // analysis contract, or null when superseded/cancelled or no worker could run.
-  function analyse(req) {
+  function analyse(req, owner) {
     abandon(); // one active job: kill any predecessor before starting
-    var job = { id: ++seq, req: req || {}, attempts: 0, done: false, watchdog: null };
+    var job = {
+      id: ++seq, req: req || {}, owner: owner || null,
+      attempts: 0, done: false, watchdog: null
+    };
     return new Promise(function (resolve) {
       job.resolve = resolve;
       active = job;
@@ -236,7 +273,10 @@
 
   // Abandon the in-flight analysis (leaving Review, navigating, or the game
   // being revised): terminate the worker and resolve its promise null.
-  function cancel() { abandon(); }
+  function cancel(owner) {
+    if (arguments.length) abandon(owner || null);
+    else abandon();
+  }
 
   // Evict the cached result for a request. The service caches any reply that
   // matches the request's position/config/turn, but the reflection layer
@@ -247,13 +287,15 @@
   // key exactly as run() does. Best-effort; resolves when the entry is gone.
   function invalidate(req) {
     var store = global.CoachStore;
-    if (!store || !store.deleteAnalysis || !req) return Promise.resolve();
+    if (!req) return Promise.resolve();
     try {
       var state = Chess.parseFen(req.fen);
       var opts = buildOpts(req);
       var ident = ChessyAnalysisCore.identity(state, opts);
       var key = keyFor(req, ident);
       if (!key) return Promise.resolve();
+      recent.delete(key);
+      if (!store || !store.deleteAnalysis) return Promise.resolve();
       return Promise.resolve(store.deleteAnalysis(key)).catch(function () {});
     } catch (e) { return Promise.resolve(); }
   }

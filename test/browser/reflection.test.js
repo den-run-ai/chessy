@@ -623,6 +623,22 @@ require('./helper').run('reflection', async function (t) {
   }, gid);
   check(corrupted, 'a valid analysis was cached, then corrupted in place');
 
+  // Clear the service's bounded in-memory handoff so the next request
+  // demonstrably exercises the corrupted IndexedDB row.
+  await page.goto(t.url + 'blank');
+  await page.goto(t.url);
+  await page.waitForSelector('#board .square');
+  await page.click('#tabReview');
+  await page.waitForSelector('.game-item');
+  await page.locator('.game-item').first().click();
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
+  });
+  await page.click('#flagMoment');
+  await page.fill('#reflectThreat', 'cached malformed line');
+  await page.fill('#reflectCandidates', 'e4');
+  await page.selectOption('#reflectEval', 'equal');
+
   const d0 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
   await page.click('#reflectVerify'); // serves the corrupted cache entry
   await verifyDone();
