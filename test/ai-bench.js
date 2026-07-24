@@ -1,12 +1,20 @@
 /*
- * AI search benchmark — measures nodes/time over 16 positions (8 families,
+ * AI search benchmark — measures nodes/time over 18 positions (9 families,
  * each also mirrored/color-swapped) and optionally compares the working
  * tree against a git ref loaded in an isolated vm context.
  *
+ * Beyond the geometric-mean node ratio it reports WORST-CASE and p90 node
+ * ratios and the total re-search count. The geometric mean alone hid the
+ * depth-6 tail-cost outlier on the game chessy202607240238 defence (nodes to
+ * resolve that position roughly doubled across an eval change while the d5
+ * geomean barely moved); the worst-case/p90 lines and the tracked 9th family
+ * surface that class of regression. Re-run with `--depth 6` to see the
+ * depth-transition cost the d5 default does not exercise.
+ *
  * Usage:
  *   node test/ai-bench.js                  # candidate numbers only
- *   node test/ai-bench.js --base main      # candidate vs ref: node ratio
- *   node test/ai-bench.js --depth 5        # fixed search depth (default 5)
+ *   node test/ai-bench.js --base main      # candidate vs ref: node ratios
+ *   node test/ai-bench.js --depth 6        # fixed search depth (default 5)
  *   node test/ai-bench.js --exact          # fail if move/score diverge from base
  *
  * Both engines get an identical seeded Math.random (re-seeded per position),
@@ -38,7 +46,14 @@ const FAMILIES = [
   ['rook ending (Lucena)', '1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1'],
   ['minor-piece ending', '8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1'],
   ['promotion race', '8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1'],
-  ['pawn ending (zugzwang)', '8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1']
+  ['pawn ending (zugzwang)', '8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1'],
+  // Real-game tactical defence (game chessy202607240238, Black to move at move
+  // 27) — the position whose depth-5→6 tail cost the geometric mean originally
+  // hid. Appended (never inserted) so the existing 0–15 indices, and the
+  // determinism self-check on POSITIONS[3], stay put. At --depth 6 Black must
+  // find g6, not the mate-allowing Rxa2; the exact move gate lives in
+  // test/ai-tactics.js — here it only feeds the worst-case/p90 tail metrics.
+  ['tactical defence (chessy202607240238)', 'r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27']
 ];
 
 // Mirror a FEN vertically and swap colors (a1<->a8, White<->Black).
@@ -123,18 +138,21 @@ const base = BASE ? loadEngine(BASE) : null;
 }
 
 let logRatioSum = 0, flagged = 0, mismatches = 0;
-let totC = 0, totB = 0, msC = 0, msB = 0;
+let totC = 0, totB = 0, msC = 0, msB = 0, rsC = 0, rsB = 0;
+const ratios = []; // { ratio, name } per position, for worst-case / p90
 console.log('depth ' + DEPTH + (BASE ? ', base ' + BASE : '') + '\n');
 for (const [name, fen] of POSITIONS) {
   const c = bench(cand, fen);
   let line = name.padEnd(34) + ' cand ' + String(c.nodes).padStart(8) +
-    ' n  d' + c.depth + ' ' + String(c.score).padStart(6) + ' ' + c.move.padEnd(6);
-  totC += c.nodes; msC += c.ms;
+    ' n ' + String(c.researches).padStart(4) + ' rs  d' + c.depth + ' ' +
+    String(c.score).padStart(6) + ' ' + c.move.padEnd(6);
+  totC += c.nodes; msC += c.ms; rsC += c.researches;
   if (base) {
     const b = bench(base, fen);
-    totB += b.nodes; msB += b.ms;
+    totB += b.nodes; msB += b.ms; rsB += b.researches;
     const ratio = c.nodes / b.nodes;
     logRatioSum += Math.log(ratio);
+    ratios.push({ ratio: ratio, name: name });
     line += ' | base ' + String(b.nodes).padStart(8) + ' n  ratio ' + ratio.toFixed(3);
     if (ratio > 1.25) { line += '  <-- >1.25x'; flagged++; }
     if (c.move !== b.move || c.score !== b.score || c.depth !== b.depth) {
@@ -144,11 +162,21 @@ for (const [name, fen] of POSITIONS) {
   }
   console.log(line);
 }
-console.log('\ncandidate: ' + totC + ' nodes, ' + msC + ' ms');
+console.log('\ncandidate: ' + totC + ' nodes, ' + msC + ' ms, ' + rsC + ' re-searches');
 if (base) {
   const geo = Math.exp(logRatioSum / POSITIONS.length);
-  console.log('base:      ' + totB + ' nodes, ' + msB + ' ms');
+  // Worst-case and p90 node ratio: the geometric mean averages the tail away,
+  // so a single position doubling in cost barely moves it. These order
+  // statistics expose that outlier explicitly. p90 uses the nearest-rank rule
+  // on the ascending ratios (ceil(0.9*n)-1).
+  const sorted = ratios.slice().sort(function (a, b) { return a.ratio - b.ratio; });
+  const worst = sorted[sorted.length - 1];
+  const p90 = sorted[Math.max(0, Math.ceil(0.9 * sorted.length) - 1)];
+  console.log('base:      ' + totB + ' nodes, ' + msB + ' ms, ' + rsB + ' re-searches');
   console.log('geometric mean node ratio (cand/base): ' + geo.toFixed(4));
+  console.log('worst-case node ratio: ' + worst.ratio.toFixed(4) + '  (' + worst.name + ')');
+  console.log('p90 node ratio:        ' + p90.ratio.toFixed(4) + '  (' + p90.name + ')');
+  console.log('re-search ratio (cand/base): ' + (rsB ? (rsC / rsB).toFixed(3) : 'n/a'));
   console.log('positions over 1.25x: ' + flagged + ', move/score divergences: ' + mismatches);
   if (EXACT && mismatches > 0) {
     console.error('FAIL: --exact requires identical move/score/depth on every position');
