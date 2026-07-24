@@ -725,5 +725,43 @@ require('./helper').run('revision-order', async function (t) {
     exhaustState.parkedNeedsRev,
     'a finish at sequence exhaustion is parked needsRev, not committed revless (no clobber)');
 
+  // (needsRev supersede) Two successive needsRev finishes of the SAME id (undo →
+  // revised finish while the floor is unreadable) are both parked revless. The
+  // LATER one (B) must SUPERSEDE the earlier (A) — the equal-revless tie must not
+  // keep the stale A (which a backup/Rematch would then treat as the latest).
+  await reset();
+  const superseded = await page.evaluate(function () {
+    const mk = function (sans) { return { history: sans.map(function (s) { return { san: s }; }) }; };
+    const cfg = { mode: 'pvp', difficulty: '2', timeControl: 'none' };
+    ChessyArchive.record(mk(['e4', 'e5']), cfg, { over: true, result: '1-0', reason: 'resignation' },
+      'nr-id', { endedAt: 10, parkOnly: true, needsRev: true }); // A
+    ChessyArchive.record(mk(['d4', 'd5', 'Qd3']), cfg, { over: true, result: '1-0', reason: 'checkmate' },
+      'nr-id', { endedAt: 20, parkOnly: true, needsRev: true }); // B — the later revision
+    const map = JSON.parse(localStorage.getItem('chessy-pending-archive-v1') || 'null');
+    return map && map['nr-id'] ? { sans: map['nr-id'].rec.sans.join(','), needsRev: map['nr-id'].rec.needsRev } : null;
+  });
+  check(superseded && superseded.sans === 'd4,d5,Qd3' && superseded.needsRev === true,
+    'a later needsRev finish supersedes an earlier same-id needsRev park');
+
+  // (park failure surfaces) A deferred finish whose park() cannot persist
+  // (localStorage blocked) must REJECT — record() must not report false success
+  // and let the caller clear its note while nothing is durable.
+  await reset();
+  const parkFail = await page.evaluate(function () {
+    const mk = function (sans) { return { history: sans.map(function (s) { return { san: s }; }) }; };
+    const cfg = { mode: 'pvp', difficulty: '2', timeControl: 'none' };
+    const realSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+      if (k === 'chessy-pending-archive-v1') throw new Error('quota');
+      return realSet.call(this, k, v);
+    };
+    return ChessyArchive.record(mk(['e4', 'e5']), cfg, { over: true, result: '1-0', reason: 'resignation' },
+      'pf-id', { endedAt: 10, parkOnly: true, needsRev: true })
+      .then(function () { Storage.prototype.setItem = realSet; return 'resolved'; },
+            function () { Storage.prototype.setItem = realSet; return 'rejected'; });
+  });
+  check(parkFail === 'rejected',
+    'a deferred finish whose park cannot persist rejects rather than reporting false success');
+
   await reset(); // leave a clean store for the console-error check
 });

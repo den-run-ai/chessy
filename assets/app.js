@@ -1349,7 +1349,12 @@
           // unaffected (no mint needed).
           if (!seeded) {
             ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
-              { endedAt: bootEndedAt, parkOnly: true, needsRev: true });
+              { endedAt: bootEndedAt, parkOnly: true, needsRev: true })
+              .then(null, function () {
+                // Park failed (storage full/blocked) — the deferred finish is not
+                // durable; surface it on the always-visible page note.
+                if (archiveAttempts.get(bootId) === seqAtCall) showArchiveFailure(archiveBootNoteEl, bootId);
+              });
             return;
           }
           if (ChessyArchive.nextRev) {

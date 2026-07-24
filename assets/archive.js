@@ -248,7 +248,15 @@
     // and the pending copy stays. Live finishes always carry a rev, so this only
     // ever withholds a demonstrably not-newer copy; the stale record is dropped
     // rather than parked (a null token means commit() clears nothing).
-    if (cur && cur.rec) {
+    //
+    // EXCEPTION: a `needsRev` record is a genuinely-new finish that could not be
+    // assigned a rev yet (floor unreadable / sequence exhausted). It is the LATEST
+    // finish of its live game, so it SUPERSEDES any same-id entry — an earlier
+    // needsRev park of the same instance, or an older numeric-rev park — instead
+    // of being refused on the revless tie. The rev-ordering guards apply only when
+    // the incoming record is not needsRev (protecting a pending revision from a
+    // stale, legacy revless boot re-offer).
+    if (cur && cur.rec && !rec.needsRev) {
       const curRev = Number.isFinite(cur.rec.rev) ? cur.rec.rev : -Infinity;
       const recRev = Number.isFinite(rec.rev) ? rec.rev : -Infinity;
       if (recRev < curRev) return null;
@@ -345,7 +353,15 @@
     // parked copy can't resurrect; a deferred finish is minted a rev and committed
     // by a later boot's reconcile once the floor is known.
     if (operationActive() || (opts && opts.parkOnly)) {
-      park(rec);
+      const token = park(rec);
+      // A DEFERRED finish (parkOnly) that could not be parked — localStorage full
+      // or blocked — is NOT durable: reject so the caller surfaces the failure and
+      // does not clear its note. Otherwise a Rematch would overwrite the needsRev
+      // live save and lose the finished game. (The operationActive path stays best
+      // effort: the game is re-derivable from the live save the op is replacing.)
+      if (opts && opts.parkOnly && token === null) {
+        return Promise.reject(new Error('could not park deferred finish'));
+      }
       return Promise.resolve(null);
     }
     return commit(rec, park(rec));
