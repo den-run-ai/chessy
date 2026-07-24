@@ -20,7 +20,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   Zobrist-keyed transposition table, and hash/killer/history move ordering,
   running in a Web Worker so the UI never blocks. The evaluation is tapered
   between midgame and endgame (the king hides, then centralizes) and scores
-  mobility, doubled/isolated/passed pawns, and the king's pawn shield. The
+  mobility, doubled/isolated/passed pawns, and king safety — the pawn shield,
+  open/semi-open files near the king, and a bounded coordinated king-ring term
+  for coordinated attacks. The
   search knows about draws: repetitions of game or search-path positions and
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own
@@ -135,10 +137,12 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 ```sh
 node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
+node test/ai-eval.js        # feature-sensitive king-safety evaluation terms
+node --jitless test/ai-master.js  # literal 5 s Master regression on a slow runtime
 ```
 
 Two more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
---base origin/main` measures search nodes over 16 benchmark positions
+--base origin/main` measures search nodes over 18 benchmark positions
 against a git ref, and `node test/ai-match.js --base origin/main` plays an
 800-game paired self-play match (100 openings x 4 seeds x both colors; also
 available as the "AI self-play match" workflow_dispatch action).

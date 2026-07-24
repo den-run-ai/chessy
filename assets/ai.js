@@ -185,36 +185,56 @@
   const PASSED_MG = [0, 5, 10, 20, 35, 60, 80];   // by ranks advanced from home
   const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
 
+  // ---- King safety (bounded midgame terms; #72) ----
+  // Ring pressure weights king-zone attacks by piece and coordinated attacker
+  // count; a lone attacker scores zero and the cap stays below half a minor.
+  const KING_ATK_WEIGHT = { P: 0, N: 2, B: 2, R: 3, Q: 5, K: 0 };
+  // Percent multiplier by distinct attacker count; saturates at seven.
+  const KING_ATK_COUNT_MUL = [0, 0, 50, 75, 88, 94, 97, 99];
+  const KING_ATK_SCALE = 6;
+  const KING_ATK_CAP = 150;
+  // Open/semi-open shelter covers the king file and its neighbours; a clear
+  // enemy heavy-piece ray through the front ring adds danger.
+  const SHELTER_OPEN = 10;     // per king-adjacent file lacking a friendly pawn
+  const SHELTER_RAY = 12;      // extra for a clear enemy rook/queen ray
+  const SHELTER_CAP = 60;
+
   const DIAG = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
   const ORTHO = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   const ALL_DIRS = DIAG.concat(ORTHO);
   const N_JUMPS = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
 
-  // Squares a piece can move to (empty or enemy-occupied). Pawns and kings
-  // are excluded: pawn play is scored by the structure terms, king freedom is
-  // not a middlegame asset.
-  function mobility(board, i, type, color) {
+  // Count mobility and, through RING, attacked enemy-king-ring squares in one
+  // walk. Pawns/kings are excluded; `ekr`/`ekc` use -8 to disable ring tallying.
+  let RING = 0;
+  function mobility(board, i, type, color, ekr, ekc) {
     const r = Math.floor(i / 8), c = i % 8;
-    let count = 0;
+    let count = 0, ring = 0;
     if (type === 'N') {
       for (const [dr, dc] of N_JUMPS) {
         const nr = r + dr, nc = c + dc;
         if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
         const p = board[nr * 8 + nc];
         if (!p || p[0] !== color) count++;
+        if (nr >= ekr - 1 && nr <= ekr + 1 && nc >= ekc - 1 && nc <= ekc + 1) ring++;
       }
+      RING = ring;
       return count;
     }
     const dirs = type === 'B' ? DIAG : type === 'R' ? ORTHO : ALL_DIRS;
     for (const [dr, dc] of dirs) {
       let nr = r + dr, nc = c + dc;
       while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        // A slider attacks a ring square only up to (and including) the first
+        // blocker on the ray — so count ring membership BEFORE the break.
+        if (nr >= ekr - 1 && nr <= ekr + 1 && nc >= ekc - 1 && nc <= ekc + 1) ring++;
         const p = board[nr * 8 + nc];
         if (p) { if (p[0] !== color) count++; break; }
         count++;
         nr += dr; nc += dc;
       }
     }
+    RING = ring;
     return count;
   }
 
@@ -228,18 +248,29 @@
   // midgame tables in the endgame. Terms: phase material + PST, mobility,
   // doubled/isolated/passed pawns, a midgame pawn shield in front of the
   // king, and a lone-king mop-up gradient so basic mates convert.
-  function evaluate(board) {
+  // `out` is an optional caller-owned trace used by feature-sensitive tests.
+  // Normal search omits it, so tracing adds no allocation on the eval hot path.
+  function evaluate(board, out) {
     let mg = 0, eg = 0, phase = 0;
     const pawnFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
     const pawnSquares = { w: [], b: [] };
     const kings = { w: -1, b: -1 };
     const force = { w: 0, b: 0 };  // count of non-king men (pawns + pieces)
     const pieces = { w: 0, b: 0 }; // count of non-king, non-pawn material (mating force)
+    // Allocation-free king-safety accumulators, indexed by defending color.
+    let ringWeightW = 0, ringWeightB = 0;
+    let ringCountW = 0, ringCountB = 0;
+    let shelterW = 0, shelterB = 0;
+    // Locate both kings before the mobility walk; -8 disables malformed boards.
+    const wk = board.indexOf('wK'), bk = board.indexOf('bK');
+    const bkr = bk >= 0 ? bk >> 3 : -8, bkc = bk >= 0 ? bk & 7 : -8;
+    const wkr = wk >= 0 ? wk >> 3 : -8, wkc = wk >= 0 ? wk & 7 : -8;
 
     for (let i = 0; i < 64; i++) {
       const p = board[i];
       if (!p) continue;
       const color = p[0], type = p[1];
+      const def = color === 'w' ? 'b' : 'w';  // king this piece could threaten
       // Mirror the square vertically for Black.
       const sq = color === 'w' ? i : (7 - Math.floor(i / 8)) * 8 + (i % 8);
       phase += PHASE[type];
@@ -253,8 +284,14 @@
         kings[color] = i;
       } else {
         pieces[color]++;
-        const mob = mobility(board, i, type, color) * MOBILITY[type];
+        const mob = mobility(board, i, type, color,
+          color === 'w' ? bkr : wkr, color === 'w' ? bkc : wkc) * MOBILITY[type];
         m += mob; e += mob;
+        // RING is this piece's attacked-square count on the enemy king ring.
+        if (RING > 0) {
+          if (def === 'w') { ringWeightW += KING_ATK_WEIGHT[type] * RING; ringCountW++; }
+          else { ringWeightB += KING_ATK_WEIGHT[type] * RING; ringCountB++; }
+        }
       }
       if (color === 'w') { mg += m; eg += e; } else { mg -= m; eg -= e; }
     }
@@ -291,18 +328,47 @@
       // only — the tapering itself retires the term as material comes off).
       const k = kings[color];
       if (k >= 0) {
-        const kr = Math.floor(k / 8) + (color === 'w' ? -1 : 1), kc = k % 8;
+        const kc = k % 8;
+        const kr = Math.floor(k / 8) + (color === 'w' ? -1 : 1);
         if (kr >= 0 && kr < 8) {
           for (let dc = -1; dc <= 1; dc++) {
             const cc = kc + dc;
             if (cc >= 0 && cc < 8 && board[kr * 8 + cc] === color + 'P') mg += sign * SHIELD;
           }
         }
+        // From the king outward, only the first blocker can shelter a file.
+        let shelter = 0;
+        for (let dc = -1; dc <= 1; dc++) {
+          const cc = kc + dc;
+          if (cc >= 0 && cc < 8) shelter += shelterFilePenalty(board, k, cc, color);
+        }
+        if (shelter > SHELTER_CAP) shelter = SHELTER_CAP;
+        if (color === 'w') shelterW = shelter; else shelterB = shelter;
+        mg -= sign * shelter;
       }
     }
 
+    // Apply capped ring pressure from White's perspective.
+    const ringPenaltyW = kingAttackPenalty(ringWeightW, ringCountW);
+    const ringPenaltyB = kingAttackPenalty(ringWeightB, ringCountB);
+    mg += ringPenaltyB;
+    mg -= ringPenaltyW;
+
     const ph = Math.min(phase, PHASE_MAX);
-    let score = Math.round((mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX);
+    if (out) {
+      out.phase = ph;
+      out.wRingWeight = ringWeightW;
+      out.bRingWeight = ringWeightB;
+      out.wRingCount = ringCountW;
+      out.bRingCount = ringCountB;
+      out.wRingPenalty = ringPenaltyW;
+      out.bRingPenalty = ringPenaltyB;
+      out.wShelter = shelterW;
+      out.bShelter = shelterB;
+    }
+    // Half-away-from-zero rounding preserves exact color antisymmetry.
+    const tapered = (mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX;
+    let score = tapered < 0 ? -Math.round(-tapered) : Math.round(tapered);
 
     // Mop-up: when one side is reduced to a bare king, add the classic mating
     // gradient — drive the lone king toward a corner and march the winning king
@@ -323,6 +389,27 @@
     return score;
   }
 
+  // Linear coordinated ring pressure, count-gated and capped.
+  function kingAttackPenalty(weight, count) {
+    if (count < 2) return 0;
+    const mul = KING_ATK_COUNT_MUL[count < 7 ? count : 7];
+    const v = Math.round(weight * KING_ATK_SCALE * mul / 100);
+    return v > KING_ATK_CAP ? KING_ATK_CAP : v;
+  }
+
+  // Shelter on one file: the nearest piece is all that can block a direct ray.
+  function shelterFilePenalty(board, king, file, color) {
+    const step = color === 'w' ? -1 : 1;
+    for (let r = (king >> 3) + step; r >= 0 && r < 8; r += step) {
+      const p = board[r * 8 + file];
+      if (!p) continue;
+      if (p === color + 'P') return 0;
+      return SHELTER_OPEN +
+        (p[0] !== color && (p[1] === 'R' || p[1] === 'Q') ? SHELTER_RAY : 0);
+    }
+    return SHELTER_OPEN;
+  }
+
   // Mating gradient for a lone king (loser) hunted by the winner's king.
   // Rewards pushing the loser off-center and closing the kings' distance —
   // the standard "mop-up" heuristic. Magnitudes (up to ~48 + ~24 cp) are large
@@ -341,11 +428,8 @@
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
   const QMAX = 16;          // quiescence ply bound: cut off runaway lines
-  // Quiet-check extension depth: for the first QCHECK_PLIES quiescence plies,
-  // quiescence also searches quiet (non-capturing) checks (see quiesceNode).
-  // 1 = only the horizon leaf itself, which is exactly where a quiet mating
-  // check would otherwise be missed, at minimum added width.
-  const QCHECK_PLIES = 1;
+  // At most two forcing quiet checks, their evasions, and a final quiet mate.
+  const QCHECK_PLIES = 5;
   const TT_MAX = 1 << 21;   // transposition table entry cap
   const ABORT = { timeUp: true }; // thrown to unwind when the budget expires
 
@@ -518,6 +602,24 @@
     }
     return false;
   }
+  // Classify zero, one, or multiple legal replies, stopping at `limit`.
+  function legalMoveCountUpTo(state, pseudo, limit, ctx) {
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    const timed = ctx && ctx.deadline !== Infinity;
+    let found = 0;
+    if (timed && Date.now() >= ctx.deadline) throw ABORT;
+    for (const m of (pseudo || Chess.pseudoMoves(state))) {
+      // Uncounted move generation must still honor the real deadline.
+      if (timed && Date.now() >= ctx.deadline) throw ABORT;
+      const next = Chess.applyMove(state, m);
+      const ks = m.piece[1] === 'K' ? m.to : kingSq;
+      if (Chess.isAttacked(next.board, ks, enemy)) continue;
+      found++;
+      if (found >= limit) return found;
+    }
+    return found;
+  }
 
   function checkTime(ctx) {
     // Check the node budget BEFORE counting this node, so exactly nodeLimit
@@ -529,8 +631,8 @@
     if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
   }
 
-  // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,
-  // then quiet moves by history score.
+  // Move ordering: hash move, promotions, forcing quiescence checks, captures
+  // (MVV-LVA), killer moves, then quiet moves by history score.
   function orderMoves(moves, ttPk, ply, ctx, turn) {
     const killers = ctx.killers[ply];
     const hist = turn === 'w' ? ctx.histW : ctx.histB;
@@ -539,6 +641,7 @@
       let s;
       if (pk === ttPk) s = 2e9;
       else if (m.promotion) s = 1e9 + VALUES[m.promotion];
+      else if (m.qcheck) s = 5e8;
       else if (m.captured) s = 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
       else if (killers && pk === killers[0]) s = 1e7;
       else if (killers && pk === killers[1]) s = 1e7 - 1;
@@ -560,7 +663,8 @@
   // (and check evasions) until the position is quiet, so the evaluation never
   // stops in the middle of an exchange (the "horizon effect"). Bounded to
   // QMAX plies so pathological lines can't run away.
-  function quiesceNode(state, alpha, beta, ply, qply, ctx) {
+  function quiesceNode(state, alpha, beta, ply, qply, ctx, afterCheck,
+                       knownR1, knownR2) {
     checkTime(ctx);
     ctx.qnodes++;
     // Repetition-dependency out-param, same contract as searchNode: the
@@ -574,19 +678,23 @@
     const inChk = Chess.isAttacked(state.board, kingSq, enemy);
 
     // Repetition awareness inside quiescence (shared prelude with searchNode).
-    // A capture or promotion — quiescence's staple — is irreversible and resets
-    // the halfmove clock, and no position can recur without a >=4-ply reversible
-    // round trip, so below halfmove 4 no path cycle or game-history threefold is
-    // possible and the hash/scan/push is skipped entirely. Above it (a check-
-    // evasion chain) a repetition must score 0 exactly as in the main search:
-    // otherwise a threefold first seen past the horizon (e.g. a check evasion
-    // into it) is scored by its material, and a path-dependent draw would leave
-    // repPly = Infinity and let an ancestor cache a score its history can't hold.
-    let rr1 = 0, rr2 = 0;
+    // A current position cannot already recur below halfmove 4, so the entry
+    // scan remains avoidable there. It can still ANCHOR a future four-ply
+    // check/evasion cycle, however: each reversible edge below lazily pushes
+    // its parent even when that parent's clock is 0..3. Captures, pawn moves,
+    // and promotions reset the clock and cannot return to their parent, so
+    // those edges need no anchor. At the main-search horizon, reuse the
+    // repetition hash searchNode already computed rather than walking 64
+    // squares again.
+    let rr1 = knownR1, rr2 = knownR2;
+    let haveRepKey = knownR1 !== undefined;
     const trackRep = state.halfmove >= 4;
     if (trackRep) {
-      hashState(state);
-      rr1 = R1; rr2 = R2;
+      if (!haveRepKey) {
+        hashState(state);
+        rr1 = R1; rr2 = R2;
+        haveRepKey = true;
+      }
       checkRep(ctx, rr1, rr2);
       if (REP_DRAW) { ctx.repPly = REP_PLY; return 0; }
     }
@@ -612,9 +720,6 @@
       else { if (best <= alpha) return best; if (best < beta) beta = best; }
     }
 
-    // Only a node that survives to explore children joins the search path, so a
-    // deeper quiescence line can detect a cycle back to here.
-    if (trackRep) { ctx.path1.push(rr1); ctx.path2.push(rr2); }
     let repMin = Infinity;
 
     // Move set. In check: every evasion (the full pseudo list; the loop filters
@@ -630,16 +735,11 @@
     // material) effectively never fires. Every capture is searched, which also
     // makes quiescence scores exact (no window-sensitive pruning artifacts).
     //
-    // Quiet-check extension: for the first QCHECK_PLIES quiescence plies, also
-    // search quiet (non-capture, non-promotion) moves that give check. Plain
-    // quiescence resolves only captures/promotions, so a QUIET mating check one
-    // ply past the horizon is invisible — the miss that let a depth-5 Master
-    // search play 27...Rxa2?? into the forced 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#
-    // (game log chessy202607240238), whose final blow is the quiet check Qh8#.
-    // The check forces the opponent straight into the (already full-width)
-    // evasion branch, proving the mate without completing a whole extra main-
-    // search ply. Stand-pat stays the floor above, so the added moves keep this
-    // node a sound alpha-beta bound (extra options never invalidate stand-pat).
+    // Within QCHECK_PLIES, search an immediate quiet mate or a quiet check with
+    // exactly one legal reply. A losing-side knight check gets up to three
+    // replies at qply 0; one single-reply follow-up is admitted after its
+    // evasion, and later layers admit only mate. This proves the tracked
+    // 27...Rxa2?? 28.Ne7+ ... 29.Qh7+ ... 30.Qh8# without ordinary checks.
     // Preferred over a stand-pat mate scan: the recursion is counted as nodes
     // and alpha-beta-pruned, where a per-leaf mate scan's movegen is uncounted
     // work that roughly quartered the node rate under the same time budget.
@@ -648,12 +748,32 @@
       moves = pseudo;
     } else {
       moves = [];
-      const genChecks = qply < QCHECK_PLIES;
+      // At the horizon and after the first evasion, admit a forcing quiet
+      // check under the bounded rules below; later layers admit only mate.
+      const genChecks = qply < QCHECK_PLIES && (qply === 0 || afterCheck);
       for (const m of pseudo) {
         if (m.captured || m.promotion) { moves.push(m); continue; }
         if (!genChecks) continue;
         const nb = Chess.applyMove(state, m);
-        if (Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) moves.push(m);
+        const ek = nb.board.indexOf(enemy + 'K');
+        if (!Chess.isAttacked(nb.board, ek, turn)) continue;
+        // A losing side may need a direct knight check with a few replies to
+        // expose a forced mate (the tracked Ne7+ has three). This selective
+        // heuristic is tied to stand-pat, not a claim of general mate detection.
+        const dr = Math.abs((m.to >> 3) - (ek >> 3));
+        const dc = Math.abs((m.to & 7) - (ek & 7));
+        const knightRescue = qply === 0 && m.piece[1] === 'N' &&
+          ((dr === 1 && dc === 2) || (dr === 2 && dc === 1)) &&
+          (maximizing ? best < 0 : best > 0);
+        const replies = legalMoveCountUpTo(nb, null, knightRescue ? 4 : 2, ctx);
+        // A qply-0 check's evasion lands on attacker qply 2. Starting the
+        // horizon in check instead lands on attacker qply 1.
+        const forceLayer = qply === 0 || (afterCheck && qply <= 2);
+        if (replies === 0 || (forceLayer && replies === 1) ||
+            (knightRescue && replies <= 3)) {
+          m.qcheck = 1;
+          moves.push(m);
+        }
       }
     }
 
@@ -661,7 +781,20 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
-      const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx);
+      // Anchor the parent only across a reversible edge. This catches a cycle
+      // rooted below a capture-reset clock without paying a hash/path cost for
+      // the irreversible capture/pawn/promotion branches that dominate qsearch.
+      const anchorRep = next.halfmove === state.halfmove + 1;
+      if (anchorRep) {
+        if (!haveRepKey) {
+          hashState(state);
+          rr1 = R1; rr2 = R2;
+          haveRepKey = true;
+        }
+        ctx.path1.push(rr1); ctx.path2.push(rr2);
+      }
+      const score = quiesceNode(next, alpha, beta, ply + 1, qply + 1, ctx, inChk);
+      if (anchorRep) { ctx.path1.pop(); ctx.path2.pop(); }
       if (ctx.repPly < repMin) repMin = ctx.repPly; // min over searched children
       if (maximizing) {
         if (score > best) best = score;
@@ -672,7 +805,6 @@
       }
       if (beta <= alpha) break;
     }
-    if (trackRep) { ctx.path1.pop(); ctx.path2.pop(); }
     ctx.repPly = repMin; // propagate the subtree's repetition dependency upward
     return best;
   }
@@ -721,7 +853,9 @@
     // tell a checkmate from a quiet position or a stalemate from a won one,
     // which let shallow searches walk into (or refuse) forced mates.
     if (depth <= 0) {
-      if (ctx.quiesce) return quiesceNode(state, alpha, beta, ply, 0, ctx);
+      if (ctx.quiesce) {
+        return quiesceNode(state, alpha, beta, ply, 0, ctx, false, r1, r2);
+      }
       if (!hasLegalMove(state)) {
         return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
       }
@@ -1085,6 +1219,10 @@
     hashKey: hashKey,
     repKey: repKey,
     MATE: MATE,
-    MATE_NEAR: MATE_NEAR
+    MATE_NEAR: MATE_NEAR,
+    _test: Object.freeze({
+      kingAttackPenalty: kingAttackPenalty,
+      shelterFilePenalty: shelterFilePenalty
+    })
   };
 })(typeof window !== 'undefined' ? window : globalThis);
