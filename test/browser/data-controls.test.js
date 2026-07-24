@@ -121,6 +121,44 @@ require('./helper').run('data-controls', async function (t) {
     'backup fails safely when the pending recovery queue cannot be read');
   await page.evaluate(function () { window.__restorePendingRead(); });
 
+  // A corrupt entry must make the whole queue unknown. Silently filtering it
+  // would claim a complete backup while dropping what may be the only copy of
+  // that finished game. The map key is also part of the queue's identity
+  // contract: a mismatched rec.id cannot be guessed safely.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1',
+      JSON.stringify({ 'lost-game': null }));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'pending-game recovery queue is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/pending-game recovery queue is malformed/.test(
+    await page.textContent('#dataStatus')),
+  'backup rejects a corrupt pending-queue entry instead of silently dropping it');
+
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'map-id': { w: 't', rec: { id: 'different-id', source: 'play',
+        sans: ['e4'], result: '*', reason: 'imported', mode: 'pvp',
+        plies: 1, createdAt: 8 } }
+    }));
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error' &&
+      document.getElementById('dataStatus').textContent.indexOf(
+        'pending-game recovery queue is malformed') !== -1;
+  }, { timeout: 5000 });
+  check(/pending-game recovery queue is malformed/.test(
+    await page.textContent('#dataStatus')),
+  'backup rejects a pending record whose id disagrees with its map key');
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+  });
+
   // An unreadable fence is likewise unknown, not empty. With a recoverable
   // parked ending present, fail rather than exporting a possibly-cleared game.
   await page.evaluate(function () {
