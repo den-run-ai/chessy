@@ -80,7 +80,26 @@ const SPECS = [
   ['underpromote N, royal fork', '8/2q1P1k1/8/8/8/8/P7/4K3 w - - 0 1', ['e7e8N'], 12000],
   ['take the rook, not the knight', '6k1/8/8/2r3n1/8/4B3/8/6K1 w - - 0 1', ['e3c5'], 8000],
   ['decline the poisoned pawn', '6k1/8/3p4/4p2Q/8/8/8/6K1 w - - 0 1', null, 8000, ['h5e5']],
-  ['K+P: only Ke6 keeps the win', '4k3/8/3K4/4P3/8/8/8/8 w - - 0 1', ['d6e6'], 30000]
+  ['K+P: only Ke6 keeps the win', '4k3/8/3K4/4P3/8/8/8/8 w - - 0 1', ['d6e6'], 30000],
+  // --- Attacker side of the game chessy202607240238 quiet-mate horizon. The
+  // regression below guards the DEFENDER (Chessy must not walk into the mate);
+  // these guard the ATTACKER (Chessy must SEE it). The forced win is
+  // 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#, whose final blow Qh8# is a QUIET
+  // (non-capturing) check. quiesceNode's bounded quiet-check extension is what
+  // lets a shallow search PROVE the deeper two mates within the budgets below —
+  // remove the extension (QCHECK_PLIES = 0) and both requireMate assertions
+  // bite: the mate-in-2 is scored by material at depth 2 (~-444, not a mate)
+  // and the mate-in-3 is not found until a whole extra main-search ply (the
+  // engine plays Ng4 for ~-228 at 150k nodes instead of Ne7+). The node budgets
+  // sit in a machine-independent (deterministic, randomize:false) window: wide
+  // enough above the extension-assisted mate depth to never false-fail, tight
+  // enough below the plain-quiescence depth to keep proving the extension is
+  // load-bearing. The mate-in-1 is main-search-visible either way and stands as
+  // documentation of the motif (and a guard that a quiet mate-in-1 is never
+  // lost) — it is the one case the extension does not change.
+  ['find the quiet mate Qh8# (mate-in-1)', '5k2/1ppqrppQ/1b2n3/3pP3/1P5B/3B3P/r5P1/2R4K w - - 2 30', ['h7h8'], 4000, null, true],
+  ['find the mating attack Qh7+ (mate-in-2)', '6k1/1ppqrpp1/1b2n3/3pP2Q/1P5B/3B3P/r5P1/2R4K w - - 0 29', ['h5h7'], 3000, null, true],
+  ['find the mating attack Ne7+ (mate-in-3)', '4r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/r5P1/2R4K w - - 0 28', null, 150000, null, true]
 ];
 
 console.log('fixed-node tactics/defence');
