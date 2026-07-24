@@ -1,0 +1,62 @@
+{
+  "corpus": "eval-v1",
+  "generator_version": "eval-v1.0.0",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
+  "mode": "shard",
+  "cases": 64,
+  "analyse_opts": {
+    "nodeLimit": 3000,
+    "nodeBudget": 2000000,
+    "multiPV": 3,
+    "pvLen": 4,
+    "quiesce": true
+  },
+  "axes": {
+    "legalRoot": {
+      "checked": 64,
+      "pass": 64,
+      "fail": 0
+    },
+    "terminalStatus": {
+      "checked": 60,
+      "pass": 60,
+      "fail": 0
+    },
+    "specialMoves": {
+      "checked": 22,
+      "pass": 22,
+      "fail": 0
+    },
+    "expectedLegal": {
+      "checked": 13,
+      "pass": 13,
+      "fail": 0
+    },
+    "pvReplay": {
+      "checked": 6,
+      "pass": 6,
+      "fail": 0
+    },
+    "perspectiveMate": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    },
+    "symmetry": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    },
+    "determinism": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    }
+  },
+  "totals": {
+    "checks": 177,
+    "pass": 177,
+    "fail": 0
+  },
+  "gate": "PASS"
+}

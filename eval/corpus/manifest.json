@@ -1,0 +1,104 @@
+{
+  "corpus": "eval-v1",
+  "generator_version": "eval-v1.0.0",
+  "retrieval_date": "2026-07-23",
+  "total": 117,
+  "shard_size": 64,
+  "counts_by_category": {
+    "en-passant": 6,
+    "castling": 5,
+    "promotion": 5,
+    "stalemate": 4,
+    "checkmate": 3,
+    "mate-in-1": 4,
+    "fifty-move": 3,
+    "threefold": 2,
+    "insufficient-material": 3,
+    "kpk": 1,
+    "rook-endgame": 1,
+    "opening": 40,
+    "puzzle": 40
+  },
+  "counts_by_split": {
+    "train": 82,
+    "val": 21,
+    "test": 14
+  },
+  "counts_by_license": {
+    "MIT": 37,
+    "CC0-1.0": 80
+  },
+  "split_policy": "70/15/15 train/val/test by stable id/game hash; same-game puzzles share a split; never tune on the test split",
+  "analyse_opts": {
+    "nodeLimit": 3000,
+    "nodeBudget": 2000000,
+    "multiPV": 3,
+    "pvLen": 4,
+    "quiesce": true
+  },
+  "ndjson": "eval-v1.ndjson",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
+  "sources": {
+    "lichess-puzzles-v1.csv": {
+      "source_url": "https://database.lichess.org/lichess_db_puzzle.csv.zst",
+      "license": "CC0-1.0",
+      "dump_last_modified": "Wed, 01 Jul 2026 08:58:23 GMT",
+      "selection": "8 per rating band (<1000, 1000-1399, 1400-1799, 1800-2199, 2200+), sorted by PuzzleId",
+      "count": 40,
+      "sha256": "5fe613257220313a76f09435940b605d4c0c9139447a4ef89f357661c1533feb"
+    },
+    "openings-v1.tsv": {
+      "source_url": "https://raw.githubusercontent.com/lichess-org/chess-openings/master",
+      "license": "CC0-1.0",
+      "selection": "8 per ECO volume, 6-12 plies, even stride",
+      "count": 40,
+      "sha256": "6febbaa43f4c296f88940a567dfd7272b093643a0dafcda94cb8d3bbecbc8ec8",
+      "volumes": {
+        "a": {
+          "eligible": 366,
+          "picked": 8
+        },
+        "b": {
+          "eligible": 425,
+          "picked": 8
+        },
+        "c": {
+          "eligible": 743,
+          "picked": 8
+        },
+        "d": {
+          "eligible": 328,
+          "picked": 8
+        },
+        "e": {
+          "eligible": 179,
+          "picked": 8
+        }
+      }
+    }
+  },
+  "schema": [
+    "id",
+    "source_url",
+    "source_id",
+    "license",
+    "retrieval_date",
+    "source_sha",
+    "fen",
+    "source_fen",
+    "setup_move",
+    "move_history",
+    "expected_moves",
+    "phase",
+    "themes",
+    "rating_band",
+    "branching",
+    "split_group",
+    "generator_version",
+    "seed",
+    "core",
+    "shard",
+    "assert"
+  ],
+  "note": "Derived offline from committed CC0 sources (eval/corpus/sources/, fetched by test/eval/fetch-corpus.js) + engine-generated MIT fixtures. See eval/LICENSE-REPORT.md."
+}
