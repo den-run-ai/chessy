@@ -109,6 +109,94 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
   }
 }
 
+// --- Horizon quiet-mate defence (regression for game log chessy202607240238).
+// At the old 2s Master budget the engine completed only depth 5 and played
+// 27...Rxa2??, walking into the forced 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#. The
+// mating blow Qh8# is a QUIET check one ply past a captures-only quiescence
+// horizon, so the depth-5 leaf scored the position by its (still winning!)
+// material and grabbed a2. quiesceNode's bounded quiet-check extension now sees
+// it. Ground truth is an INDEPENDENT exact forced-mate solver (full width, no
+// evaluation, memoised) — never the engine under test — so the assertion is
+// "the move Chessy plays allows no forced mate", not "Chessy plays move X".
+console.log('horizon quiet-mate defence (game chessy202607240238)');
+(function () {
+  const memoF = new Map(), memoD = new Map();
+  // Legal successors, each tagged with whether the move gives check and a cheap
+  // "likely escape" score (king move / capture) used only to order for an
+  // earlier cutoff — ordering never changes the exact boolean result.
+  function succ(state) {
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    const out = [];
+    for (const m of Chess.pseudoMoves(state)) {
+      const nx = Chess.applyMove(state, m);
+      const ks = m.piece[1] === 'K' ? m.to : kingSq;
+      if (Chess.isAttacked(nx.board, ks, enemy)) continue; // illegal
+      out.push({
+        nx: nx,
+        chk: Chess.isAttacked(nx.board, nx.board.indexOf(enemy + 'K'), turn) ? 1 : 0,
+        esc: (m.piece[1] === 'K' ? 1 : 0) + (m.captured ? 1 : 0)
+      });
+    }
+    return out;
+  }
+  // Can the side to move force checkmate within `plies` plies (attacker and
+  // defender moves both counted)? Tries checking moves first to cut off sooner.
+  function forcesMate(state, plies) {
+    if (plies <= 0) return false;
+    const k = Chess.positionKey(state) + '|' + plies;
+    const c = memoF.get(k); if (c !== undefined) return c;
+    const s = succ(state).sort(function (a, b) { return b.chk - a.chk; });
+    let r = false;
+    for (const e of s) { if (defenderMated(e.nx, plies - 1)) { r = true; break; } }
+    memoF.set(k, r); return r;
+  }
+  // Is the side to move checkmated now, or unable to avoid forced mate within
+  // `plies`? Returns false the moment one reply escapes (likely escapes first).
+  function defenderMated(state, plies) {
+    const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
+    const kingSq = state.board.indexOf(turn + 'K');
+    const s = succ(state);
+    if (!s.length) return Chess.isAttacked(state.board, kingSq, enemy); // mate vs stalemate
+    if (plies <= 0) return false;
+    const k = Chess.positionKey(state) + '|' + plies;
+    const c = memoD.get(k); if (c !== undefined) return c;
+    s.sort(function (a, b) { return b.esc - a.esc; });
+    let r = true;
+    for (const e of s) { if (!forcesMate(e.nx, plies - 1)) { r = false; break; } }
+    memoD.set(k, r); return r;
+  }
+
+  const fen = 'r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27';
+  const MATE_PLIES = 5;      // 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#
+  const blunder = 'a8a2';    // 27...Rxa2??
+  for (const flip of [false, true]) {
+    const f = flip ? mirrorFen(fen) : fen;
+    const bad = flip ? mirrorMove(blunder) : blunder;
+    const st = Chess.parseFen(f);
+    const badMove = Chess.legalMoves(st).find(function (m) {
+      return Chess.sqName(m.from) + Chess.sqName(m.to) === bad;
+    });
+    // (1) Independent ground truth: the historical move allows a forced mate.
+    check(!!badMove && forcesMate(Chess.applyMove(st, badMove), MATE_PLIES),
+      'solver: ' + bad + ' allows a forced mate in ' + MATE_PLIES + (flip ? ' (mirrored)' : ''),
+      'solver did not confirm the known mate');
+    // (2) The engine, at a budget that completes depth 5, does not play it.
+    const r = solve(f, 400000);
+    check(r.uci !== bad && isLegal(f, r.move),
+      'engine avoids the mate-allowing ' + bad + (flip ? ' (mirrored)' : ''),
+      'played ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
+    // (3) Exact guarantee (original only — the no-mate proof is full-width and
+    // ~5s): the move actually chosen allows NO forced mate in MATE_PLIES, so
+    // this catches any mate-allowing choice, not just the historical blunder.
+    if (!flip) {
+      check(!forcesMate(Chess.applyMove(st, r.move), MATE_PLIES),
+        'engine choice ' + r.uci + ' allows no forced mate in ' + MATE_PLIES,
+        'chose ' + r.uci + ', still allows mate');
+    }
+  }
+})();
+
 // --- Conversion: play out a won ending against itself under a small budget.
 console.log('conversion');
 function convert(name, fen, maxPlies, nodesPerMove) {
@@ -143,7 +231,11 @@ function convert(name, fen, maxPlies, nodesPerMove) {
     'ended ' + (status.reason || 'unfinished') + ' after ' + plies + ' plies');
 }
 convert('K+Q vs K converts', '8/8/8/4k3/8/8/8/K3Q3 w - - 0 1', 40, 3000);
-convert('K+R vs K converts', '8/8/8/4k3/8/8/8/K3R3 w - - 0 1', 60, 20000);
+// 40k, not 20k: the quiet-check extension searches the winning side's many
+// checks in the K+R mating net, so the depth that drives the mop-up costs more
+// nodes to reach at a FIXED node budget (real Master play is time-budgeted and
+// unaffected). At 20k the check-laden search now drifts to the fifty-move rule.
+convert('K+R vs K converts', '8/8/8/4k3/8/8/8/K3R3 w - - 0 1', 60, 40000);
 
 // --- Repetition at a fixed node budget (mirrors the Tier A depth tests).
 console.log('repetition');
@@ -331,6 +423,7 @@ check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
 // shallow/small. Includes BOTH delta-review witnesses, the exact regressions
 // that motivated removing delta pruning.
 const QMAX_ORACLE = 16;
+const QCHECK_PLIES_ORACLE = 1; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
 function oracleQuiesce(state, alpha, beta, ply, qply, path) {
   if (Chess.insufficientMaterial(state.board)) return 0;
   const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
@@ -356,7 +449,16 @@ function oracleQuiesce(state, alpha, beta, ply, qply, path) {
     else { if (best <= alpha) return best; if (best < beta) beta = best; }
   }
   path.push(key);
-  const moves = inChk ? legal : legal.filter(function (e) { return e[0].captured || e[0].promotion; });
+  // Same bounded quiet-check extension as quiesceNode: captures/promotions
+  // always, plus quiet (non-capturing) checks for the first QCHECK_PLIES_ORACLE
+  // plies. `legal` already carries each move's applied state, so the check test
+  // needs no extra applyMove.
+  const genChecks = qply < QCHECK_PLIES_ORACLE;
+  const moves = inChk ? legal : legal.filter(function (e) {
+    if (e[0].captured || e[0].promotion) return true;
+    if (!genChecks) return false;
+    return Chess.isAttacked(e[1].board, e[1].board.indexOf(enemy + 'K'), turn);
+  });
   for (const e of moves) {
     const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path);
     if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }

@@ -27,8 +27,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   mating material. Five difficulty levels: Easy/Medium/Hard/Expert are
   increasing search depths (1/2/3/5 plies); **Master** adds quiescence search
   (captures are resolved past the horizon, so it stops falling for exchange
-  tricks) and thinks on a 2-second-per-move budget, deepening as far as the
-  clock allows.
+  tricks, with a bounded quiet-check extension so a mating check just past the
+  horizon isn't missed) and thinks on a 5-second-per-move budget, deepening as
+  far as the clock allows.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,
