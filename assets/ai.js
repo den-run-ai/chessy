@@ -428,8 +428,8 @@
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
   const QMAX = 16;          // quiescence ply bound: cut off runaway lines
-  // At most two forcing quiet checks and their single-reply evasions.
-  const QCHECK_PLIES = 4;
+  // At most two forcing quiet checks, their evasions, and a final quiet mate.
+  const QCHECK_PLIES = 5;
   const TT_MAX = 1 << 21;   // transposition table entry cap
   const ABORT = { timeUp: true }; // thrown to unwind when the budget expires
 
@@ -734,9 +734,10 @@
     // makes quiescence scores exact (no window-sensitive pruning artifacts).
     //
     // Within QCHECK_PLIES, search an immediate quiet mate or a quiet check with
-    // exactly one legal reply. One follow-up is admitted after the first check
-    // evasion; later layers admit only mate. This proves the tracked
-    // 27...Rxa2?? 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8# without ordinary checks.
+    // exactly one legal reply. A losing-side knight check gets up to three
+    // replies at qply 0; one single-reply follow-up is admitted after its
+    // evasion, and later layers admit only mate. This proves the tracked
+    // 27...Rxa2?? 28.Ne7+ ... 29.Qh7+ ... 30.Qh8# without ordinary checks.
     // Preferred over a stand-pat mate scan: the recursion is counted as nodes
     // and alpha-beta-pruned, where a per-leaf mate scan's movegen is uncounted
     // work that roughly quartered the node rate under the same time budget.
@@ -745,17 +746,29 @@
       moves = pseudo;
     } else {
       moves = [];
-      // At the horizon and after the first evasion, admit a non-mating quiet
-      // check only when it has one legal reply; later layers admit only mate.
+      // At the horizon and after the first evasion, admit a forcing quiet
+      // check under the bounded rules below; later layers admit only mate.
       const genChecks = qply < QCHECK_PLIES && (qply === 0 || afterCheck);
       for (const m of pseudo) {
         if (m.captured || m.promotion) { moves.push(m); continue; }
         if (!genChecks) continue;
         const nb = Chess.applyMove(state, m);
-        if (!Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) continue;
-        const replies = legalMoveCountUpTo(nb, null, 2, ctx);
-        const forceLayer = qply === 0 || (afterCheck && qply === 1);
-        if (replies === 0 || (forceLayer && replies === 1)) {
+        const ek = nb.board.indexOf(enemy + 'K');
+        if (!Chess.isAttacked(nb.board, ek, turn)) continue;
+        // A losing side may need a direct knight check with a few replies to
+        // expose a forced mate (the tracked Ne7+ has three). This selective
+        // heuristic is tied to stand-pat, not a claim of general mate detection.
+        const dr = Math.abs((m.to >> 3) - (ek >> 3));
+        const dc = Math.abs((m.to & 7) - (ek & 7));
+        const knightRescue = qply === 0 && m.piece[1] === 'N' &&
+          ((dr === 1 && dc === 2) || (dr === 2 && dc === 1)) &&
+          (maximizing ? best < 0 : best > 0);
+        const replies = legalMoveCountUpTo(nb, null, knightRescue ? 4 : 2, ctx);
+        // A qply-0 check's evasion lands on attacker qply 2. Starting the
+        // horizon in check instead lands on attacker qply 1.
+        const forceLayer = qply === 0 || (afterCheck && qply <= 2);
+        if (replies === 0 || (forceLayer && replies === 1) ||
+            (knightRescue && replies <= 3)) {
           m.qcheck = 1;
           moves.push(m);
         }

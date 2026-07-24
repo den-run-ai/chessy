@@ -195,6 +195,19 @@ console.log('tracked Master decisions (game chessy202607240238)');
 // "the move Chessy plays allows no forced mate", not "Chessy plays move X".
 console.log('horizon quiet-mate defence (game chessy202607240238)');
 (function () {
+  // Directly exercise the entire five-ply forcing tail from after 27...Rxa2.
+  // A main-search depth of zero makes this a pure quiescence contract: it must
+  // admit Ne7+ (three replies), the forced follow-up, and the final quiet mate.
+  const attackFen = '4r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/r5P1/2R4K w - - 0 28';
+  for (const flip of [false, true]) {
+    const f = flip ? mirrorFen(attackFen) : attackFen;
+    const value = ChessAI.search(Chess.parseFen(f), 0, -Infinity, Infinity, true);
+    const expected = flip ? -(MATE - 5) : MATE - 5;
+    check(value === expected,
+      'pure quiescence proves the full quiet mate in 5' + (flip ? ' (mirrored)' : ''),
+      'expected ' + expected + ', got ' + value);
+  }
+
   const memoF = new Map(), memoD = new Map();
   // Legal successors, each tagged with whether the move gives check and a cheap
   // "likely escape" score (king move / capture) used only to order for an
