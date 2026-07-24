@@ -205,6 +205,26 @@ console.log('horizon quiet-mate defence (game chessy202607240238)');
     check(r.uci !== bad && isLegal(f, r.move),
       'engine avoids the mate-allowing ' + bad + (flip ? ' (mirrored)' : ''),
       'played ' + r.uci + ' (d' + r.depth + ' ' + r.score + ')');
+    // (2b) Tail-cost gate (original only — search node-count is not mirror
+    // invariant: move ordering explores in generation order, so a position and
+    // its colour-swapped twin complete the same depth at different node counts,
+    // and pinning a single tight budget to the canonical position is what keeps
+    // the guard meaningful). The Master loss was not that the engine COULDN'T
+    // see the defence but that seeing it — depth 5, the quiet-check horizon —
+    // cost more nodes than the 5 s budget covered, so time-budgeted play stopped
+    // at depth 4 and blundered. At ~60k nodes/s that budget is ~300k nodes, so
+    // depth 5 MUST complete, and the blunder be avoided, inside 300k nodes, or
+    // real Master play regresses even though the generous 400k check above still
+    // passes. This is the guard that bit when the #72 king-safety eval term
+    // first landed: it made this position score near-equal, and the resulting
+    // depth-4->5 swing inflated the aspiration re-search tail past the budget
+    // until a volatility-adaptive aspiration window brought it back under.
+    if (!flip) {
+      const rt = solve(f, 300000);
+      check(rt.depth >= 5 && rt.uci !== bad && isLegal(f, rt.move),
+        'depth 5 completes and avoids ' + bad + ' within the ~5 s (300k-node) budget',
+        'played ' + rt.uci + ' (d' + rt.depth + ' ' + rt.score + ')');
+    }
     // (3) Exact guarantee (original only — the no-mate proof is full-width and
     // ~5s): the move actually chosen allows NO forced mate in MATE_PLIES, so
     // this catches any mate-allowing choice, not just the historical blunder.

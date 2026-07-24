@@ -20,7 +20,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   Zobrist-keyed transposition table, and hash/killer/history move ordering,
   running in a Web Worker so the UI never blocks. The evaluation is tapered
   between midgame and endgame (the king hides, then centralizes) and scores
-  mobility, doubled/isolated/passed pawns, and the king's pawn shield. The
+  mobility, doubled/isolated/passed pawns, and king safety — the pawn shield,
+  open/semi-open files near the king, and a non-linear king-danger term that
+  rewards coordinated attacks on the enemy king (so a mating attack outweighs
+  the material it invests, not the other way round). The
   search knows about draws: repetitions of game or search-path positions and
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own

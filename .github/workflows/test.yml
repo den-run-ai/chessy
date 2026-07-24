@@ -75,6 +75,8 @@ jobs:
         run: node test/engine.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
+      - name: Run king-safety evaluation tests
+        run: node test/ai-eval.js
       - name: Install chess.js (dev-only independent legal-move oracle)
         # A SEPARATE rules implementation so the eval legalRoot axis is a true
         # differential, not the engine agreeing with itself. Dev/CI only; never

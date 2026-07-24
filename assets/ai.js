@@ -185,36 +185,74 @@
   const PASSED_MG = [0, 5, 10, 20, 35, 60, 80];   // by ranks advanced from home
   const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
 
+  // ---- King safety (midgame only; #72, motivated by game chessy202607240238) ----
+  // Two bounded, symmetric terms, added to the MIDGAME score only so the taper
+  // retires them as material comes off (identical treatment to the pawn shield).
+  //
+  // (1) King-ring attacks. For each king, sum the enemy pieces bearing on its
+  // 3x3 ring (Chebyshev distance <= 1), weighted by piece type and by how many
+  // ring squares each attacks, then scale NON-LINEARLY by the number of distinct
+  // attacking pieces: a lone attacker is normal piece activity (multiplier 0), a
+  // coordinated swarm is dangerous. This is what the depth-limited search missed
+  // when White's Q+B+B+N massed on Black's castled king in the game — the
+  // material score stayed "winning" while the king was in fact under a mating
+  // attack. Capped well below a minor piece so it steers, never overriding
+  // material judgement.
+  const KING_ATK_WEIGHT = { P: 0, N: 2, B: 2, R: 3, Q: 5, K: 0 };
+  // Multiplier (percent) by number of distinct attacking pieces. [0]=[1]=0 so a
+  // single attacker never scores; ramps toward saturation as attackers pile on.
+  const KING_ATK_COUNT_MUL = [0, 0, 50, 75, 88, 94, 97, 99];
+  const KING_ATK_SCALE = 6;    // centipawns per weight-unit before the multiplier
+  const KING_ATK_CAP = 150;    // hard per-king ceiling (< half a minor piece)
+  // (2) Open/semi-open file shelter. A king on a file with no friendly pawn is
+  // exposed down that file; an enemy rook/queen already on it is worse. Applied
+  // to the king's own file and its two neighbours, capped.
+  const SHELTER_OPEN = 10;     // per king-adjacent file lacking a friendly pawn
+  const SHELTER_HEAVY = 12;    // extra when an enemy rook/queen bears down it
+  const SHELTER_CAP = 60;
+
   const DIAG = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
   const ORTHO = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   const ALL_DIRS = DIAG.concat(ORTHO);
   const N_JUMPS = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
 
-  // Squares a piece can move to (empty or enemy-occupied). Pawns and kings
-  // are excluded: pawn play is scored by the structure terms, king freedom is
-  // not a middlegame asset.
-  function mobility(board, i, type, color) {
+  // Squares a piece can move to (empty or enemy-occupied), and — as a side
+  // effect written to the module-level RING out-param — how many squares of the
+  // enemy king's 3x3 ring it attacks. Folding the ring count into the mobility
+  // walk keeps king-attack detection free of extra ray scans on the eval hot
+  // path (no per-call allocation). Pawns and kings are excluded from mobility:
+  // pawn play is scored by the structure terms, king freedom is not a midgame
+  // asset. `ekr`/`ekc` are the enemy king's row/col (the king this piece could
+  // attack); pass -8 to disable ring counting.
+  let RING = 0;
+  function mobility(board, i, type, color, ekr, ekc) {
     const r = Math.floor(i / 8), c = i % 8;
-    let count = 0;
+    let count = 0, ring = 0;
     if (type === 'N') {
       for (const [dr, dc] of N_JUMPS) {
         const nr = r + dr, nc = c + dc;
         if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
         const p = board[nr * 8 + nc];
         if (!p || p[0] !== color) count++;
+        if (nr >= ekr - 1 && nr <= ekr + 1 && nc >= ekc - 1 && nc <= ekc + 1) ring++;
       }
+      RING = ring;
       return count;
     }
     const dirs = type === 'B' ? DIAG : type === 'R' ? ORTHO : ALL_DIRS;
     for (const [dr, dc] of dirs) {
       let nr = r + dr, nc = c + dc;
       while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        // A slider attacks a ring square only up to (and including) the first
+        // blocker on the ray — so count ring membership BEFORE the break.
+        if (nr >= ekr - 1 && nr <= ekr + 1 && nc >= ekc - 1 && nc <= ekc + 1) ring++;
         const p = board[nr * 8 + nc];
         if (p) { if (p[0] !== color) count++; break; }
         count++;
         nr += dr; nc += dc;
       }
     }
+    RING = ring;
     return count;
   }
 
@@ -235,11 +273,26 @@
     const kings = { w: -1, b: -1 };
     const force = { w: 0, b: 0 };  // count of non-king men (pawns + pieces)
     const pieces = { w: 0, b: 0 }; // count of non-king, non-pawn material (mating force)
+    // King-safety accumulators, indexed by the DEFENDING king's color: the
+    // weighted ring-attack pressure against that king and the number of distinct
+    // enemy pieces contributing to it. Enemy rooks/queens per file feed the
+    // open-file shelter term below.
+    const ringWeight = { w: 0, b: 0 };
+    const ringCount = { w: 0, b: 0 };
+    const heavyFiles = { w: [0, 0, 0, 0, 0, 0, 0, 0], b: [0, 0, 0, 0, 0, 0, 0, 0] };
+    // Enemy king coordinates are needed before the sliding walk can tally ring
+    // attacks, so locate both kings up front (a bare indexOf, cheaper than the
+    // ray walks it feeds). -8 sentinels keep ring counting inert if a king is
+    // absent (malformed board): no on-board square is within a ring of -8.
+    const wk = board.indexOf('wK'), bk = board.indexOf('bK');
+    const ekr = { w: bk >= 0 ? bk >> 3 : -8, b: wk >= 0 ? wk >> 3 : -8 };
+    const ekc = { w: bk >= 0 ? bk & 7 : -8, b: wk >= 0 ? wk & 7 : -8 };
 
     for (let i = 0; i < 64; i++) {
       const p = board[i];
       if (!p) continue;
       const color = p[0], type = p[1];
+      const def = color === 'w' ? 'b' : 'w';  // king this piece could threaten
       // Mirror the square vertically for Black.
       const sq = color === 'w' ? i : (7 - Math.floor(i / 8)) * 8 + (i % 8);
       phase += PHASE[type];
@@ -253,8 +306,12 @@
         kings[color] = i;
       } else {
         pieces[color]++;
-        const mob = mobility(board, i, type, color) * MOBILITY[type];
+        if (type === 'R' || type === 'Q') heavyFiles[color][i % 8]++;
+        const mob = mobility(board, i, type, color, ekr[color], ekc[color]) * MOBILITY[type];
         m += mob; e += mob;
+        // RING (set by mobility) is this piece's attack count on the enemy
+        // king's ring; accrue it to that king's danger tally.
+        if (RING > 0) { ringWeight[def] += KING_ATK_WEIGHT[type] * RING; ringCount[def]++; }
       }
       if (color === 'w') { mg += m; eg += e; } else { mg -= m; eg -= e; }
     }
@@ -291,18 +348,46 @@
       // only — the tapering itself retires the term as material comes off).
       const k = kings[color];
       if (k >= 0) {
-        const kr = Math.floor(k / 8) + (color === 'w' ? -1 : 1), kc = k % 8;
+        const kc = k % 8;
+        const kr = Math.floor(k / 8) + (color === 'w' ? -1 : 1);
         if (kr >= 0 && kr < 8) {
           for (let dc = -1; dc <= 1; dc++) {
             const cc = kc + dc;
             if (cc >= 0 && cc < 8 && board[kr * 8 + cc] === color + 'P') mg += sign * SHIELD;
           }
         }
+        // Open/semi-open file shelter (midgame): the king's own file and its two
+        // neighbours are weaknesses when they carry no friendly pawn, worse yet
+        // when an enemy rook or queen already occupies the file. Bounded.
+        const enemyHeavy = heavyFiles[color === 'w' ? 'b' : 'w'];
+        let shelter = 0;
+        for (let dc = -1; dc <= 1; dc++) {
+          const cc = kc + dc;
+          if (cc < 0 || cc > 7 || files[cc]) continue; // friendly pawn shields it
+          shelter += SHELTER_OPEN;
+          if (enemyHeavy[cc]) shelter += SHELTER_HEAVY;
+        }
+        if (shelter > SHELTER_CAP) shelter = SHELTER_CAP;
+        mg -= sign * shelter;
       }
     }
 
+    // King-ring attack pressure (midgame): scale each king's summed ring-attack
+    // weight by the non-linear multiplier for the number of distinct attackers,
+    // cap it, and apply from White's perspective — danger to White's king is bad
+    // for White, danger to Black's king is good for White.
+    mg += kingAttackPenalty(ringWeight.b, ringCount.b);
+    mg -= kingAttackPenalty(ringWeight.w, ringCount.w);
+
     const ph = Math.min(phase, PHASE_MAX);
-    let score = Math.round((mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX);
+    // Round half AWAY from zero, not Math.round's half-up: king safety is added
+    // to mg but not eg, so the tapered value can land on a half-integer, and
+    // Math.round(-x) !== -Math.round(x) there (round(2.5)=3 but round(-2.5)=-2)
+    // would break the exact color antisymmetry evaluate() must hold (the eval
+    // scorecard's symmetry axis, the mirrored tactics twins). This form is
+    // antisymmetric by construction.
+    const tapered = (mg * ph + eg * (PHASE_MAX - ph)) / PHASE_MAX;
+    let score = tapered < 0 ? -Math.round(-tapered) : Math.round(tapered);
 
     // Mop-up: when one side is reduced to a bare king, add the classic mating
     // gradient — drive the lone king toward a corner and march the winning king
@@ -321,6 +406,17 @@
       else if (pieces.b > 0 && force.w === 0) score -= mopUp(kings.w, kings.b);
     }
     return score;
+  }
+
+  // King-ring attack penalty: the summed ring-attack weight against one king,
+  // scaled by how many distinct enemy pieces attack (non-linear — a swarm is
+  // far more dangerous than the sum of its parts), then capped. Returns 0 for
+  // fewer than two attackers, so ordinary single-piece pressure never scores.
+  function kingAttackPenalty(weight, count) {
+    if (count < 2) return 0;
+    const mul = KING_ATK_COUNT_MUL[count < 7 ? count : 7];
+    const v = Math.round(weight * KING_ATK_SCALE * mul / 100);
+    return v > KING_ATK_CAP ? KING_ATK_CAP : v;
   }
 
   // Mating gradient for a lone king (loser) hunted by the winner's king.
@@ -928,7 +1024,7 @@
       };
     });
 
-    let best = null, bestScore = 0, completed = 0;
+    let best = null, bestScore = 0, completed = 0, prevScore = 0;
 
     for (let d = 1; d <= maxDepth; d++) {
       // Aspiration window: from depth 2, expect this iteration to score
@@ -941,7 +1037,19 @@
       // same value as an independent full-window search, and the 16-position
       // --exact bench shows 0 move/score divergences vs no aspiration. Mate
       // scores never aspire.
-      let delta = 50;
+      //
+      // The initial width ADAPTS to score volatility: the jump between the
+      // last two completed iterations (|score(d-1) - score(d-2)|) predicts how
+      // far this iteration may move, so a position whose score is swinging with
+      // depth — a tactic resolving past the horizon, exactly where a fixed
+      // narrow window pays a fail-and-widen re-search tail — starts wide enough
+      // to land the first attempt. On the game chessy202607240238 defence this
+      // cut the nodes-to-depth-5 roughly in half (the king-safety term makes
+      // that position swing ~180 cp as the mating attack resolves), keeping the
+      // depth that sees the mate inside the Master time budget. Stable positions
+      // keep the tight 50 cp window and its sharper pruning.
+      const swing = Math.abs(bestScore - prevScore);
+      let delta = Math.min(400, Math.max(50, Math.round(swing * 1.5)));
       let lo = -Infinity, hi = Infinity;
       if (d >= 2 && Math.abs(bestScore) < MATE_NEAR) {
         lo = bestScore - delta; hi = bestScore + delta;
@@ -1000,6 +1108,7 @@
         break;
       }
       best = iterBest;
+      prevScore = bestScore;   // remember the prior completed score for volatility
       bestScore = iterScore;
       completed = d;
       // Order the whole root by this iteration's scores (fail-low moves
