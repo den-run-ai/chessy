@@ -341,6 +341,11 @@
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
   const QMAX = 16;          // quiescence ply bound: cut off runaway lines
+  // Quiet-check extension depth: for the first QCHECK_PLIES quiescence plies,
+  // quiescence also searches quiet (non-capturing) checks (see quiesceNode).
+  // 1 = only the horizon leaf itself, which is exactly where a quiet mating
+  // check would otherwise be missed, at minimum added width.
+  const QCHECK_PLIES = 1;
   const TT_MAX = 1 << 21;   // transposition table entry cap
   const ABORT = { timeUp: true }; // thrown to unwind when the budget expires
 
@@ -612,16 +617,45 @@
     if (trackRep) { ctx.path1.push(rr1); ctx.path2.push(rr2); }
     let repMin = Infinity;
 
-    // No delta (futility) pruning here: with the tapered evaluation a single
+    // Move set. In check: every evasion (the full pseudo list; the loop filters
+    // illegals). Otherwise captures and promotions — plus a bounded quiet-check
+    // extension.
+    //
+    // No delta (futility) pruning: with the tapered evaluation a single
     // capture's score swing is dominated by positional terms (an advanced or
     // passed pawn's endgame value, the mover's placement, freed mobility, the
     // lone-king mop-up gradient), not the captured piece's material, so a
     // material-based delta margin cannot be both sound and useful — any margin
     // large enough to never discard a window-crossing capture (~1700 cp over
-    // material) effectively never fires. Since delta pruning saved <0.5% of
-    // nodes here anyway, it is removed; every capture is searched, which also
+    // material) effectively never fires. Every capture is searched, which also
     // makes quiescence scores exact (no window-sensitive pruning artifacts).
-    const moves = inChk ? pseudo : pseudo.filter(function (m) { return m.captured || m.promotion; });
+    //
+    // Quiet-check extension: for the first QCHECK_PLIES quiescence plies, also
+    // search quiet (non-capture, non-promotion) moves that give check. Plain
+    // quiescence resolves only captures/promotions, so a QUIET mating check one
+    // ply past the horizon is invisible — the miss that let a depth-5 Master
+    // search play 27...Rxa2?? into the forced 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#
+    // (game log chessy202607240238), whose final blow is the quiet check Qh8#.
+    // The check forces the opponent straight into the (already full-width)
+    // evasion branch, proving the mate without completing a whole extra main-
+    // search ply. Stand-pat stays the floor above, so the added moves keep this
+    // node a sound alpha-beta bound (extra options never invalidate stand-pat).
+    // Preferred over a stand-pat mate scan: the recursion is counted as nodes
+    // and alpha-beta-pruned, where a per-leaf mate scan's movegen is uncounted
+    // work that roughly quartered the node rate under the same time budget.
+    let moves;
+    if (inChk) {
+      moves = pseudo;
+    } else {
+      moves = [];
+      const genChecks = qply < QCHECK_PLIES;
+      for (const m of pseudo) {
+        if (m.captured || m.promotion) { moves.push(m); continue; }
+        if (!genChecks) continue;
+        const nb = Chess.applyMove(state, m);
+        if (Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) moves.push(m);
+      }
+    }
 
     for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
       const next = Chess.applyMove(state, m);
