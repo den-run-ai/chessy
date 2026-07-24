@@ -213,6 +213,7 @@
             stopLocal();
             if (current === job) current = null;
             currentSource = null;
+            emit(null);
             return false;
           }
           emit(job);
@@ -231,6 +232,7 @@
         stopLocal();
         if (current === job) current = null;
         currentSource = null;
+        emit(null);
         return false;
       }
       return Promise.resolve(CoachStore.putJob(job)).then(function () {
