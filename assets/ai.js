@@ -1239,7 +1239,7 @@
     const fallbackReasons = {
       'worker-error': true, watchdog: true
     };
-    return {
+    const sanitized = {
       release: releaseToken(value.release),
       depth: integer(value.depth) || 0,
       attemptedDepth: integer(value.attemptedDepth),
@@ -1264,7 +1264,6 @@
       score: finite(value.score),
       scorePov: value.scorePov === 'white' ? 'white' : null,
       pvUci: pv,
-      rootOrderUci: rootOrder,
       pvSource: value.pvSource === 'final-tt-best-effort'
         ? 'final-tt-best-effort' : null,
       stopReason: reasons[value.stopReason] ? value.stopReason : 'unknown',
@@ -1272,6 +1271,14 @@
       fallbackReason: fallbackReasons[value.fallbackReason]
         ? value.fallbackReason : null
     };
+    // Missing rootOrderUci is the backwards-compatible marker for telemetry
+    // recorded before reproducible root capture existed. Preserve that
+    // distinction: an explicitly present [] would otherwise look identical
+    // and could erase forged/incomplete evidence at restore time.
+    if (Array.isArray(value.rootOrderUci)) {
+      sanitized.rootOrderUci = rootOrder;
+    }
+    return sanitized;
   }
 
   global.ChessAI = {
