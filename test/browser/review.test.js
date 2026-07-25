@@ -25,10 +25,11 @@ require('./helper').run('review', async function (t) {
     'the asynchronous handoff moves focus into the review flow');
 
   // Save the SELECTED archived game, not a closure over Play's live state.
-  // The clean Review export deliberately has no "+ log" control: archive rows
-  // do not retain the AI search telemetry needed to reproduce that file.
-  check(await page.locator('#reviewExportPgn').isVisible(),
-    'an opened archived game offers a Save PGN action');
+  // The ordinary action stays clean; the explicit log action adds bounded
+  // per-ply evidence from the same durable archive snapshot.
+  check(await page.locator('#reviewExportPgn').isVisible() &&
+      await page.locator('#reviewExportPgnLog').isVisible(),
+    'an opened archived game offers clean and debug PGN actions');
   const [reviewDownload] = await Promise.all([
     page.waitForEvent('download'),
     page.click('#reviewExportPgn')
@@ -42,8 +43,22 @@ require('./helper').run('review', async function (t) {
   check(reviewPgn.includes('[Result "0-1"]') &&
         reviewPgn.includes('1. f3 e5 2. g4 Qh4# {checkmate} 0-1'),
     'Review exports the complete selected game and its archived result');
+  check(!reviewPgn.includes('{engine') && !reviewPgn.includes('{before:'),
+    'the ordinary Review PGN remains free of debug comments');
   check(await page.evaluate(function () { return document.activeElement.id; }) === 'reviewExportPgn',
     'saving keeps keyboard focus on the visible Review action');
+  const [reviewLogDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#reviewExportPgnLog')
+  ]);
+  const reviewLogPgn = fs.readFileSync(await reviewLogDownload.path(), 'utf8');
+  const startFen = await page.evaluate(function () { return Chess.START_FEN; });
+  check(/-debug\.pgn$/.test(reviewLogDownload.suggestedFilename()) &&
+      reviewLogPgn.includes('{before: ' + startFen + '}'),
+    'the explicit Review log action downloads a named per-ply debug PGN');
+  check(await page.evaluate(function () { return document.activeElement.id; }) ===
+      'reviewExportPgnLog',
+    'saving the log keeps keyboard focus on its visible Review action');
 
   // Browse position by position.
   check((await page.textContent('#reviewStatus')).includes('played here: f3'),
@@ -69,8 +84,9 @@ require('./helper').run('review', async function (t) {
   await page.click('#reviewBack');
   await page.waitForSelector('.game-item');
   check(await page.locator('#reviewFlow').isHidden(), 'Back returns to the game list');
-  check(await page.locator('#reviewExportPgn').isHidden(),
-    'the per-game export action is hidden when no archived game is selected');
+  check(await page.locator('#reviewExportPgn').isHidden() &&
+      await page.locator('#reviewExportPgnLog').isHidden(),
+    'both per-game export actions are hidden when no game is selected');
   await page.waitForFunction(function () {
     return document.activeElement && document.activeElement.className === 'game-item';
   });

@@ -400,6 +400,76 @@
     return next;
   }
 
+  // Build the contents of one debug-PGN comment. Review reuses this formatter
+  // for durable archive rows, so live and restored incident exports cannot
+  // drift into two subtly different evidence formats. `mover` is explicit:
+  // custom SetUp/FEN games may begin with Black, where history-index parity is
+  // not the side that just moved.
+  function pgnLogComment(entry, mover) {
+    let note = 'before: ' + entry.fen;
+    if (entry.ai) {
+      const ai = entry.ai;
+      const details = [];
+      if (Number.isInteger(ai.attemptedDepth)) details.push('attempted depth ' + ai.attemptedDepth);
+      if (Number.isInteger(ai.nodes)) {
+        details.push(ai.nodes + ' nodes' +
+          (Number.isInteger(ai.qnodes) ? ' (' + ai.qnodes + ' q)' : ''));
+      }
+      if (Number.isFinite(ai.score)) {
+        details.push('score ' + ai.score +
+          (ai.scorePov === 'white' ? ' (White POV)' : ''));
+      }
+      if (typeof ai.stopReason === 'string') details.push('stop ' + ai.stopReason);
+      const config = [];
+      if (Number.isInteger(ai.maxDepth)) config.push('dmax ' + ai.maxDepth);
+      if (Number.isInteger(ai.timeMs)) config.push('time ' + ai.timeMs + 'ms');
+      if (Number.isInteger(ai.nodeLimit)) config.push('node-limit ' + ai.nodeLimit);
+      if (Number.isInteger(ai.seed)) config.push('seed ' + ai.seed);
+      else if (ai.randomize === true) config.push('random');
+      else if (ai.randomize === false) config.push('ordered');
+      if (Array.isArray(ai.rootOrderUci)) {
+        const rootOrder = ai.rootOrderUci.slice(0, 256).filter(function (u) {
+          return typeof u === 'string' &&
+            /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u);
+        });
+        if (rootOrder.length) config.push('root-order ' + rootOrder.join('/'));
+      }
+      if (config.length) details.push('config ' + config.join('/'));
+      if (Number.isFinite(ai.searchMs)) details.push('search ' + ai.searchMs + ' ms');
+      // Release identifiers can originate in restored local data. Keep
+      // brace/comment syntax out even if a caller bypassed normalization.
+      if (typeof ai.release === 'string' && ai.release.length <= 32 &&
+          ai.release.trim() === ai.release &&
+          /^r\d+$/.test(ai.release)) {
+        details.push('release ' + ai.release);
+      }
+      if (typeof ai.source === 'string') details.push('source ' + ai.source);
+      if (ai.fallbackReason === 'worker-error' || ai.fallbackReason === 'watchdog') {
+        details.push('fallback ' + ai.fallbackReason);
+      }
+      if (Array.isArray(ai.pvUci) && ai.pvUci.length) {
+        details.push('PV ' + ai.pvUci.join(' ') +
+          (ai.pvSource === 'final-tt-best-effort' ? ' (best effort)' : ''));
+      }
+      note = 'engine depth ' + ai.depth + (ai.quiesce ? '+quiescence' : '') +
+             ', ' + ai.ms + ' ms' + (details.length ? ', ' + details.join(', ') : '') +
+             '; ' + note;
+    }
+    // Standard %clk command: the mover's remaining time after the move.
+    if (entry.clock) {
+      const ms = Number.isFinite(entry.clock.ms)
+        ? entry.clock.ms
+        : (mover === 'b' ? entry.clock.bMs : entry.clock.wMs);
+      if (Number.isFinite(ms)) {
+        const sec = Math.max(0, Math.round(ms / 1000));
+        note = '[%clk ' + Math.floor(sec / 3600) + ':' +
+               String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' +
+               String(sec % 60).padStart(2, '0') + '] ' + note;
+      }
+    }
+    return note;
+  }
+
   // Export the game as PGN (standard Portable Game Notation). `tags` override
   // the seven-tag roster; `withLog` embeds a debug comment per move (engine
   // settings and think time for AI moves, plus the FEN before the move).
@@ -423,64 +493,9 @@
       if (i % 2 === 0) parts.push((i / 2 + 1) + '.');
       parts.push(entry.san);
       if (withLog) {
-        let note = 'before: ' + entry.fen;
-        if (entry.ai) {
-          const ai = entry.ai;
-          const details = [];
-          if (Number.isInteger(ai.attemptedDepth)) details.push('attempted depth ' + ai.attemptedDepth);
-          if (Number.isInteger(ai.nodes)) {
-            details.push(ai.nodes + ' nodes' +
-              (Number.isInteger(ai.qnodes) ? ' (' + ai.qnodes + ' q)' : ''));
-          }
-          if (Number.isFinite(ai.score)) {
-            details.push('score ' + ai.score +
-              (ai.scorePov === 'white' ? ' (White POV)' : ''));
-          }
-          if (typeof ai.stopReason === 'string') details.push('stop ' + ai.stopReason);
-          const config = [];
-          if (Number.isInteger(ai.maxDepth)) config.push('dmax ' + ai.maxDepth);
-          if (Number.isInteger(ai.timeMs)) config.push('time ' + ai.timeMs + 'ms');
-          if (Number.isInteger(ai.nodeLimit)) config.push('node-limit ' + ai.nodeLimit);
-          if (Number.isInteger(ai.seed)) config.push('seed ' + ai.seed);
-          else if (ai.randomize === true) config.push('random');
-          else if (ai.randomize === false) config.push('ordered');
-          if (Array.isArray(ai.rootOrderUci)) {
-            const rootOrder = ai.rootOrderUci.slice(0, 256).filter(function (u) {
-              return typeof u === 'string' &&
-                /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u);
-            });
-            if (rootOrder.length) config.push('root-order ' + rootOrder.join('/'));
-          }
-          if (config.length) details.push('config ' + config.join('/'));
-          if (Number.isFinite(ai.searchMs)) details.push('search ' + ai.searchMs + ' ms');
-          // Release identifiers can originate in restored local data. Keep
-          // brace/comment syntax out even if a caller bypassed normalization.
-          if (typeof ai.release === 'string' && ai.release.length <= 32 &&
-              ai.release.trim() === ai.release &&
-              /^r\d+$/.test(ai.release)) {
-            details.push('release ' + ai.release);
-          }
-          if (typeof ai.source === 'string') details.push('source ' + ai.source);
-          if (ai.fallbackReason === 'worker-error' || ai.fallbackReason === 'watchdog') {
-            details.push('fallback ' + ai.fallbackReason);
-          }
-          if (Array.isArray(ai.pvUci) && ai.pvUci.length) {
-            details.push('PV ' + ai.pvUci.join(' ') +
-              (ai.pvSource === 'final-tt-best-effort' ? ' (best effort)' : ''));
-          }
-          note = 'engine depth ' + ai.depth + (ai.quiesce ? '+quiescence' : '') +
-                 ', ' + ai.ms + ' ms' + (details.length ? ', ' + details.join(', ') : '') +
-                 '; ' + note;
-        }
-        // Standard %clk command: the mover's remaining time after the move.
-        if (entry.clock) {
-          const ms = i % 2 === 0 ? entry.clock.wMs : entry.clock.bMs;
-          const sec = Math.max(0, Math.round(ms / 1000));
-          note = '[%clk ' + Math.floor(sec / 3600) + ':' +
-                 String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' +
-                 String(sec % 60).padStart(2, '0') + '] ' + note;
-        }
-        parts.push('{' + note + '}');
+        const mover = typeof entry.fen === 'string' &&
+          entry.fen.split(/\s+/)[1] === 'b' ? 'b' : 'w';
+        parts.push('{' + pgnLogComment(entry, mover) + '}');
       }
     });
     if (status.over) parts.push('{' + status.reason + '}');
@@ -539,6 +554,7 @@
     undoMove: undoMove,
     toSan: toSan,
     toPgn: toPgn,
+    pgnLogComment: pgnLogComment,
     replaySans: replaySans,
     inCheck: inCheck,
     insufficientMaterial: insufficientMaterial,

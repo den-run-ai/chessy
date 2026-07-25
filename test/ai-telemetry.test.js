@@ -158,8 +158,9 @@ check(dualAborted && dualBudgetCtx.nodes === 1024 &&
 const legacy = ChessAI.sanitizeTelemetry({ depth: 5, quiesce: true, ms: 123 });
 check(legacy && legacy.depth === 5 && legacy.quiesce && legacy.ms === 123 &&
     legacy.elapsedMs === 123 && legacy.nodes === null &&
-    legacy.stopReason === 'unknown',
-  'legacy depth/quiesce/ms evidence upgrades without being discarded');
+    legacy.stopReason === 'unknown' &&
+    !Object.prototype.hasOwnProperty.call(legacy, 'rootOrderUci'),
+  'legacy evidence upgrades without inventing an empty captured root order');
 const normalized = ChessAI.sanitizeTelemetry({
   release: 'r54', depth: 4, attemptedDepth: 5, maxDepth: 30,
   quiesce: true, timeMs: 5000, seed: 4294967295, randomize: true,
@@ -184,28 +185,80 @@ const hostile = ChessAI.sanitizeTelemetry({
 check(hostile.release === null,
   'telemetry drops a release token that could terminate a PGN comment');
 
+const initialRootOrder = Chess.legalMoves(Chess.newGameState()).map(uci);
+const positionNormalized = Object.assign({}, normalized, {
+  rootOrderUci: initialRootOrder.slice().reverse()
+});
 const validGame = {
   id: 'telemetry', sans: ['e4'], result: '*', plies: 1, createdAt: 1,
-  startedRelease: 'r54', ai: [normalized]
+  startedRelease: 'r54', ai: [positionNormalized]
 };
 check(CoachStore.validateGameRecord(validGame) === null,
   'shared pending/backup boundary accepts canonical provenance');
+check(CoachStore.validateGameRecord(
+  Object.assign({}, validGame, { ai: [legacy] })) === null,
+  'shared boundary keeps rootless legacy telemetry compatible');
 const badStarted = Object.assign({}, validGame, { startedRelease: injectedRelease });
 const badAi = Object.assign({}, validGame, {
-  ai: [Object.assign({}, normalized, { release: injectedRelease })]
+  ai: [Object.assign({}, positionNormalized, { release: injectedRelease })]
 });
 check(/startedRelease/.test(CoachStore.validateGameRecord(badStarted) || '') &&
     /AI telemetry/.test(CoachStore.validateGameRecord(badAi) || ''),
   'shared pending/backup boundary rejects malformed game and move releases');
 const badEvidence = [
-  Object.assign({}, normalized, { rootOrderUci: ['a4a3', 'a4a3'] }),
-  Object.assign({}, normalized, { scorePov: 'side-to-move' }),
-  Object.assign({}, normalized, { fallbackReason: 'mystery' })
+  Object.assign({}, positionNormalized, { rootOrderUci: ['a4a3', 'a4a3'] }),
+  Object.assign({}, positionNormalized, { rootOrderUci: undefined }),
+  Object.assign({}, positionNormalized, { scorePov: 'side-to-move' }),
+  Object.assign({}, positionNormalized, { fallbackReason: 'mystery' })
 ];
 check(badEvidence.every(function (ai) {
   return /AI telemetry/.test(CoachStore.validateGameRecord(
     Object.assign({}, validGame, { ai: [ai] })) || '');
-}), 'shared boundary rejects duplicate roots and unknown score/fallback provenance');
+}), 'shared boundary rejects duplicate/undefined roots and unknown score/fallback provenance');
+const substitutedRoot = initialRootOrder.slice();
+substitutedRoot[0] = 'a1a8';
+const mismatchedRoots = [
+  initialRootOrder.slice(1),
+  substitutedRoot,
+  []
+].map(function (rootOrderUci) {
+  return Object.assign({}, positionNormalized, { rootOrderUci: rootOrderUci });
+});
+check(mismatchedRoots.every(function (ai) {
+  const error = CoachStore.validateGameRecord(
+    Object.assign({}, validGame, { ai: [ai] })) || '';
+  return /root order/.test(error) && /position/.test(error);
+}), 'shared boundary rejects truncated, substituted and explicitly empty root orders');
+
+const afterE4 = Chess.replaySans(['e4']);
+const blackRootOrder = Chess.legalMoves(afterE4).map(uci).reverse();
+const twoPlyGame = {
+  id: 'telemetry-two-ply', sans: ['e4', 'e5'], result: '*',
+  plies: 2, createdAt: 2, ai: [
+    null,
+    Object.assign({}, positionNormalized, { rootOrderUci: blackRootOrder })
+  ]
+};
+check(CoachStore.validateGameRecord(twoPlyGame) === null &&
+    /root order/.test(CoachStore.validateGameRecord(Object.assign({}, twoPlyGame, {
+      ai: [null, positionNormalized]
+    })) || ''),
+  'root-order validation replays the SAN prefix and checks the matching ply');
+
+const promotionFen = '4k3/P7/8/8/8/8/8/4K3 w - - 0 1';
+const promotionRoots = Chess.legalMoves(Chess.parseFen(promotionFen))
+  .map(uci).reverse();
+const promotionGame = {
+  id: 'telemetry-promotion', setupFen: promotionFen,
+  sans: ['a8=Q+'], result: '*', plies: 1, createdAt: 3,
+  ai: [Object.assign({}, positionNormalized, {
+    rootOrderUci: promotionRoots
+  })]
+};
+check(promotionRoots.indexOf('a7a8q') !== -1 &&
+    promotionRoots.indexOf('a7a8n') !== -1 &&
+    CoachStore.validateGameRecord(promotionGame) === null,
+  'custom-position root validation preserves canonical promotion suffixes');
 const badEnvelope = {
   format: 'chessy-coach-backup', version: 1, dbVersion: 6,
   release: injectedRelease, stores: { games: [], cards: [] }
