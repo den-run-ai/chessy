@@ -54,5 +54,55 @@
       "fen": "6k1/1p3pp1/2p4p/8/5P2/p3PBP1/P6P/2rR3K b - - 2 34"
     }
   ],
+  "oracle": {
+    "engine": "Stockfish 18",
+    "engineId": "Stockfish 18 WASM",
+    "package": "stockfish@18.0.8",
+    "flavor": "single",
+    "jsSha256": "ce07b916870473a837b598b9b558c125e24568624e47dabc3381474558ee201d",
+    "wasmSha256": "f611ac05ddb248fe975a4f180ac9fec7f7fb650f8f17f5fe4230fcc0fe6419c7",
+    "depth": 20,
+    "threads": 1,
+    "hashMb": 256,
+    "multiPv": 1,
+    "uciNewGameBeforeEach": true,
+    "clearHashBeforeEach": true,
+    "scorePov": "black",
+    "gateIntent": "catastrophic-blunder-mitigation",
+    "maxAdmittedRegretCp": 175,
+    "positions": [
+      {
+        "ply": 37,
+        "bestUci": "c6a5",
+        "bestCp": 81,
+        "playedUci": "a4a3",
+        "playedCp": -135,
+        "regretCp": 216,
+        "admitted": [
+          { "uci": "c6a5", "cp": 81 },
+          { "uci": "d6d7", "cp": -53 },
+          { "uci": "c6e7", "cp": -79 },
+          { "uci": "a8a6", "cp": -51 },
+          { "uci": "d6d8", "cp": -70 },
+          { "uci": "d6e6", "cp": -90 },
+          { "uci": "e8d8", "cp": -56 },
+          { "uci": "a8d8", "cp": -56 },
+          { "uci": "a8a5", "cp": -75 },
+          { "uci": "g7g6", "cp": -81 }
+        ]
+      },
+      {
+        "ply": 47,
+        "bestUci": "c6e7",
+        "bestCp": -176,
+        "playedUci": "c6b4",
+        "playedCp": -362,
+        "regretCp": 186,
+        "admitted": [
+          { "uci": "c6e7", "cp": -176 }
+        ]
+      }
+    ]
+  },
   "finalFen": "k7/8/1Q6/2KB4/8/p7/P7/8 b - - 14 62"
 }

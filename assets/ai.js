@@ -182,7 +182,7 @@
   const PHASE_MAX = 24;
 
   const MOBILITY = { N: 3, B: 3, R: 2, Q: 1 };  // centipawns per reachable square
-  const DOUBLED = 12, ISOLATED = 12, SHIELD = 8;
+  const DOUBLED = 12, ISOLATED = 12, BLOCKED_MG = 2, BLOCKED_EG = 4, SHIELD = 8;
   const PASSED_MG = [0, 5, 10, 20, 35, 60, 80];   // by ranks advanced from home
   const PASSED_EG = [0, 15, 30, 50, 80, 130, 180];
 
@@ -262,8 +262,9 @@
 
     for (const color of ['w', 'b']) {
       const sign = color === 'w' ? 1 : -1;
+      const enemy = color === 'w' ? 'b' : 'w';
       const files = pawnFiles[color];
-      const enemyPawns = pawnSquares[color === 'w' ? 'b' : 'w'];
+      const enemyPawns = pawnSquares[enemy];
       for (let f = 0; f < 8; f++) {
         if (files[f] > 1) {
           const extra = (files[f] - 1) * DOUBLED;
@@ -272,9 +273,14 @@
       }
       for (const i of pawnSquares[color]) {
         const f = i % 8, r = Math.floor(i / 8);
+        const next = i + (color === 'w' ? -8 : 8);
+        const blocked = next >= 0 && next < 64 && !!board[next];
+        const rr = Math.min(Math.max(color === 'w' ? 6 - r : r - 1, 0), 6);
         if (!(f > 0 && files[f - 1]) && !(f < 7 && files[f + 1])) {
           mg -= sign * ISOLATED; eg -= sign * ISOLATED;
         }
+        // Immobilization matters more after a pawn has spent tempi advancing.
+        if (blocked) { mg -= sign * BLOCKED_MG * rr; eg -= sign * BLOCKED_EG * rr; }
         let passed = true;
         for (const e2 of enemyPawns) {
           const ef = e2 % 8, er = Math.floor(e2 / 8);
@@ -284,8 +290,13 @@
           }
         }
         if (passed) {
-          const rr = Math.min(Math.max(color === 'w' ? 6 - r : r - 1, 0), 6);
-          mg += sign * PASSED_MG[rr]; eg += sign * PASSED_EG[rr];
+          // A blocker always halves a passer; tactical catchability applies
+          // only in advanced endings.
+          const unsafe = blocked || (phase <= PHASE_MAX / 2 && rr >= 4 &&
+            Chess.isAttacked(board, next, enemy) &&
+            !Chess.isAttacked(board, next, color));
+          mg += sign * Math.round(PASSED_MG[rr] * (unsafe ? 0.5 : 1));
+          eg += sign * Math.round(PASSED_EG[rr] * (unsafe ? 0.5 : 1));
         }
       }
       // Pawn shield: friendly pawns directly in front of the king (midgame

@@ -1,7 +1,9 @@
 /*
- * Play-search telemetry must be forensic but behavior-neutral. The signatures
- * below were frozen from main@1e7cbaec before telemetry existed: move, score,
- * completed depth and every search counter must remain byte-for-byte equal.
+ * Play-search telemetry must be forensic and deterministic. PR1 froze these
+ * signatures from main@1e7cbaec to prove that telemetry itself was
+ * behavior-neutral. PR3 intentionally changes pawn evaluation, so its expected
+ * move/score/counters are re-frozen here while the provenance and exact
+ * root-order replay guarantees remain unchanged.
  */
 'use strict';
 require('../assets/engine.js');
@@ -37,7 +39,7 @@ const cases = [
     fen: Chess.START_FEN,
     nodes: 12000,
     expected: {
-      uci: 'd2d4', depth: 4, score: 0, nodes: 12000, qnodes: 6372,
+      uci: 'd2d4', depth: 4, score: 0, nodes: 12000, qnodes: 6374,
       cutoffs: 1097, researches: 17
     }
   },
@@ -46,8 +48,8 @@ const cases = [
     fen: 'r3r1k1/1pp2pp1/2nq3p/2b5/p4P2/2PpPQP1/PP1B2BP/R3R2K b - - 1 19',
     nodes: 50000,
     expected: {
-      uci: 'a4a3', depth: 4, score: -141, nodes: 50000, qnodes: 38314,
-      cutoffs: 2797, researches: 23
+      uci: 'd6g6', depth: 3, score: -130, nodes: 50000, qnodes: 38252,
+      cutoffs: 2741, researches: 33
     }
   },
   {
@@ -55,13 +57,13 @@ const cases = [
     fen: '4r1k1/rpp2pp1/1bn4p/3B4/1PP2P2/p2pP1P1/P2B3P/1R2R2K b - - 0 24',
     nodes: 100000,
     expected: {
-      uci: 'c6b4', depth: 5, score: -13, nodes: 100000, qnodes: 63025,
-      cutoffs: 5872, researches: 41
+      uci: 'c6e7', depth: 5, score: 14, nodes: 100000, qnodes: 58407,
+      cutoffs: 5233, researches: 36
     }
   }
 ];
 
-console.log('behavior-neutral fixed-node signatures');
+console.log('deterministic fixed-node provenance signatures');
 for (const c of cases) {
   const state = Chess.parseFen(c.fen);
   const r = ChessAI.think(state, {
@@ -72,7 +74,7 @@ for (const c of cases) {
     qnodes: r.qnodes, cutoffs: r.cutoffs, researches: r.researches
   };
   check(JSON.stringify(actual) === JSON.stringify(c.expected),
-    c.name + ' search signature unchanged', JSON.stringify(actual));
+    c.name + ' search signature matches the current evaluator', JSON.stringify(actual));
   check(r.stopReason === 'node-limit' && r.attemptedDepth === r.depth + 1,
     c.name + ' distinguishes completed and aborted drafts',
     r.stopReason + ' d' + r.depth + '/attempted ' + r.attemptedDepth);

@@ -1,8 +1,9 @@
 /*
- * Fixed-node AI regression suite — run with: node test/ai-tactics.js
+ * Deterministic AI regression suite — run with: node test/ai-tactics.js
  *
- * Every search runs deterministic (randomize:false) under a fixed nodeLimit,
- * so results are reproducible across machines and immune to timer noise.
+ * Most searches use a fixed nodeLimit; the reported-game stability gates use
+ * fixed depths. Every search disables root randomness, so results are
+ * reproducible across machines and immune to timer noise.
  * Mirrored (rank-flipped, color-swapped) twins of each positional test keep
  * the engine honest about color symmetry. Several tests allow multiple
  * equally-good moves; `avoid` tests assert restraint instead.
@@ -14,6 +15,7 @@ require('../assets/engine.js');
 require('../assets/ai.js');
 const Chess = globalThis.Chess;
 const ChessAI = globalThis.ChessAI;
+const masterIncident = require('./fixtures/master-incident-20260724.json');
 
 const MATE = 1000000, MATE_NEAR = MATE - 1000; // mirror ai.js
 
@@ -42,6 +44,16 @@ function solve(fen, nodes, positions) {
   const r = ChessAI.think(Chess.parseFen(fen), {
     maxDepth: 30, nodeLimit: nodes, quiesce: true, randomize: false,
     positions: positions || null
+  });
+  return {
+    uci: r.move ? Chess.sqName(r.move.from) + Chess.sqName(r.move.to) + (r.move.promotion || '') : '-',
+    score: r.score, depth: r.depth, move: r.move
+  };
+}
+
+function solveDepth(fen, depth) {
+  const r = ChessAI.think(Chess.parseFen(fen), {
+    maxDepth: depth, quiesce: true, randomize: false
   });
   return {
     uci: r.move ? Chess.sqName(r.move.from) + Chess.sqName(r.move.to) + (r.move.promotion || '') : '-',
@@ -124,6 +136,132 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
       const wantMate = flip ? -MATE_NEAR : MATE_NEAR;
       check(flip ? r.score < wantMate : r.score > wantMate,
         label + ' [mate seen, winning side]', 'score ' + r.score);
+    }
+  }
+}
+
+// --- Pawn progress evaluation. These pairs isolate the two terms behind the
+// master-game regression. They are deliberately mutation-sensitive: removing
+// the advancement-scaled blocker penalty reverses the first comparison, while
+// treating every attacked advance as unsafe separates the second equal pair by
+// about half an advanced passer bonus. Color twins guard sign symmetry.
+console.log('blocker-aware pawn evaluation');
+(function () {
+  const blocked = '7k/2p5/3n4/3P4/8/8/8/K7 w - - 0 1';
+  const mobile = '7k/2p5/8/2nP4/8/8/8/K7 w - - 0 1';
+  const blockedScore = ChessAI.evaluate(Chess.parseFen(blocked).board);
+  const mobileScore = ChessAI.evaluate(Chess.parseFen(mobile).board);
+  check(blockedScore < mobileScore,
+    'an advanced blocked pawn loses progress value',
+    'blocked ' + blockedScore + ', mobile ' + mobileScore);
+
+  const defended = '2Br3k/8/3P4/8/8/8/8/K7 w - - 0 1';
+  const unchallenged = '2B2r1k/8/3P4/8/8/8/8/K7 w - - 0 1';
+  const defendedState = Chess.parseFen(defended);
+  const next = Chess.sqIndex('d7');
+  check(Chess.isAttacked(defendedState.board, next, 'b') &&
+    Chess.isAttacked(defendedState.board, next, 'w'),
+    'defended-passer fixture has an attacked and defended advance');
+  const defendedScore = ChessAI.evaluate(defendedState.board);
+  const unchallengedScore = ChessAI.evaluate(Chess.parseFen(unchallenged).board);
+  check(Math.abs(defendedScore - unchallengedScore) <= 2,
+    'a defended passer keeps its full progress credit',
+    'defended ' + defendedScore + ', unchallenged ' + unchallengedScore);
+
+  for (const [name, fen] of [
+    ['blocked pawn', blocked], ['mobile pawn', mobile],
+    ['defended passer', defended], ['unchallenged passer', unchallenged]
+  ]) {
+    const a = ChessAI.evaluate(Chess.parseFen(fen).board);
+    const b = ChessAI.evaluate(Chess.parseFen(mirrorFen(fen)).board);
+    check(Math.abs(a + b) <= 1, name + ' evaluation is color-symmetric',
+      'original ' + a + ', mirrored ' + b);
+  }
+})();
+
+// --- Exact reported Master game. The FENs and frozen independent labels are
+// read from the same full-ID fixture that replays the screenshot game, rather
+// than copied into a second anonymous incident. The oracle labels use
+// Stockfish 18, depth 20, Threads 1, Hash 256, Clear Hash before each probe,
+// Black POV. Gate move behavior, never equality to those centipawn labels or
+// one brittle PV. The scored move-19 allow-list is an explicitly bounded
+// catastrophic-blunder mitigation set, not a claim that every admitted
+// defence is oracle-equivalent; move 24 admits only ...Ne7. Depths 4-6 cover
+// the observed non-monotonic ...Nxb4 regression.
+console.log('reported Master game ' + masterIncident.id + ' (frozen Stockfish 18 report)');
+const incidentCritical = new Map(masterIncident.critical.map(function (c) {
+  return [c.ply, c];
+}));
+const incidentOracle = masterIncident.oracle;
+check(masterIncident.id === 'dd608f7d-4a6d-416a-a773-0c7515e14898' &&
+    incidentOracle.engine === 'Stockfish 18' && incidentOracle.depth === 20 &&
+    incidentOracle.engineId === 'Stockfish 18 WASM' &&
+    incidentOracle.threads === 1 && incidentOracle.hashMb === 256 &&
+    incidentOracle.package === 'stockfish@18.0.8' &&
+    incidentOracle.flavor === 'single' && incidentOracle.multiPv === 1 &&
+    /^[0-9a-f]{64}$/.test(incidentOracle.jsSha256) &&
+    /^[0-9a-f]{64}$/.test(incidentOracle.wasmSha256) &&
+    incidentOracle.uciNewGameBeforeEach === true &&
+    incidentOracle.clearHashBeforeEach === true &&
+    incidentOracle.scorePov === 'black' &&
+    incidentOracle.gateIntent === 'catastrophic-blunder-mitigation' &&
+    incidentOracle.maxAdmittedRegretCp === 175,
+  'incident gate is pinned to the exact screenshot game and oracle config');
+for (const label of incidentOracle.positions) {
+  const critical = incidentCritical.get(label.ply);
+  check(Number.isInteger(label.bestCp) && Number.isInteger(label.playedCp) &&
+      label.regretCp === label.bestCp - label.playedCp &&
+      !!critical,
+    'frozen oracle label at ply ' + label.ply + ' is internally consistent');
+  const state = Chess.parseFen(critical.fen);
+  const legal = Chess.legalMoves(state);
+  function uciOf(m) {
+    return Chess.sqName(m.from) + Chess.sqName(m.to) +
+      (m.promotion ? m.promotion.toLowerCase() : '');
+  }
+  const best = legal.find(function (m) { return uciOf(m) === label.bestUci; });
+  const played = legal.find(function (m) { return uciOf(m) === label.playedUci; });
+  check(!!best && !!played && Chess.toSan(state, played, legal) === critical.san,
+    'oracle moves at ply ' + label.ply + ' are legal and identify the archived move');
+  const admittedUci = Array.isArray(label.admitted)
+    ? label.admitted.map(function (move) { return move.uci; }) : [];
+  const legalUci = new Set(legal.map(uciOf));
+  check(label.regretCp > incidentOracle.maxAdmittedRegretCp,
+    'archived move at ply ' + label.ply + ' exceeds the mitigation ceiling');
+  check(admittedUci.length > 0 &&
+      new Set(admittedUci).size === admittedUci.length &&
+      admittedUci.indexOf(label.playedUci) < 0 &&
+      admittedUci.every(function (uci) { return legalUci.has(uci); }) &&
+      label.admitted.some(function (move) { return move.uci === label.bestUci; }) &&
+      label.admitted.every(function (move) {
+        const regret = label.bestCp - move.cp;
+        return Number.isInteger(move.cp) && regret >= 0 &&
+          regret <= incidentOracle.maxAdmittedRegretCp;
+      }),
+    'admitted moves at ply ' + label.ply + ' are unique, legal and within the mitigation ceiling');
+}
+for (const [name, ply] of [
+  ['move 19 defence', 37],
+  ['move 24 defence', 47]
+]) {
+  const report = incidentOracle.positions.find(function (p) { return p.ply === ply; });
+  const allowed = report.admitted.map(function (move) { return move.uci; });
+  const fen = incidentCritical.get(ply).fen;
+  const avoided = [report.playedUci];
+  check(allowed.indexOf(report.bestUci) >= 0,
+    name + ' admits the independently labelled best move');
+  for (const depth of [4, 5, 6]) {
+    for (const flip of [false, true]) {
+      const f = flip ? mirrorFen(fen) : fen;
+      const ok = (flip ? allowed.map(mirrorMove) : allowed);
+      const bad = (flip ? avoided.map(mirrorMove) : avoided);
+      const r = solveDepth(f, depth);
+      const label = name + ' d' + depth + (flip ? ' (mirrored)' : '');
+      check(isLegal(f, r.move), label + ' [returns a legal move]', 'got ' + r.uci);
+      check(ok.indexOf(r.uci) >= 0, label + ' [acceptable set]',
+        'got ' + r.uci + ' (' + r.score + ')');
+      check(bad.indexOf(r.uci) < 0, label + ' [avoids reported blunder]',
+        'played ' + r.uci);
     }
   }
 }

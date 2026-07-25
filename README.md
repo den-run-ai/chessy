@@ -20,7 +20,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   Zobrist-keyed transposition table, and hash/killer/history move ordering,
   running in a Web Worker so the UI never blocks. The evaluation is tapered
   between midgame and endgame (the king hides, then centralizes) and scores
-  mobility, doubled/isolated/passed pawns, and the king's pawn shield. The
+  mobility, doubled/isolated/passed pawns, and the king's pawn shield. A
+  blocked pawn loses progress credit in proportion to how far it advanced;
+  a passed pawn with an occupied next square also receives half its passer
+  bonus. In lower-material endings, that half-credit applies to an advanced
+  passer whose next step is enemy-controlled without friendly support. The
   search knows about draws: repetitions of game or search-path positions and
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own
@@ -156,15 +160,16 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 
 ```sh
 node test/engine.test.js
-node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
+node test/ai-tactics.js     # deterministic fixed-node/depth AI regressions
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
+node test/master-incident-depth4-boundary.test.js  # deterministic d4 boundary
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
 node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
 ```
 
 The AI measurement tools are manual (too slow for PR CI). `node
-test/ai-bench.js --base origin/main` measures search nodes over 16 benchmark
+test/ai-bench.js --base origin/main` measures search nodes over 18 benchmark
 positions against a git ref. `test/ai-match.js` supports one formal paired
 protocol plus diagnostic modes. Only `--formal --nodes 10000 --plies 180`
 aggregated over 100 openings x 4 seeds x both colors (800 games), against a
@@ -193,6 +198,33 @@ malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
 valid statistical miss. Start a fresh complete 20-shard run for a genuinely
 new experiment, because post-selection invalidates the predeclared result.
+The pinned external Stockfish reproduction below is independent of these
+paired-match protocols.
+
+The r56 pawn-evaluation regression uses both critical positions from archived
+Master game `dd608f7d-4a6d-416a-a773-0c7515e14898` and their color-swapped
+twins at fixed depths 4–6. Its
+move-19 set is an anti-blunder stability set, not a claim that every admitted
+defence is oracle-equivalent. Each admitted move has a frozen score and must
+remain within the explicit 175cp catastrophic-blunder mitigation ceiling;
+move 24 admits only `...Ne7`. Frozen full
+Stockfish 18 WASM labels, package/build hashes, and probe settings live beside
+the tests; install `stockfish@18.0.8` and run
+`node test/oracle/master-incident-stockfish.js` to reproduce them manually. On
+the 18-position depth-5 bench this change measured 1.020x geometric-mean nodes,
+1.113x worst case, and
+no position above 1.25x; wall time was about 12% higher in the local run.
+Normal and `--jitless` five-second probes chose the guarded moves for three
+root-order seeds. `test/master-incident-depth4-boundary.test.js` uses a
+58,000-node deterministic decision boundary and guards both exact incident
+positions, their color mirrors, and three distinct root orders after depth 4.
+That node count is deliberately **not** a portable estimate of five seconds:
+device speed, load, runtime and JIT state all change wall-clock throughput. A
+20-game, 4k-node paired smoke scored 45% and is explicitly too small and
+shallow to establish strength. It does not replace the formal 800-game
+strict-strength gate; this pure evaluation change may merge only if the
+one-sided 95% lower bound is strictly above 50%. The 200-game equal-time
+protocol remains draft diagnostic evidence only.
 
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
