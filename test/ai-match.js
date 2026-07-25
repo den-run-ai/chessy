@@ -1,32 +1,40 @@
 /*
  * AI self-play match — working-tree candidate vs a git ref, run manually or
  * via workflow_dispatch (deliberately NOT part of PR CI: a full match takes
- * minutes to hours depending on --nodes).
+ * minutes to hours depending on its per-move budget).
  *
  * Usage:
- *   node test/ai-match.js --base claude/ai-3-tests        # full 800-game match
+ *   node test/ai-match.js --formal --base HEAD~1          # formal 800-game gate
  *   node test/ai-match.js --base HEAD~1 --nodes 3000      # cheaper run
+ *   node test/ai-match.js --base HEAD~1 --time 5000 --seeds 1
  *   node test/ai-match.js --base claude/ai-3-tests --pairs 20   # first N pairs
  *
- * The base ref MUST honor the per-move node budget (nodeLimit). Pre-nodeLimit
- * refs (e.g. an old origin/main) would search toward depth 30 unbounded and
- * hang the match, so both engines are probed up front and the run refuses a
- * base that ignores the budget. The 'origin/main' default is kept only as a
- * convenience for when main itself carries the budget; otherwise pass an
- * explicit ref at or after the node-budget fix.
+ * Exactly one budget is active: fixed nodes (`--nodes`, default 10000) or
+ * equal wall-clock time (`--time MS`). Supplying both is an error. Fixed-node
+ * runs are diagnostic unless `--formal` explicitly requests and validates the
+ * frozen gate contract. In fixed-node mode the base ref MUST honor nodeLimit.
+ * Pre-nodeLimit refs would search toward depth 30 unbounded and hang the match,
+ * so both engines are probed up front and the run refuses an incompatible base.
  *
  * Design (paired match):
- *   100 frozen openings x 4 deterministic seeds x both colors = 800 games.
- *   Fixed nodes per move (default 10000) with quiescence; 180-ply cap, an
- *   unfinished game is a draw (but a game decided ON the cap move is scored).
- *   Both engines get an identically seeded Math.random per game, so the whole
- *   match is reproducible.
+ *   Formal fixed-node gate (`--formal`): exactly 10,000 nodes/move, 100 frozen
+ *   openings x 4 deterministic seeds x both colors = 800 games, and a 180-ply
+ *   cap. Other fixed-node configurations have a distinct diagnostic protocol
+ *   identity. Draft equal-time diagnostic: the same openings x 1 seed x both
+ *   colors = 200 games at the production 5000ms budget.
+ *   Both engines get an identically seeded Math.random per game. Fixed-node
+ *   results are exactly reproducible; equal-time runs preserve root variety
+ *   but naturally retain scheduler/JIT timing noise. Equal-time records do not
+ *   yet contain per-move timing evidence, so they are not independently
+ *   auditable and cannot replace the formal fixed-node merge gate.
  *
  * Shard a large match by seed (--seeds/--seedbase) and/or by opening range
  * (--openbase/--opencount) so any single shard fits the workflow timeout; the
  * aggregator (test/ai-match-agg.js) checks the shards tile the full manifest.
  *
- * Output (all machine-readable, captured into the workflow artifact):
+ * Output includes a canonical, exactly-once metadata envelope (protocol,
+ * acceptance class/threshold, commits, budget, max plies, opening-manifest
+ * identity, Node runtime and optional workflow run), plus:
  *   pair-scores:     the raw per-(opening, seed) pair scores;
  *   records:         one structured JSON record per pair {op, name, seed,
  *                    gseed, white, black, pair} — enough to recompute any
@@ -35,7 +43,7 @@
  *   shard:           this shard's opening and seed ranges;
  *   depth-dist /     the completed-depth histogram and the fraction of moves
  *   completed-depth: returned from a depth >= 5 search (search-depth telemetry,
- *                    e.g. for calibrating the node budget);
+ *                    e.g. for calibrating either per-move budget);
  *   RESULT:          the opening-CLUSTER non-inferiority verdict (see
  *                    test/match-stats.js) — the 95% lower bound is over the
  *                    per-opening means, not the individual pairs.
@@ -45,14 +53,19 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const cp = require('child_process');
+const crypto = require('crypto');
 require('../assets/engine.js'); // arbiter rules (host realm)
 const Chess = globalThis.Chess;
 const { clusterStats } = require('./match-stats'); // opening-cluster verdict
+const MatchProtocol = require('./ai-match-protocol');
 
 const args = process.argv.slice(2);
 function opt(name, dflt) {
   const i = args.indexOf('--' + name);
   return i >= 0 ? args[i + 1] : dflt;
+}
+function flagCount(name) {
+  return args.filter(function (arg) { return arg === '--' + name; }).length;
 }
 const BASE = opt('base', 'origin/main');
 // An explicit `--base` with no value (or an empty string) makes opt() return
@@ -64,12 +77,12 @@ if (!BASE) {
   console.error('--base requires a non-empty git ref');
   process.exit(2);
 }
-// Positive SAFE integer: node/ply/seed/pair counts index integer loops, so a
+// Positive SAFE integer: budget/ply/seed/pair counts index integer loops, so a
 // decimal (`--plies 1.1` -> 2 plies) or non-numeric value silently runs a
-// different experiment than requested. A non-numeric --nodes would become NaN,
-// and `ctx.nodes >= NaN` is always false — turning the per-move budget OFF and
+// different experiment than requested. A non-numeric --nodes would become
+// NaN, and `ctx.nodes >= NaN` is always false — turning that budget OFF and
 // letting the search run toward depth 30 unbounded. Number.isSafeInteger (not
-// just isInteger) also rejects magnitudes past 2^53, where `n++` in a loop can
+// just isInteger) also rejects magnitudes past 2^53, where integer loops can
 // stop advancing (float rounding) and spin forever.
 function posInt(name, dflt) {
   const raw = opt(name, String(dflt));
@@ -80,9 +93,50 @@ function posInt(name, dflt) {
   }
   return n;
 }
-const NODES = posInt('nodes', 10000);
+const HAS_NODES = args.includes('--nodes');
+const HAS_TIME = args.includes('--time');
+if (flagCount('nodes') > 1 || flagCount('time') > 1) {
+  console.error('--nodes and --time may each be supplied at most once');
+  process.exit(2);
+}
+if (HAS_NODES && HAS_TIME) {
+  console.error('--nodes and --time are mutually exclusive per-move budgets');
+  process.exit(2);
+}
+const NODES = HAS_TIME ? null : posInt('nodes', 10000);
+const TIME_MS = HAS_TIME ? posInt('time', 0) : null;
+const BUDGET_MODE = TIME_MS == null ? 'nodes' : 'time';
+const BUDGET_VALUE = TIME_MS == null ? NODES : TIME_MS;
+const BUDGET_LABEL = BUDGET_VALUE + (BUDGET_MODE === 'nodes' ? ' nodes/move' : ' ms/move');
+const WORKFLOW_RUN = process.env.CHESSY_WORKFLOW_RUN || null;
+if (WORKFLOW_RUN &&
+    !/^https:\/\/[^\s]+\/actions\/runs\/[0-9]+$/.test(WORKFLOW_RUN)) {
+  console.error('CHESSY_WORKFLOW_RUN must be a canonical Actions run URL');
+  process.exit(2);
+}
 const MAX_PLIES = posInt('plies', 180);
 const SEEDS = posInt('seeds', 4);
+const FORMAL_REQUESTED = args.includes('--formal');
+if (flagCount('formal') > 1) {
+  console.error('--formal may be supplied at most once');
+  process.exit(2);
+}
+let PROTOCOL;
+if (FORMAL_REQUESTED) {
+  PROTOCOL = MatchProtocol.PROTOCOLS.formalFixedNode;
+  if (BUDGET_MODE !== PROTOCOL.budgetMode ||
+      BUDGET_VALUE !== PROTOCOL.budgetValue ||
+      MAX_PLIES !== PROTOCOL.maxPlies) {
+    console.error('--formal requires exactly --nodes ' + PROTOCOL.budgetValue +
+      ' and --plies ' + PROTOCOL.maxPlies);
+    process.exit(2);
+  }
+} else {
+  PROTOCOL = BUDGET_MODE === 'nodes'
+    ? MatchProtocol.PROTOCOLS.nodeDiagnostic
+    : MatchProtocol.PROTOCOLS.timeDiagnostic;
+}
+const PROTOCOL_ID = PROTOCOL.id;
 // Seed base (shard offset): a safe integer >= 0. A typo like `--seedbase nope`
 // becomes NaN, making the seed loop `s < NaN + SEEDS` false from the start —
 // exiting successfully with an empty, inconclusive result and silently
@@ -233,6 +287,14 @@ const OPENINGS = [
   ['Larsen Attack', 'b3 e5 Bb2 Nc6'],
   ['Nimzo-Larsen', 'Nf3 Nf6 b3 g6']
 ];
+const openingsHash = crypto.createHash('sha256')
+  .update(JSON.stringify(OPENINGS), 'utf8').digest('hex');
+if (OPENINGS.length !== MatchProtocol.OPENINGS_MANIFEST_COUNT ||
+    openingsHash !== MatchProtocol.OPENINGS_MANIFEST_SHA256) {
+  console.error('frozen opening list changed without a new manifest version/hash (got ' +
+    OPENINGS.length + ' openings, ' + openingsHash + ')');
+  process.exit(2);
+}
 
 const MK_RAND = 'function __mkRand(seed) {\n' +
   '  return function () {\n' +
@@ -278,8 +340,8 @@ function openingState(sans) {
 
 // Candidate-only search-depth telemetry, accumulated across every match move
 // the candidate makes. Emitted in the artifact so a run records how deep the
-// search actually reached at the chosen node budget — useful for calibrating
-// that budget (a budget that only ever completes depth 2-3 exercises far less
+// search actually reached at the chosen per-move budget — useful for
+// calibrating it (a budget that only ever completes depth 2-3 exercises far less
 // of the search than one reaching depth 5-6). candDepthGe5 counts moves whose
 // last COMPLETED iteration reached depth >= 5.
 let candMoves = 0, candDepthGe5 = 0;
@@ -296,9 +358,13 @@ function playGame(engines, sans, seed) {
       return status.result === '1-0' ? 1 : status.result === '0-1' ? 0 : 0.5;
     }
     const ctx = engines[state.turn === 'w' ? 0 : 1];
-    const r = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.toFen(state)), {
-      maxDepth: 30, nodeLimit: NODES, quiesce: true, positions: state.positions
-    });
+    const searchOpts = {
+      maxDepth: 30, quiesce: true, positions: state.positions
+    };
+    if (TIME_MS == null) searchOpts.nodeLimit = NODES;
+    else searchOpts.timeMs = TIME_MS;
+    const r = ctx.ChessAI.think(
+      ctx.Chess.parseFen(Chess.toFen(state)), searchOpts);
     // `cand` is the working-tree engine (assigned below, before any game runs).
     if (ctx === cand) {
       candMoves++;
@@ -325,9 +391,9 @@ function playGame(engines, sans, seed) {
 
 // A base engine that ignores nodeLimit would search toward depth 30 with no
 // bound, so every move would hang the match. Probe it BEFORE playing: give a
-// tiny node budget plus a time backstop (all engine versions honor timeMs, so
-// this can't hang); if it blows past the node budget, it doesn't support the
-// per-move budget and the match would be unfair — refuse loudly.
+// tiny node budget plus the long-standing time backstop. If it blows past the
+// node budget, it doesn't support the per-move budget and the match would be
+// unfair — refuse loudly.
 const PROBE_NODES = 3000;
 function assertBounded(ctx, label) {
   const probe = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.START_FEN),
@@ -339,10 +405,50 @@ function assertBounded(ctx, label) {
   // give it materially more computation than its opponent — an unfair,
   // invalid fixed-node result.
   if (probe.nodes > PROBE_NODES + 1) {
-    console.error('base "' + label + '" does not honor nodeLimit (searched ' + probe.nodes +
+    console.error('engine "' + label + '" does not honor nodeLimit (searched ' + probe.nodes +
       ' nodes for a ' + PROBE_NODES + '-node probe). Pick a ref that supports the per-move ' +
       'node budget (any ref at or after the node-budget fix, e.g. claude/ai-3-tests), not ' +
       'pre-nodeLimit main.');
+    process.exit(3);
+  }
+}
+
+// Equal-time fairness has the symmetric compatibility requirement: both refs
+// must actually stop on timeMs. A per-VM fake clock makes the probe independent
+// of host speed: call 1 starts at 1000, every later call is the exact deadline.
+// maxDepth stays finite so a ref that ignores time returns and is rejected.
+// Legacy main honors the deadline but predates stopReason telemetry, so an
+// early abort is authoritative and a missing reason is accepted.
+const PROBE_TIME_MS = 5;
+const PROBE_TIME_DEPTH = 2;
+const PROBE_TIME_FEN =
+  'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1';
+function assertTimed(ctx, label) {
+  vm.runInContext(
+    'globalThis.__matchRealNow = Date.now;' +
+    'globalThis.__matchClockCalls = 0;' +
+    'Date.now = function () {' +
+    ' return globalThis.__matchClockCalls++ === 0 ? 1000 : 1005;' +
+    '};', ctx);
+  let probe;
+  try {
+    probe = ctx.ChessAI.think(ctx.Chess.parseFen(PROBE_TIME_FEN),
+      { maxDepth: PROBE_TIME_DEPTH, timeMs: PROBE_TIME_MS,
+        quiesce: true, randomize: false });
+  } finally {
+    vm.runInContext(
+      'Date.now = globalThis.__matchRealNow;' +
+      'delete globalThis.__matchRealNow;' +
+      'delete globalThis.__matchClockCalls;', ctx);
+  }
+  const reasonKnown = probe && probe.stopReason != null;
+  if (!probe || !Number.isInteger(probe.depth) ||
+      probe.depth >= PROBE_TIME_DEPTH ||
+      (reasonKnown && probe.stopReason !== 'time-limit')) {
+    console.error('engine "' + label + '" does not honor/report timeMs (returned d' +
+      (probe && probe.depth) + ', stopReason ' +
+      JSON.stringify(probe && probe.stopReason) +
+      ' for a deterministic ' + PROBE_TIME_MS + 'ms probe).');
     process.exit(3);
   }
 }
@@ -377,10 +483,33 @@ if (OPEN_LO >= OPENINGS.length) {
   process.exit(2);
 }
 
+function gitSha(ref, label) {
+  try {
+    const sha = cp.execFileSync('git', ['rev-parse', '--verify', ref + '^{commit}'],
+      { encoding: 'utf8', cwd: path.join(__dirname, '..') }).trim();
+    if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('non-canonical SHA "' + sha + '"');
+    return sha;
+  } catch (e) {
+    console.error('cannot resolve canonical ' + label + ' SHA from "' + ref + '": ' +
+      e.message);
+    process.exit(2);
+  }
+}
+const CANDIDATE_SHA = gitSha('HEAD', 'candidate');
+const BASE_SHA = gitSha(BASE, 'base');
+if (PROTOCOL.formal && CANDIDATE_SHA === BASE_SHA) {
+  console.error('formal fixed-node gate requires distinct candidate and base commits');
+  process.exit(2);
+}
 const cand = loadEngine(null);
 const base = loadEngine(BASE);
-assertBounded(cand, 'candidate (working tree)');
-assertBounded(base, BASE);
+if (TIME_MS == null) {
+  assertBounded(cand, 'candidate (working tree)');
+  assertBounded(base, BASE);
+} else {
+  assertTimed(cand, 'candidate (working tree)');
+  assertTimed(base, BASE);
+}
 
 let w = 0, d = 0, l = 0, games = 0;
 const pairScores = []; // candidate score per (opening, seed) pair, in [0, 1]
@@ -413,27 +542,39 @@ for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
 process.stderr.write('\n');
 
 const cs = clusterStats(records);
+function acceptanceVerdict(stats) {
+  if (!Number.isFinite(stats.lo95)) return stats.verdict;
+  if (stats.lo95 > PROTOCOL.lowerBoundThreshold) {
+    return PROTOCOL.formal
+      ? 'PASS — strict strength gate met'
+      : stats.verdict;
+  }
+  return PROTOCOL.formal
+    ? 'FAIL — strict strength gate not met (lower bound at or below 50%)'
+    : stats.verdict;
+}
 
 // Completed-depth histogram and the fraction of candidate moves returned from a
-// depth >= 5 search — search-depth telemetry for calibrating the node budget.
+// depth >= 5 search — search-depth telemetry for calibrating the chosen budget.
 const ge5Pct = candMoves ? (100 * candDepthGe5 / candMoves) : 0;
 
-// Provenance so a shard produced directly here (e.g. via --openbase/--opencount)
-// is admissible to ai-match-agg.js without the workflow's metadata header — the
-// aggregator requires candidate-sha / base-sha / nodes-per-move on EVERY shard.
-// candidate = the working tree at HEAD (a locally dirty tree is the caller's
-// responsibility, exactly as the workflow assumes a clean checkout); base = the
-// resolved --base ref. 'unknown' if git can't resolve a ref; the aggregator's
-// SHA-agreement check still stops a mixed shard set from combining.
-function gitSha(ref) {
-  try {
-    return cp.execFileSync('git', ['rev-parse', ref],
-      { encoding: 'utf8', cwd: path.join(__dirname, '..') }).trim();
-  } catch (e) { return 'unknown'; }
-}
-console.log('candidate-sha: ' + gitSha('HEAD'));
-console.log('base-sha: ' + gitSha(BASE));
-console.log('nodes-per-move: ' + NODES);
+// Canonical artifact metadata. A dirty local tree remains the caller's
+// responsibility; workflow checkouts are clean and therefore identified by
+// CANDIDATE_SHA exactly.
+console.log('protocol-id: ' + PROTOCOL_ID);
+console.log('acceptance-class: ' + PROTOCOL.acceptanceClass);
+console.log('lower-bound-threshold: ' + PROTOCOL.lowerBoundThreshold);
+console.log('candidate-sha: ' + CANDIDATE_SHA);
+console.log('base-sha: ' + BASE_SHA);
+console.log('budget-mode: ' + BUDGET_MODE);
+console.log('budget-value: ' + BUDGET_VALUE);
+console.log('max-plies: ' + MAX_PLIES);
+console.log('openings-manifest-version: ' +
+  MatchProtocol.OPENINGS_MANIFEST_VERSION);
+console.log('openings-manifest-sha256: ' +
+  MatchProtocol.OPENINGS_MANIFEST_SHA256);
+console.log('node-runtime: ' + process.version);
+if (WORKFLOW_RUN) console.log('workflow-run: ' + WORKFLOW_RUN);
 console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
 console.log('records: ' + JSON.stringify(records));        // structured, for the cluster aggregator
 console.log('openings-total: ' + OPENINGS.length);         // opening-list size (aggregator cross-check)
@@ -442,21 +583,23 @@ console.log('shard: openings [' + OPEN_LO + ',' + OPEN_HI + ') seeds [' +
 console.log('depth-dist: ' + JSON.stringify(candDepths));  // completed-depth histogram (candidate moves)
 console.log('completed-depth: ' + candDepthGe5 + '/' + candMoves + ' candidate moves reached depth >= 5 (' +
   ge5Pct.toFixed(1) + '%)');
-console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + NODES + ' nodes/move');
+console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + BUDGET_LABEL);
 // The verdict is the opening-CLUSTER one-sided non-inferiority bound (mean and
 // 95% lower bound over the per-opening means, NOT the raw pairs — see
 // test/match-stats.js). A single --seeds 1 shard has one pair per opening, so
-// its cluster bound equals the pair bound; the authoritative 800-game bound
-// comes from aggregating the shards' `records:` with test/ai-match-agg.js.
+// its cluster bound equals the pair bound. The authoritative formal result is
+// the aggregate of all 800 fixed-node games. Equal-time aggregation remains
+// diagnostic. Both are computed from all protocol shards' `records:` with
+// test/ai-match-agg.js.
 if (cs.nClusters < 2) {
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
     (cs.nClusters ? '  score ' + (cs.mean * 100).toFixed(1) + '%' : '') +
     '  (' + cs.nClusters + ' opening' + (cs.nClusters === 1 ? '' : 's') + ')');
-  console.log('RESULT: ' + cs.verdict);
+  console.log('RESULT: ' + acceptanceVerdict(cs));
 } else {
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
     '  score ' + (cs.mean * 100).toFixed(2) + '%' +
     '  one-sided 95% lower bound ' + (cs.lo95 * 100).toFixed(2) + '%' +
     '  over ' + cs.nClusters + ' openings (' + cs.nPairs + ' pairs)');
-  console.log('RESULT: ' + cs.verdict);
+  console.log('RESULT: ' + acceptanceVerdict(cs));
 }

@@ -68,6 +68,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ai-match-cli.test.js checks the exact legacy-main time contract.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -103,6 +106,8 @@ jobs:
           fi
       - name: Validate frozen match openings
         run: node test/ai-match.js --check-openings
+      - name: Validate match protocol CLI and equal-time smoke
+        run: node test/ai-match-cli.test.js
       - name: Run match cluster-statistics tests
         run: node test/match-stats.test.js
       - name: Run match shard-aggregator tests
