@@ -92,6 +92,9 @@ require('./helper').run('replay', async function (t) {
   await mv('g2', 'g4'); await mv('d8', 'h4');
   await page.waitForSelector('#gameOverDialog[open]');
   await page.click('#gameOverRematch');
+  await page.waitForFunction(function () {
+    return !document.getElementById('gameOverDialog').open;
+  });
   check(await page.locator('#moveList .ply').count() === 0, 'Rematch starts a fresh game');
 
   // Phone-sized regression: playing moves must never scroll the PAGE (the

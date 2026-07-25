@@ -9,10 +9,10 @@
  * Dynamic gate: an old service worker receiving a NEW release must never
  * produce mixed execution (new HTML with old cached scripts or the
  * reverse). This suite serves the repo with the release token rewritten
- * on the fly: install release rA, flip the server to rB, reload under the
- * still-active rA worker, and assert every loaded executable asset always
- * carries the DOCUMENT's own release token — online during the update and
- * offline after it.
+ * on the fly: install release rA, flip the server to rB behind a long-open
+ * active game, request New game, and assert B takes over before the old
+ * runtime can replace the save. Every loaded executable asset must carry
+ * the DOCUMENT's own release token — online and offline.
  */
 'use strict';
 const http = require('http');
@@ -154,14 +154,41 @@ function browserType() {
     'release A loads coherently (' + a.total + ' assets, 0 mixed)');
   check(a.build === RA, 'release A executes release A BYTES (build marker ' + a.build + ')');
 
-  // Phase B publishes while the A worker still controls the page. The
-  // reload's network-first navigation fetches the B shell; its ?r= assets
-  // miss the A cache and come from the network — never from the old
-  // release's cache. The new worker then installs and takes over.
+  // Leave a real active game in the long-open A tab. New game checks A's
+  // worker before replacing the save; with no update yet it starts normally.
+  await page.click('#newGame');
+  await page.click('input[name="mode"][value="pvp"] + span');
+  await page.click('#newGameStart');
+  await page.waitForFunction(function () {
+    return !document.getElementById('newGameDialog').open;
+  });
+  await page.click('#board .square[data-index="52"]'); // e2
+  await page.click('#board .square[data-index="36"]'); // e4
+  const activeA = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return { id: saved.gameId, plies: saved.history.length };
+  });
+  check(activeA.plies === 1, 'release A has a synchronously persisted active game');
+
+  // Phase B publishes while that foreground tab remains open: there is no
+  // navigation or visibilitychange to discover it. Clicking Start game is
+  // the safe-boundary check. The stale callback must NOT replace the active
+  // save; B's skipWaiting/claim triggers a reload, and B restores that game.
   phase.release = RB;
-  await page.reload();
+  await page.click('#newGame');
+  await page.click('#newGameStart');
   const b = await stable(function (s) { return s.token === RB && s.ready && s.controlled; },
     'phase B ready under the new worker');
+  const restoredB = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      id: saved.gameId,
+      plies: saved.history.length,
+      rendered: document.querySelectorAll('#moveList .ply').length
+    };
+  });
+  check(restoredB.id === activeA.id && restoredB.plies === 1 && restoredB.rendered === 1,
+    'new release takes control before New game and restores the active A game');
   check(b.mixed.length === 0 && b.engine,
     'update in flight: the B document executes only B asset URLs (' + b.total + ' checked)');
   check(b.build === RB,

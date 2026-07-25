@@ -25,6 +25,68 @@ require('./helper').run('setup', async function (t) {
   await page.click('#newGame');
   await page.click('#newGameCancel');
   check(await page.locator('#moveList .ply').count() === 1, 'cancelled dialog leaves the game untouched');
+
+  // The release check is asynchronous. Rapid Start clicks coalesce at the
+  // runtime layer and are generation-fenced here; cancelling while the check
+  // is pending must prevent every queued callback from replacing the game.
+  const activeId = await page.evaluate(function () {
+    window.__realChessyRuntime = window.ChessyRuntime;
+    window.__installRuntimeCheck = function () {
+      window.__runtimeCheck = new Promise(function (resolve) {
+        window.__resolveRuntimeCheck = resolve;
+      });
+      window.ChessyRuntime = {
+        ensureCurrent: function () { return window.__runtimeCheck; }
+      };
+    };
+    window.__installRuntimeCheck();
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
+  });
+  await page.click('#newGame');
+  await page.click('#newGameStart');
+  await page.click('#newGameStart');
+  await page.click('#newGameCancel');
+  await page.evaluate(function () { window.__resolveRuntimeCheck(true); });
+  await page.waitForTimeout(0);
+  const cancelled = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return { id: saved.gameId, plies: saved.history.length };
+  });
+  check(cancelled.id === activeId && cancelled.plies === 1,
+    'Cancel fences concurrent pending Start clicks');
+
+  // Without cancellation, only the latest concurrent Start callback acts.
+  const canCountUuids = await page.evaluate(function () {
+    window.__installRuntimeCheck();
+    window.__uuidCalls = 0;
+    try {
+      window.__realRandomUUID = crypto.randomUUID;
+      crypto.randomUUID = function () {
+        window.__uuidCalls++;
+        return '00000000-0000-4000-8000-' + String(window.__uuidCalls).padStart(12, '0');
+      };
+      return crypto.randomUUID !== window.__realRandomUUID;
+    } catch (e) {
+      return false;
+    }
+  });
+  await page.click('#newGame');
+  await page.click('#newGameStart');
+  await page.click('#newGameStart');
+  await page.evaluate(function () { window.__resolveRuntimeCheck(true); });
+  await page.waitForFunction(function () {
+    return !document.getElementById('newGameDialog').open;
+  });
+  const concurrent = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    const out = { plies: saved.history.length, uuidCalls: window.__uuidCalls };
+    if (window.__realRandomUUID) crypto.randomUUID = window.__realRandomUUID;
+    window.ChessyRuntime = window.__realChessyRuntime;
+    return out;
+  });
+  check(concurrent.plies === 0 && (!canCountUuids || concurrent.uuidCalls === 1),
+    'concurrent Start clicks create exactly one new game');
+
   await t.newGame({});
 
   // Persistence round-trip.

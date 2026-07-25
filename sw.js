@@ -22,9 +22,11 @@
  *   own release's cached assets).
  * - Unversioned assets (manifest, icons) are stale-while-revalidate.
  * - The page auto-reloads once when a new service worker takes over (see
- *   index.html); game state survives via localStorage.
+ *   assets/runtime-update.js); game state survives via localStorage. New
+ *   game/Rematch explicitly run an update check before replacing that save,
+ *   so a long-open foreground tab cannot begin another game on stale code.
  */
-const RELEASE = 'r54';
+const RELEASE = 'r55';
 const CACHE = 'chessy-' + RELEASE;
 const ASSETS = [
   './',
@@ -35,6 +37,7 @@ const ASSETS = [
   './assets/ai-worker.js?r=' + RELEASE,
   './assets/analysis-worker.js?r=' + RELEASE,
   './assets/store.js?r=' + RELEASE,
+  './assets/runtime-update.js?r=' + RELEASE,
   './assets/app.js?r=' + RELEASE,
   './assets/archive.js?r=' + RELEASE,
   './assets/mini-board.js?r=' + RELEASE,

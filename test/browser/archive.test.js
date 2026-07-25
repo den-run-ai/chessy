@@ -51,6 +51,9 @@ require('./helper').run('archive', async function (t) {
 
   // Rematch with the IDENTICAL moves is a new game instance → new record.
   await page.click('#gameOverRematch');
+  await page.waitForFunction(function () {
+    return !document.getElementById('gameOverDialog').open;
+  });
   await mv('f2', 'f3'); await mv('e7', 'e5');
   await mv('g2', 'g4'); await mv('d8', 'h4');
   await page.waitForSelector('#gameOverDialog[open]');
