@@ -68,9 +68,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   an unseeded shuffle. Restores are validated by replaying every recorded move
   through the rules engine and checking the final position — a corrupted or
   tampered save falls back to a fresh game instead of undefined behavior.
-- **Offline status** — the footer reports the real service-worker state
+- **Offline status and version** — the persistent header shows the running
+  `rN` release, while the footer reports the real service-worker state
   (caching, ready offline, updating, failed, unsupported) instead of an
-  unconditional claim.
+  unconditional claim. After a real offline-app upgrade, a non-modal,
+  session-scoped note identifies the old and new releases and confirms that
+  saved games and training data were not changed.
 - **PGN export** — save the game in standard PGN, plain or with an embedded
   debug log (effective engine config, total/search time, counters and explicit
   White-POV score, release/execution/fallback path, stop reason, captured root
