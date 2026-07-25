@@ -9,12 +9,15 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r56">
+  <link rel="stylesheet" href="assets/style.css?r=r57">
 </head>
 <body>
   <div class="app">
     <header class="topbar">
-      <h1 class="brand">♞ Chessy</h1>
+      <div class="brand-lockup">
+        <h1 class="brand">♞ Chessy</h1>
+        <span class="app-version" id="appVersion">Version r57</span>
+      </div>
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
 
@@ -24,6 +27,12 @@
       <button type="button" class="tab" id="tabTrain" data-view="train">Train</button>
       <button type="button" class="tab" id="tabProgress" data-view="progress">Progress</button>
     </nav>
+
+    <!-- A real service-worker release transition leaves a one-time marker in
+         the new release cache. The page consumes it into sessionStorage so
+         this non-modal note survives the automatic takeover reload and later
+         offline reloads, but does not return in a future browsing session. -->
+    <div class="update-note" id="updateNote" role="status" aria-live="polite" hidden></div>
 
     <!-- Shown only OUTSIDE Play while a timed game's clocks are running:
          the live game must stay visible from the coach views (#34). -->
@@ -352,37 +361,108 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r56';</script>
-  <script src="assets/engine.js?r=r56"></script>
-  <script src="assets/ai.js?r=r56"></script>
+  <script>window.CHESSY_RELEASE = 'r57';</script>
+  <script src="assets/engine.js?r=r57"></script>
+  <script src="assets/ai.js?r=r57"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r56"></script>
-  <script src="assets/archive.js?r=r56"></script>
-  <script src="assets/runtime-update.js?r=r56"></script>
-  <script src="assets/app.js?r=r56"></script>
-  <script src="assets/mini-board.js?r=r56"></script>
-  <script src="assets/review.js?r=r56"></script>
-  <script src="assets/analysis-core.js?r=r56"></script>
-  <script src="assets/analysis-service.js?r=r56"></script>
-  <script src="assets/analysis-result.js?r=r56"></script>
-  <script src="assets/moment-selector.js?r=r56"></script>
-  <script src="assets/moment-scan.js?r=r56"></script>
-  <script src="assets/pgn.js?r=r56"></script>
-  <script src="assets/import.js?r=r56"></script>
-  <script src="assets/data-controls.js?r=r56"></script>
-  <script src="assets/reflection.js?r=r56"></script>
-  <script src="assets/train.js?r=r56"></script>
-  <script src="assets/progress.js?r=r56"></script>
+  <script src="assets/store.js?r=r57"></script>
+  <script src="assets/archive.js?r=r57"></script>
+  <script src="assets/runtime-update.js?r=r57"></script>
+  <script src="assets/app.js?r=r57"></script>
+  <script src="assets/mini-board.js?r=r57"></script>
+  <script src="assets/review.js?r=r57"></script>
+  <script src="assets/analysis-core.js?r=r57"></script>
+  <script src="assets/analysis-service.js?r=r57"></script>
+  <script src="assets/analysis-result.js?r=r57"></script>
+  <script src="assets/moment-selector.js?r=r57"></script>
+  <script src="assets/moment-scan.js?r=r57"></script>
+  <script src="assets/pgn.js?r=r57"></script>
+  <script src="assets/import.js?r=r57"></script>
+  <script src="assets/data-controls.js?r=r57"></script>
+  <script src="assets/reflection.js?r=r57"></script>
+  <script src="assets/train.js?r=r57"></script>
+  <script src="assets/progress.js?r=r57"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.
     (function () {
       var note = document.getElementById('installNote');
+      var updateNote = document.getElementById('updateNote');
+      var updateMarker = './__chessy-update__';
+      var updateSessionKey = 'chessy-update-note-v1';
+      var updateConsume = null;
       function setNote(text) { note.textContent = text; }
+      function validRelease(value) { return /^r\d+$/.test(value || ''); }
+      function validUpdate(update) {
+        return update && validRelease(update.from) &&
+          update.to === window.CHESSY_RELEASE &&
+          Number(update.from.slice(1)) < Number(update.to.slice(1));
+      }
+      function showUpdate(update) {
+        if (!validUpdate(update)) return;
+        updateNote.textContent = 'Chessy updated from ' + update.from + ' to ' +
+          update.to + '. Your saved games and training data are unchanged.';
+        updateNote.hidden = false;
+      }
+      function rememberUpdate(update) {
+        if (!validUpdate(update)) return;
+        try {
+          sessionStorage.setItem(updateSessionKey, JSON.stringify(update));
+        } catch (e) { /* The note still appears for this document. */ }
+        showUpdate(update);
+      }
+      function restoreUpdate() {
+        try {
+          var saved = JSON.parse(sessionStorage.getItem(updateSessionKey) || 'null');
+          if (validUpdate(saved)) showUpdate(saved);
+          else sessionStorage.removeItem(updateSessionKey);
+        } catch (e) {
+          try { sessionStorage.removeItem(updateSessionKey); } catch (ignored) {}
+        }
+      }
+      function consumeUpdateMarker() {
+        if (!('caches' in window)) return Promise.resolve();
+        // Boot and controllerchange can overlap in one page. Share the same
+        // in-flight read so takeover never reloads ahead of its own session
+        // write.
+        if (updateConsume) return updateConsume;
+        var cacheName = 'chessy-' + window.CHESSY_RELEASE;
+        // Do not open a cache merely to inspect it: a failed/unsupported
+        // first install must not leave a phantom release that a later worker
+        // could mistake for a successfully installed predecessor.
+        var consume = caches.has(cacheName).then(function (exists) {
+          if (!exists) return null;
+          return caches.open(cacheName);
+        }).then(function (cache) {
+          if (!cache) return null;
+          return cache.match(updateMarker).then(function (response) {
+            if (!response) return null;
+            return response.json().catch(function () { return null; })
+              .then(function (update) {
+                // The marker is globally one-shot. Across multiple tabs only
+                // the delete winner records it; Chessy's persistence model is
+                // intentionally single-active-tab.
+                return cache.delete(updateMarker).then(function (deleted) {
+                  if (deleted && validUpdate(update)) rememberUpdate(update);
+                });
+              });
+          });
+        }).catch(function () {
+          // Update messaging is best-effort and must never interfere with play.
+        });
+        updateConsume = consume.then(function (value) {
+          updateConsume = null;
+          return value;
+        });
+        return updateConsume;
+      }
+
+      restoreUpdate();
+      consumeUpdateMarker();
 
       if (!('serviceWorker' in navigator)) {
         setNote('Offline mode not supported here — the game still works online.');
@@ -390,6 +470,9 @@
       }
       var runtime = window.ChessyRuntimeUpdate && window.ChessyRuntimeUpdate.create({
         serviceWorker: navigator.serviceWorker,
+        // The replacement worker writes its marker into the NEW release cache
+        // before claiming clients. Reload directly; the new document's boot
+        // consumer reads that cache and records the transition in this tab.
         reload: function () { location.reload(); }
       });
       window.ChessyRuntime = runtime || null;

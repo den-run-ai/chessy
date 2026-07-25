@@ -26,8 +26,9 @@
  *   game/Rematch explicitly run an update check before replacing that save,
  *   so a long-open foreground tab cannot begin another game on stale code.
  */
-const RELEASE = 'r56';
+const RELEASE = 'r57';
 const CACHE = 'chessy-' + RELEASE;
+const UPDATE_MARKER = './__chessy-update__';
 const ASSETS = [
   './',
   './index.html',
@@ -61,18 +62,49 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
+    caches.keys().then((keys) => {
       // Delete only our own old caches — the github.io origin is shared with
       // sibling GitHub Pages apps whose caches we must not touch.
-      .then((keys) => Promise.all(
-        keys.filter((k) => k.startsWith('chessy-') && k !== CACHE).map((k) => caches.delete(k))
-      ))
+      const oldKeys = keys.filter((k) => k.startsWith('chessy-') && k !== CACHE);
+      const releaseNumber = Number(RELEASE.slice(1));
+      // A failed older install can leave an empty named cache. Only a cache
+      // containing its app shell proves that release completed precaching and
+      // is eligible to appear in an "updated from" message.
+      return Promise.all(oldKeys.map((key) => {
+        const release = key.slice('chessy-'.length);
+        if (!/^r\d+$/.test(release) || Number(release.slice(1)) >= releaseNumber) {
+          return null;
+        }
+        return caches.open(key)
+          .then((cache) => cache.match('./index.html'))
+          .then((shell) => shell ? release : null)
+          .catch(() => null);
+      })).then((installed) => {
+        const previous = installed.filter(Boolean)
+          .sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)))[0];
+        // Record the transition inside the NEW cache before deleting the old
+        // one or claiming pages. The new page consumes this into
+        // sessionStorage, so even an older page that did not know this protocol
+        // can reload into the current release and report the upgrade exactly once.
+        const mark = previous
+          ? caches.open(CACHE).then((cache) => cache.put(
+            UPDATE_MARKER,
+            new Response(JSON.stringify({ from: previous, to: RELEASE }), {
+              headers: { 'Content-Type': 'application/json' }
+            })
+          )).catch(() => undefined)
+          : Promise.resolve();
+        return mark.then(() => Promise.all(oldKeys.map((k) => caches.delete(k))));
+      });
+    })
       .then(() => self.clients.claim())
   );
 });

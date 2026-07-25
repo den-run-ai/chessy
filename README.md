@@ -72,9 +72,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   an unseeded shuffle. Restores are validated by replaying every recorded move
   through the rules engine and checking the final position — a corrupted or
   tampered save falls back to a fresh game instead of undefined behavior.
-- **Offline status** — the footer reports the real service-worker state
+- **Offline status and version** — the persistent header shows the running
+  `rN` release, while the footer reports the real service-worker state
   (caching, ready offline, updating, failed, unsupported) instead of an
-  unconditional claim.
+  unconditional claim. After a real offline-app upgrade, a non-modal,
+  session-scoped note identifies the old and new releases and confirms that
+  saved games and training data were not changed.
 - **PGN export** — save the game in standard PGN, plain or with an embedded
   debug log (effective engine config, total/search time, counters and explicit
   White-POV score, release/execution/fallback path, stop reason, captured root
@@ -201,7 +204,7 @@ new experiment, because post-selection invalidates the predeclared result.
 The pinned external Stockfish reproduction below is independent of these
 paired-match protocols.
 
-The r56 pawn-evaluation regression uses both critical positions from archived
+The r57 pawn-evaluation regression uses both critical positions from archived
 Master game `dd608f7d-4a6d-416a-a773-0c7515e14898` and their color-swapped
 twins at fixed depths 4–6. Its
 move-19 set is an anti-blunder stability set, not a claim that every admitted
