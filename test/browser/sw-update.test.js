@@ -37,6 +37,7 @@ const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const htmlSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const swToken = (swSrc.match(/const RELEASE = '([^']+)'/) || [])[1];
 const inlineToken = (htmlSrc.match(/window\.CHESSY_RELEASE = '([^']+)'/) || [])[1];
+const displayedToken = (htmlSrc.match(/id="appVersion"[^>]*>Version ([^<]+)</) || [])[1];
 const refTokens = Array.from(htmlSrc.matchAll(/\?r=([\w-]+)/g)).map(function (m) { return m[1]; });
 const versionedRefs = Array.from(htmlSrc.matchAll(/(?:src|href)="([^"]+\?r=[\w-]+)"/g))
   .map(function (m) { return m[1]; });
@@ -45,6 +46,7 @@ check(!!swToken, 'sw.js declares a RELEASE token (' + swToken + ')');
 check(/^r\d+$/.test(swToken || ''),
   'the token is rN (numeric): sw.js orders tokens to refuse stale-release refills');
 check(inlineToken === swToken, 'index.html CHESSY_RELEASE matches sw.js RELEASE');
+check(displayedToken === swToken, 'the visible Version badge matches sw.js RELEASE');
 check(refTokens.length > 0 && refTokens.every(function (t) { return t === swToken; }),
   'every ?r= reference in index.html carries the same token (' + refTokens.length + ' refs)');
 check(versionedRefs.every(function (ref) { return swSrc.indexOf(ref.replace('?r=' + swToken, '')) !== -1; }),
@@ -65,7 +67,7 @@ function browserType() {
 (async function () {
   // Numeric tokens, like production: the worker ORDERS tokens to refuse
   // refilling a stale release's URL from the current deployment.
-  const RA = 'r9001', RB = 'r9002';
+  const RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
   const phase = { release: RA };
   const server = http.createServer(function (req, res) {
     let p = decodeURIComponent(req.url.split('?')[0]);
@@ -110,6 +112,12 @@ function browserType() {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', function (e) { errors.push(String(e)); });
+  // Counts full document boots in this tab. The rA load is 1, the manual rB
+  // navigation is 2, and the controllerchange auto-reload must reach 3.
+  await page.addInitScript(function () {
+    const key = 'chessy-update-test-boots';
+    sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) || 0) + 1));
+  });
 
   // Reads the page's release plus every executable asset URL. Runs inside
   // whatever document is CURRENT — the auto-reload on service-worker
@@ -128,6 +136,11 @@ function browserType() {
         total: urls.length,
         engine: typeof Chess !== 'undefined' && typeof ChessAI !== 'undefined',
         ready: document.getElementById('installNote').textContent.indexOf('Ready offline') !== -1,
+        version: document.getElementById('appVersion').textContent.trim(),
+        update: document.getElementById('updateNote').hidden
+          ? '' : document.getElementById('updateNote').textContent.trim(),
+        updateSession: sessionStorage.getItem('chessy-update-note-v1') || '',
+        boots: Number(sessionStorage.getItem('chessy-update-test-boots') || 0),
         controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
         caches: keys.filter(function (k) { return k.indexOf('chessy-') === 0; })
       };
@@ -153,6 +166,33 @@ function browserType() {
   check(a.token === RA && a.total >= 4 && a.mixed.length === 0 && a.engine,
     'release A loads coherently (' + a.total + ' assets, 0 mixed)');
   check(a.build === RA, 'release A executes release A BYTES (build marker ' + a.build + ')');
+  check(a.version === 'Version ' + RA, 'the persistent header shows release A');
+  check(a.update === '' && a.updateSession === '',
+    'a first install does not claim that an update happened');
+  for (const tab of ['#tabReview', '#tabTrain', '#tabProgress', '#tabPlay']) {
+    await page.click(tab);
+    check(await page.locator('#appVersion').isVisible(),
+      'the version remains visible in ' + (await page.textContent(tab)).trim());
+  }
+
+  // Representative durable user data: the release transition is cache-only
+  // and must leave both the saved game area and the coaching database intact.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-update-test-game', 'saved');
+    return CoachStore.putGame({
+      id: 'chessy-update-test-game', sans: [], result: '*',
+      reason: 'test', createdAt: 1
+    }).then(function () {
+      return CoachStore.addCard({
+        gameId: 'chessy-update-test-game', ply: 0, due: 1,
+        lesson: 'saved training card'
+      });
+    });
+  });
+  // Model an r9001 install that opened its cache but failed before precaching
+  // index.html. The r9002 activation must report the last COMPLETE release
+  // (r9000), never this empty cache name.
+  await page.evaluate(function (failed) { return caches.open('chessy-' + failed); }, FAILED);
 
   // Phase B publishes while the A worker still controls the page. The
   // reload's network-first navigation fetches the B shell; its ?r= assets
@@ -172,9 +212,33 @@ function browserType() {
   // proof the B worker activated: its activate handler deletes the A
   // cache, so B's cache present + A's gone = takeover complete.
   await stable(function (s) {
-    return s.caches.indexOf('chessy-' + RB) !== -1 && s.caches.indexOf('chessy-' + RA) === -1;
-  }, 'B worker takeover (A cache cleaned)');
-  check(true, 'the B worker activates and cleans up the A cache');
+    return s.caches.indexOf('chessy-' + RB) !== -1 &&
+      s.caches.indexOf('chessy-' + RA) === -1 &&
+      s.caches.indexOf('chessy-' + FAILED) === -1;
+  }, 'B worker takeover (old caches cleaned)');
+  check(true, 'the B worker activates and cleans up complete and failed old caches');
+  const expectedUpdate = 'Chessy updated from ' + RA + ' to ' + RB +
+    '. Your saved games and training data are unchanged.';
+  const noticed = await stable(function (s) {
+    return s.version === 'Version ' + RB && s.update === expectedUpdate &&
+      s.updateSession.indexOf(RA) !== -1 && s.updateSession.indexOf(RB) !== -1 &&
+      s.boots >= 3;
+  }, 'post-update version and note');
+  check(noticed.version === 'Version ' + RB,
+    'the persistent badge advances to the new release');
+  check(noticed.update === expectedUpdate,
+    'after the automatic reload, the real upgrade reports the last complete release');
+  const preserved = await page.evaluate(function () {
+    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (rows) {
+      return {
+        game: localStorage.getItem('chessy-update-test-game'),
+        archived: rows[0].some(function (g) { return g.id === 'chessy-update-test-game'; }),
+        card: rows[1].some(function (c) { return c.lesson === 'saved training card'; })
+      };
+    });
+  });
+  check(preserved.game === 'saved' && preserved.archived && preserved.card,
+    'the upgrade preserves saved games and training data');
 
   // A stale-release URL must NEVER be refilled from the current
   // deployment: the host ignores the token, so the bytes would be B's
@@ -218,14 +282,32 @@ function browserType() {
   if ((process.env.BROWSER || 'chromium') === 'chromium') {
     await context.setOffline(true);
     await page.reload();
-    const off = await stable(function (s) { return s.token === RB && s.engine; }, 'offline reload');
+    const off = await stable(function (s) {
+      return s.token === RB && s.engine && s.update === expectedUpdate && s.boots >= 4;
+    }, 'offline reload');
     check(off.mixed.length === 0 && off.build === RB,
       'offline: cached shell, cached assets and executed bytes are all one release');
+    check(off.version === 'Version ' + RB && off.update === expectedUpdate,
+      'offline reload keeps the new version and the session-scoped update note');
     check(await page.locator('#board .square').count() === 64, 'offline app is functional');
     await context.setOffline(false);
   } else {
     console.log('  --  offline phase skipped (Playwright WebKit cannot emulate SW-served offline navigations)');
   }
+
+  // A new top-level browsing session shares the installed worker/cache but
+  // not this tab's sessionStorage. Because the cache marker was consumed,
+  // the old update notice must not leak into that fresh session.
+  const fresh = await context.newPage();
+  await fresh.goto(url);
+  await fresh.waitForFunction(function () {
+    return document.getElementById('installNote').textContent.indexOf('Ready offline') !== -1;
+  });
+  const freshState = await fresh.evaluate(inspect);
+  check(freshState.version === 'Version ' + RB && freshState.update === '' &&
+    freshState.updateSession === '',
+    'a fresh browsing session shows the version without replaying the old update note');
+  await fresh.close();
 
   check(errors.length === 0,
     'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
