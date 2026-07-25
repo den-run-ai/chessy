@@ -659,7 +659,7 @@
              return typeof u === 'string' &&
                /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u);
            }))) return false;
-      if (v.rootOrderUci !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(v, 'rootOrderUci')) {
         if (!Array.isArray(v.rootOrderUci) || v.rootOrderUci.length > 256) return false;
         var seenRoot = Object.create(null);
         if (!v.rootOrderUci.every(function (u) {
@@ -671,6 +671,76 @@
       }
       return true;
     });
+  }
+
+  // A captured root order is reproducible only when it is the COMPLETE legal
+  // root permutation for the position before that recorded move. Syntax and
+  // uniqueness alone are insufficient: replayRootMoves() deliberately falls
+  // back to a fresh shuffle when the list is incomplete or from another
+  // position, which would make restored "provenance" silently non-replayable.
+  //
+  // A MISSING list remains valid for legacy telemetry that predates root
+  // capture. Once the property is present it must be complete; accepting an
+  // explicit [] would make evidence erasure indistinguishable from legacy
+  // data. Lists are checked while replaying the canonical SAN prefix,
+  // including custom SetUp/FEN games.
+  function validAiRootOrders(record) {
+    if (!Array.isArray(record.ai) ||
+        !record.ai.some(function (entry) {
+          return entry && Object.prototype.hasOwnProperty.call(
+            entry, 'rootOrderUci');
+        })) {
+      return true;
+    }
+    if (typeof Chess === 'undefined' ||
+        typeof Chess.legalMoves !== 'function' ||
+        typeof Chess.toSan !== 'function' ||
+        typeof Chess.applyMove !== 'function') {
+      return false;
+    }
+
+    var state;
+    try {
+      state = record.setupFen
+        ? Chess.parseFen(record.setupFen) : Chess.newGameState();
+    } catch (e) {
+      return false;
+    }
+
+    function uci(move) {
+      return Chess.sqName(move.from) + Chess.sqName(move.to) +
+        (move.promotion ? move.promotion.toLowerCase() : '');
+    }
+
+    for (var i = 0; i < record.sans.length; i++) {
+      var legal;
+      try {
+        legal = Chess.legalMoves(state);
+      } catch (e) {
+        return false;
+      }
+      var entry = record.ai[i];
+      if (entry && Object.prototype.hasOwnProperty.call(
+        entry, 'rootOrderUci')) {
+        var order = entry.rootOrderUci;
+        if (!Array.isArray(order)) return false;
+        if (order.length !== legal.length) return false;
+        var expected = Object.create(null);
+        for (var li = 0; li < legal.length; li++) expected[uci(legal[li])] = true;
+        for (var oi = 0; oi < order.length; oi++) {
+          if (!expected[order[oi]]) return false;
+          delete expected[order[oi]];
+        }
+        if (Object.keys(expected).length !== 0) return false;
+      }
+
+      var move = legal.find(function (candidate) {
+        return Chess.toSan(state, candidate, legal) === record.sans[i];
+      });
+      if (!move) return false;
+      state = Chess.applyMove(state, move);
+    }
+    return true;
   }
 
   // Shared game-record trust boundary used by both backup restore and the raw
@@ -702,11 +772,14 @@
         !validRelease(r.startedRelease)) {
       return prefix + ' has an invalid startedRelease';
     }
+    if (r.setupFen && !validFen(r.setupFen)) {
+      return prefix + ' has an invalid setupFen';
+    }
     if (!validOptionalAi(r.ai, r.plies)) {
       return prefix + ' has invalid AI telemetry';
     }
-    if (r.setupFen && !validFen(r.setupFen)) {
-      return prefix + ' has an invalid setupFen';
+    if (!validAiRootOrders(r)) {
+      return prefix + ' has AI telemetry with a root order that does not match its position';
     }
     return null;
   }

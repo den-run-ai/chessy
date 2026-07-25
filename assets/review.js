@@ -105,7 +105,7 @@
     return tags;
   }
 
-  function downloadReviewPgn() {
+  function downloadReviewPgn(withLog) {
     // Export the exact in-memory snapshot being shown. A same-id archive
     // revision landing concurrently must not make the file differ from the
     // board the user chose to save.
@@ -117,11 +117,30 @@
         'PGN export is unavailable. Reload after the offline update finishes.';
       return;
     }
+    // A clean game score is still recoverable if optional forensic evidence
+    // was damaged in an old/raw IndexedDB row. Only the debug download needs
+    // the complete archive trust boundary to pass.
+    if (withLog) {
+      if (typeof CoachStore.validateGameRecord !== 'function') {
+        $('reviewStatus').textContent =
+          'Search-log validation is unavailable. Save the clean PGN instead.';
+        return;
+      }
+      const validationError = CoachStore.validateGameRecord(opened.game);
+      if (validationError) {
+        $('reviewStatus').textContent =
+          'The saved search log is invalid. Save the clean PGN instead.';
+        return;
+      }
+    }
     let pgn;
     try {
-      pgn = ChessyPGN.serializeRecord(opened.game, exportTags(opened.game));
+      pgn = ChessyPGN.serializeRecord(
+        opened.game, exportTags(opened.game), withLog);
     } catch (e) {
-      $('reviewStatus').textContent = 'This archived game could not be exported.';
+      $('reviewStatus').textContent = withLog
+        ? 'This archived search log could not be exported. Save the clean PGN instead.'
+        : 'This archived game could not be exported.';
       return;
     }
 
@@ -135,7 +154,8 @@
     }));
     a.download = 'chessy-' + stamp.getFullYear() +
       pad2(stamp.getMonth() + 1) + pad2(stamp.getDate()) + '-' +
-      pad2(stamp.getHours()) + pad2(stamp.getMinutes()) + '.pgn';
+      pad2(stamp.getHours()) + pad2(stamp.getMinutes()) +
+      (withLog ? '-debug' : '') + '.pgn';
     // This transport-only link exists for one second; keep it out of keyboard
     // order and the accessibility tree while the visible button retains focus.
     a.tabIndex = -1;
@@ -676,7 +696,12 @@
       (firstItem || $('tabReview')).focus();
     });
   });
-  $('reviewExportPgn').addEventListener('click', downloadReviewPgn);
+  $('reviewExportPgn').addEventListener('click', function () {
+    downloadReviewPgn(false);
+  });
+  $('reviewExportPgnLog').addEventListener('click', function () {
+    downloadReviewPgn(true);
+  });
   $('revStart').addEventListener('click', function () { stepReview(0); });
   $('revPrev').addEventListener('click', function () { stepReview(review.ply - 1); });
   $('revNext').addEventListener('click', function () { stepReview(review.ply + 1); });

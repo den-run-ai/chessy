@@ -127,16 +127,27 @@ require('./helper').run('provenance', async function (t) {
     delete legacy.release;
     legacy.stores.games.forEach(function (g) {
       delete g.startedRelease;
-      delete g.ai;
+      if (g.id === 'telemetry-roundtrip') {
+        g.ai = [{ depth: 1, quiesce: false, ms: 12 }];
+      } else {
+        delete g.ai;
+      }
     });
     const malformed = JSON.parse(JSON.stringify(data));
     const row = malformed.stores.games.find(function (g) {
       return g.id === 'telemetry-roundtrip';
     });
     row.ai = [{}]; // wrong/empty evidence must not be silently trusted
+    const wrongRoot = JSON.parse(JSON.stringify(data));
+    const wrongRootRow = wrongRoot.stores.games.find(function (g) {
+      return g.id === 'telemetry-roundtrip';
+    });
+    wrongRootRow.ai[0].rootOrderUci =
+      wrongRootRow.ai[0].rootOrderUci.slice(1);
     return {
       legacy: CoachStore.validateBackup(legacy),
-      malformed: CoachStore.validateBackup(malformed)
+      malformed: CoachStore.validateBackup(malformed),
+      wrongRoot: CoachStore.validateBackup(wrongRoot)
     };
   }, backup);
   check(compatibility.legacy === null,
@@ -144,6 +155,10 @@ require('./helper').run('provenance', async function (t) {
   check(typeof compatibility.malformed === 'string' &&
       compatibility.malformed.includes('AI telemetry'),
     'malformed optional AI telemetry is rejected before restore');
+  check(typeof compatibility.wrongRoot === 'string' &&
+      compatibility.wrongRoot.includes('root order') &&
+      compatibility.wrongRoot.includes('position'),
+    'restore rejects an incomplete root order for its recorded position');
 
   await page.evaluate(function (data) {
     return CoachStore.restoreAll(data);
@@ -154,4 +169,40 @@ require('./helper').run('provenance', async function (t) {
   check(restored && restored.ai[0].nodes === ai.nodes &&
       restored.ai[0].release === live.release,
     'backup restore round-trips search telemetry unchanged');
+
+  // Review exports the durable archive shape, not Play's live history. The
+  // restored record must therefore offer that retained search evidence in the
+  // explicit debug PGN without contaminating the ordinary score.
+  await page.evaluate(function () {
+    return CoachReview.openArchivedGame('telemetry-roundtrip');
+  });
+  await page.waitForSelector('#reviewFlow:not([hidden])');
+  const [cleanDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#reviewExportPgn')
+  ]);
+  const cleanPgn = fs.readFileSync(await cleanDownload.path(), 'utf8');
+  check(!cleanPgn.includes('{engine') && !cleanPgn.includes('{before:'),
+    'restored telemetry does not change the ordinary Review PGN');
+  const [reviewDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#reviewExportPgnLog')
+  ]);
+  const reviewPgn = fs.readFileSync(await reviewDownload.path(), 'utf8');
+  const firstSanPattern = backed.sans[0]
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const reviewEvidence = {
+    filename: /-debug\.pgn$/.test(reviewDownload.suggestedFilename()),
+    aligned: new RegExp(firstSanPattern + '\\s+\\{engine depth ' + ai.depth)
+      .test(reviewPgn),
+    nodes: reviewPgn.includes(ai.nodes + ' nodes'),
+    stop: reviewPgn.includes('stop ' + ai.stopReason),
+    release: reviewPgn.includes('release ' + ai.release),
+    roots: reviewPgn.includes('root-order ' + ai.rootOrderUci.join('/')),
+    pv: reviewPgn.includes('PV ' + ai.pvUci.join(' '))
+  };
+  check(Object.keys(reviewEvidence).every(function (key) {
+    return reviewEvidence[key];
+  }),
+    'Review debug PGN exports restored per-ply search provenance');
 });
