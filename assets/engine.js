@@ -425,8 +425,52 @@
       if (withLog) {
         let note = 'before: ' + entry.fen;
         if (entry.ai) {
-          note = 'engine depth ' + entry.ai.depth + (entry.ai.quiesce ? '+quiescence' : '') +
-                 ', ' + entry.ai.ms + ' ms; ' + note;
+          const ai = entry.ai;
+          const details = [];
+          if (Number.isInteger(ai.attemptedDepth)) details.push('attempted depth ' + ai.attemptedDepth);
+          if (Number.isInteger(ai.nodes)) {
+            details.push(ai.nodes + ' nodes' +
+              (Number.isInteger(ai.qnodes) ? ' (' + ai.qnodes + ' q)' : ''));
+          }
+          if (Number.isFinite(ai.score)) {
+            details.push('score ' + ai.score +
+              (ai.scorePov === 'white' ? ' (White POV)' : ''));
+          }
+          if (typeof ai.stopReason === 'string') details.push('stop ' + ai.stopReason);
+          const config = [];
+          if (Number.isInteger(ai.maxDepth)) config.push('dmax ' + ai.maxDepth);
+          if (Number.isInteger(ai.timeMs)) config.push('time ' + ai.timeMs + 'ms');
+          if (Number.isInteger(ai.nodeLimit)) config.push('node-limit ' + ai.nodeLimit);
+          if (Number.isInteger(ai.seed)) config.push('seed ' + ai.seed);
+          else if (ai.randomize === true) config.push('random');
+          else if (ai.randomize === false) config.push('ordered');
+          if (Array.isArray(ai.rootOrderUci)) {
+            const rootOrder = ai.rootOrderUci.slice(0, 256).filter(function (u) {
+              return typeof u === 'string' &&
+                /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u);
+            });
+            if (rootOrder.length) config.push('root-order ' + rootOrder.join('/'));
+          }
+          if (config.length) details.push('config ' + config.join('/'));
+          if (Number.isFinite(ai.searchMs)) details.push('search ' + ai.searchMs + ' ms');
+          // Release identifiers can originate in restored local data. Keep
+          // brace/comment syntax out even if a caller bypassed normalization.
+          if (typeof ai.release === 'string' && ai.release.length <= 32 &&
+              ai.release.trim() === ai.release &&
+              /^r\d+$/.test(ai.release)) {
+            details.push('release ' + ai.release);
+          }
+          if (typeof ai.source === 'string') details.push('source ' + ai.source);
+          if (ai.fallbackReason === 'worker-error' || ai.fallbackReason === 'watchdog') {
+            details.push('fallback ' + ai.fallbackReason);
+          }
+          if (Array.isArray(ai.pvUci) && ai.pvUci.length) {
+            details.push('PV ' + ai.pvUci.join(' ') +
+              (ai.pvSource === 'final-tt-best-effort' ? ' (best effort)' : ''));
+          }
+          note = 'engine depth ' + ai.depth + (ai.quiesce ? '+quiescence' : '') +
+                 ', ' + ai.ms + ' ms' + (details.length ? ', ' + details.join(', ') : '') +
+                 '; ' + note;
         }
         // Standard %clk command: the mover's remaining time after the move.
         if (entry.clock) {

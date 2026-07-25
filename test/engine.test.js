@@ -500,6 +500,26 @@ const pgnLog = Chess.toPgn(pgnGame, {}, true);
 assertEqual(pgnLog.includes('{engine depth 5+quiescence, 123 ms; before: '), true,
   'debug PGN embeds engine info + FEN comments');
 assertEqual(pgnLog.includes('before: ' + Chess.START_FEN), true, 'debug PGN logs starting FEN');
+pgnGame.history[3].ai = {
+  depth: 4, attemptedDepth: 5, quiesce: true, ms: 5002,
+  maxDepth: 30, timeMs: 5000, nodeLimit: null,
+  seed: null, randomize: true, searchMs: 5000,
+  nodes: 50000, qnodes: 30000, score: -141, scorePov: 'white',
+  stopReason: 'time-limit', release: 'r54', source: 'worker',
+  rootOrderUci: ['d8h4'], pvUci: ['d8h4'],
+  pvSource: 'final-tt-best-effort'
+};
+const pgnRich = Chess.toPgn(pgnGame, {}, true);
+assertEqual(pgnRich.includes(
+  'engine depth 4+quiescence, 5002 ms, attempted depth 5, ' +
+  '50000 nodes (30000 q), score -141 (White POV), stop time-limit, ' +
+  'config dmax 30/time 5000ms/random/root-order d8h4, search 5000 ms, release r54, ' +
+  'source worker, PV d8h4 (best effort); before: '), true,
+  'debug PGN embeds release and search telemetry');
+pgnGame.history[3].ai.release = 'r54} 99. Qh8# {';
+const pgnHostile = Chess.toPgn(pgnGame, {}, true);
+assertEqual(pgnHostile.includes('99. Qh8#') || pgnHostile.includes('release r54}'), false,
+  'debug PGN drops a release token that could terminate its comment');
 const pgnOngoing = Chess.toPgn(playSans(['e4']), {});
 assertEqual(pgnOngoing.includes('[Result "*"]'), true, 'ongoing game marked *');
 

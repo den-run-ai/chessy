@@ -63,6 +63,14 @@
     if (el) el.checked = true;
   }
   const TIME_CONTROLS = { none: true, '300+3': true, '900+10': true, '1800+20': true };
+  function releaseToken(value) {
+    return typeof value === 'string' && value.length <= 32 &&
+      value.trim() === value && /^r\d+$/.test(value)
+      ? value : null;
+  }
+  function currentRelease() {
+    return releaseToken(window.CHESSY_RELEASE);
+  }
 
   // ---- Chess clocks (Fischer increment) ----
   // clocks.wMs/bMs hold the remaining time as of the LAST completed move;
@@ -173,7 +181,7 @@
   // AI runs in a Web Worker so deep searches never freeze the board;
   // falls back to a synchronous call where workers are unavailable.
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
-  let aiPending = null;       // {depth, quiesce, started} for the in-flight search (PGN log)
+  let aiPending = null;       // config/provenance for the in-flight search
   let aiWatchdog = null;      // guards against an alive-but-SILENT worker (see maybeAiMove)
 
   function createAiWorker() {
@@ -186,7 +194,7 @@
         (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : ''));
       w.onmessage = function (e) {
         if (e.data.id !== aiRequestId || !aiThinking) return;
-        applyAiMove(e.data.move, e.data.depth);
+        applyAiMove(e.data.move, e.data);
       };
       w.onerror = function () {
         // Broken worker: fall back to the synchronous path so the app is
@@ -206,7 +214,7 @@
         if (aiThinking) {
           const originalStartedAt = aiPending && aiPending.started;
           aiThinking = false;
-          maybeAiMove(originalStartedAt);
+          maybeAiMove(originalStartedAt, 'worker-error');
         }
         aiWorker = createAiWorker();
       };
@@ -594,19 +602,31 @@
     return { maxDepth: Number(settings.difficulty), timeMs: 10000, quiesce: false };
   }
 
-  function maybeAiMove(startedAt) {
+  function maybeAiMove(startedAt, fallbackReason) {
     if (state.turn !== aiColor() || fullStatus().over) return;
     aiThinking = true;
     render();
     const cfg = aiConfig();
     const id = ++aiRequestId;
+    const retrying = Number.isFinite(startedAt);
     aiPending = {
       depth: cfg.maxDepth,
       quiesce: cfg.quiesce,
+      timeMs: cfg.timeMs,
+      nodeLimit: null,
+      // Casual Play still uses its historical unseeded shuffle. Record that
+      // fact explicitly rather than inventing a seed after the move.
+      seed: null,
+      randomize: true,
+      release: currentRelease(),
+      source: aiWorker ? 'worker' : (retrying ? 'sync-fallback' : 'sync'),
+      fallbackReason: retrying &&
+        (fallbackReason === 'worker-error' || fallbackReason === 'watchdog')
+        ? fallbackReason : null,
       // A worker-failure retry is still the same move attempt. Keep its
       // original start so the debug PGN reports the worker wait as well as
       // the synchronous fallback search.
-      started: Number.isFinite(startedAt) ? startedAt : Date.now()
+      started: retrying ? startedAt : Date.now()
     };
     if (aiWorker) {
       // Watchdog for an alive-but-silent worker: onerror only covers
@@ -624,13 +644,14 @@
         // maybeAiMove picks its path); a fresh worker then serves later
         // moves — without it, one transient hang would put every future
         // AI turn on the main thread for the full search budget.
-        maybeAiMove(originalStartedAt);
+        maybeAiMove(originalStartedAt, 'watchdog');
         aiWorker = createAiWorker();
       }, cfg.timeMs + 3000);
       aiWorker.searching = true; // this worker did real work (see onerror)
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
-        quiesce: cfg.quiesce, positions: state.positions
+        quiesce: cfg.quiesce, positions: state.positions,
+        seed: aiPending.seed, randomize: aiPending.randomize
       });
     } else {
       // Fallback: yield so the "thinking" status paints before the search.
@@ -638,14 +659,15 @@
         if (id !== aiRequestId || !aiThinking) return;
         const result = ChessAI.think(state, {
           maxDepth: cfg.maxDepth, timeMs: cfg.timeMs, quiesce: cfg.quiesce,
-          positions: state.positions
+          positions: state.positions, seed: aiPending && aiPending.seed,
+          randomize: aiPending ? aiPending.randomize : true
         });
-        applyAiMove(result.move, result.depth);
+        applyAiMove(result.move, result);
       }, AI_DELAY_MS);
     }
   }
 
-  function applyAiMove(move, reachedDepth) {
+  function applyAiMove(move, result) {
     clearTimeout(aiWatchdog);
     aiThinking = false;
     viewPly = null;
@@ -658,18 +680,40 @@
     state = Chess.playMove(state, local);
     punchClock();
     if (aiPending) {
-      // Record engine settings + think time on the move for PGN debug export.
-      // Depth is the deepest COMPLETED iteration, which under a time budget
-      // can be less than the configured maximum.
-      state.history[state.history.length - 1].ai = {
-        // reachedDepth is the deepest COMPLETED iteration and may legitimately
-        // be 0 (the budget expired before depth 1 finished). Only a
-        // missing value falls back to the configured maximum — coercing a
-        // real 0 would falsely record the max depth for partial searches.
-        depth: reachedDepth != null ? reachedDepth : aiPending.depth,
+      result = result || {};
+      const totalMs = Date.now() - aiPending.started;
+      // Record enough evidence to reproduce or explain a Master incident.
+      // The worker and page share one release unit; fallback searches record
+      // their execution path and retain the original attempt's elapsed time.
+      state.history[state.history.length - 1].ai = ChessAI.sanitizeTelemetry({
+        release: aiPending.release,
+        // `depth` is the deepest COMPLETED iteration. Zero is meaningful.
+        depth: result.depth != null ? result.depth : 0,
+        attemptedDepth: result.attemptedDepth,
+        maxDepth: aiPending.depth,
         quiesce: aiPending.quiesce,
-        ms: Date.now() - aiPending.started
-      };
+        timeMs: aiPending.timeMs,
+        nodeLimit: aiPending.nodeLimit,
+        seed: aiPending.seed,
+        randomize: aiPending.randomize,
+        ms: totalMs,
+        elapsedMs: totalMs,
+        searchMs: result.elapsedMs,
+        nodes: result.nodes,
+        qnodes: result.qnodes,
+        cutoffs: result.cutoffs,
+        researches: result.researches,
+        score: result.score,
+        // ChessAI's raw scalar is always from White's point of view (mate is
+        // encoded in that same score); record the contract at the caller too.
+        scorePov: 'white',
+        pvUci: result.pvUci,
+        rootOrderUci: result.rootOrderUci,
+        pvSource: result.pvSource,
+        stopReason: result.stopReason,
+        source: aiPending.source,
+        fallbackReason: aiPending.fallbackReason
+      });
       aiPending = null;
     }
     render();
@@ -748,7 +792,7 @@
     const seqAtCall = ++archiveSeq;
     archiveAttempts.set(idAtCall, seqAtCall);
     archiveAttempt = ChessyArchive.record(state, settings, status, idAtCall,
-      { endedAt: gameEndedAt })
+      { endedAt: gameEndedAt, startedRelease: startedRelease })
       .then(function (storedId) {
         // The game's record exists now — withdraw any page-note blame for
         // it. Only as the game's LATEST attempt: a superseded attempt's
@@ -781,6 +825,11 @@
   // so an identical game played twice is two records, while the same ending
   // re-displayed (or replayed after reload + undo) overwrites one record.
   let gameId = null;
+  // Release active when this game instance began. Old saves legitimately have
+  // null here; never relabel their historical moves with the release that
+  // merely happened to restore them. Each new AI move also carries its own
+  // release, so a game resumed after an update remains attributable.
+  let startedRelease = currentRelease();
   // When the game FIRST ended, persisted with the save: the archive's
   // createdAt must be the completion time even when the write is only
   // reconciled on a much later boot (chronology, not restart time).
@@ -803,6 +852,7 @@
 
   function startNewGame() {
     gameId = newGameId();
+    startedRelease = currentRelease();
     gameEndedAt = null;
     cancelAi();
     state = Chess.newGameState();
@@ -1058,6 +1108,7 @@
         // instance and must keep its record key — and its original
         // completion time, for a boot-time reconcile's createdAt.
         gameId: gameId,
+        startedRelease: startedRelease,
         endedAt: gameEndedAt
       }));
     } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
@@ -1085,11 +1136,10 @@
         if (!m) return false;
         s = Chess.playMove(s, m);
         if (entry.ai && typeof entry.ai === 'object') {
-          s.history[s.history.length - 1].ai = {
-            depth: Number(entry.ai.depth) || 0,
-            quiesce: !!entry.ai.quiesce,
-            ms: Number(entry.ai.ms) || 0
-          };
+          // New releases retain full forensic evidence; legacy
+          // {depth,quiesce,ms} entries normalize with the added fields null.
+          const ai = ChessAI.sanitizeTelemetry(entry.ai);
+          if (ai) s.history[s.history.length - 1].ai = ai;
         }
         if (entry.clock && typeof entry.clock === 'object') {
           s.history[s.history.length - 1].clock = {
@@ -1121,6 +1171,7 @@
       }
       flipped = !!data.flipped;
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
+      startedRelease = releaseToken(data.startedRelease);
       gameEndedAt = Number.isFinite(data.endedAt) ? data.endedAt : null;
       return true;
     } catch (e) {
@@ -1131,7 +1182,10 @@
   // ---- Boot ----
   buildBoard();
   // No saved game: the implicit first game needs its own UUID too.
-  if (!load()) gameId = newGameId();
+  if (!load()) {
+    gameId = newGameId();
+    startedRelease = currentRelease();
+  }
 
   // A game restored in a FINISHED state may have missed its archive write:
   // the tab can die between the synchronous localStorage save and the
@@ -1150,6 +1204,7 @@
   const bootStatus = fullStatus();
   const bootState = state;
   const bootId = gameId;
+  const bootStartedRelease = startedRelease;
   const bootEndedAt = gameEndedAt;
   // settings is a shared mutable object — a New game started while the
   // drain below is in flight must not relabel the restored record.
@@ -1192,7 +1247,7 @@
         const seqAtCall = ++archiveSeq;
         archiveAttempts.set(bootId, seqAtCall);
         ChessyArchive.record(bootState, bootSettings, bootStatus, bootId,
-          { endedAt: bootEndedAt })
+          { endedAt: bootEndedAt, startedRelease: bootStartedRelease })
           .then(function () {
             if (archiveAttempts.get(bootId) === seqAtCall) clearArchiveFailure(bootId);
           }, function () {

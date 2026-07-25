@@ -65,6 +65,39 @@ require('./helper').run('data-controls', async function (t) {
         backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
     'a parked (pending-queue) game is included in the backup');
 
+  // The raw queue is an export trust boundary too: it must reject provenance
+  // that the same build's restore validator would refuse, rather than emit a
+  // self-invalid backup (or a release token that can break a debug-PGN comment).
+  async function rejectsPendingRecord(rec, label) {
+    await page.evaluate(function (row) {
+      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+        suspect: { w: 't', rec: row }
+      }));
+      const status = document.getElementById('dataStatus');
+      status.textContent = '';
+      status.dataset.kind = '';
+    }, rec);
+    await page.click('#backupBtn');
+    await page.waitForFunction(function () {
+      const status = document.getElementById('dataStatus');
+      return status.dataset.kind === 'error' &&
+        /pending-game recovery queue/.test(status.textContent);
+    }, { timeout: 5000 });
+    check(true, label);
+  }
+  const pendingBase = {
+    id: 'suspect', source: 'play', sans: ['e4'], result: '*',
+    reason: 'imported', mode: 'pvp', plies: 1, createdAt: 5
+  };
+  await rejectsPendingRecord(
+    Object.assign({}, pendingBase, { ai: [{}] }),
+    'backup rejects malformed AI telemetry in the raw pending queue');
+  await rejectsPendingRecord(
+    Object.assign({}, pendingBase, {
+      ai: [null], startedRelease: 'r54} 99. Qh8# {'
+    }),
+    'backup rejects a malformed release in the raw pending queue');
+
   // Backup still reads the raw durability queue when archive.js is absent
   // (partial offline release), honours the persisted ending fence without the
   // archive helper, and keeps prototype-sensitive ids as data.
@@ -450,8 +483,8 @@ require('./helper').run('data-controls', async function (t) {
       mode: 'pvp', plies: 3, createdAt: 1 };
     const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
     return CoachStore.putGame(g)
-      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1, attempts: [], fenBefore: fen }); })
-      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1, attempts: [], fenBefore: fen }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1, step: -1, attempts: [], fenBefore: fen }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1, step: -1, attempts: [], fenBefore: fen }); })
       .then(function () {
         // Revision diverges at ply 1 (e4 → d4), so both cards (ply 1 and 2) prune.
         localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({

@@ -6,12 +6,13 @@
  *
  * Entry points:
  *   think(state, {maxDepth, timeMs, nodeLimit, quiesce, positions, seed,
- *     randomize}) — iterative deepening from depth 1 up to maxDepth,
+ *     randomize, rootOrderUci}) — iterative deepening from depth 1 up to maxDepth,
  *     stopping early when the timeMs/nodeLimit budget runs out (the move
  *     from the last COMPLETED iteration is used) or a forced mate is found.
  *     seed makes the root shuffle reproducible; randomize:false disables it
- *     entirely (benchmarks/analysis). Returns {move, depth, score, nodes,
- *     qnodes, cutoffs, researches}.
+ *     entirely (benchmarks/analysis). Returns {move, depth, attemptedDepth,
+ *     score, scorePov, nodes, qnodes, cutoffs, researches, elapsedMs, stopReason,
+ *     pvUci, pvSource, rootOrderUci}.
  *   bestMove(state, depth, quiesce, positions) — fixed-depth wrapper.
  */
 (function (global) {
@@ -491,6 +492,7 @@
       // (already-exhausted) budget: it must return without searching, not be
       // silently promoted to Infinity by a falsy check.
       nodeLimit: nodeLimit == null ? Infinity : nodeLimit,
+      abortReason: null,
       nodes: 0,
       qnodes: 0,       // quiescence share of nodes
       cutoffs: 0,      // beta cutoffs in the main search
@@ -524,9 +526,15 @@
     // nodes are actually evaluated (counting first would abort on entry to
     // node nodeLimit+1 while still incrementing it — an off-by-one that
     // reports one more node than was searched).
-    if (ctx.nodes >= ctx.nodeLimit) throw ABORT;
+    if (ctx.nodes >= ctx.nodeLimit) {
+      ctx.abortReason = 'node-limit';
+      throw ABORT;
+    }
     ctx.nodes++;
-    if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) throw ABORT;
+    if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) {
+      ctx.abortReason = 'time-limit';
+      throw ABORT;
+    }
   }
 
   // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,
@@ -856,6 +864,63 @@
     return arr;
   }
 
+  function uciMove(m) {
+    return Chess.sqName(m.from) + Chess.sqName(m.to) +
+      (m.promotion ? m.promotion.toLowerCase() : '');
+  }
+
+  // Replay a captured initial root order when it is an exact permutation of
+  // this position's legal moves. Invalid diagnostic input falls back to the
+  // ordinary seeded/unseeded path; casual Play never supplies this option.
+  function replayRootMoves(moves, wanted) {
+    if (!Array.isArray(wanted) || wanted.length !== moves.length) return null;
+    const byUci = new Map();
+    for (const m of moves) byUci.set(uciMove(m), m);
+    if (byUci.size !== moves.length) return null;
+    const ordered = [];
+    for (const u of wanted) {
+      if (typeof u !== 'string' || !byUci.has(u)) return null;
+      ordered.push(byUci.get(u));
+      byUci.delete(u);
+    }
+    return byUci.size === 0 ? ordered : null;
+  }
+
+  // Reconstruct a best-effort principal variation from the final TT. This runs
+  // only AFTER move selection, so telemetry cannot consume wall-clock budget or
+  // change which iteration completes. A partially searched next iteration may
+  // have refreshed continuation entries, hence the explicit best-effort label
+  // in the returned telemetry. Every TT move is re-resolved against legal
+  // moves, and cycles stop the walk instead of producing an unbounded log.
+  function pvUci(state, firstMove, ctx, maxLen) {
+    if (!firstMove || maxLen <= 0) return [];
+    const out = [uciMove(firstMove)];
+    const seen = new Set();
+    let s = Chess.applyMove(state, firstMove);
+    for (let i = 1; i < maxLen; i++) {
+      hashState(s);
+      const key = R1 + ':' + R2;
+      if (seen.has(key)) break;
+      seen.add(key);
+      const e = ctx.tt.get(H1);
+      if (!e || e.h2 !== H2 || !e.move) break;
+      const from = (e.move >> 9) & 63;
+      const to = (e.move >> 3) & 63;
+      const pi = e.move & 7;
+      const promo = pi === 1 ? 'Q' : pi === 2 ? 'R' : pi === 3 ? 'B' :
+        pi === 4 ? 'N' : null;
+      const legal = Chess.legalMoves(s);
+      const m = legal.find(function (x) {
+        return x.from === from && x.to === to &&
+          (x.promotion || null) === promo;
+      });
+      if (!m) break;
+      out.push(uciMove(m));
+      s = Chess.applyMove(s, m);
+    }
+    return out;
+  }
+
   // Pick the best move for the side to move via iterative deepening.
   // opts: maxDepth (default 3), timeMs (per-move budget; omit for fixed
   // depth), quiesce (extend horizon nodes with capture resolution), positions
@@ -872,11 +937,14 @@
   //
   // When the budget expires mid-iteration, that iteration's partial result is
   // discarded (its "best so far" is biased toward the moves searched first)
-  // and the last completed iteration's move is used.
+  // and the last completed iteration's move is used. The result reports the
+  // completed and (when aborted) attempted depths, counters, elapsed time,
+  // stop reason and a post-selection best-effort final-TT PV.
   function think(state, opts) {
     opts = opts || {};
+    const startedAt = Date.now();
     const maxDepth = Math.max(1, opts.maxDepth || 3);
-    const deadline = opts.timeMs ? Date.now() + opts.timeMs : Infinity;
+    const deadline = opts.timeMs ? startedAt + opts.timeMs : Infinity;
     // Root variety: seeded (reproducible), default Math.random, or none.
     // Deterministic modes exist for benchmarks, analysis and tests; casual
     // play keeps its randomness.
@@ -892,7 +960,14 @@
     // callers must not get a "best move" from a finished game.
     const status = Chess.gameStatus(
       Object.assign({}, state, { positions: positions || {} }));
-    if (status.over) return { move: null, depth: 0, score: 0, nodes: 0, qnodes: 0, cutoffs: 0, researches: 0 };
+    if (status.over) {
+      return {
+        move: null, depth: 0, score: 0, scorePov: 'white', nodes: 0, qnodes: 0,
+        cutoffs: 0, researches: 0, pvUci: [], rootOrderUci: [],
+        pvSource: 'final-tt-best-effort', attemptedDepth: null,
+        elapsedMs: Date.now() - startedAt, stopReason: 'game-over'
+      };
+    }
     const moves = Chess.legalMoves(state);
     const maximizing = state.turn === 'w';
     const ctx = makeCtx(opts.quiesce, deadline, opts.nodeLimit);
@@ -918,17 +993,22 @@
     ctx.path1.push(R1);
     ctx.path2.push(R2);
 
-    const items = orderMoves(rand ? shuffle(moves, rand) : moves, 0, 0, ctx, state.turn).map(function (m) {
+    const replayedRoot = replayRootMoves(moves, opts.rootOrderUci);
+    const initialRoot = replayedRoot || (rand ? shuffle(moves, rand) : moves);
+    const items = orderMoves(initialRoot, 0, 0, ctx, state.turn).map(function (m, initialIndex) {
       const next = Chess.applyMove(state, m);
       return {
         move: m,
         next: next,
+        initialIndex: initialIndex,
         score: 0,
         repDraw: !!(positions && (positions[Chess.positionKey(next)] || 0) >= 2)
       };
     });
 
     let best = null, bestScore = 0, completed = 0;
+    let stopReason = 'max-depth';
+    let attemptedDepth = null;
 
     for (let d = 1; d <= maxDepth; d++) {
       // Aspiration window: from depth 2, expect this iteration to score
@@ -997,6 +1077,9 @@
         // partial iteration; depth 1 never aspires, so the emergency
         // "budget died inside depth 1" result is still full-window.
         if (best === null && iterBest !== null) { best = iterBest; bestScore = iterScore; }
+        attemptedDepth = d;
+        stopReason = ctx.abortReason ||
+          (ctx.nodes >= ctx.nodeLimit ? 'node-limit' : 'time-limit');
         break;
       }
       best = iterBest;
@@ -1009,18 +1092,45 @@
       items.sort(function (a, b) { return maximizing ? b.score - a.score : a.score - b.score; });
       items.splice(items.indexOf(iterBest), 1);
       items.unshift(iterBest);
-      if (Math.abs(bestScore) >= MATE_NEAR) break; // forced mate found — deeper won't help
-      if (Date.now() >= deadline) break;
-      if (ctx.nodes >= ctx.nodeLimit) break;
+      if (Math.abs(bestScore) >= MATE_NEAR) {
+        stopReason = 'mate';
+        break; // forced mate found — deeper won't help
+      }
+      // A budget that is exhausted exactly as the requested final draft
+      // completes did not stop the search: maxDepth did. Only classify the
+      // budget as the stop reason when another draft would actually be
+      // attempted.
+      if (d < maxDepth) {
+        if (Date.now() >= deadline) {
+          stopReason = 'time-limit';
+          break;
+        }
+        if (ctx.nodes >= ctx.nodeLimit) {
+          stopReason = 'node-limit';
+          break;
+        }
+      }
     }
 
     if (best === null) best = items[0]; // budget died inside depth 1: any legal move
+    const elapsedMs = Date.now() - startedAt;
+    // Freeze all authoritative counters before the diagnostic TT walk below.
+    const nodes = ctx.nodes, qnodes = ctx.qnodes;
+    const cutoffs = ctx.cutoffs, researches = ctx.researches;
+    const rootOrder = items.slice().sort(function (a, b) {
+      return a.initialIndex - b.initialIndex;
+    }).map(function (it) { return uciMove(it.move); });
+    const finalPv = best ? pvUci(state, best.move, ctx, Math.max(1, completed)) : [];
     // Report the last FULLY completed depth (0 if even depth 1 was aborted):
     // a partial iteration's move is still returned, but must not be reported
     // as a completed search draft.
     return {
-      move: best.move, depth: completed, score: bestScore, nodes: ctx.nodes,
-      qnodes: ctx.qnodes, cutoffs: ctx.cutoffs, researches: ctx.researches
+      move: best.move, depth: completed, attemptedDepth: attemptedDepth,
+      score: bestScore, scorePov: 'white', nodes: nodes, qnodes: qnodes,
+      cutoffs: cutoffs, researches: researches,
+      rootOrderUci: rootOrder,
+      pvUci: finalPv, pvSource: 'final-tt-best-effort',
+      elapsedMs: elapsedMs, stopReason: stopReason
     };
   }
 
@@ -1036,6 +1146,7 @@
   function search(state, depth, alpha, beta, useQuiesce, opts) {
     opts = opts || {};
     const ctx = opts.ctx || makeCtx(useQuiesce, Infinity);
+    ctx.abortReason = null;
     // Baseline path depth. searchNode pushes an ancestor key per ply and pops
     // it on the way out, but an ABORT thrown mid-search (a finite nodeLimit
     // running out) unwinds straight past those pops. Restoring the path to its
@@ -1075,6 +1186,83 @@
     return (e && e.h2 === H2 && e.move) ? e.move : 0;
   }
 
+  // Canonical, JSON-safe shape for per-move play telemetry. Saved games are
+  // untrusted localStorage input and backup rows may outlive many releases, so
+  // callers use this both when recording a fresh search and when restoring an
+  // older entry. Missing new fields stay null; the original depth/quiesce/ms
+  // trio remains readable for backwards compatibility.
+  function sanitizeTelemetry(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    function integer(v) {
+      return Number.isInteger(v) && v >= 0 ? v : null;
+    }
+    function finite(v) {
+      return Number.isFinite(v) ? v : null;
+    }
+    function releaseToken(v) {
+      return typeof v === 'string' && v.length <= 32 && v.trim() === v &&
+        /^r\d+$/.test(v)
+        ? v : null;
+    }
+    const elapsed = finite(value.elapsedMs);
+    const legacyMs = finite(value.ms);
+    const reasons = {
+      'max-depth': true, 'time-limit': true, 'node-limit': true,
+      mate: true, 'game-over': true, unknown: true
+    };
+    const sources = { worker: true, sync: true, 'sync-fallback': true, unknown: true };
+    const pv = Array.isArray(value.pvUci)
+      ? value.pvUci.slice(0, 64).filter(function (u) {
+        return typeof u === 'string' && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u);
+      })
+      : [];
+    const rootSeen = Object.create(null);
+    const rootOrder = Array.isArray(value.rootOrderUci)
+      ? value.rootOrderUci.slice(0, 256).filter(function (u) {
+        if (typeof u !== 'string' ||
+            !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u) || rootSeen[u]) return false;
+        rootSeen[u] = true;
+        return true;
+      })
+      : [];
+    const fallbackReasons = {
+      'worker-error': true, watchdog: true
+    };
+    return {
+      release: releaseToken(value.release),
+      depth: integer(value.depth) || 0,
+      attemptedDepth: integer(value.attemptedDepth),
+      maxDepth: integer(value.maxDepth),
+      quiesce: !!value.quiesce,
+      timeMs: integer(value.timeMs),
+      nodeLimit: integer(value.nodeLimit),
+      // think() coerces a supplied seed with `| 0`; persist that effective
+      // signed-32-bit value rather than an unreproducible pre-coercion input.
+      seed: Number.isInteger(value.seed) ? value.seed | 0 : null,
+      randomize: typeof value.randomize === 'boolean' ? value.randomize : null,
+      // `ms` is retained because older debug PGNs and saves already expose it.
+      // `elapsedMs` names its end-to-end meaning; searchMs excludes worker
+      // startup/fallback delay when the engine was able to report it.
+      ms: Math.max(0, elapsed != null ? elapsed : (legacyMs != null ? legacyMs : 0)),
+      elapsedMs: Math.max(0, elapsed != null ? elapsed : (legacyMs != null ? legacyMs : 0)),
+      searchMs: finite(value.searchMs) == null ? null : Math.max(0, finite(value.searchMs)),
+      nodes: integer(value.nodes),
+      qnodes: integer(value.qnodes),
+      cutoffs: integer(value.cutoffs),
+      researches: integer(value.researches),
+      score: finite(value.score),
+      scorePov: value.scorePov === 'white' ? 'white' : null,
+      pvUci: pv,
+      rootOrderUci: rootOrder,
+      pvSource: value.pvSource === 'final-tt-best-effort'
+        ? 'final-tt-best-effort' : null,
+      stopReason: reasons[value.stopReason] ? value.stopReason : 'unknown',
+      source: sources[value.source] ? value.source : 'unknown',
+      fallbackReason: fallbackReasons[value.fallbackReason]
+        ? value.fallbackReason : null
+    };
+  }
+
   global.ChessAI = {
     bestMove: bestMove,
     think: think,
@@ -1082,6 +1270,7 @@
     search: search,
     makeCtx: makeCtx,
     ttPackedMove: ttPackedMove,
+    sanitizeTelemetry: sanitizeTelemetry,
     hashKey: hashKey,
     repKey: repKey,
     MATE: MATE,

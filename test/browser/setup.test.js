@@ -107,12 +107,18 @@ require('./helper').run('setup', async function (t) {
   await page.waitForFunction(function () {
     return document.querySelectorAll('#moveList .ply').length >= 1;
   }, null, { timeout: 5000 });
-  const failedAiMs = await page.evaluate(function () {
+  const failedAi = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    return saved.history[0].ai.ms;
+    return saved.history[0].ai;
   });
-  check(failedAiMs >= 700,
-    'failed worker: AI timing includes the pre-error wait (' + failedAiMs + 'ms)');
+  check(failedAi.ms >= 700,
+    'failed worker: AI timing includes the pre-error wait (' + failedAi.ms + 'ms)');
+  check(failedAi.source === 'sync-fallback' &&
+      failedAi.fallbackReason === 'worker-error',
+    'failed worker telemetry identifies the loud-error fallback');
+  check(Number.isFinite(failedAi.searchMs) && failedAi.ms >= failedAi.searchMs &&
+      Number.isInteger(failedAi.nodes) && failedAi.nodes > 0,
+    'failed worker fallback retains search time and counters');
 
   await page.evaluate(function () { window.__chessyTestWorkerMode = 'silent'; });
   await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
@@ -125,12 +131,18 @@ require('./helper').run('setup', async function (t) {
   check(true, 'silent worker: the watchdog falls back and the computer still moves');
   check(!(await page.textContent('#status')).includes('thinking'),
     'status leaves "thinking" after the fallback move');
-  const stalledAiMs = await page.evaluate(function () {
+  const stalledAi = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    return saved.history[0].ai.ms;
+    return saved.history[0].ai;
   });
-  check(stalledAiMs >= 4900,
-    'silent worker: AI timing includes the watchdog wait (' + stalledAiMs + 'ms)');
+  check(stalledAi.ms >= 4900,
+    'silent worker: AI timing includes the watchdog wait (' + stalledAi.ms + 'ms)');
+  check(stalledAi.source === 'sync-fallback' &&
+      stalledAi.fallbackReason === 'watchdog',
+    'silent worker telemetry identifies the watchdog fallback');
+  check(Number.isFinite(stalledAi.searchMs) && stalledAi.ms >= stalledAi.searchMs &&
+      Number.isInteger(stalledAi.nodes) && stalledAi.nodes > 0,
+    'watchdog fallback retains search time and counters');
 
   // A PERSISTENTLY unloadable worker script fires onerror on every fresh
   // instance before any message. The app must drop to synchronous mode —

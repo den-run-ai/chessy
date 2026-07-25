@@ -60,20 +60,26 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   `TimeControl` tag. The live clock is persisted whenever the page is
   hidden or closed, so reloading never refunds thinking time.
 - **Persistence** — the game is saved to `localStorage` and survives reloads
-  and app restarts. Restores are validated by replaying every recorded move
+  and app restarts. Each computer move retains its release, effective search
+  config, actual initial root order, completed/attempted depth, counters,
+  White-POV score (including mate-distance encoding), stop/fallback reason and
+  best-effort PV for incident diagnosis. The captured root order can be supplied
+  back to the engine for an exact fixed-node replay even when casual Play used
+  an unseeded shuffle. Restores are validated by replaying every recorded move
   through the rules engine and checking the final position — a corrupted or
   tampered save falls back to a fresh game instead of undefined behavior.
 - **Offline status** — the footer reports the real service-worker state
   (caching, ready offline, updating, failed, unsupported) instead of an
   unconditional claim.
 - **PGN export** — save the game in standard PGN, plain or with an embedded
-  debug log (engine depth/quiescence, think time, and the FEN before every
-  move) for troubleshooting.
+  debug log (effective engine config, total/search time, counters and explicit
+  White-POV score, release/execution/fallback path, stop reason, captured root
+  order, best-effort PV, and the FEN before every move) for troubleshooting.
 - **Game archive (coaching foundation)** — finished games are recorded
   automatically to IndexedDB, keyed on a per-game UUID (idempotent
-  re-archive; per-move clock/think evidence and the side you played are
-  retained). A failed write is reported in the game-over dialog (or on a
-  page-level note once it has closed).
+  re-archive; per-move clock/think and computer-search evidence, game-start
+  release, and the side you played are retained). A failed write is reported
+  in the game-over dialog (or on a page-level note once it has closed).
 - **Review (read-only)** — a Play/Review/Train/Progress tab bar; Review lists
   the archived games and browses any of them position by position on an
   accessible mini board (same ARIA grid model as the Play board,
@@ -108,8 +114,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   **no headline accuracy**, weakness ranking, or confidence claims.
 - **Coaching data controls** — paste or upload one PGN into the archive
   (legality-validated and deduplicated), back up games/cards to versioned JSON,
-  atomically restore a validated backup, or Delete All behind a recovery fence.
-  Bulk/Lichess import and an optional language coach remain future work (roadmap
+  including release/search provenance, atomically restore a validated backup,
+  or Delete All behind a recovery fence. Bulk/Lichess import and an optional
+  language coach remain future work (roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23), scan tracker
   [#73](https://github.com/den-run-ai/chessy/issues/73)).
 - **PWA** — a service worker precaches every asset on first load; afterwards
@@ -146,6 +153,8 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 ```sh
 node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
+node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
+node test/ai-telemetry.test.js      # behavior-neutral search provenance
 ```
 
 Two more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
