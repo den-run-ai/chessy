@@ -48,7 +48,22 @@ body {
   flex-wrap: wrap;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .brand { font-size: 1.4rem; font-weight: 700; }
+
+.app-version {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
 
 .status {
   font-size: 1rem;
@@ -418,6 +433,17 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   gap: 0.4rem;
   padding-bottom: 0.75rem;
   flex-wrap: wrap;
+}
+
+.update-note {
+  margin-bottom: 0.75rem;
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0.65rem 0.8rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .tab {
