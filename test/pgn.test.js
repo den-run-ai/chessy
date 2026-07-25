@@ -1,5 +1,6 @@
 /*
- * PGN import parser/validator (roadmap #23, Phase 4) — run with:
+ * PGN import parser/validator and archive exporter (roadmap #23, Phase 4) —
+ * run with:
  *   node test/pgn.test.js
  * Storage dedupe (CoachStore.importGame) is covered in the browser suite
  * test/browser/import.test.js.
@@ -85,6 +86,86 @@ check(rec.moves[1].nags && rec.moves[1].nags.indexOf('$1') !== -1 &&
   'NAGs and comments are preserved on the stored moves');
 check(rec.importedAt === 100 && rec.createdAt === 100 && rec.playedAt === null,
   'timestamps: importedAt/createdAt are epoch ms; playedAt null without a date tag');
+
+// --- Archive export: metadata/annotations and custom starting move survive ---
+const customFen = '4k3/8/8/8/8/8/4P3/4K3 b - - 0 17';
+const exportRecord = {
+  id: 'export-round-trip',
+  source: 'import',
+  tags: {
+    Event: 'Quoted "event" \\ path\ncontinued',
+    White: 'Alice',
+    Black: 'Bob',
+    Result: '0-1',       // stale/raw values must lose to validated record fields
+    SetUp: '0',
+    FEN: 'not the archived setup'
+  },
+  setupFen: customFen,
+  preComment: 'Start {here}',
+  sans: ['Ke7', 'e4'],
+  moves: [
+    { san: 'Ke7', nags: ['$1'], comment: 'Black } note' },
+    { san: 'e4', nags: ['$6'], comment: '[%clk 0:04:58]' }
+  ],
+  result: '1-0',
+  reason: 'imported'
+};
+const exported = PGN.serializeRecord(exportRecord, { TimeControl: '300+3' });
+check(exported.includes('[Event "Quoted \\"event\\" \\\\ path continued"]') &&
+  exported.includes('[Result "1-0"]') &&
+  exported.includes('[SetUp "1"]') && exported.includes('[FEN "' + customFen + '"]'),
+  'archive export escapes tags and forces authoritative Result/SetUp/FEN');
+check(exported.includes('{Start [here]} 17... Ke7 $1 {Black ] note} 18. e4 $6') &&
+  exported.trim().endsWith('1-0'),
+  'archive export preserves annotations and numbers a black-to-move setup correctly');
+const roundTrip = PGN.parseGame(exported);
+check(roundTrip.valid && roundTrip.setupFen === customFen &&
+  roundTrip.result === '1-0' && roundTrip.tags.Event ===
+    'Quoted "event" \\ path continued',
+  'exported archive PGN reparses with the exact setup, result and tag values',
+  roundTrip.error);
+check(roundTrip.preComment === 'Start [here]' &&
+  roundTrip.moves[0].nags.indexOf('$1') !== -1 &&
+  roundTrip.moves[0].comment === 'Black ] note' &&
+  roundTrip.moves[1].nags.indexOf('$6') !== -1 &&
+  roundTrip.moves[1].clkMs === 298000,
+  'export/import round trip keeps pre-comments, NAGs, comments and clock annotations');
+const correctedMate = PGN.serializeRecord({
+  source: 'play', tags: {}, sans: ['f3', 'e5', 'g4', 'Qh4#'],
+  result: '1-0', reason: 'resignation'
+});
+check(correctedMate.includes('[Result "0-1"]') &&
+  correctedMate.includes('{checkmate} 0-1'),
+  'terminal board rules correct a contradictory restored result and reason');
+const flaggedMate = PGN.serializeRecord({
+  source: 'play', tags: {}, sans: ['f3', 'e5', 'g4', 'Qh4#'],
+  result: '1-0', reason: 'time forfeit'
+});
+check(flaggedMate.includes('[Result "1-0"]') &&
+  flaggedMate.includes('{time forfeit} 1-0'),
+  'an archived clock forfeit stays authoritative even when the board is terminal');
+const malformedFlag = PGN.serializeRecord({
+  source: 'play', tags: {}, sans: ['f3', 'e5', 'g4', 'Qh4#'],
+  result: '*', reason: 'time forfeit'
+});
+check(malformedFlag.includes('[Result "0-1"]') &&
+  malformedFlag.includes('{checkmate} 0-1'),
+  'an unfinished marker cannot masquerade as a completed clock adjudication');
+const inheritedResult = PGN.serializeRecord({
+  source: 'import', tags: {}, sans: ['e4'], result: 'constructor', reason: 'imported'
+});
+check(inheritedResult.includes('[Result "*"]') && inheritedResult.trim().endsWith('*'),
+  'prototype-inherited names are not accepted as PGN results');
+let invalidExportRejected = false;
+try {
+  PGN.serializeRecord({
+    source: 'import', tags: {}, setupFen: 'not a fen',
+    sans: [], result: '*', reason: 'imported'
+  });
+} catch (e) {
+  invalidExportRejected = /starting position/.test(e.message);
+}
+check(invalidExportRejected, 'archive export rejects a structurally invalid SetUp/FEN');
 
 // --- P1: a ) inside a brace comment (or a stray delimiter) must not freeze ---
 const tricky = '[Result "1-0"]\n\n1. e4 {a ) inside ) a comment} e5 (1... c5 {nested ) here}) 2. Nf3 1-0';

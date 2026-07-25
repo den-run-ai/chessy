@@ -77,8 +77,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **Review (read-only)** — a Play/Review/Train/Progress tab bar; Review lists
   the archived games and browses any of them position by position on an
   accessible mini board (same ARIA grid model as the Play board,
-  inspection-only). A running timed game stays visible from the coach views
-  via a live-clock banner that returns to Play.
+  inspection-only). The selected archive record can be saved as a clean PGN,
+  including imported tags, annotations, and custom SetUp/FEN positions. A
+  running timed game stays visible from the coach views via a live-clock banner
+  that returns to Play.
 - **Critical-moment suggestions** — Review can explicitly start, pause, and
   resume a durable two-pass scan of the player's decisions. Imported games
   with no known player side ask for White, Black, or Both first. The scan shows

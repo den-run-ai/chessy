@@ -1,6 +1,7 @@
 /* Read-only Review: archived-game list, position browser, game-over
  * handoff by game UUID, and the live-clock guard rails around it. */
 'use strict';
+const fs = require('fs');
 require('./helper').run('review', async function (t) {
   const page = t.page, check = t.check, mv = t.mv;
 
@@ -22,6 +23,27 @@ require('./helper').run('review', async function (t) {
     'Review game opens the archived record in the coaching review');
   check(await page.evaluate(function () { return document.activeElement.id; }) === 'reviewBack',
     'the asynchronous handoff moves focus into the review flow');
+
+  // Save the SELECTED archived game, not a closure over Play's live state.
+  // The clean Review export deliberately has no "+ log" control: archive rows
+  // do not retain the AI search telemetry needed to reproduce that file.
+  check(await page.locator('#reviewExportPgn').isVisible(),
+    'an opened archived game offers a Save PGN action');
+  const [reviewDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#reviewExportPgn')
+  ]);
+  const reviewPgn = fs.readFileSync(await reviewDownload.path(), 'utf8');
+  check(/\.pgn$/.test(reviewDownload.suggestedFilename()) &&
+        reviewPgn.includes('[White "Human"]') &&
+        reviewPgn.includes('[Black "Human"]') &&
+        reviewPgn.includes('[TimeControl "-"]'),
+    'Review downloads a named PGN with reconstructed Play metadata');
+  check(reviewPgn.includes('[Result "0-1"]') &&
+        reviewPgn.includes('1. f3 e5 2. g4 Qh4# {checkmate} 0-1'),
+    'Review exports the complete selected game and its archived result');
+  check(await page.evaluate(function () { return document.activeElement.id; }) === 'reviewExportPgn',
+    'saving keeps keyboard focus on the visible Review action');
 
   // Browse position by position.
   check((await page.textContent('#reviewStatus')).includes('played here: f3'),
@@ -47,6 +69,8 @@ require('./helper').run('review', async function (t) {
   await page.click('#reviewBack');
   await page.waitForSelector('.game-item');
   check(await page.locator('#reviewFlow').isHidden(), 'Back returns to the game list');
+  check(await page.locator('#reviewExportPgn').isHidden(),
+    'the per-game export action is hidden when no archived game is selected');
   await page.waitForFunction(function () {
     return document.activeElement && document.activeElement.className === 'game-item';
   });
@@ -242,15 +266,27 @@ require('./helper').run('review', async function (t) {
   await page.evaluate(function () { CoachStore.listGames = CoachStore.__realListGames; });
   await page.click('#tabPlay');
 
-  // An imported SetUp/FEN game replays from its OWN initial position, not the
-  // standard start: Review must browse it, not reject it with "no longer
-  // replays" (Chess.replaySans only knows the standard start).
+  // An imported SetUp/FEN game replays and exports from its OWN initial
+  // position, not the standard start. Start with Black on move 17 so the
+  // download also proves custom-side/fullmove numbering.
+  const setupFen = '4k3/8/8/8/8/8/4P3/4K3 b - - 0 17';
   await page.evaluate(function () {
     return CoachStore.putGame({
-      id: 'setup-game', source: 'import', tags: {},
-      setupFen: '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',
-      sans: ['e4', 'Ke7'], playerColor: null, clocks: [null, null],
-      result: '*', reason: 'imported', mode: 'import', difficulty: null,
+      id: 'setup-game', source: 'import',
+      tags: {
+        Event: 'Quoted "event" \\ path',
+        White: 'Alice', Black: 'Bob', Result: '0-1',
+        SetUp: '0', FEN: 'not the archived setup'
+      },
+      setupFen: '4k3/8/8/8/8/8/4P3/4K3 b - - 0 17',
+      preComment: 'Start here',
+      sans: ['Ke7', 'e4'],
+      moves: [
+        { san: 'Ke7', nags: ['$1'], comment: 'Only move' },
+        { san: 'e4', nags: ['$6'], comment: '[%clk 0:04:58]' }
+      ],
+      playerColor: null, clocks: [null, { ms: 298000 }],
+      result: '1-0', reason: 'resignation', mode: 'import', difficulty: null,
       timeControl: 'unknown', plies: 2, createdAt: Date.now() + 100000
     });
   });
@@ -260,8 +296,44 @@ require('./helper').run('review', async function (t) {
     return document.getElementById('reviewStatus').textContent.indexOf('Position 0/2') !== -1;
   });
   check(await page.locator('#reviewFlow').isVisible() &&
-        (await page.textContent('#reviewStatus')).includes('played here: e4'),
+        (await page.textContent('#reviewStatus')).includes('Black to move') &&
+        (await page.textContent('#reviewStatus')).includes('played here: Ke7'),
     'a SetUp/FEN import replays from its custom initial position in Review');
+  const [setupDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#reviewExportPgn')
+  ]);
+  const setupPgn = fs.readFileSync(await setupDownload.path(), 'utf8');
+  const parsedSetup = await page.evaluate(function (text) {
+    const parsed = ChessyPGN.parseGame(text);
+    return {
+      valid: parsed.valid,
+      error: parsed.error,
+      setupFen: parsed.setupFen,
+      result: parsed.result,
+      event: parsed.tags.Event,
+      date: parsed.tags.Date,
+      preComment: parsed.preComment,
+      firstNags: parsed.moves[0] && parsed.moves[0].nags,
+      firstComment: parsed.moves[0] && parsed.moves[0].comment,
+      secondClock: parsed.moves[1] && parsed.moves[1].clkMs
+    };
+  }, setupPgn);
+  check(setupPgn.includes('17... Ke7 $1 {Only move} 18. e4 $6') &&
+        setupPgn.includes('[Result "1-0"]') &&
+        !setupPgn.includes('1. f3 e5'),
+    'export uses the selected archive, its move number and authoritative result—not Play');
+  check(parsedSetup.valid && parsedSetup.setupFen === setupFen &&
+        parsedSetup.result === '1-0' &&
+        parsedSetup.event === 'Quoted "event" \\ path' &&
+        parsedSetup.date === '????.??.??',
+    'downloaded SetUp/FEN PGN reparses with its exact setup, result and escaped tags',
+    parsedSetup.error);
+  check(parsedSetup.preComment === 'Start here' &&
+        parsedSetup.firstNags.indexOf('$1') !== -1 &&
+        parsedSetup.firstComment === 'Only move' &&
+        parsedSetup.secondClock === 298000,
+    'Review export preserves imported comments, NAGs and clock annotations');
   await page.click('#revEnd');
   check((await page.textContent('#reviewStatus')).includes('Position 2/2') &&
         (await page.textContent('#reviewStatus')).includes('end of game'),
