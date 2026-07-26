@@ -1161,6 +1161,25 @@
   // start position and the final FEN must match, or the save is rejected.
   // This validates the whole schema in one stroke, rebuilds the repetition
   // table and SANs from scratch, and migrates any stale derived data.
+  function validSavedRootOrder(ai, legal) {
+    // Missing rootOrderUci is the backwards-compatible marker for telemetry
+    // saved before root-order capture. Once present, however, it must be the
+    // exact legal-root permutation for THIS pre-move position. The generic
+    // sanitizer intentionally filters malformed/duplicate entries; using it
+    // as the trust boundary would turn poisoned evidence into a shorter list
+    // that cannot reproduce the search and that the archive later rejects.
+    if (!Object.prototype.hasOwnProperty.call(ai, 'rootOrderUci')) return true;
+    const order = ai.rootOrderUci;
+    if (!Array.isArray(order) || order.length !== legal.length) return false;
+    const expected = new Set(legal.map(function (move) {
+      return Chess.sqName(move.from) + Chess.sqName(move.to) +
+        (move.promotion ? move.promotion.toLowerCase() : '');
+    }));
+    return order.every(function (uci) {
+      return typeof uci === 'string' && expected.delete(uci);
+    }) && expected.size === 0;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -1176,6 +1195,9 @@
                  (x.promotion || null) === (entry.move.promotion || null);
         });
         if (!m) return false;
+        if (entry.ai && typeof entry.ai === 'object') {
+          if (!validSavedRootOrder(entry.ai, legal)) return false;
+        }
         s = Chess.playMove(s, m);
         if (entry.ai && typeof entry.ai === 'object') {
           // New releases retain full forensic evidence; legacy

@@ -68,7 +68,7 @@ function browserType() {
   // Numeric tokens, like production: the worker ORDERS tokens to refuse
   // refilling a stale release's URL from the current deployment.
   const RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
-  const phase = { release: RA };
+  const phase = { release: RA, failWorker: false };
   const server = http.createServer(function (req, res) {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p.endsWith('/')) p += 'index.html';
@@ -76,6 +76,11 @@ function browserType() {
     if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {
       res.writeHead(403);
       res.end();
+      return;
+    }
+    if (file.endsWith(path.sep + 'sw.js') && phase.failWorker) {
+      res.writeHead(503, { 'Cache-Control': 'no-store' });
+      res.end('worker deliberately unavailable');
       return;
     }
     fs.readFile(file, function (err, data) {
@@ -338,6 +343,85 @@ function browserType() {
 
   check(errors.length === 0,
     'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  await context.close();
+
+  // First-controller race: A loads while its initial worker fetch fails, so
+  // the page remains uncontrolled. B later installs and becomes this old
+  // document's FIRST controller. Its release handshake must fence a Start
+  // click dispatched by that same controllerchange and preserve A's save.
+  phase.release = RA;
+  phase.failWorker = true;
+  const raceContext = await browser.newContext();
+  const race = await raceContext.newPage();
+  const raceErrors = [];
+  race.on('pageerror', function (e) { raceErrors.push(String(e)); });
+  await race.goto(url);
+  await race.waitForFunction(function () {
+    return document.getElementById('installNote').textContent
+      .indexOf('Offline setup failed') !== -1;
+  });
+  check(!await race.evaluate(function () {
+    return !!navigator.serviceWorker.controller;
+  }), 'release A remains uncontrolled after its worker install fails');
+
+  await race.click('#newGame');
+  await race.click('input[name="mode"][value="pvp"] + span');
+  await race.click('#newGameStart');
+  await race.waitForFunction(function () {
+    return !document.getElementById('newGameDialog').open;
+  });
+  await race.click('#board .square[data-index="52"]'); // e2
+  await race.click('#board .square[data-index="36"]'); // e4
+  const raceA = await race.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return { id: saved.gameId, plies: saved.history.length };
+  });
+  await race.click('#newGame');
+
+  phase.release = RB;
+  phase.failWorker = false;
+  await race.evaluate(function () {
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      sessionStorage.setItem('chessy-first-claim-start', 'attempted');
+      document.getElementById('newGameStart').click();
+    }, { once: true });
+    return navigator.serviceWorker.register('sw.js');
+  });
+  const raceB = await (async function () {
+    const t0 = Date.now();
+    for (;;) {
+      let state = null;
+      try {
+        state = await race.evaluate(function () {
+          const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+          return {
+            token: window.CHESSY_RELEASE,
+            controlled: !!navigator.serviceWorker.controller,
+            ready: document.getElementById('installNote').textContent
+              .indexOf('Ready offline') !== -1,
+            attempted: sessionStorage.getItem('chessy-first-claim-start'),
+            id: saved && saved.gameId,
+            plies: saved && saved.history.length,
+            rendered: document.querySelectorAll('#moveList .ply').length
+          };
+        });
+      } catch (e) { /* mid-navigation */ }
+      if (state && state.token === RB && state.controlled && state.ready) return state;
+      if (Date.now() - t0 > 30000) {
+        throw new Error('timeout: first-controller race — last state ' +
+          JSON.stringify(state));
+      }
+      await new Promise(function (r) { setTimeout(r, 200); });
+    }
+  })();
+  check(raceB.attempted === 'attempted',
+    'Start is attempted during the newer first-controller claim');
+  check(raceB.id === raceA.id && raceB.plies === 1 && raceB.rendered === 1,
+    'the newer first claimant reloads A and preserves its active save');
+  check(raceErrors.length === 0,
+    'the first-controller race has no page errors' +
+      (raceErrors.length ? ': ' + raceErrors.join(' | ') : ''));
+  await raceContext.close();
 
   await browser.close();
   server.close();

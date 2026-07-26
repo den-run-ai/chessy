@@ -38,12 +38,35 @@ function eventTarget(fields) {
   }, fields || {});
 }
 
-function setup(controller, timeoutMs) {
+function FakeMessageChannel() {
+  const receiver = { onmessage: null, close: function () {} };
+  this.port1 = receiver;
+  this.port2 = {
+    postMessage: function (data) {
+      if (receiver.onmessage) receiver.onmessage({ data: data });
+    }
+  };
+}
+
+function claimant(id, release, silent) {
+  return {
+    id: id,
+    postMessage: function (message, ports) {
+      if (!silent && message && message.type === 'chessy-release?' && ports[0]) {
+        ports[0].postMessage({ type: 'chessy-release', release: release });
+      }
+    }
+  };
+}
+
+function setup(controller, timeoutMs, release) {
   const sw = eventTarget({ controller: controller });
   let reloads = 0;
   const gate = RuntimeUpdate.create({
     serviceWorker: sw,
     reload: function () { reloads++; },
+    release: release || 'r56',
+    MessageChannel: FakeMessageChannel,
     timeoutMs: timeoutMs == null ? 50 : timeoutMs
   });
   return {
@@ -88,11 +111,63 @@ function setup(controller, timeoutMs) {
     let calls = 0;
     const reg = { update: function () { calls++; return Promise.resolve(reg); } };
     x.gate.setRegistration(reg);
-    x.sw.controller = { id: 'A' };
+    x.sw.controller = claimant('A', 'r56');
     x.sw.emit('controllerchange');
-    check(x.reloads() === 0, 'a first service-worker claim does not reload');
     check(await x.gate.ensureCurrent() === true && calls === 1,
       'the newly controlled current release remains usable');
+    check(x.reloads() === 0, 'a verified same-release first claim does not reload');
+  }
+
+  // An uncontrolled old page can receive its first controller only after a
+  // newer deployment has won installation. The first claim must be verified;
+  // treating it as an ordinary first install would let stale code replace the
+  // saved game.
+  {
+    const x = setup(null);
+    let calls = 0;
+    const reg = { update: function () { calls++; return Promise.resolve(reg); } };
+    x.gate.setRegistration(reg);
+    x.sw.controller = claimant('B', 'r57');
+    x.sw.emit('controllerchange');
+    check(await x.gate.ensureCurrent() === false &&
+        x.reloads() === 1 && calls === 0,
+      'a newer first claimant fences the start and reloads stale page assets');
+  }
+
+  // The controller property can become visible just before controllerchange
+  // is delivered. ensureCurrent() must discover and verify that claimant too.
+  {
+    const x = setup(null);
+    x.gate.setRegistration({ update: function () { return Promise.resolve(this); } });
+    x.sw.controller = claimant('B-before-event', 'r57');
+    check(await x.gate.ensureCurrent() === false && x.reloads() === 1,
+      'a visible first claimant is fenced even before controllerchange dispatch');
+  }
+
+  // A first claim may also arrive just after ensureCurrent() snapshots an
+  // uncontrolled page but before its promise resolves.
+  {
+    const x = setup(null);
+    x.gate.setRegistration({ update: function () { return Promise.resolve(this); } });
+    const result = x.gate.ensureCurrent();
+    x.sw.controller = claimant('B-after-check', 'r57');
+    x.sw.emit('controllerchange');
+    check(await result === false && x.reloads() === 1,
+      'an in-flight uncontrolled check joins first-claim verification');
+  }
+
+  // A claimant that cannot prove its release is bounded and handled
+  // conservatively. Reloading once is safe for legacy workers: the next page
+  // starts with that worker as its already-loaded controller.
+  {
+    const x = setup(null, 15);
+    x.gate.setRegistration({ update: function () { return Promise.resolve(this); } });
+    x.sw.controller = claimant('unknown', null, true);
+    x.sw.emit('controllerchange');
+    const t0 = Date.now();
+    check(await x.gate.ensureCurrent() === false &&
+        x.reloads() === 1 && Date.now() - t0 < 250,
+      'an unverifiable first claim is timeout-bounded and reloads once');
   }
 
   // Offline update failure is explicitly fail-open.
