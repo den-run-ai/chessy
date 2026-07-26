@@ -47,23 +47,34 @@ equality**: acceptable-move sets, set overlap, budget invariance and a regret
 *tail distribution*. The only external oracle is the CC0 Lichess puzzle key
 move, so the run stays offline and needs no GPL engine.
 
-## Baseline — frozen E3 PR shard (36 cases)
+The shipped candidate width used by `playedRank` is **derived from
+`assets/reflection.js` at run time**, never duplicated: if the app changes its
+coaching width, `e3_opts` changes with it, the committed baseline goes
+incompatible, and the gate forces a conscious re-baseline — and if the CFG
+declaration ever moves, the run fails loudly rather than silently testing a
+stale width.
+
+## Baseline — frozen E3 PR shard (34 train/val cases)
 
 ```
-eval-v1 ANALYSIS scorecard — shard (36 cases)
+eval-v1 ANALYSIS scorecard — shard (34 cases)
   corpus eval-v1 @ eval-v1.0.0
-  rootComplete     strict  ok   36/36
-  playedRank       strict  ok   13/13
-  puzzleTop1       ratchet score 10/13
-  puzzleRecall3    ratchet score 11/13
-  pvStability      ratchet score 19/29
-  budgetStability  ratchet score 28/36
-  regret cp        ratchet score median 0  p90 5  catastrophic 0/36
+  rootComplete     strict  ok   34/34
+  playedRank       strict  ok   12/12
+  puzzleTop1       ratchet score 9/12
+  puzzleRecall3    ratchet score 10/12
+  pvStability      ratchet score 18/27
+  budgetStability  ratchet score 26/34
+  regret cp        ratchet score median 0  p90 5  catastrophic 0/34
   STRICT gate           PASS (0 strict failures)
 ```
 
-The shard is every shard puzzle (all five difficulty bands) plus the core, live
-generated fixtures — **~9 s**, small enough to run on every PR.
+The shard is every **train/validation** shard puzzle (all five difficulty bands
+stay represented) plus the core, live generated fixtures — **~9 s**, small
+enough to run on every PR. The corpus's held-out **test** split is excluded: a
+per-PR ratchet is selection pressure, and the tracker's rule is *never tune on
+the test split* — test records are measured only by the `--full` nightly /
+pre-release run below.
 
 ## Full corpus (`--full`, 103 live cases)
 
@@ -122,22 +133,22 @@ own UCI), **result-level** (headline score desynchronized from `bestLines[0]`;
 confined to the played line):
 
 ```
-self-test (truncate-multipv): RED ✓ (39 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (empty-multipv):    RED ✓ (36 strict failures; rootComplete 36/36, playedRank 0/13)
-self-test (strip-scores):     RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (zero-mate):        RED ✓ (13 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (absent-mate):      RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (skew-white):       RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (bad-san):          RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (skew-move):        RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (top-eval-skew):    RED ✓ (41 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (stability-depths): RED ✓ (39 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (tamper-provenance):RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (complete-truthy):  RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
-self-test (played-san):       RED ✓ (13 strict failures; rootComplete 36/36, playedRank 13/13)
+self-test (truncate-multipv): RED ✓ (37 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (empty-multipv):    RED ✓ (34 strict failures; rootComplete 34/34, playedRank 0/12)
+self-test (strip-scores):     RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (zero-mate):        RED ✓ (11 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (absent-mate):      RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (skew-white):       RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (bad-san):          RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (skew-move):        RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (top-eval-skew):    RED ✓ (40 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (stability-depths): RED ✓ (36 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (tamper-provenance):RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (complete-truthy):  RED ✓ (46 strict failures; rootComplete 34/34, playedRank 12/12)
+self-test (played-san):       RED ✓ (12 strict failures; rootComplete 34/34, playedRank 12/12)
 
-self-test (incomplete-aux, ratchet):  fully VISIBLE ✓ (budgetStability 0/36, regret catastrophic 36/36, strict gate correctly unaffected)
-self-test (liar-stability, immunity): pvStability correctly UNMOVED ✓ (19/29 — measured independently, not read off the result)
+self-test (incomplete-aux, ratchet):  fully VISIBLE ✓ (budgetStability 0/34, regret catastrophic 34/34, strict gate correctly unaffected)
+self-test (liar-stability, immunity): pvStability correctly UNMOVED ✓ (18/27 — measured independently, not read off the result)
 ```
 
 Each fault must produce strict failures **while still having checked every
@@ -166,8 +177,8 @@ The quality ratchet is separately verified: replaying the shard against a
 baseline holding one extra solve and a lower p90 correctly reports
 
 ```
-  puzzleTop1       11/13 → 10/13  (-1)  ← REGRESSION
-  regret cp        med 0→0 p90 1→5 catastrophic 0→0  ← REGRESSION
+  puzzleTop1       10/12 → 9/12  (-1)  ← REGRESSION
+  regret cp        n 34→34 med 0→0 p90 1→5 catastrophic 0→0  ← REGRESSION
 ```
 
 and exits non-zero — so a lost solve **or** a fattened regret tail fails the PR.
@@ -181,7 +192,7 @@ silently disappear from the published vector.
 contracts, ratcheted from this baseline on the five quality axes — and publish
 this vector as the frozen eval-v1 analysis baseline.**
 
-- The 36-case shard runs on every PR (wired into `.github/workflows/test.yml`)
+- The 34-case train/val shard runs on every PR (wired into `.github/workflows/test.yml`)
   with `--baseline eval/ANALYSIS-BASELINE.json`.
 - The full 103-case corpus is available via `--full` for nightly / pre-release runs.
 - **Deferred, on purpose:** level calibration and the adjacent-level ladder

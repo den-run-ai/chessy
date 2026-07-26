@@ -73,16 +73,31 @@ const CORPUS_DIR = path.join(__dirname, '..', '..', 'eval', 'corpus');
 // deterministic and machine-independent (never wall-clock). The `ref` pass sets
 // multiPV wide enough to score EVERY legal root — analyse() scores all roots
 // internally regardless of multiPV, so a wide multiPV only widens the returned
-// list. `ship` mirrors the shipped coaching width (reflection.js CFG.multiPV
-// = 3) so the classification axis tests the real candidate-set boundary.
-// `quarter`/`quad` are the ¼×/4× scan tiers for the budget-stability sweep;
-// they read only the best move so they stay cheap. Baked into the score vector
-// so a config drift can never compare "clean" against a baseline built under a
-// different budget.
+// list. `ship` uses the SHIPPED coaching width so the classification axis
+// tests the real candidate-set boundary. `quarter`/`quad` are the ¼×/4× scan
+// tiers for the budget-stability sweep; they read only the best move so they
+// stay cheap. Baked into the score vector so a config drift can never compare
+// "clean" against a baseline built under a different budget.
 // ---------------------------------------------------------------------------
+// The shipped coaching width is DERIVED from assets/reflection.js, never
+// duplicated: a copied "3" would silently stop testing the product boundary
+// the moment the app changed it. reflection.js cannot be require()d here (its
+// module guard needs the browser app's globals), so the value is read from the
+// source text, and the run fails loudly if the CFG declaration ever moves or
+// the width cannot be found. A changed width also changes e3_opts below, so
+// the committed baseline goes INCOMPATIBLE and must be consciously rebuilt.
+function shippedMultiPV() {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'assets', 'reflection.js'), 'utf8');
+  const m = src.match(/const CFG = \{[^}]*\bmultiPV:\s*(\d+)/);
+  if (!m) {
+    throw new Error('cannot locate the shipped coaching width (CFG.multiPV) in ' +
+      'assets/reflection.js — rebind this scorecard\'s ship config to the app');
+  }
+  return Number(m[1]);
+}
 const E3_OPTS = {
   ref:     { nodeLimit: 2000, nodeBudget: 2000000, multiPV: 999, pvLen: 4, quiesce: true },
-  ship:    { nodeLimit: 2000, nodeBudget: 2000000, multiPV: 3,   pvLen: 4, quiesce: true },
+  ship:    { nodeLimit: 2000, nodeBudget: 2000000, multiPV: shippedMultiPV(), pvLen: 4, quiesce: true },
   quarter: { nodeLimit: 500,  nodeBudget: 2000000, multiPV: 1,   pvLen: 1, quiesce: true },
   quad:    { nodeLimit: 8000, nodeBudget: 2000000, multiPV: 1,   pvLen: 1, quiesce: true }
 };
@@ -204,10 +219,16 @@ function analyse(state, opts) {
 }
 function isLive(rec) { return !(rec.assert && rec.assert.terminal); }
 function isPuzzle(rec) { return rec.expected_moves && rec.expected_moves.length > 0; }
-// The frozen E3 PR shard: every shard puzzle (all five difficulty bands) plus
-// the core, live generated fixtures. Small enough for a per-PR run, stratified
-// enough to move when analysis quality moves. --full analyses every live case.
-function inE3Shard(rec) { return rec.shard && isLive(rec) && (isPuzzle(rec) || rec.core); }
+// The frozen E3 PR shard: every TRAIN/VAL shard puzzle (all five difficulty
+// bands) plus the core, live generated fixtures. The corpus's held-out TEST
+// split is EXCLUDED: this ratchet accepts or rejects every PR, so grading test
+// records here would turn the locked split into development feedback ("never
+// tune on the test split"). Test cases are still measured by --full, which is
+// the nightly / pre-release run. Small enough for a per-PR run, stratified
+// enough to move when analysis quality moves.
+function inE3Shard(rec) {
+  return rec.shard && isLive(rec) && rec.split_group !== 'test' && (isPuzzle(rec) || rec.core);
+}
 
 // ---------------------------------------------------------------------------
 // per-axis checks. Fraction axes return {ok} results; the regret axis feeds a
@@ -578,8 +599,8 @@ function main() {
       // quietly checked nothing is itself a vacuous pass. Coverage is asserted
       // PER AXIS, never pooled: the axes differ in applicability (rootComplete
       // = every live record, playedRank = puzzles only), so a pooled sum can
-      // hit the threshold while an entire subset escaped (on the 36-case
-      // shard, dropping all 13 puzzle root checks still leaves 23 + 13 = 36).
+      // hit the threshold while an entire subset escaped (on the 34-case
+      // shard, dropping all 12 puzzle root checks still leaves 22 + 12 = 34).
       // rootComplete is recorded before any early exit, so its coverage must
       // hold exactly under every fault; playedRank coverage legitimately
       // varies (a fault that empties bestLines stops each case before the

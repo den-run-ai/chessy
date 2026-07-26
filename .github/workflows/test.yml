@@ -93,7 +93,7 @@ jobs:
         # --baseline makes lost checks / a vacuous axis / a changed analysis
         # config fail the gate, not just new assertion failures.
         run: node test/eval/scorecard.js --baseline eval/BASELINE.json
-      - name: Run eval-v1 analysis scorecard (E3, frozen 36-case shard)
+      - name: Run eval-v1 analysis scorecard (E3, frozen 34-case train/val shard)
         # The E3 quality vector: two STRICT output contracts (complete/ordered
         # MultiPV over every legal root; self-consistent played-move rank +
         # classification) gate at 100%, and five QUALITY axes (puzzle top-1 /

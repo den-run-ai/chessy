@@ -41,7 +41,7 @@ steps:
 | `../test/eval/fetch-corpus.js` | **Online** fetcher: commits the frozen CC0 sample under `corpus/sources/` |
 | `../test/eval/gen-corpus.js` | **Offline** deterministic, self-validating generator that derives the corpus |
 | `../test/eval/scorecard.js` | Correctness score-vector runner (frozen 64-case PR shard + full mode) |
-| `../test/eval/analysis-scorecard.js` | **Analysis/coaching** score-vector runner (frozen 36-case PR shard + full mode) |
+| `../test/eval/analysis-scorecard.js` | **Analysis/coaching** score-vector runner (frozen 34-case train/val PR shard + full mode) |
 
 ## Run it
 
@@ -53,7 +53,7 @@ node test/eval/scorecard.js --baseline eval/BASELINE.json   # before/after vs th
 node test/eval/gen-corpus.js           # regenerate the corpus offline from committed sources
 node test/eval/fetch-corpus.js         # (online) refresh the frozen CC0 sample under corpus/sources/
 
-node test/eval/analysis-scorecard.js   # E3 analysis vector — frozen 36-case shard (runs in CI, ~9s)
+node test/eval/analysis-scorecard.js   # E3 analysis vector — frozen 34-case train/val shard (runs in CI, ~9s)
 node test/eval/analysis-scorecard.js --full   # all 103 live cases (~95s, nightly / pre-release)
 node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json   # strict gate + quality ratchet
 node test/eval/analysis-scorecard.js --self-test    # prove the strict gate turns red
@@ -164,10 +164,13 @@ The strict axes delegate whole-object validation to the shipped
 `ChessyAnalysisResult.validate` (against an independently derived identity), so
 the gate can never be laxer than the coaching path consuming the same output;
 E3 adds only the full-MultiPV coverage requirement on top — and the auxiliary
-¼×/4× tiers must pass the same validator before they are graded. `--self-test`
-simulates fifteen distinct shapes of engine regression: thirteen must turn the
-strict gate red, an unusable auxiliary tier must be fully visible to the
-ratchet, and a flattering self-report must leave `pvStability` unmoved
+¼×/4× tiers must pass the same validator before they are graded. The shipped
+candidate width is derived from `assets/reflection.js` at run time, never
+duplicated. The PR shard grades **train/validation records only** — the
+held-out test split is reserved for `--full` (*never tune on the test split*).
+`--self-test` simulates fifteen distinct shapes of engine regression: thirteen
+must turn the strict gate red, an unusable auxiliary tier must be fully visible
+to the ratchet, and a flattering self-report must leave `pvStability` unmoved
 (immunity) — see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the
 fault list and the published numbers.
 

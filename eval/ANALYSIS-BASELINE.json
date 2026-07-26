@@ -34,49 +34,49 @@
       "quiesce": true
     }
   },
-  "cases": 36,
+  "cases": 34,
   "axes": {
     "rootComplete": {
-      "checked": 36,
-      "pass": 36,
+      "checked": 34,
+      "pass": 34,
       "fail": 0
     },
     "playedRank": {
-      "checked": 13,
-      "pass": 13,
+      "checked": 12,
+      "pass": 12,
       "fail": 0
     },
     "puzzleTop1": {
-      "checked": 13,
-      "pass": 10,
+      "checked": 12,
+      "pass": 9,
       "fail": 3
     },
     "puzzleRecall3": {
-      "checked": 13,
-      "pass": 11,
+      "checked": 12,
+      "pass": 10,
       "fail": 2
     },
     "pvStability": {
-      "checked": 29,
-      "pass": 19,
-      "fail": 10
+      "checked": 27,
+      "pass": 18,
+      "fail": 9
     },
     "budgetStability": {
-      "checked": 36,
-      "pass": 28,
+      "checked": 34,
+      "pass": 26,
       "fail": 8
     }
   },
   "regret": {
-    "n": 36,
+    "n": 34,
     "median": 0,
     "p90": 5,
     "catastrophic": 0
   },
   "totals": {
-    "checks": 140,
-    "pass": 117,
-    "fail": 23,
+    "checks": 131,
+    "pass": 109,
+    "fail": 22,
     "strictFail": 0
   },
   "gate": "PASS"
