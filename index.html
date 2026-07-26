@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Chessy — a completely offline chess PWA. Two-player or vs computer.">
   <meta name="theme-color" content="#312e2b">
+  <script>
+    // Snapshot controller ownership before stylesheet/script loading, but
+    // retain it as a legacy-handshake fallback only when Navigation Timing
+    // proves a worker handled THIS navigation. A worker that merely claims the
+    // client during parsing has workerStart === 0 and is never trusted.
+    var chessyNavigation = performance.getEntriesByType
+      ? performance.getEntriesByType('navigation')[0] : null;
+    window.CHESSY_BOOT_CONTROLLER = 'serviceWorker' in navigator &&
+      chessyNavigation && chessyNavigation.workerStart > 0
+      ? navigator.serviceWorker.controller : null;
+  </script>
   <title>Chessy — Offline Chess</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -472,9 +483,59 @@
       var registerWorker = function () {
         return navigator.serviceWorker.register('sw.js');
       };
-      var runtime = window.ChessyRuntimeUpdate && window.ChessyRuntimeUpdate.create({
+      var runtime = null;
+      var currentRegistration = null;
+      var wiredRegistrations = new WeakSet();
+      var watchedWorkers = new WeakSet();
+      var visibilityWired = false;
+      function watchWorker(sw, firstInstall) {
+        if (!sw || watchedWorkers.has(sw)) return;
+        watchedWorkers.add(sw);
+        sw.addEventListener('statechange', function () {
+          if (sw.state === 'installed') {
+            setNote(firstInstall ? 'Ready offline — installable as an app.'
+                                 : 'Updating to the latest version…');
+          } else if (sw.state === 'redundant' && !navigator.serviceWorker.controller) {
+            setNote('Offline setup failed — playing online only.');
+          }
+        });
+      }
+      function registrationReady(reg) {
+        currentRegistration = reg;
+        if (navigator.serviceWorker.controller) {
+          setNote('Ready offline — installable as an app.');
+        } else if (reg.installing) {
+          setNote('Caching for offline use…');
+        }
+        watchWorker(reg.installing, !navigator.serviceWorker.controller);
+        if (!wiredRegistrations.has(reg)) {
+          wiredRegistrations.add(reg);
+          reg.addEventListener('updatefound', function () {
+            watchWorker(reg.installing, !navigator.serviceWorker.controller);
+          });
+        }
+        if (!visibilityWired) {
+          visibilityWired = true;
+          // Re-check whenever the app is brought back into view (helps
+          // installed/home-screen PWAs that keep running).
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'visible') return;
+            if (runtime) runtime.ensureCurrent();
+            else if (currentRegistration) {
+              currentRegistration.update().catch(function () {});
+            }
+          });
+        }
+      }
+      function registrationFailed() {
+        setNote('Offline setup failed — playing online only.');
+      }
+      runtime = window.ChessyRuntimeUpdate && window.ChessyRuntimeUpdate.create({
         serviceWorker: navigator.serviceWorker,
         register: registerWorker,
+        loadedController: window.CHESSY_BOOT_CONTROLLER,
+        onRegistration: registrationReady,
+        onRegistrationError: registrationFailed,
         release: window.CHESSY_RELEASE,
         // The replacement worker writes its marker into the NEW release cache
         // before claiming clients. Reload directly; the new document's boot
@@ -483,39 +544,8 @@
       });
       window.ChessyRuntime = runtime || null;
       window.addEventListener('load', function () {
-        var registration = registerWorker();
-        if (runtime) runtime.setRegistration(registration);
-        registration.then(function (reg) {
-          if (navigator.serviceWorker.controller) {
-            setNote('Ready offline — installable as an app.');
-          } else if (reg.installing) {
-            setNote('Caching for offline use…');
-          }
-          function watch(sw, firstInstall) {
-            if (!sw) return;
-            sw.addEventListener('statechange', function () {
-              if (sw.state === 'installed') {
-                setNote(firstInstall ? 'Ready offline — installable as an app.'
-                                     : 'Updating to the latest version…');
-              } else if (sw.state === 'redundant' && !navigator.serviceWorker.controller) {
-                setNote('Offline setup failed — playing online only.');
-              }
-            });
-          }
-          watch(reg.installing, !navigator.serviceWorker.controller);
-          reg.addEventListener('updatefound', function () {
-            watch(reg.installing, !navigator.serviceWorker.controller);
-          });
-          // Re-check for updates whenever the app is brought back into view
-          // (helps installed/home-screen PWAs that keep running).
-          document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState !== 'visible') return;
-            if (runtime) runtime.ensureCurrent();
-            else reg.update().catch(function () {});
-          });
-        }).catch(function () {
-          setNote('Offline setup failed — playing online only.');
-        });
+        if (runtime) runtime.register();
+        else registerWorker().then(registrationReady, registrationFailed);
         // Keep the prior auto-reload behavior if the optional gate asset was
         // unavailable (for example a partially evicted offline cache).
         if (!runtime) {

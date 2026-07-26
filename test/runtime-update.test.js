@@ -59,17 +59,21 @@ function claimant(id, release, silent) {
   };
 }
 
-function setup(controller, timeoutMs, release, register) {
+function setup(controller, timeoutMs, release, register, extra) {
   const sw = eventTarget({ controller: controller });
   let reloads = 0;
-  const gate = RuntimeUpdate.create({
+  const options = Object.assign({
     serviceWorker: sw,
     reload: function () { reloads++; },
     register: register,
+    // Tests model a controller that owned the document at its early snapshot
+    // unless they explicitly pass null to exercise an ambiguous late claim.
+    loadedController: controller,
     release: release || 'r56',
     MessageChannel: FakeMessageChannel,
     timeoutMs: timeoutMs == null ? 50 : timeoutMs
-  });
+  }, extra || {});
+  const gate = RuntimeUpdate.create(options);
   return {
     sw: sw,
     gate: gate,
@@ -80,7 +84,7 @@ function setup(controller, timeoutMs, release, register) {
 (async function () {
   // No update: the boundary remains usable and calls the platform check.
   {
-    const x = setup({ id: 'A' });
+    const x = setup(claimant('A', 'r56'));
     let calls = 0;
     const reg = { update: function () { calls++; return Promise.resolve(reg); } };
     x.gate.setRegistration(reg);
@@ -88,10 +92,75 @@ function setup(controller, timeoutMs, release, register) {
       'an unchanged controlled release passes the boundary');
   }
 
+  // A controller already visible when the late runtime script executes is not
+  // necessarily the one that loaded this page. Without an earlier snapshot it
+  // must prove its release before a fresh-game boundary can proceed.
+  {
+    const same = claimant('same-release-late-claim', 'r56');
+    const x = setup(same, 50, 'r56', null, { loadedController: null });
+    let calls = 0;
+    const reg = { update: function () { calls++; return Promise.resolve(reg); } };
+    x.gate.setRegistration(reg);
+    check(await x.gate.ensureCurrent() === true &&
+        calls === 1 && x.reloads() === 0,
+      'an ambiguous same-release controller is verified and accepted');
+  }
+
+  {
+    const newer = claimant('newer-late-claim', 'r57');
+    const x = setup(newer, 50, 'r56', null, { loadedController: null });
+    x.gate.setRegistration({ update: function () { return Promise.resolve(this); } });
+    check(await x.gate.ensureCurrent() === false && x.reloads() === 1,
+      'an ambiguous newer controller at gate initialization reloads and fences');
+  }
+
+  // A non-null early snapshot is not proof that the controller served this
+  // navigation. A release response still decides, so snapshotted B cannot
+  // bless an r56 page.
+  {
+    const newer = claimant('snapshotted-newer-controller', 'r57');
+    const x = setup(newer, 50, 'r56');
+    x.gate.setRegistration({ update: function () { return Promise.resolve(this); } });
+    check(await x.gate.ensureCurrent() === false && x.reloads() === 1,
+      'a snapshotted newer controller still must pass the release handshake');
+  }
+
+  // A legacy controller that cannot answer is accepted only when it was also
+  // present in the early snapshot. This makes the conservative reload for an
+  // ambiguous first claim terminate on the next document.
+  {
+    const legacy = { id: 'legacy-snapshot' };
+    const x = setup(legacy, 15, 'r56');
+    let calls = 0;
+    const reg = { update: function () { calls++; return Promise.resolve(reg); } };
+    x.gate.setRegistration(reg);
+    check(await x.gate.ensureCurrent() === true &&
+        calls === 1 && x.reloads() === 0,
+      'an unresponsive controller in the reliable snapshot avoids a reload loop');
+  }
+
+  // Replacement during that initial handshake is also a takeover, regardless
+  // of what release the superseded controller eventually reports.
+  {
+    let responsePort = null;
+    const first = {
+      postMessage: function (message, ports) {
+        if (message && message.type === 'chessy-release?') responsePort = ports[0];
+      }
+    };
+    const x = setup(first, 50, 'r56', null, { loadedController: null });
+    const result = x.gate.ensureCurrent();
+    x.sw.controller = claimant('replacement-during-handshake', 'r57');
+    x.sw.emit('controllerchange');
+    responsePort.postMessage({ type: 'chessy-release', release: 'r56' });
+    check(await result === false && x.reloads() === 1,
+      'controller replacement during initial verification reloads once');
+  }
+
   // Two rapid Start clicks share one network/update job. app.js independently
   // generation-fences their actions, so only the latest click may start.
   {
-    const x = setup({ id: 'A' });
+    const x = setup(claimant('A', 'r56'));
     const update = deferred();
     let calls = 0;
     const reg = { update: function () { calls++; return update.promise; } };
@@ -175,7 +244,7 @@ function setup(controller, timeoutMs, release, register) {
   // page. The next boundary retries registration, probes the returned
   // registration, and joins first-claim verification before allowing play.
   {
-    let registrations = 0, updates = 0;
+    let registrations = 0, updates = 0, wired = 0, errors = 0;
     let x;
     const reg = {
       update: function () {
@@ -188,12 +257,65 @@ function setup(controller, timeoutMs, release, register) {
     x = setup(null, 50, 'r56', function () {
       registrations++;
       return Promise.resolve(reg);
+    }, {
+      loadedController: null,
+      onRegistration: function () { wired++; },
+      onRegistrationError: function () { errors++; }
     });
     x.gate.setRegistration(Promise.reject(new Error('boot deploy race')));
     await new Promise(function (r) { setTimeout(r, 0); });
     check(await x.gate.ensureCurrent() === false &&
-        registrations === 1 && updates === 1 && x.reloads() === 1,
-      'a boundary retries failed registration and fences its newer first claimant');
+        registrations === 1 && updates === 1 && wired === 1 &&
+        errors === 1 && x.reloads() === 1,
+      'a retry runs success wiring before fencing its newer first claimant');
+  }
+
+  // Idempotent register() calls may return the same Registration object at
+  // every boundary. Every success reaches the UI callback; that callback's
+  // listener de-duplication is exercised by the real browser regression.
+  {
+    let registrations = 0, updates = 0, wired = 0;
+    const reg = {
+      update: function () {
+        updates++;
+        return Promise.resolve(reg);
+      }
+    };
+    const controller = claimant('stable-controller', 'r56');
+    const x = setup(controller, 50, 'r56', function () {
+      registrations++;
+      return Promise.resolve(reg);
+    }, {
+      onRegistration: function () { wired++; }
+    });
+    await x.gate.register();
+    check(await x.gate.ensureCurrent() === true &&
+        await x.gate.ensureCurrent() === true &&
+        registrations === 3 && updates === 2 && wired === 3,
+      'every successful registration attempt reaches the lifecycle callback');
+  }
+
+  // Registration attempts can settle out of order. An older success still
+  // owns valid lifecycle wiring, and a newer offline failure must not replace
+  // its Ready state with a setup-failed state.
+  {
+    const first = deferred();
+    const second = deferred();
+    let wired = 0, errors = 0;
+    const reg = { update: function () { return Promise.resolve(reg); } };
+    const x = setup(null, 50, 'r56', null, {
+      loadedController: null,
+      onRegistration: function () { wired++; },
+      onRegistrationError: function () { errors++; }
+    });
+    x.gate.setRegistration(first.promise);
+    x.gate.setRegistration(second.promise);
+    first.resolve(reg);
+    await new Promise(function (r) { setTimeout(r, 0); });
+    second.reject(new Error('later offline attempt'));
+    await new Promise(function (r) { setTimeout(r, 0); });
+    check(wired === 1 && errors === 0,
+      'an out-of-order success wires once and suppresses later failure UI');
   }
 
   // Retrying registration remains advisory when the browser is offline.
@@ -282,7 +404,7 @@ function setup(controller, timeoutMs, release, register) {
 
   // Offline update failure is explicitly fail-open.
   {
-    const x = setup({ id: 'A' });
+    const x = setup(claimant('A', 'r56'));
     const reg = { update: function () { return Promise.reject(new Error('offline')); } };
     x.gate.setRegistration(reg);
     check(await x.gate.ensureCurrent() === true && x.reloads() === 0,
@@ -293,7 +415,7 @@ function setup(controller, timeoutMs, release, register) {
   // The still-running platform job remains observed, and a later takeover
   // reloads even after this particular boundary timed out.
   {
-    const x = setup({ id: 'A' }, 15);
+    const x = setup(claimant('A', 'r56'), 15);
     const hung = deferred();
     const reg = { update: function () { return hung.promise; } };
     x.gate.setRegistration(reg);
@@ -310,7 +432,7 @@ function setup(controller, timeoutMs, release, register) {
   // update() may resolve while the replacement worker is still installing.
   // The boundary waits; takeover resolves false and requests one reload.
   {
-    const x = setup({ id: 'A' });
+    const x = setup(claimant('A', 'r56'));
     const worker = eventTarget({ state: 'installing' });
     const reg = {
       installing: worker,
