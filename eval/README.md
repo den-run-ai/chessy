@@ -8,10 +8,11 @@ each measured on a **frozen, license-clean corpus** and reported as a **score
 vector, not one headline Elo number**.
 
 Tracker: [#87](https://github.com/den-run-ai/chessy/issues/87) — *Evaluation v1
-— license-clean corpus and release gates*. This first slice ships **E1 (corpus + provenance + frozen PR
-shard)** and a working **correctness scorecard** (the E2 slice). The
-strength/position-quality baselines are deliberately deferred until the active
-engine changes in #72 settle.
+— license-clean corpus and release gates*. Shipped so far: **E1** (corpus +
+provenance + frozen PR shard), the **correctness scorecard** (**E2**), and the
+**analysis/coaching scorecard** (**E3**). The strength and level-calibration
+baselines (**E4**) are deliberately deferred until the active engine changes in
+#72 settle.
 
 ## Online eval, offline app
 
@@ -35,10 +36,12 @@ steps:
 | `corpus/eval-v1.ndjson` | The frozen corpus — one JSON record per line, full provenance schema |
 | `corpus/manifest.json` | Counts, split policy, shared `analyse` opts, generator version, corpus + source sha256 |
 | `BASELINE.md` / `BASELINE.json` | The first published correctness baseline (human + machine) |
+| `ANALYSIS-BASELINE.md` / `.json` | The first published **analysis/coaching** baseline (the E3 slice) |
 | `LICENSE-REPORT.md` | Per-source license provenance and the explicit exclusion list |
 | `../test/eval/fetch-corpus.js` | **Online** fetcher: commits the frozen CC0 sample under `corpus/sources/` |
 | `../test/eval/gen-corpus.js` | **Offline** deterministic, self-validating generator that derives the corpus |
 | `../test/eval/scorecard.js` | Correctness score-vector runner (frozen 64-case PR shard + full mode) |
+| `../test/eval/analysis-scorecard.js` | **Analysis/coaching** score-vector runner (frozen 34-case train/val PR shard + full mode) |
 
 ## Run it
 
@@ -49,6 +52,11 @@ node test/eval/scorecard.js --json --out run.json          # machine-readable ve
 node test/eval/scorecard.js --baseline eval/BASELINE.json   # before/after vs the baseline
 node test/eval/gen-corpus.js           # regenerate the corpus offline from committed sources
 node test/eval/fetch-corpus.js         # (online) refresh the frozen CC0 sample under corpus/sources/
+
+node test/eval/analysis-scorecard.js   # E3 analysis vector — frozen 34-case train/val shard (runs in CI, ~9s)
+node test/eval/analysis-scorecard.js --full   # all 103 live cases (~95s, nightly / pre-release)
+node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json   # strict gate + quality ratchet
+node test/eval/analysis-scorecard.js --self-test    # prove the strict gate turns red
 ```
 
 The three tools are **development/build-time Node tools** (they use
@@ -126,6 +134,46 @@ degrades to the self-consistency form and the corpus regenerates identically
 eval/BASELINE.json`, so a lost check, a vacuous axis, or a changed analysis
 config fails the gate — not just a new assertion failure.
 
+## The analysis scorecard (the E3 slice)
+
+`analysis-scorecard.js` grades the **quality** of what the coaching panel shows,
+on the same frozen corpus. Its axes are split into two gate classes so a quality
+measurement can never silently become a build-breaking assertion:
+
+| Axis | Class | What it checks |
+| --- | --- | --- |
+| `rootComplete` | **strict** | The whole result passes the shipped `ChessyAnalysisResult.validate` (provenance, `complete`, depth/stability, top-level and per-line evaluations, full line resolution, ordering, duplicates), **and** `bestLines` covers every legal root — a true MultiPV, not a shortlist |
+| `playedRank` | **strict** | The played-move `rank` matches its true rank over all roots, and `classification` matches that rank at the **shipped** candidate width (equivalent-move recognition) |
+| `puzzleTop1` | ratchet | The CC0 Lichess key move is the engine's #1 line |
+| `puzzleRecall3` | ratchet | The key move is within the top 3 |
+| `pvStability` | ratchet | Best move unchanged one ply shallower — **measured independently**, not read off the engine's own stability flag |
+| `budgetStability` | ratchet | Best line unchanged at ¼× budget (`--full` adds the 4× tier); a tier rejected by the shipped validator scores as a miss |
+| `regret` | ratchet | Median / p90 / p99 cp regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
+
+**Strict axes gate at 100%; quality axes ratchet** — they may improve but never
+regress against `ANALYSIS-BASELINE.json`. An unsolved puzzle is a measured
+quality level, not a broken build; determinism (proven by the E2 axis) makes
+the ratchet **exact**, with no tolerance band. Coverage is part of the score:
+the fraction axes' `checked` counts and the regret sample `n` fail the ratchet
+when they shrink, so an engine can never look better by measuring less. Per the
+tracker, oracle comparison avoids exact centipawn/PV equality — acceptable-move
+sets, set overlap, budget invariance and a regret tail distribution, never a
+single Elo number.
+
+The strict axes delegate whole-object validation to the shipped
+`ChessyAnalysisResult.validate` (against an independently derived identity), so
+the gate can never be laxer than the coaching path consuming the same output;
+E3 adds only the full-MultiPV coverage requirement on top — and the auxiliary
+¼×/4× tiers must pass the same validator before they are graded. The shipped
+candidate width is derived from `assets/reflection.js` at run time, never
+duplicated. The PR shard grades **train/validation records only** — the
+held-out test split is reserved for `--full` (*never tune on the test split*).
+`--self-test` simulates fifteen distinct shapes of engine regression: thirteen
+must turn the strict gate red, an unusable auxiliary tier must be fully visible
+to the ratchet, and a flattering self-report must leave `pvStability` unmoved
+(immunity) — see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the
+fault list and the published numbers.
+
 ## Roadmap (per the tracker)
 
 - **E1** — corpus & provenance, frozen 64-case PR shard *(this slice: online
@@ -133,8 +181,11 @@ config fails the gate — not just a new assertion failure.
   the Syzygy exact-WDL and rotating OOD tranches are staged next)*.
 - **E2** — correctness runner *(this slice: differential legality, PV replay,
   stateful cases, deterministic search signature)*.
-- **E3** — analysis scorecard: acceptable-move sets, top-3 recall, regret,
-  stability at ¼×/1×/4× node budget, cache/progress/cancel behaviour.
+- **E3** — analysis scorecard *(this slice: acceptable-move sets, top-3 recall,
+  regret quantiles, stability at ¼×/1×/4× node budget, complete-MultiPV and
+  played-move-rank contracts — see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md).
+  Still open: the **cache / progress / cancel** runtime tests, which live in the
+  analysis **service worker** rather than the pure core graded here)*.
 - **E4** — level & match calibration: the 400-opening manifest, adjacent-level
   ladder, paired opening-cluster statistics.
 - **E5** — tuning protocol: grouped splits, locked-test workflow, corrected

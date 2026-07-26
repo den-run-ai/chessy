@@ -1,0 +1,83 @@
+{
+  "corpus": "eval-v1",
+  "generator_version": "eval-v1.0.0",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
+  "scorecard": "analysis-v1",
+  "mode": "shard",
+  "e3_opts": {
+    "ref": {
+      "nodeLimit": 2000,
+      "nodeBudget": 2000000,
+      "multiPV": 999,
+      "pvLen": 4,
+      "quiesce": true
+    },
+    "ship": {
+      "nodeLimit": 2000,
+      "nodeBudget": 2000000,
+      "multiPV": 3,
+      "pvLen": 4,
+      "quiesce": true
+    },
+    "quarter": {
+      "nodeLimit": 500,
+      "nodeBudget": 2000000,
+      "multiPV": 1,
+      "pvLen": 1,
+      "quiesce": true
+    },
+    "quad": {
+      "nodeLimit": 8000,
+      "nodeBudget": 2000000,
+      "multiPV": 1,
+      "pvLen": 1,
+      "quiesce": true
+    }
+  },
+  "cases": 34,
+  "axes": {
+    "rootComplete": {
+      "checked": 34,
+      "pass": 34,
+      "fail": 0
+    },
+    "playedRank": {
+      "checked": 12,
+      "pass": 12,
+      "fail": 0
+    },
+    "puzzleTop1": {
+      "checked": 12,
+      "pass": 9,
+      "fail": 3
+    },
+    "puzzleRecall3": {
+      "checked": 12,
+      "pass": 10,
+      "fail": 2
+    },
+    "pvStability": {
+      "checked": 27,
+      "pass": 18,
+      "fail": 9
+    },
+    "budgetStability": {
+      "checked": 34,
+      "pass": 26,
+      "fail": 8
+    }
+  },
+  "regret": {
+    "n": 34,
+    "median": 0,
+    "p90": 5,
+    "catastrophic": 0
+  },
+  "totals": {
+    "checks": 131,
+    "pass": 109,
+    "fail": 22,
+    "strictFail": 0
+  },
+  "gate": "PASS"
+}
