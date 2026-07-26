@@ -530,11 +530,15 @@
       ctx.abortReason = 'node-limit';
       throw ABORT;
     }
-    ctx.nodes++;
-    if ((ctx.nodes & 1023) === 0 && Date.now() >= ctx.deadline) {
+    // Poll the deadline immediately BEFORE entering each 1024th node. A node
+    // that throws at the poll has not executed any of its body, so it must not
+    // be included in the authoritative count used for fixed-node replay.
+    const nextNode = ctx.nodes + 1;
+    if ((nextNode & 1023) === 0 && Date.now() >= ctx.deadline) {
       ctx.abortReason = 'time-limit';
       throw ABORT;
     }
+    ctx.nodes = nextNode;
   }
 
   // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,

@@ -29,6 +29,7 @@
   function create(options) {
     options = options || {};
     const serviceWorker = options.serviceWorker;
+    const register = typeof options.register === 'function' ? options.register : null;
     const reload = typeof options.reload === 'function' ? options.reload : function () {};
     const setTimer = options.setTimeout || setTimeout;
     const clearTimer = options.clearTimeout || clearTimeout;
@@ -129,12 +130,25 @@
     }
 
     function setRegistration(value) {
-      registrationPromise = Promise.resolve(value);
+      const tracked = Promise.resolve(value);
+      registrationPromise = tracked;
       // Registration failures are handled as an offline/no-SW outcome by
       // ensureCurrent(); attaching here also prevents an ignored boot promise
       // from becoming an unhandled rejection.
-      registrationPromise.catch(function () {});
-      return registrationPromise;
+      tracked.catch(function () {});
+      return tracked;
+    }
+
+    function registrationForBoundary() {
+      if (!register) return registrationPromise;
+      // register() is idempotent for the same script and scope. Invoke it for
+      // every fresh-game boundary so a rejected, hung, or later-redundant boot
+      // attempt cannot become sticky. checkInFlight coalesces concurrent clicks.
+      try {
+        return setRegistration(register());
+      } catch (e) {
+        return setRegistration(Promise.reject(e));
+      }
     }
 
     function bounded(promise, fallback, deadline) {
@@ -232,11 +246,11 @@
           return bounded(firstClaimPromise, false, deadline)
             .then(registrationAfterClaim);
         }
-        // No controller means either unsupported SW or a first install that
-        // has not claimed yet. The document came directly from the network
-        // and is safe to use until a claimant arrives.
-        if (!loadedController || !registrationPromise) return true;
-        return bounded(registrationPromise, null, deadline);
+        const registration = registrationForBoundary();
+        // Without a registration API the network-loaded document is safe to
+        // use. A failed or hung retry is likewise bounded below and fails open.
+        if (!registration) return true;
+        return bounded(registration, null, deadline);
       }
       function currentAfterClaim() {
         if (!isCurrent()) return false;

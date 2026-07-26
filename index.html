@@ -469,8 +469,12 @@
         setNote('Offline mode not supported here — the game still works online.');
         return;
       }
+      var registerWorker = function () {
+        return navigator.serviceWorker.register('sw.js');
+      };
       var runtime = window.ChessyRuntimeUpdate && window.ChessyRuntimeUpdate.create({
         serviceWorker: navigator.serviceWorker,
+        register: registerWorker,
         release: window.CHESSY_RELEASE,
         // The replacement worker writes its marker into the NEW release cache
         // before claiming clients. Reload directly; the new document's boot
@@ -479,7 +483,7 @@
       });
       window.ChessyRuntime = runtime || null;
       window.addEventListener('load', function () {
-        var registration = navigator.serviceWorker.register('sw.js');
+        var registration = registerWorker();
         if (runtime) runtime.setRegistration(registration);
         registration.then(function (reg) {
           if (navigator.serviceWorker.controller) {
