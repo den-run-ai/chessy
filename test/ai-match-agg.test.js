@@ -1,109 +1,329 @@
 /*
- * Aggregator hardening tests — run with: node test/ai-match-agg.test.js
- *
- * Synthesizes shard artifacts in a temp dir and asserts that ai-match-agg.js
- * ACCEPTS a complete, disjoint, consistent manifest and REJECTS (non-zero,
- * with the documented exit code) every bad case: missing metadata, malformed
- * records, mismatched SHAs/nodes, duplicated cells, and incomplete coverage.
+ * Canonical shard-schema and aggregation tests.
+ * Run with: node test/ai-match-agg.test.js
  */
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const cp = require('child_process');
+const MatchProtocol = require('./ai-match-protocol');
 
 const AGG = path.join(__dirname, 'ai-match-agg.js');
-const OPENINGS = 100, SEEDS = 4;
+const OPENINGS = 100;
+const WORKFLOW = 'https://github.com/den-run-ai/chessy/actions/runs/123';
+const CANDIDATE = 'a'.repeat(40);
+const BASE = 'b'.repeat(40);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aggtest-'));
-
 let passed = 0, failed = 0;
+
 function check(ok, label, detail) {
   if (ok) { passed++; console.log('  ok  ' + label); }
-  else { failed++; console.error('FAIL  ' + label + (detail != null ? ' — ' + detail : '')); }
+  else {
+    failed++;
+    console.error('FAIL  ' + label + (detail ? ' — ' + detail : ''));
+  }
 }
-
-// Build one shard file covering openings [0,OPENINGS) for a single seed slot.
-// `over` can override header fields (candidate-sha/base-sha/nodes-per-move) or
-// inject a bad record.
+function records(seed, openings) {
+  const out = [];
+  for (let op = 0; op < (openings || OPENINGS); op++) {
+    const white = 1, black = op % 2 ? 0.5 : 0;
+    out.push({
+      op, name: 'op' + op, seed,
+      gseed: MatchProtocol.deriveGameSeed(op, seed),
+      white, black, pair: (white + black) / 2
+    });
+  }
+  return out;
+}
 function shardFile(name, seed, over) {
   over = over || {};
-  const recs = [];
-  for (let op = 0; op < OPENINGS; op++) {
-    // Per-opening pair alternates 0.75 (W1/B0.5) / 0.50 (W0.5/B0.5) -> mean
-    // 0.625 with real variance -> a clean PASS (lower bound well above 50%).
-    // Both game scores are in {0,0.5,1} and pair === (white+black)/2, so the
-    // records satisfy the aggregator's consistency check.
-    const white = 1, black = op % 2 ? 0.5 : 0;
-    recs.push({ op: op, name: 'op' + op, seed: seed, gseed: op * 7 + seed,
-      white: white, black: black, pair: (white + black) / 2 });
+  const mode = over.mode || 'nodes';
+  const protocol = over.protocol || (mode === 'time'
+    ? MatchProtocol.PROTOCOLS.timeDiagnostic.id
+    : over.formal
+      ? MatchProtocol.PROTOCOLS.formalFixedNode.id
+      : mode === 'nodes'
+        ? MatchProtocol.PROTOCOLS.nodeDiagnostic.id
+        : 'unknown-protocol');
+  const protocolConfig = MatchProtocol.PROTOCOL_BY_ID[protocol] ||
+    MatchProtocol.PROTOCOLS.nodeDiagnostic;
+  let recs = over.records || records(seed);
+  if (over.dropOp != null) {
+    recs = recs.slice();
+    recs.splice(over.dropOp, 1);
   }
-  if (over.badRecord) recs.push(over.badRecord);
-  if (over.dropOp != null) recs.splice(over.dropOp, 1); // remove a cell -> incomplete
-  const lines = [
-    'candidate-sha: ' + (over.candSha || 'cand0000000000000000000000000000000000000'),
-    'base-sha:      ' + (over.baseSha || 'base0000000000000000000000000000000000000'),
-    'nodes-per-move: ' + (over.nodes || '10000'),
-    'openings-total: ' + (over.total || OPENINGS),
-    '---',
-    'records: ' + JSON.stringify(recs)
-  ].filter(function (ln) { return over.omit ? ln.indexOf(over.omit) !== 0 : true; });
+  const fields = [
+    ['protocol-id', protocol],
+    ['acceptance-class',
+      over.acceptanceClass || protocolConfig.acceptanceClass],
+    ['lower-bound-threshold',
+      over.lowerBoundThreshold || String(protocolConfig.lowerBoundThreshold)],
+    ['candidate-sha', over.candidate || CANDIDATE],
+    ['base-sha', over.base || BASE],
+    ['budget-mode', mode],
+    ['budget-value', over.budget || (mode === 'time' ? '5000' : '10000')],
+    ['max-plies', over.maxPlies || '180'],
+    ['openings-manifest-version',
+      over.manifestVersion || MatchProtocol.OPENINGS_MANIFEST_VERSION],
+    ['openings-manifest-sha256',
+      over.manifestSha || MatchProtocol.OPENINGS_MANIFEST_SHA256],
+    ['node-runtime', over.runtime || 'v22.0.0']
+  ];
+  if (!over.local) fields.push(['workflow-run', over.workflow || WORKFLOW]);
+  fields.push(['records', JSON.stringify(recs)]);
+  fields.push(['openings-total', over.total || String(OPENINGS)]);
+  let lines = fields.filter(function (entry) {
+    return entry[0] !== over.omit;
+  }).map(function (entry) {
+    return entry[0] + ': ' + entry[1];
+  });
+  if (over.duplicate) {
+    const hit = fields.find(function (entry) {
+      return entry[0] === over.duplicate;
+    });
+    lines.push(over.duplicate + ': ' + (hit ? hit[1] : 'duplicate'));
+  }
+  if (over.extra) lines.push(over.extra);
   const p = path.join(dir, name);
   fs.writeFileSync(p, lines.join('\n') + '\n');
   return p;
 }
-
-// Run the aggregator; return its exit code (0 on success).
 function run(fileArgs, extra) {
-  try {
-    cp.execFileSync('node', [AGG].concat(extra || []).concat(fileArgs), { stdio: 'pipe' });
-    return 0;
-  } catch (e) { return e.status == null ? -1 : e.status; }
+  const r = cp.spawnSync(process.execPath,
+    [AGG].concat(extra || [], fileArgs), { encoding: 'utf8' });
+  return { status: r.status, output: (r.stdout || '') + (r.stderr || '') };
+}
+function expect(files, status, label, extra) {
+  const r = run(files, extra);
+  check(r.status === status, label,
+    'exit ' + r.status + ': ' + r.output.trim());
+}
+function expectMessage(files, status, message, label, extra) {
+  const r = run(files, extra);
+  check(r.status === status && r.output.includes(message), label,
+    'exit ' + r.status + ': ' + r.output.trim());
 }
 
-// Four disjoint seed shards = the full 100x4 manifest.
-const full = [shardFile('s0.txt', 0), shardFile('s1.txt', 1), shardFile('s2.txt', 2), shardFile('s3.txt', 3)];
+const full = [
+  shardFile('s0.txt', 0, { formal: true }),
+  shardFile('s1.txt', 1, { formal: true }),
+  shardFile('s2.txt', 2, { formal: true }),
+  shardFile('s3.txt', 3, { formal: true })
+];
+const diagnosticFull = [
+  shardFile('diag0.txt', 0), shardFile('diag1.txt', 1),
+  shardFile('diag2.txt', 2), shardFile('diag3.txt', 3)
+];
 
-console.log('accepts a complete manifest');
-check(run(full) === 0, 'complete, disjoint, consistent 100x4 -> exit 0 (PASS)');
+console.log('accepts canonical complete manifests');
+expect(full, 0, 'canonical 100x4 workflow manifest passes');
+expect([
+  shardFile('local0.txt', 0, { formal: true, local: true }),
+  shardFile('local1.txt', 1, { formal: true, local: true }),
+  shardFile('local2.txt', 2, { formal: true, local: true }),
+  shardFile('local3.txt', 3, { formal: true, local: true })
+], 0, 'workflow-run may be absent from every local shard');
+expect([shardFile('timed.txt', 0, { mode: 'time', local: true })], 0,
+  'canonical 100x1 equal-time diagnostic aggregates', ['--seeds', '1']);
 
-console.log('rejects bad manifests');
-check(run(full.slice(0, 3)) === 5, 'missing a seed slot -> exit 5 (incomplete)');
-check(run([shardFile('opincomplete.txt', 0, { dropOp: 10 }), full[1], full[2], full[3]]) === 5,
-  'one missing (opening, seed) cell -> exit 5 (incomplete)');
-check(run(full.concat([full[0]])) === 4, 'a duplicated shard -> exit 4 (overlapping cells)');
-check(run([full[0], full[1], full[2], shardFile('s3bad.txt', 3, { baseSha: 'DIFFERENT' })]) === 3,
-  'a mismatched base-sha -> exit 3');
-check(run([full[0], full[1], full[2], shardFile('s3nodes.txt', 3, { nodes: '25000' })]) === 3,
-  'a mismatched node budget -> exit 3');
-check(run([full[0], full[1], full[2], shardFile('s3nometa.txt', 3, { omit: 'candidate-sha' })]) === 2,
-  'a shard missing candidate-sha -> exit 2 (missing metadata)');
-check(run([full[0], full[1], full[2], shardFile('s3norec.txt', 3, { omit: 'records' })]) === 2,
-  'a shard missing the records line -> exit 2');
-check(run([shardFile('s0badrec.txt', 0, { badRecord: { op: 999, seed: 0, pair: 0.5 } }), full[1], full[2], full[3]]) === 2,
-  'an out-of-range op -> exit 2 (malformed record)');
-check(run(full, ['--openings', '99']) === 3,
-  'declared --openings disagreeing with the shards -> exit 3');
-
-// An out-of-range pair value, isolated on a 1x1 manifest so it reaches pair
-// validation instead of colliding with an existing cell.
-function rawShard(name, recs) {
-  const p = path.join(dir, name);
-  fs.writeFileSync(p, ['candidate-sha: c', 'base-sha: b', 'nodes-per-move: 10000',
-    'openings-total: 1', '---', 'records: ' + JSON.stringify(recs)].join('\n') + '\n');
-  return p;
+console.log('binds the formal fixed-node contract');
+expectMessage([
+  shardFile('formal-budget-1.txt', 0, { formal: true, budget: '1' })
+], 2, 'formal protocol requires exactly',
+'a one-node artifact cannot claim or pass the formal protocol');
+expectMessage([full[0]], 2, '4 seeds',
+  '--seeds 1 cannot aggregate as the formal protocol', ['--seeds', '1']);
+expectMessage([
+  shardFile('formal-plies-1.txt', 0, { formal: true, maxPlies: '1' })
+], 2, 'formal protocol requires exactly',
+'a one-ply artifact cannot claim or pass the formal protocol');
+expectMessage([
+  shardFile('formal-self.txt', 0, { formal: true, base: CANDIDATE })
+], 2, 'distinct candidate and base SHAs',
+'self-vs-self cannot claim or pass the formal protocol');
+const diagnosticBudgetOne = run([
+  shardFile('diagnostic-budget-1.txt', 0, {
+    budget: '1', local: true
+  })
+], ['--seeds', '1']);
+check(diagnosticBudgetOne.status === 0 &&
+    diagnosticBudgetOne.output.includes(
+      'chessy-fixed-node-diagnostic-v1 (non-formal fixed-node diagnostic)'),
+  'custom node budgets remain explicitly non-formal',
+  'exit ' + diagnosticBudgetOne.status + ': ' +
+    diagnosticBudgetOne.output.trim());
+function identityRecords(seed) {
+  return records(seed).map(function (r) {
+    return Object.assign({}, r, { white: 0.5, black: 0.5, pair: 0.5 });
+  });
 }
-check(run([rawShard('badpair.txt', [{ op: 0, seed: 0, white: 1, black: 1, pair: 2 }])], ['--openings', '1', '--seeds', '1']) === 2,
-  'an out-of-range pair -> exit 2 (malformed record)');
-check(run([rawShard('good11.txt', [{ op: 0, seed: 0, white: 1, black: 0, pair: 0.5 }])], ['--openings', '1', '--seeds', '1']) === 1,
-  'a valid 1x1 manifest at 50% -> exit 1 (aggregates, FAILs the gate)');
-// Regression: an internally inconsistent record (the reviewer's white 0 /
-// black 0 / pair 1) must be rejected, not silently gated on `pair` while W/D/L
-// reads white/black — otherwise 800 losses could report a 100% PASS.
-check(run([rawShard('inconsistent.txt', [{ op: 0, seed: 0, white: 0, black: 0, pair: 1 }])], ['--openings', '1', '--seeds', '1']) === 2,
-  'pair != (white+black)/2 -> exit 2 (inconsistent record)');
-// A game score outside {0,0.5,1} is malformed even if `pair` looks in-range.
-check(run([rawShard('badgame.txt', [{ op: 0, seed: 0, white: 0.3, black: 0.7, pair: 0.5 }])], ['--openings', '1', '--seeds', '1']) === 2,
-  'a non-{0,0.5,1} game score -> exit 2 (malformed record)');
+const strictIdentity = run([
+  shardFile('strict-identity-0.txt', 0, {
+    formal: true, records: identityRecords(0)
+  }),
+  shardFile('strict-identity-1.txt', 1, {
+    formal: true, records: identityRecords(1)
+  }),
+  shardFile('strict-identity-2.txt', 2, {
+    formal: true, records: identityRecords(2)
+  }),
+  shardFile('strict-identity-3.txt', 3, {
+    formal: true, records: identityRecords(3)
+  })
+]);
+check(strictIdentity.status === 1 &&
+    strictIdentity.output.includes('acceptance: strict-strength') &&
+    strictIdentity.output.includes('lower bound at or below 50%'),
+  'formal pure-strength protocol rejects an identity result at exactly 50%',
+  'exit ' + strictIdentity.status + ': ' + strictIdentity.output.trim());
+const diagnosticIdentity = run([
+  shardFile('diagnostic-identity.txt', 0, {
+    local: true, records: identityRecords(0)
+  })
+], ['--seeds', '1']);
+check(diagnosticIdentity.status === 0 &&
+    diagnosticIdentity.output.includes('acceptance: diagnostic-noninferiority'),
+  'non-formal diagnostics retain the >49% non-inferiority classification',
+  'exit ' + diagnosticIdentity.status + ': ' +
+    diagnosticIdentity.output.trim());
+
+console.log('rejects incomplete or overlapping manifests');
+expect(full.slice(0, 3), 5, 'missing seed shard -> exit 5');
+expect([
+  shardFile('drop.txt', 0, { formal: true, dropOp: 10 }),
+  full[1], full[2], full[3]
+], 5, 'missing opening/seed cell -> exit 5');
+expect(full.concat(full[0]), 4, 'duplicated shard -> exit 4');
+
+console.log('rejects cross-shard metadata disagreement');
+expect([full[0], full[1], full[2],
+  shardFile('base-mismatch.txt', 3, {
+    formal: true, base: 'c'.repeat(40)
+  })],
+3, 'different base SHA -> exit 3');
+expect([diagnosticFull[0], diagnosticFull[1], diagnosticFull[2],
+  shardFile('budget-mismatch.txt', 3, { budget: '12000' })],
+3, 'different budget value -> exit 3');
+expect([full[0], full[1], full[2],
+  shardFile('mode-mismatch.txt', 3, { mode: 'time' })],
+3, 'different protocol/budget mode -> exit 3');
+expect([diagnosticFull[0], diagnosticFull[1], diagnosticFull[2],
+  shardFile('plies-mismatch.txt', 3, { maxPlies: '160' })],
+3, 'different max plies -> exit 3');
+expect([full[0], full[1], full[2],
+  shardFile('runtime-mismatch.txt', 3, {
+    formal: true, runtime: 'v23.0.0'
+  })],
+3, 'different Node runtime -> exit 3');
+expect([full[0], full[1], full[2],
+  shardFile('local-partial.txt', 3, { formal: true, local: true })],
+3, 'workflow-run must be all-or-none -> exit 3');
+expect([full[0], full[1], full[2],
+  shardFile('workflow-mismatch.txt', 3, {
+    formal: true,
+    workflow: 'https://github.com/den-run-ai/chessy/actions/runs/456'
+  })],
+3, 'different workflow run -> exit 3');
+
+console.log('rejects malformed or non-canonical metadata');
+expect([shardFile('bad-sha.txt', 0, { candidate: 'ABC' })], 2,
+  'non-canonical SHA -> exit 2', ['--seeds', '1']);
+expect([shardFile('unknown-mode.txt', 0, { mode: 'seconds' })], 2,
+  'unknown budget mode -> exit 2', ['--seeds', '1']);
+expect([shardFile('wrong-protocol.txt', 0, {
+  protocol: MatchProtocol.PROTOCOLS.timeDiagnostic.id
+})], 2, 'protocol/mode mismatch -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-manifest.txt', 0, { manifestVersion: 'future-v9' })], 2,
+  'unknown opening manifest -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-runtime.txt', 0, { runtime: 'node-22' })], 2,
+  'non-canonical Node runtime -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-acceptance.txt', 0, {
+  acceptanceClass: 'strict-strength'
+})], 2, 'acceptance class must match protocol -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-threshold.txt', 0, {
+  lowerBoundThreshold: '0.48'
+})], 2, 'acceptance threshold must match protocol -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-plies.txt', 0, { maxPlies: '1.5' })], 2,
+  'non-integer max plies -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-budget.txt', 0, { budget: '1.5' })], 2,
+  'non-integer budget -> exit 2', ['--seeds', '1']);
+expect([shardFile('bad-workflow.txt', 0, { workflow: 'rerun-123' })], 2,
+  'non-canonical workflow run -> exit 2', ['--seeds', '1']);
+expect([shardFile('missing-sha.txt', 0, { omit: 'candidate-sha' })], 2,
+  'missing required field -> exit 2', ['--seeds', '1']);
+expect([shardFile('missing-acceptance.txt', 0, {
+  omit: 'acceptance-class'
+})], 2, 'missing acceptance class -> exit 2', ['--seeds', '1']);
+expect([shardFile('duplicate-sha.txt', 0, { duplicate: 'candidate-sha' })], 2,
+  'duplicate required field -> exit 2', ['--seeds', '1']);
+expect([shardFile('duplicate-records.txt', 0, { duplicate: 'records' })], 2,
+  'duplicate records field -> exit 2', ['--seeds', '1']);
+expect([shardFile('duplicate-workflow.txt', 0, {
+  duplicate: 'workflow-run'
+})], 2, 'duplicate optional workflow field -> exit 2', ['--seeds', '1']);
+expect([shardFile('unknown-field.txt', 0, { extra: 'mystery-field: x' })], 2,
+  'unknown metadata field -> exit 2', ['--seeds', '1']);
+expect([shardFile('wrong-total.txt', 0, { total: '99' })], 2,
+  'opening total disagrees with canonical manifest -> exit 2',
+  ['--seeds', '1']);
+
+console.log('rejects malformed records');
+function mutatedRecords(over) {
+  const recs = over.losses ? records(0).map(function (r) {
+    return Object.assign({}, r, { white: 0, black: 0, pair: 0 });
+  }) : records(0);
+  if (Object.prototype.hasOwnProperty.call(over, 'record')) {
+    recs[0] = over.record;
+  }
+  return shardFile(over.name, 0, {
+    local: true, records: recs
+  });
+}
+expectMessage([mutatedRecords({
+  name: 'null-record.txt',
+  record: null
+})], 2, 'record 0 is not a non-null object',
+'null record is rejected cleanly -> exit 2', ['--seeds', '1']);
+expect([mutatedRecords({
+  name: 'bad-op.txt',
+  record: {
+    op: 100, seed: 0, gseed: MatchProtocol.deriveGameSeed(100, 0),
+    white: 1, black: 0, pair: 0.5
+  }
+})], 2, 'out-of-range opening -> exit 2', ['--seeds', '1']);
+expect([mutatedRecords({
+  name: 'bad-pair.txt',
+  record: {
+    op: 0, seed: 0, gseed: MatchProtocol.deriveGameSeed(0, 0),
+    white: 1, black: 1, pair: 2
+  }
+})], 2, 'out-of-range pair -> exit 2', ['--seeds', '1']);
+expect([mutatedRecords({
+  name: 'inconsistent.txt',
+  record: {
+    op: 0, seed: 0, gseed: MatchProtocol.deriveGameSeed(0, 0),
+    white: 0, black: 0, pair: 1
+  }
+})], 2, 'inconsistent game/pair scores -> exit 2',
+['--seeds', '1']);
+expect([mutatedRecords({
+  name: 'bad-game.txt',
+  record: {
+    op: 0, seed: 0, gseed: MatchProtocol.deriveGameSeed(0, 0),
+    white: 0.3, black: 0.7, pair: 0.5
+  }
+})], 2, 'non-discrete game score -> exit 2',
+['--seeds', '1']);
+const staleSeed = records(0)[0];
+expectMessage([mutatedRecords({
+  name: 'stale-gseed.txt',
+  record: Object.assign({}, staleSeed, { gseed: staleSeed.gseed + 1 })
+})], 2, 'does not match canonical opening/seed mapping',
+'stale derived game seed -> exit 2', ['--seeds', '1']);
+expect([mutatedRecords({
+  name: 'valid-fail.txt', losses: true
+})], 1, 'valid losing 100x1 manifest fails NI', ['--seeds', '1']);
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

@@ -1,42 +1,33 @@
-name: AI self-play match
+name: AI fixed-node strict-strength gate
 
-# The full 800-game non-inferiority match, fanned out as a build matrix so it
-# runs off the local container and fits the per-job timeout: 100 frozen openings
-# x 4 seeds x both colors = 800 games, split into 20 shards of 20 openings x 1
-# seed (40 games each). Every shard job uploads a `match-results-*` artifact and
-# prints the machine-readable `records:` line to its log; combine them into the
-# authoritative opening-clustered verdict with
-#   node test/ai-match-agg.js match-results-*.txt
-# whose 95% lower bound is taken over the 100 per-opening means (see
-# test/match-stats.js).
+# The formal gate for a pure evaluation/strength change:
+#   10,000 nodes/move x 100 openings x 4 seeds x both colors = 800 games,
+#   with a 180-ply cap, distinct candidate/base commits, and a one-sided 95%
+#   lower bound strictly above 50%.
 #
-# Only `base` and `nodes` are dispatch inputs (so a run is dispatchable against
-# the default-branch schema); the 20 (seedbase, openbase) shards are the matrix.
+# Never rerun selected jobs or retry a valid statistical miss. Dispatch a fresh
+# complete experiment only for a changed candidate/base/protocol or after an
+# invalid infrastructure run; the aggregate job requires exactly 20 shards.
 on:
   workflow_dispatch:
     inputs:
       base:
-        description: Git ref/SHA to play against (e.g. d1d25909 for provenance)
+        description: Git ref/SHA to play against (must differ from candidate)
         default: origin/main
-        required: true
-      nodes:
-        description: Fixed nodes per move
-        default: "10000"
         required: true
 
 permissions:
   contents: read
 
 jobs:
-  shard:
+  formal-shard:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
       fail-fast: false
       max-parallel: 20
       matrix:
-        seedbase: [0, 1, 2, 3]
-        openbase: [0, 20, 40, 60, 80]
+        slot: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,34 +35,68 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Run shard (openings [openbase, openbase+20) x seed seedbase)
-        # Dispatch inputs reach Bash only as environment values, never spliced
-        # into the script; the matrix coordinates are trusted integer literals.
+      - name: Run formal fixed-node shard
         env:
           BASE: ${{ inputs.base }}
-          NODES: ${{ inputs.nodes }}
-          SEEDBASE: ${{ matrix.seedbase }}
-          OPENBASE: ${{ matrix.openbase }}
+          SLOT: ${{ matrix.slot }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          CHESSY_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          CAND_SHA=$(git rev-parse HEAD)
-          BASE_SHA=$(git rev-parse "$BASE")
-          FILE="match-results-s${SEEDBASE}-o${OPENBASE}.txt"
-          {
-            echo "candidate-sha: $CAND_SHA"
-            echo "base-sha:      $BASE_SHA"
-            echo "nodes-per-move: $NODES"
-            echo "openings-total: 100"
-            echo "command:       node test/ai-match.js --base $BASE --nodes $NODES --seeds 1 --seedbase $SEEDBASE --openbase $OPENBASE --opencount 20"
-            echo "workflow-run:  ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "---"
-          } | tee "$FILE"
-          node test/ai-match.js --base "$BASE" --nodes "$NODES" \
-            --seeds 1 --seedbase "$SEEDBASE" --openbase "$OPENBASE" --opencount 20 | tee -a "$FILE"
-      - name: Upload shard results
+          if [ "$RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Reruns are inadmissible; start a fresh workflow dispatch"
+            exit 2
+          fi
+          SEEDBASE=$((SLOT / 5))
+          OPENBASE=$(((SLOT % 5) * 20))
+          FILE="match-results-fixed-nodes-slot${SLOT}.txt"
+          node test/ai-match.js --formal --base "$BASE" --nodes 10000 \
+            --plies 180 --seeds 1 --seedbase "$SEEDBASE" \
+            --openbase "$OPENBASE" --opencount 20 | tee "$FILE"
+      - name: Upload formal shard
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: match-results-s${{ matrix.seedbase }}-o${{ matrix.openbase }}
-          path: match-results-s${{ matrix.seedbase }}-o${{ matrix.openbase }}.txt
-          if-no-files-found: warn
+          name: match-results-fixed-nodes-slot${{ matrix.slot }}
+          path: match-results-fixed-nodes-slot${{ matrix.slot }}.txt
+          if-no-files-found: error
+
+  formal-aggregate:
+    needs: formal-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download all formal shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: match-results-fixed-nodes-slot*
+          path: match-results
+          merge-multiple: true
+      - name: Enforce complete formal verdict
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [ "$RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Rerun artifacts are inadmissible; start a fresh workflow dispatch"
+            exit 2
+          fi
+          files=()
+          for slot in $(seq 0 19); do
+            file="match-results/match-results-fixed-nodes-slot${slot}.txt"
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing formal shard artifact file $file"
+              exit 5
+            fi
+            files+=("$file")
+          done
+          count=$(find match-results -maxdepth 1 -type f -name 'match-results-*.txt' | wc -l)
+          if [ "$count" -ne 20 ]; then
+            echo "::error::Expected exactly 20 formal shard files, found $count"
+            exit 5
+          fi
+          node test/ai-match-agg.js "${files[@]}"

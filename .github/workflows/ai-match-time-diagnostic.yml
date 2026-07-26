@@ -1,0 +1,115 @@
+name: AI equal-time diagnostic (DRAFT)
+
+# Informational only: 100 openings x 1 seed x both colors = 200 games.
+# Wall-clock results are noisy and lack per-move timing evidence. A statistical
+# miss is reported but stays green; malformed, mixed or incomplete artifacts
+# remain fatal. This check cannot substitute for the formal fixed-node gate.
+#
+# Never selectively rerun shards or retry a valid statistical miss. Dispatch a
+# fresh complete experiment only for changed inputs/commits or after an invalid
+# infrastructure run.
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Git ref/SHA to play against
+        default: origin/main
+        required: true
+      time_ms:
+        description: Milliseconds per move (Master uses 5000)
+        default: "5000"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic-shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        slot: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run equal-time diagnostic shard
+        env:
+          BASE: ${{ inputs.base }}
+          TIME_MS: ${{ inputs.time_ms }}
+          SLOT: ${{ matrix.slot }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          CHESSY_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ "$RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Reruns are inadmissible; start a fresh workflow dispatch"
+            exit 2
+          fi
+          OPENBASE=$((SLOT * 5))
+          FILE="match-results-equal-time-slot${SLOT}.txt"
+          node test/ai-match.js --base "$BASE" --time "$TIME_MS" \
+            --plies 180 --seeds 1 --seedbase 0 \
+            --openbase "$OPENBASE" --opencount 5 | tee "$FILE"
+      - name: Upload diagnostic shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: match-results-equal-time-slot${{ matrix.slot }}
+          path: match-results-equal-time-slot${{ matrix.slot }}.txt
+          if-no-files-found: error
+
+  diagnostic-aggregate:
+    needs: diagnostic-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download all diagnostic shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: match-results-equal-time-slot*
+          path: match-results
+          merge-multiple: true
+      - name: Validate complete diagnostic result
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [ "$RUN_ATTEMPT" != "1" ]; then
+            echo "::error::Rerun artifacts are inadmissible; start a fresh workflow dispatch"
+            exit 2
+          fi
+          files=()
+          for slot in $(seq 0 19); do
+            file="match-results/match-results-equal-time-slot${slot}.txt"
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing diagnostic shard artifact file $file"
+              exit 5
+            fi
+            files+=("$file")
+          done
+          count=$(find match-results -maxdepth 1 -type f -name 'match-results-*.txt' | wc -l)
+          if [ "$count" -ne 20 ]; then
+            echo "::error::Expected exactly 20 diagnostic shard files, found $count"
+            exit 5
+          fi
+
+          set +e
+          node test/ai-match-agg.js --seeds 1 "${files[@]}"
+          status=$?
+          set -e
+          if [ "$status" -eq 1 ]; then
+            echo "::notice::Valid equal-time statistical miss; diagnostic remains informational"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi

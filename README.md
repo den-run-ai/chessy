@@ -162,14 +162,42 @@ node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
+node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
 ```
 
-Two more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
---base origin/main` measures search nodes over 16 benchmark positions
-against a git ref, and `node test/ai-match.js --base origin/main` plays an
-800-game paired self-play match (100 openings x 4 seeds x both colors; also
-available as the "AI self-play match" workflow_dispatch action).
+The AI measurement tools are manual (too slow for PR CI). `node
+test/ai-bench.js --base origin/main` measures search nodes over 16 benchmark
+positions against a git ref. `test/ai-match.js` supports one formal paired
+protocol plus diagnostic modes. Only `--formal --nodes 10000 --plies 180`
+aggregated over 100 openings x 4 seeds x both colors (800 games), against a
+distinct base commit, is the formal gate for a pure evaluation/strength
+change, and it passes only when the opening-clustered one-sided 95% lower
+bound is strictly above 50%. The looser lower-bound-above-49% non-inferiority
+criterion is not sufficient for such a change; it is reserved for a separately
+demonstrated efficiency optimization. Any custom fixed-node budget or ply cap
+emits a separate non-formal diagnostic protocol. Equal time
+(`--time 5000 --seeds 1`, the same openings x both colors = 200 games) is DRAFT
+diagnostic infrastructure, not a second merge gate. Prior opening-level
+variance implies only about 12%
+power to clear a one-percentage-point non-inferiority margin with 100 clusters:
+a clean pass is useful strong evidence, but neither a pass nor a failure
+replaces the fixed-node result. Equal-time artifacts also lack per-move
+deadline/elapsed/overshoot records, so their equal-compute premise is not yet
+independently auditable.
+
+`--nodes` and `--time` are mutually exclusive. The separate "AI fixed-node
+strict-strength gate" and "AI equal-time diagnostic (DRAFT)"
+workflow-dispatch actions each fan out to exactly 20 shards and aggregate
+automatically, so their check contexts cannot substitute for one another.
+Formal shard artifacts report statistics but deliberately make no PASS/FAIL
+claim; only the complete 800-game aggregate emits the strict-strength verdict.
+A valid statistical miss fails the strict-strength check but is
+informational/green in the equal-time diagnostic;
+malformed, mixed or incomplete diagnostic artifacts still fail. Never
+selectively rerun shards, combine artifacts across dispatches, or retry a
+valid statistical miss. Start a fresh complete 20-shard run for a genuinely
+new experiment, because post-selection invalidates the predeclared result.
 
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
