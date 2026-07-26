@@ -33,6 +33,11 @@
   const LEGACY_FENCE_KEY = 'chessy-archive-fenced-v1';
   const FENCE_KEY = 'chessy-archive-fenced-v2';
   const FENCE_CAP = 200;
+  function releaseToken(value) {
+    return typeof value === 'string' && value.length <= 32 &&
+      value.trim() === value && /^r\d+$/.test(value)
+      ? value : null;
+  }
   // A destructive operation (restore / Delete-all) holds this mutex while it
   // runs, so the two can never overlap: a second confirm is refused rather than
   // racing a shared suspension and fence. archive.js reference-counts the
@@ -51,7 +56,7 @@
     catch (e) { return null; }
     if (!data || typeof data.gameId !== 'string' || !Array.isArray(data.history)) return null;
     let s = Chess.newGameState();
-    const sans = [], clocks = [];
+    const sans = [], clocks = [], ai = [];
     for (let i = 0; i < data.history.length; i++) {
       const entry = data.history[i];
       if (!entry || !entry.move) return null;
@@ -63,6 +68,8 @@
       if (!m) return null; // corrupt save — don't fabricate a record
       sans.push(Chess.toSan(s, m, legal));
       clocks.push(entry.clock || null);
+      ai.push(entry.ai && typeof ChessAI !== 'undefined' && ChessAI.sanitizeTelemetry
+        ? ChessAI.sanitizeTelemetry(entry.ai) : null);
       s = Chess.playMove(s, m);
     }
     let status;
@@ -81,6 +88,8 @@
       sans: sans,
       playerColor: data.mode === 'ai-b' ? 'w' : data.mode === 'ai-w' ? 'b' : 'both',
       clocks: clocks,
+      ai: ai,
+      startedRelease: releaseToken(data.startedRelease),
       result: status.result,
       reason: status.reason,
       mode: data.mode,
@@ -99,6 +108,30 @@
       a.sans.length === b.sans.length &&
       a.sans.every(function (s, i) { return s === b.sans[i]; }) &&
       a.result === b.result && a.reason === b.reason;
+  }
+
+  // A same-ending recovery can contain newer evidence for only SOME plies:
+  // local-save reconstruction sanitizes every malformed/missing slot to null.
+  // Merge those aligned slots individually so one usable recovered entry does
+  // not erase intact committed evidence elsewhere. Never manufacture legacy
+  // telemetry for an absent slot; null remains the explicit "no evidence"
+  // marker, and an all-null recovery leaves a legacy row without `ai` alone.
+  function mergeAiEvidence(cur, rec) {
+    const plies = cur.sans.length;
+    if (!Array.isArray(rec.ai) || rec.ai.length !== plies) return;
+    function usable(entry) {
+      return !!entry && typeof entry === 'object' && !Array.isArray(entry);
+    }
+    if (!rec.ai.some(usable)) return;
+
+    const committedAligned = Array.isArray(cur.ai) && cur.ai.length === plies;
+    const merged = new Array(plies);
+    for (let i = 0; i < plies; i++) {
+      merged[i] = usable(rec.ai[i])
+        ? rec.ai[i]
+        : (committedAligned ? cur.ai[i] : null);
+    }
+    cur.ai = merged;
   }
 
   // Drop cards for `id` at or after the first ply where the moves diverge —
@@ -149,7 +182,9 @@
           }) ||
           typeof rec.result !== 'string' || !rec.result ||
           !Number.isInteger(rec.plies) || rec.plies !== rec.sans.length ||
-          !Number.isFinite(rec.createdAt)) {
+          !Number.isFinite(rec.createdAt) ||
+          typeof CoachStore.validateGameRecord !== 'function' ||
+          CoachStore.validateGameRecord(rec) !== null) {
         throw new Error('the pending-game recovery queue is malformed');
       }
       out.push(rec);
@@ -267,6 +302,14 @@
         if (Number.isFinite(rec.createdAt) && Number.isFinite(cur.createdAt)) {
           cur.createdAt = Math.min(cur.createdAt, rec.createdAt);
         }
+        // The recovery copy may be the only one with newer forensic fields for
+        // a particular ply. Preserve those per-ply without letting its
+        // malformed/null slots erase committed evidence.
+        mergeAiEvidence(cur, rec);
+        const recoveredRelease = releaseToken(rec.startedRelease);
+        if (recoveredRelease) {
+          cur.startedRelease = recoveredRelease;
+        }
         return; // keep the committed record's moves and earliest date
       }
       if (cur) pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
@@ -302,6 +345,10 @@
           return fenced.indexOf(endingSig(
             rec.id, rec.sans, rec.result, rec.reason)) === -1;
         });
+        const validationError = CoachStore.validateBackup(data);
+        if (validationError) {
+          throw new Error('assembled backup is invalid: ' + validationError);
+        }
         const json = JSON.stringify(data);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);

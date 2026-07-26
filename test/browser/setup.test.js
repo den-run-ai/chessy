@@ -58,7 +58,8 @@ require('./helper').run('setup', async function (t) {
   });
   check((await page.textContent('#status')).includes('to move'), 'garbage save rejected, app boots normally');
 
-  // A valid save (with AI metadata) is restored, including settings.
+  // A valid rootless legacy save (with AI metadata) is restored, including
+  // settings. Missing rootOrderUci remains the backwards-compatible marker.
   await t.inject(function () {
     localStorage.setItem('chessy-game-v1', JSON.stringify({
       fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
@@ -70,6 +71,85 @@ require('./helper').run('setup', async function (t) {
   check(await page.locator('#moveList .ply').count() === 1, 'valid single-move save restored');
   check((await page.textContent('#setupSummary')).includes('Black vs computer · Hard'),
     'mode/difficulty restored from save');
+
+  // A captured root order is trusted evidence, not a best-effort list. The
+  // live-save loader must check the RAW list against the exact pre-move
+  // position before sanitizeTelemetry can filter bad entries and let poisoned
+  // evidence reach the archive.
+  const rootedSave = await page.evaluate(function () {
+    const data = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    data.history[0].ai.rootOrderUci =
+      Chess.legalMoves(Chess.newGameState()).map(function (move) {
+        return Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
+      }).reverse();
+    return data;
+  });
+  await t.inject(function (data) {
+    localStorage.setItem('chessy-game-v1', JSON.stringify(data));
+  }, rootedSave);
+  check(await page.locator('#moveList .ply').count() === 1,
+    'complete legal root-order evidence restores');
+
+  const roots = rootedSave.history[0].ai.rootOrderUci;
+  const substituted = roots.slice();
+  substituted[0] = 'a1a8';
+  const duplicated = roots.slice();
+  duplicated[0] = duplicated[1];
+  const malformed = roots.slice();
+  malformed[0] = 'not-uci';
+  const poisonedRoots = [
+    { label: 'truncated', value: roots.slice(1) },
+    { label: 'substituted', value: substituted },
+    { label: 'duplicate', value: duplicated },
+    { label: 'malformed', value: malformed }
+  ];
+  for (const poison of poisonedRoots) {
+    const data = JSON.parse(JSON.stringify(rootedSave));
+    data.history[0].ai.rootOrderUci = poison.value;
+    await t.inject(function (saved) {
+      localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+    }, data);
+    check(await page.locator('#moveList .ply').count() === 0,
+      poison.label + ' live-save root order is rejected');
+  }
+
+  const positionAwareSave = await page.evaluate(function () {
+    function byUci(state, wanted) {
+      return Chess.legalMoves(state).find(function (move) {
+        const uci = Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
+        return uci === wanted;
+      });
+    }
+    let state = Chess.newGameState();
+    state = Chess.playMove(state, byUci(state, 'e2e4'));
+    const blackRoots = Chess.legalMoves(state).map(function (move) {
+      return Chess.sqName(move.from) + Chess.sqName(move.to) +
+        (move.promotion ? move.promotion.toLowerCase() : '');
+    }).reverse();
+    state = Chess.playMove(state, byUci(state, 'e7e5'));
+    state.history[1].ai = {
+      depth: 1, quiesce: false, ms: 12, rootOrderUci: blackRoots
+    };
+    return {
+      fen: Chess.toFen(state), history: state.history,
+      mode: 'pvp', difficulty: '2'
+    };
+  });
+  await t.inject(function (data) {
+    localStorage.setItem('chessy-game-v1', JSON.stringify(data));
+  }, positionAwareSave);
+  check(await page.locator('#moveList .ply').count() === 2,
+    'later-ply root order is checked against its pre-move position');
+
+  const foreignPosition = JSON.parse(JSON.stringify(positionAwareSave));
+  foreignPosition.history[1].ai.rootOrderUci = roots.slice();
+  await t.inject(function (data) {
+    localStorage.setItem('chessy-game-v1', JSON.stringify(data));
+  }, foreignPosition);
+  check(await page.locator('#moveList .ply').count() === 0,
+    'same-length root order from another position is rejected');
 
   // Offline status reaches a real "ready" state via a service-worker
   // install (localhost is a secure context; the origin is fresh per run).
@@ -107,12 +187,18 @@ require('./helper').run('setup', async function (t) {
   await page.waitForFunction(function () {
     return document.querySelectorAll('#moveList .ply').length >= 1;
   }, null, { timeout: 5000 });
-  const failedAiMs = await page.evaluate(function () {
+  const failedAi = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    return saved.history[0].ai.ms;
+    return saved.history[0].ai;
   });
-  check(failedAiMs >= 700,
-    'failed worker: AI timing includes the pre-error wait (' + failedAiMs + 'ms)');
+  check(failedAi.ms >= 700,
+    'failed worker: AI timing includes the pre-error wait (' + failedAi.ms + 'ms)');
+  check(failedAi.source === 'sync-fallback' &&
+      failedAi.fallbackReason === 'worker-error',
+    'failed worker telemetry identifies the loud-error fallback');
+  check(Number.isFinite(failedAi.searchMs) && failedAi.ms >= failedAi.searchMs &&
+      Number.isInteger(failedAi.nodes) && failedAi.nodes > 0,
+    'failed worker fallback retains search time and counters');
 
   await page.evaluate(function () { window.__chessyTestWorkerMode = 'silent'; });
   await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
@@ -125,12 +211,18 @@ require('./helper').run('setup', async function (t) {
   check(true, 'silent worker: the watchdog falls back and the computer still moves');
   check(!(await page.textContent('#status')).includes('thinking'),
     'status leaves "thinking" after the fallback move');
-  const stalledAiMs = await page.evaluate(function () {
+  const stalledAi = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    return saved.history[0].ai.ms;
+    return saved.history[0].ai;
   });
-  check(stalledAiMs >= 4900,
-    'silent worker: AI timing includes the watchdog wait (' + stalledAiMs + 'ms)');
+  check(stalledAi.ms >= 4900,
+    'silent worker: AI timing includes the watchdog wait (' + stalledAi.ms + 'ms)');
+  check(stalledAi.source === 'sync-fallback' &&
+      stalledAi.fallbackReason === 'watchdog',
+    'silent worker telemetry identifies the watchdog fallback');
+  check(Number.isFinite(stalledAi.searchMs) && stalledAi.ms >= stalledAi.searchMs &&
+      Number.isInteger(stalledAi.nodes) && stalledAi.nodes > 0,
+    'watchdog fallback retains search time and counters');
 
   // A PERSISTENTLY unloadable worker script fires onerror on every fresh
   // instance before any message. The app must drop to synchronous mode —

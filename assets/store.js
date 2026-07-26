@@ -3,8 +3,8 @@
  * features (roadmap #23). Object stores:
  *
  *   games: { id (the game's UUID from app.js), source ('play'), tags,
- *            sans, playerColor, clocks, result, reason, mode, difficulty,
- *            timeControl, plies, createdAt }
+ *            sans, playerColor, clocks, ai, startedRelease, result, reason,
+ *            mode, difficulty, timeControl, plies, createdAt }
  *   cards: { id (auto), gameId, ply, ... } — lesson cards
  *   analyses: { key, gameId, ply, ... } — one bounded engine analysis per
  *            (game, ply, position fingerprint, engine, config); the caller
@@ -531,7 +531,9 @@
   // resumable scan progress: recomputable from the games, so they are OMITTED
   // to keep backups small and portable. `version` is the backup-format
   // version; `dbVersion` is the schema the backup was taken from, so a restore
-  // can refuse a backup from a FUTURE schema it cannot understand.
+  // can refuse a backup from a FUTURE schema it cannot understand. `release`
+  // identifies the app release that assembled the envelope; game-start and
+  // per-AI-move release identifiers remain on the records themselves.
   var BACKUP_FORMAT = 'chessy-coach-backup';
   var BACKUP_VERSION = 1;
   var DURABLE_STORES = ['games', 'cards'];
@@ -545,6 +547,7 @@
       return new Promise(function (resolve, reject) {
         var t = db.transaction(DURABLE_STORES, 'readonly');
         var out = { format: BACKUP_FORMAT, version: BACKUP_VERSION, dbVersion: DB_VERSION,
+          release: validRelease(global.CHESSY_RELEASE) ? global.CHESSY_RELEASE : null,
           exportedAt: Date.now(), stores: {} };
         DURABLE_STORES.forEach(function (name) {
           var req = t.objectStore(name).getAll();
@@ -603,6 +606,184 @@
     return true;
   }
 
+  function validRelease(value) {
+    return typeof value === 'string' && value.length <= 32 &&
+      value.trim() === value && /^r\d+$/.test(value);
+  }
+
+  function validOptionalAi(ai, plies) {
+    if (ai === undefined) return true; // every pre-telemetry backup
+    if (!Array.isArray(ai) || ai.length !== plies) return false;
+    var reasons = {
+      'max-depth': true, 'time-limit': true, 'node-limit': true,
+      mate: true, 'game-over': true, unknown: true
+    };
+    var sources = { worker: true, sync: true, 'sync-fallback': true, unknown: true };
+    var fallbacks = { 'worker-error': true, watchdog: true };
+    function optInt(v) {
+      return v === undefined || v === null || (Number.isInteger(v) && v >= 0);
+    }
+    function optFinite(v) {
+      return v === undefined || v === null || (Number.isFinite(v) && v >= 0);
+    }
+    return ai.every(function (v) {
+      if (v === null) return true; // human move
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+      // Legacy debug entries used only depth/quiesce/ms; every added field is
+      // optional so those backups remain restorable.
+      if (!Number.isInteger(v.depth) || v.depth < 0 ||
+          typeof v.quiesce !== 'boolean' ||
+          !Number.isFinite(v.ms) || v.ms < 0 ||
+          !optInt(v.attemptedDepth) ||
+          !optInt(v.maxDepth) || !optInt(v.timeMs) || !optInt(v.nodeLimit) ||
+          !optInt(v.nodes) || !optInt(v.qnodes) || !optInt(v.cutoffs) ||
+          !optInt(v.researches) || !optFinite(v.elapsedMs) ||
+          !optFinite(v.searchMs)) return false;
+      if (v.release !== undefined && v.release !== null &&
+          !validRelease(v.release)) return false;
+      if (v.seed !== undefined && v.seed !== null &&
+          (!Number.isInteger(v.seed) || (v.seed | 0) !== v.seed)) return false;
+      if (v.randomize !== undefined && v.randomize !== null &&
+          typeof v.randomize !== 'boolean') return false;
+      if (v.score !== undefined && v.score !== null && !Number.isFinite(v.score)) return false;
+      if (v.scorePov !== undefined && v.scorePov !== null && v.scorePov !== 'white') return false;
+      if (v.stopReason !== undefined && !reasons[v.stopReason]) return false;
+      if (v.source !== undefined && !sources[v.source]) return false;
+      if (v.fallbackReason !== undefined && v.fallbackReason !== null &&
+          !fallbacks[v.fallbackReason]) return false;
+      if (v.pvSource !== undefined && v.pvSource !== null &&
+          v.pvSource !== 'final-tt-best-effort') return false;
+      if (v.pvUci !== undefined &&
+          (!Array.isArray(v.pvUci) || v.pvUci.length > 64 ||
+           !v.pvUci.every(function (u) {
+             return typeof u === 'string' &&
+               /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u);
+           }))) return false;
+      if (Object.prototype.hasOwnProperty.call(v, 'rootOrderUci')) {
+        if (!Array.isArray(v.rootOrderUci) || v.rootOrderUci.length > 256) return false;
+        var seenRoot = Object.create(null);
+        if (!v.rootOrderUci.every(function (u) {
+          if (typeof u !== 'string' ||
+              !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u) || seenRoot[u]) return false;
+          seenRoot[u] = true;
+          return true;
+        })) return false;
+      }
+      return true;
+    });
+  }
+
+  // A captured root order is reproducible only when it is the COMPLETE legal
+  // root permutation for the position before that recorded move. Syntax and
+  // uniqueness alone are insufficient: replayRootMoves() deliberately falls
+  // back to a fresh shuffle when the list is incomplete or from another
+  // position, which would make restored "provenance" silently non-replayable.
+  //
+  // A MISSING list remains valid for legacy telemetry that predates root
+  // capture. Once the property is present it must be complete; accepting an
+  // explicit [] would make evidence erasure indistinguishable from legacy
+  // data. Lists are checked while replaying the canonical SAN prefix,
+  // including custom SetUp/FEN games.
+  function validAiRootOrders(record) {
+    if (!Array.isArray(record.ai) ||
+        !record.ai.some(function (entry) {
+          return entry && Object.prototype.hasOwnProperty.call(
+            entry, 'rootOrderUci');
+        })) {
+      return true;
+    }
+    if (typeof Chess === 'undefined' ||
+        typeof Chess.legalMoves !== 'function' ||
+        typeof Chess.toSan !== 'function' ||
+        typeof Chess.applyMove !== 'function') {
+      return false;
+    }
+
+    var state;
+    try {
+      state = record.setupFen
+        ? Chess.parseFen(record.setupFen) : Chess.newGameState();
+    } catch (e) {
+      return false;
+    }
+
+    function uci(move) {
+      return Chess.sqName(move.from) + Chess.sqName(move.to) +
+        (move.promotion ? move.promotion.toLowerCase() : '');
+    }
+
+    for (var i = 0; i < record.sans.length; i++) {
+      var legal;
+      try {
+        legal = Chess.legalMoves(state);
+      } catch (e) {
+        return false;
+      }
+      var entry = record.ai[i];
+      if (entry && Object.prototype.hasOwnProperty.call(
+        entry, 'rootOrderUci')) {
+        var order = entry.rootOrderUci;
+        if (!Array.isArray(order)) return false;
+        if (order.length !== legal.length) return false;
+        var expected = Object.create(null);
+        for (var li = 0; li < legal.length; li++) expected[uci(legal[li])] = true;
+        for (var oi = 0; oi < order.length; oi++) {
+          if (!expected[order[oi]]) return false;
+          delete expected[order[oi]];
+        }
+        if (Object.keys(expected).length !== 0) return false;
+      }
+
+      var move = legal.find(function (candidate) {
+        return Chess.toSan(state, candidate, legal) === record.sans[i];
+      });
+      if (!move) return false;
+      state = Chess.applyMove(state, move);
+    }
+    return true;
+  }
+
+  // Shared game-record trust boundary used by both backup restore and the raw
+  // pending-archive export path. An export must never emit a recovery row that
+  // this same release would refuse to restore.
+  function validateGameRecord(r, prefix) {
+    prefix = prefix || 'game record';
+    if (!r || typeof r !== 'object' || Array.isArray(r) ||
+        typeof r.id !== 'string' || !Array.isArray(r.sans)) {
+      return prefix + ' is missing required fields';
+    }
+    if (!r.sans.every(function (san) {
+      return typeof san === 'string' && san.length > 0;
+    })) {
+      return prefix + ' has an invalid move list';
+    }
+    // Review renders result / plies / createdAt directly; missing values show
+    // as "undefined", "NaN moves", "Invalid Date".
+    if (typeof r.result !== 'string' || !r.result) {
+      return prefix + ' is missing a result';
+    }
+    if (!Number.isInteger(r.plies) || r.plies !== r.sans.length) {
+      return prefix + ' has an invalid plies count';
+    }
+    if (!Number.isFinite(r.createdAt)) {
+      return prefix + ' has a non-numeric createdAt';
+    }
+    if (r.startedRelease !== undefined && r.startedRelease !== null &&
+        !validRelease(r.startedRelease)) {
+      return prefix + ' has an invalid startedRelease';
+    }
+    if (r.setupFen && !validFen(r.setupFen)) {
+      return prefix + ' has an invalid setupFen';
+    }
+    if (!validOptionalAi(r.ai, r.plies)) {
+      return prefix + ' has invalid AI telemetry';
+    }
+    if (!validAiRootOrders(r)) {
+      return prefix + ' has AI telemetry with a root order that does not match its position';
+    }
+    return null;
+  }
+
   // Validate a parsed backup WITHOUT touching the database: format, a version
   // no NEWER than this build understands, and every durable record's key and
   // minimal schema. Returns an error string, or null when it is safe to
@@ -619,6 +800,10 @@
       return 'backup has no valid version';
     }
     if (data.version > BACKUP_VERSION) return 'backup is from a newer app version';
+    if (data.release !== undefined && data.release !== null &&
+        !validRelease(data.release)) {
+      return 'backup has an invalid release';
+    }
     if (!Number.isInteger(data.dbVersion) || data.dbVersion < 1) {
       return 'backup has no valid database version';
     }
@@ -650,28 +835,8 @@
         // AND be trainable. Otherwise the destructive restore swaps in records
         // that later blow up the view or the training load.
         if (name === 'games') {
-          if (typeof r.id !== 'string' || !Array.isArray(r.sans)) {
-            return 'store "games" record ' + j + ' is missing required fields';
-          }
-          if (!r.sans.every(function (san) {
-            return typeof san === 'string' && san.length > 0;
-          })) {
-            return 'store "games" record ' + j + ' has an invalid move list';
-          }
-          // Review renders result / plies / createdAt directly; missing values
-          // show as "undefined", "NaN moves", "Invalid Date".
-          if (typeof r.result !== 'string' || !r.result) {
-            return 'store "games" record ' + j + ' is missing a result';
-          }
-          if (!Number.isInteger(r.plies) || r.plies !== r.sans.length) {
-            return 'store "games" record ' + j + ' has an invalid plies count';
-          }
-          if (!Number.isFinite(r.createdAt)) {
-            return 'store "games" record ' + j + ' has a non-numeric createdAt';
-          }
-          if (r.setupFen && !validFen(r.setupFen)) {
-            return 'store "games" record ' + j + ' has an invalid setupFen';
-          }
+          const gameError = validateGameRecord(r, 'store "games" record ' + j);
+          if (gameError) return gameError;
           gamesById[r.id] = r;
         }
         if (name === 'cards') {
@@ -803,6 +968,7 @@
     getJob: getJob,
     deleteJob: deleteJob,
     exportAll: exportAll,
+    validateGameRecord: validateGameRecord,
     validateBackup: validateBackup,
     restoreAll: restoreAll,
     deleteAllData: deleteAllData,

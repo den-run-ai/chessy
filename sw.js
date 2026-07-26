@@ -24,7 +24,7 @@
  * - The page auto-reloads once when a new service worker takes over (see
  *   index.html); game state survives via localStorage.
  */
-const RELEASE = 'r54';
+const RELEASE = 'r55';
 const CACHE = 'chessy-' + RELEASE;
 const UPDATE_MARKER = './__chessy-update__';
 const ASSETS = [
@@ -89,8 +89,8 @@ self.addEventListener('activate', (event) => {
           .sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)))[0];
         // Record the transition inside the NEW cache before deleting the old
         // one or claiming pages. The new page consumes this into
-        // sessionStorage, so even an r53 page that did not know this protocol
-        // can reload into r54 and report the upgrade exactly once.
+        // sessionStorage, so even an older page that did not know this protocol
+        // can reload into the current release and report the upgrade exactly once.
         const mark = previous
           ? caches.open(CACHE).then((cache) => cache.put(
             UPDATE_MARKER,

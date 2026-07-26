@@ -7,6 +7,7 @@
  */
 'use strict';
 require('../assets/engine.js');
+require('../assets/ai.js');
 require('../assets/pgn.js');
 const Chess = globalThis.Chess;
 const PGN = globalThis.ChessyPGN;
@@ -130,6 +131,95 @@ check(roundTrip.preComment === 'Start [here]' &&
   roundTrip.moves[1].nags.indexOf('$6') !== -1 &&
   roundTrip.moves[1].clkMs === 298000,
   'export/import round trip keeps pre-comments, NAGs, comments and clock annotations');
+
+// A Play record's search evidence is parallel to its SAN list. Review's
+// explicit "+ log" export must preserve that alignment while the ordinary
+// PGN stays clean and byte-compatible.
+const afterE4 = Chess.replaySans(['e4']);
+const blackRootOrder = Chess.legalMoves(afterE4).map(function (m) {
+  return Chess.sqName(m.from) + Chess.sqName(m.to) +
+    (m.promotion ? m.promotion.toLowerCase() : '');
+});
+const archivedTelemetryRecord = {
+  source: 'play',
+  sans: ['e4', 'e5'],
+  clocks: [null, { thinkMs: 2000, wMs: 305000, bMs: 298000 }],
+  ai: [null, {
+    release: 'r55', depth: 4, attemptedDepth: 5, maxDepth: 30,
+    quiesce: true, timeMs: 5000, nodeLimit: null,
+    seed: -1, randomize: true, ms: 5002, elapsedMs: 5002,
+    searchMs: 5000, nodes: 50000, qnodes: 30000,
+    cutoffs: 10, researches: 2, score: -141, scorePov: 'white',
+    stopReason: 'time-limit', source: 'sync-fallback',
+    fallbackReason: 'watchdog', rootOrderUci: blackRootOrder,
+    pvUci: ['e7e5'], pvSource: 'final-tt-best-effort'
+  }],
+  result: '*',
+  reason: 'ongoing'
+};
+const archivedClean = PGN.serializeRecord(archivedTelemetryRecord);
+const archivedTelemetry = PGN.serializeRecord(
+  archivedTelemetryRecord, null, true);
+check(!archivedClean.includes('{engine') &&
+    !archivedClean.includes('{before:') &&
+    archivedClean.includes('1. e4 e5'),
+  'ordinary Review export remains clean when archived telemetry exists');
+check(archivedTelemetry.includes('engine depth 4+quiescence, 5002 ms') &&
+    archivedTelemetry.includes('attempted depth 5') &&
+    archivedTelemetry.includes('50000 nodes (30000 q)') &&
+    archivedTelemetry.includes('score -141 (White POV)') &&
+    archivedTelemetry.includes('stop time-limit') &&
+    archivedTelemetry.includes('config dmax 30/time 5000ms/seed -1/root-order ' +
+      blackRootOrder.join('/')) &&
+    archivedTelemetry.includes('search 5000 ms, release r55, source sync-fallback') &&
+    archivedTelemetry.includes('fallback watchdog') &&
+    archivedTelemetry.includes('PV e7e5 (best effort)') &&
+    archivedTelemetry.includes('[%clk 0:04:58]') &&
+    archivedTelemetry.includes('; before: ' + Chess.toFen(afterE4)),
+  'Review + log uses the shared formatter for aligned per-ply provenance');
+const parsedTelemetry = PGN.parseGame(archivedTelemetry);
+check(parsedTelemetry.valid &&
+    parsedTelemetry.moves.map(function (m) { return m.san; }).join(' ') ===
+      'e4 e5' &&
+    parsedTelemetry.result === '*',
+  'a Review debug PGN reparses with the same moves and result',
+  parsedTelemetry.error);
+
+const legacyTelemetry = PGN.serializeRecord({
+  source: 'play', sans: ['e4'], clocks: [null],
+  ai: [{ depth: 3, quiesce: false, ms: 42 }],
+  result: '*', reason: 'ongoing'
+}, null, true);
+check(legacyTelemetry.includes('engine depth 3, 42 ms') &&
+    !legacyTelemetry.includes('root-order'),
+  'rootless legacy telemetry remains exportable without invented evidence');
+
+const customDebugFen = '4k3/8/8/8/8/8/4P3/4K3 b - - 0 17';
+const customDebug = PGN.serializeRecord({
+  source: 'play', setupFen: customDebugFen, sans: ['Ke7'],
+  clocks: [{ ms: 298000 }],
+  ai: [{ depth: 1, quiesce: false, ms: 12 }],
+  result: '*', reason: 'ongoing'
+}, null, true);
+check(customDebug.includes('17... Ke7') &&
+    customDebug.includes('[%clk 0:04:58]') &&
+    customDebug.includes('before: ' + customDebugFen),
+  'debug export uses the true mover and FEN for a Black-to-move setup');
+
+const hostileArchiveTelemetry = PGN.serializeRecord({
+  source: 'play', sans: ['e4'], result: '*', reason: 'ongoing',
+  ai: [{
+    depth: 1, quiesce: false, ms: 1,
+    release: 'r55} 99. Qh8# {', source: '} 1-0 {',
+    pvUci: ['e2e4', '}'], rootOrderUci: ['e2e4', '}']
+  }]
+}, null, true);
+check(!hostileArchiveTelemetry.includes('Qh8') &&
+    !hostileArchiveTelemetry.includes('source }') &&
+    hostileArchiveTelemetry.includes('PV e2e4') &&
+    hostileArchiveTelemetry.includes('root-order e2e4'),
+  'archive telemetry comments reject injected tokens while retaining safe UCI evidence');
+
 const correctedMate = PGN.serializeRecord({
   source: 'play', tags: {}, sans: ['f3', 'e5', 'g4', 'Qh4#'],
   result: '1-0', reason: 'resignation'

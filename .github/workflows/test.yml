@@ -73,6 +73,10 @@ jobs:
           node-version: 22
       - name: Run engine tests
         run: node test/engine.test.js
+      - name: Replay exact Master screenshot incident
+        run: node test/master-incident.test.js
+      - name: Verify behavior-neutral AI telemetry
+        run: node test/ai-telemetry.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
       - name: Install chess.js (dev-only independent legal-move oracle)

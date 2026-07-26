@@ -1,0 +1,58 @@
+{
+  "id": "dd608f7d-4a6d-416a-a773-0c7515e14898",
+  "source": "chessy-backup-2026-07-24",
+  "difficulty": "master",
+  "playerColor": "w",
+  "result": "1-0",
+  "reason": "checkmate",
+  "plies": 123,
+  "sanSha256": "c283292bcd43ef2653d516f6a2adb0a382f7a5ce5bd77301fb1c16cd402baed9",
+  "sans": [
+    "Nf3", "Nf6", "g3", "Nc6", "Bg2", "e5", "O-O", "e4", "Ng5", "d5",
+    "f4", "h6", "Nh3", "Bxh3", "Bxh3", "Bc5+", "e3", "d4", "Qe2", "O-O",
+    "Kh1", "d3", "cxd3", "exd3", "Qd1", "Ne4", "Nc3", "Nxc3", "dxc3", "Re8",
+    "Re1", "Qd6", "Bd2", "a5", "Qf3", "a4", "Bg2", "a3", "b4", "Bb6",
+    "Rab1", "Qe6", "Qd5", "Qxd5", "Bxd5", "Ra7", "c4", "Nxb4", "Bxb4", "c6",
+    "Bf3", "Ra4", "Bd2", "Ba5", "Bxa5", "Rxa5", "Rbd1", "Rd8", "Rd2", "Rc5",
+    "Red1", "Rxc4", "Rxd3", "Rxd3", "Rxd3", "Rc1+", "Rd1", "Rxd1+", "Bxd1", "b5",
+    "Bf3", "b4", "Bd1", "c5", "Bb3", "Kf8", "Kg2", "f5", "Kf3", "Ke7",
+    "e4", "fxe4+", "Kxe4", "Kd6", "f5", "Kc6", "g4", "Kd6", "h4", "Kc6",
+    "Ke5", "Kb6", "Kd5", "Kb5", "g5", "hxg5", "hxg5", "c4", "Bxc4+", "Kb6",
+    "f6", "gxf6", "gxf6", "b3", "Bxb3", "Kc7", "f7", "Kb6", "f8=Q", "Kc7",
+    "Qd6+", "Kb7", "Bc4", "Ka7", "Kc5", "Kb7", "Bd5+", "Kc8", "Be6+", "Kb7",
+    "Qb6+", "Ka8", "Bd5#"
+  ],
+  "critical": [
+    {
+      "ply": 13,
+      "san": "Bxh3",
+      "fen": "r1bqkb1r/ppp2pp1/2n2n1p/3p4/4pP2/6PN/PPPPP1BP/RNBQ1RK1 b kq - 1 7"
+    },
+    {
+      "ply": 21,
+      "san": "d3",
+      "fen": "r2q1rk1/ppp2pp1/2n2n1p/2b5/3ppP2/4P1PB/PPPPQ2P/RNB2R1K b - - 3 11"
+    },
+    {
+      "ply": 25,
+      "san": "Ne4",
+      "fen": "r2q1rk1/ppp2pp1/2n2n1p/2b5/5P2/3pP1PB/PP1P3P/RNBQ1R1K b - - 1 13"
+    },
+    {
+      "ply": 37,
+      "san": "a3",
+      "fen": "r3r1k1/1pp2pp1/2nq3p/2b5/p4P2/2PpPQP1/PP1B2BP/R3R2K b - - 1 19"
+    },
+    {
+      "ply": 47,
+      "san": "Nxb4",
+      "fen": "4r1k1/rpp2pp1/1bn4p/3B4/1PP2P2/p2pP1P1/P2B3P/1R2R2K b - - 0 24"
+    },
+    {
+      "ply": 67,
+      "san": "Rxd1+",
+      "fen": "6k1/1p3pp1/2p4p/8/5P2/p3PBP1/P6P/2rR3K b - - 2 34"
+    }
+  ],
+  "finalFen": "k7/8/1Q6/2KB4/8/p7/P7/8 b - - 14 62"
+}

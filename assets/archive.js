@@ -30,6 +30,11 @@
   // reconcilePending() drains every entry on the next boot.
   const PENDING_KEY = 'chessy-pending-archive-v1';
   let writeSeq = 0;
+  function releaseToken(value) {
+    return typeof value === 'string' && value.length <= 32 &&
+      value.trim() === value && /^r\d+$/.test(value)
+      ? value : null;
+  }
 
   // Archive-clear fence (Phase 4b3/4b4). A restore or Delete-all fences the
   // exact ENDINGS that could otherwise be re-archived from a recovery source —
@@ -305,8 +310,9 @@
   // the caller surfaces that (a training archive that silently drops
   // games would corrupt every later statistic). A zero-ply game is still
   // archived: a timed game can be forfeit on time before the first move.
-  // opts: { endedAt } — the persisted completion time, so a boot-time
-  // reconcile keeps the chronology instead of stamping the restart.
+  // opts: { endedAt, startedRelease } — persisted completion time and the
+  // release that began the game, so a boot-time reconcile keeps chronology
+  // and attribution instead of stamping either with the restart.
   function record(state, settings, status, gameId, opts) {
     if (!gameId || !status.over) {
       return Promise.resolve(null);
@@ -331,6 +337,16 @@
       // Per-move clock evidence ({thinkMs, wMs, bMs} or null): retained so
       // efficiency/impulse diagnoses have data behind them.
       clocks: state.history.map(function (h) { return h.clock || null; }),
+      // Search evidence is parallel to SAN/clocks (null for human moves).
+      // Normalize here as a second trust boundary because this record is also
+      // copied into the localStorage durability queue before IndexedDB settles.
+      ai: state.history.map(function (h) {
+        return h.ai && typeof ChessAI !== 'undefined' && ChessAI.sanitizeTelemetry
+          ? ChessAI.sanitizeTelemetry(h.ai) : null;
+      }),
+      // Release at game creation. Per-AI-move entries carry their own release
+      // too, so a game resumed after an update remains attributable.
+      startedRelease: releaseToken(opts && opts.startedRelease),
       result: status.result,
       reason: status.reason,
       mode: settings.mode,

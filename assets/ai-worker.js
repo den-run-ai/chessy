@@ -19,7 +19,11 @@ self.onmessage = function (e) {
     // reproducibly (a fixed seed or randomize:false) instead of falling back
     // to Math.random and possibly preferring a different move each run.
     seed: e.data.seed,
-    randomize: e.data.randomize
+    randomize: e.data.randomize,
+    rootOrderUci: e.data.rootOrderUci
   });
-  self.postMessage({ id: e.data.id, move: result.move, depth: result.depth, score: result.score });
+  // Return the complete, JSON-safe search evidence. Play records it alongside
+  // the move so an archived incident can be attributed to a release, budget
+  // and completed draft instead of being reconstructed from SAN alone.
+  self.postMessage(Object.assign({ id: e.data.id }, result));
 };

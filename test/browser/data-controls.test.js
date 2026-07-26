@@ -65,6 +65,39 @@ require('./helper').run('data-controls', async function (t) {
         backup2.stores.games.some(function (g) { return g.id === 'parked'; }),
     'a parked (pending-queue) game is included in the backup');
 
+  // The raw queue is an export trust boundary too: it must reject provenance
+  // that the same build's restore validator would refuse, rather than emit a
+  // self-invalid backup (or a release token that can break a debug-PGN comment).
+  async function rejectsPendingRecord(rec, label) {
+    await page.evaluate(function (row) {
+      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+        suspect: { w: 't', rec: row }
+      }));
+      const status = document.getElementById('dataStatus');
+      status.textContent = '';
+      status.dataset.kind = '';
+    }, rec);
+    await page.click('#backupBtn');
+    await page.waitForFunction(function () {
+      const status = document.getElementById('dataStatus');
+      return status.dataset.kind === 'error' &&
+        /pending-game recovery queue/.test(status.textContent);
+    }, { timeout: 5000 });
+    check(true, label);
+  }
+  const pendingBase = {
+    id: 'suspect', source: 'play', sans: ['e4'], result: '*',
+    reason: 'imported', mode: 'pvp', plies: 1, createdAt: 5
+  };
+  await rejectsPendingRecord(
+    Object.assign({}, pendingBase, { ai: [{}] }),
+    'backup rejects malformed AI telemetry in the raw pending queue');
+  await rejectsPendingRecord(
+    Object.assign({}, pendingBase, {
+      ai: [null], startedRelease: 'r54} 99. Qh8# {'
+    }),
+    'backup rejects a malformed release in the raw pending queue');
+
   // Backup still reads the raw durability queue when archive.js is absent
   // (partial offline release), honours the persisted ending fence without the
   // archive helper, and keeps prototype-sensitive ids as data.
@@ -443,6 +476,113 @@ require('./helper').run('data-controls', async function (t) {
   check(dated && dated.createdAt === 100,
     'an identical parked ending keeps the earliest committed completion time');
 
+  // Same-ending recovery sources may contain newer telemetry for only some
+  // plies. Their null-sanitized slots must not erase evidence accumulated from
+  // committed → finished live save → pending queue.
+  await page.evaluate(function () {
+    localStorage.removeItem('chessy-pending-archive-v1');
+    let s = Chess.newGameState();
+    function play(f, t) {
+      const legal = Chess.legalMoves(s);
+      const move = legal.find(function (x) {
+        return Chess.sqName(x.from) === f && Chess.sqName(x.to) === t;
+      });
+      s = Chess.playMove(s, move);
+    }
+    play('f2', 'f3'); play('e7', 'e5'); play('g2', 'g4'); play('d8', 'h4');
+    const status = Chess.gameStatus(s);
+    let replay = Chess.newGameState();
+    const roots = s.history.map(function (entry) {
+      const legal = Chess.legalMoves(replay);
+      const order = legal.map(function (move) {
+        return Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
+      });
+      const played = legal.find(function (move) {
+        return move.from === entry.move.from && move.to === entry.move.to &&
+          (move.promotion || null) === (entry.move.promotion || null);
+      });
+      replay = Chess.playMove(replay, played);
+      return order;
+    });
+    function evidence(ply, depth, quiesce, ms) {
+      return {
+        depth: depth, quiesce: quiesce, ms: ms,
+        rootOrderUci: roots[ply]
+      };
+    }
+    const committedAi = [
+      evidence(0, 7, true, 700),
+      evidence(1, 8, false, 800),
+      null,
+      null
+    ];
+    const recoveredAi = [
+      [], // malformed: savedFinishedRecord sanitizes this slot to null
+      evidence(1, 9, true, 900),
+      evidence(2, 11, true, 1100),
+      'malformed' // likewise null after sanitization
+    ];
+    s.history.forEach(function (entry, i) { entry.ai = recoveredAi[i]; });
+    const committed = {
+      id: 'telemetry-merge', source: 'play', tags: {},
+      sans: s.history.map(function (h) { return h.san; }),
+      playerColor: 'both', clocks: [null, null, null, null],
+      ai: committedAi, startedRelease: 'r53',
+      result: status.result, reason: status.reason,
+      mode: 'pvp', difficulty: '2', timeControl: 'none',
+      plies: s.history.length, createdAt: 100
+    };
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: Chess.toFen(s), history: s.history, mode: 'pvp', difficulty: '2',
+      timeControl: 'none', clocks: null, timeForfeit: null, flipped: false,
+      gameId: committed.id, startedRelease: 'r54', endedAt: 200
+    }));
+    // Pending is newest-last. Its one overlapping non-null slot should win,
+    // while its nulls preserve evidence accumulated from committed + live.
+    const pending = Object.assign({}, committed, {
+      ai: [null, evidence(1, 10, false, 1000), null, null],
+      startedRelease: 'r55', createdAt: 300
+    });
+    const legacy = Object.assign({}, committed, {
+      id: 'legacy-ai-merge', createdAt: 300
+    });
+    delete legacy.ai;
+    delete legacy.startedRelease;
+    const legacyRecovery = Object.assign({}, committed, {
+      id: legacy.id, ai: [null, null, null, null],
+      startedRelease: 'r54', createdAt: 400
+    });
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      'telemetry-merge': { w: 'telemetry-merge-write', rec: pending },
+      'legacy-ai-merge': { w: 'legacy-ai-merge-write', rec: legacyRecovery }
+    }));
+    return CoachStore.putGame(committed).then(function () {
+      return CoachStore.putGame(legacy);
+    });
+  });
+  const [telemetryDl] = await Promise.all([
+    page.waitForEvent('download'), page.click('#backupBtn')
+  ]);
+  const telemetryBackup = JSON.parse(
+    fs.readFileSync(await telemetryDl.path(), 'utf8'));
+  const telemetryMerged = telemetryBackup.stores.games.find(function (g) {
+    return g.id === 'telemetry-merge';
+  });
+  check(telemetryMerged && telemetryMerged.ai.length === telemetryMerged.plies &&
+      telemetryMerged.ai[0].depth === 7 &&
+      telemetryMerged.ai[1].depth === 10 &&
+      telemetryMerged.ai[2].depth === 11,
+    'same-ending recovery accumulates AI telemetry per ply and newest non-null evidence wins');
+  check(telemetryMerged && telemetryMerged.ai[3] === null,
+    'same-ending recovery keeps an evidence-free ply null instead of inventing legacy telemetry');
+  const legacyTelemetry = telemetryBackup.stores.games.find(function (g) {
+    return g.id === 'legacy-ai-merge';
+  });
+  check(legacyTelemetry &&
+      !Object.prototype.hasOwnProperty.call(legacyTelemetry, 'ai'),
+    'an all-null recovery does not invent an AI array on a legacy committed row');
+
   // A parked REVISION prunes lesson cards from the abandoned continuation.
   await page.evaluate(function () {
     localStorage.removeItem('chessy-pending-archive-v1');
@@ -450,8 +590,8 @@ require('./helper').run('data-controls', async function (t) {
       mode: 'pvp', plies: 3, createdAt: 1 };
     const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
     return CoachStore.putGame(g)
-      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1, attempts: [], fenBefore: fen }); })
-      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1, attempts: [], fenBefore: fen }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1, step: -1, attempts: [], fenBefore: fen }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1, step: -1, attempts: [], fenBefore: fen }); })
       .then(function () {
         // Revision diverges at ply 1 (e4 → d4), so both cards (ply 1 and 2) prune.
         localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({

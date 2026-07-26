@@ -473,7 +473,9 @@
   // `overrides` supplies display metadata that old Play records do not store
   // as PGN tags (player labels, derived date/time control). The record's
   // validated result and setup position always win over either tag source.
-  function serializeRecord(record, overrides) {
+  // `withLog` adds a separate, bounded forensic comment per ply while keeping
+  // the default clean export byte-compatible with older Review downloads.
+  function serializeRecord(record, overrides, withLog) {
     if (!record || !Array.isArray(record.sans)) {
       throw new Error('archive record has no move list');
     }
@@ -493,11 +495,13 @@
     // board rules correct a contradictory restored Result for terminal games;
     // non-terminal outcomes (resignation/time forfeit/import) remain archival.
     let finalState = start;
+    const beforeFens = [];
     record.sans.forEach(function (san) {
       if (typeof san !== 'string' || !san ||
           Chess.gameStatus(finalState).over) {
         throw new Error('archive record has an invalid move list');
       }
+      beforeFens.push(Chess.toFen(finalState));
       const legal = Chess.legalMoves(finalState);
       const move = legal.find(function (candidate) {
         return Chess.toSan(finalState, candidate, legal) === san;
@@ -597,6 +601,28 @@
       const note = meta && typeof meta.comment === 'string'
         ? commentValue(meta.comment) : '';
       if (note) parts.push('{' + note + '}');
+      if (withLog) {
+        if (typeof Chess.pgnLogComment !== 'function') {
+          throw new Error('archive debug formatter is unavailable');
+        }
+        const rawAi = Array.isArray(record.ai) ? record.ai[i] : null;
+        let ai = null;
+        if (rawAi !== null && rawAi !== undefined) {
+          if (typeof ChessAI === 'undefined' ||
+              typeof ChessAI.sanitizeTelemetry !== 'function') {
+            throw new Error('archive AI telemetry sanitizer is unavailable');
+          }
+          ai = ChessAI.sanitizeTelemetry(rawAi);
+          if (!ai) throw new Error('archive record has invalid AI telemetry');
+        }
+        const clock = Array.isArray(record.clocks) ? record.clocks[i] : null;
+        const debug = commentValue(Chess.pgnLogComment({
+          fen: beforeFens[i],
+          clock: clock,
+          ai: ai
+        }, turn));
+        if (debug) parts.push('{' + debug + '}');
+      }
 
       if (turn === 'b') fullmove++;
       turn = turn === 'w' ? 'b' : 'w';
