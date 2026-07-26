@@ -28,7 +28,12 @@
     "MIT": 37,
     "CC0-1.0": 80
   },
-  "split_policy": "70/15/15 train/val/test by stable id/game hash; same-game puzzles share a split; never tune on the test split",
+  "split_policy": "70/15/15 train/val/test tags by stable id/game hash; same-game puzzles share a split; test is excluded from routine analysis-quality PR feedback; strict correctness coverage may include test-tagged shard records; historical usage is documented in eval/README.md",
+  "test_usage": {
+    "analysis_quality_pr_feedback": false,
+    "correctness_contract_pr_feedback": true,
+    "accepted_move_criterion_v1": "consumed; compatibility-only; see #112"
+  },
   "analyse_opts": {
     "nodeLimit": 3000,
     "nodeBudget": 2000000,

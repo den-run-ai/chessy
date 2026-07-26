@@ -35,24 +35,43 @@ evidence**, never a bare boolean:
 - `provider` (`engineId`, `version`, `configHash`) and
   `positionFingerprint` — provenance copied from the validated result;
 - `coverage` — `all-roots` when `bestLines` covers every legal move,
-  `candidates` otherwise;
-- `best`, `attempt` (uci, san, covered, true rank, evaluation, cp gap) and
-  `accepted` — the accepted-move set among the returned lines with their
-  scores;
+  `candidates` otherwise — plus `complete`, `legalRootCount`,
+  `candidateLineCount`, and `coveredRootCount`;
+- `playedProbe` — the result's optional played-move probe even when the current
+  call grades a different move, including its evaluation, candidate
+  membership, rank, `rankBasis`, and proven `rankLowerBound`;
+- `stability` — the validated depth pair and `bestMoveStable` value that
+  authorized (or prevented) a negative verdict;
+- `best`, `attempt` (uci, san, covered, evaluation, cp gap, rank,
+  `rankBasis`, `rankLowerBound`) and
+  `accepted` — the accepted-move set among returned candidates plus a covered
+  outside-MultiPV `playedLine`, with their scores;
 - `verdict` — `best` | `equivalent` | `not-equivalent` | `unknown` — and a
   machine-readable `reason`.
 
 ## Decision procedure
 
-1. **Fail closed on untrusted analysis.** The whole result must pass the
-   shipped `ChessyAnalysisResult.validate` against the caller's expected
-   identity. `requireComplete` is forced to `true` — grading callers cannot
-   waive completeness the way scan orchestration can. A rejected result
-   produces `{ ok: false, reason: 'analysis-…' }`: no verdict, no evidence.
+1. **Canonicalize, then fail closed on untrusted analysis.** Result, source
+   state, and expected identity are snapshotted once into inert data before
+   validation, so accessor/Proxy values cannot change or throw on a
+   post-validation read. The whole snapshot must pass the shipped
+   `ChessyAnalysisResult.validate` against the snapshotted expected identity.
+   Its centipawn representation is restricted to safe integers in the built-in
+   engine's non-mate band (absolute value ≤ 999000), so hostile finite values
+   cannot collide with mate ordering or overflow a persisted gap.
+   `requireComplete` is forced to `true` — grading callers cannot waive
+   completeness the way scan orchestration can. A rejected or unreadable
+   input produces `{ ok: false, reason: 'analysis-…' }`: no verdict, no
+   evidence.
 2. **Fail closed on an illegal attempt** (`attempt-illegal`).
 3. **Locate the attempt's evidence line**: its candidate line when returned,
-   else the validated `playedLine` produced for exactly this move. With
-   neither, the verdict is **`unknown` (`not-covered`)** — an attempt outside
+   else the validated `playedLine` produced for exactly this move. An
+   outside-candidate line's `rank` is explicitly **provider-reported**, not
+   independently proven by the shortlist. The validator proves its legal
+   range, that it is below the candidate-rank lower bound, and—using
+   categorical mate/centipawn ordering—that it cannot outrank the shortlist's
+   final line. Candidate ranks are proven by array position. With no attempt
+   line, the verdict is **`unknown` (`not-covered`)** — an attempt outside
    MultiPV is *never* auto-failed ("not yet covered" is not "wrong"); the
    caller must first analyse the attempt (`playedMove`) to grade it.
 4. **The engine's own best move is `best`** (gap 0 for centipawn lines, no
@@ -73,33 +92,46 @@ evidence**, never a bare boolean:
    `equivalent`) is unaffected by stability: accepting a within-tolerance
    move is safe in both failure directions.
 
-## Calibration — why 30 cp
+## Policy rationale and validation status — why 30 cp
 
-Calibrated against the frozen E3 analysis baseline
+`cpTolerance = 30` is a versioned product-policy boundary, not a fitted
+statistical estimate. It accepts a root within **0.30 pawn** of the engine's
+best score while keeping ordinary half-pawn losses outside the accepted set.
+The gap is always computed inside **one** complete, validated result at one
+fixed budget, with both roots scored by the same search.
+
+The frozen E3 baseline
 ([`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md), merged in
-[#110](https://github.com/den-run-ai/chessy/pull/110)), measured on the
-license-clean corpus with the shipped validator in the loop:
+[#110](https://github.com/den-run-ai/chessy/pull/110)) informed that policy:
 
-- **Lower bound — the engine's own measurement noise.** Re-scoring the same
-  position at a different node budget moves the reported best by a median of
-  0 cp but a **p90 of 17 cp** over the full corpus (quick-scan regret,
-  103 cases; the PR shard's p90 is 5 cp). A tolerance below that floor would
-  flip grades on budget noise rather than on chess.
-- **Near-equivalent roots must grade equivalent.** The baseline's
-  `pvStability`/`budgetStability` misses concentrate on positions whose top
-  roots are deliberately near-equal, with **median regret 0 cp** — exactly
-  the "bounded, near-equivalent" variation the evaluation tracker requires
-  distinguishing from a real mistake.
-- **Upper bound — the conventional inaccuracy threshold.** Standard
-  annotation practice (e.g. Lichess) starts labelling moves as inaccuracies
-  around a **~50 cp** loss. The tolerance must stay clearly below that, or
-  genuine inaccuracies would be blessed as equivalent.
+- On its 34-case train/validation shard, the ¼× scan's chosen root re-scored
+  inside the 1× all-roots result has median regret **0 cp** and p90 **5 cp**.
+  That compact CI shard is an execution subset, not a statistically complete
+  train/validation sample.
+- On all 103 live cases, the same descriptive distribution has median
+  **0 cp** and p90 **17 cp**. This is cross-budget chosen-move regret—not
+  repeated measurement of the same root—so it is context for a conservative
+  boundary, not an error bar on an in-result gap.
+- Its near-equal roots exercise the intended distinction between a bounded
+  alternative and a genuine mistake; the committed exact E3 fixture freezes
+  every **PR-shard** puzzle's v1 verdict/reason so later semantic drift cannot
+  hide in aggregates. `--full` reports all 40 puzzle outcomes descriptively;
+  there is no committed full-mode baseline.
 
-`cpTolerance = 30` sits between those bounds: comfortably above the 17 cp
-p90 noise floor, materially below the 50 cp inaccuracy convention. The gap
-itself is always computed inside **one** complete, validated result (fixed
-budget, every root scored by the same search), so the noise floor is the
-conservative anchor, not an in-band error estimate.
+**Historical disclosure.** The full `eval-v1` metrics, including records tagged
+`test`, had already been inspected in #110, and the first version of this
+criterion explicitly used the full-corpus p90 of 17 cp in its rationale.
+Therefore that split is **not an untouched holdout for this v1 decision**.
+This document makes no post-selection or out-of-sample claim for it; those
+records are deterministic development/compatibility evidence.
+
+A genuinely fresh check requires new, non-overlapping source data frozen before
+the criterion is run. [#112](https://github.com/den-run-ai/chessy/issues/112)
+predeclares that one-shot lockbox: exclude every existing puzzle and source
+game, freeze the source snapshot/selection/hash and the exact v1 implementation
+first, and keep results out of routine tuning feedback. The tranche is consumed
+on its first reveal regardless of outcome; if that result changes criterion
+code or policy, only a new tranche can validate the revision.
 
 ## Provenance and the stability of outcomes
 
@@ -115,9 +147,16 @@ therefore produces **new** evidence — it never rewrites a persisted outcome
 1. Bump `version` in `assets/equivalence.js` and in this document, and update
    the pinned identity in `test/equivalence.test.js` — the pin exists so a
    parameter edit cannot land as an invisible behaviour change.
-2. Re-derive the calibration section from the then-current analysis baseline.
-3. Re-baseline any evaluation gate that scores grading behaviour, in the same
-   change, so the shift is visible in review rather than silent.
+2. Record the policy rationale and every dataset consulted. Use development
+   data for changes; an out-of-sample claim requires a new lockbox under #112,
+   frozen before the changed criterion is run.
+3. Re-baseline the E3 PR-shard scorecard's exact `equivalence` fixture in
+   `eval/ANALYSIS-BASELINE.json` and `.md` in the same change. Baseline
+   compatibility includes the criterion identity, and every baseline puzzle's
+   `id → verdict/reason` in that committed shard is compared exactly; an
+   identity change, missing case, or grading drift fails until consciously
+   reviewed and re-baselined. Full-mode output remains descriptive unless a
+   separate full baseline is explicitly added.
 
 Consumed by: #76 E2 (move grading), #108 (verified lesson proposals).
 Related: #23, #87, #107, #110.

@@ -4,8 +4,9 @@
  * Grades one attempted move against a trusted analysis result and returns
  * versioned, persistable equivalence EVIDENCE — never a bare boolean. The
  * criterion is the explicitly documented CP/mate fallback from
- * eval/EQUIVALENCE-CRITERION.md, calibrated against the frozen E3 analysis
- * baseline (eval/ANALYSIS-BASELINE.md). It is NOT WDL equivalence: the
+ * eval/EQUIVALENCE-CRITERION.md, with its policy rationale and evaluation
+ * history recorded against the frozen E3 analysis baseline. It is NOT WDL
+ * equivalence: the
  * built-in provider has no win/draw/loss model, so evidence carries
  * `wdl: null` — unavailable, never synthesized (#107).
  *
@@ -50,10 +51,9 @@
    * The versioned criterion. Any change to these values changes what
    * "equivalent" means for every future grade, so it MUST bump `version`
    * (test/equivalence.test.js pins the exact object) and consciously
-   * re-baseline the E3 scorecard. cpTolerance is calibrated in
-   * eval/EQUIVALENCE-CRITERION.md: above the engine's own quick-vs-full
-   * re-scoring noise floor (p90 17 cp on the frozen corpus), below the
-   * conventional ~50 cp inaccuracy threshold.
+   * re-baseline the E3 scorecard. The policy rationale and the disclosed
+   * corpus-inspection history for cpTolerance live in
+   * eval/EQUIVALENCE-CRITERION.md.
    */
   const CRITERION = deepFreeze({
     id: 'chessy-equivalence',
@@ -64,6 +64,35 @@
 
   function failure(reason) {
     return deepFreeze({ ok: false, reason: reason, verdict: null });
+  }
+
+  /*
+   * Canonicalise the grading inputs before validation. Reading an untrusted
+   * worker/cache result (or a mutable source state/expectation) again after
+   * validate() would reopen the boundary: accessor- or Proxy-backed fields
+   * could change or throw on the second read. This snapshot reads each
+   * enumerable field once into inert arrays/plain objects; validate() and
+   * every later grading read consume only that one coherent value.
+   * defineProperty avoids the legacy __proto__ setter when copying hostile
+   * keys. Cycles and throwing traps are rejected by grade()'s fail-closed
+   * catch.
+   */
+  function snapshot(value, stack) {
+    if (value === null || typeof value !== 'object') return value;
+    stack = stack || [];
+    if (stack.indexOf(value) !== -1) throw new Error('cyclic analysis result');
+    stack.push(value);
+    const copy = Array.isArray(value) ? [] : {};
+    Object.keys(value).forEach(function (key) {
+      Object.defineProperty(copy, key, {
+        value: snapshot(value[key], stack),
+        enumerable: true,
+        configurable: true,
+        writable: true
+      });
+    });
+    stack.pop();
+    return copy;
   }
 
   function mateFor(value, turn) {
@@ -144,18 +173,34 @@
    *
    * Returns { ok: false, reason } when no evidence may exist at all
    * (rejected analysis, illegal attempt), otherwise frozen evidence:
-   *   criterion, provider, positionFingerprint, turn, depth, coverage,
+   *   criterion, provider, positionFingerprint, turn, depth, complete,
+   *   coverage + legal/candidate/covered-root counts, playedProbe, stability,
    *   wdl (always null for the built-in provider), best, attempt,
    *   accepted (the accepted-move set among returned lines),
    *   verdict 'best' | 'equivalent' | 'not-equivalent' | 'unknown', reason.
    */
   function grade(result, state, expected, attemptUci) {
-    const checked = AnalysisResult.validate(result, state, normalizeExpected(expected));
+    let trustedResult, trustedState, trustedExpected, checked;
+    try {
+      const input = snapshot({
+        result: result,
+        state: state,
+        expected: expected
+      });
+      trustedResult = input.result;
+      trustedState = input.state;
+      trustedExpected = input.expected;
+      checked = AnalysisResult.validate(
+        trustedResult, trustedState, normalizeExpected(trustedExpected)
+      );
+    } catch (err) {
+      return failure('analysis-validation-error');
+    }
     if (!checked.ok) return failure('analysis-' + checked.reason);
 
     let legal;
     try {
-      legal = Chess.legalMoves(state);
+      legal = Chess.legalMoves(trustedState);
     } catch (err) {
       return failure('analysis-source-state');
     }
@@ -165,33 +210,62 @@
       }) : null;
     if (!attemptMove) return failure('attempt-illegal');
 
-    const turn = result.turn;
+    const turn = trustedResult.turn;
     const cpTolerance = CRITERION.params.cpTolerance;
-    const best = result.bestLines[0];
-
-    const accepted = result.bestLines.filter(function (line) {
-      return line === best ||
-        compareToBest(best, line, turn, cpTolerance).acceptable;
-    }).map(function (line) {
-      return Object.assign({ uci: line.uci, san: line.san }, cloneEval(line));
-    });
+    const best = trustedResult.bestLines[0];
 
     // The attempt's evidence line: a candidate line when returned, else the
-    // validated playedLine produced FOR this exact move. `validate` already
-    // proved rank truth and candidate/played agreement, so rank is the true
-    // rank over all scored roots in both branches.
-    const candidateIndex = result.bestLines.findIndex(function (line) {
+    // validated playedLine produced FOR this exact move. Candidate rank is
+    // proven by array position. An outside rank remains provider-reported:
+    // validate() proves legal range and a necessary shortlist lower/order
+    // bound, not the exact position among roots that were not returned.
+    const candidateIndex = trustedResult.bestLines.findIndex(function (line) {
       return line.uci === attemptUci;
     });
-    const played = result.playedLine && result.playedLine.uci === attemptUci ?
-      result.playedLine : null;
-    const line = candidateIndex >= 0 ? result.bestLines[candidateIndex] : played;
+    const resultPlayed = trustedResult.playedLine || null;
+    const played = resultPlayed && resultPlayed.uci === attemptUci ?
+      resultPlayed : null;
+    const line = candidateIndex >= 0 ?
+      trustedResult.bestLines[candidateIndex] : played;
+
+    // The accepted set covers every returned candidate plus an independently
+    // probed playedLine when it sits outside MultiPV. Leaving an accepted
+    // outside attempt out of this persisted set would make the verdict and
+    // its own evidence disagree.
+    const returned = trustedResult.bestLines.slice();
+    const playedCandidateIndex = resultPlayed ?
+      trustedResult.bestLines.findIndex(function (item) {
+        return item.uci === resultPlayed.uci;
+      }) : -1;
+    if (resultPlayed && playedCandidateIndex < 0) returned.push(resultPlayed);
+    const accepted = returned.filter(function (item) {
+      return item === best ||
+        compareToBest(best, item, turn, cpTolerance).acceptable;
+    }).map(function (item) {
+      return Object.assign({ uci: item.uci, san: item.san }, cloneEval(item));
+    });
+    const playedProbe = resultPlayed ? {
+      uci: resultPlayed.uci,
+      san: resultPlayed.san,
+      amongCandidates: playedCandidateIndex >= 0,
+      rank: playedCandidateIndex >= 0 ?
+        playedCandidateIndex + 1 : resultPlayed.rank,
+      rankBasis: playedCandidateIndex >= 0 ?
+        'candidate-index' : 'provider-reported',
+      rankLowerBound: playedCandidateIndex >= 0 ?
+        playedCandidateIndex + 1 : trustedResult.bestLines.length + 1,
+      eval: cloneEval(resultPlayed)
+    } : null;
 
     const attempt = {
       uci: attemptUci,
-      san: line ? line.san : Chess.toSan(state, attemptMove, legal),
+      san: line ? line.san : Chess.toSan(trustedState, attemptMove, legal),
       covered: !!line,
       rank: candidateIndex >= 0 ? candidateIndex + 1 : (played ? played.rank : null),
+      rankBasis: candidateIndex >= 0 ? 'candidate-index' :
+        (played ? 'provider-reported' : null),
+      rankLowerBound: candidateIndex >= 0 ? candidateIndex + 1 :
+        (played ? trustedResult.bestLines.length + 1 : null),
       eval: line ? cloneEval(line) : null,
       gapCp: null
     };
@@ -213,7 +287,7 @@
       if (cmp.acceptable) {
         verdict = 'equivalent';
         reason = cmp.why;
-      } else if (stableBest(result)) {
+      } else if (stableBest(trustedResult)) {
         verdict = 'not-equivalent';
         reason = cmp.why;
       } else {
@@ -231,14 +305,25 @@
         params: { cpTolerance: cpTolerance }
       },
       provider: {
-        engineId: result.engine.id,
-        version: result.engine.version,
-        configHash: result.engine.configHash
+        engineId: trustedResult.engine.id,
+        version: trustedResult.engine.version,
+        configHash: trustedResult.engine.configHash
       },
-      positionFingerprint: result.positionFingerprint,
+      positionFingerprint: trustedResult.positionFingerprint,
       turn: turn,
-      depth: result.depth,
-      coverage: result.bestLines.length === legal.length ? 'all-roots' : 'candidates',
+      depth: trustedResult.depth,
+      complete: trustedResult.complete,
+      coverage: trustedResult.bestLines.length === legal.length ?
+        'all-roots' : 'candidates',
+      legalRootCount: legal.length,
+      candidateLineCount: trustedResult.bestLines.length,
+      coveredRootCount: trustedResult.bestLines.length +
+        (resultPlayed && playedCandidateIndex < 0 ? 1 : 0),
+      playedProbe: playedProbe,
+      stability: trustedResult.stability ? {
+        depths: trustedResult.stability.depths.slice(),
+        bestMoveStable: trustedResult.stability.bestMoveStable
+      } : null,
       wdl: null,
       best: Object.assign({ uci: best.uci, san: best.san }, cloneEval(best)),
       accepted: accepted,

@@ -16,21 +16,26 @@ machine-independent and bit-reproducible — not a wall-clock or Elo figure.
 Strength / level-calibration baselines (E4) remain **deferred** until the
 active #72 engine changes settle, per §7 of the tracker.
 
-## Two gate classes
+## Three gate classes
 
-The axes are split by what they actually measure, so a quality number can never
-silently become a build-breaking assertion — or vice versa:
+The axes are split by what they actually measure, so a quality number, an
+output contract, and an exact semantic fixture cannot be silently conflated:
 
 | Class | Axes | Gate |
 | --- | --- | --- |
 | **STRICT** — output *contracts*, version-independent | `rootComplete`, `playedRank` | **100%, blocks the PR** |
 | **QUALITY** — position-quality measurements | `puzzleTop1`, `puzzleRecall3`, `pvStability`, `budgetStability`, `regret` | **ratchet**: may improve, may never regress |
+| **EXACT FIXTURE** — accepted-move semantics | `equivalence` | criterion identity and every committed PR-shard puzzle's `id → verdict/reason` must match; drift or missing coverage blocks until consciously re-baselined |
 
 An unsolved puzzle is therefore a *measured quality level*, not a broken build —
 it fails only if a later change makes it worse. The engine is deterministic
 (proven by the E2 `determinism` axis), so the ratchet is **exact** — no
 tolerance band. Coverage is part of the score: the fraction axes' `checked`
 counts and the regret sample `n` fail the ratchet when they shrink.
+`unknown` and `not-equivalent` are legitimate `equivalence` baseline states,
+not intrinsic failures; the failure is an unreviewed change in a persisted
+grading outcome. Exact per-case comparison prevents opposite shifts from
+cancelling in an aggregate count.
 
 | Axis | What it measures |
 | --- | --- |
@@ -41,6 +46,7 @@ counts and the regret sample `n` fail the ratchet when they shrink.
 | `pvStability` | Best move unchanged one ply shallower — **derived independently** (a fixed-depth search at d−1), never read off the engine's own stability flag |
 | `budgetStability` | Best line unchanged at **¼×** the scan budget (`--full` adds the **4×** tier). A tier is graded only if the shipped validator accepts its result — an incomplete or malformed auxiliary analysis is a miss, and its regret counts as catastrophic, never a skip |
 | `regret` | Median / p90 (/ p99 in `--full`) centipawn regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
+| `equivalence` | The shipped `ChessyEquivalence.grade()` verdict/reason for each PR-shard CC0 puzzle key, using the complete shipped-width result created with that key as `playedMove`. This exercises both candidate and outside-MultiPV `playedLine` paths; rank is still checked independently against the all-roots reference. The score vector also records `rankBasis`, the proven rank lower bound, gap/covered-root diagnostics, and the exact `chessy-equivalence` identity. `--full` reports all puzzle keys, but no full-mode baseline is committed |
 
 Per the tracker, oracle comparison deliberately **avoids exact centipawn/PV
 equality**: acceptable-move sets, set overlap, budget invariance and a regret
@@ -52,7 +58,8 @@ The shipped candidate width used by `playedRank` is **derived from
 coaching width, `e3_opts` changes with it, the committed baseline goes
 incompatible, and the gate forces a conscious re-baseline — and if the CFG
 declaration ever moves, the run fails loudly rather than silently testing a
-stale width.
+stale width. The same shipped-width result feeds `equivalence`; the criterion's
+CP/mate matrix is invoked from the shipped module, never reimplemented here.
 
 ## Baseline — frozen E3 PR shard (34 train/val cases)
 
@@ -65,16 +72,20 @@ eval-v1 ANALYSIS scorecard — shard (34 cases)
   puzzleRecall3    ratchet score 10/12
   pvStability      ratchet score 18/27
   budgetStability  ratchet score 26/34
+  equivalence      fixture exact 12 cases  best 9  equivalent 2  not-equivalent 1  unknown 0  invalid 0
   regret cp        ratchet score median 0  p90 5  catastrophic 0/34
   STRICT gate           PASS (0 strict failures)
 ```
 
 The shard is every **train/validation** shard puzzle (all five difficulty bands
 stay represented) plus the core, live generated fixtures — **~9 s**, small
-enough to run on every PR. The corpus's held-out **test** split is excluded: a
-per-PR ratchet is selection pressure, and the tracker's rule is *never tune on
-the test split* — test records are measured only by the `--full` nightly /
-pre-release run below.
+enough to run on every PR. The corpus's **test-tagged** records are excluded
+from that routine analysis-quality feedback and measured by E3 only in the
+`--full` nightly / pre-release run below. Strict correctness checks may still
+cover test-tagged shard records. They are not an untouched holdout for
+accepted-move criterion v1: #110 published the full metrics before v1 was
+finalized. They serve as frozen compatibility evidence; #112 tracks a new
+non-overlapping one-shot lockbox.
 
 ## Full corpus (`--full`, 103 live cases)
 
@@ -85,11 +96,13 @@ pre-release run below.
   puzzleRecall3    ratchet score 34/40
   pvStability      ratchet score 56/81
   budgetStability  ratchet score 68/103
+  equivalence      fixture exact 40 cases  best 27  equivalent 6  not-equivalent 3  unknown 4  invalid 0
   regret cp        ratchet score median 0  p90 17  p99 440  catastrophic 0/103
   STRICT gate           PASS (0 strict failures)
 ```
 
-**407 checks, 0 strict failures**, ~95 s — a nightly / pre-release run.
+**407 strict/quality checks, 40 exact grading fixtures, 0 strict failures**,
+~95 s — a nightly / pre-release run.
 
 ### The solve curve declines with puzzle difficulty
 
@@ -120,10 +133,20 @@ distinguished from a real blunder. That is why these axes ratchet rather than
 gate, and why `regret` is reported alongside: **median regret is 0 cp with no
 catastrophic misses**, so the disagreements cost essentially nothing.
 
+The accepted-move fixture shows why rank alone was insufficient. On the
+train/validation shard, the external puzzle key is engine-best in 9 cases,
+within the versioned 30 cp/mate criterion in 2 more, and not-equivalent in 1;
+the full audit adds 4 honest `unknown` outcomes where rejection is withheld
+because the best move is unstable. The 12 shard outcomes are exact committed
+fixtures: future engine or criterion work cannot rewrite one silently. The
+40-case full output is descriptive because no full-mode baseline is committed.
+Because the full corpus had already informed the 30 cp policy, these numbers
+make no out-of-sample claim; fresh validation follows the #112 lockbox protocol.
+
 ## The gate has teeth (not a vacuous 100%)
 
-`node test/eval/analysis-scorecard.js --self-test` simulates fifteen distinct
-shapes of engine regression in three assertion classes. Thirteen must turn the
+`node test/eval/analysis-scorecard.js --self-test` simulates eighteen distinct
+gate failures in four assertion classes. Thirteen must turn the
 strict gate red — **line-level** (MultiPV truncated, missing, unscored; an
 invalid mate distance; a mate field absent rather than explicitly null; a
 desynchronized centipawn pair; a corrupted SAN; a `move` disagreeing with its
@@ -149,6 +172,9 @@ self-test (played-san):       RED ✓ (12 strict failures; rootComplete 34/34, p
 
 self-test (incomplete-aux, ratchet):  fully VISIBLE ✓ (budgetStability 0/34, regret catastrophic 34/34, strict gate correctly unaffected)
 self-test (liar-stability, immunity): pvStability correctly UNMOVED ✓ (18/27 — measured independently, not read off the result)
+self-test (equivalence-verdict, exact fixture): correctly went RED ✓
+self-test (equivalence-coverage, exact fixture): correctly went RED ✓
+self-test (criterion-identity, compatibility): correctly went RED ✓
 ```
 
 Each fault must produce strict failures **while still having checked every
@@ -159,7 +185,7 @@ threshold). The faults are engine regressions, not corpus-label edits: the
 strict axes grade self-consistency, so a swapped-but-legal key move would
 rightly stay green.
 
-The last two lines are different assertion classes. `incomplete-aux` corrupts
+The last five lines are different assertion classes. `incomplete-aux` corrupts
 only the auxiliary ¼×/4× tiers (`complete: false` with a partial line list),
 which never touches the graded results — so it cannot turn the strict gate red,
 and the requirement is full **ratchet visibility** instead: every tier scored
@@ -171,7 +197,10 @@ everywhere — a corruption that moves a quality number **upward**, which a
 ratchet (failing only on falling numbers) would record as progress. The
 requirement there is that `pvStability` does **not move at all**: the axis
 measures the shallower best move itself rather than echoing the engine's claim
-about it.
+about it. The final three checks mutate only one exact-fixture verdict, remove
+one graded puzzle (and separately corrupt its derived counts), and change the
+criterion version. Each must make baseline comparison red even though the
+directional quality totals can remain unchanged.
 
 The quality ratchet is separately verified: replaying the shard against a
 baseline holding one extra solve and a lower p90 correctly reports
@@ -189,8 +218,9 @@ silently disappear from the published vector.
 ## Decision
 
 **Adopt the analysis scorecard as a PR gate — strict at 100% on the two output
-contracts, ratcheted from this baseline on the five quality axes — and publish
-this vector as the frozen eval-v1 analysis baseline.**
+contracts, ratcheted from this baseline on the five quality axes, and exact on
+the versioned accepted-move fixture — and publish this vector as the frozen
+eval-v1 analysis baseline.**
 
 - The 34-case train/val shard runs on every PR (wired into `.github/workflows/test.yml`)
   with `--baseline eval/ANALYSIS-BASELINE.json`.

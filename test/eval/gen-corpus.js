@@ -428,7 +428,12 @@ function write(records, prov) {
     corpus: 'eval-v1', generator_version: GENERATOR_VERSION, retrieval_date: prov.retrieval_date,
     total: records.length, shard_size: records.filter(r => r.shard).length,
     counts_by_category: byCat, counts_by_split: bySplit, counts_by_license: byLicense,
-    split_policy: '70/15/15 train/val/test by stable id/game hash; same-game puzzles share a split; never tune on the test split',
+    split_policy: '70/15/15 train/val/test tags by stable id/game hash; same-game puzzles share a split; test is excluded from routine analysis-quality PR feedback; strict correctness coverage may include test-tagged shard records; historical usage is documented in eval/README.md',
+    test_usage: {
+      analysis_quality_pr_feedback: false,
+      correctness_contract_pr_feedback: true,
+      accepted_move_criterion_v1: 'consumed; compatibility-only; see #112'
+    },
     analyse_opts: ANALYSE_OPTS, ndjson: 'eval-v1.ndjson', ndjson_sha256: sha256(ndjson),
     sources: prov.sources, schema: KEY_ORDER,
     note: 'Derived offline from committed CC0 sources (eval/corpus/sources/, fetched by test/eval/fetch-corpus.js) + engine-generated MIT fixtures. See eval/LICENSE-REPORT.md.'

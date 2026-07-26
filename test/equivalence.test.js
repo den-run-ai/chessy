@@ -14,7 +14,7 @@
 require('../assets/engine.js');
 require('../assets/ai.js');
 require('../assets/analysis-core.js');
-require('../assets/analysis-result.js');
+const AnalysisResult = require('../assets/analysis-result.js');
 const Equivalence = require('../assets/equivalence.js');
 const Chess = globalThis.Chess;
 const AC = globalThis.ChessyAnalysisCore;
@@ -140,6 +140,8 @@ check(JSON.stringify(Equivalence.CRITERION) === JSON.stringify({
   JSON.stringify(Equivalence.CRITERION));
 check(Object.isFrozen(Equivalence.CRITERION) &&
   Object.isFrozen(Equivalence.CRITERION.params), 'CRITERION is deeply frozen');
+check(AnalysisResult.MAX_CP_ABS === globalThis.ChessAI.MATE_NEAR,
+  'analysis CP trust band stays aligned with the engine mate boundary');
 
 // ---------------------------------------------------------------------------
 console.log('cp case matrix');
@@ -163,8 +165,14 @@ const cp = function (score, i) { return cpLine(start, legal[i], score); };
     best.criterion.basis === 'cp-mate-fallback' &&
     best.provider.engineId === 'chessy-test' &&
     best.provider.configHash === 'cfg-e1' &&
-    best.positionFingerprint === 'fp-start' && best.depth === 4,
-    'evidence carries provenance, criterion version, and explicit null WDL');
+    best.positionFingerprint === 'fp-start' && best.depth === 4 &&
+    best.complete === true && best.legalRootCount === legal.length &&
+    best.candidateLineCount === 4 && best.coveredRootCount === 4 &&
+    best.playedProbe === null &&
+    best.attempt.rankBasis === 'candidate-index' &&
+    best.attempt.rankLowerBound === 1 &&
+    best.stability.bestMoveStable === true,
+    'evidence carries provenance, coverage counts, stability, and null WDL');
 
   const within = grade(result, start, result.bestLines[1].uci);
   check(within.ok && within.verdict === 'equivalent' &&
@@ -273,14 +281,63 @@ console.log('mate case matrix');
 console.log('coverage and the played line');
 // ---------------------------------------------------------------------------
 {
-  const better = fixture(start, [cp(30, 0), cp(20, 1), cp(10, 2)], {
+  const outside = fixture(start, [cp(50, 0), cp(40, 1), cp(30, 2)], {
     stable: true,
-    playedLine: Object.assign(cpLine(start, legal[9], 50), { rank: 4 })
+    playedLine: Object.assign(cpLine(start, legal[9], 20), { rank: 4 })
   });
-  const g = grade(better, start, better.playedLine.uci);
-  check(g.ok && g.verdict === 'equivalent' && g.attempt.gapCp === -20,
-    'a played line scoring above the best candidate is equivalent, never "best"',
+  const g = grade(outside, start, outside.playedLine.uci);
+  check(g.ok && g.verdict === 'equivalent' && g.attempt.gapCp === 30 &&
+    g.attempt.rankBasis === 'provider-reported' &&
+    g.attempt.rankLowerBound === 4 &&
+    g.candidateLineCount === 3 && g.coveredRootCount === 4 &&
+    g.playedProbe && g.playedProbe.uci === outside.playedLine.uci &&
+    g.playedProbe.rankBasis === 'provider-reported' &&
+    g.accepted.some(function (item) {
+      return item.uci === outside.playedLine.uci;
+    }),
+    'an equivalent outside-candidates line joins the persisted accepted set',
     g.ok ? g.verdict + '/' + g.attempt.gapCp : g.reason);
+  const sameResultDifferentAttempt =
+    grade(outside, start, outside.bestLines[0].uci);
+  check(sameResultDifferentAttempt.ok &&
+    JSON.stringify(sameResultDifferentAttempt.accepted) ===
+      JSON.stringify(g.accepted) &&
+    sameResultDifferentAttempt.playedProbe.uci === outside.playedLine.uci &&
+    sameResultDifferentAttempt.coveredRootCount === 4,
+    'accepted and covered-root evidence is result-stable across attempts');
+
+  const rejectedProbe = fixture(start, [cp(50, 0), cp(40, 1), cp(30, 2)], {
+    stable: true,
+    playedLine: Object.assign(cpLine(start, legal[9], -100), { rank: 4 })
+  });
+  const candidateGrade =
+    grade(rejectedProbe, start, rejectedProbe.bestLines[0].uci);
+  check(candidateGrade.ok &&
+    !candidateGrade.accepted.some(function (item) {
+      return item.uci === rejectedProbe.playedLine.uci;
+    }) &&
+    candidateGrade.playedProbe &&
+    candidateGrade.playedProbe.uci === rejectedProbe.playedLine.uci &&
+    candidateGrade.coveredRootCount === 4,
+    'a non-accepted outside probe remains auditable while grading a candidate');
+
+  const impossible = clone(outside);
+  impossible.playedLine.scoreCpWhite = 60;
+  impossible.playedLine.scoreCpPlayer = 60;
+  const rejected = grade(impossible, start, impossible.playedLine.uci);
+  check(!rejected.ok && rejected.reason === 'analysis-played-order',
+    'an outside line whose score contradicts its claimed rank fails closed',
+    rejected.reason);
+
+  const overflowGap = fixture(start,
+    [cp(AnalysisResult.MAX_CP_ABS, 0),
+     cp(-AnalysisResult.MAX_CP_ABS - 1, 1)], { stable: true });
+  const overflowRejected =
+    grade(overflowGap, start, overflowGap.bestLines[1].uci);
+  check(!overflowRejected.ok &&
+    overflowRejected.reason === 'analysis-best-line-eval',
+    'an out-of-band finite cp gap fails closed before evidence serialization',
+    overflowRejected.reason);
 
   const uncovered = fixture(start, [cp(30, 0), cp(20, 1)], { stable: true });
   const u = grade(uncovered, start, uci(legal[9]));
@@ -293,7 +350,10 @@ console.log('coverage and the played line');
   const covered = fixture(start, [cp(30, 0), cp(20, 1)],
     { stable: true, playedIndex: 1 });
   const c = grade(covered, start, covered.bestLines[1].uci);
-  check(c.ok && c.verdict === 'equivalent' && c.attempt.rank === 2,
+  check(c.ok && c.verdict === 'equivalent' && c.attempt.rank === 2 &&
+    c.attempt.rankBasis === 'candidate-index' &&
+    c.playedProbe.rankBasis === 'candidate-index' &&
+    c.coveredRootCount === 2,
     'an among-candidates played line grades through its candidate evidence');
 }
 
@@ -330,6 +390,84 @@ console.log('fail-closed boundaries');
 }
 
 // ---------------------------------------------------------------------------
+console.log('canonical trust snapshot');
+// ---------------------------------------------------------------------------
+{
+  const base = fixture(start, [cp(30, 0), cp(20, 1)], { stable: true });
+
+  let turnReads = 0;
+  Object.defineProperty(base, 'turn', {
+    enumerable: true,
+    configurable: true,
+    get: function () {
+      turnReads++;
+      if (turnReads > 1) throw new Error('turn was read outside the boundary');
+      return 'w';
+    }
+  });
+  const once = grade(base, start, base.bestLines[0].uci);
+  check(once.ok && once.verdict === 'best' && once.turn === 'w' &&
+    turnReads === 1,
+    'an accessor-backed field is snapshotted once, then graded canonically',
+    (once.ok ? once.verdict : once.reason) + '/reads=' + turnReads);
+
+  const target = fixture(start, [cp(30, 0), cp(20, 1)], { stable: true });
+  let proxyReads = 0;
+  const proxied = new Proxy(target, {
+    get: function (object, key) {
+      if (key === 'bestLines') {
+        proxyReads++;
+        if (proxyReads > 1) throw new Error('bestLines escaped the snapshot');
+      }
+      return object[key];
+    }
+  });
+  const viaProxy = grade(proxied, start, target.bestLines[1].uci);
+  check(viaProxy.ok && viaProxy.verdict === 'equivalent' && proxyReads === 1,
+    'a Proxy-backed result is never re-read after validation',
+    (viaProxy.ok ? viaProxy.verdict : viaProxy.reason) +
+      '/reads=' + proxyReads);
+
+  const stateView = clone(start);
+  let stateReads = 0;
+  Object.defineProperty(stateView, 'turn', {
+    enumerable: true,
+    configurable: true,
+    get: function () {
+      stateReads++;
+      if (stateReads > 1) throw new Error('state escaped the snapshot');
+      return 'w';
+    }
+  });
+  const fromState = grade(target, stateView, target.bestLines[0].uci);
+  check(fromState.ok && fromState.turn === 'w' && stateReads === 1,
+    'the source state shares the same one-read canonical boundary',
+    (fromState.ok ? fromState.verdict : fromState.reason) +
+      '/reads=' + stateReads);
+
+  const throwing = fixture(start, [cp(30, 0), cp(20, 1)], { stable: true });
+  Object.defineProperty(throwing, 'engine', {
+    enumerable: true,
+    configurable: true,
+    get: function () { throw new Error('unreadable provider result'); }
+  });
+  const rejected = grade(throwing, start, throwing.bestLines[0].uci);
+  check(!rejected.ok &&
+    rejected.reason === 'analysis-validation-error' &&
+    rejected.verdict === null,
+    'a throwing snapshot trap fails closed instead of unwinding grade()',
+    rejected.reason);
+
+  const cyclic = fixture(start, [cp(30, 0), cp(20, 1)], { stable: true });
+  cyclic.extraCycle = cyclic;
+  const cycleRejected = grade(cyclic, start, cyclic.bestLines[0].uci);
+  check(!cycleRejected.ok &&
+    cycleRejected.reason === 'analysis-validation-error',
+    'a cyclic provider value fails closed at the canonical boundary',
+    cycleRejected.reason);
+}
+
+// ---------------------------------------------------------------------------
 console.log('purity and determinism');
 // ---------------------------------------------------------------------------
 {
@@ -342,7 +480,8 @@ console.log('purity and determinism');
   check(JSON.stringify(result) === before,
     'grading never mutates the analysis result');
   check(Object.isFrozen(a) && Object.isFrozen(a.attempt) &&
-    Object.isFrozen(a.accepted) && Object.isFrozen(a.best),
+    Object.isFrozen(a.accepted) && Object.isFrozen(a.best) &&
+    Object.isFrozen(a.stability) && Object.isFrozen(a.stability.depths),
     'evidence is deeply frozen');
   check(a.best.mate === null && a.accepted[0].scoreCpWhite === 30 &&
     a.accepted.length === 1,
@@ -398,8 +537,9 @@ console.log('real analysis-core integration');
     agree + '/' + res.bestLines.length);
 
   // The shipped coaching shape: width-3 candidates plus a playedMove probe.
-  // An attempt outside the candidates grades through its played line with
-  // the same true rank the all-roots reference assigns it.
+  // An attempt outside the candidates grades through its provider-reported
+  // played-line rank; this integration fixture independently checks that rank
+  // against a complete all-roots reference.
   const probe = res.bestLines[res.bestLines.length - 1];
   const SHIP = { nodeLimit: 2000, nodeBudget: 2000000, multiPV: 3, pvLen: 4,
     quiesce: true, playedMove: probe.move };
@@ -407,8 +547,11 @@ console.log('real analysis-core integration');
   const shipExpected = AC.identity(state, SHIP);
   const viaPlayed = Equivalence.grade(shipRes, state, shipExpected, probe.uci);
   check(viaPlayed.ok && viaPlayed.attempt.covered &&
-    viaPlayed.attempt.rank === roots && viaPlayed.coverage === 'candidates',
-    'a shipped-width probe grades through its played line at the true rank',
+    viaPlayed.attempt.rank === roots &&
+    viaPlayed.attempt.rankBasis === 'provider-reported' &&
+    viaPlayed.attempt.rankLowerBound === 4 &&
+    viaPlayed.coverage === 'candidates',
+    'an outside rank is provider-reported and independently matches all roots',
     viaPlayed.ok ? viaPlayed.attempt.rank + ' vs ' + roots : viaPlayed.reason);
 
   const shipNoPlayed = AC.analyse(state,
