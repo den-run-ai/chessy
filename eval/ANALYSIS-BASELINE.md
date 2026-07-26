@@ -39,7 +39,7 @@ counts and the regret sample `n` fail the ratchet when they shrink.
 | `puzzleTop1` | Acceptable top-1: the crowd-validated CC0 Lichess key move is the engine's #1 line |
 | `puzzleRecall3` | Oracle best recall@3: the key move is among the top 3 |
 | `pvStability` | Best move unchanged one ply shallower — **derived independently** (a fixed-depth search at d−1), never read off the engine's own stability flag |
-| `budgetStability` | Best line unchanged at **¼×** the scan budget (`--full` adds the **4×** tier) |
+| `budgetStability` | Best line unchanged at **¼×** the scan budget (`--full` adds the **4×** tier). A tier is graded only if the shipped validator accepts its result — an incomplete or malformed auxiliary analysis is a miss, and its regret counts as catastrophic, never a skip |
 | `regret` | Median / p90 (/ p99 in `--full`) centipawn regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
 
 Per the tracker, oracle comparison deliberately **avoids exact centipawn/PV
@@ -111,15 +111,15 @@ catastrophic misses**, so the disagreements cost essentially nothing.
 
 ## The gate has teeth (not a vacuous 100%)
 
-`node test/eval/analysis-scorecard.js --self-test` simulates fourteen distinct
-shapes of engine regression — **line-level** (MultiPV truncated, missing,
-unscored; an invalid mate distance; a mate field absent rather than explicitly
-null; a desynchronized centipawn pair; a corrupted SAN; a `move` disagreeing
-with its own UCI), **result-level** (headline score desynchronized from
-`bestLines[0]`; `stability.depths` not matching the reported depth; tampered
-provenance; a `complete` flag truthy but not `true`) and **coaching-level**
-(corruption confined to the played line) — and confirms the strict gate turns
-red for each:
+`node test/eval/analysis-scorecard.js --self-test` simulates fifteen distinct
+shapes of engine regression in three assertion classes. Thirteen must turn the
+strict gate red — **line-level** (MultiPV truncated, missing, unscored; an
+invalid mate distance; a mate field absent rather than explicitly null; a
+desynchronized centipawn pair; a corrupted SAN; a `move` disagreeing with its
+own UCI), **result-level** (headline score desynchronized from `bestLines[0]`;
+`stability.depths` not matching the reported depth; tampered provenance; a
+`complete` flag truthy but not `true`) and **coaching-level** (corruption
+confined to the played line):
 
 ```
 self-test (truncate-multipv): RED ✓ (39 strict failures; rootComplete 36/36, playedRank 13/13)
@@ -136,6 +136,7 @@ self-test (tamper-provenance):RED ✓ (49 strict failures; rootComplete 36/36, p
 self-test (complete-truthy):  RED ✓ (49 strict failures; rootComplete 36/36, playedRank 13/13)
 self-test (played-san):       RED ✓ (13 strict failures; rootComplete 36/36, playedRank 13/13)
 
+self-test (incomplete-aux, ratchet):  fully VISIBLE ✓ (budgetStability 0/36, regret catastrophic 36/36, strict gate correctly unaffected)
 self-test (liar-stability, immunity): pvStability correctly UNMOVED ✓ (19/29 — measured independently, not read off the result)
 ```
 
@@ -147,12 +148,19 @@ threshold). The faults are engine regressions, not corpus-label edits: the
 strict axes grade self-consistency, so a swapped-but-legal key move would
 rightly stay green.
 
-The last line is a different kind of assertion. `liar-stability` makes the
-engine claim `bestMoveStable: true` everywhere — a corruption that moves a
-quality number **upward**, which a ratchet (failing only on falling numbers)
-would record as progress. The requirement is therefore that `pvStability` does
-**not move at all**: the axis measures the shallower best move itself rather
-than echoing the engine's claim about it.
+The last two lines are different assertion classes. `incomplete-aux` corrupts
+only the auxiliary ¼×/4× tiers (`complete: false` with a partial line list),
+which never touches the graded results — so it cannot turn the strict gate red,
+and the requirement is full **ratchet visibility** instead: every tier scored
+as a miss with coverage intact, and every quick-scan regret counted
+catastrophic with the sample not shrunk, so `--baseline` fails on the fallen
+counts. A silently trusted (or silently skipped) tier would leave the numbers
+clean. `liar-stability` makes the engine claim `bestMoveStable: true`
+everywhere — a corruption that moves a quality number **upward**, which a
+ratchet (failing only on falling numbers) would record as progress. The
+requirement there is that `pvStability` does **not move at all**: the axis
+measures the shallower best move itself rather than echoing the engine's claim
+about it.
 
 The quality ratchet is separately verified: replaying the shard against a
 baseline holding one extra solve and a lower p90 correctly reports

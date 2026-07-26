@@ -28,7 +28,9 @@
  *     pvStability     best move unchanged one ply shallower — measured here,
  *                     never read off the engine's own stability flag
  *     budgetStability best line unchanged at ¼× the scan budget (--full adds
- *                     the 4× tier for a ¼×/1×/4× sweep)
+ *                     the 4× tier); a tier is graded only if the shipped
+ *                     validator accepts its result — an unusable tier is a
+ *                     miss and a catastrophic regret, never a skip
  *     regret          median / p90 (/ p99 in --full) centipawn regret of the
  *                     QUICK-scan pick re-scored at full depth, plus a
  *                     catastrophic-miss count ("final precision")
@@ -186,6 +188,14 @@ function analyse(state, opts) {
     res.playedLine.san = 'Zz9';
     if (res.playedLine.pv) res.playedLine.pv[0] = 'Zz9';
   }
+  // An auxiliary (¼×/4×) tier that exhausts its budget returns complete:false
+  // with a partial line list. Grading it as signal would score garbage — a
+  // partial pick that happens to match the reference would even count as
+  // stable. This fault never touches the graded ref/ship results, so it cannot
+  // turn the STRICT gate red; it must instead be fully visible to the ratchet.
+  if (FAULT === 'incomplete-aux' && (opts === E3_OPTS.quarter || opts === E3_OPTS.quad)) {
+    res.complete = false;
+  }
   // A flattering self-report moves a QUALITY number UP, and the ratchet only
   // fails on a falling number — so pvStability must be IMMUNE to this fault
   // (unmoved), which it can only be by measuring the behaviour itself.
@@ -279,6 +289,16 @@ function checkPuzzleRecall3(rec, ref) {
   return { ok: top3.includes(key), detail: 'key ' + key + ' vs top3 {' + top3.join(',') + '}' };
 }
 
+// QUALITY-tier guard: a ¼×/4× result is graded only if the SHIPPED validator
+// accepts it outright — the same wholesale delegation the strict axes use.
+// analyse() reports complete:false when it exhausts nodeBudget, and a partial
+// result can still carry a plausible first line; trusting it would let an
+// unusable tier score as agreement. Rejected tiers are scored as failures by
+// the caller, never skipped.
+function auxUsable(res, state, opts) {
+  return AR.validate(res, state, AC.identity(state, opts)).ok;
+}
+
 // QUALITY: is the best move the same one ply shallower? MEASURED HERE — the
 // shallower best move is derived by an independent fixed-depth search at d-1,
 // never read off `analyse()`'s own `stability.bestMoveStable` flag. Echoing
@@ -347,31 +367,42 @@ function run(records, full) {
     // three-way agreement. Regret re-scores the quick pick with the reference's
     // own all-roots line (always present — the pick is a legal root).
     const quick = analyse(state, E3_OPTS.quarter);
-    const quickBest = quick.bestLines[0] ? quick.bestLines[0].uci : null;
+    const quickOk = auxUsable(quick, state, E3_OPTS.quarter);
+    const quickBest = quickOk ? quick.bestLines[0].uci : null;
     const refBest = ref.bestLines[0].uci;
-    let stable = quickBest === refBest;
+    let stable = quickOk && quickBest === refBest;
     // Report EVERY tier that ran, so a case that agrees at ¼× but diverges at 4×
     // names the tier that moved instead of printing two identical moves.
-    let detail = '¼×=' + quickBest + ' 1×=' + refBest;
+    let detail = quickOk ? '¼×=' + quickBest + ' 1×=' + refBest
+                         : '¼× unusable (rejected by the shipped validator) 1×=' + refBest;
     if (full) {
       const quad = analyse(state, E3_OPTS.quad);
-      const quadBest = quad.bestLines[0] ? quad.bestLines[0].uci : null;
-      stable = stable && quadBest === refBest;
-      detail += ' 4×=' + quadBest;
+      const quadOk = auxUsable(quad, state, E3_OPTS.quad);
+      const quadBest = quadOk ? quad.bestLines[0].uci : null;
+      stable = stable && quadOk && quadBest === refBest;
+      detail += quadOk ? ' 4×=' + quadBest : ' 4× unusable (rejected by the shipped validator)';
     }
     add('budgetStability', { ok: stable, detail: detail }, rec.id);
 
-    const quickLine = ref.bestLines.find(l => l.uci === quickBest);
-    if (quickLine) {
-      const raw = orderVal(ref.bestLines[0], ref.turn) - orderVal(quickLine, ref.turn);
-      // A non-finite regret would poison the quantiles into NaN, which compares
-      // false against everything and would silently blind the ratchet. Strict
-      // rootComplete already rejects the malformed scores that could cause it;
-      // count any survivor as catastrophic rather than letting it vanish.
-      if (!Number.isFinite(raw)) { catastrophic++; regrets.push(CATASTROPHIC_CP); }
+    if (!quickOk) {
+      // An unusable quick scan has no pick to re-score: the quick-scan feature
+      // itself failed, which is a catastrophic miss — never a dropped sample,
+      // or losing coverage could "improve" the quantiles.
+      catastrophic++; regrets.push(CATASTROPHIC_CP);
+    } else {
+      const quickLine = ref.bestLines.find(l => l.uci === quickBest);
+      if (!quickLine) { catastrophic++; regrets.push(CATASTROPHIC_CP); }
       else {
-        regrets.push(Math.max(0, Math.min(CATASTROPHIC_CP, raw)));
-        if (raw >= CATASTROPHIC_CP) catastrophic++;
+        const raw = orderVal(ref.bestLines[0], ref.turn) - orderVal(quickLine, ref.turn);
+        // A non-finite regret would poison the quantiles into NaN, which compares
+        // false against everything and would silently blind the ratchet. Strict
+        // rootComplete already rejects the malformed scores that could cause it;
+        // count any survivor as catastrophic rather than letting it vanish.
+        if (!Number.isFinite(raw)) { catastrophic++; regrets.push(CATASTROPHIC_CP); }
+        else {
+          regrets.push(Math.max(0, Math.min(CATASTROPHIC_CP, raw)));
+          if (raw >= CATASTROPHIC_CP) catastrophic++;
+        }
       }
     }
   }
@@ -565,12 +596,39 @@ function main() {
                                       : ' — rootComplete must cover EVERY record; a subset escaped')));
     }
 
+    // RATCHET-VISIBLE faults: corrupting an auxiliary (¼×/4×) tier cannot turn
+    // the STRICT gate red — the graded ref/ship results are untouched — so the
+    // requirement is full visibility to the ratchet instead: every tier flagged
+    // unusable (budgetStability at 0 passes with coverage intact) and every
+    // quick-scan regret counted catastrophic (sample not shrunk). A silently
+    // trusted or silently skipped tier would leave the numbers clean.
+    const clean = run(records, full);
+    {
+      FAULT = 'incomplete-aux';
+      const sr = run(records, full);
+      FAULT = null;
+      const bs = sr.axes.budgetStability, cb = clean.axes.budgetStability;
+      const visible = sr.totals.strictFail === 0 &&
+        bs.checked === cb.checked && bs.pass === 0 &&
+        sr.regret.n === clean.regret.n &&
+        sr.regret.catastrophic === sr.regret.n;
+      allDetected = allDetected && visible;
+      diag('\nself-test (incomplete-aux, ratchet): ' +
+        (visible ? 'fully VISIBLE ✓ (budgetStability ' + bs.pass + '/' + bs.checked +
+                   ', regret catastrophic ' + sr.regret.catastrophic + '/' + sr.regret.n +
+                   ', strict gate correctly unaffected)'
+                 : 'ESCAPED ✗ — budgetStability ' + bs.pass + '/' + bs.checked +
+                   ' (clean ' + cb.pass + '/' + cb.checked + '), regret n ' +
+                   clean.regret.n + '→' + sr.regret.n + ' catastrophic ' +
+                   sr.regret.catastrophic + ', strictFail ' + sr.totals.strictFail +
+                   ' — an unusable tier must be flagged and counted, never trusted or skipped'));
+    }
+
     // IMMUNITY faults: corruptions that would move a QUALITY number UPWARD.
     // These must NOT turn the gate red — the ratchet only fails on a falling
     // number, so a flattering self-report would ratchet through as progress.
     // The assertion is that the score does not MOVE: the axis must measure the
     // behaviour itself rather than echo the claim.
-    const clean = run(records, full);
     for (const [fault, axis] of [['liar-stability', 'pvStability']]) {
       FAULT = fault;
       const sr = run(records, full);

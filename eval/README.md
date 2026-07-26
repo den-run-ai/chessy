@@ -147,7 +147,7 @@ measurement can never silently become a build-breaking assertion:
 | `puzzleTop1` | ratchet | The CC0 Lichess key move is the engine's #1 line |
 | `puzzleRecall3` | ratchet | The key move is within the top 3 |
 | `pvStability` | ratchet | Best move unchanged one ply shallower — **measured independently**, not read off the engine's own stability flag |
-| `budgetStability` | ratchet | Best line unchanged at ¼× budget (`--full` adds the 4× tier) |
+| `budgetStability` | ratchet | Best line unchanged at ¼× budget (`--full` adds the 4× tier); a tier rejected by the shipped validator scores as a miss |
 | `regret` | ratchet | Median / p90 / p99 cp regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
 
 **Strict axes gate at 100%; quality axes ratchet** — they may improve but never
@@ -163,11 +163,13 @@ single Elo number.
 The strict axes delegate whole-object validation to the shipped
 `ChessyAnalysisResult.validate` (against an independently derived identity), so
 the gate can never be laxer than the coaching path consuming the same output;
-E3 adds only the full-MultiPV coverage requirement on top. `--self-test`
-simulates fourteen distinct shapes of engine regression (plus one *immunity*
-check on a self-reported flag) and proves the strict gate turns red for each —
-see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the fault list and the
-published numbers.
+E3 adds only the full-MultiPV coverage requirement on top — and the auxiliary
+¼×/4× tiers must pass the same validator before they are graded. `--self-test`
+simulates fifteen distinct shapes of engine regression: thirteen must turn the
+strict gate red, an unusable auxiliary tier must be fully visible to the
+ratchet, and a flattering self-report must leave `pvStability` unmoved
+(immunity) — see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the
+fault list and the published numbers.
 
 ## Roadmap (per the tracker)
 
