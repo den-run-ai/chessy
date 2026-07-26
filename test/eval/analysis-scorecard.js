@@ -35,6 +35,12 @@
  *                     QUICK-scan pick re-scored at full depth, plus a
  *                     catastrophic-miss count ("final precision")
  *
+ *   EXACT FIXTURE (baseline compatibility, no intrinsic good/bad verdict):
+ *     equivalence     the shipped accepted-move criterion's per-puzzle
+ *                     verdict/reason over the shipped-width playedMove path.
+ *                     Criterion identity, case coverage, and every outcome
+ *                     must match the reviewed baseline exactly.
+ *
  * Oracle comparisons deliberately AVOID exact centipawn/PV equality (per the
  * tracker): acceptable-move sets, set overlap, budget invariance and a regret
  * tail distribution — never a single Elo number. The only external oracle is
@@ -60,9 +66,11 @@ require('../../assets/analysis-core.js');
 // than the coaching path consuming the same output — if the app tightens the
 // invariant, the gate tightens with it instead of silently drifting apart.
 require('../../assets/analysis-result.js');
+require('../../assets/equivalence.js');
 const Chess = globalThis.Chess;
 const AC = globalThis.ChessyAnalysisCore;
 const AR = globalThis.ChessyAnalysisResult;
+const Equivalence = globalThis.ChessyEquivalence;
 // Used to derive the depth-(d-1) best move INDEPENDENTLY for pvStability.
 const ChessAI = globalThis.ChessAI;
 
@@ -220,14 +228,18 @@ function analyse(state, opts) {
 function isLive(rec) { return !(rec.assert && rec.assert.terminal); }
 function isPuzzle(rec) { return rec.expected_moves && rec.expected_moves.length > 0; }
 // The frozen E3 PR shard: every TRAIN/VAL shard puzzle (all five difficulty
-// bands) plus the core, live generated fixtures. The corpus's held-out TEST
-// split is EXCLUDED: this ratchet accepts or rejects every PR, so grading test
-// records here would turn the locked split into development feedback ("never
-// tune on the test split"). Test cases are still measured by --full, which is
-// the nightly / pre-release run. Small enough for a per-PR run, stratified
-// enough to move when analysis quality moves.
+// bands) plus the core, live generated fixtures. TEST-tagged records are
+// EXCLUDED: this ratchet accepts or rejects every PR, so including them would
+// add routine analysis-quality feedback. (The separate strict correctness
+// scorecard may still cover test-tagged shard records.) They are measured by
+// E3 only in --full, the nightly / pre-release run. They are compatibility—not
+// untouched validation—evidence for criterion v1 because its full metrics were
+// already consulted; #112 defines a new one-shot lockbox. Small enough for a
+// per-PR run, stratified enough to move when analysis quality moves.
 function inE3Shard(rec) {
-  return rec.shard && isLive(rec) && rec.split_group !== 'test' && (isPuzzle(rec) || rec.core);
+  return rec.shard && isLive(rec) &&
+    (rec.split_group === 'train' || rec.split_group === 'val') &&
+    (isPuzzle(rec) || rec.core);
 }
 
 // ---------------------------------------------------------------------------
@@ -261,14 +273,21 @@ function checkRootComplete(state, ref, opts) {
   return { ok: true, detail: legal.length + ' roots, shipped-validator clean' };
 }
 
-// STRICT: the coaching played-move accounting is self-consistent. Feed the
-// crowd-validated key move as the "played" move at the SHIPPED candidate width
-// and confirm its reported rank equals its true rank over all roots, and that
-// classification matches that rank + the candidate width.
-function checkPlayedRank(rec, state, ref) {
+// Build the one shipped-width playedMove result consumed by BOTH the strict
+// rank contract and the exact accepted-move fixture. Sharing it is important:
+// the fixture must exercise the product path, including a key move outside
+// MultiPV that is carried by its complete validated playedLine, rather than
+// grading only the convenient all-roots reference.
+function assessPlayedMove(rec, state, ref) {
   const key = rec.expected_moves[0];
   const played = Chess.legalMoves(state).find(m => uciOf(m) === key);
-  if (!played) return { ok: false, detail: 'labelled key move ' + key + ' is not legal (corrupt fixture)' };
+  if (!played) {
+    return {
+      check: { ok: false, detail: 'labelled key move ' + key +
+        ' is not legal (corrupt fixture)' },
+      key: key, result: null, expected: null
+    };
+  }
   const shipMultiPV = E3_OPTS.ship.multiPV;
   const shipOpts = Object.assign({ playedMove: played }, E3_OPTS.ship);
   const res = analyse(state, shipOpts);
@@ -280,22 +299,85 @@ function checkPlayedRank(rec, state, ref) {
     { playedMove: played, requirePlayed: true });
   const verdict = AR.validate(res, state, expected);
   if (!verdict.ok) {
-    return { ok: false, detail: 'shipped-width result rejected by the shipped validator: ' + verdict.reason };
+    return {
+      check: { ok: false, detail: 'shipped-width result rejected by the ' +
+        'shipped validator: ' + verdict.reason },
+      key: key, result: res, expected: expected
+    };
   }
   const pl = res.playedLine;
-  if (!pl) return { ok: false, detail: 'played key move ' + key + ' was not ranked (playedLine null)' };
+  if (!pl) {
+    return {
+      check: { ok: false, detail: 'played key move ' + key +
+        ' was not ranked (playedLine null)' },
+      key: key, result: res, expected: expected
+    };
+  }
   // True rank of the key move over ALL roots (the ref pass scored every one).
   const trueRank = ref.bestLines.findIndex(l => l.uci === key) + 1;
-  if (pl.rank !== trueRank) return { ok: false, detail: 'reported rank ' + pl.rank + ' != true rank ' + trueRank };
+  if (pl.rank !== trueRank) {
+    return {
+      check: { ok: false, detail: 'reported rank ' + pl.rank +
+        ' != true rank ' + trueRank },
+      key: key, result: res, expected: expected
+    };
+  }
   const wantCandidate = trueRank <= shipMultiPV;
   if (pl.amongCandidates !== wantCandidate) {
-    return { ok: false, detail: 'amongCandidates=' + pl.amongCandidates + ' but rank ' + trueRank + ' vs width ' + shipMultiPV };
+    return {
+      check: { ok: false, detail: 'amongCandidates=' + pl.amongCandidates +
+        ' but rank ' + trueRank + ' vs width ' + shipMultiPV },
+      key: key, result: res, expected: expected
+    };
   }
   const wantCls = trueRank === 1 ? 'same' : (wantCandidate ? 'different-candidate' : 'unknown-equivalence');
   if (res.classification !== wantCls) {
-    return { ok: false, detail: 'classification ' + res.classification + ' != ' + wantCls + ' (rank ' + trueRank + ')' };
+    return {
+      check: { ok: false, detail: 'classification ' + res.classification +
+        ' != ' + wantCls + ' (rank ' + trueRank + ')' },
+      key: key, result: res, expected: expected
+    };
   }
-  return { ok: true, detail: 'rank ' + trueRank + ' → ' + wantCls };
+  return {
+    check: { ok: true, detail: 'rank ' + trueRank + ' → ' + wantCls },
+    key: key, result: res, expected: expected
+  };
+}
+
+// EXACT FIXTURE: invoke the SHIPPED criterion itself — never paraphrase its
+// CP/mate matrix and never treat rank/classification as proof of equivalence.
+// Unknown and not-equivalent are legitimate measured states. The gate is an
+// exact before/after comparison of id → verdict/reason, so the criterion or
+// engine cannot silently rewrite which frozen puzzle keys it accepts.
+function equivalenceCase(rec, state, played) {
+  if (!played.result || !played.expected) {
+    return {
+      id: rec.id, verdict: 'invalid', reason: 'played-result-unavailable',
+      rank: null, rankBasis: null, rankLowerBound: null,
+      gapCp: null, coverage: null, coveredRootCount: null
+    };
+  }
+  const grade = Equivalence.grade(
+    played.result, state, played.expected, played.key
+  );
+  if (!grade.ok) {
+    return {
+      id: rec.id, verdict: 'invalid', reason: grade.reason,
+      rank: null, rankBasis: null, rankLowerBound: null,
+      gapCp: null, coverage: null, coveredRootCount: null
+    };
+  }
+  return {
+    id: rec.id,
+    verdict: grade.verdict,
+    reason: grade.reason,
+    rank: grade.attempt.rank,
+    rankBasis: grade.attempt.rankBasis,
+    rankLowerBound: grade.attempt.rankLowerBound,
+    gapCp: grade.attempt.gapCp,
+    coverage: grade.coverage,
+    coveredRootCount: grade.coveredRootCount
+  };
 }
 
 // QUALITY: acceptable top-1 (solve rate) and oracle best recall@3.
@@ -351,11 +433,27 @@ function checkPvStability(state, ref) {
 const STRICT_AXES = ['rootComplete', 'playedRank'];
 const QUALITY_AXES = ['puzzleTop1', 'puzzleRecall3', 'pvStability', 'budgetStability'];
 const FRACTION_AXES = STRICT_AXES.concat(QUALITY_AXES);
+const EQUIVALENCE_VERDICTS =
+  ['best', 'equivalent', 'not-equivalent', 'unknown', 'invalid'];
+
+function summariseEquivalence(cases) {
+  const counts = {};
+  for (const verdict of EQUIVALENCE_VERDICTS) counts[verdict] = 0;
+  for (const item of cases) {
+    if (!Object.prototype.hasOwnProperty.call(counts, item.verdict)) {
+      counts.invalid++;
+    } else {
+      counts[item.verdict]++;
+    }
+  }
+  return { checked: cases.length, counts: counts, cases: cases };
+}
 
 function run(records, full) {
   const axes = {};
   for (const a of FRACTION_AXES) axes[a] = { checked: 0, pass: 0, fail: 0 };
   const failures = [];
+  const equivalenceCases = [];
   const regrets = []; // per-case capped centipawn regret of the quick pick
   let catastrophic = 0;
 
@@ -377,7 +475,9 @@ function run(records, full) {
     add('rootComplete', checkRootComplete(state, ref, E3_OPTS.ref), rec.id);
     if (!ref.bestLines.length) continue; // strict failure already recorded above
     if (isPuzzle(rec)) {
-      add('playedRank', checkPlayedRank(rec, state, ref), rec.id);
+      const played = assessPlayedMove(rec, state, ref);
+      add('playedRank', played.check, rec.id);
+      equivalenceCases.push(equivalenceCase(rec, state, played));
       add('puzzleTop1', checkPuzzleTop1(rec, ref), rec.id);
       add('puzzleRecall3', checkPuzzleRecall3(rec, ref), rec.id);
     }
@@ -431,6 +531,7 @@ function run(records, full) {
   let checks = 0, pass = 0, fail = 0, strictFail = 0;
   for (const a of FRACTION_AXES) { checks += axes[a].checked; pass += axes[a].pass; fail += axes[a].fail; }
   for (const a of STRICT_AXES) strictFail += axes[a].fail;
+  axes.equivalence = summariseEquivalence(equivalenceCases);
   return { axes, regret: summariseRegret(regrets, catastrophic, full),
     totals: { checks, pass, fail, strictFail }, failures };
 }
@@ -457,6 +558,9 @@ function scoreVector(mode, records, result, manifest) {
     ndjson_sha256: manifest.ndjson_sha256,
     scorecard: 'analysis-v1',
     mode: mode,
+    // The grading fixture is meaningful only under this exact criterion.
+    // A version/parameter edit is baseline-incompatible by design.
+    criterion: Equivalence.CRITERION,
     // The E3 config is part of the identity of every number below — a baseline
     // built under a different budget must not compare "clean".
     e3_opts: E3_OPTS,
@@ -482,6 +586,13 @@ function printReport(sv, failures) {
     const flag = strict ? (a.fail === 0 ? 'ok  ' : 'FAIL') : 'score';
     console.log('  ' + pad(axis) + ' ' + (strict ? 'strict ' : 'ratchet') + ' ' + flag + ' ' + a.pass + '/' + a.checked);
   }
+  const eq = sv.axes.equivalence;
+  console.log('  ' + pad('equivalence') + ' fixture exact ' + eq.checked +
+    ' cases  best ' + eq.counts.best +
+    '  equivalent ' + eq.counts.equivalent +
+    '  not-equivalent ' + eq.counts['not-equivalent'] +
+    '  unknown ' + eq.counts.unknown +
+    '  invalid ' + eq.counts.invalid);
   const r = sv.regret;
   console.log('  ' + pad('regret cp') + ' ratchet score median ' + r.median + '  p90 ' + r.p90 +
     (r.p99 != null ? '  p99 ' + r.p99 : '') + '  catastrophic ' + r.catastrophic + '/' + r.n);
@@ -500,20 +611,92 @@ function printReport(sv, failures) {
   }
 }
 
+function equivalenceIndex(axis) {
+  const byId = Object.create(null);
+  const derivedCounts = {};
+  for (const verdict of EQUIVALENCE_VERDICTS) derivedCounts[verdict] = 0;
+  let valid = !!axis && Number.isInteger(axis.checked) &&
+    Array.isArray(axis.cases) && axis.checked === axis.cases.length &&
+    !!axis.counts && typeof axis.counts === 'object' &&
+    Object.keys(axis.counts).sort().join(',') ===
+      EQUIVALENCE_VERDICTS.slice().sort().join(',');
+  if (!valid) return { valid: false, byId: byId };
+  for (const item of axis.cases) {
+    if (!item || typeof item.id !== 'string' ||
+        typeof item.verdict !== 'string' ||
+        typeof item.reason !== 'string' ||
+        !Object.prototype.hasOwnProperty.call(derivedCounts, item.verdict) ||
+        Object.prototype.hasOwnProperty.call(byId, item.id)) {
+      valid = false;
+      continue;
+    }
+    byId[item.id] = item;
+    derivedCounts[item.verdict]++;
+  }
+  for (const verdict of EQUIVALENCE_VERDICTS) {
+    if (!Number.isInteger(axis.counts[verdict]) ||
+        axis.counts[verdict] !== derivedCounts[verdict]) {
+      valid = false;
+    }
+  }
+  return { valid: valid, byId: byId };
+}
+
+// Exact accepted-move fixture comparison. Verdicts are not directionally
+// ordered: unknown/not-equivalent can be honest baseline states, and even a
+// seemingly flattering change may mean the criterion or provider silently
+// rewrote a persisted outcome. Any id/verdict/reason drift needs a conscious
+// reviewed re-baseline.
+function compareEquivalence(baselineAxis, currentAxis, log) {
+  const before = equivalenceIndex(baselineAxis);
+  const after = equivalenceIndex(currentAxis);
+  let changed = !before.valid || !after.valid;
+  const ids = Array.from(new Set(
+    Object.keys(before.byId).concat(Object.keys(after.byId))
+  )).sort();
+  const changes = [];
+  for (const id of ids) {
+    const b = before.byId[id];
+    const a = after.byId[id];
+    if (!b || !a || b.verdict !== a.verdict || b.reason !== a.reason) {
+      changed = true;
+      changes.push({
+        id: id,
+        before: b ? b.verdict + '/' + b.reason : 'missing',
+        after: a ? a.verdict + '/' + a.reason : 'missing'
+      });
+    }
+  }
+  const beforeN = baselineAxis && baselineAxis.checked;
+  const afterN = currentAxis && currentAxis.checked;
+  if (beforeN !== afterN) changed = true;
+  log('  ' + pad('equivalence') + ' exact fixtures ' + beforeN + '→' +
+    afterN + (changed ? '  ← REGRESSION' : '  unchanged'));
+  for (const item of changes) {
+    log('    ' + item.id + ': ' + item.before + ' → ' + item.after);
+  }
+  return !changed;
+}
+
 // Ratchet comparison: no axis may lose a pass or shed coverage, and regret
 // quantiles may never rise. Determinism makes this exact — no tolerance band.
 function compareBaseline(baseline, sv, log) {
   log = log || console.log;
   log('\nbefore/after vs baseline (' + baseline.mode + '):');
   const optsEq = JSON.stringify(baseline.e3_opts) === JSON.stringify(sv.e3_opts);
+  const criterionEq =
+    JSON.stringify(baseline.criterion) === JSON.stringify(sv.criterion);
   if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode || !optsEq ||
-      baseline.scorecard !== sv.scorecard ||
+      !criterionEq || baseline.scorecard !== sv.scorecard ||
       baseline.generator_version !== sv.generator_version ||
       baseline.ndjson_sha256 !== sv.ndjson_sha256) {
     log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.generator_version + '/' + baseline.mode +
       ' digest=' + String(baseline.ndjson_sha256).slice(0, 12) +
       ' vs ' + sv.corpus + '/' + sv.generator_version + '/' + sv.mode +
-      ' digest=' + String(sv.ndjson_sha256).slice(0, 12) + '  ← REGRESSION');
+      ' digest=' + String(sv.ndjson_sha256).slice(0, 12) +
+      (criterionEq ? '' : ' criterion=' +
+        JSON.stringify(baseline.criterion) + '→' +
+        JSON.stringify(sv.criterion)) + '  ← REGRESSION');
     return false;
   }
   let regressed = false;
@@ -527,6 +710,11 @@ function compareBaseline(baseline, sv, log) {
     const delta = a.pass - b.pass;
     log('  ' + pad(axis) + ' ' + b.pass + '/' + b.checked + ' → ' + a.pass + '/' + a.checked +
       (delta ? '  (' + (delta > 0 ? '+' : '') + delta + ')' : '') + (bad ? '  ← REGRESSION' : ''));
+  }
+  if (!compareEquivalence(
+    baseline.axes.equivalence, sv.axes.equivalence, log
+  )) {
+    regressed = true;
   }
   // Regret: rising median/p90/p99 or more catastrophic misses regress — and so
   // does a SHRINKING SAMPLE, since losing samples could otherwise "improve" the
@@ -666,6 +854,47 @@ function main() {
                 : 'MOVED ✗ ' + before.pass + '/' + before.checked + ' → ' + after.pass + '/' +
                   after.checked + ' — the axis is echoing the engine\'s self-report, so a ' +
                   'broken implementation would ratchet through as an improvement'));
+    }
+
+    // EXACT-FIXTURE faults: unlike a directional quality score, accepted-move
+    // verdicts may not drift in either direction without review. Prove that
+    // an offsetting per-case shift, reduced coverage, and a criterion identity
+    // change each make baseline comparison fail.
+    const cleanSv = scoreVector(mode, records, clean, manifest);
+    const quiet = function () {};
+    {
+      const shifted = JSON.parse(JSON.stringify(cleanSv));
+      const item = shifted.axes.equivalence.cases[0];
+      item.verdict = item.verdict === 'best' ? 'equivalent' : 'best';
+      const detected = !compareBaseline(cleanSv, shifted, quiet);
+      allDetected = allDetected && detected;
+      diag('\nself-test (equivalence-verdict, exact fixture): ' +
+        (detected ? 'correctly went RED ✓'
+                  : 'ESCAPED ✗ — one case changed verdict at equal coverage'));
+    }
+    {
+      const missing = JSON.parse(JSON.stringify(cleanSv));
+      const removed = missing.axes.equivalence.cases.pop();
+      missing.axes.equivalence.checked--;
+      missing.axes.equivalence.counts[removed.verdict]--;
+      const wrongCounts = JSON.parse(JSON.stringify(cleanSv));
+      wrongCounts.axes.equivalence.counts.best++;
+      const detected = !compareBaseline(cleanSv, missing, quiet) &&
+        !compareBaseline(cleanSv, wrongCounts, quiet);
+      allDetected = allDetected && detected;
+      diag('\nself-test (equivalence-coverage, exact fixture): ' +
+        (detected ? 'correctly went RED ✓'
+                  : 'ESCAPED ✗ — missing coverage or inconsistent counts were ignored'));
+    }
+    {
+      const changedCriterion = JSON.parse(JSON.stringify(cleanSv));
+      changedCriterion.criterion.version++;
+      const detected =
+        !compareBaseline(cleanSv, changedCriterion, quiet);
+      allDetected = allDetected && detected;
+      diag('\nself-test (criterion-identity, compatibility): ' +
+        (detected ? 'correctly went RED ✓'
+                  : 'ESCAPED ✗ — criterion drift compared as compatible'));
     }
     if (!allDetected) process.exit(3);
   }
