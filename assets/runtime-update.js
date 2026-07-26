@@ -9,9 +9,12 @@
  * are unavailable, it fails open so local play is never blocked.
  *
  * The service worker uses skipWaiting() + clients.claim(). Once a different
- * worker controls a page that already had a controller, this gate reloads the
- * page and resolves the pending start as false. app.js therefore leaves the
- * existing, synchronously persisted game intact for the fresh page to restore.
+ * worker controls the page, this gate reloads and resolves the pending start
+ * as false. An initially uncontrolled page verifies a first claimant's release
+ * over MessageChannel: a same-release first install stays put, while a newer
+ * (or unverifiable) claimant reloads instead of blessing stale page assets.
+ * app.js therefore leaves the existing, synchronously persisted game intact
+ * for the fresh page to restore.
  */
 (function (global, factory) {
   'use strict';
@@ -30,10 +33,15 @@
     const setTimer = options.setTimeout || setTimeout;
     const clearTimer = options.clearTimeout || clearTimeout;
     const now = options.now || Date.now;
+    const pageRelease = /^r\d+$/.test(options.release || '') ? options.release : null;
+    const MessageChannelApi = options.MessageChannel ||
+      (typeof MessageChannel !== 'undefined' ? MessageChannel : null);
     const timeoutMs = Number.isFinite(options.timeoutMs)
       ? Math.max(0, options.timeoutMs) : 4000;
 
     let loadedController = serviceWorker && serviceWorker.controller;
+    let pendingController = null;
+    let firstClaimPromise = null;
     let registrationPromise = null;
     let checkInFlight = null;
     let reloadPending = false;
@@ -46,13 +54,74 @@
       reload();
     }
 
+    function controllerRelease(controller, deadline) {
+      if (!controller || typeof controller.postMessage !== 'function' ||
+          typeof MessageChannelApi !== 'function') {
+        return Promise.resolve(null);
+      }
+      let channel;
+      try {
+        channel = new MessageChannelApi();
+      } catch (e) {
+        return Promise.resolve(null);
+      }
+      const response = new Promise(function (resolve) {
+        channel.port1.onmessage = function (event) {
+          const data = event && event.data;
+          resolve(data && data.type === 'chessy-release'
+            && /^r\d+$/.test(data.release || '') ? data.release : null);
+        };
+        try {
+          controller.postMessage({ type: 'chessy-release?' }, [channel.port2]);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+      return bounded(response, null, deadline).then(function (release) {
+        if (channel.port1 && typeof channel.port1.close === 'function') {
+          channel.port1.close();
+        }
+        return release;
+      });
+    }
+
+    function verifyFirstClaim(next) {
+      pendingController = next;
+      const deadline = now() + timeoutMs;
+      const claim = controllerRelease(next, deadline).then(function (release) {
+        if (pendingController !== next || reloadPending) return false;
+        pendingController = null;
+        if (!serviceWorker || serviceWorker.controller !== next ||
+            !pageRelease || release !== pageRelease) {
+          requestReload();
+          return false;
+        }
+        loadedController = next;
+        return true;
+      });
+      const wrapped = claim.then(function (current) {
+        if (firstClaimPromise === wrapped) firstClaimPromise = null;
+        return current;
+      }, function () {
+        if (firstClaimPromise === wrapped) firstClaimPromise = null;
+        if (pendingController === next) pendingController = null;
+        requestReload();
+        return false;
+      });
+      firstClaimPromise = wrapped;
+    }
+
     function controllerChanged() {
       const next = serviceWorker && serviceWorker.controller;
-      // A first install claims an initially uncontrolled page whose HTML and
-      // scripts already came from the same current deployment. Only replacing
-      // an existing controller makes the loaded runtime stale.
-      if (loadedController && next !== loadedController) requestReload();
-      loadedController = next;
+      if (loadedController) {
+        if (next !== loadedController) requestReload();
+        return;
+      }
+      if (pendingController) {
+        if (next !== pendingController) requestReload();
+        return;
+      }
+      if (next) verifyFirstClaim(next);
     }
 
     if (serviceWorker && typeof serviceWorker.addEventListener === 'function') {
@@ -122,8 +191,20 @@
 
     function isCurrent() {
       if (reloadPending) return false;
+      // Do not rely on controllerchange delivery winning a race with a click:
+      // controller may already expose a first claimant while its event is
+      // still queued.
+      if (!loadedController && !pendingController && serviceWorker &&
+          serviceWorker.controller) {
+        verifyFirstClaim(serviceWorker.controller);
+      }
       if (loadedController && serviceWorker &&
           serviceWorker.controller !== loadedController) {
+        requestReload();
+        return false;
+      }
+      if (pendingController && serviceWorker &&
+          serviceWorker.controller !== pendingController) {
         requestReload();
         return false;
       }
@@ -132,9 +213,6 @@
 
     function ensureCurrent() {
       if (!isCurrent()) return Promise.resolve(false);
-      // No controller means either unsupported SW or a first install. In both
-      // cases this document was fetched directly and is safe to use.
-      if (!loadedController || !registrationPromise) return Promise.resolve(true);
       if (checkInFlight) return checkInFlight;
 
       // One deadline bounds the registration, update fetch AND install wait.
@@ -142,7 +220,33 @@
       // The underlying update is deliberately not cancelled: if it eventually
       // takes control, controllerchange still reloads the just-saved game.
       const deadline = now() + timeoutMs;
-      const job = bounded(registrationPromise, null, deadline).then(function (registration) {
+      const firstClaim = firstClaimPromise
+        ? bounded(firstClaimPromise, false, deadline)
+        : Promise.resolve(true);
+      function registrationAfterClaim(current) {
+        if (!current || !isCurrent()) return false;
+        // A controller can claim between ensureCurrent()'s initial snapshot
+        // and this microtask. Join that newly-created verification instead of
+        // taking the uncontrolled-page fail-open path.
+        if (firstClaimPromise) {
+          return bounded(firstClaimPromise, false, deadline)
+            .then(registrationAfterClaim);
+        }
+        // No controller means either unsupported SW or a first install that
+        // has not claimed yet. The document came directly from the network
+        // and is safe to use until a claimant arrives.
+        if (!loadedController || !registrationPromise) return true;
+        return bounded(registrationPromise, null, deadline);
+      }
+      function currentAfterClaim() {
+        if (!isCurrent()) return false;
+        if (!firstClaimPromise) return true;
+        return bounded(firstClaimPromise, false, deadline).then(function (current) {
+          return current ? currentAfterClaim() : false;
+        });
+      }
+      const job = firstClaim.then(registrationAfterClaim).then(function (registration) {
+        if (registration === false || registration === true) return registration;
         if (!registration || typeof registration.update !== 'function') return null;
         const update = Promise.resolve().then(function () {
           return registration.update();
@@ -152,8 +256,8 @@
           const active = updated || registration;
           return waitForCandidate(active.installing || active.waiting, deadline);
         });
-      }).then(function () {
-        return isCurrent();
+      }).then(function (result) {
+        return result === false ? false : currentAfterClaim();
       });
 
       checkInFlight = job.then(function (current) {

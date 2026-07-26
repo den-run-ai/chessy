@@ -471,6 +471,7 @@
       }
       var runtime = window.ChessyRuntimeUpdate && window.ChessyRuntimeUpdate.create({
         serviceWorker: navigator.serviceWorker,
+        release: window.CHESSY_RELEASE,
         // The replacement worker writes its marker into the NEW release cache
         // before claiming clients. Reload directly; the new document's boot
         // consumer reads that cache and records the transition in this tab.

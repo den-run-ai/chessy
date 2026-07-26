@@ -189,8 +189,10 @@ independently auditable.
 `--nodes` and `--time` are mutually exclusive. The separate "AI fixed-node
 strict-strength gate" and "AI equal-time diagnostic (DRAFT)"
 workflow-dispatch actions each fan out to exactly 20 shards and aggregate
-automatically, so their check contexts cannot substitute for one another. A
-valid statistical miss fails the strict-strength check but is
+automatically, so their check contexts cannot substitute for one another.
+Formal shard artifacts report statistics but deliberately make no PASS/FAIL
+claim; only the complete 800-game aggregate emits the strict-strength verdict.
+A valid statistical miss fails the strict-strength check but is
 informational/green in the equal-time diagnostic;
 malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
