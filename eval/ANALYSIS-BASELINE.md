@@ -171,6 +171,9 @@ baseline holding one extra solve and a lower p90 correctly reports
 ```
 
 and exits non-zero — so a lost solve **or** a fattened regret tail fails the PR.
+A statistic the baseline defines that the current run no longer reports (or
+reports as null/NaN) regresses the same way — the full-mode `p99` cannot
+silently disappear from the published vector.
 
 ## Decision
 

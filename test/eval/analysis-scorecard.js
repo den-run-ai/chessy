@@ -511,13 +511,16 @@ function compareBaseline(baseline, sv, log) {
   // does a SHRINKING SAMPLE, since losing samples could otherwise "improve" the
   // quantiles while measuring strictly less (coverage is part of the score,
   // same rule as `checked` above). NaN-safe: a non-finite quantile compares
-  // false against everything, so anything not finite regresses outright.
+  // false against everything, so anything not finite regresses outright — and
+  // a statistic the baseline defines (the full-mode p99) that the current run
+  // no longer reports, or reports as null/NaN, is a regression too, never a
+  // skipped comparison: a published number may not silently disappear.
   const br = baseline.regret, ar = sv.regret;
   const worse = (a, b) => !Number.isFinite(a) || a > b;
   const rBad = !Number.isFinite(ar.n) || ar.n < br.n ||
     worse(ar.median, br.median) || worse(ar.p90, br.p90) ||
     worse(ar.catastrophic, br.catastrophic) ||
-    (br.p99 != null && ar.p99 != null && worse(ar.p99, br.p99));
+    (br.p99 != null && worse(ar.p99, br.p99));
   if (rBad) regressed = true;
   log('  ' + pad('regret cp') + ' n ' + br.n + '→' + ar.n +
     ' med ' + br.median + '→' + ar.median + ' p90 ' + br.p90 + '→' + ar.p90 +
