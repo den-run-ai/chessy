@@ -127,6 +127,8 @@ jobs:
         run: node test/analysis-service.test.js
       - name: Run analysis-result trust-boundary tests
         run: node test/analysis-result.test.js
+      - name: Run accepted-move criterion tests (Train v2 E1)
+        run: node test/equivalence.test.js
       - name: Run critical-moment selector tests
         run: node test/moment-selector.test.js
       - name: Run resumable moment-scan tests
