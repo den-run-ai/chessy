@@ -345,10 +345,11 @@ function browserType() {
     'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await context.close();
 
-  // First-controller race: A loads while its initial worker fetch fails, so
-  // the page remains uncontrolled. B later installs and becomes this old
-  // document's FIRST controller. Its release handshake must fence a Start
-  // click dispatched by that same controllerchange and preserve A's save.
+  // Registration retry: A loads while its initial worker fetch fails, so the
+  // page remains uncontrolled. A later New-game boundary must itself retry
+  // registration after B is published. B then becomes this old document's
+  // FIRST controller, and its release handshake must fence that same Start
+  // request and preserve A's save.
   phase.release = RA;
   phase.failWorker = true;
   const raceContext = await browser.newContext();
@@ -381,12 +382,9 @@ function browserType() {
   phase.release = RB;
   phase.failWorker = false;
   await race.evaluate(function () {
-    navigator.serviceWorker.addEventListener('controllerchange', function () {
-      sessionStorage.setItem('chessy-first-claim-start', 'attempted');
-      document.getElementById('newGameStart').click();
-    }, { once: true });
-    return navigator.serviceWorker.register('sw.js');
+    sessionStorage.setItem('chessy-registration-retry-start', 'attempted');
   });
+  await race.click('#newGameStart');
   const raceB = await (async function () {
     const t0 = Date.now();
     for (;;) {
@@ -399,7 +397,7 @@ function browserType() {
             controlled: !!navigator.serviceWorker.controller,
             ready: document.getElementById('installNote').textContent
               .indexOf('Ready offline') !== -1,
-            attempted: sessionStorage.getItem('chessy-first-claim-start'),
+            attempted: sessionStorage.getItem('chessy-registration-retry-start'),
             id: saved && saved.gameId,
             plies: saved && saved.history.length,
             rendered: document.querySelectorAll('#moveList .ply').length
@@ -415,7 +413,7 @@ function browserType() {
     }
   })();
   check(raceB.attempted === 'attempted',
-    'Start is attempted during the newer first-controller claim');
+    'the later Start boundary retries registration without test-side registration');
   check(raceB.id === raceA.id && raceB.plies === 1 && raceB.rendered === 1,
     'the newer first claimant reloads A and preserves its active save');
   check(raceErrors.length === 0,

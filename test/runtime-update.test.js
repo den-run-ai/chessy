@@ -59,12 +59,13 @@ function claimant(id, release, silent) {
   };
 }
 
-function setup(controller, timeoutMs, release) {
+function setup(controller, timeoutMs, release, register) {
   const sw = eventTarget({ controller: controller });
   let reloads = 0;
   const gate = RuntimeUpdate.create({
     serviceWorker: sw,
     reload: function () { reloads++; },
+    register: register,
     release: release || 'r56',
     MessageChannel: FakeMessageChannel,
     timeoutMs: timeoutMs == null ? 50 : timeoutMs
@@ -168,6 +169,115 @@ function setup(controller, timeoutMs, release) {
     check(await x.gate.ensureCurrent() === false &&
         x.reloads() === 1 && Date.now() - t0 < 250,
       'an unverifiable first claim is timeout-bounded and reloads once');
+  }
+
+  // A transient boot failure must not permanently bless an uncontrolled
+  // page. The next boundary retries registration, probes the returned
+  // registration, and joins first-claim verification before allowing play.
+  {
+    let registrations = 0, updates = 0;
+    let x;
+    const reg = {
+      update: function () {
+        updates++;
+        x.sw.controller = claimant('B-after-retry', 'r57');
+        x.sw.emit('controllerchange');
+        return Promise.resolve(reg);
+      }
+    };
+    x = setup(null, 50, 'r56', function () {
+      registrations++;
+      return Promise.resolve(reg);
+    });
+    x.gate.setRegistration(Promise.reject(new Error('boot deploy race')));
+    await new Promise(function (r) { setTimeout(r, 0); });
+    check(await x.gate.ensureCurrent() === false &&
+        registrations === 1 && updates === 1 && x.reloads() === 1,
+      'a boundary retries failed registration and fences its newer first claimant');
+  }
+
+  // Retrying registration remains advisory when the browser is offline.
+  {
+    let registrations = 0;
+    const x = setup(null, 50, 'r56', function () {
+      registrations++;
+      return Promise.reject(new Error('still offline'));
+    });
+    x.gate.setRegistration(Promise.reject(new Error('boot offline')));
+    await new Promise(function (r) { setTimeout(r, 0); });
+    check(await x.gate.ensureCurrent() === true &&
+        registrations === 1 && x.reloads() === 0,
+      'a rejected registration retry is bounded and fails open');
+  }
+
+  // A retry can stall after the original boot failure. Its deadline must
+  // release the first Start, and a later boundary must make a NEW idempotent
+  // registration attempt rather than reusing the permanently pending promise.
+  {
+    const hung = deferred();
+    let registrations = 0, updates = 0;
+    let x;
+    const recovered = {
+      update: function () {
+        updates++;
+        x.sw.controller = claimant('B-after-hung-retry', 'r57');
+        x.sw.emit('controllerchange');
+        return Promise.resolve(recovered);
+      }
+    };
+    x = setup(null, 15, 'r56', function () {
+      registrations++;
+      return registrations === 1 ? hung.promise : Promise.resolve(recovered);
+    });
+    x.gate.setRegistration(Promise.reject(new Error('boot offline')));
+    await new Promise(function (r) { setTimeout(r, 0); });
+    const t0 = Date.now();
+    check(await x.gate.ensureCurrent() === true &&
+        registrations === 1 && updates === 0 && Date.now() - t0 < 250,
+      'a hung registration retry is timeout-bounded and fails open');
+    check(await x.gate.ensureCurrent() === false &&
+        registrations === 2 && updates === 1 && x.reloads() === 1,
+      'the next boundary re-registers and fences a recovered newer claimant');
+    hung.resolve(recovered);
+  }
+
+  // register() resolves before installation completes. If that worker later
+  // becomes redundant, the resolved registration must not be trusted forever:
+  // the next boundary calls register() again and can discover the deployment.
+  {
+    const failedWorker = eventTarget({ state: 'installing' });
+    let registrations = 0, updates = 0;
+    let x;
+    const failed = {
+      installing: failedWorker,
+      waiting: null,
+      update: function () {
+        updates++;
+        return Promise.resolve(failed);
+      }
+    };
+    const recovered = {
+      update: function () {
+        updates++;
+        x.sw.controller = claimant('B-after-redundant-install', 'r57');
+        x.sw.emit('controllerchange');
+        return Promise.resolve(recovered);
+      }
+    };
+    x = setup(null, 15, 'r56', function () {
+      registrations++;
+      return Promise.resolve(registrations === 1 ? failed : recovered);
+    });
+    x.gate.setRegistration(Promise.reject(new Error('boot deploy race')));
+    await new Promise(function (r) { setTimeout(r, 0); });
+    check(await x.gate.ensureCurrent() === true &&
+        registrations === 1 && updates === 1,
+      'an unresolved install is bounded and initially fails open');
+    failedWorker.state = 'redundant';
+    failedWorker.emit('statechange');
+    check(await x.gate.ensureCurrent() === false &&
+        registrations === 2 && updates === 2 && x.reloads() === 1,
+      'a later boundary re-registers after the prior install becomes redundant');
   }
 
   // Offline update failure is explicitly fail-open.

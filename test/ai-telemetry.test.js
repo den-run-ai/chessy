@@ -152,10 +152,40 @@ try {
 } finally {
   Date.now = savedNow;
 }
-check(dualAborted && dualBudgetCtx.nodes === 1024 &&
+check(dualAborted && dualBudgetCtx.nodes === 1023 &&
     dualBudgetCtx.abortReason === 'time-limit',
-  'dual-budget ABORT retains the exact time-limit cause at the node boundary',
+  'deadline ABORT excludes the polled node whose body was never entered',
   JSON.stringify({ nodes: dualBudgetCtx.nodes, reason: dualBudgetCtx.abortReason }));
+
+let deadlineClockCalls = 0;
+let timedCutoff;
+Date.now = function () {
+  // startedAt, then two completed-draft checks, then the 1024th-node poll.
+  return ++deadlineClockCalls >= 4 ? 1 : 0;
+};
+try {
+  timedCutoff = ChessAI.think(Chess.newGameState(), {
+    maxDepth: 30, timeMs: 1, quiesce: true, seed: 12345
+  });
+} finally {
+  Date.now = savedNow;
+}
+const timedReplay = ChessAI.think(Chess.newGameState(), {
+  maxDepth: 30, nodeLimit: timedCutoff.nodes, quiesce: true,
+  rootOrderUci: timedCutoff.rootOrderUci
+});
+const timedSignature = Object.assign(signature(timedCutoff), {
+  attemptedDepth: timedCutoff.attemptedDepth
+});
+const replaySignature = Object.assign(signature(timedReplay), {
+  attemptedDepth: timedReplay.attemptedDepth
+});
+check(timedCutoff.stopReason === 'time-limit' &&
+    timedCutoff.nodes === 1023 &&
+    timedReplay.stopReason === 'node-limit' &&
+    JSON.stringify(replaySignature) === JSON.stringify(timedSignature),
+  'a timed cutoff replays exactly at its fully-entered node count and captured root order',
+  JSON.stringify({ timed: timedSignature, replay: replaySignature }));
 
 const legacy = ChessAI.sanitizeTelemetry({ depth: 5, quiesce: true, ms: 123 });
 check(legacy && legacy.depth === 5 && legacy.quiesce && legacy.ms === 123 &&
