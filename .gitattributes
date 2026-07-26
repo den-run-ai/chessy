@@ -8,3 +8,4 @@ eval/corpus/sources/*.csv        text eol=lf
 eval/corpus/sources/*.tsv        text eol=lf
 eval/corpus/sources/*.json       text eol=lf
 eval/BASELINE.json               text eol=lf
+eval/ANALYSIS-BASELINE.json      text eol=lf
