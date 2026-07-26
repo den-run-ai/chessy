@@ -128,8 +128,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   units**: every executable asset URL carries the release token and is
   cached per release, so a page always runs the scripts of its own release
   — never new HTML with old cached scripts (or the reverse) during an
-  update. A browser test drives an old-worker → new-release transition
-  (online and offline) and gates the token's coherence across files.
+  update. Long-open tabs check for a new worker when they return to view and
+  immediately before New game or Rematch replaces the current save. If an
+  update takes control, the page reloads into that release first and restores
+  the current game; a failed check never blocks offline play. A browser test
+  drives an old-worker → new-release transition (online and offline) and
+  gates the token's coherence and this fresh-game boundary across files.
 
 No fonts, images, or libraries are fetched from the network: pieces are
 Unicode glyphs, styling is system fonts, and the icons ship in the repo.
@@ -158,6 +162,7 @@ node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
+node test/runtime-update.test.js
 ```
 
 Two more AI tools are manual (too slow for PR CI): `node test/ai-bench.js
@@ -193,6 +198,7 @@ gated on the engine *and* browser suites.
 | `assets/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
 | `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
 | `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
+| `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards, analysis cache, resumable scan jobs) |
 | `assets/archive.js` | Records finished games into the store |

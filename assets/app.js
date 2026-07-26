@@ -864,10 +864,38 @@
     maybeAiMove();
   }
 
+  // A long-open tab can outlive a deployment without ever becoming visible
+  // again (the normal visibility update check therefore never runs). New
+  // game and Rematch are safe release boundaries: check sw.js BEFORE they
+  // replace the current save. If a newer worker takes control, the runtime
+  // gate reloads this coherent-but-old page and returns false; render() has
+  // already persisted the existing game, so the fresh page restores it.
+  // Missing/failed service workers fail open, preserving fully offline play.
+  let freshStartSeq = 0;
+  function startOnCurrentRuntime(stillRequested, action) {
+    const seq = ++freshStartSeq;
+    const gate = window.ChessyRuntime;
+    let checked;
+    try {
+      checked = gate && typeof gate.ensureCurrent === 'function'
+        ? gate.ensureCurrent() : Promise.resolve(true);
+    } catch (e) {
+      checked = Promise.resolve(true);
+    }
+    Promise.resolve(checked).then(function (current) {
+      if (current && seq === freshStartSeq && stillRequested()) action();
+    }, function () {
+      // Update discovery is advisory when it fails: an offline user must
+      // always be able to start a local game.
+      if (seq === freshStartSeq && stillRequested()) action();
+    });
+  }
+
   // "New game" opens a setup dialog (which doubles as the restart
   // confirmation): settings only apply when Start is pressed, so changing
   // them and cancelling never affects the running game.
   document.getElementById('newGame').addEventListener('click', function () {
+    freshStartSeq++; // invalidate a pending Rematch/start request
     setChoice('mode', settings.mode);
     setChoice('difficulty', settings.difficulty);
     setChoice('timeControl', settings.timeControl);
@@ -875,14 +903,24 @@
   });
 
   document.getElementById('newGameStart').addEventListener('click', function () {
-    settings.mode = getChoice('mode') || settings.mode;
-    settings.difficulty = getChoice('difficulty') || settings.difficulty;
-    settings.timeControl = getChoice('timeControl') || settings.timeControl;
-    newGameDialog.close();
-    startNewGame();
+    // Snapshot the accepted choices; a slow update check must not observe
+    // later edits if the user dismisses/reopens the dialog in the meantime.
+    const next = {
+      mode: getChoice('mode') || settings.mode,
+      difficulty: getChoice('difficulty') || settings.difficulty,
+      timeControl: getChoice('timeControl') || settings.timeControl
+    };
+    startOnCurrentRuntime(function () { return newGameDialog.open; }, function () {
+      settings.mode = next.mode;
+      settings.difficulty = next.difficulty;
+      settings.timeControl = next.timeControl;
+      newGameDialog.close();
+      startNewGame();
+    });
   });
 
   document.getElementById('newGameCancel').addEventListener('click', function () {
+    freshStartSeq++;
     newGameDialog.close();
   });
 
@@ -926,10 +964,12 @@
   });
 
   document.getElementById('gameOverClose').addEventListener('click', function () {
+    freshStartSeq++;
     gameOverDialog.close();
   });
 
   document.getElementById('gameOverReview').addEventListener('click', function () {
+    freshStartSeq++;
     gameOverDialog.close();
     // Hand off to the coaching Review of this game's archived record —
     // AFTER the archive attempt settles, so the record is there to open.
@@ -962,8 +1002,10 @@
   });
 
   document.getElementById('gameOverRematch').addEventListener('click', function () {
-    gameOverDialog.close();
-    startNewGame();
+    startOnCurrentRuntime(function () { return gameOverDialog.open; }, function () {
+      gameOverDialog.close();
+      startNewGame();
+    });
   });
 
   // ---- Replay navigation ----

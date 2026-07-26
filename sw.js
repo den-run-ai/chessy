@@ -22,9 +22,11 @@
  *   own release's cached assets).
  * - Unversioned assets (manifest, icons) are stale-while-revalidate.
  * - The page auto-reloads once when a new service worker takes over (see
- *   index.html); game state survives via localStorage.
+ *   assets/runtime-update.js); game state survives via localStorage. New
+ *   game/Rematch explicitly run an update check before replacing that save,
+ *   so a long-open foreground tab cannot begin another game on stale code.
  */
-const RELEASE = 'r55';
+const RELEASE = 'r56';
 const CACHE = 'chessy-' + RELEASE;
 const UPDATE_MARKER = './__chessy-update__';
 const ASSETS = [
@@ -36,6 +38,7 @@ const ASSETS = [
   './assets/ai-worker.js?r=' + RELEASE,
   './assets/analysis-worker.js?r=' + RELEASE,
   './assets/store.js?r=' + RELEASE,
+  './assets/runtime-update.js?r=' + RELEASE,
   './assets/app.js?r=' + RELEASE,
   './assets/archive.js?r=' + RELEASE,
   './assets/mini-board.js?r=' + RELEASE,
@@ -56,6 +59,12 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/icon-512-maskable.png'
 ];
+
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'chessy-release?') return;
+  const port = event.ports && event.ports[0];
+  if (port) port.postMessage({ type: 'chessy-release', release: RELEASE });
+});
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

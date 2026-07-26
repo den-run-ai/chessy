@@ -119,6 +119,11 @@ function run(name, suite) {
         if (opts.difficulty) await t.pick('difficulty', opts.difficulty);
         if (opts.timeControl) await t.pick('timeControl', opts.timeControl);
         await page.click('#newGameStart');
+        // Start is release-gated: online it may briefly await an explicit
+        // service-worker update check before replacing the saved game.
+        await page.waitForFunction(function () {
+          return !document.getElementById('newGameDialog').open;
+        });
       }
     };
 
