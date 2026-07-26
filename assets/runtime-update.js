@@ -29,7 +29,11 @@
   function create(options) {
     options = options || {};
     const serviceWorker = options.serviceWorker;
-    const register = typeof options.register === 'function' ? options.register : null;
+    const registerWorker = typeof options.register === 'function' ? options.register : null;
+    const onRegistration = typeof options.onRegistration === 'function'
+      ? options.onRegistration : function () {};
+    const onRegistrationError = typeof options.onRegistrationError === 'function'
+      ? options.onRegistrationError : function () {};
     const reload = typeof options.reload === 'function' ? options.reload : function () {};
     const setTimer = options.setTimeout || setTimeout;
     const clearTimer = options.clearTimeout || clearTimeout;
@@ -40,10 +44,17 @@
     const timeoutMs = Number.isFinite(options.timeoutMs)
       ? Math.max(0, options.timeoutMs) : 4000;
 
-    let loadedController = serviceWorker && serviceWorker.controller;
+    // A controller observed only now may have claimed this document while its
+    // old HTML was still parsing. Every initial controller proves its release;
+    // the caller's earlier snapshot is only a legacy-handshake fallback.
+    const controllerSnapshot = Object.prototype.hasOwnProperty.call(options, 'loadedController')
+      ? (options.loadedController || null) : null;
+    let loadedController = null;
     let pendingController = null;
     let firstClaimPromise = null;
     let registrationPromise = null;
+    let registrationSeq = 0;
+    let registrationSucceeded = false;
     let checkInFlight = null;
     let reloadPending = false;
     let reloadCalled = false;
@@ -86,14 +97,16 @@
       });
     }
 
-    function verifyFirstClaim(next) {
+    function verifyFirstClaim(next, allowLegacySnapshot) {
       pendingController = next;
       const deadline = now() + timeoutMs;
       const claim = controllerRelease(next, deadline).then(function (release) {
         if (pendingController !== next || reloadPending) return false;
         pendingController = null;
+        const releaseMatches = release === pageRelease ||
+          (release === null && allowLegacySnapshot);
         if (!serviceWorker || serviceWorker.controller !== next ||
-            !pageRelease || release !== pageRelease) {
+            !pageRelease || !releaseMatches) {
           requestReload();
           return false;
         }
@@ -130,7 +143,19 @@
     }
 
     function setRegistration(value) {
-      const tracked = Promise.resolve(value);
+      const seq = ++registrationSeq;
+      const tracked = Promise.resolve(value).then(function (registration) {
+        if (registration) registrationSucceeded = true;
+        if (registration) {
+          try { onRegistration(registration); } catch (e) {}
+        }
+        return registration;
+      }, function (error) {
+        if (seq === registrationSeq && !registrationSucceeded) {
+          try { onRegistrationError(error); } catch (e) {}
+        }
+        throw error;
+      });
       registrationPromise = tracked;
       // Registration failures are handled as an offline/no-SW outcome by
       // ensureCurrent(); attaching here also prevents an ignored boot promise
@@ -139,13 +164,13 @@
       return tracked;
     }
 
-    function registrationForBoundary() {
-      if (!register) return registrationPromise;
+    function register() {
+      if (!registerWorker) return registrationPromise;
       // register() is idempotent for the same script and scope. Invoke it for
       // every fresh-game boundary so a rejected, hung, or later-redundant boot
       // attempt cannot become sticky. checkInFlight coalesces concurrent clicks.
       try {
-        return setRegistration(register());
+        return setRegistration(registerWorker());
       } catch (e) {
         return setRegistration(Promise.reject(e));
       }
@@ -225,6 +250,19 @@
       return true;
     }
 
+    // Reconcile after installing the one controllerchange owner. Even a
+    // controller present in the early snapshot must answer the release
+    // handshake: it could have claimed after navigation began but before that
+    // first inline script. The snapshot only prevents a reload loop for a
+    // legacy controller that cannot answer; after one reload it is reliably
+    // present in the next document's early snapshot.
+    if (serviceWorker) {
+      const currentController = serviceWorker.controller;
+      if (currentController) {
+        verifyFirstClaim(currentController, currentController === controllerSnapshot);
+      }
+    }
+
     function ensureCurrent() {
       if (!isCurrent()) return Promise.resolve(false);
       if (checkInFlight) return checkInFlight;
@@ -246,7 +284,7 @@
           return bounded(firstClaimPromise, false, deadline)
             .then(registrationAfterClaim);
         }
-        const registration = registrationForBoundary();
+        const registration = register();
         // Without a registration API the network-loaded document is safe to
         // use. A failed or hung retry is likewise bounded below and fails open.
         if (!registration) return true;
@@ -287,6 +325,7 @@
 
     return {
       setRegistration: setRegistration,
+      register: register,
       ensureCurrent: ensureCurrent
     };
   }

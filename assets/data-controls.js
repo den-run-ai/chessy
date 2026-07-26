@@ -110,6 +110,30 @@
       a.result === b.result && a.reason === b.reason;
   }
 
+  // A same-ending recovery can contain newer evidence for only SOME plies:
+  // local-save reconstruction sanitizes every malformed/missing slot to null.
+  // Merge those aligned slots individually so one usable recovered entry does
+  // not erase intact committed evidence elsewhere. Never manufacture legacy
+  // telemetry for an absent slot; null remains the explicit "no evidence"
+  // marker, and an all-null recovery leaves a legacy row without `ai` alone.
+  function mergeAiEvidence(cur, rec) {
+    const plies = cur.sans.length;
+    if (!Array.isArray(rec.ai) || rec.ai.length !== plies) return;
+    function usable(entry) {
+      return !!entry && typeof entry === 'object' && !Array.isArray(entry);
+    }
+    if (!rec.ai.some(usable)) return;
+
+    const committedAligned = Array.isArray(cur.ai) && cur.ai.length === plies;
+    const merged = new Array(plies);
+    for (let i = 0; i < plies; i++) {
+      merged[i] = usable(rec.ai[i])
+        ? rec.ai[i]
+        : (committedAligned ? cur.ai[i] : null);
+    }
+    cur.ai = merged;
+  }
+
   // Drop cards for `id` at or after the first ply where the moves diverge —
   // exactly what archiveGame() does when a revised ending replaces an old one
   // (store.js pruneFromDivergence). Without this a backup carrying a parked
@@ -278,13 +302,10 @@
         if (Number.isFinite(rec.createdAt) && Number.isFinite(cur.createdAt)) {
           cur.createdAt = Math.min(cur.createdAt, rec.createdAt);
         }
-        // The recovery copy may be the only one with the new forensic fields
-        // (for example the IndexedDB write committed before a tab died, while
-        // the richer local save survived). Preserve real evidence, but never
-        // replace a populated archive array with an all-null legacy recovery.
-        if (Array.isArray(rec.ai) && rec.ai.some(function (v) { return !!v; })) {
-          cur.ai = rec.ai;
-        }
+        // The recovery copy may be the only one with newer forensic fields for
+        // a particular ply. Preserve those per-ply without letting its
+        // malformed/null slots erase committed evidence.
+        mergeAiEvidence(cur, rec);
         const recoveredRelease = releaseToken(rec.startedRelease);
         if (recoveredRelease) {
           cur.startedRelease = recoveredRelease;
