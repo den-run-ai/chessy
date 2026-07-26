@@ -68,7 +68,9 @@ function browserType() {
   // Numeric tokens, like production: the worker ORDERS tokens to refuse
   // refilling a stale release's URL from the current deployment.
   const RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
-  const phase = { release: RA, failWorker: false };
+  const phase = { release: RA, failWorker: false, holdProgress: false };
+  let releaseHeldProgress = null;
+  let resolveProgressHeld = null;
   const server = http.createServer(function (req, res) {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p.endsWith('/')) p += 'index.html';
@@ -100,11 +102,23 @@ function browserType() {
         body = Buffer.concat([Buffer.from(body),
           Buffer.from("\n;window.CHESSY_BUILD = '" + phase.release + "';\n")]);
       }
-      res.writeHead(200, {
-        'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
-        'Cache-Control': 'no-store'
-      });
-      res.end(body);
+      function send() {
+        res.writeHead(200, {
+          'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
+          'Cache-Control': 'no-store'
+        });
+        res.end(body);
+      }
+      // A dedicated regression pauses the LAST external script after the
+      // early controller snapshot but before the bottom-of-body gate is
+      // created. Another page can then install/claim B deterministically.
+      if (file.endsWith(path.join('assets', 'progress.js')) && phase.holdProgress) {
+        phase.holdProgress = false;
+        releaseHeldProgress = send;
+        if (resolveProgressHeld) resolveProgressHeld();
+        return;
+      }
+      send();
     });
   });
   await new Promise(function (r) { server.listen(0, '127.0.0.1', r); });
@@ -356,6 +370,21 @@ function browserType() {
   const race = await raceContext.newPage();
   const raceErrors = [];
   race.on('pageerror', function (e) { raceErrors.push(String(e)); });
+  await race.addInitScript(function () {
+    const key = 'chessy-retry-test-boots';
+    sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) || 0) + 1));
+    window.__chessyListenerCounts = { visibility: 0, updatefound: 0 };
+    const add = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type) {
+      if (type === 'visibilitychange' && this === document) {
+        window.__chessyListenerCounts.visibility++;
+      } else if (type === 'updatefound' && this && this.constructor &&
+          this.constructor.name === 'ServiceWorkerRegistration') {
+        window.__chessyListenerCounts.updatefound++;
+      }
+      return add.apply(this, arguments);
+    };
+  });
   await race.goto(url);
   await race.waitForFunction(function () {
     return document.getElementById('installNote').textContent
@@ -365,12 +394,49 @@ function browserType() {
     return !!navigator.serviceWorker.controller;
   }), 'release A remains uncontrolled after its worker install fails');
 
+  // Recover without changing releases. The boundary-owned retry must run the
+  // same UI/listener success path as boot registration, yet accepting A's
+  // same-release first claim must not reload this document.
+  phase.failWorker = false;
   await race.click('#newGame');
   await race.click('input[name="mode"][value="pvp"] + span');
   await race.click('#newGameStart');
   await race.waitForFunction(function () {
+    return !document.getElementById('newGameDialog').open &&
+      document.getElementById('installNote').textContent.indexOf('Ready offline') !== -1 &&
+      !!navigator.serviceWorker.controller;
+  });
+  const retryUi = await race.evaluate(function () {
+    return {
+      token: window.CHESSY_RELEASE,
+      note: document.getElementById('installNote').textContent,
+      boots: Number(sessionStorage.getItem('chessy-retry-test-boots') || 0),
+      listeners: window.__chessyListenerCounts
+    };
+  });
+  check(retryUi.token === RA && retryUi.boots === 1 &&
+      retryUi.note.indexOf('Ready offline') !== -1,
+    'same-release retry clears the failure note without reloading');
+  check(retryUi.listeners.visibility === 2 && retryUi.listeners.updatefound === 1,
+    'retry success wires one lifecycle listener set (plus the app visibility listener)');
+
+  // Re-registering at the next boundary returns the same Registration object.
+  // Its lifecycle listeners must not multiply.
+  await race.click('#newGame');
+  await race.click('#newGameStart');
+  await race.waitForFunction(function () {
     return !document.getElementById('newGameDialog').open;
   });
+  const repeatUi = await race.evaluate(function () {
+    return {
+      boots: Number(sessionStorage.getItem('chessy-retry-test-boots') || 0),
+      listeners: window.__chessyListenerCounts
+    };
+  });
+  check(repeatUi.boots === 1 &&
+      repeatUi.listeners.visibility === 2 && repeatUi.listeners.updatefound === 1,
+    'repeated successful boundary registration does not duplicate listeners');
+
   await race.click('#board .square[data-index="52"]'); // e2
   await race.click('#board .square[data-index="36"]'); // e4
   const raceA = await race.evaluate(function () {
@@ -420,6 +486,84 @@ function browserType() {
     'the first-controller race has no page errors' +
       (raceErrors.length ? ': ' + raceErrors.join(' | ') : ''));
   await raceContext.close();
+
+  // Late-initial-controller race: A's head snapshot sees no controller, then
+  // parsing pauses at its final external script. A second page installs B,
+  // whose clients.claim() makes B visible before A creates its runtime gate.
+  // Gate initialization must handshake that ambiguous controller and reload A
+  // even though no controllerchange listener existed when the claim happened.
+  phase.release = RA;
+  phase.failWorker = false;
+  phase.holdProgress = true;
+  const progressHeld = new Promise(function (resolve) {
+    resolveProgressHeld = resolve;
+  });
+  const initContext = await browser.newContext();
+  const initRace = await initContext.newPage();
+  const initErrors = [];
+  initRace.on('pageerror', function (e) { initErrors.push(String(e)); });
+  await initRace.addInitScript(function () {
+    const key = 'chessy-init-race-boots';
+    sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) || 0) + 1));
+  });
+  const initNavigation = initRace.goto(url).catch(function () {
+    // The expected runtime reload may abort the original navigation.
+  });
+  await progressHeld;
+  check(await initRace.evaluate(function () {
+    return window.CHESSY_BOOT_CONTROLLER === null &&
+      !navigator.serviceWorker.controller;
+  }), 'release A records an uncontrolled early snapshot before gate initialization');
+
+  phase.release = RB;
+  const publisher = await initContext.newPage();
+  await publisher.goto(url);
+  await publisher.waitForFunction(function () {
+    return !!navigator.serviceWorker.controller &&
+      document.getElementById('installNote').textContent.indexOf('Ready offline') !== -1;
+  });
+  await initRace.waitForFunction(function () {
+    return !!navigator.serviceWorker.controller;
+  });
+  check(await initRace.evaluate(function () {
+    return window.CHESSY_BOOT_CONTROLLER === null &&
+      !!navigator.serviceWorker.controller;
+  }), 'B claims the parsing A page after its snapshot but before gate creation');
+  releaseHeldProgress();
+  await initNavigation;
+
+  const initializedB = await (async function () {
+    const t0 = Date.now();
+    for (;;) {
+      let state = null;
+      try {
+        state = await initRace.evaluate(function () {
+          return {
+            token: window.CHESSY_RELEASE,
+            build: window.CHESSY_BUILD,
+            controlled: !!navigator.serviceWorker.controller,
+            ready: document.getElementById('installNote').textContent
+              .indexOf('Ready offline') !== -1,
+            boots: Number(sessionStorage.getItem('chessy-init-race-boots') || 0)
+          };
+        });
+      } catch (e) { /* mid-navigation */ }
+      if (state && state.token === RB && state.build === RB &&
+          state.controlled && state.ready && state.boots >= 2) return state;
+      if (Date.now() - t0 > 30000) {
+        throw new Error('timeout: late-initial-controller race — last state ' +
+          JSON.stringify(state));
+      }
+      await new Promise(function (r) { setTimeout(r, 200); });
+    }
+  })();
+  check(initializedB.boots >= 2,
+    'gate initialization verifies the late controller and reloads into coherent B');
+  check(initErrors.length === 0,
+    'the late-initial-controller race has no page errors' +
+      (initErrors.length ? ': ' + initErrors.join(' | ') : ''));
+  await publisher.close();
+  await initContext.close();
 
   await browser.close();
   server.close();
