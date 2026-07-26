@@ -10,6 +10,14 @@ const OPENINGS_MANIFEST_SHA256 =
   'ac8a1c3e5776c6cf3989af3b219085eb5c6c56124757d326a76611dd7e5d25de';
 const OPENINGS_MANIFEST_COUNT = 100;
 
+// Canonical RNG seed for one (opening, seed-slot) pair. This mapping is part of
+// the protocol evidence: both colours use the same derived seed, and the
+// aggregator re-derives it so artifacts produced by an older/stale mapping
+// cannot be accepted under the current protocol identity.
+function deriveGameSeed(opening, seed) {
+  return (opening * 977 + seed * 7919 + 1) | 0;
+}
+
 const PROTOCOLS = Object.freeze({
   formalFixedNode: Object.freeze({
     id: 'chessy-fixed-node-strict-strength-10000x4x100x180-v1',
@@ -47,6 +55,7 @@ module.exports = Object.freeze({
   OPENINGS_MANIFEST_VERSION,
   OPENINGS_MANIFEST_SHA256,
   OPENINGS_MANIFEST_COUNT,
+  deriveGameSeed,
   PROTOCOLS,
   PROTOCOL_BY_ID
 });

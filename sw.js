@@ -60,6 +60,12 @@ const ASSETS = [
   './icons/icon-512-maskable.png'
 ];
 
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'chessy-release?') return;
+  const port = event.ports && event.ports[0];
+  if (port) port.postMessage({ type: 'chessy-release', release: RELEASE });
+});
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)

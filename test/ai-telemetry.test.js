@@ -57,8 +57,8 @@ const cases = [
     fen: '4r1k1/rpp2pp1/1bn4p/3B4/1PP2P2/p2pP1P1/P2B3P/1R2R2K b - - 0 24',
     nodes: 100000,
     expected: {
-      uci: 'c6e7', depth: 5, score: 14, nodes: 100000, qnodes: 58407,
-      cutoffs: 5233, researches: 36
+      uci: 'c6e7', depth: 5, score: 14, nodes: 100000, qnodes: 58516,
+      cutoffs: 5268, researches: 44
     }
   }
 ];

@@ -212,7 +212,12 @@ for (const file of files) {
     fail(2, file + ': records is empty or not an array');
   }
 
-  for (const r of recs) {
+  for (let recordIndex = 0; recordIndex < recs.length; recordIndex++) {
+    const r = recs[recordIndex];
+    if (!r || typeof r !== 'object' || Array.isArray(r)) {
+      fail(2, file + ': record ' + recordIndex +
+        ' is not a non-null object');
+    }
     if (!Number.isInteger(r.op) || r.op < 0 || r.op >= EXP_OPENINGS) {
       fail(2, file + ': record op ' + JSON.stringify(r.op) +
         ' is out of range [0,' + EXP_OPENINGS + ')');
@@ -220,6 +225,12 @@ for (const file of files) {
     if (!Number.isInteger(r.seed) || r.seed < 0 || r.seed >= EXP_SEEDS) {
       fail(2, file + ': record seed ' + JSON.stringify(r.seed) +
         ' is out of range [0,' + EXP_SEEDS + ')');
+    }
+    const expectedGameSeed = MatchProtocol.deriveGameSeed(r.op, r.seed);
+    if (r.gseed !== expectedGameSeed) {
+      fail(2, file + ': record gseed ' + JSON.stringify(r.gseed) +
+        ' does not match canonical opening/seed mapping (expected ' +
+        expectedGameSeed + ' for opening ' + r.op + ', seed ' + r.seed + ')');
     }
     if (typeof r.pair !== 'number' || r.pair < 0 || r.pair > 1) {
       fail(2, file + ': record pair ' + JSON.stringify(r.pair) +

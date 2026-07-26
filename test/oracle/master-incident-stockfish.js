@@ -23,9 +23,32 @@ try {
 
 const incident = require('../fixtures/master-incident-20260724.json');
 const expected = incident.oracle;
-const packageRoot = path.dirname(require.resolve('stockfish'));
-const packageJson = JSON.parse(fs.readFileSync(
-  path.join(packageRoot, 'package.json'), 'utf8'));
+
+// The package entry is `stockfish/src/stockfish.js`, not the package root.
+// Walk upward to the manifest instead of assuming one dirname is sufficient;
+// this also remains correct if a later pinned build nests its entry differently.
+function findPackageRoot(entry, packageName) {
+  let dir = path.dirname(entry);
+  while (true) {
+    const manifestPath = path.join(dir, 'package.json');
+    if (fs.existsSync(manifestPath)) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (manifest.name === packageName) {
+        return { root: dir, manifest: manifest };
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      throw new Error('could not resolve the ' + packageName + ' package root');
+    }
+    dir = parent;
+  }
+}
+
+const stockfishPackage = findPackageRoot(
+  require.resolve('stockfish'), 'stockfish');
+const packageRoot = stockfishPackage.root;
+const packageJson = stockfishPackage.manifest;
 
 function sha256(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');

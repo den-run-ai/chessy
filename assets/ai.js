@@ -291,10 +291,20 @@
         }
         if (passed) {
           // A blocker always halves a passer; tactical catchability applies
-          // only in advanced endings.
+          // only in advanced endings. Test the destination on the board AFTER
+          // the push: on the current board the pawn itself can hide a rook or
+          // queen behind it, masking either an enemy attack or friendly
+          // support that the advance would reveal.
+          let advanced = board;
+          if (!blocked && next >= 0 && next < 64 &&
+              phase <= PHASE_MAX / 2 && rr >= 4) {
+            advanced = board.slice();
+            advanced[next] = advanced[i];
+            advanced[i] = null;
+          }
           const unsafe = blocked || (phase <= PHASE_MAX / 2 && rr >= 4 &&
-            Chess.isAttacked(board, next, enemy) &&
-            !Chess.isAttacked(board, next, color));
+            Chess.isAttacked(advanced, next, enemy) &&
+            !Chess.isAttacked(advanced, next, color));
           mg += sign * Math.round(PASSED_MG[rr] * (unsafe ? 0.5 : 1));
           eg += sign * Math.round(PASSED_EG[rr] * (unsafe ? 0.5 : 1));
         }

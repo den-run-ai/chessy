@@ -44,9 +44,10 @@
  *   depth-dist /     the completed-depth histogram and the fraction of moves
  *   completed-depth: returned from a depth >= 5 search (search-depth telemetry,
  *                    e.g. for calibrating either per-move budget);
- *   RESULT:          the opening-CLUSTER non-inferiority verdict (see
- *                    test/match-stats.js) — the 95% lower bound is over the
- *                    per-opening means, not the individual pairs.
+ *   RESULT:          the opening-CLUSTER non-inferiority verdict for
+ *                    diagnostic runs (see test/match-stats.js). Formal shards
+ *                    deliberately emit no verdict; only the complete 800-game
+ *                    aggregation may pass or fail the strict-strength gate.
  */
 'use strict';
 const fs = require('fs');
@@ -519,7 +520,7 @@ outer:
 for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
   for (let o = OPEN_LO; o < OPEN_HI; o++) {
     if (pairScores.length >= PAIRS_LIMIT) break outer;
-    const seed = (o * 977 + s * 7919 + 1) | 0;
+    const seed = MatchProtocol.deriveGameSeed(o, s);
     let pair = 0;
     // candidate as White, then colors swapped — same opening, same seed.
     const asWhite = playGame([cand, base], OPENINGS[o][1], seed);
@@ -542,16 +543,13 @@ for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
 process.stderr.write('\n');
 
 const cs = clusterStats(records);
-function acceptanceVerdict(stats) {
-  if (!Number.isFinite(stats.lo95)) return stats.verdict;
-  if (stats.lo95 > PROTOCOL.lowerBoundThreshold) {
-    return PROTOCOL.formal
-      ? 'PASS — strict strength gate met'
-      : stats.verdict;
+function printVerdict(stats) {
+  if (PROTOCOL.formal) {
+    console.log('FORMAL SHARD: no verdict — strict-strength verdict is reserved ' +
+      'for the complete 800-game aggregation');
+    return;
   }
-  return PROTOCOL.formal
-    ? 'FAIL — strict strength gate not met (lower bound at or below 50%)'
-    : stats.verdict;
+  console.log('RESULT: ' + stats.verdict);
 }
 
 // Completed-depth histogram and the fraction of candidate moves returned from a
@@ -595,11 +593,11 @@ if (cs.nClusters < 2) {
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
     (cs.nClusters ? '  score ' + (cs.mean * 100).toFixed(1) + '%' : '') +
     '  (' + cs.nClusters + ' opening' + (cs.nClusters === 1 ? '' : 's') + ')');
-  console.log('RESULT: ' + acceptanceVerdict(cs));
+  printVerdict(cs);
 } else {
   console.log('W ' + w + ' / D ' + d + ' / L ' + l +
     '  score ' + (cs.mean * 100).toFixed(2) + '%' +
     '  one-sided 95% lower bound ' + (cs.lo95 * 100).toFixed(2) + '%' +
     '  over ' + cs.nClusters + ' openings (' + cs.nPairs + ' pairs)');
-  console.log('RESULT: ' + acceptanceVerdict(cs));
+  printVerdict(cs);
 }

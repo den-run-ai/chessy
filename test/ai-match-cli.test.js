@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const MATCH = path.join(__dirname, 'ai-match.js');
+const MATCH_SOURCE = fs.readFileSync(MATCH, 'utf8');
 const FORMAL_WORKFLOW =
   path.join(__dirname, '..', '.github', 'workflows', 'ai-match.yml');
 const TIME_WORKFLOW =
@@ -92,6 +93,12 @@ check(formalSelf.status === 2 &&
     !formalSelf.output.includes('protocol-id:'),
   'formal self-vs-self fails before producing an artifact',
   'exit ' + formalSelf.status + ': ' + formalSelf.output.trim());
+check(MATCH_SOURCE.includes(
+      'FORMAL SHARD: no verdict — strict-strength verdict is reserved ') &&
+    !MATCH_SOURCE.includes("'PASS — strict strength gate met'") &&
+    !MATCH_SOURCE.includes(
+      "'FAIL — strict strength gate not met (lower bound at or below 50%)'"),
+  'formal shard output reserves the strict-strength verdict for aggregation');
 
 console.log('equal-time match smoke');
 const smoke = run([

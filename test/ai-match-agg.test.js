@@ -29,7 +29,8 @@ function records(seed, openings) {
   for (let op = 0; op < (openings || OPENINGS); op++) {
     const white = 1, black = op % 2 ? 0.5 : 0;
     out.push({
-      op, name: 'op' + op, seed, gseed: op * 7 + seed,
+      op, name: 'op' + op, seed,
+      gseed: MatchProtocol.deriveGameSeed(op, seed),
       white, black, pair: (white + black) / 2
     });
   }
@@ -272,29 +273,54 @@ function mutatedRecords(over) {
   const recs = over.losses ? records(0).map(function (r) {
     return Object.assign({}, r, { white: 0, black: 0, pair: 0 });
   }) : records(0);
-  if (over.record) recs[0] = over.record;
+  if (Object.prototype.hasOwnProperty.call(over, 'record')) {
+    recs[0] = over.record;
+  }
   return shardFile(over.name, 0, {
     local: true, records: recs
   });
 }
+expectMessage([mutatedRecords({
+  name: 'null-record.txt',
+  record: null
+})], 2, 'record 0 is not a non-null object',
+'null record is rejected cleanly -> exit 2', ['--seeds', '1']);
 expect([mutatedRecords({
   name: 'bad-op.txt',
-  record: { op: 100, seed: 0, white: 1, black: 0, pair: 0.5 }
+  record: {
+    op: 100, seed: 0, gseed: MatchProtocol.deriveGameSeed(100, 0),
+    white: 1, black: 0, pair: 0.5
+  }
 })], 2, 'out-of-range opening -> exit 2', ['--seeds', '1']);
 expect([mutatedRecords({
   name: 'bad-pair.txt',
-  record: { op: 0, seed: 0, white: 1, black: 1, pair: 2 }
+  record: {
+    op: 0, seed: 0, gseed: MatchProtocol.deriveGameSeed(0, 0),
+    white: 1, black: 1, pair: 2
+  }
 })], 2, 'out-of-range pair -> exit 2', ['--seeds', '1']);
 expect([mutatedRecords({
   name: 'inconsistent.txt',
-  record: { op: 0, seed: 0, white: 0, black: 0, pair: 1 }
+  record: {
+    op: 0, seed: 0, gseed: MatchProtocol.deriveGameSeed(0, 0),
+    white: 0, black: 0, pair: 1
+  }
 })], 2, 'inconsistent game/pair scores -> exit 2',
 ['--seeds', '1']);
 expect([mutatedRecords({
   name: 'bad-game.txt',
-  record: { op: 0, seed: 0, white: 0.3, black: 0.7, pair: 0.5 }
+  record: {
+    op: 0, seed: 0, gseed: MatchProtocol.deriveGameSeed(0, 0),
+    white: 0.3, black: 0.7, pair: 0.5
+  }
 })], 2, 'non-discrete game score -> exit 2',
 ['--seeds', '1']);
+const staleSeed = records(0)[0];
+expectMessage([mutatedRecords({
+  name: 'stale-gseed.txt',
+  record: Object.assign({}, staleSeed, { gseed: staleSeed.gseed + 1 })
+})], 2, 'does not match canonical opening/seed mapping',
+'stale derived game seed -> exit 2', ['--seeds', '1']);
 expect([mutatedRecords({
   name: 'valid-fail.txt', losses: true
 })], 1, 'valid losing 100x1 manifest fails NI', ['--seeds', '1']);

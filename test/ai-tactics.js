@@ -168,9 +168,44 @@ console.log('blocker-aware pawn evaluation');
     'a defended passer keeps its full progress credit',
     'defended ' + defendedScore + ', unchallenged ' + unchallengedScore);
 
+  // Moving the pawn can uncover a same-file slider behind it. Attack/support
+  // classification must use that post-push board, not the current board where
+  // the pawn itself masks the ray.
+  const revealedAttack = '7k/8/3P4/3r4/8/8/8/K7 w - - 0 1';
+  const attackControl = '7k/8/3P4/4r3/8/8/8/K7 w - - 0 1';
+  const revealedAttackState = Chess.parseFen(revealedAttack);
+  const advancedAttackBoard = revealedAttackState.board.slice();
+  advancedAttackBoard[next] = advancedAttackBoard[Chess.sqIndex('d6')];
+  advancedAttackBoard[Chess.sqIndex('d6')] = null;
+  check(!Chess.isAttacked(revealedAttackState.board, next, 'b') &&
+      Chess.isAttacked(advancedAttackBoard, next, 'b'),
+    'a pawn push reveals the enemy rook attack behind it');
+  const revealedAttackScore = ChessAI.evaluate(revealedAttackState.board);
+  const attackControlScore = ChessAI.evaluate(Chess.parseFen(attackControl).board);
+  check(revealedAttackScore < attackControlScore - 40,
+    'a post-push enemy slider halves the advanced passer credit',
+    'revealed ' + revealedAttackScore + ', control ' + attackControlScore);
+
+  const revealedSupport = '2b4k/8/3P4/3R4/8/8/8/K7 w - - 0 1';
+  const supportControl = '2b4k/8/3P4/4R3/8/8/8/K7 w - - 0 1';
+  const revealedSupportState = Chess.parseFen(revealedSupport);
+  const advancedSupportBoard = revealedSupportState.board.slice();
+  advancedSupportBoard[next] = advancedSupportBoard[Chess.sqIndex('d6')];
+  advancedSupportBoard[Chess.sqIndex('d6')] = null;
+  check(!Chess.isAttacked(revealedSupportState.board, next, 'w') &&
+      Chess.isAttacked(advancedSupportBoard, next, 'w'),
+    'a pawn push reveals friendly rook support behind it');
+  const revealedSupportScore = ChessAI.evaluate(revealedSupportState.board);
+  const supportControlScore = ChessAI.evaluate(Chess.parseFen(supportControl).board);
+  check(revealedSupportScore > supportControlScore + 20,
+    'post-push slider support preserves the advanced passer credit',
+    'revealed ' + revealedSupportScore + ', control ' + supportControlScore);
+
   for (const [name, fen] of [
     ['blocked pawn', blocked], ['mobile pawn', mobile],
-    ['defended passer', defended], ['unchallenged passer', unchallenged]
+    ['defended passer', defended], ['unchallenged passer', unchallenged],
+    ['revealed slider attack', revealedAttack],
+    ['revealed slider support', revealedSupport]
   ]) {
     const a = ChessAI.evaluate(Chess.parseFen(fen).board);
     const b = ChessAI.evaluate(Chess.parseFen(mirrorFen(fen)).board);
