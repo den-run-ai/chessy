@@ -20,14 +20,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r57">
+  <link rel="stylesheet" href="assets/style.css?r=r58">
 </head>
 <body>
   <div class="app">
     <header class="topbar">
       <div class="brand-lockup">
         <h1 class="brand">♞ Chessy</h1>
-        <span class="app-version" id="appVersion">Version r57</span>
+        <span class="app-version" id="appVersion">Version r58</span>
       </div>
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
@@ -111,7 +111,9 @@
         </div>
         <input type="file" id="restoreFile" accept=".json,application/json" hidden>
         <p class="coach-note" id="dataStatus" role="status" aria-live="polite"></p>
-        <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
+        <p class="coach-note" id="reviewEmpty" hidden>
+          No games saved yet — finish a game or start a new one after making moves.
+        </p>
         <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
       </div>
 
@@ -256,8 +258,10 @@
   <!-- Setup uses styled radio groups, NOT native selects: mobile browsers
        render select menus as system popovers that can cover the browser
        chrome and look detached from the dialog. -->
-  <dialog id="newGameDialog" class="setup" aria-labelledby="newGameTitle">
+  <dialog id="newGameDialog" class="setup" aria-labelledby="newGameTitle"
+          aria-describedby="newGameWarning newGameStatus">
     <h2 id="newGameTitle">New game</h2>
+    <p id="newGameWarning" class="coach-note" hidden></p>
     <fieldset class="choice stack">
       <legend>Opponent</legend>
       <div class="choice-options">
@@ -285,9 +289,11 @@
         <label><input type="radio" name="timeControl" value="1800+20"><span>30+20</span></label>
       </div>
     </fieldset>
+    <p id="newGameStatus" class="coach-note" role="status" aria-live="polite"></p>
     <div class="buttons setup-actions">
-      <button id="newGameStart" class="btn primary">Start game</button>
-      <button id="newGameCancel" class="btn">Cancel</button>
+      <button type="button" id="newGameStart" class="btn primary">Start game</button>
+      <button type="button" id="newGameDiscard" class="btn danger" hidden>Start without saving</button>
+      <button type="button" id="newGameCancel" class="btn">Cancel</button>
     </div>
   </dialog>
 
@@ -373,32 +379,32 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r57';</script>
-  <script src="assets/engine.js?r=r57"></script>
-  <script src="assets/ai.js?r=r57"></script>
+  <script>window.CHESSY_RELEASE = 'r58';</script>
+  <script src="assets/engine.js?r=r58"></script>
+  <script src="assets/ai.js?r=r58"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r57"></script>
-  <script src="assets/archive.js?r=r57"></script>
-  <script src="assets/runtime-update.js?r=r57"></script>
-  <script src="assets/app.js?r=r57"></script>
-  <script src="assets/mini-board.js?r=r57"></script>
-  <script src="assets/review.js?r=r57"></script>
-  <script src="assets/analysis-core.js?r=r57"></script>
-  <script src="assets/analysis-service.js?r=r57"></script>
-  <script src="assets/analysis-result.js?r=r57"></script>
-  <script src="assets/equivalence.js?r=r57"></script>
-  <script src="assets/moment-selector.js?r=r57"></script>
-  <script src="assets/moment-scan.js?r=r57"></script>
-  <script src="assets/pgn.js?r=r57"></script>
-  <script src="assets/import.js?r=r57"></script>
-  <script src="assets/data-controls.js?r=r57"></script>
-  <script src="assets/reflection.js?r=r57"></script>
-  <script src="assets/train.js?r=r57"></script>
-  <script src="assets/progress.js?r=r57"></script>
+  <script src="assets/store.js?r=r58"></script>
+  <script src="assets/archive.js?r=r58"></script>
+  <script src="assets/runtime-update.js?r=r58"></script>
+  <script src="assets/app.js?r=r58"></script>
+  <script src="assets/mini-board.js?r=r58"></script>
+  <script src="assets/review.js?r=r58"></script>
+  <script src="assets/analysis-core.js?r=r58"></script>
+  <script src="assets/analysis-service.js?r=r58"></script>
+  <script src="assets/analysis-result.js?r=r58"></script>
+  <script src="assets/equivalence.js?r=r58"></script>
+  <script src="assets/moment-selector.js?r=r58"></script>
+  <script src="assets/moment-scan.js?r=r58"></script>
+  <script src="assets/pgn.js?r=r58"></script>
+  <script src="assets/import.js?r=r58"></script>
+  <script src="assets/data-controls.js?r=r58"></script>
+  <script src="assets/reflection.js?r=r58"></script>
+  <script src="assets/train.js?r=r58"></script>
+  <script src="assets/progress.js?r=r58"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

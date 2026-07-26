@@ -29,6 +29,11 @@
   const moveListEl = document.getElementById('moveList');
   const setupSummaryEl = document.getElementById('setupSummary');
   const newGameDialog = document.getElementById('newGameDialog');
+  const newGameWarningEl = document.getElementById('newGameWarning');
+  const newGameStatusEl = document.getElementById('newGameStatus');
+  const newGameStartEl = document.getElementById('newGameStart');
+  const newGameDiscardEl = document.getElementById('newGameDiscard');
+  const newGameCancelEl = document.getElementById('newGameCancel');
   const clocksEl = document.getElementById('clocks');
   const clockWhiteEl = document.getElementById('clockWhite');
   const clockBlackEl = document.getElementById('clockBlack');
@@ -46,6 +51,10 @@
   let selected = null;        // selected square index
   let flipped = false;
   let aiThinking = false;
+  // Owns the frozen live game while a New Game request is release-gated or
+  // committing its incomplete checkpoint. Object identity, not just gameId,
+  // prevents a stale attempt from resuming a newer attempt for the same game.
+  let checkpointAttempt = null;
   let squares = [];           // 64 DOM cells, index = board index
 
   // Game settings are chosen in the New Game dialog and fixed for the game's
@@ -139,7 +148,8 @@
   }
 
   function tickClock() {
-    if (clocks.wMs === null || timeForfeit || Chess.gameStatus(state).over) return;
+    if (clocks.wMs === null || turnStartedAt === null ||
+        timeForfeit || Chess.gameStatus(state).over) return;
     const remaining = liveRemaining(state.turn);
     if (remaining <= 0) flag(state.turn);
     else renderClocks();
@@ -148,7 +158,8 @@
   function liveRemaining(color) {
     const stored = color === 'w' ? clocks.wMs : clocks.bMs;
     if (stored === null) return null;
-    if (timeForfeit || Chess.gameStatus(state).over || color !== state.turn) return stored;
+    if (turnStartedAt === null || timeForfeit ||
+        Chess.gameStatus(state).over || color !== state.turn) return stored;
     return stored - Math.max(0, Date.now() - turnStartedAt);
   }
 
@@ -377,7 +388,8 @@
 
   function updateLiveNote() {
     const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
-    const running = clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over;
+    const running = clocks.wMs !== null && turnStartedAt !== null &&
+      !timeForfeit && !Chess.gameStatus(state).over;
     liveNoteEl.dataset.active = running ? 'true' : 'false';
     if (inPlay || !running) {
       liveNoteEl.hidden = true;
@@ -429,7 +441,8 @@
       w = liveRemaining('w');
       b = liveRemaining('b');
     }
-    const running = !isViewing() && !timeForfeit && !Chess.gameStatus(state).over;
+    const running = !isViewing() && turnStartedAt !== null &&
+      !timeForfeit && !Chess.gameStatus(state).over;
     clockWhiteEl.querySelector('b').textContent = fmtClock(w);
     clockBlackEl.querySelector('b').textContent = fmtClock(b);
     clockWhiteEl.classList.toggle('active', running && state.turn === 'w');
@@ -603,7 +616,7 @@
   }
 
   function maybeAiMove(startedAt, fallbackReason) {
-    if (state.turn !== aiColor() || fullStatus().over) return;
+    if (checkpointAttempt || state.turn !== aiColor() || fullStatus().over) return;
     aiThinking = true;
     render();
     const cfg = aiConfig();
@@ -851,6 +864,7 @@
   }
 
   function startNewGame() {
+    checkpointAttempt = null;
     gameId = newGameId();
     startedRelease = currentRelease();
     gameEndedAt = null;
@@ -883,45 +897,226 @@
       checked = Promise.resolve(true);
     }
     Promise.resolve(checked).then(function (current) {
-      if (current && seq === freshStartSeq && stillRequested()) action();
+      if (current && seq === freshStartSeq && stillRequested()) action(seq);
     }, function () {
       // Update discovery is advisory when it fails: an offline user must
       // always be able to start a local game.
-      if (seq === freshStartSeq && stillRequested()) action();
+      if (seq === freshStartSeq && stillRequested()) action(seq);
+    });
+    return seq;
+  }
+
+  function chosenGameSettings() {
+    return {
+      mode: getChoice('mode') || settings.mode,
+      difficulty: getChoice('difficulty') || settings.difficulty,
+      timeControl: getChoice('timeControl') || settings.timeControl
+    };
+  }
+
+  function applyAndStartNewGame(next) {
+    settings.mode = next.mode;
+    settings.difficulty = next.difficulty;
+    settings.timeControl = next.timeControl;
+    if (gameOverDialog.open) gameOverDialog.close();
+    newGameDialog.close();
+    startNewGame();
+  }
+
+  function hasIncompleteGame() {
+    return state.history.length > 0 && !fullStatus().over;
+  }
+
+  function resetNewGamePrompt() {
+    const willSave = hasIncompleteGame();
+    newGameWarningEl.hidden = !willSave;
+    newGameWarningEl.textContent = willSave
+      ? 'Starting another game will save this one to Review as Incomplete.'
+      : '';
+    newGameStatusEl.textContent = '';
+    newGameStartEl.textContent = willSave ? 'Save & start new game' : 'Start game';
+    newGameStartEl.disabled = false;
+    newGameCancelEl.disabled = false;
+    newGameDiscardEl.hidden = true;
+    newGameDiscardEl.disabled = false;
+  }
+
+  // Freeze the live turn as soon as Start is pressed — before the runtime
+  // update gate and before IndexedDB. This makes the accepted position exact:
+  // neither an AI reply nor a low clock can finish the game behind the modal.
+  // A cancelled/failed request resumes only when it still owns this exact
+  // attempt object; gameId alone is insufficient when a dialog is reopened.
+  function pauseCheckpointClock() {
+    if (clocks.wMs === null || timeForfeit || Chess.gameStatus(state).over) return true;
+    const color = state.turn;
+    const remaining = liveRemaining(color);
+    if (remaining <= 0) return false;
+    clocks[color + 'Ms'] = remaining;
+    turnStartedAt = null;
+    if (clockTicker) { clearInterval(clockTicker); clockTicker = null; }
+    renderClocks();
+    save();
+    return true;
+  }
+
+  function resumeCheckpointGame(attempt) {
+    if (!attempt || checkpointAttempt !== attempt) return;
+    checkpointAttempt = null;
+    if (gameId !== attempt.gameId) return;
+    if (clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over &&
+        turnStartedAt === null) {
+      turnStartedAt = Date.now();
+      if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+      renderClocks();
+      save();
+    }
+    maybeAiMove();
+  }
+
+  function finishCheckpoint(attempt, runtimeSeq) {
+    if (checkpointAttempt !== attempt || runtimeSeq !== freshStartSeq ||
+        !newGameDialog.open || gameId !== attempt.gameId) return;
+
+    if (!attempt.saveIncomplete) {
+      checkpointAttempt = null;
+      applyAndStartNewGame(attempt.next);
+      return;
+    }
+
+    attempt.phase = 'saving';
+    newGameStatusEl.textContent = 'Saving the current game to Review…';
+    newGameCancelEl.disabled = true;
+
+    let write;
+    try {
+      if (!window.ChessyArchive ||
+          typeof ChessyArchive.recordAbandoned !== 'function') {
+        throw new Error('archive unavailable');
+      }
+      write = ChessyArchive.recordAbandoned(
+        attempt.state, attempt.settings, attempt.status, attempt.gameId,
+        { archivedAt: attempt.archivedAt, startedRelease: attempt.startedRelease });
+    } catch (e) {
+      write = Promise.reject(e);
+    }
+
+    Promise.resolve(write).then(function (storedId) {
+      if (checkpointAttempt !== attempt || runtimeSeq !== freshStartSeq ||
+          !newGameDialog.open || gameId !== attempt.gameId) return;
+      if (storedId !== attempt.gameId) throw new Error('checkpoint was not stored');
+      if (archiveAttempts.get(attempt.gameId) === attempt.archiveSeq) {
+        clearArchiveFailure(attempt.gameId);
+      }
+      // Defensive only: the clock and AI are frozen, but never replace a game
+      // that somehow became terminal while the write was outside this module.
+      if (fullStatus().over) {
+        checkpointAttempt = null;
+        newGameDialog.close();
+        if (gameOverDialog.open) gameOverDialog.close();
+        showGameOver(fullStatus());
+        return;
+      }
+      checkpointAttempt = null;
+      if (gameOverDialog.open) gameOverDialog.close();
+      applyAndStartNewGame(attempt.next);
+    }).catch(function () {
+      if (checkpointAttempt !== attempt || runtimeSeq !== freshStartSeq ||
+          !newGameDialog.open || gameId !== attempt.gameId) return;
+      newGameStatusEl.textContent =
+        'This game could not be saved. Try again, cancel, or start without saving it.';
+      newGameStartEl.textContent = 'Try saving again';
+      newGameStartEl.disabled = false;
+      newGameCancelEl.disabled = false;
+      newGameDiscardEl.hidden = false;
+      resumeCheckpointGame(attempt);
+    });
+  }
+
+  function beginNewGameStart(next, discard) {
+    const status = fullStatus();
+    const attempt = {
+      gameId: gameId,
+      state: state,
+      settings: Object.assign({}, settings),
+      status: status,
+      startedRelease: startedRelease,
+      archivedAt: Date.now(),
+      next: next,
+      saveIncomplete: !discard && state.history.length > 0 && !status.over,
+      phase: 'runtime',
+      runtimeSeq: null,
+      archiveSeq: null
+    };
+    checkpointAttempt = attempt;
+    cancelAi();
+    if (!pauseCheckpointClock()) {
+      checkpointAttempt = null;
+      freshStartSeq++;
+      newGameDialog.close();
+      flag(state.turn);
+      return;
+    }
+    if (attempt.saveIncomplete) {
+      const seqAtCall = ++archiveSeq;
+      archiveAttempts.set(attempt.gameId, seqAtCall);
+      attempt.archiveSeq = seqAtCall;
+      newGameStatusEl.textContent = 'Preparing the current game for Review…';
+    } else {
+      newGameStatusEl.textContent = 'Starting the new game…';
+    }
+    newGameStartEl.disabled = true;
+    newGameCancelEl.disabled = false; // cancellation is safe while only the runtime gate is pending
+    newGameDiscardEl.hidden = true;
+
+    attempt.runtimeSeq = startOnCurrentRuntime(function () {
+      return checkpointAttempt === attempt && newGameDialog.open;
+    }, function (runtimeSeq) {
+      finishCheckpoint(attempt, runtimeSeq);
     });
   }
 
   // "New game" opens a setup dialog (which doubles as the restart
   // confirmation): settings only apply when Start is pressed, so changing
-  // them and cancelling never affects the running game.
+  // them and cancelling never affects the running game. A non-empty,
+  // unfinished game is committed to Review before this one live-save slot is
+  // replaced; a failed checkpoint keeps the game unless the player explicitly
+  // chooses "Start without saving".
   document.getElementById('newGame').addEventListener('click', function () {
     freshStartSeq++; // invalidate a pending Rematch/start request
     setChoice('mode', settings.mode);
     setChoice('difficulty', settings.difficulty);
     setChoice('timeControl', settings.timeControl);
+    resetNewGamePrompt();
     newGameDialog.showModal();
   });
 
-  document.getElementById('newGameStart').addEventListener('click', function () {
-    // Snapshot the accepted choices; a slow update check must not observe
-    // later edits if the user dismisses/reopens the dialog in the meantime.
-    const next = {
-      mode: getChoice('mode') || settings.mode,
-      difficulty: getChoice('difficulty') || settings.difficulty,
-      timeControl: getChoice('timeControl') || settings.timeControl
-    };
-    startOnCurrentRuntime(function () { return newGameDialog.open; }, function () {
-      settings.mode = next.mode;
-      settings.difficulty = next.difficulty;
-      settings.timeControl = next.timeControl;
-      newGameDialog.close();
-      startNewGame();
-    });
+  newGameStartEl.addEventListener('click', function () {
+    // Snapshot choices and freeze the live turn synchronously; a slow update
+    // check must observe neither later edits nor a later AI/clock position.
+    beginNewGameStart(chosenGameSettings(), false);
   });
 
-  document.getElementById('newGameCancel').addEventListener('click', function () {
+  newGameDiscardEl.addEventListener('click', function () {
+    beginNewGameStart(chosenGameSettings(), true);
+  });
+
+  newGameCancelEl.addEventListener('click', function () {
+    const attempt = checkpointAttempt;
+    if (attempt && attempt.phase === 'saving') return;
     freshStartSeq++;
     newGameDialog.close();
+    resumeCheckpointGame(attempt);
+  });
+  newGameDialog.addEventListener('cancel', function (e) {
+    // Escape is the dialog's keyboard Cancel path. Fence an update/checkpoint
+    // callback exactly like the visible button and resume any paused AI turn.
+    const attempt = checkpointAttempt;
+    if (attempt && attempt.phase === 'saving') {
+      e.preventDefault();
+      return;
+    }
+    freshStartSeq++;
+    resumeCheckpointGame(attempt);
   });
 
   document.getElementById('undo').addEventListener('click', function () {

@@ -158,9 +158,9 @@
       a.result === b.result && a.reason === b.reason;
   }
 
-  // Archive a finished game; resolves with the stored id. The get and put
-  // run in ONE readwrite transaction, so a re-offer racing a write cannot
-  // interleave.
+  // Archive a finished game or an explicit incomplete checkpoint; resolves
+  // with the stored id. The get and put run in ONE readwrite transaction, so
+  // a re-offer racing a write cannot interleave.
   //   - no existing record     → stored as-is
   //   - same ending re-offered → overwritten, keeping the EARLIEST known
   //     completion time (listGames sorts by createdAt — a re-shown or
