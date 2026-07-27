@@ -22,7 +22,7 @@ require('./helper').run('data-controls', async function (t) {
     return CoachStore.importGame(a).then(function () { return CoachStore.importGame(b); })
       .then(function () { return CoachStore.addCard({ gameId: a.id, ply: 2, cause: 'test', due: 1, step: -1, attempts: [],
         fenBefore: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
-        playedSan: 'e5', bestSan: 'e5', bestMove: { from: 52, to: 36, promotion: null } }); })
+        playedSan: 'e5', bestSan: 'e5', bestMove: { from: 12, to: 28, promotion: null } }); })
       .then(function () {
         return CoachStore.putAnalysis({ key: 'k1', gameId: a.id, ply: 2, gameRev: 'x',
           fingerprint: 'f', engineId: 'chessy', configHash: 'c', complete: true,
@@ -588,10 +588,15 @@ require('./helper').run('data-controls', async function (t) {
     localStorage.removeItem('chessy-pending-archive-v1');
     const g = { id: 'rev-x', source: 'play', sans: ['e4', 'e5', 'Nf3'], result: '*', reason: 'imported',
       mode: 'pvp', plies: 3, createdAt: 1 };
-    const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+    const afterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
+    const afterE4E5 = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2';
     return CoachStore.putGame(g)
-      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1, step: -1, attempts: [], fenBefore: fen }); })
-      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1, step: -1, attempts: [], fenBefore: fen }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1,
+        step: -1, attempts: [], fenBefore: afterE4, bestSan: 'e5',
+        bestMove: { from: 12, to: 28, promotion: null } }); })
+      .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 2, cause: 't', due: 1,
+        step: -1, attempts: [], fenBefore: afterE4E5, bestSan: 'Nf3',
+        bestMove: { from: 62, to: 45, promotion: null } }); })
       .then(function () {
         // Revision diverges at ply 1 (e4 → d4), so both cards (ply 1 and 2) prune.
         localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
@@ -889,7 +894,8 @@ require('./helper').run('data-controls', async function (t) {
     const game = { id: 'g', sans: ['e4'], result: '*', plies: 1, createdAt: 1 };
     function card(step) {
       return { id: 1, gameId: 'g', ply: 0, due: 0, step: step,
-        fenBefore: startFen, attempts: [] };
+        fenBefore: startFen, bestSan: 'e4',
+        bestMove: { from: 52, to: 36, promotion: null }, attempts: [] };
     }
     function backup(c, games) {
       return { format: F, version: 1, dbVersion: 6,
@@ -899,7 +905,8 @@ require('./helper').run('data-controls', async function (t) {
       arrayStores: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: [] }),
       badAttempts: CoachStore.validateBackup({ format: F, version: 1, dbVersion: 6, stores: {
         games: [], cards: [{ id: 1, gameId: 'g', due: 0, step: 0,
-          fenBefore: startFen, attempts: {} }] } }),
+          fenBefore: startFen, bestSan: 'e4',
+          bestMove: { from: 52, to: 36, promotion: null }, attempts: {} }] } }),
       emptyStores: CoachStore.validateBackup({
         format: F, version: 1, dbVersion: 6, stores: {} }),
       noStep: CoachStore.validateBackup(backup(card(undefined))),
@@ -908,6 +915,12 @@ require('./helper').run('data-controls', async function (t) {
       aboveLadder: CoachStore.validateBackup(backup(card(6))),
       badAttemptEntry: CoachStore.validateBackup(backup(Object.assign(card(0), {
         attempts: [{ at: 'yesterday', correct: 'yes' }]
+      }))),
+      terminalPosition: CoachStore.validateBackup(backup(Object.assign(card(0), {
+        fenBefore: 'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3'
+      }))),
+      illegalBestMove: CoachStore.validateBackup(backup(Object.assign(card(0), {
+        bestMove: { from: 12, to: 28, promotion: null }, bestSan: 'e5'
       }))),
       missingGame: CoachStore.validateBackup(backup(card(0), [])),
       missingPly: CoachStore.validateBackup(backup(Object.assign(card(0), { ply: 1 }))),
@@ -923,6 +936,8 @@ require('./helper').run('data-controls', async function (t) {
     'missing, fractional, and out-of-ladder card steps are rejected');
   check(!!moreRejects.badAttemptEntry,
     'malformed attempt entries are rejected before Progress reads them');
+  check(!!moreRejects.terminalPosition && !!moreRejects.illegalBestMove,
+    'terminal positions and illegal saved moves are rejected before Train reads them');
   check(!!moreRejects.missingGame && !!moreRejects.missingPly,
     'cards must reference a restored game and one of its played plies');
   check(moreRejects.learnStep === null && moreRejects.lastDayStep === null,

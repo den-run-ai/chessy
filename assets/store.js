@@ -305,7 +305,16 @@
 
   function listGames() {
     return tx('games', 'readonly', function (s) { return s.getAll(); })
-      .then(function (games) { return games.sort(function (a, b) { return b.createdAt - a.createdAt; }); });
+      .then(function (games) {
+        return games.sort(function (a, b) {
+          // A damaged timestamp must not throw (BigInt) or poison the
+          // comparator (NaN) before Review gets a chance to quarantine the
+          // row. Keep valid records newest-first and place suspect rows last.
+          var at = a && Number.isFinite(a.createdAt) ? a.createdAt : -Infinity;
+          var bt = b && Number.isFinite(b.createdAt) ? b.createdAt : -Infinity;
+          return bt - at;
+        });
+      });
   }
 
   function addCard(card) {
@@ -319,7 +328,13 @@
   function dueCards(now) {
     return tx('cards', 'readonly', function (s) {
       return s.index('due').getAll(IDBKeyRange.upperBound(now));
-    }).then(function (cards) { return cards.sort(function (a, b) { return a.due - b.due; }); });
+    }).then(function (cards) {
+      return cards.sort(function (a, b) {
+        var ad = a && Number.isFinite(a.due) ? a.due : Infinity;
+        var bd = b && Number.isFinite(b.due) ? b.due : Infinity;
+        return ad - bd;
+      });
+    });
   }
 
   // Atomic read-modify-write for grading: `mutate` runs on the FRESH
@@ -743,10 +758,11 @@
     return true;
   }
 
-  // Shared game-record trust boundary used by both backup restore and the raw
-  // pending-archive export path. An export must never emit a recovery row that
-  // this same release would refuse to restore.
-  function validateGameRecord(r, prefix) {
+  // Review/clean-export trust boundary. It validates only the durable game
+  // score and the fields Review dereferences; optional forensic engine
+  // telemetry is checked separately so damage there cannot hide an otherwise
+  // recoverable board score or clean PGN.
+  function validateGameReplayRecord(r, prefix) {
     prefix = prefix || 'game record';
     if (!r || typeof r !== 'object' || Array.isArray(r) ||
         typeof r.id !== 'string' || !Array.isArray(r.sans)) {
@@ -768,18 +784,99 @@
     if (!Number.isFinite(r.createdAt)) {
       return prefix + ' has a non-numeric createdAt';
     }
+    if (r.setupFen && !validFen(r.setupFen)) {
+      return prefix + ' has an invalid setupFen';
+    }
+    return null;
+  }
+
+  // Full shared game-record trust boundary used by backup restore, raw
+  // pending-archive export and debug-PGN export. A recovery export must never
+  // emit a row that this same release would refuse to restore.
+  function validateGameRecord(r, prefix) {
+    prefix = prefix || 'game record';
+    var replayError = validateGameReplayRecord(r, prefix);
+    if (replayError) return replayError;
     if (r.startedRelease !== undefined && r.startedRelease !== null &&
         !validRelease(r.startedRelease)) {
       return prefix + ' has an invalid startedRelease';
-    }
-    if (r.setupFen && !validFen(r.setupFen)) {
-      return prefix + ' has an invalid setupFen';
     }
     if (!validOptionalAi(r.ai, r.plies)) {
       return prefix + ' has invalid AI telemetry';
     }
     if (!validAiRootOrders(r)) {
       return prefix + ' has AI telemetry with a root order that does not match its position';
+    }
+    return null;
+  }
+
+  // Shared card-record trust boundary. Restore uses this before replacing the
+  // archive; Train also uses it after a raw IndexedDB read so one damaged row
+  // cannot make otherwise valid due cards disappear. This is deliberately
+  // validation only: callers quarantine bad rows in memory and never rewrite
+  // or delete the stored source.
+  function validateCardRecord(r, prefix) {
+    prefix = prefix || 'card record';
+    if (!r || typeof r !== 'object' || Array.isArray(r)) {
+      return prefix + ' is not an object';
+    }
+    if (typeof r.gameId !== 'string') {
+      return prefix + ' is missing a gameId';
+    }
+    // Train dereferences fenBefore with Chess.parseFen. parseFen is lenient,
+    // so use the strict six-field validator before the view touches it.
+    if (!validFen(r.fenBefore)) {
+      return prefix + ' has an invalid fenBefore';
+    }
+    // A due card must describe an exercise the board can actually present.
+    // Quarantine terminal positions and stale/forged best moves before the
+    // earliest bad card can block every valid card behind it.
+    if (typeof Chess === 'undefined' ||
+        typeof Chess.parseFen !== 'function' ||
+        typeof Chess.gameStatus !== 'function' ||
+        typeof Chess.legalMoves !== 'function' ||
+        typeof Chess.toSan !== 'function') {
+      return prefix + ' cannot be checked by this release';
+    }
+    try {
+      var state = Chess.parseFen(r.fenBefore);
+      if (Chess.gameStatus(state).over) {
+        return prefix + ' has a terminal training position';
+      }
+      var legal = Chess.legalMoves(state);
+      var best = legal.find(function (move) {
+        return r.bestMove && move.from === r.bestMove.from &&
+          move.to === r.bestMove.to &&
+          (move.promotion || null) === (r.bestMove.promotion || null);
+      });
+      if (!best) {
+        return prefix + ' has an illegal bestMove';
+      }
+      if (typeof r.bestSan !== 'string' ||
+          Chess.toSan(state, best, legal) !== r.bestSan) {
+        return prefix + ' has an invalid bestSan';
+      }
+    } catch (e) {
+      return prefix + ' has an unusable training position';
+    }
+    if (!Number.isFinite(r.due)) {
+      return prefix + ' has a non-numeric due';
+    }
+    // Progress iterates attempts and Train appends to it. Missing is the
+    // legacy empty value; present-but-not-an-array cannot be used safely.
+    if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
+      return prefix + ' has a non-array attempts';
+    }
+    if (Array.isArray(r.attempts) && !r.attempts.every(function (a) {
+      return !!a && typeof a === 'object' && Number.isFinite(a.at) &&
+        typeof a.correct === 'boolean';
+    })) {
+      return prefix + ' has an invalid attempt';
+    }
+    // -1 is immediate learning; 0..5 are the fixed
+    // 1/3/7/14/30/90-day ladder.
+    if (!Number.isInteger(r.step) || r.step < -1 || r.step > 5) {
+      return prefix + ' has an invalid step';
     }
     return null;
   }
@@ -840,36 +937,9 @@
           gamesById[r.id] = r;
         }
         if (name === 'cards') {
-          if (typeof r.gameId !== 'string') {
-            return 'store "cards" record ' + j + ' is missing a gameId';
-          }
-          // Train dereferences fenBefore (Chess.parseFen) and schedules on due;
-          // an unparseable FEN drops the WHOLE training load into its "Archive
-          // unavailable" path, and a non-numeric due breaks the due index.
-          if (!validFen(r.fenBefore)) {
-            return 'store "cards" record ' + j + ' has an invalid fenBefore';
-          }
-          if (!Number.isFinite(r.due)) {
-            return 'store "cards" record ' + j + ' has a non-numeric due';
-          }
-          // Progress iterates `for (const a of attempts)` and Train grading
-          // does `(attempts || []).concat(...)`; a non-array (e.g. {}) is truthy
-          // so it slips the `|| []` guard and throws. Missing is fine (treated
-          // as empty); present-but-not-an-array is rejected.
-          if (r.attempts !== undefined && !Array.isArray(r.attempts)) {
-            return 'store "cards" record ' + j + ' has a non-array attempts';
-          }
-          if (Array.isArray(r.attempts) && !r.attempts.every(function (a) {
-            return !!a && typeof a === 'object' && Number.isFinite(a.at) &&
-              typeof a.correct === 'boolean';
-          })) {
-            return 'store "cards" record ' + j + ' has an invalid attempt';
-          }
-          // -1 is immediate learning; 0..5 are the fixed
-          // 1/3/7/14/30/90-day ladder.
-          if (!Number.isInteger(r.step) || r.step < -1 || r.step > 5) {
-            return 'store "cards" record ' + j + ' has an invalid step';
-          }
+          const cardError = validateCardRecord(
+            r, 'store "cards" record ' + j);
+          if (cardError) return cardError;
           var game = gamesById[r.gameId];
           if (!game) {
             return 'store "cards" record ' + j + ' references a missing game';
@@ -968,7 +1038,9 @@
     getJob: getJob,
     deleteJob: deleteJob,
     exportAll: exportAll,
+    validateGameReplayRecord: validateGameReplayRecord,
     validateGameRecord: validateGameRecord,
+    validateCardRecord: validateCardRecord,
     validateBackup: validateBackup,
     restoreAll: restoreAll,
     deleteAllData: deleteAllData,

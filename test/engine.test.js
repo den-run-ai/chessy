@@ -582,6 +582,10 @@ pgnGame.history[3].clock = { thinkMs: 2000, wMs: 305000, bMs: 298000 };
 const pgnClk = Chess.toPgn(pgnGame, { TimeControl: '300+3' }, true);
 assertEqual(pgnClk.includes('[TimeControl "300+3"]'), true, 'PGN TimeControl tag');
 assertEqual(pgnClk.includes('[%clk 0:04:58]'), true, 'debug PGN embeds %clk remaining time');
+pgnGame.history[3].clock.bMs = 298123;
+const pgnClkMillis = Chess.toPgn(pgnGame, { TimeControl: '300+3' }, true);
+assertEqual(pgnClkMillis.includes('[%clk 0:04:58.123]'), true,
+  'debug PGN preserves sub-second clock precision');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

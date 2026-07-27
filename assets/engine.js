@@ -482,10 +482,20 @@
         ? entry.clock.ms
         : (mover === 'b' ? entry.clock.bMs : entry.clock.wMs);
       if (Number.isFinite(ms)) {
-        const sec = Math.max(0, Math.round(ms / 1000));
+        // App clock samples are integer milliseconds. Preserve them exactly
+        // via PGN's standard fractional-seconds form, but omit the fraction
+        // for whole seconds so existing exports stay byte-compatible.
+        const totalMs = Math.max(0, Math.round(ms));
+        const sec = Math.floor(totalMs / 1000);
+        const remainder = totalMs % 1000;
+        let secondField = String(sec % 60).padStart(2, '0');
+        if (remainder) {
+          secondField += '.' +
+            String(remainder).padStart(3, '0').replace(/0+$/, '');
+        }
         note = '[%clk ' + Math.floor(sec / 3600) + ':' +
                String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' +
-               String(sec % 60).padStart(2, '0') + '] ' + note;
+               secondField + '] ' + note;
       }
     }
     return note;

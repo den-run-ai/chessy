@@ -35,6 +35,14 @@
   // screen-reader users outside the active view.
   function inTrainView() { return document.body.dataset.view === 'train'; }
 
+  function showSkippedCards(count) {
+    const notice = $('trainSkipped');
+    notice.hidden = !count;
+    notice.textContent = count
+      ? 'Skipped ' + count + ' malformed due card' + (count === 1 ? '.' : 's.')
+      : '';
+  }
+
   // The mini board mirrors the Play board's check semantics — a card can
   // open (or an answer land) with a king in check, and hiding that would
   // drop a crucial constraint of the exercise.
@@ -43,7 +51,20 @@
   }
 
   function loadTrain() {
-    return CoachStore.dueCards(Date.now()).then(function (cards) {
+    showSkippedCards(0);
+    return CoachStore.dueCards(Date.now()).then(function (storedCards) {
+      // Quarantine each row independently and only in memory. filter()
+      // preserves the due-time order returned by the IndexedDB index.
+      const cards = [];
+      let skipped = 0;
+      for (const card of storedCards) {
+        const error = typeof CoachStore.validateCardRecord === 'function'
+          ? CoachStore.validateCardRecord(card)
+          : 'validation unavailable';
+        if (error) skipped++;
+        else cards.push(card);
+      }
+      showSkippedCards(skipped);
       train = { queue: cards, card: null, state: null, selected: null,
                 answered: false, grading: false };
       nextTrainCard();
@@ -53,6 +74,7 @@
       // guard (`train && train.card`) strand focus in now-hidden content.
       train = { queue: [], card: null, state: null, selected: null,
                 answered: false, grading: false };
+      showSkippedCards(0);
       $('trainEmpty').hidden = false;
       $('trainEmpty').textContent = 'Archive unavailable in this browser.';
       // No card is available: a stale "1 due" (or larger) count left in the

@@ -88,6 +88,47 @@ check(rec.moves[1].nags && rec.moves[1].nags.indexOf('$1') !== -1 &&
 check(rec.importedAt === 100 && rec.createdAt === 100 && rec.playedAt === null,
   'timestamps: importedAt/createdAt are epoch ms; playedAt null without a date tag');
 
+// --- Live Play exporter round trips (the Chess.toPgn path, not archive serialization) ---
+function liveRoundTrip(label, sans, remaining, expectedResult) {
+  const state = Chess.replaySans(sans);
+  state.history.forEach(function (entry, i) {
+    // This is the exact clock shape app.js writes after every live move.
+    entry.clock = {
+      thinkMs: 1000 + i,
+      wMs: i % 2 === 0 ? remaining[i] : remaining[Math.max(0, i - 1)],
+      bMs: i % 2 === 1 ? remaining[i] : (i === 0 ? 300000 : remaining[i - 1])
+    };
+  });
+  const canonicalSans = state.history.map(function (entry) { return entry.san; });
+  const canonicalUci = state.history.map(function (entry) {
+    return Chess.sqName(entry.move.from) + Chess.sqName(entry.move.to) +
+      (entry.move.promotion ? entry.move.promotion.toLowerCase() : '');
+  });
+
+  const normal = PGN.parseGame(Chess.toPgn(state, {}, false));
+  check(normal.valid &&
+      normal.moves.map(function (m) { return m.san; }).join(' ') === canonicalSans.join(' ') &&
+      normal.moves.map(function (m) { return m.uci; }).join(' ') === canonicalUci.join(' ') &&
+      normal.result === expectedResult,
+    label + ' normal live PGN reparses with canonical moves and result',
+    normal.error);
+
+  const debug = PGN.parseGame(Chess.toPgn(state, {}, true));
+  check(debug.valid &&
+      debug.moves.map(function (m) { return m.san; }).join(' ') === canonicalSans.join(' ') &&
+      debug.moves.map(function (m) { return m.uci; }).join(' ') === canonicalUci.join(' ') &&
+      debug.result === expectedResult,
+    label + ' debug live PGN reparses with canonical moves and result',
+    debug.error);
+  check(debug.moves.map(function (m) { return m.clkMs; }).join(',') === remaining.join(','),
+    label + ' debug live PGN preserves every mover clock exactly');
+}
+
+liveRoundTrip('ongoing game', ['e4', 'e5', 'Nf3'],
+  [299123, 298456, 297789], '*');
+liveRoundTrip('terminal game', ['f3', 'e5', 'g4', 'Qh4#'],
+  [299321, 298654, 297987, 296111], '0-1');
+
 // --- Archive export: metadata/annotations and custom starting move survive ---
 const customFen = '4k3/8/8/8/8/8/4P3/4K3 b - - 0 17';
 const exportRecord = {
@@ -354,9 +395,10 @@ check(PGN.parseGame('[Result "1-0"]\n\n1. e4 *').result === '1-0',
 
 // parseClk validates the documented shape: malformed clocks become null.
 check(PGN.parseClk('[%clk 0:03:00]') === 180000 &&
+  PGN.parseClk('[%clk 0:03:00.123]') === 180123 &&
   PGN.parseClk('[%clk 1::2]') === null && PGN.parseClk('[%clk 0:99:00]') === null &&
   PGN.parseClk('[%clk 1:2:3:4]') === null,
-  'parseClk accepts H:MM:SS and rejects empty/out-of-range/excess fields');
+  'parseClk preserves fractional milliseconds and rejects malformed clock fields');
 
 // A comment before the first move is preserved on the game and record.
 const pre = PGN.parseGame('{Opening note} 1. e4 *');

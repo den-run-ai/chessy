@@ -355,5 +355,101 @@ require('./helper').run('review', async function (t) {
         (await page.textContent('#reviewStatus')).includes('end of game'),
     'the SetUp/FEN game browses through to its end');
   await page.click('#reviewBack');
+  await page.waitForSelector('.game-item');
+
+  // Raw IndexedDB rows are quarantined independently at read time: one has a
+  // malformed setup FEN, one has a structurally plausible but illegal SAN
+  // replay, and one has a BigInt timestamp that must not crash sorting before
+  // validation. A fourth row has a valid score but a truncated forensic root
+  // order: it remains reviewable and clean-exportable while its debug export
+  // fails closed. Valid rows keep their original newest-first ordering, and
+  // every damaged source row remains untouched for backup/recovery.
+  const validOrderBeforeQuarantine = await page.locator('.game-item').allTextContents();
+  await page.evaluate(function () {
+    const base = {
+      source: 'import', tags: {}, playerColor: null, clocks: [],
+      result: '*', reason: 'ongoing', mode: 'import', difficulty: null,
+      timeControl: 'unknown'
+    };
+    return CoachStore.putGame(Object.assign({}, base, {
+      id: 'malformed-setup', setupFen: 'not a fen', sans: [],
+      plies: 0, createdAt: Date.now() + 300000
+    })).then(function () {
+      return CoachStore.putGame(Object.assign({}, base, {
+        id: 'malformed-replay', sans: ['e4', 'e4'],
+        plies: 2, createdAt: Date.now() + 200000
+      }));
+    }).then(function () {
+      return CoachStore.putGame(Object.assign({}, base, {
+        id: 'malformed-created-at', sans: ['e4'],
+        plies: 1, createdAt: BigInt(1)
+      }));
+    }).then(function () {
+      return CoachStore.putGame(Object.assign({}, base, {
+        id: 'damaged-telemetry', sans: ['e4'], plies: 1,
+        createdAt: Date.now() + 100000,
+        ai: [{
+          depth: 1, quiesce: true, ms: 1,
+          rootOrderUci: ['e2e4']
+        }]
+      }));
+    }).then(function () { return CoachReview.refreshGames(); });
+  });
+  await page.waitForSelector('#reviewSkipped:not([hidden])');
+  const validOrderAfterQuarantine = await page.locator('.game-item').allTextContents();
+  check((await page.textContent('#reviewSkipped')).includes('Skipped 3 malformed saved games'),
+    'Review reports the malformed saved-game count without blocking valid games');
+  check(validOrderAfterQuarantine.length === validOrderBeforeQuarantine.length + 1 &&
+        JSON.stringify(validOrderAfterQuarantine.slice(1)) ===
+          JSON.stringify(validOrderBeforeQuarantine),
+    'Review skips malformed score rows, retains telemetry-only damage, and preserves valid-game ordering');
+  check(await page.evaluate(function () {
+    return CoachStore.listGames().then(function (games) {
+      const bad = games.filter(function (game) {
+        return game.id === 'malformed-setup' ||
+          game.id === 'malformed-replay' ||
+          game.id === 'malformed-created-at' ||
+          game.id === 'damaged-telemetry';
+      });
+      return bad.length === 4 &&
+        bad.find(function (game) { return game.id === 'malformed-setup'; }).setupFen ===
+          'not a fen' &&
+        bad.find(function (game) { return game.id === 'malformed-replay'; }).sans[1] ===
+          'e4' &&
+        bad.find(function (game) { return game.id === 'malformed-created-at'; }).createdAt ===
+          BigInt(1) &&
+        bad.find(function (game) { return game.id === 'damaged-telemetry'; })
+          .ai[0].rootOrderUci.length === 1;
+    });
+  }), 'Review quarantine does not delete or rewrite malformed stored games');
+
+  // The telemetry-only row is the newest reviewable game. Its clean score
+  // remains recoverable; the full forensic boundary still blocks debug output.
+  await page.locator('.game-item').first().click();
+  await page.waitForSelector('#reviewFlow:not([hidden])');
+  const [cleanRecovery] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('#reviewExportPgn')
+  ]);
+  const cleanRecoveryPgn = fs.readFileSync(await cleanRecovery.path(), 'utf8');
+  const cleanRecoveryParsed = await page.evaluate(function (text) {
+    const parsed = ChessyPGN.parseGame(text);
+    return {
+      valid: parsed.valid,
+      sans: parsed.moves.map(function (move) { return move.san; }),
+      result: parsed.result
+    };
+  }, cleanRecoveryPgn);
+  check(cleanRecoveryParsed.valid &&
+        JSON.stringify(cleanRecoveryParsed.sans) === JSON.stringify(['e4']) &&
+        cleanRecoveryParsed.result === '*',
+    'telemetry-only damage keeps the clean score reviewable and clean-PGN exportable');
+  await page.click('#reviewExportPgnLog');
+  await page.waitForFunction(function () {
+    return document.getElementById('reviewStatus').textContent
+      .indexOf('saved search log is invalid') !== -1;
+  });
+  check(true, 'telemetry-only damage fails closed only for the debug PGN');
+
   await page.click('#tabPlay');
 });

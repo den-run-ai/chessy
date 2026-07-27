@@ -259,6 +259,12 @@ check(mismatchedRoots.every(function (ai) {
     Object.assign({}, validGame, { ai: [ai] })) || '';
   return /root order/.test(error) && /position/.test(error);
 }), 'shared boundary rejects truncated, substituted and explicitly empty root orders');
+const damagedTelemetryGame = Object.assign({}, validGame, {
+  ai: [mismatchedRoots[0]]
+});
+check(CoachStore.validateGameReplayRecord(damagedTelemetryGame) === null &&
+    /root order/.test(CoachStore.validateGameRecord(damagedTelemetryGame) || ''),
+  'clean replay boundary preserves a valid score when only forensic telemetry is damaged');
 
 const afterE4 = Chess.replaySans(['e4']);
 const blackRootOrder = Chess.legalMoves(afterE4).map(uci).reverse();
