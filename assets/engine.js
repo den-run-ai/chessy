@@ -143,16 +143,36 @@
 
   // Pseudo-legal moves for the side to move. Move: {from, to, piece, captured,
   // promotion, ep (en-passant capture), castle ('K'|'Q'), double (pawn 2-step)}.
-  function pseudoMoves(state) {
+  //
+  // Search may supply a private per-ply scratch object ({moves, pool}). Its
+  // returned moves are ephemeral: the same scratch must not be regenerated
+  // while a caller is still iterating it. Keeping the high-water object pool
+  // separate from the truncated result array preserves objects across a narrow
+  // node followed by a wider sibling. Ordinary callers omit scratch and retain
+  // the fresh-array/fresh-object API.
+  function pseudoMoves(state, scratch) {
     const { board, turn } = state;
-    const moves = [];
+    const moves = scratch ? scratch.moves : [];
+    const pool = scratch ? scratch.pool : moves;
+    let count = 0;
     const enemy = turn === 'w' ? 'b' : 'w';
 
     function push(from, to, extra) {
-      moves.push(Object.assign({
-        from: from, to: to, piece: board[from], captured: board[to] || null,
-        promotion: null, ep: false, castle: null, double: false
-      }, extra || {}));
+      const move = pool[count] || (pool[count] = {});
+      moves[count] = move;
+      move.from = from;
+      move.to = to;
+      move.piece = board[from];
+      move.captured = board[to] || null;
+      move.promotion = null;
+      move.ep = false;
+      move.castle = null;
+      move.double = false;
+      // Move ordering decorates scratch objects in ai.js. Clear that private
+      // field before reuse so no stale property is observable within search.
+      if (scratch) move.order = 0;
+      if (extra) Object.assign(move, extra);
+      count++;
     }
 
     for (let from = 0; from < 64; from++) {
@@ -228,6 +248,7 @@
         }
       }
     }
+    moves.length = count;
     return moves;
   }
 
