@@ -503,17 +503,21 @@
       histB: new Int32Array(4096),
       gameCounts: new Map(),          // repetition key ("r1:r2") -> occurrences in the actual game
       path1: [], path2: [],           // repetition keys of ancestors on the current search path
-      repPly: Infinity                // out-param: shallowest ancestor ply the last-searched subtree's score depended on
+      repPly: Infinity,               // out-param: shallowest ancestor ply the last-searched subtree's score depended on
+      moveBuffers: [],                // per-ply pseudo-move arrays + object pools
+      qmoves: []                      // per-ply filtered quiescence buffers
     };
   }
 
   // Does the side to move have at least one legal move? Scans pseudo-legal
   // moves and stops at the first that leaves the king safe — usually the very
   // first one, so this is far cheaper than a full legalMoves().
-  function hasLegalMove(state, pseudo) {
+  function hasLegalMove(state, pseudo, ply, ctx) {
     const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
     const kingSq = state.board.indexOf(turn + 'K');
-    for (const m of (pseudo || Chess.pseudoMoves(state))) {
+    const scratch = ctx.moveBuffers[ply] ||
+      (ctx.moveBuffers[ply] = { moves: [], pool: [] });
+    for (const m of (pseudo || Chess.pseudoMoves(state, scratch))) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (!Chess.isAttacked(next.board, ks, enemy)) return true;
@@ -608,8 +612,10 @@
     // unless the position is checkmate (mate takes precedence). These are
     // position-intrinsic (repPly stays Infinity), so they return before the
     // path push below.
-    const pseudo = Chess.pseudoMoves(state);
-    if (!hasLegalMove(state, pseudo)) {
+    const moveScratch = ctx.moveBuffers[ply] ||
+      (ctx.moveBuffers[ply] = { moves: [], pool: [] });
+    const pseudo = Chess.pseudoMoves(state, moveScratch);
+    if (!hasLegalMove(state, pseudo, ply, ctx)) {
       return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
     }
     if (state.halfmove >= 100) return 0;
@@ -659,13 +665,16 @@
     if (inChk) {
       moves = pseudo;
     } else {
-      moves = [];
+      moves = ctx.qmoves[ply] || (ctx.qmoves[ply] = []);
+      moves.length = 0;
       const genChecks = qply < QCHECK_PLIES;
       for (const m of pseudo) {
         if (m.captured || m.promotion) { moves.push(m); continue; }
         if (!genChecks) continue;
         const nb = Chess.applyMove(state, m);
-        if (Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) moves.push(m);
+        if (Chess.isAttacked(nb.board, nb.board.indexOf(enemy + 'K'), turn)) {
+          moves.push(m);
+        }
       }
     }
 
@@ -734,7 +743,7 @@
     // which let shallow searches walk into (or refuse) forced mates.
     if (depth <= 0) {
       if (ctx.quiesce) return quiesceNode(state, alpha, beta, ply, 0, ctx);
-      if (!hasLegalMove(state)) {
+      if (!hasLegalMove(state, null, ply, ctx)) {
         return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
       }
       if (fifty) return 0; // in check but escapable: the 50-move draw stands
@@ -779,10 +788,15 @@
     let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
     ctx.path1.push(r1); ctx.path2.push(r2);
-    for (const m of orderMoves(Chess.pseudoMoves(state), ttPk, ply, ctx, turn)) {
+    const moveScratch = ctx.moveBuffers[ply] ||
+      (ctx.moveBuffers[ply] = { moves: [], pool: [] });
+    for (const m of orderMoves(
+      Chess.pseudoMoves(state, moveScratch), ttPk, ply, ctx, turn
+    )) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
+      let score, childRep;
       // Principal variation search: the first legal move gets the full
       // window; later moves get a null-window scout ("can this beat the
       // bound at all?") and repeat at the full window only when the scout
@@ -800,7 +814,6 @@
       // that whole failure mode). Move selection is confirmed by the 16-position
       // bench (--exact) and the tactics suite. The only remaining path
       // dependence is repetition draws, tracked via childRep/repPly below.
-      let score, childRep;
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
         childRep = ctx.repPly;
