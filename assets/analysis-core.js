@@ -30,6 +30,15 @@
  *
  * Chessy never auto-labels a move a mistake: classification is only same /
  * a-known-Chessy-candidate / unknown-equivalence.
+ *
+ * opts.onProgress is an optional observation-only callback. It receives
+ * bounded, non-result checkpoints:
+ *   { phase:'initial-scan'|'root-verification',
+ *     completedRoots, totalRoots, elapsedMs }
+ * The synchronous initial scan reports 0/1 then 1/1; root verification reports
+ * completed/legal roots.
+ * Root verification remains one truthful phase because the deep and shallow
+ * searches are interleaved per root. Scores and PVs are never streamed.
  */
 (function (global) {
   'use strict';
@@ -243,20 +252,45 @@
     if (status.over) return out; // terminal: no move to analyse
 
     const t0 = now();
+    const beforeFen = Chess.toFen(state);
+    const legal = Chess.legalMoves(state);
+    let progressElapsed = 0;
+    function progress(phase, completedRoots, totalRoots) {
+      if (typeof opts.onProgress !== 'function') return;
+      // Date.now() is not monotonic on every host. Clamp at the last observed
+      // value so the public progress contract remains monotonic even if the
+      // wall clock moves backwards.
+      const rawElapsed = now() - t0;
+      progressElapsed = Math.max(progressElapsed,
+        Number.isFinite(rawElapsed) ? Math.max(0, rawElapsed) : 0);
+      try {
+        opts.onProgress({
+          phase: phase,
+          completedRoots: completedRoots,
+          totalRoots: totalRoots,
+          elapsedMs: progressElapsed
+        });
+      } catch (e) {
+        // Progress is observation-only: a consumer failure cannot change the
+        // deterministic analysis result or stop the bounded search.
+      }
+    }
+
     // 1) Scan (repetition-aware, deterministic) to fix the analysis depth.
+    progress('initial-scan', 0, 1);
     const scan = ChessAI.think(state, { maxDepth: maxDepth, nodeLimit: scanNodes,
       quiesce: quiesce, positions: positions, randomize: false });
     const depth = Math.max(1, scan.depth);
     out.depth = depth; out.nodes = scan.nodes; out.qnodes = scan.qnodes;
+    progress('initial-scan', 1, 1);
 
-    const beforeFen = Chess.toFen(state);
-    const legal = Chess.legalMoves(state);
     // 2) Deep-verify EVERY legal root move at the completed depth (scoring all
     //    roots, not a shortlist, makes bestLines true MultiPV) and, one depth
     //    shallower, on a SEPARATE context so the stability pass never overwrites
     //    the deep transposition table before the PV is read from it. The PV for
     //    each move is captured from the deep TT immediately after its own deep
     //    search, so it always matches the score it is shown with.
+    progress('root-verification', 0, legal.length);
     const deep = analysisCtx(quiesce, positions, nodeBudget);
     const shallow = analysisCtx(quiesce, positions, nodeBudget);
     const scored = [];
@@ -275,6 +309,9 @@
         const prevSort = maximizing ? swPrev : -swPrev;
         if (bestPrev === null || prevSort > bestPrevScore) { bestPrevScore = prevSort; bestPrev = m; }
       }
+      // A root is complete only after BOTH interleaved verification searches
+      // have finished. An aborted deep or shallow pass never advances it.
+      progress('root-verification', scored.length, legal.length);
     }
     scored.sort(function (a, b) { return b._sort - a._sort; });
     // Report the FULL work: the scan plus both deep-verify passes, not just the

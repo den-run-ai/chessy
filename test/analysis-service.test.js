@@ -92,6 +92,16 @@ function factoryOf() {
   return function () { const b = behaviors[Math.min(i, behaviors.length - 1)]; i++; return new FakeWorker(b); };
 }
 
+function progressReply(jobId, phase, completed, total, elapsed, extra) {
+  const progress = Object.assign({
+    phase: phase,
+    completedRoots: completed,
+    totalRoots: total,
+    elapsedMs: elapsed
+  }, extra || {});
+  return { v: PROTOCOL, jobId: jobId, progress: progress };
+}
+
 // ---- Fake in-memory CoachStore (analyses only).
 function makeStore() {
   const map = new Map();
@@ -399,6 +409,160 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   check((await scanJob) === null && (await reflectionJob) !== null &&
     made[0].terminated === true,
     'a newer owner supersedes the active job instead of waiting in a queue');
+
+  // --- True root progress: only an active job's matching owner sees exact,
+  //     validated, monotonic non-result messages. Malformed, stale, foreign and
+  //     result+progress hybrid messages are inert; listener failures are
+  //     observation-only. ---
+  reset({ factory: factoryOf({ mode: 'stall' }) });
+  const ownedProgress = [], foreignProgress = [];
+  const stopThrowing = Svc.subscribe('reflection', function () {
+    throw new Error('observer failure');
+  });
+  const stopOwned = Svc.subscribe('reflection', function (p) {
+    ownedProgress.push(cloneJson(p));
+  });
+  const stopForeign = Svc.subscribe('moment-scan', function (p) {
+    foreignProgress.push(cloneJson(p));
+  });
+  const progressRun = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'root-progress' }), 'reflection');
+  const progressWorker = made[0], progressId = progressWorker.posts[0].jobId;
+  progressWorker.deliver(progressReply(progressId, 'initial-scan', 0, 1, 0));
+  progressWorker.deliver(progressReply(progressId, 'initial-scan', 1, 1, 5));
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 0, 4, 10));
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 1, 4, 120));
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 2, 5, 130)); // changed total
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 2, 4, 130,
+    { scoreCpWhite: 99 })); // provisional result field
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 0, 4, 140)); // regressive root
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 2, 4, 100)); // regressive elapsed
+  progressWorker.deliver(Object.assign(
+    progressReply(progressId, 'root-verification', 2, 4, 150),
+    { result: goodResult })); // non-terminal/terminal hybrid
+  progressWorker.deliver(progressReply(progressId + 999, 'root-verification', 2, 4, 150));
+  progressWorker.deliver(Object.assign(
+    progressReply(progressId, 'root-verification', 2, 4, 150),
+    { v: PROTOCOL + 1 }));
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 4, 4, 250));
+  progressWorker.deliver({ v: PROTOCOL, jobId: progressId, result: goodResult });
+  const progressResult = await progressRun;
+  progressWorker.deliver(progressReply(progressId, 'root-verification', 4, 4, 300));
+  const forwardedKeys = 'completedRoots,elapsedMs,jobId,owner,phase,totalRoots';
+  check(!!progressResult && ownedProgress.length === 5 &&
+    ownedProgress.every(function (p) {
+      return Object.keys(p).sort().join(',') === forwardedKeys &&
+        p.jobId === progressId && p.owner === 'reflection';
+    }) &&
+    ownedProgress.map(function (p) { return p.phase + ':' + p.completedRoots; }).join('|') ===
+      'initial-scan:0|initial-scan:1|root-verification:0|root-verification:1|root-verification:4',
+    'only exact monotonic progress is forwarded; malformed/stale/hybrid messages and listener errors are inert');
+  check(foreignProgress.length === 0,
+    'a subscription for another owner cannot observe the active reflection job');
+  stopThrowing(); stopOwned(); stopForeign();
+
+  // --- Supersede/cancel ownership races: old-job progress is dropped, a new
+  //     owner's listener alone receives the successor, and the wrong owner
+  //     cannot cancel it. ---
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }) });
+  const reflectionEvents = [], scanEvents = [];
+  const stopReflection = Svc.subscribe('reflection', function (p) {
+    reflectionEvents.push(cloneJson(p));
+  });
+  const stopScan = Svc.subscribe('moment-scan', function (p) {
+    scanEvents.push(cloneJson(p));
+  });
+  const oldOwnedRun = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'old-owner' }), 'reflection');
+  const oldOwnedWorker = made[0], oldOwnedId = oldOwnedWorker.posts[0].jobId;
+  oldOwnedWorker.deliver(progressReply(oldOwnedId, 'initial-scan', 0, 1, 0));
+  const newOwnedRun = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'new-owner' }), 'moment-scan');
+  const newOwnedWorker = made[1], newOwnedId = newOwnedWorker.posts[0].jobId;
+  check((await oldOwnedRun) === null, 'superseding ownership settles the predecessor null');
+  oldOwnedWorker.terminated = false;
+  oldOwnedWorker.deliver(progressReply(oldOwnedId, 'initial-scan', 1, 1, 10));
+  newOwnedWorker.deliver(progressReply(newOwnedId, 'initial-scan', 0, 1, 0));
+  Svc.cancel('reflection'); // must not cancel the moment-scan successor
+  let newOwnerSettled = false;
+  newOwnedRun.then(function () { newOwnerSettled = true; });
+  await delay(5);
+  const wrongOwnerInert = !newOwnerSettled && newOwnedWorker.terminated === false;
+  newOwnedWorker.deliver(progressReply(newOwnedId, 'initial-scan', 1, 1, 5));
+  Svc.cancel('moment-scan');
+  check((await newOwnedRun) === null && wrongOwnerInert && newOwnerSettled === true,
+    'the matching owner can cancel the successor after the wrong owner was inert');
+  const scanCountAfterCancel = scanEvents.length;
+  newOwnedWorker.terminated = false;
+  newOwnedWorker.deliver(progressReply(newOwnedId, 'root-verification', 0, 4, 10));
+  check(reflectionEvents.length === 1 && scanEvents.length === scanCountAfterCancel &&
+    scanCountAfterCancel === 2,
+    'stale predecessor and post-cancel progress are dropped across an ownership change');
+  stopReflection(); stopScan();
+
+  // --- Retry stays publicly monotonic, and progress never resets/extends the
+  //     watchdog. The fresh attempt's scan/root reset is suppressed until it
+  //     catches the first attempt's root high-water. ---
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }), watchdog: 25 });
+  const retryProgress = [];
+  const stopRetry = Svc.subscribe('reflection', function (p) {
+    retryProgress.push(cloneJson(p));
+  });
+  const retryRun = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'progress-retry' }), 'reflection');
+  const retryW1 = made[0], retryId = retryW1.posts[0].jobId;
+  retryW1.deliver(progressReply(retryId, 'initial-scan', 0, 1, 0));
+  retryW1.deliver(progressReply(retryId, 'initial-scan', 1, 1, 1));
+  retryW1.deliver(progressReply(retryId, 'root-verification', 0, 4, 2));
+  retryW1.deliver(progressReply(retryId, 'root-verification', 2, 4, 150));
+  for (let i = 0; i < 50 && made.length < 2; i++) await delay(2);
+  const retryW2 = made[1];
+  let retryRecovered = false, staleAttemptSafe = false;
+  if (retryW2) {
+    let retrySettledEarly = false;
+    retryRun.then(function () { retrySettledEarly = true; });
+    const beforeStaleAttempt = retryProgress.length;
+    // These callbacks were queued by the terminated first attempt. Even with
+    // the SAME job id, they do not belong to W2 and must be inert.
+    retryW1.onmessage({ data: progressReply(
+      retryId, 'root-verification', 4, 4, 300) });
+    retryW1.onmessage({ data: {
+      v: PROTOCOL, jobId: retryId, result: goodResult
+    } });
+    retryW1.onerror({});
+    await delay(2);
+    staleAttemptSafe = made.length === 2 && retryW2.terminated === false &&
+      retryProgress.length === beforeStaleAttempt && !retrySettledEarly;
+
+    const offset = retryW2.posts[0].elapsedOffsetMs;
+    retryW2.deliver(progressReply(retryId, 'initial-scan', 0, 1, offset));
+    retryW2.deliver(progressReply(retryId, 'initial-scan', 1, 1, offset + 1));
+    retryW2.deliver(progressReply(retryId, 'root-verification', 0, 4, offset + 2));
+    retryW2.deliver(progressReply(retryId, 'root-verification', 1, 4, offset + 3));
+    retryW2.deliver(progressReply(retryId, 'root-verification', 2, 4, offset + 4));
+    retryW2.deliver(progressReply(retryId, 'root-verification', 4, 4, offset + 120));
+    retryW2.deliver({ v: PROTOCOL, jobId: retryId, result: goodResult });
+    retryRecovered = (await retryRun) !== null;
+  } else {
+    Svc.cancel('reflection');
+    await retryRun;
+  }
+  let retryMonotone = retryProgress.length >= 6;
+  for (let i = 1; i < retryProgress.length; i++) {
+    const p = retryProgress[i - 1], n = retryProgress[i];
+    if (n.elapsedMs < p.elapsedMs || n.phase === 'initial-scan' &&
+        p.phase === 'root-verification' ||
+        n.phase === p.phase && n.completedRoots < p.completedRoots) retryMonotone = false;
+  }
+  check(retryRecovered && made.length === 2 && retryW1.terminated === true &&
+    retryW2.posts[0].elapsedOffsetMs >= 150 && staleAttemptSafe,
+    'progress does not extend the watchdog; queued old-attempt callbacks cannot harm its fresh retry');
+  check(retryMonotone &&
+    retryProgress.filter(function (p, i) {
+      return i >= 4 && (p.phase === 'initial-scan' || p.completedRoots < 2);
+    }).length === 0,
+    'retry progress never moves phase/root/elapsed backward and resumes only after catching the high-water');
+  stopRetry();
 
   // --- Watchdog: a wedged worker is retried once in a fresh worker ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }), watchdog: 25 });

@@ -138,6 +138,62 @@ const krkA = Core.analyse(krk, Object.assign({}, FAST, { multiPV: 50 }));
 check(krkA.bestLines.length === Chess.legalMoves(krk).length,
   'every legal root move is deep-scored (bestLines is real MultiPV, not a shortlist)');
 
+// --- Optional progress is truthful, bounded and contains no provisional
+//     score/PV. The initial synchronous scan is 0/1 then 1/1; the interleaved
+//     deep+shallow verification advances exactly once per completed legal root.
+const progressEvents = [];
+const progressOpts = Object.assign({}, FAST, {
+  maxDepth: 3, nodeLimit: 8000, multiPV: 3, nodeBudget: 200000,
+  onProgress: function (p) { progressEvents.push(JSON.parse(JSON.stringify(p))); }
+});
+const progressed = Core.analyse(krk, progressOpts);
+const rootEvents = progressEvents.filter(function (p) {
+  return p.phase === 'root-verification';
+});
+const progressKeys = 'completedRoots,elapsedMs,phase,totalRoots';
+let progressMonotone = progressEvents.length === Chess.legalMoves(krk).length + 3;
+for (let i = 0; i < progressEvents.length; i++) {
+  const p = progressEvents[i];
+  if (Object.keys(p).sort().join(',') !== progressKeys ||
+      !Number.isInteger(p.elapsedMs) || p.elapsedMs < 0 ||
+      (i && p.elapsedMs < progressEvents[i - 1].elapsedMs)) progressMonotone = false;
+}
+for (let i = 0; i < rootEvents.length; i++) {
+  if (rootEvents[i].completedRoots !== i ||
+      rootEvents[i].totalRoots !== Chess.legalMoves(krk).length) progressMonotone = false;
+}
+check(progressEvents[0] && progressEvents[0].phase === 'initial-scan' &&
+  progressEvents[0].completedRoots === 0 && progressEvents[0].totalRoots === 1 &&
+  progressEvents[1] && progressEvents[1].phase === 'initial-scan' &&
+  progressEvents[1].completedRoots === 1 && progressEvents[1].totalRoots === 1 &&
+  rootEvents.length && rootEvents[rootEvents.length - 1].completedRoots ===
+    Chess.legalMoves(krk).length && progressMonotone,
+  'progress orders initial scan then every fully verified root, monotonically and without scores/PVs');
+check(progressed.complete === true &&
+  Core.configHashOf(progressOpts) === Core.configHashOf(Object.assign({}, progressOpts,
+    { onProgress: undefined })),
+  'the observation-only callback neither changes completeness nor cache identity');
+
+const cappedProgress = [];
+const cappedProgressResult = Core.analyse(start, {
+  maxDepth: 3, nodeLimit: 3000, multiPV: 3, nodeBudget: 1,
+  onProgress: function (p) { cappedProgress.push(p); }
+});
+const cappedRoot = cappedProgress.filter(function (p) {
+  return p.phase === 'root-verification';
+});
+check(cappedProgressResult.complete === false && cappedRoot.length === 1 &&
+  cappedRoot[0].completedRoots === 0 && cappedRoot[0].totalRoots ===
+    Chess.legalMoves(start).length,
+  'an aborted root never advances progress or claims verification completion');
+
+const throwOpts = Object.assign({}, progressOpts, {
+  onProgress: function () { throw new Error('observer failure'); }
+});
+const afterObserverThrow = Core.analyse(krk, throwOpts);
+check(norm(progressed) === norm(afterObserverThrow),
+  'a throwing progress observer cannot alter the deterministic analysis result');
+
 // --- Contract carries completeness + verified-best stability across depths ---
 check(a.complete === true && a.stability &&
   a.stability.depths.length === 2 && typeof a.stability.bestMoveStable === 'boolean',

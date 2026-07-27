@@ -9,9 +9,14 @@
  *   - One active interactive job. A newer analyse() SUPERSEDES the previous
  *     one: the busy worker is TERMINATED (the only way to cancel a running
  *     search) and the abandoned promise resolves null so its caller discards it.
- *   - Stale replies are ignored. Every reply must carry the current protocol
- *     version and the active job's id; anything else (a late reply from a
- *     superseded request, a foreign message) is dropped.
+ *   - Stale replies are ignored. Every reply must come from the current Worker
+ *     instance and carry the current protocol version and active job id;
+ *     anything else (a late superseded/retried attempt, a foreign message) is
+ *     dropped.
+ *   - Progress is an exclusive NON-TERMINAL protocol message. It is validated,
+ *     monotonic across retries, forwarded only to subscribers matching the
+ *     active job's owner, and never clears or extends the watchdog. It carries
+ *     no scores/PVs and is never cached.
  *   - The watchdog is DERIVED FROM THE WORKLOAD, not a fixed play-probe budget:
  *     the contract can search millions of nodes, so the deadline scales with
  *     scanNodes + the deep/shallow node budgets and is generous enough that a
@@ -40,7 +45,7 @@
   'use strict';
   if (typeof Chess === 'undefined' || typeof ChessyAnalysisCore === 'undefined') return;
 
-  var PROTOCOL = 1;            // must match assets/analysis-worker.js
+  var PROTOCOL = 2;            // must match assets/analysis-worker.js
   var MAX_ATTEMPTS = 2;        // initial worker + one fresh-worker retry
   var DEFAULT_WATCHDOG_MS = 20000;
 
@@ -48,6 +53,7 @@
   var active = null;
   var seq = 0;
   var dispatches = 0;         // worker postMessages (tests assert cache hits skip these)
+  var subscribers = [];
   // A tiny process-local cache closes the handoff between a scan result and an
   // immediately opened reflection without making analysis completion depend on
   // IndexedDB. A storage write is best-effort and, under a broken adapter, may
@@ -94,6 +100,10 @@
 
   function buildOpts(req) {
     var opts = Object.assign({}, req.opts || {});
+    // Direct core callers may observe opts.onProgress, but service callers use
+    // subscribe(owner, listener). A main-thread function cannot be cloned into
+    // a Worker and must never become part of the cache/transport payload.
+    delete opts.onProgress;
     if (req.positions) opts.positions = req.positions;
     return opts;
   }
@@ -153,6 +163,88 @@
 
   function clearWatch(job) { if (job.watchdog) { clearTimeout(job.watchdog); job.watchdog = null; } }
 
+  function finiteInteger(n) {
+    return typeof n === 'number' && Number.isFinite(n) &&
+      n >= 0 && Math.floor(n) === n;
+  }
+
+  function phaseOrder(phase) {
+    return phase === 'initial-scan' ? 0 :
+      phase === 'root-verification' ? 1 : -1;
+  }
+
+  // Validate progress independently from the worker. Exact payload keys keep
+  // provisional scores/PVs from crossing this boundary by accident.
+  function progressEvent(msg, job) {
+    var p = msg && msg.progress;
+    if (!p || Object.keys(p).sort().join(',') !==
+        'completedRoots,elapsedMs,phase,totalRoots' ||
+        phaseOrder(p.phase) < 0 ||
+        !finiteInteger(p.completedRoots) ||
+        !finiteInteger(p.totalRoots) ||
+        !finiteInteger(p.elapsedMs) ||
+        p.completedRoots > p.totalRoots) return null;
+    if (p.phase === 'initial-scan') {
+      if (p.totalRoots !== 1 || p.completedRoots > 1) return null;
+    } else if (p.totalRoots < 1) {
+      return null;
+    }
+
+    var event = {
+      jobId: job.id,
+      owner: job.owner,
+      phase: p.phase,
+      completedRoots: p.completedRoots,
+      totalRoots: p.totalRoots,
+      elapsedMs: p.elapsedMs
+    };
+
+    // Each attempt must be internally monotonic. A retry gets a fresh
+    // attemptProgress, but public progress below retains the prior high-water.
+    var attempt = job.attemptProgress;
+    if (attempt) {
+      var attemptPrevOrder = phaseOrder(attempt.phase);
+      var attemptNextOrder = phaseOrder(event.phase);
+      if (attemptNextOrder < attemptPrevOrder ||
+          event.elapsedMs < attempt.elapsedMs ||
+          (attemptNextOrder === attemptPrevOrder &&
+           (event.totalRoots !== attempt.totalRoots ||
+            event.completedRoots < attempt.completedRoots))) return null;
+    }
+    job.attemptProgress = event;
+
+    // A retry truthfully starts its own scan at zero, but publishing that reset
+    // would move the user-visible job backwards. Suppress it until the fresh
+    // attempt catches the prior phase/root high-water; never fabricate counts.
+    var published = job.publishedProgress;
+    if (published) {
+      var prevOrder = phaseOrder(published.phase);
+      var nextOrder = phaseOrder(event.phase);
+      if (nextOrder < prevOrder || event.elapsedMs < published.elapsedMs) return null;
+      if (nextOrder === prevOrder) {
+        if (event.totalRoots !== published.totalRoots ||
+            event.completedRoots < published.completedRoots) return null;
+        if (event.completedRoots === published.completedRoots &&
+            event.elapsedMs === published.elapsedMs) return null;
+      }
+    }
+    return event;
+  }
+
+  function publishProgress(job, event) {
+    if (!event || job !== active || job.done) return;
+    job.publishedProgress = event;
+    // Snapshot the list so listeners may safely unsubscribe. Re-check active
+    // ownership before each call: an earlier listener may cancel/supersede.
+    subscribers.slice().forEach(function (sub) {
+      if (job !== active || job.done || sub.owner !== job.owner ||
+          subscribers.indexOf(sub) < 0) return;
+      try { sub.listener(Object.assign({}, event)); } catch (e) {
+        // Observation-only: a broken listener cannot affect the worker job.
+      }
+    });
+  }
+
   function settle(job, value) {
     if (job.done) return;
     job.done = true;
@@ -190,8 +282,8 @@
       }
     } catch (e) { worker = null; return null; }
     // Bind callbacks to this exact worker/job. A queued event from a worker
-    // terminated during supersede/retry must never act through the mutable
-    // global reference and kill or consume a retry for its successor.
+    // terminated during supersede/retry must never act through the global
+    // `worker` reference and kill, settle, or consume a retry for its successor.
     var instance = worker;
     instance.onmessage = function (e) {
       if (worker !== instance || active !== job || job.done) return;
@@ -211,8 +303,22 @@
     if (!job || job.done) return;
     // Drop foreign / superseded / wrong-protocol replies.
     if (!msg || msg.v !== PROTOCOL || msg.jobId !== job.id) return;
+    var hasProgress = Object.prototype.hasOwnProperty.call(msg, 'progress');
+    var hasResult = Object.prototype.hasOwnProperty.call(msg, 'result');
+    var hasError = Object.prototype.hasOwnProperty.call(msg, 'error');
+    if (hasProgress) {
+      // Progress is exclusive and non-terminal. In particular, do NOT
+      // clear/re-arm the watchdog here: chatter cannot keep a wedged job alive.
+      if (hasResult || hasError) return;
+      publishProgress(job, progressEvent(msg, job));
+      return;
+    }
+    // Result/error are the only terminal message shapes. Malformed chatter is
+    // ignored while the original watchdog continues to bound the attempt.
+    if (hasResult === hasError) return;
+    if (hasError && (typeof msg.error !== 'string' || !msg.error)) return;
     clearWatch(job);
-    if (msg.error) { recover(job); return; }   // worker-side failure → retry/give up
+    if (hasError) { recover(job); return; }   // worker-side failure → retry/give up
     var result = msg.result;
     if (!validMatch(result, job)) { settle(job, null); return; }
     // Publish from a bounded in-memory handoff, then persist without blocking
@@ -239,11 +345,17 @@
     if (worker) { worker.terminate(); worker = null; }
     if (job.attempts >= MAX_ATTEMPTS || !ensureWorker(job)) { settle(job, null); return; }
     job.attempts++;
+    job.attemptProgress = null;
     job.watchdog = setTimeout(function () { recover(job); }, watchdogMs(job.opts));
     dispatches++;
+    var elapsedOffset = Math.max(0, nowMs() - job.startedAt);
+    if (job.publishedProgress) {
+      elapsedOffset = Math.max(elapsedOffset, job.publishedProgress.elapsedMs);
+    }
     worker.postMessage({
       v: PROTOCOL, jobId: job.id, fen: job.req.fen,
-      positions: job.req.positions || undefined, opts: job.opts
+      positions: job.req.positions || undefined, opts: job.opts,
+      elapsedOffsetMs: elapsedOffset
     });
   }
 
@@ -311,7 +423,8 @@
     abandon(); // one active job: kill any predecessor before starting
     var job = {
       id: ++seq, req: req || {}, owner: owner || null,
-      attempts: 0, done: false, watchdog: null
+      attempts: 0, done: false, watchdog: null,
+      startedAt: nowMs(), attemptProgress: null, publishedProgress: null
     };
     return new Promise(function (resolve) {
       job.resolve = resolve;
@@ -325,6 +438,22 @@
   function cancel(owner) {
     if (arguments.length) abandon(owner || null);
     else abandon();
+  }
+
+  // Subscribe to progress owned by one subsystem. There is deliberately no
+  // wildcard: a listener can observe only the currently active job whose
+  // owner exactly matches its subscription. Returns an idempotent unsubscribe.
+  function subscribe(owner, listener) {
+    if (typeof listener !== 'function') return function () {};
+    var sub = { owner: owner || null, listener: listener };
+    var closed = false;
+    subscribers.push(sub);
+    return function () {
+      if (closed) return;
+      closed = true;
+      var i = subscribers.indexOf(sub);
+      if (i >= 0) subscribers.splice(i, 1);
+    };
   }
 
   // Evict the cached result for a request. The service caches any reply that
@@ -357,6 +486,7 @@
   global.ChessyAnalysisService = {
     analyse: analyse,
     cancel: cancel,
+    subscribe: subscribe,
     invalidate: invalidate,
     stats: stats,
     PROTOCOL: PROTOCOL

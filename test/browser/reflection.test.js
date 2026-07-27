@@ -160,6 +160,62 @@ require('./helper').run('reflection', async function (t) {
     return window.__cancelWorkers.length === 1 &&
       window.__cancelWorkers[0].posts.length === 1;
   });
+  const visibleProgress = await page.evaluate(function () {
+    const worker = window.__cancelWorkers[0];
+    const post = worker.posts[0];
+    function send(phase, completed, total, elapsed, jobId, extra) {
+      worker.onmessage({
+        data: {
+          v: ChessyAnalysisService.PROTOCOL,
+          jobId: jobId === undefined ? post.jobId : jobId,
+          progress: Object.assign({
+            phase: phase,
+            completedRoots: completed,
+            totalRoots: total,
+            elapsedMs: elapsed
+          }, extra || {})
+        }
+      });
+    }
+    send('initial-scan', 0, 1, 0);
+    const initialText = document.getElementById('verifyProgressText').textContent;
+    send('initial-scan', 1, 1, 1);
+    send('root-verification', 0, 20, 2);
+    send('root-verification', 2, 20, 120);
+    const meter = document.getElementById('verifyProgress');
+    const beforeForeign = {
+      text: document.getElementById('verifyProgressText').textContent,
+      value: meter.value,
+      max: meter.max,
+      label: meter.getAttribute('aria-label'),
+      valueText: meter.getAttribute('aria-valuetext')
+    };
+    send('root-verification', 9, 20, 200, post.jobId + 999);
+    send('root-verification', 3, 20, 200, post.jobId, { scoreCpWhite: 99 });
+    return {
+      initialText: initialText,
+      beforeForeign: beforeForeign,
+      afterForeign: {
+        text: document.getElementById('verifyProgressText').textContent,
+        value: meter.value,
+        max: meter.max,
+        valueText: meter.getAttribute('aria-valuetext')
+      }
+    };
+  });
+  check(visibleProgress.initialText === 'Initial scan…' &&
+        visibleProgress.beforeForeign.text === 'Verified 2 of 20 roots.' &&
+        visibleProgress.beforeForeign.value === 2 &&
+        visibleProgress.beforeForeign.max === 20 &&
+        visibleProgress.beforeForeign.label === 'Verification progress' &&
+        visibleProgress.beforeForeign.valueText === visibleProgress.beforeForeign.text &&
+        JSON.stringify(visibleProgress.afterForeign) === JSON.stringify({
+          text: visibleProgress.beforeForeign.text,
+          value: visibleProgress.beforeForeign.value,
+          max: visibleProgress.beforeForeign.max,
+          valueText: visibleProgress.beforeForeign.valueText
+        }),
+    'Verify exposes truthful accessible phase/root progress; foreign or score-bearing messages cannot repaint it');
   const elapsedStart = await page.evaluate(function () {
     return parseFloat(document.getElementById('verifyElapsed').textContent.match(/\d+\.\d+/)[0]);
   });
@@ -175,12 +231,14 @@ require('./helper').run('reflection', async function (t) {
       groupName: activity.getAttribute('aria-label'),
       elapsed: elapsed,
       timerRole: document.getElementById('verifyElapsed').getAttribute('role'),
+      progressText: document.getElementById('verifyProgressText').textContent,
       cancelText: document.getElementById('cancelVerify').textContent,
       result: document.getElementById('verifyResult').textContent
     };
   });
   check(runningUi.activityVisible && runningUi.groupName === 'Verification controls' &&
         runningUi.timerRole === 'timer' &&
+        runningUi.progressText === 'Verified 2 of 20 roots.' &&
         runningUi.cancelText === 'Cancel Verify' &&
         runningUi.result.includes('Analysing') &&
         /^Elapsed: \d+\.\d seconds$/.test(runningUi.elapsed) &&
@@ -199,7 +257,8 @@ require('./helper').run('reflection', async function (t) {
       result: document.getElementById('verifyResult').textContent,
       lines: document.getElementById('verifyLines').children.length,
       saveDisabled: document.getElementById('saveCard').disabled,
-      elapsed: document.getElementById('verifyElapsed').textContent
+      elapsed: document.getElementById('verifyElapsed').textContent,
+      progress: document.getElementById('verifyProgressText').textContent
     };
   });
   check(cancelledUi.owner === 'reflection' && cancelledUi.terminated &&
@@ -209,8 +268,25 @@ require('./helper').run('reflection', async function (t) {
         cancelledUi.saveDisabled,
     'Cancel Verify promptly terminates only reflection work and leaves a retryable, non-saveable state');
   await page.waitForTimeout(250);
-  check((await page.textContent('#verifyElapsed')) === cancelledUi.elapsed,
-    'the elapsed clock stops after cancellation');
+  await page.evaluate(function () {
+    const oldWorker = window.__cancelWorkers[0];
+    const oldPost = oldWorker.posts[0];
+    oldWorker.onmessage({
+      data: {
+        v: ChessyAnalysisService.PROTOCOL,
+        jobId: oldPost.jobId,
+        progress: {
+          phase: 'root-verification',
+          completedRoots: 20,
+          totalRoots: 20,
+          elapsedMs: 500
+        }
+      }
+    });
+  });
+  check((await page.textContent('#verifyElapsed')) === cancelledUi.elapsed &&
+        (await page.textContent('#verifyProgressText')) === cancelledUi.progress,
+    'elapsed and root progress stop after cancellation; a late checkpoint cannot repaint them');
 
   // Start again, then make the cancelled predecessor reply while this newer
   // request owns the UI. Its old job id must neither stop the new clock nor
@@ -223,6 +299,18 @@ require('./helper').run('reflection', async function (t) {
   await page.evaluate(function () {
     const oldWorker = window.__cancelWorkers[0];
     const oldPost = oldWorker.posts[0];
+    oldWorker.onmessage({
+      data: {
+        v: ChessyAnalysisService.PROTOCOL,
+        jobId: oldPost.jobId,
+        progress: {
+          phase: 'root-verification',
+          completedRoots: 20,
+          totalRoots: 20,
+          elapsedMs: 700
+        }
+      }
+    });
     const oldResult = window.__reflectionFixture(window.__cancelRequests[0].req, {
       complete: true,
       includePlayed: true
@@ -238,8 +326,9 @@ require('./helper').run('reflection', async function (t) {
   await page.waitForTimeout(150);
   check((await page.textContent('#verifyResult')).includes('Analysing') &&
         await page.locator('#verifyActivity').isVisible() &&
+        (await page.textContent('#verifyProgressText')) === 'Preparing verification…' &&
         !(await page.locator('#cancelVerify').isDisabled()),
-    'a cancelled predecessor’s late reply cannot stop or repaint a newer Verify');
+    'a cancelled predecessor’s late progress/result cannot stop or repaint a newer Verify');
 
   // Let the current worker finish and persist, but hold reflection's durable
   // source read. Cancel in that narrow post-transport/pre-verdict window:
@@ -257,6 +346,20 @@ require('./helper').run('reflection', async function (t) {
     };
     const worker = window.__cancelWorkers[1];
     const post = worker.posts[0];
+    [
+      { phase: 'initial-scan', completedRoots: 0, totalRoots: 1, elapsedMs: 0 },
+      { phase: 'initial-scan', completedRoots: 1, totalRoots: 1, elapsedMs: 1 },
+      { phase: 'root-verification', completedRoots: 0, totalRoots: 20, elapsedMs: 2 },
+      { phase: 'root-verification', completedRoots: 20, totalRoots: 20, elapsedMs: 250 }
+    ].forEach(function (progress) {
+      worker.onmessage({
+        data: {
+          v: ChessyAnalysisService.PROTOCOL,
+          jobId: post.jobId,
+          progress: progress
+        }
+      });
+    });
     const result = window.__reflectionFixture(window.__cancelRequests[1].req, {
       complete: true,
       includePlayed: true
@@ -276,8 +379,9 @@ require('./helper').run('reflection', async function (t) {
     });
   }, beforeCancel);
   check(await page.locator('#verifyActivity').isVisible() &&
-        (await page.textContent('#verifyResult')).includes('Analysing'),
-    'Verify stays cancellable while its completed transport awaits the durable source check');
+        (await page.textContent('#verifyResult')).includes('Analysing') &&
+        (await page.textContent('#verifyProgressText')) === 'Verified 20 of 20 roots.',
+    'Verify shows completed root work and stays cancellable while transport awaits the durable source check');
   await page.click('#cancelVerify');
   await page.evaluate(function () { window.__cancelSourceReadRelease(); });
   await page.waitForFunction(function (baseline) {
@@ -331,9 +435,21 @@ require('./helper').run('reflection', async function (t) {
     'no cause asked when the move matches');
   check(!(await page.locator('#reflectVerify').isDisabled()), 'probe button re-enables');
   const completedClock = await page.textContent('#verifyElapsed');
+  const completedProgress = await page.evaluate(function () {
+    const meter = document.getElementById('verifyProgress');
+    return {
+      text: document.getElementById('verifyProgressText').textContent,
+      value: meter.value,
+      max: meter.max,
+      valueText: meter.getAttribute('aria-valuetext')
+    };
+  });
   check(await page.locator('#verifyActivity').isHidden() &&
-        await page.locator('#cancelVerify').isDisabled(),
-    'a completed Verify retires its elapsed timer and Cancel control');
+        await page.locator('#cancelVerify').isDisabled() &&
+        completedProgress.value === completedProgress.max &&
+        /^Verified \d+ of \d+ roots\.$/.test(completedProgress.text) &&
+        completedProgress.valueText === completedProgress.text,
+    'a completed Verify retires its activity controls after truthful root completion');
   await page.waitForTimeout(250);
   check((await page.textContent('#verifyElapsed')) === completedClock,
     'the elapsed clock stays stopped after successful completion');
@@ -842,11 +958,13 @@ require('./helper').run('reflection', async function (t) {
   await page.click('#reflectVerify');
   await page.click('#reviewBack'); // abandon mid-probe
   const abandonedElapsed = await page.textContent('#verifyElapsed');
+  const abandonedProgress = await page.textContent('#verifyProgressText');
   await page.waitForTimeout(2500);
   check(await page.locator('#verifyActivity').isHidden() &&
         await page.locator('#cancelVerify').isDisabled() &&
-        (await page.textContent('#verifyElapsed')) === abandonedElapsed,
-    'leaving the reviewed game retires the active Cancel control and elapsed timer');
+        (await page.textContent('#verifyElapsed')) === abandonedElapsed &&
+        (await page.textContent('#verifyProgressText')) === abandonedProgress,
+    'leaving the reviewed game retires and freezes elapsed/root progress controls');
   await page.locator('.game-item').first().click();
   await page.click('#flagMoment'); // fresh moment, ply 0
   check(await page.locator('#verifyBox').isHidden(),

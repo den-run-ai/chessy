@@ -136,7 +136,7 @@
   // can never make the displayed duration move backwards. The clock is not an
   // ETA: search shape varies by position/device, so only observed elapsed time
   // is honest.
-  let verifyRun = null; // { token, request, startedAt, lastTenths, interval }
+  let verifyRun = null; // { token, request, jobId, startedAt, lastTenths, interval }
   // The moment ("gameId:revision:ply") whose last analysis was rejected or
   // cancelled, so the next Verify bypasses the (evicted) cache and re-runs the
   // worker rather than racing a best-effort deletion.
@@ -158,6 +158,41 @@
       'Elapsed: ' + (run.lastTenths / 10).toFixed(1) + ' seconds';
   }
 
+  // Progress carries work counts only — never provisional scores or PVs. The
+  // service already validates and owner-gates it; the UI repeats the token/job
+  // checks so a stale callback cannot repaint a newer Verify.
+  function renderProgress(run, event) {
+    if (!run || verifyRun !== run || run.token !== verifySeq || !event ||
+        event.owner !== ANALYSIS_OWNER || !Number.isInteger(event.jobId) ||
+        !Number.isInteger(event.completedRoots) ||
+        !Number.isInteger(event.totalRoots) ||
+        event.completedRoots < 0 || event.totalRoots < 1 ||
+        event.completedRoots > event.totalRoots) return;
+    if (run.jobId === null) run.jobId = event.jobId;
+    if (run.jobId !== event.jobId) return;
+
+    let text;
+    if (event.phase === 'initial-scan') {
+      if (event.totalRoots !== 1) return;
+      text = event.completedRoots === 1 ? 'Initial scan complete.' : 'Initial scan…';
+    } else if (event.phase === 'root-verification') {
+      text = 'Verified ' + event.completedRoots + ' of ' + event.totalRoots + ' roots.';
+    } else {
+      return;
+    }
+    const meter = $('verifyProgress');
+    meter.max = event.totalRoots;
+    meter.value = event.completedRoots;
+    meter.setAttribute('aria-valuetext', text);
+    $('verifyProgressText').textContent = text;
+    // Fold in the worker's job-level elapsed high-water without replacing the
+    // independent visible clock between throttled root checkpoints.
+    if (typeof event.elapsedMs === 'number' && isFinite(event.elapsedMs)) {
+      run.lastTenths = Math.max(run.lastTenths, Math.floor(event.elapsedMs / 100));
+      renderElapsed(run);
+    }
+  }
+
   function stopVerifyRun(token) {
     const run = verifyRun;
     if (!run || (token !== undefined && run.token !== token)) return;
@@ -175,17 +210,30 @@
     const run = {
       token: token,
       request: request,
+      jobId: null,
       startedAt: monotonicNow(),
       lastTenths: 0,
       interval: null
     };
     verifyRun = run;
+    $('verifyProgress').max = 1;
+    $('verifyProgress').removeAttribute('value');
+    $('verifyProgress').setAttribute('aria-valuetext', 'Preparing verification');
+    $('verifyProgressText').textContent = 'Preparing verification…';
     $('verifyElapsed').textContent = 'Elapsed: 0.0 seconds';
     $('cancelVerify').disabled = false;
     $('verifyActivity').hidden = false;
     // Four lightweight paints per second feel responsive without competing
     // materially with the worker on constrained mobile hardware.
     run.interval = setInterval(function () { renderElapsed(run); }, 250);
+  }
+
+  // One module-lifetime owner subscription is enough: verifyRun/token/job
+  // ownership decides whether a delivered checkpoint is still renderable.
+  if (typeof ChessyAnalysisService.subscribe === 'function') {
+    ChessyAnalysisService.subscribe(ANALYSIS_OWNER, function (event) {
+      renderProgress(verifyRun, event);
+    });
   }
 
   function sameMoment(r) {
