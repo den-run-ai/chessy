@@ -10,7 +10,7 @@
  * (complete:false) preservation, and the guarantee that the heavy search never
  * runs on the main thread.
  *
- * The E3b runtime tranche (#87) extends this with the service-level
+ * The E3b runtime tranche (#87) extends this with the three service-level
  * contracts the eval scorecard deliberately does not grade:
  *   cache    — a persisted record is served bit-identically with provenance
  *              intact and no recompute, and only after re-passing the same
@@ -19,16 +19,28 @@
  *   cancel   — a superseded or cancelled job never publishes: its promise is
  *              null, its late replies write neither the persistent cache nor
  *              the in-memory handoff, and one interactive job holds under a
- *              rapid re-request storm.
+ *              rapid re-request storm;
+ *   progress — reported work is consistent with the declared node budget, a
+ *              budget-capped run is visibly partial end to end (the
+ *              reflection-panel rule in assets/reflection.js), and the moment
+ *              scan's progress stream over the REAL service is monotonic and
+ *              never claims completion while work remains.
  */
 'use strict';
 require('../assets/engine.js');
 require('../assets/ai.js');
 require('../assets/analysis-core.js');
 require('../assets/analysis-service.js');
+// The E3b progress tranche drives the REAL moment-scan controller over the
+// real service (both loaded here, before any document shim exists, so the
+// controller's DOM listeners are skipped exactly as in a worker-less page).
+require('../assets/analysis-result.js');
+require('../assets/moment-selector.js');
+require('../assets/moment-scan.js');
 const Chess = globalThis.Chess;
 const Core = globalThis.ChessyAnalysisCore;
 const Svc = globalThis.ChessyAnalysisService;
+const Scan = globalThis.ChessyMomentScan;
 
 let passed = 0, failed = 0;
 function check(ok, label, detail) {
@@ -91,7 +103,7 @@ function makeStore() {
   };
 }
 
-// ---- E3b helpers: seeded persistent records, gated lookups.
+// ---- E3b helpers: seeded persistent records, gated lookups, scan fixtures.
 function cloneJson(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
 
 // The cache identity EXACTLY as the service computes it before dispatch
@@ -137,6 +149,63 @@ function gatedStore() {
       return gate.promise;
     },
     putAnalysis: function (rec) { map.set(rec.key, rec); return Promise.resolve(); }
+  };
+}
+
+// makeStore plus the durable-job seam the scan controller checkpoints through.
+function makeScanStore() {
+  const s = makeStore();
+  const jobs = new Map(), games = new Map();
+  s._jobs = jobs; s._games = games;
+  s.getJob = function (id) { return Promise.resolve(cloneJson(jobs.get(id))); };
+  s.putJob = function (job) { jobs.set(job.gameId, cloneJson(job)); return Promise.resolve(job.gameId); };
+  s.putJobIfGame = function (job, expected) {
+    const g = games.get(job.gameId);
+    const same = !!g && !!expected && JSON.stringify({
+      id: g.id, setupFen: g.setupFen || null, playerColor: g.playerColor || null,
+      sans: g.sans || [], clocks: g.clocks || [], timeControl: g.timeControl || null
+    }) === JSON.stringify(expected);
+    if (!same) return Promise.resolve(false);
+    jobs.set(job.gameId, cloneJson(job));
+    return Promise.resolve(true);
+  };
+  s.getGame = function (id) { return Promise.resolve(cloneJson(games.get(id))); };
+  return s;
+}
+
+// Replay a short game for the scan seam. Each picker returns the move to play
+// from (state, legalMoves); everything downstream (sans, states, fens,
+// positions) is derived with the real engine so the fixture can never drift
+// from what the scan will recompute.
+function replayReview(id, setupFen, pickers) {
+  let s = Chess.parseFen(setupFen);
+  s.history = [];
+  s.positions = {};
+  s.positions[Chess.positionKey(s)] = 1;
+  const states = [s], fens = [Chess.toFen(s)];
+  for (const pick of pickers) {
+    const legal = Chess.legalMoves(s);
+    s = Chess.playMove(s, pick(s, legal));
+    states.push(s);
+    fens.push(Chess.toFen(s));
+  }
+  const game = {
+    id: id, setupFen: setupFen, playerColor: 'w',
+    sans: s.history.map(function (h) { return h.san; }),
+    clocks: s.history.map(function () { return null; }),
+    timeControl: 'none'
+  };
+  return { game: game, gs: s, states: states, fens: fens, ply: 0 };
+}
+
+function byUci(u) {
+  return function (state, legal) {
+    const m = legal.find(function (x) {
+      return Chess.sqName(x.from) + Chess.sqName(x.to) +
+        (x.promotion ? x.promotion.toLowerCase() : '') === u;
+    });
+    if (!m) throw new Error('fixture move not legal: ' + u);
+    return m;
   };
 }
 
@@ -499,6 +568,119 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   check(!!postFirst && postSecond === postFirst &&
     Svc.stats().dispatches === dPost && postStore._map.size === 1,
     'cancel() after completion unpublishes nothing: the identical request still hits');
+
+  // ====================== E3b §3 — progress (#87) ======================
+
+  // --- Budget consistency through the full transport: reported work never
+  //     exceeds the declared budget (scan + two verification passes, counted
+  //     exactly by the engine), a capped run is visibly partial, and a larger
+  //     budget on identical input can only report more work. ---
+  reset({ factory: factoryOf({ mode: 'normal' }) });
+  const BUD = { maxDepth: 4, nodeLimit: 3000, multiPV: 3, pvLen: 6 };
+  const capped = await Svc.analyse(Object.assign({}, REQ,
+    { gameId: 'e3b-bud', opts: Object.assign({}, BUD, { nodeBudget: 2000 }) }));
+  const ample = await Svc.analyse(Object.assign({}, REQ,
+    { gameId: 'e3b-bud', opts: Object.assign({}, BUD, { nodeBudget: 400000 }) }));
+  check(!!capped && capped.complete === false && !!ample && ample.complete === true,
+    'the node budget is the completeness boundary: a capped run is partial, an ample run complete');
+  check(capped.nodes <= 3000 + 2 * 2000 && ample.nodes <= 3000 + 2 * 400000,
+    'reported nodes never exceed the declared budget (scan + deep-verify + shallow-verify)');
+  check(capped.nodes < ample.nodes && capped.depth === ample.depth && capped.depth >= 1,
+    'a larger budget on identical input reports strictly more work at the same scan-fixed depth');
+
+  // --- The moment scan's progress stream over the REAL service: monotonic
+  //     counters, requests that declare a shipped profile, replies whose
+  //     reported work fits that profile's budget, and a 'done' that is never
+  //     claimed while work remains. The fixture blunder (missing Rxa8+) is
+  //     graded by the real engine; the quiet White move is DERIVED from the
+  //     engine's own best line, so nomination thresholds hold across engine
+  //     versions. ---
+  const scanStore = makeScanStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: scanStore });
+  const quickProfile = Scan.profiles.quick;
+  const seamReview = replayReview('e3b-scan', 'r3k3/8/8/8/8/8/8/R3K3 w - - 0 1', [
+    byUci('a1b1'), // White misses Rxa8+ — the one real moment
+    byUci('e8d7'),
+    function (state, legal) { // White plays its own engine-best: regret 0, never nominated
+      const best = Core.analyse(state, Object.assign({}, quickProfile,
+        { positions: state.positions })).bestLines[0].move;
+      return legal.find(function (m) {
+        return m.from === best.from && m.to === best.to &&
+          (m.promotion || null) === (best.promotion || null);
+      });
+    },
+    function (state, legal) { return legal[0]; }
+  ]);
+  scanStore._games.set('e3b-scan', cloneJson(seamReview.game));
+
+  const seamEvents = [];
+  const realDoc = globalThis.document, realCE = globalThis.CustomEvent;
+  globalThis.document = {
+    dispatchEvent: function (e) { seamEvents.push(cloneJson(e.detail)); }
+  };
+  globalThis.CustomEvent = function (type, init) {
+    this.type = type;
+    this.detail = init && init.detail;
+  };
+  const seamCalls = [];
+  globalThis.ChessyAnalysisService = { // the controller resolves this global per call
+    analyse: function (req, owner) {
+      const call = { opts: cloneJson(req.opts), owner: owner, res: undefined };
+      seamCalls.push(call);
+      return Svc.analyse(req, owner).then(function (res) { call.res = res; return res; });
+    },
+    cancel: function (owner) { return arguments.length ? Svc.cancel(owner) : Svc.cancel(); }
+  };
+  let seamDone;
+  try {
+    seamDone = await Scan.start(seamReview, { restart: true });
+    await delay(20); // any stray post-completion emit would land here
+  } finally {
+    globalThis.ChessyAnalysisService = Svc;
+    if (realDoc === undefined) delete globalThis.document;
+    else globalThis.document = realDoc;
+    if (realCE === undefined) delete globalThis.CustomEvent;
+    else globalThis.CustomEvent = realCE;
+  }
+  Scan.invalidate();
+
+  const stream = seamEvents.filter(function (e) { return e !== null; });
+  const doneIdx = stream.findIndex(function (e) { return e.state === 'done'; });
+  let monotone = stream.length > 0;
+  for (let i = 0; i < stream.length; i++) {
+    const e = stream[i];
+    if (e.gameId !== 'e3b-scan' || e.total !== 2 || e.checked > e.total ||
+        e.verifyIndex > e.verifyTotal || e.verifyTotal > 2 || e.error !== null) monotone = false;
+    if (i === 0) continue;
+    const p = stream[i - 1];
+    if (e.checked < p.checked || e.checked - p.checked > 1 || e.cursorPly < p.cursorPly ||
+        e.pass < p.pass || e.verifyIndex < p.verifyIndex || e.verifyTotal < p.verifyTotal) monotone = false;
+  }
+  check(stream.length >= 5 && monotone,
+    'the scan progress stream over the real service is monotonic and self-consistent');
+  check(doneIdx === stream.length - 1 && stream[doneIdx].checked === 2 &&
+    stream[doneIdx].pass === 2 && stream[doneIdx].verifyTotal === 1 &&
+    stream[doneIdx].verifyIndex === stream[doneIdx].verifyTotal &&
+    stream[doneIdx].unresolvedCount === 0,
+    'done is claimed exactly once, last, with no work remaining (never a dressed-up partial)');
+  check(!!seamDone && seamDone.state === 'done' && seamDone.checked === 2 && seamDone.total === 2,
+    'the returned public state agrees with the stream: both decisions checked, blunder verified');
+  const sanitized = stream.every(function (e) {
+    return e.moments.every(function (m) {
+      return Object.keys(m).sort().join(',') === 'playedSan,ply';
+    });
+  });
+  const seamProfiles = [Scan.profiles.quick, Scan.profiles.quickFallback, Scan.profiles.deep];
+  const budgeted = seamCalls.length >= 3 && seamCalls.every(function (call) {
+    const declared = seamProfiles.some(function (prof) {
+      return call.opts.nodeLimit === prof.nodeLimit && call.opts.nodeBudget === prof.nodeBudget &&
+        call.opts.maxDepth === prof.maxDepth && call.opts.multiPV === prof.multiPV;
+    });
+    return declared && call.owner === 'moment-scan' && !!call.res &&
+      call.res.depth >= 1 && call.res.nodes <= call.opts.nodeLimit + 2 * call.opts.nodeBudget;
+  });
+  check(budgeted && sanitized,
+    'every scan request declares a shipped profile, every reply fits its budget, and public moments stay sanitized');
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
