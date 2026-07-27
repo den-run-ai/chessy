@@ -636,6 +636,19 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 /* The partial qualifier lives in #verifyMeta's TEXT (accessible); this only
    emphasises it visually. */
 #verifyMeta.partial { color: var(--danger, #d9534f); }
+.verify-activity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.verify-activity #verifyElapsed {
+  font-variant-numeric: tabular-nums;
+}
+.verify-activity .btn {
+  min-height: 44px;
+}
 
 .stats {
   display: grid;

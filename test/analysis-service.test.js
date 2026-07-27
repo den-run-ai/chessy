@@ -352,6 +352,29 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   check((await cancelled) === null && made[0].terminated === true,
     'cancel() terminates the worker and resolves the in-flight promise null');
 
+  // A terminated worker may already have queued an error event. Its handler
+  // is bound to that exact worker/job: firing it after a successor starts must
+  // not terminate the successor or consume the successor's retry.
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }) });
+  const oldRun = Svc.analyse(Object.assign({}, REQ, { gameId: 'old-error' }));
+  const oldWorker = made[0], staleError = oldWorker.onerror;
+  Svc.cancel();
+  check((await oldRun) === null, 'the stale-error predecessor is cancelled');
+  const successorRun = Svc.analyse(Object.assign({}, REQ, { gameId: 'new-error' }));
+  const successorWorker = made[1], successorId = successorWorker.posts[0].jobId;
+  let successorSettled = false;
+  successorRun.then(function () { successorSettled = true; });
+  staleError({});
+  await delay(5);
+  const staleErrorInert = made.length === 2 &&
+    successorWorker.terminated === false && successorSettled === false;
+  successorWorker.deliver({
+    v: PROTOCOL, jobId: successorId,
+    result: Core.analyse(Chess.parseFen(START), FAST)
+  });
+  check(staleErrorInert && (await successorRun) !== null,
+    'a cancelled worker’s queued error cannot terminate or settle its successor');
+
   // --- Owner-scoped cancel: a stale scan pause cannot kill a newer reflection.
   //     Global cancel remains available to destructive data controls. ---
   reset({ factory: factoryOf({ mode: 'stall' }) });
@@ -516,6 +539,66 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const lateAfter = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
   check(!!lateAfter && Svc.stats().dispatches === dLate + 1 && lateStore._map.size === 1,
     'after the cancelled work the identical request misses (no ghost handoff) and recomputes');
+
+  // --- Cancel/invalidate after transport accepted the result but while its
+  //     best-effort cache put is delayed. The delete must queue after that old
+  //     put, and a fresh successor put must queue after the delete:
+  //
+  //         cancelled put -> delete -> successor put
+  //
+  //     Without per-key ordering, landing the first gate after invalidate()
+  //     resurrected the cancelled result in persistent storage.
+  const delayedMap = new Map(), delayedPuts = [], delayedEvents = [];
+  const delayedStore = {
+    analysisKey: function (g, p, f, e, c) { return [g, p, f, e, c].join('|'); },
+    getAnalysis: function (key) { return Promise.resolve(delayedMap.get(key)); },
+    putAnalysis: function (rec) {
+      const number = delayedPuts.length + 1;
+      const gate = {};
+      gate.promise = new Promise(function (resolve) {
+        gate.land = function () {
+          delayedEvents.push('put' + number);
+          delayedMap.set(rec.key, rec);
+          resolve();
+        };
+      });
+      delayedPuts.push(gate);
+      return gate.promise;
+    },
+    deleteAnalysis: function (key) {
+      delayedEvents.push('delete');
+      delayedMap.delete(key);
+      return Promise.resolve();
+    }
+  };
+  const delayedReq = Object.assign({}, REQ, { gameId: 'e3b-delayed-put' });
+  reset({ factory: factoryOf({ mode: 'normal' }), store: delayedStore });
+  const delayedAccepted = await Svc.analyse(delayedReq, 'reflection');
+  check(!!delayedAccepted && delayedPuts.length === 1 && delayedMap.size === 0,
+    'analysis delivery does not wait for an intentionally delayed cache put');
+  const delayedInvalidation = Svc.invalidate(delayedReq);
+  let delayedInvalidated = false;
+  delayedInvalidation.then(function () { delayedInvalidated = true; });
+  await delay(5);
+  check(!delayedInvalidated && delayedEvents.length === 0,
+    'invalidate waits behind the already-started put instead of deleting too early');
+
+  // A fresh Verify may start immediately after Cancel. Its persistence queues
+  // behind the invalidation but its interactive result still returns promptly.
+  const delayedSuccessor = await Svc.analyse(
+    Object.assign({}, delayedReq, { fresh: true }), 'reflection');
+  check(!!delayedSuccessor && delayedPuts.length === 1,
+    'a fresh successor completes while its cache write waits behind cancellation');
+  delayedPuts[0].land();
+  await delayedInvalidation;
+  await delay(0); // let the queued successor invoke its adapter
+  check(delayedMap.size === 0 && delayedPuts.length === 2 &&
+        delayedEvents.join(',') === 'put1,delete',
+    'the post-cancel delete removes the delayed predecessor before successor persistence');
+  delayedPuts[1].land();
+  await delay(5);
+  check(delayedMap.size === 1 && delayedEvents.join(',') === 'put1,delete,put2',
+    'a later fresh result persists after, never before, the cancellation tombstone');
 
   // --- One interactive job under a rapid re-request storm: every predecessor
   //     resolves null, at most one worker is ever left alive, each dispatched

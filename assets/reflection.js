@@ -131,9 +131,62 @@
   let verdict = null;
   let verifySeq = 0;
   let saveSeq = 0;
-  // The moment ("gameId:ply") whose last analysis was rejected as unusable, so
-  // the next Verify for it bypasses the (evicted) cache and re-runs the worker.
+  // One visible elapsed clock belongs to one verification token. Use the
+  // browser's monotonic clock (and clamp the fallback) so wall-clock changes
+  // can never make the displayed duration move backwards. The clock is not an
+  // ETA: search shape varies by position/device, so only observed elapsed time
+  // is honest.
+  let verifyRun = null; // { token, request, startedAt, lastTenths, interval }
+  // The moment ("gameId:revision:ply") whose last analysis was rejected or
+  // cancelled, so the next Verify bypasses the (evicted) cache and re-runs the
+  // worker rather than racing a best-effort deletion.
   let retryFresh = null;
+
+  function monotonicNow() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now() : Date.now();
+  }
+
+  function renderElapsed(run) {
+    if (!run || verifyRun !== run || run.token !== verifySeq) return;
+    const elapsed = Math.max(0, monotonicNow() - run.startedAt);
+    // Integer tenths avoid floating-point display jitter. Clamp to the last
+    // rendered value as a belt-and-suspenders fallback for older browsers that
+    // lack performance.now() and whose wall clock can be adjusted.
+    run.lastTenths = Math.max(run.lastTenths, Math.floor(elapsed / 100));
+    $('verifyElapsed').textContent =
+      'Elapsed: ' + (run.lastTenths / 10).toFixed(1) + ' seconds';
+  }
+
+  function stopVerifyRun(token) {
+    const run = verifyRun;
+    if (!run || (token !== undefined && run.token !== token)) return;
+    clearInterval(run.interval);
+    verifyRun = null;
+    $('verifyActivity').hidden = true;
+    $('cancelVerify').disabled = true;
+  }
+
+  function startVerifyRun(token, request) {
+    // A new Verify owns both the clock and the result area. Clearing the old
+    // interval first also makes a terminal callback from the previous request
+    // unable to tick into this run.
+    stopVerifyRun();
+    const run = {
+      token: token,
+      request: request,
+      startedAt: monotonicNow(),
+      lastTenths: 0,
+      interval: null
+    };
+    verifyRun = run;
+    $('verifyElapsed').textContent = 'Elapsed: 0.0 seconds';
+    $('cancelVerify').disabled = false;
+    $('verifyActivity').hidden = false;
+    // Four lightweight paints per second feel responsive without competing
+    // materially with the worker on constrained mobile hardware.
+    run.interval = setInterval(function () { renderElapsed(run); }, 250);
+  }
 
   function sameMoment(r) {
     return !!r && !!flagged && r === flagged.review &&
@@ -161,6 +214,7 @@
   function cancelReflection() {
     verifySeq++;
     saveSeq++;
+    stopVerifyRun();
     flagged = null;
     verdict = null;
     ChessyAnalysisService.cancel(ANALYSIS_OWNER);
@@ -201,6 +255,7 @@
     ChessyAnalysisService.cancel(ANALYSIS_OWNER);
     verifySeq++; // an in-flight analysis for another moment is now stale
     saveSeq++;   // so is any card write still owning the shared UI
+    stopVerifyRun();
     flagged = {
       gameId: r.game.id,
       ply: r.ply,
@@ -291,6 +346,34 @@
     $('verifyResult').textContent = message;
   }
 
+  // Cancel is intentionally a terminal UI action even if an injected/broken
+  // transport ignores cancellation. Invalidate ownership BEFORE asking the
+  // service to terminate its worker: cancel() settles synchronously and its
+  // promise continuation must already be stale when that microtask runs.
+  $('cancelVerify').addEventListener('click', function () {
+    const run = verifyRun;
+    if (!run || run.token !== verifySeq) return;
+    verifySeq++;
+    saveSeq++;
+    stopVerifyRun(run.token);
+    verdict = null;
+    retryFresh = flagged
+      ? flagged.gameId + ':' + flagged.gameRev + ':' + flagged.ply
+      : null;
+    try { ChessyAnalysisService.cancel(ANALYSIS_OWNER); }
+    catch (e) { /* token ownership still suppresses a broken transport */ }
+    // Usually cancel() wins before the worker can publish. Also evict this
+    // exact request to close the narrower race where transport completed and
+    // cached its result while reflection was still awaiting its durable-source
+    // read. Analysis is recomputable; a cancelled probe must leave no handoff
+    // or persistent result behind.
+    try { ChessyAnalysisService.invalidate(run.request); }
+    catch (e) { /* cache eviction is best effort */ }
+    failVerify('Verification cancelled. You can ask Chessy again.');
+    $('reflectVerify').disabled = false;
+    $('reflectVerify').focus();
+  });
+
   $('reflectForm').addEventListener('submit', function (e) {
     e.preventDefault();
     // Whitespace is not reflection: native `required` accepts spaces, so trim
@@ -332,7 +415,7 @@
     // not in opts, so it never perturbs the analysis identity / cache key.
     const momentKey = flagged.gameId + ':' + gameRev + ':' + ply;
     const wantFresh = retryFresh === momentKey;
-    retryFresh = null;
+    if (wantFresh) retryFresh = null;
     const analysisSource = flagged.source;
     const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
@@ -340,7 +423,14 @@
       opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
         nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
     };
-    ChessyAnalysisService.analyse(analysisReq, ANALYSIS_OWNER).then(function (res) {
+    startVerifyRun(token, analysisReq);
+    let pendingAnalysis;
+    try {
+      pendingAnalysis = ChessyAnalysisService.analyse(analysisReq, ANALYSIS_OWNER);
+    } catch (e) {
+      pendingAnalysis = Promise.reject(e);
+    }
+    Promise.resolve(pendingAnalysis).then(function (res) {
       // The currently rendered Review object can remain the old in-memory
       // replay while archiveGame() atomically revises that id underneath it.
       // Re-read the durable source before accepting a late result; Save has its
@@ -358,6 +448,7 @@
         function () { return { res: res, sourceCurrent: false }; });
     }).then(function (out) {
       if (!out || out.abandoned) return;
+      stopVerifyRun(token);
       if (token === verifySeq) $('reflectVerify').disabled = false;
       // A newer request superseded this one, or the user left the moment: drop
       // it silently (the owning request/moment repaints the shared controls).
@@ -493,6 +584,18 @@
         reflection: reflection
       };
       $('saveCard').disabled = false;
+    }).catch(function () {
+      // The production service resolves failures as null, but storage adapters
+      // and test seams are allowed to reject. Treat that as a terminal,
+      // retryable failure and always retire the clock/control ownership.
+      if (token !== verifySeq) return;
+      stopVerifyRun(token);
+      $('reflectVerify').disabled = false;
+      if (!sameMoment(CoachReview.current())) {
+        cancelReflection();
+        return;
+      }
+      failVerify('Chessy could not complete the analysis — Verify again.');
     });
   });
 
