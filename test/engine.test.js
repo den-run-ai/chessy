@@ -91,6 +91,45 @@ assertEqual(moveScratch.pool[19] === highWaterMove, true,
 assertEqual(moveSignatures(loneKingPseudo), moveSignatures(freshLoneKingPseudo),
   'scratch generation matches fresh pseudo-move generation');
 
+// SEE is an ordering heuristic only, but its material exchange must handle the
+// capture shapes that make a cheap MVV-LVA move misleading. It temporarily
+// edits the supplied board to avoid a 64-square copy, so restoration is part
+// of the contract as well as the returned score.
+console.log('static exchange evaluation');
+function seeOf(fen, uci) {
+  const state = Chess.parseFen(fen);
+  const before = Chess.toFen(state);
+  const move = Chess.legalMoves(state).find(function (m) {
+    return Chess.sqName(m.from) + Chess.sqName(m.to) + (m.promotion || '') === uci;
+  });
+  if (!move) throw new Error('missing SEE test move ' + uci);
+  const score = ChessAI.see(state.board, move);
+  assertEqual(Chess.toFen(state), before, 'SEE restores the board after ' + uci);
+  return score;
+}
+assertEqual(seeOf('4k3/8/8/4p3/8/8/8/4R1K1 w - - 0 1', 'e1e5'), 100,
+  'SEE: rook wins an undefended pawn');
+assertEqual(seeOf('4r1k1/8/8/4p3/8/8/8/4R1K1 w - - 0 1', 'e1e5'), -400,
+  'SEE: rook loses material on a defended pawn');
+assertEqual(seeOf('4k3/8/5p2/4p3/8/5N2/8/4K3 w - - 0 1', 'f3e5'), -220,
+  'SEE: knight loses material on a pawn recapture');
+assertEqual(seeOf('4r1k1/8/8/4p3/8/4R3/8/4R1K1 w - - 0 1', 'e3e5'), 100,
+  'SEE: an x-ray rook joins the recapture sequence');
+assertEqual(seeOf('4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 1', 'd5e6'), 100,
+  'SEE: en passant removes the pawn behind the target');
+assertEqual(seeOf('4r1k1/8/8/3Pp3/8/8/8/6K1 w - e6 0 1', 'd5e6'), 0,
+  'SEE: en passant removal opens an off-target rook recapture');
+assertEqual(seeOf('4r1k1/5P2/8/8/8/8/8/6K1 w - - 0 1', 'f7e8Q'), 1300,
+  'SEE: capture promotion credits the promoted material');
+assertEqual(seeOf('6rk/5P2/8/8/8/8/8/6K1 w - - 0 1', 'f7g8Q'), 400,
+  'SEE: a legal king recapture of a promoted piece is counted');
+assertEqual(seeOf('4k3/4r3/3Q4/8/8/8/8/4R1K1 w - - 0 1', 'd6e7'), 500,
+  'SEE: a king recapture onto an attacked square is rejected');
+assertEqual(seeOf('4k3/8/4p3/3p4/8/8/8/3QR1K1 w - - 0 1', 'd1d5'), 100,
+  'SEE: an absolutely pinned pawn cannot recapture');
+assertEqual(seeOf('k7/8/8/8/8/5N2/3p4/4r1K1 w - - 0 1', 'f3e1'), -620,
+  'SEE: a pawn recapture on the last rank includes promotion');
+
 // --- FEN round-trip ---
 console.log('FEN round-trip');
 for (const fen of [

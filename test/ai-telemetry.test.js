@@ -1,7 +1,8 @@
 /*
- * Play-search telemetry must be forensic but behavior-neutral. The signatures
- * below were frozen from main@1e7cbaec before telemetry existed: move, score,
- * completed depth and every search counter must remain byte-for-byte equal.
+ * Play-search telemetry must be forensic and reproducible. The signatures
+ * below are frozen for the current engine version: ordinary telemetry changes
+ * must remain behavior-neutral, while an intentional search-order change must
+ * update these fixtures together with its engine version and evidence.
  */
 'use strict';
 require('../assets/engine.js');
@@ -37,8 +38,8 @@ const cases = [
     fen: Chess.START_FEN,
     nodes: 12000,
     expected: {
-      uci: 'd2d4', depth: 4, score: 0, nodes: 12000, qnodes: 6372,
-      cutoffs: 1097, researches: 17
+      uci: 'd2d4', depth: 4, score: 0, nodes: 12000, qnodes: 6233,
+      cutoffs: 1109, researches: 17
     }
   },
   {
@@ -46,8 +47,8 @@ const cases = [
     fen: 'r3r1k1/1pp2pp1/2nq3p/2b5/p4P2/2PpPQP1/PP1B2BP/R3R2K b - - 1 19',
     nodes: 50000,
     expected: {
-      uci: 'a4a3', depth: 4, score: -141, nodes: 50000, qnodes: 38314,
-      cutoffs: 2797, researches: 23
+      uci: 'a4a3', depth: 4, score: -141, nodes: 50000, qnodes: 36894,
+      cutoffs: 3091, researches: 21
     }
   },
   {
@@ -55,8 +56,8 @@ const cases = [
     fen: '4r1k1/rpp2pp1/1bn4p/3B4/1PP2P2/p2pP1P1/P2B3P/1R2R2K b - - 0 24',
     nodes: 100000,
     expected: {
-      uci: 'c6b4', depth: 5, score: -13, nodes: 100000, qnodes: 63025,
-      cutoffs: 5872, researches: 41
+      uci: 'c6b4', depth: 5, score: -13, nodes: 100000, qnodes: 60606,
+      cutoffs: 5770, researches: 40
     }
   }
 ];
@@ -72,7 +73,7 @@ for (const c of cases) {
     qnodes: r.qnodes, cutoffs: r.cutoffs, researches: r.researches
   };
   check(JSON.stringify(actual) === JSON.stringify(c.expected),
-    c.name + ' search signature unchanged', JSON.stringify(actual));
+    c.name + ' search signature matches the engine contract', JSON.stringify(actual));
   check(r.stopReason === 'node-limit' && r.attemptedDepth === r.depth + 1,
     c.name + ' distinguishes completed and aborted drafts',
     r.stopReason + ' d' + r.depth + '/attempted ' + r.attemptedDepth);

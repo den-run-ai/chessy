@@ -545,9 +545,199 @@
     ctx.nodes = nextNode;
   }
 
-  // Move ordering: hash move, promotions, captures (MVV-LVA), killer moves,
-  // then quiet moves by history score.
-  function orderMoves(moves, ttPk, ply, ctx, turn) {
+  // ---- Static exchange evaluation (SEE) ----
+  // Material result of a legal least-attacker exchange sequence on one target
+  // square. This is ordering-only: no move is pruned from the search. The hot
+  // path normally calls it only when the victim is cheaper than the attacker.
+  //
+  // Unlike the archived #80 experiment, SEE does not copy the 64-square board
+  // or allocate attacker/gain objects per call. Search is synchronous, so the
+  // position can be changed briefly and restored before returning. Re-scanning
+  // rays after each removal naturally reveals x-rays; a temporary legality
+  // probe rejects pinned pieces and kings that would recapture onto an attacked
+  // square. A pawn recapturing on its last rank is valued as a queen.
+  const SEE_VAL = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 20000 };
+  const SEE_GAIN = new Int32Array(32);
+  const SEE_FROM = new Int8Array(32);
+  const SEE_PIECE = new Array(32);
+
+  // A non-king capture can only become illegal here by uncovering a slider
+  // attack on its own king. The position was legal before the recapture, so
+  // pawn/knight/king attacks cannot appear merely because `from` was vacated.
+  function seeSliderSafe(board, kingSq, enemy) {
+    const r = kingSq >> 3, c = kingSq & 7;
+    for (let i = 0; i < ALL_DIRS.length; i++) {
+      const dr = ALL_DIRS[i][0], dc = ALL_DIRS[i][1];
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const p = board[nr * 8 + nc];
+        if (p) {
+          if (p[0] === enemy &&
+              (p[1] === 'Q' ||
+               (i < DIAG.length ? p[1] === 'B' : p[1] === 'R'))) return false;
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+    return true;
+  }
+
+  function legalSeeAttacker(board, from, target, side, kingW, kingB) {
+    const piece = board[from], captured = board[target];
+    const promotes = piece[1] === 'P' &&
+      (side === 'w' ? target < 8 : target >= 56);
+    board[from] = null;
+    board[target] = promotes ? side + 'Q' : piece;
+    const enemy = side === 'w' ? 'b' : 'w';
+    const kingSq = piece[1] === 'K' ? target :
+      (side === 'w' ? kingW : kingB);
+    const legal = kingSq >= 0 && (piece[1] === 'K'
+      ? !Chess.isAttacked(board, kingSq, enemy)
+      : seeSliderSafe(board, kingSq, enemy));
+    board[from] = piece;
+    board[target] = captured;
+    return legal;
+  }
+
+  function sliderAttacker(board, target, side, dirs, type, kingW, kingB) {
+    const r = target >> 3, c = target & 7;
+    for (let i = 0; i < dirs.length; i++) {
+      const dr = dirs[i][0], dc = dirs[i][1];
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        const sq = nr * 8 + nc, p = board[sq];
+        if (p) {
+          if (p[0] === side && p[1] === type &&
+              legalSeeAttacker(
+                board, sq, target, side, kingW, kingB
+              )) return sq;
+          break;
+        }
+        nr += dr; nc += dc;
+      }
+    }
+    return -1;
+  }
+
+  // Least valuable legal `side` attacker of `target`, or -1. The board already
+  // reflects every earlier capture in the exchange, including opened rays.
+  function leastAttacker(board, target, side, kingW, kingB) {
+    const r = target >> 3, c = target & 7;
+    const pr = side === 'w' ? r + 1 : r - 1;
+    if (pr >= 0 && pr < 8) {
+      for (let dc = -1; dc <= 1; dc += 2) {
+        const pc = c + dc;
+        if (pc < 0 || pc > 7) continue;
+        const sq = pr * 8 + pc, p = board[sq];
+        if (p && p[0] === side && p[1] === 'P' &&
+            legalSeeAttacker(
+              board, sq, target, side, kingW, kingB
+            )) return sq;
+      }
+    }
+    for (let i = 0; i < N_JUMPS.length; i++) {
+      const dr = N_JUMPS[i][0], dc = N_JUMPS[i][1];
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
+      const sq = nr * 8 + nc, p = board[sq];
+      if (p && p[0] === side && p[1] === 'N' &&
+          legalSeeAttacker(
+            board, sq, target, side, kingW, kingB
+          )) return sq;
+    }
+    let from = sliderAttacker(
+      board, target, side, DIAG, 'B', kingW, kingB
+    );
+    if (from >= 0) return from;
+    from = sliderAttacker(
+      board, target, side, ORTHO, 'R', kingW, kingB
+    );
+    if (from >= 0) return from;
+    from = sliderAttacker(
+      board, target, side, DIAG, 'Q', kingW, kingB
+    );
+    if (from >= 0) return from;
+    from = sliderAttacker(
+      board, target, side, ORTHO, 'Q', kingW, kingB
+    );
+    if (from >= 0) return from;
+    for (let i = 0; i < ALL_DIRS.length; i++) {
+      const dr = ALL_DIRS[i][0], dc = ALL_DIRS[i][1];
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
+      const sq = nr * 8 + nc, p = board[sq];
+      if (p && p[0] === side && p[1] === 'K' &&
+          legalSeeAttacker(
+            board, sq, target, side, kingW, kingB
+          )) return sq;
+    }
+    return -1;
+  }
+
+  // Material score for `move` from its mover's point of view. Callers may use
+  // only its sign, but retaining the exact score keeps the implementation
+  // directly testable for x-rays, en passant, and capture promotions.
+  function see(board, move) {
+    const side0 = move.piece[0], target = move.to;
+    const fromPiece = board[move.from], targetPiece = board[target];
+    let kingW = board.indexOf('wK'), kingB = board.indexOf('bK');
+    if (move.piece[1] === 'K') {
+      if (side0 === 'w') kingW = target; else kingB = target;
+    }
+    let epSq = -1, epPiece = null;
+    let captured = move.captured ? SEE_VAL[move.captured[1]] : 0;
+    let onType = move.piece[1];
+    if (move.promotion) {
+      captured += SEE_VAL[move.promotion] - SEE_VAL.P;
+      onType = move.promotion;
+    }
+
+    board[move.from] = null;
+    if (move.ep) {
+      epSq = target + (side0 === 'w' ? 8 : -8);
+      epPiece = board[epSq];
+      board[epSq] = null;
+    }
+    board[target] = side0 + onType;
+
+    SEE_GAIN[0] = captured;
+    let depth = 0, removed = 0, onValue = SEE_VAL[onType];
+    let side = side0 === 'w' ? 'b' : 'w';
+    for (;;) {
+      const from = leastAttacker(board, target, side, kingW, kingB);
+      if (from < 0) break;
+      const piece = board[from];
+      const promotes = piece[1] === 'P' &&
+        (side === 'w' ? target < 8 : target >= 56);
+      const onNext = promotes ? 'Q' : piece[1];
+      depth++;
+      SEE_GAIN[depth] = onValue +
+        (promotes ? SEE_VAL.Q - SEE_VAL.P : 0) - SEE_GAIN[depth - 1];
+      if (Math.max(-SEE_GAIN[depth - 1], SEE_GAIN[depth]) < 0) break;
+      SEE_FROM[removed] = from;
+      SEE_PIECE[removed++] = piece;
+      board[from] = null;
+      board[target] = side + onNext;
+      onValue = SEE_VAL[onNext];
+      side = side === 'w' ? 'b' : 'w';
+    }
+    while (depth > 0) {
+      SEE_GAIN[depth - 1] = -Math.max(-SEE_GAIN[depth - 1], SEE_GAIN[depth]);
+      depth--;
+    }
+    const score = SEE_GAIN[0];
+
+    for (let i = 0; i < removed; i++) board[SEE_FROM[i]] = SEE_PIECE[i];
+    board[move.from] = fromPiece;
+    if (epSq >= 0) board[epSq] = epPiece;
+    board[target] = targetPiece;
+    return score;
+  }
+
+  // Move ordering: hash move, promotions, non-losing captures (MVV-LVA),
+  // killer/history quiets, then SEE-negative captures. SEE never prunes.
+  function orderMoves(moves, ttPk, ply, ctx, turn, board, allowSee) {
     const killers = ctx.killers[ply];
     const hist = turn === 'w' ? ctx.histW : ctx.histB;
     for (const m of moves) {
@@ -555,7 +745,19 @@
       let s;
       if (pk === ttPk) s = 2e9;
       else if (m.promotion) s = 1e9 + VALUES[m.promotion];
-      else if (m.captured) s = 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
+      else if (m.captured) {
+        s = 1e8 + 10 * VALUES[m.captured[1]] - VALUES[m.piece[1]];
+        // Victim >= attacker is normally a free sign bound. The exception is
+        // an opposing pawn recapturing onto its promotion rank, so back-rank
+        // targets still run the exchange.
+        const row = m.to >> 3;
+        const recapturePromotion = m.piece[0] === 'w' ? row === 7 : row === 0;
+        if (allowSee &&
+            (SEE_VAL[m.captured[1]] < SEE_VAL[m.piece[1]] ||
+             recapturePromotion) && see(board, m) < 0) {
+          s -= 2e9;
+        }
+      }
       else if (killers && pk === killers[0]) s = 1e7;
       else if (killers && pk === killers[1]) s = 1e7 - 1;
       else s = hist[m.from * 64 + m.to];
@@ -678,7 +880,7 @@
       }
     }
 
-    for (const m of orderMoves(moves, 0, ply, ctx, turn)) {
+    for (const m of orderMoves(moves, 0, ply, ctx, turn, state.board, !inChk)) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue;
@@ -791,7 +993,8 @@
     const moveScratch = ctx.moveBuffers[ply] ||
       (ctx.moveBuffers[ply] = { moves: [], pool: [] });
     for (const m of orderMoves(
-      Chess.pseudoMoves(state, moveScratch), ttPk, ply, ctx, turn
+      Chess.pseudoMoves(state, moveScratch), ttPk, ply, ctx, turn, state.board,
+      !inChk
     )) {
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
@@ -1012,7 +1215,9 @@
 
     const replayedRoot = replayRootMoves(moves, opts.rootOrderUci);
     const initialRoot = replayedRoot || (rand ? shuffle(moves, rand) : moves);
-    const items = orderMoves(initialRoot, 0, 0, ctx, state.turn).map(function (m, initialIndex) {
+    const items = orderMoves(
+      initialRoot, 0, 0, ctx, state.turn, state.board, true
+    ).map(function (m, initialIndex) {
       const next = Chess.applyMove(state, m);
       return {
         move: m,
@@ -1295,6 +1500,7 @@
     makeCtx: makeCtx,
     ttPackedMove: ttPackedMove,
     sanitizeTelemetry: sanitizeTelemetry,
+    see: see,
     hashKey: hashKey,
     repKey: repKey,
     MATE: MATE,
