@@ -185,7 +185,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            OUT=probe-reports DEPTH=$DEPTH PARITY_DEPTH=$DEPTH REPS=$REPS MIN_MS=50 FIVE=$FIVE WAIT_S=2400 bash experiments/wasm/probe/run-android.sh
+            OUT=probe-reports DEPTH=$DEPTH PARITY_DEPTH=$DEPTH REPS=$REPS MIN_MS=50 FIVE=$FIVE WAIT_S=900 bash experiments/wasm/probe/run-android.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

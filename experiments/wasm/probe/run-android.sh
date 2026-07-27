@@ -48,15 +48,33 @@ fi
 adb shell "echo '_ --no-first-run --no-default-browser-check --disable-fre --disable-features=FirstRunUi,ChromeWhatsNewUI' > /data/local/tmp/chrome-command-line" || true
 adb shell am set-debug-app --persistent com.android.chrome || true
 
-URL="http://10.0.2.2:${PORT}/experiments/wasm/probe/?depth=${DEPTH}&parityDepth=${PARITY_DEPTH}&reps=${REPS}&minMs=${MIN_MS}&five=${FIVE}&target=${TARGET}"
-echo "--- opening $URL"
-# Inner quotes keep the device-side shell from splitting the URL on '&'.
-adb shell "am start -a android.intent.action.VIEW -d '$URL' com.android.chrome"
+# Post-boot, google_apis images thrash for a while (GMS sync storms, launcher
+# ANRs, lmkd reinits). Run 4 saw Android kill FOREGROUND Chrome only because
+# com.google.android.gms.persistent died and Chrome "depends on provider
+# ...FontsProvider" in it. Let the storm pass, then retry launches: each
+# attempt reloads the probe page from scratch on a progressively calmer
+# system, and a stalled attempt fails fast on progress staleness.
+echo "--- letting post-boot GMS churn settle"
+sleep 60
 
-# Stall detection (no progress POST for 300 s) fails fast, so the screenshot
-# and logcat below land near the browser's moment of death, not 40 min later.
-if node experiments/wasm/probe/wait-report.js "$OUT/final-${TARGET}.json" "$WAIT_S" \
-  "$OUT/progress-${TARGET}.log" 300; then
+URL="http://10.0.2.2:${PORT}/experiments/wasm/probe/?depth=${DEPTH}&parityDepth=${PARITY_DEPTH}&reps=${REPS}&minMs=${MIN_MS}&five=${FIVE}&target=${TARGET}"
+ok=0
+for attempt in 1 2 3; do
+  echo "--- attempt $attempt: opening $URL"
+  adb shell am force-stop com.android.chrome || true
+  sleep 2
+  # Inner quotes keep the device-side shell from splitting the URL on '&'.
+  adb shell "am start -a android.intent.action.VIEW -d '$URL' com.android.chrome"
+  if node experiments/wasm/probe/wait-report.js "$OUT/final-${TARGET}.json" "$WAIT_S" \
+    "$OUT/progress-${TARGET}.log" 240; then
+    ok=1
+    break
+  fi
+  echo "--- attempt $attempt failed"
+  adb exec-out screencap -p > "$OUT/${TARGET}-attempt${attempt}-screen.png" || true
+done
+
+if [ "$ok" = "1" ]; then
   exit 0
 fi
 
