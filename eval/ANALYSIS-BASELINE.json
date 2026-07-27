@@ -4,6 +4,14 @@
   "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
   "scorecard": "analysis-v1",
   "mode": "shard",
+  "criterion": {
+    "id": "chessy-equivalence",
+    "version": 1,
+    "basis": "cp-mate-fallback",
+    "params": {
+      "cpTolerance": 30
+    }
+  },
   "e3_opts": {
     "ref": {
       "nodeLimit": 2000,
@@ -65,6 +73,150 @@
       "checked": 34,
       "pass": 26,
       "fail": 8
+    },
+    "equivalence": {
+      "checked": 12,
+      "counts": {
+        "best": 9,
+        "equivalent": 2,
+        "not-equivalent": 1,
+        "unknown": 0,
+        "invalid": 0
+      },
+      "cases": [
+        {
+          "id": "puzzle-000o3",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000rZ",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": null,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0008Q",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0009B",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-00008",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0000D",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000Pw",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000h0",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000jr",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000mr",
+          "verdict": "equivalent",
+          "reason": "within-tolerance",
+          "rank": 5,
+          "rankBasis": "provider-reported",
+          "rankLowerBound": 4,
+          "gapCp": 17,
+          "coverage": "candidates",
+          "coveredRootCount": 4
+        },
+        {
+          "id": "puzzle-000VW",
+          "verdict": "equivalent",
+          "reason": "within-tolerance",
+          "rank": 2,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 2,
+          "gapCp": 11,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0018S",
+          "verdict": "not-equivalent",
+          "reason": "cp-gap",
+          "rank": 5,
+          "rankBasis": "provider-reported",
+          "rankLowerBound": 4,
+          "gapCp": 96,
+          "coverage": "candidates",
+          "coveredRootCount": 4
+        }
+      ]
     }
   },
   "regret": {

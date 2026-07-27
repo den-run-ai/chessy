@@ -98,7 +98,9 @@ jobs:
         # MultiPV over every legal root; self-consistent played-move rank +
         # classification) gate at 100%, and five QUALITY axes (puzzle top-1 /
         # recall@3, PV + budget stability, regret quantiles) ratchet from the
-        # committed baseline — a lost solve or a fattened regret tail fails here.
+        # committed baseline. The accepted-move criterion identity and each
+        # PR-shard puzzle's verdict/reason are an exact fixture: semantic drift
+        # or lost coverage also fails here until consciously re-baselined.
         run: node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json
       - name: Verify eval corpus is up to date with its generator
         # The committed ndjson/manifest must match a fresh generation (with the
@@ -127,6 +129,8 @@ jobs:
         run: node test/analysis-service.test.js
       - name: Run analysis-result trust-boundary tests
         run: node test/analysis-result.test.js
+      - name: Run accepted-move criterion tests (Train v2 E1)
+        run: node test/equivalence.test.js
       - name: Run critical-moment selector tests
         run: node test/moment-selector.test.js
       - name: Run resumable moment-scan tests

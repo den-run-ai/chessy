@@ -94,12 +94,18 @@ rating_band, branching, split_group, generator_version, seed?, assert
 Only a **compact frozen sample** of each CC0 database is committed — never the
 multi-million-row dumps. `split_group` assigns a deterministic **70/15/15
 train/val/test** split (puzzles hashed by *game id* so same-game puzzles share a
-split — split-before-extract). **Never tune on the test split.** The frozen
-**64-case PR shard** (`shard: true`: every correctness-critical generated case,
-then a fill stratified round-robin across ECO volumes and puzzle rating bands)
-runs on every PR; the full corpus is for nightly / pre-release runs. The
-Syzygy exact-WDL fixtures and the rotating later-month OOD sample are staged for
-later E1 work — see `LICENSE-REPORT.md`.
+split — split-before-extract). Test-tagged records are excluded from routine PR
+analysis-quality feedback (strict correctness coverage may still include
+test-tagged shard records). The frozen **64-case PR shard** (`shard: true`: every
+correctness-critical generated case, then a fill stratified round-robin across
+ECO volumes and puzzle rating bands) runs on every PR; the full corpus is for
+nightly / pre-release runs. The Syzygy exact-WDL fixtures and the rotating
+later-month OOD sample are staged for later E1 work — see `LICENSE-REPORT.md`.
+Historical exception: the full
+`eval-v1` metrics were already consulted when selecting accepted-move criterion
+v1, so its test-tagged records are now compatibility evidence for that
+criterion, not an untouched holdout. A new non-overlapping one-shot lockbox is
+tracked in [#112](https://github.com/den-run-ai/chessy/issues/112).
 
 ## The correctness scorecard (a score vector)
 
@@ -137,8 +143,9 @@ config fails the gate — not just a new assertion failure.
 ## The analysis scorecard (the E3 slice)
 
 `analysis-scorecard.js` grades the **quality** of what the coaching panel shows,
-on the same frozen corpus. Its axes are split into two gate classes so a quality
-measurement can never silently become a build-breaking assertion:
+on the same frozen corpus. Its axes use strict contracts, directional quality
+ratchets, and one exact semantic fixture so those different claims cannot be
+silently conflated:
 
 | Axis | Class | What it checks |
 | --- | --- | --- |
@@ -149,6 +156,7 @@ measurement can never silently become a build-breaking assertion:
 | `pvStability` | ratchet | Best move unchanged one ply shallower — **measured independently**, not read off the engine's own stability flag |
 | `budgetStability` | ratchet | Best line unchanged at ¼× budget (`--full` adds the 4× tier); a tier rejected by the shipped validator scores as a miss |
 | `regret` | ratchet | Median / p90 / p99 cp regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
+| `equivalence` | **exact fixture** | The shipped `ChessyEquivalence` verdict/reason for each frozen **PR-shard** puzzle key through the shipped-width `playedMove` path; criterion identity, per-case outcome, and coverage must match the reviewed baseline (`--full` reports all puzzle keys descriptively) |
 
 **Strict axes gate at 100%; quality axes ratchet** — they may improve but never
 regress against `ANALYSIS-BASELINE.json`. An unsolved puzzle is a measured
@@ -160,6 +168,16 @@ tracker, oracle comparison avoids exact centipawn/PV equality — acceptable-mov
 sets, set overlap, budget invariance and a regret tail distribution, never a
 single Elo number.
 
+The `equivalence` fixture is intentionally different from a directional
+quality score: `unknown` and `not-equivalent` are honest measured states, not
+automatic build failures. What fails is an unreviewed semantic change. The
+baseline embeds the exact criterion identity and per-case
+`id → verdict/reason`, so opposite shifts cannot cancel in an aggregate count;
+identity drift, a missing case, or any changed outcome requires a conscious
+same-change re-baseline. This exact gate covers the 12 puzzle cases in the
+committed shard baseline. The 40-case `--full` output has no committed
+full-mode baseline and is therefore descriptive.
+
 The strict axes delegate whole-object validation to the shipped
 `ChessyAnalysisResult.validate` (against an independently derived identity), so
 the gate can never be laxer than the coaching path consuming the same output;
@@ -167,12 +185,17 @@ E3 adds only the full-MultiPV coverage requirement on top — and the auxiliary
 ¼×/4× tiers must pass the same validator before they are graded. The shipped
 candidate width is derived from `assets/reflection.js` at run time, never
 duplicated. The PR shard grades **train/validation records only** — the
-held-out test split is reserved for `--full` (*never tune on the test split*).
-`--self-test` simulates fifteen distinct shapes of engine regression: thirteen
-must turn the strict gate red, an unusable auxiliary tier must be fully visible
-to the ratchet, and a flattering self-report must leave `pvStability` unmoved
-(immunity) — see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the
-fault list and the published numbers.
+test-tagged records are reserved for `--full`. They remain outside routine PR
+feedback, but are not represented as untouched validation for criterion v1
+because its full-corpus metrics were already consulted; see #112 for the fresh
+lockbox protocol.
+`--self-test` simulates eighteen gate failures: thirteen engine faults must
+turn the strict gate red, an unusable auxiliary tier must be fully visible to
+the ratchet, a flattering self-report must leave `pvStability` unmoved
+(immunity), and verdict drift, missing fixture coverage, and criterion-identity
+drift must each turn the exact baseline gate red — see
+[`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the fault list and the
+published numbers.
 
 ## Roadmap (per the tracker)
 
@@ -183,7 +206,8 @@ fault list and the published numbers.
   stateful cases, deterministic search signature)*.
 - **E3** — analysis scorecard *(this slice: acceptable-move sets, top-3 recall,
   regret quantiles, stability at ¼×/1×/4× node budget, complete-MultiPV and
-  played-move-rank contracts — see [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md).
+  played-move-rank contracts, and exact accepted-move criterion fixtures — see
+  [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md).
   Still open: the **cache / progress / cancel** runtime tests, which live in the
   analysis **service worker** rather than the pure core graded here)*.
 - **E4** — level & match calibration: the 400-opening manifest, adjacent-level

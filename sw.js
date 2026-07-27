@@ -26,7 +26,7 @@
  *   game/Rematch explicitly run an update check before replacing that save,
  *   so a long-open foreground tab cannot begin another game on stale code.
  */
-const RELEASE = 'r56';
+const RELEASE = 'r57';
 const CACHE = 'chessy-' + RELEASE;
 const UPDATE_MARKER = './__chessy-update__';
 const ASSETS = [
@@ -46,6 +46,7 @@ const ASSETS = [
   './assets/analysis-core.js?r=' + RELEASE,
   './assets/analysis-service.js?r=' + RELEASE,
   './assets/analysis-result.js?r=' + RELEASE,
+  './assets/equivalence.js?r=' + RELEASE,
   './assets/moment-selector.js?r=' + RELEASE,
   './assets/moment-scan.js?r=' + RELEASE,
   './assets/pgn.js?r=' + RELEASE,

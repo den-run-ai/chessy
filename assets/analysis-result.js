@@ -21,6 +21,10 @@
 
   const UCI_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
   const PROMOTIONS = ['Q', 'R', 'B', 'N'];
+  // analysis-core converts scores outside ChessAI.MATE_NEAR into mate objects.
+  // Keeping CP inside that safe-integer band prevents hostile finite Numbers
+  // from colliding with mate ordering or overflowing persisted gap arithmetic.
+  const MAX_CP_ABS = 999000;
 
   function failure(reason) {
     return {
@@ -56,7 +60,8 @@
 
   /*
    * An evaluation has exactly one representation:
-   *   - a finite White/player centipawn pair with mate === null, or
+   *   - a safe-integer White/player centipawn pair in the built-in engine's
+   *     non-mate band with mate === null, or
    *   - a valid mate object with both centipawn fields explicitly null.
    * The player score is checked against the analysed side to move.
    */
@@ -66,8 +71,10 @@
       return value.scoreCpWhite === null && value.scoreCpPlayer === null;
     }
     if (value.mate !== null) return false;
-    if (!Number.isFinite(value.scoreCpWhite) ||
-        !Number.isFinite(value.scoreCpPlayer)) return false;
+    if (!Number.isSafeInteger(value.scoreCpWhite) ||
+        !Number.isSafeInteger(value.scoreCpPlayer) ||
+        Math.abs(value.scoreCpWhite) > MAX_CP_ABS ||
+        Math.abs(value.scoreCpPlayer) > MAX_CP_ABS) return false;
     return value.scoreCpPlayer ===
       (turn === 'w' ? value.scoreCpWhite : -value.scoreCpWhite);
   }
@@ -175,16 +182,33 @@
       a.scoreCpPlayer === b.scoreCpPlayer;
   }
 
-  // Contract lines are best-first for the side to move. Preserve mate-distance
-  // ordering without inventing a centipawn conversion: faster mates for the
-  // mover are better; when being mated, delaying it is better.
-  function orderValue(value, turn) {
-    if (validMate(value.mate)) {
-      return value.mate.forWhite === (turn === 'w')
-        ? 1000000000 - value.mate.inPlies
-        : -1000000000 + value.mate.inPlies;
+  /*
+   * Compare two validated evaluations for the side to move. A categorical
+   * comparison is deliberate: mate semantics should not depend on a numeric
+   * centipawn sentinel (the separate CP trust band protects persistence
+   * arithmetic). Return >0 when `a` is better, <0 when `b` is better, and 0
+   * when they are tied.
+   */
+  function compareEval(a, b, turn) {
+    const aMateFor = validMate(a.mate) &&
+      a.mate.forWhite === (turn === 'w');
+    const bMateFor = validMate(b.mate) &&
+      b.mate.forWhite === (turn === 'w');
+    const aMateAgainst = validMate(a.mate) && !aMateFor;
+    const bMateAgainst = validMate(b.mate) && !bMateFor;
+    const aClass = aMateFor ? 2 : (aMateAgainst ? 0 : 1);
+    const bClass = bMateFor ? 2 : (bMateAgainst ? 0 : 1);
+    if (aClass !== bClass) return aClass > bClass ? 1 : -1;
+    if (aMateFor) {
+      return a.mate.inPlies === b.mate.inPlies ? 0 :
+        (a.mate.inPlies < b.mate.inPlies ? 1 : -1);
     }
-    return value.scoreCpPlayer;
+    if (aMateAgainst) {
+      return a.mate.inPlies === b.mate.inPlies ? 0 :
+        (a.mate.inPlies > b.mate.inPlies ? 1 : -1);
+    }
+    return a.scoreCpPlayer === b.scoreCpPlayer ? 0 :
+      (a.scoreCpPlayer > b.scoreCpPlayer ? 1 : -1);
   }
 
   function identityFrom(expected) {
@@ -297,8 +321,7 @@
         return failure('best-line-duplicate');
       }
       if (i > 0 &&
-          orderValue(result.bestLines[i - 1], expectedTurn) <
-            orderValue(line, expectedTurn)) {
+          compareEval(result.bestLines[i - 1], line, expectedTurn) < 0) {
         return failure('best-lines-order');
       }
       resolved.push(checked.move);
@@ -332,6 +355,16 @@
           (candidateIndex < 0 &&
            result.playedLine.rank <= resolved.length)) {
         return failure('played-rank');
+      }
+      // An outside-candidate played line came from the same fully sorted root
+      // search as bestLines. Its exact hidden rank cannot be reconstructed
+      // from a shortlist, but it cannot outrank the shortlist's last line.
+      // Without this necessary bound a forged rank-4 line could score above
+      // rank 1 and still be accepted as covered evidence.
+      if (candidateIndex < 0 &&
+          compareEval(result.playedLine,
+            result.bestLines[result.bestLines.length - 1], expectedTurn) > 0) {
+        return failure('played-order');
       }
       if (result.playedLine.amongCandidates !== (candidateIndex >= 0)) {
         return failure('played-candidates');
@@ -385,9 +418,11 @@
   }
 
   return {
+    MAX_CP_ABS: MAX_CP_ABS,
     validate: validate,
     validMate: validMate,
     validEval: validEval,
+    compareEval: compareEval,
     resolveLine: resolveLine,
     sameMove: sameMove,
     uciOf: uciOf

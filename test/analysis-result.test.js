@@ -132,8 +132,11 @@ check(accepted.bestMoves && accepted.bestMoves.length === 3,
 check(Result.resolveLine(state, lines[0]).ok,
   'resolveLine accepts canonical legal UCI/SAN/PV');
 check(Result.validEval(lines[0], 'w') &&
+  Result.validEval(cpLine(state, legal[4], Result.MAX_CP_ABS), 'w') &&
+  !Result.validEval(cpLine(state, legal[4], Result.MAX_CP_ABS + 1), 'w') &&
+  !Result.validEval(cpLine(state, legal[4], 1.5), 'w') &&
   !Result.validEval(Object.assign({}, lines[0], { scoreCpPlayer: -30 }), 'w'),
-  'validEval enforces finite, side-correct centipawn scores');
+  'validEval enforces safe-integer, non-mate-band, side-correct cp scores');
 check(Result.uciOf(lines[0].move) === lines[0].uci,
   'uciOf emits canonical lower-case UCI');
 
@@ -244,6 +247,65 @@ bad.bestLines[1].scoreCpWhite = 40;
 bad.bestLines[1].scoreCpPlayer = 40;
 expectReject('rejects candidate lines that are not best-first', bad, state,
   expected, 'best-lines-order');
+
+const outsideLine = cpLine(state, legal[3], 5);
+outsideLine.rank = 4;
+outsideLine.amongCandidates = false;
+const outside = clone(good);
+outside.playedLine = outsideLine;
+outside.classification = 'unknown-equivalence';
+const outsideExpected = Object.assign({}, expected, {
+  playedMove: outsideLine.move
+});
+check(Result.validate(outside, state, outsideExpected).ok,
+  'accepts an outside-candidate played line ordered below the shortlist');
+bad = clone(outside);
+bad.playedLine.scoreCpWhite = 40;
+bad.playedLine.scoreCpPlayer = 40;
+expectReject('an outside-candidate cp line cannot outrank the shortlist',
+  bad, state, outsideExpected, 'played-order');
+bad = clone(outside);
+bad.playedLine = mateLine(state, legal[3],
+  { forWhite: true, inPlies: 5 });
+bad.playedLine.rank = 4;
+bad.playedLine.amongCandidates = false;
+expectReject('an outside-candidate mate line cannot outrank cp candidates',
+  bad, state, outsideExpected, 'played-order');
+const extremeCp = fixture(state, identity, [
+  cpLine(state, legal[0], Result.MAX_CP_ABS),
+  cpLine(state, legal[1], 500000),
+  cpLine(state, legal[2], 0)
+], 1);
+extremeCp.playedLine = mateLine(state, legal[3],
+  { forWhite: true, inPlies: 5 });
+extremeCp.playedLine.rank = 4;
+extremeCp.playedLine.amongCandidates = false;
+extremeCp.classification = 'unknown-equivalence';
+expectReject('mate-for always outranks the highest contract-valid cp score',
+  extremeCp, state, Object.assign({}, expected, {
+    playedMove: extremeCp.playedLine.move
+  }), 'played-order');
+const losingMate = fixture(state, identity, [
+  mateLine(state, legal[0], { forWhite: false, inPlies: 9 }),
+  mateLine(state, legal[1], { forWhite: false, inPlies: 7 }),
+  mateLine(state, legal[2], { forWhite: false, inPlies: 5 })
+], 1);
+losingMate.playedLine = cpLine(state, legal[3], -Result.MAX_CP_ABS);
+losingMate.playedLine.rank = 4;
+losingMate.playedLine.amongCandidates = false;
+losingMate.classification = 'unknown-equivalence';
+expectReject('the lowest contract-valid cp score still outranks mate-against',
+  losingMate, state, Object.assign({}, expected, {
+    playedMove: losingMate.playedLine.move
+  }), 'played-order');
+const overflowScores = fixture(state, identity, [
+  cpLine(state, legal[0], Number.MAX_VALUE),
+  cpLine(state, legal[1], -Number.MAX_VALUE)
+], 1);
+expectReject('rejects finite cp scores outside the persistable engine band',
+  overflowScores, state, Object.assign({}, expected, {
+    playedMove: overflowScores.playedLine.move
+  }), 'top-eval');
 
 bad = clone(good);
 bad.playedLine.rank = 0;
