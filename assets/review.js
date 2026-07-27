@@ -53,6 +53,31 @@
     return { pvp: 'Two players', 'ai-b': 'You vs computer', 'ai-w': 'Computer vs you' }[g.mode] || 'Game';
   }
 
+  function showSkippedGames(count) {
+    const notice = $('reviewSkipped');
+    notice.hidden = !count;
+    notice.textContent = count
+      ? 'Skipped ' + count + ' malformed saved game' + (count === 1 ? '.' : 's.')
+      : '';
+  }
+
+  // Raw IndexedDB rows are not trusted merely because they were once written.
+  // Apply the store's score/FEN boundary, then the same legal replay Review
+  // itself uses. Optional forensic telemetry is deliberately NOT part of this
+  // gate: a damaged search log must not hide a recoverable board score or clean
+  // PGN. Debug export applies the complete record boundary separately below.
+  // The returned state lets the open path avoid dereferencing the row until
+  // both score checks have passed.
+  function reviewState(game) {
+    if (typeof CoachStore.validateGameReplayRecord !== 'function') {
+      return { error: 'validation unavailable' };
+    }
+    const recordError = CoachStore.validateGameReplayRecord(game);
+    if (recordError) return { error: recordError };
+    try { return { state: replayGame(game) }; }
+    catch (e) { return { error: e && e.message ? e.message : 'replay failed' }; }
+  }
+
   const DIFF_LABELS = Object.freeze(Object.assign(Object.create(null), {
     1: 'Easy', 2: 'Medium', 3: 'Hard', 5: 'Expert', master: 'Master'
   }));
@@ -182,12 +207,23 @@
     // stay clickable while a slow listGames() is in flight.
     $('gameList').innerHTML = '';
     $('reviewEmpty').hidden = true;
-    return CoachStore.listGames().then(function (games) {
+    showSkippedGames(0);
+    return CoachStore.listGames().then(function (storedGames) {
+      // Filter in memory only. Keeping the original array order preserves the
+      // store's newest-first ordering for every valid row.
+      const games = [];
+      let skipped = 0;
+      for (const game of storedGames) {
+        if (reviewState(game).error) skipped++;
+        else games.push(game);
+      }
+      showSkippedGames(skipped);
       const list = $('gameList');
       list.innerHTML = '';
       $('reviewEmpty').hidden = games.length > 0;
-      $('reviewEmpty').textContent =
-        'No games saved yet — finish a game or start a new one after making moves.';
+      $('reviewEmpty').textContent = skipped
+        ? 'No reviewable saved games are available.'
+        : 'No games saved yet — finish a game or start a new one after making moves.';
       for (const g of games) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
@@ -231,6 +267,9 @@
   function replayGame(game) {
     let s = initialState(game);
     for (const san of game.sans) {
+      if (Chess.gameStatus(s).over) {
+        throw new Error('move played after the game ended');
+      }
       const legal = Chess.legalMoves(s);
       const m = legal.find(function (mv) { return Chess.toSan(s, mv, legal) === san; });
       if (!m) throw new Error('illegal or unknown SAN "' + san + '"');
@@ -240,13 +279,14 @@
   }
 
   function openReview(game) {
-    let gs;
-    try { gs = replayGame(game); }
-    catch (e) {
+    const checked = reviewState(game);
+    if (checked.error) {
+      showSkippedGames(1);
       $('reviewEmpty').hidden = false;
-      $('reviewEmpty').textContent = 'This archived game no longer replays: ' + e.message;
-      return;
+      $('reviewEmpty').textContent = 'This malformed saved game was skipped.';
+      return false;
     }
+    const gs = checked.state;
     const fens = gs.history.map(function (h) { return h.fen; });
     fens.push(Chess.toFen(gs));
     // Full game states per ply (WITH repetition tables): engine analysis
@@ -279,6 +319,7 @@
     // move focus to the start of the region that replaced it — keyboard
     // and screen-reader users must never be left on a hidden element.
     $('reviewBack').focus();
+    return true;
   }
 
   function renderReview() {
@@ -730,7 +771,7 @@
       return Promise.resolve();
     }
     return CoachStore.getGame(gameId).then(function (game) {
-      if (game) openReview(game); // openReview moves focus into the flow
+      if (game && openReview(game)) return; // openReview moves focus into the flow
       else $('tabReview').focus();
     }).catch(function () { $('tabReview').focus(); });
   }

@@ -94,7 +94,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   inspection-only). The selected archive record can be saved as a clean PGN,
   including imported tags, annotations, and custom SetUp/FEN positions. A
   running timed game stays visible from the coach views via a live-clock banner
-  that returns to Play.
+  that returns to Play. Raw archive rows are revalidated before display;
+  malformed FENs or illegal replays are skipped with a visible count and
+  preserved unchanged for backup or recovery.
 - **Critical-moment suggestions** — Review can explicitly start, pause, and
   resume a durable two-pass scan of the player's decisions. Imported games
   with no known player side ask for White, Black, or Both first. The scan shows
@@ -115,7 +117,8 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   **1 / 3 / 7 / 14 / 30 / 90-day** spaced ladder (Good climbs a rung, Hard
   repeats it, Again retries in ten minutes). No background timers — the queue
   rebuilds on view entry or the Refresh button. Grading is atomic and honest:
-  a different answer "differs", it is not marked wrong.
+  a different answer "differs", it is not marked wrong. A malformed saved card
+  is quarantined independently, so it cannot hide otherwise valid due cards.
 - **Progress** — a read-only descriptive snapshot: games archived, lesson
   cards, due-now, 30-day reviews, and per-cause tallies. The one narrow signal
   ("matched Chessy's saved move on first try") is labelled as exactly that —

@@ -5,8 +5,10 @@ require('./helper').run('train', async function (t) {
   const page = t.page, check = t.check, idx = t.idx;
   const tsq = function (name) { return page.locator('#trainBoard .square').nth(idx(name)); };
 
-  // Seed two due cards directly (the reflection flow is covered by its own
-  // suite): a mate-in-one and an underpromotion.
+  // Seed two valid due cards plus three unusable rows directly (the reflection
+  // flow is covered by its own suite): a mate-in-one, an underpromotion, a
+  // terminal position, an illegal saved move, and a corrupt FEN. Every bad
+  // row must be quarantined without hiding either valid card.
   await page.evaluate(function () {
     const now = Date.now();
     return CoachStore.addCard({
@@ -27,12 +29,50 @@ require('./helper').run('train', async function (t) {
         lesson: 'Check the underpromotion', reflection: {},
         createdAt: now, due: now, step: -1, attempts: []
       });
+    }).then(function () {
+      return CoachStore.addCard({
+        gameId: 'terminal', ply: 4,
+        fenBefore: 'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3',
+        playedSan: 'Qh4#', bestSan: 'e4',
+        bestMove: { from: 52, to: 36, promotion: null },
+        kind: 'terminal', cause: 'calculation', lesson: 'terminal row',
+        createdAt: now + 1, due: now - 3000, step: -1, attempts: []
+      });
+    }).then(function () {
+      return CoachStore.addCard({
+        gameId: 'illegal-best', ply: 2,
+        fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+        playedSan: 'e4', bestSan: 'e4',
+        bestMove: { from: 52, to: 36, promotion: null },
+        kind: 'illegal-best', cause: 'calculation', lesson: 'illegal move row',
+        createdAt: now + 2, due: now - 2000, step: -1, attempts: []
+      });
+    }).then(function () {
+      return CoachStore.addCard({
+        gameId: 'damaged', ply: 0, fenBefore: 'not a fen',
+        playedSan: 'e4', bestSan: 'e4',
+        bestMove: { from: 52, to: 36, promotion: null },
+        kind: 'quarantined', cause: 'calculation', lesson: 'damaged row',
+        createdAt: now + 1, due: now - 500, step: -1, attempts: []
+      });
     });
   });
 
   await page.click('#tabTrain');
   await page.waitForSelector('#trainCardBox:not([hidden])');
   check((await page.textContent('#trainCount')).includes('2 due'), 'both cards due');
+  check((await page.textContent('#trainSkipped')).includes('Skipped 3 malformed due cards'),
+    'Train reports every unusable due card while loading valid cards');
+  check(await page.evaluate(function () {
+    return CoachStore.listCards().then(function (cards) {
+      const damaged = cards.find(function (card) { return card.kind === 'quarantined'; });
+      const terminal = cards.find(function (card) { return card.kind === 'terminal'; });
+      const illegal = cards.find(function (card) { return card.kind === 'illegal-best'; });
+      return cards.length === 5 && damaged && damaged.fenBefore === 'not a fen' &&
+        terminal && terminal.bestSan === 'e4' &&
+        illegal && illegal.bestMove.from === 52;
+    });
+  }), 'Train quarantine does not delete or rewrite unusable stored cards');
   check((await page.textContent('#trainPrompt')).includes('Black to move') &&
         (await page.textContent('#trainPrompt')).includes('You played Qh4#'),
     'prompt names the side to move and recalls the played move');
