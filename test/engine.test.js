@@ -52,6 +52,45 @@ assertEqual(perft(pos5, 1), 44, 'perft(1) = 44');
 assertEqual(perft(pos5, 2), 1486, 'perft(2) = 1486');
 assertEqual(perft(pos5, 3), 62379, 'perft(3) = 62379');
 
+// Search callers may provide per-ply scratch storage so pseudo-move arrays and
+// objects do not need to be allocated again at every node. Ordinary callers
+// that omit the buffer retain the fresh-array API.
+console.log('pseudo-move scratch reuse');
+const staleMove = {
+  from: -1, to: -1, piece: 'bQ', captured: 'wQ',
+  promotion: 'Q', ep: true, castle: 'K', double: true, order: 999
+};
+const moveScratch = { moves: [], pool: [staleMove] };
+const startPseudo = Chess.pseudoMoves(start, moveScratch);
+assertEqual(startPseudo === moveScratch.moves, true, 'pseudoMoves returns the scratch result array');
+assertEqual(startPseudo[0] === staleMove, true, 'pseudoMoves reuses existing move objects');
+assertEqual(
+  [startPseudo[0].promotion, startPseudo[0].ep, startPseudo[0].castle,
+    startPseudo[0].double, startPseudo[0].captured].join(','),
+  ',false,,false,',
+  'reused move objects clear every optional move field'
+);
+assertEqual(startPseudo[0].order, 0, 'reused move objects clear stale ordering scores');
+const firstScratchMove = startPseudo[0];
+const highWaterMove = startPseudo[startPseudo.length - 1];
+const loneKing = Chess.parseFen('8/8/8/8/8/8/8/K6k w - - 0 1');
+const loneKingPseudo = Chess.pseudoMoves(loneKing, moveScratch);
+const freshLoneKingPseudo = Chess.pseudoMoves(loneKing);
+function moveSignatures(moves) {
+  return moves.map(function (m) {
+    return [m.from, m.to, m.piece, m.captured, m.promotion,
+      m.ep, m.castle, m.double].join(':');
+  }).join('|');
+}
+assertEqual(loneKingPseudo.length, freshLoneKingPseudo.length,
+  'pseudoMoves truncates an oversized scratch array');
+assertEqual(loneKingPseudo[0] === firstScratchMove, true,
+  'pseudoMoves preserves reusable object identity across positions');
+assertEqual(moveScratch.pool[19] === highWaterMove, true,
+  'pseudoMoves retains the high-water object pool after a narrow position');
+assertEqual(moveSignatures(loneKingPseudo), moveSignatures(freshLoneKingPseudo),
+  'scratch generation matches fresh pseudo-move generation');
+
 // --- FEN round-trip ---
 console.log('FEN round-trip');
 for (const fen of [
