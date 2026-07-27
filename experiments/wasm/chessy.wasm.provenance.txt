@@ -1,0 +1,9 @@
+built: 2026-07-27T18:52:56Z
+zig: 0.16.0
+wasm-opt: wasm-opt version 131 (version_131)
+flags: -target wasm32-freestanding -fno-entry (fast: -O ReleaseFast + wasm-opt -O3 --converge; size: -O ReleaseSmall + wasm-opt -Oz --converge)
+source sha256: 5c25b5d042b08f9cd3f12328a3cc7dabb8a6723c39897f904f18f11c64bf46bd
+chessy.wasm sha256: 5f4813eb6fd3cc589bf6468502ae88e540e953a8df58d3576fd3c6327320a925
+chessy-size.wasm sha256: 5373a2788ed9da6fc2a1b045fc6863bbaf88a666be9c1e843f66ed9196b1cc14
+chessy.wasm bytes: 27451
+chessy-size.wasm bytes: 18271
