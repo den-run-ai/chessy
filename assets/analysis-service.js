@@ -21,8 +21,10 @@
  *   - Cache identity folds game revision, ply, the halfmove-and-repetition-aware
  *     position fingerprint, the engine version and the config hash. A stored
  *     result is persisted only when it VALIDATES against the originating
- *     request (same fingerprint, config and side to move); complete AND partial
- *     (complete:false) results are stored, with the completeness flag preserved.
+ *     request (same fingerprint, config and side to move) and must re-pass the
+ *     same validation when SERVED back, so a corrupted or mismatched record is
+ *     recomputed rather than published; complete AND partial (complete:false)
+ *     results are stored, with the completeness flag preserved.
  *
  * A request is { gameId, ply, gameRev, fen, positions, opts }. analyse(req,
  * owner?) accepts an optional subsystem owner; cancel(owner) then abandons
@@ -244,8 +246,13 @@
       if (lookup && typeof lookup.then === 'function') {
         lookup.then(function (rec) {
           if (job !== active || job.done) return;          // superseded during lookup
-          if (rec && rec.gameRev === job.req.gameRev && rec.result) {
-            settle(job, rec.result);                        // fresh cache hit
+          // A persisted record outlives the session that validated it, so a
+          // served payload must re-pass the SAME gate as a live worker reply
+          // (validMatch): a corrupted or mismatched row under a correct key is
+          // recomputed — and overwritten via persist — never published.
+          if (rec && rec.gameRev === job.req.gameRev && rec.result &&
+              validMatch(rec.result, job)) {
+            settle(job, rec.result);                        // validated fresh cache hit
           } else {
             dispatch(job);
           }

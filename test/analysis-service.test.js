@@ -9,6 +9,13 @@
  * watchdog retry + graceful final failure, cache identity separation, partial
  * (complete:false) preservation, and the guarantee that the heavy search never
  * runs on the main thread.
+ *
+ * The E3b runtime tranche (#87) extends this with the service-level
+ * contracts the eval scorecard deliberately does not grade:
+ *   cache    — a persisted record is served bit-identically with provenance
+ *              intact and no recompute, and only after re-passing the same
+ *              validation gate as a live worker reply (a corrupted record is
+ *              recomputed, never served).
  */
 'use strict';
 require('../assets/engine.js');
@@ -78,6 +85,38 @@ function makeStore() {
     getAnalysis: function (k) { return Promise.resolve(map.get(k)); },
     putAnalysis: function (rec) { map.set(rec.key, rec); return Promise.resolve(); }
   };
+}
+
+// ---- E3b helpers: seeded persistent records.
+function cloneJson(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+
+// The cache identity EXACTLY as the service computes it before dispatch
+// (buildOpts folds req.positions into opts, then ChessyAnalysisCore.identity).
+function identOf(req) {
+  const opts = Object.assign({}, req.opts || {});
+  if (req.positions) opts.positions = req.positions;
+  return Core.identity(Chess.parseFen(req.fen), opts);
+}
+
+// A record shaped exactly like the service's persist() would write it,
+// simulating a prior session's validated write (or, when `result` is
+// deliberately mismatched, a corrupted/miswritten row under a correct key).
+function recordFor(store, req, result) {
+  const ident = identOf(req);
+  const key = store.analysisKey(
+    req.gameId, req.ply, ident.positionFingerprint, ident.engineId, ident.configHash);
+  return { key: key, ident: ident, rec: {
+    key: key, gameId: req.gameId, ply: req.ply, gameRev: req.gameRev,
+    fingerprint: ident.positionFingerprint,
+    engineId: ident.engineId, configHash: ident.configHash,
+    complete: result.complete !== false, result: result, createdAt: 1
+  } };
+}
+
+function seedRecord(store, req, result) {
+  const r = recordFor(store, req, result);
+  store._map.set(r.key, r.rec);
+  return r;
 }
 
 function reset(opts) {
@@ -282,6 +321,71 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const tampered = await Svc.analyse(Object.assign({}, REQ, { gameId: 'T' }));
   check(tampered === null && store4._map.size === 0,
     'a reply that does not match the requested position is rejected and not cached');
+
+  // ====================== E3b §1 — cache (#87) ======================
+
+  // --- Cold persistent hit: a record from a PRIOR SESSION (fresh gameId, so
+  //     the in-memory handoff is cold) is served without recompute — the very
+  //     object the store returned, provenance intact — and no worker is even
+  //     constructed. ---
+  const coldStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: coldStore });
+  const coldReq = Object.assign({}, REQ, { gameId: 'e3b-cold' });
+  const coldTruth = Core.analyse(Chess.parseFen(START), FAST);
+  const coldSeed = seedRecord(coldStore, coldReq, coldTruth);
+  const dCold = Svc.stats().dispatches;
+  const coldRes = await Svc.analyse(Object.assign({}, coldReq));
+  check(coldRes === coldTruth && Svc.stats().dispatches === dCold && made.length === 0,
+    'a validated record from a prior session is served as-is: no dispatch, no worker, no recompute');
+  check(!!coldRes && coldRes.engine.id === Core.ENGINE_ID &&
+    coldRes.engine.version === Core.ENGINE_VERSION &&
+    coldRes.engine.configHash === coldSeed.ident.configHash &&
+    coldRes.positionFingerprint === coldSeed.ident.positionFingerprint,
+    'the served result keeps its provenance (engine id/version/configHash, fingerprint) intact');
+
+  // A budget-capped partial that was honestly persisted is served back still
+  // partial: the data half of the reflection-panel rule (assets/reflection.js
+  // shows a partial as visibly partial — the transport must never let a
+  // complete:false result resurface dressed up as complete).
+  const coldPartialStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: coldPartialStore });
+  const coldPartialOpts = { maxDepth: 4, nodeLimit: 8000, multiPV: 3, nodeBudget: 1 };
+  const coldPartialReq = Object.assign({}, REQ, { gameId: 'e3b-cold-partial', opts: coldPartialOpts });
+  const coldPartialTruth = Core.analyse(Chess.parseFen(START), coldPartialOpts);
+  seedRecord(coldPartialStore, coldPartialReq, coldPartialTruth);
+  const coldPartialRes = await Svc.analyse(Object.assign({}, coldPartialReq));
+  check(coldPartialRes === coldPartialTruth && coldPartialRes.complete === false && made.length === 0,
+    'a persisted partial (complete:false) is re-served still visibly partial, never as complete');
+
+  // --- Corruption: a record under a CORRECT key whose payload does not match
+  //     the request is rejected and recomputed, never served. The read side
+  //     reuses the same validMatch gate as a live worker reply; each of its
+  //     three legs (fingerprint, config, turn) is proven able to turn the
+  //     gate red, and the recompute overwrites the bad entry via persist. ---
+  const foreignFen = START.replace(' 0 1', ' 40 1'); // same board, foreign halfmove history
+  const corruptions = [
+    { id: 'e3b-corrupt-fp', label: 'a foreign-position payload (fingerprint mismatch)',
+      make: function () { return Core.analyse(Chess.parseFen(foreignFen), FAST); } },
+    { id: 'e3b-corrupt-cfg', label: 'a foreign-config payload (configHash mismatch)',
+      make: function () { return Core.analyse(Chess.parseFen(START), Object.assign({}, FAST, { multiPV: 2 })); } },
+    { id: 'e3b-corrupt-turn', label: 'a turn-corrupted payload',
+      make: function () { const c = cloneJson(coldTruth); c.turn = 'b'; return c; } }
+  ];
+  for (const corruption of corruptions) {
+    const badStore = makeStore();
+    reset({ factory: factoryOf({ mode: 'normal' }), store: badStore });
+    // Distinct gameIds keep every case's key cold in the module-private
+    // in-memory handoff, so each one exercises the persistent read path.
+    const badReq = Object.assign({}, REQ, { gameId: corruption.id });
+    const badSeed = seedRecord(badStore, badReq, corruption.make());
+    const badRes = await Svc.analyse(Object.assign({}, badReq));
+    await delay(5); // let the recompute's best-effort persist settle
+    const overwritten = badStore._map.get(badSeed.key);
+    check(!!badRes && made.length === 1 && norm(badRes) === norm(coldTruth),
+      corruption.label + ' is rejected and recomputed, never served');
+    check(!!overwritten && norm(overwritten.result) === norm(coldTruth) && overwritten.complete === true,
+      'the recompute overwrites the corrupted entry: ' + corruption.label);
+  }
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
