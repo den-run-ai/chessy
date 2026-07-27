@@ -15,7 +15,11 @@
  *   cache    — a persisted record is served bit-identically with provenance
  *              intact and no recompute, and only after re-passing the same
  *              validation gate as a live worker reply (a corrupted record is
- *              recomputed, never served).
+ *              recomputed, never served);
+ *   cancel   — a superseded or cancelled job never publishes: its promise is
+ *              null, its late replies write neither the persistent cache nor
+ *              the in-memory handoff, and one interactive job holds under a
+ *              rapid re-request storm.
  */
 'use strict';
 require('../assets/engine.js');
@@ -87,7 +91,7 @@ function makeStore() {
   };
 }
 
-// ---- E3b helpers: seeded persistent records.
+// ---- E3b helpers: seeded persistent records, gated lookups.
 function cloneJson(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
 
 // The cache identity EXACTLY as the service computes it before dispatch
@@ -117,6 +121,23 @@ function seedRecord(store, req, result) {
   const r = recordFor(store, req, result);
   store._map.set(r.key, r.rec);
   return r;
+}
+
+// A store whose getAnalysis promises resolve only when the test releases them,
+// so a cancel/supersede can be interleaved INSIDE the lookup window.
+function gatedStore() {
+  const map = new Map(), gates = [];
+  return {
+    _map: map, _gates: gates,
+    analysisKey: function (g, p, f, e, c) { return [g, p, f, e, c].join('|'); },
+    getAnalysis: function () {
+      const gate = {};
+      gate.promise = new Promise(function (r) { gate.release = r; });
+      gates.push(gate);
+      return gate.promise;
+    },
+    putAnalysis: function (rec) { map.set(rec.key, rec); return Promise.resolve(); }
+  };
 }
 
 function reset(opts) {
@@ -386,6 +407,98 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     check(!!overwritten && norm(overwritten.result) === norm(coldTruth) && overwritten.complete === true,
       'the recompute overwrites the corrupted entry: ' + corruption.label);
   }
+
+  // ====================== E3b §2 — cancel (#87) ======================
+
+  // --- A superseded job's late reply, and a cancelled job's own late reply,
+  //     never publish: no promise value, no persistent write, no in-memory
+  //     handoff entry — the next identical request misses and recomputes. ---
+  const lateStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }, { mode: 'normal' }), store: lateStore });
+  const late1 = Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
+  await delay(1); // let the lookup miss and dispatch the stalled worker
+  const late2 = Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
+  check((await late1) === null, 'the superseded twin request resolves null');
+  await delay(1); // the active job's own lookup misses and dispatches too
+  const lateW1 = made[0], lateW2 = made[1];
+  const lateGood = Core.analyse(Chess.parseFen(START), FAST);
+  lateW1.terminated = false; // the terminate lost the race with an in-flight reply
+  lateW1.deliver({ v: PROTOCOL, jobId: lateW1.posts[0].jobId, result: lateGood });
+  let late2Settled = false;
+  late2.then(function () { late2Settled = true; });
+  await delay(5);
+  check(lateStore._map.size === 0 && late2Settled === false,
+    'a superseded job\'s late valid reply writes nothing and cannot settle the active job');
+  Svc.cancel();
+  check((await late2) === null, 'cancel() resolves the active job null');
+  lateW2.terminated = false;
+  lateW2.deliver({ v: PROTOCOL, jobId: lateW2.posts[0].jobId, result: lateGood });
+  await delay(5);
+  check(lateStore._map.size === 0,
+    'a cancelled job\'s own late reply publishes nothing to the persistent cache');
+  const dLate = Svc.stats().dispatches;
+  const lateAfter = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
+  check(!!lateAfter && Svc.stats().dispatches === dLate + 1 && lateStore._map.size === 1,
+    'after the cancelled work the identical request misses (no ghost handoff) and recomputes');
+
+  // --- One interactive job under a rapid re-request storm: every predecessor
+  //     resolves null, at most one worker is ever left alive, each dispatched
+  //     worker got exactly one post, and only the winner publishes. ---
+  reset({ factory: factoryOf({ mode: 'normal' }) }); // no store: dispatch is synchronous
+  const dStorm = Svc.stats().dispatches;
+  const storm = [];
+  for (let i = 0; i < 5; i++) {
+    storm.push(Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-storm' })));
+  }
+  const stormRes = await Promise.all(storm);
+  const stormIds = made.map(function (w) { return w.posts[0] && w.posts[0].jobId; });
+  check(stormRes.slice(0, 4).every(function (r) { return r === null; }) &&
+    !!stormRes[4] && stormRes[4].turn === 'w',
+    'under a rapid re-request storm every superseded promise is null and only the last wins');
+  check(made.length === 5 && Svc.stats().dispatches === dStorm + 5 &&
+    made.slice(0, 4).every(function (w) { return w.terminated; }) &&
+    made[4].terminated === false &&
+    made.every(function (w) { return w.posts.length === 1; }) &&
+    new Set(stormIds).size === 5,
+    'one-interactive-job holds under the storm: predecessors terminated, one alive, one post each');
+
+  // --- Cancel and supersede INSIDE the persistent-lookup window: the late
+  //     lookup result must neither dispatch nor publish nor pre-empt the
+  //     successor, and the service is left healthy. ---
+  const gateStore = gatedStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: gateStore });
+  const gateReq = Object.assign({}, REQ, { gameId: 'e3b-gate' });
+  const gateCancelled = Svc.analyse(Object.assign({}, gateReq));
+  Svc.cancel();
+  check((await gateCancelled) === null, 'cancel during the cache lookup resolves the job null');
+  gateStore._gates[0].release(recordFor(gateStore, gateReq, coldTruth).rec);
+  await delay(5);
+  check(made.length === 0 && gateStore._map.size === 0,
+    'a lookup resolving after cancel neither dispatches nor publishes');
+  const gateB = Svc.analyse(Object.assign({}, gateReq));
+  const gateC = Svc.analyse(Object.assign({}, gateReq)); // supersedes B mid-lookup
+  check((await gateB) === null, 'the request superseded during its lookup resolves null');
+  gateStore._gates[1].release(recordFor(gateStore, gateReq, coldTruth).rec);
+  let gateCSettled = false;
+  gateC.then(function () { gateCSettled = true; });
+  await delay(5);
+  check(gateCSettled === false && made.length === 0,
+    'a predecessor\'s valid lookup record can never settle or pre-empt the successor');
+  gateStore._gates[2].release(undefined); // the successor's own lookup: a miss
+  const gateCRes = await gateC;
+  check(!!gateCRes && gateCRes.turn === 'w' && made.length === 1,
+    'the successor survives the stale lookup and completes on its own dispatch');
+
+  // --- cancel() after completion is inert: published results stay published. ---
+  const postStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: postStore });
+  const postFirst = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-post' }));
+  Svc.cancel();
+  const dPost = Svc.stats().dispatches;
+  const postSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-post' }));
+  check(!!postFirst && postSecond === postFirst &&
+    Svc.stats().dispatches === dPost && postStore._map.size === 1,
+    'cancel() after completion unpublishes nothing: the identical request still hits');
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
