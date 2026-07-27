@@ -108,7 +108,8 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   the engine stays hidden until you answer the reflection questions, and each
   probe snapshots the answers as submitted (a rewrite after the verdict can't
   reach that probe's card). One request runs at a time — Verify shows monotonic
-  elapsed time and an accessible Cancel action, with no fabricated ETA — and
+  elapsed time, truthful initial-scan/root progress, and an accessible Cancel
+  action, with no fabricated ETA or provisional score/PV streaming — and
   you can revise your answers and re-probe the same moment, which updates its
   **one card per moment** (game + ply) in place. You own the diagnosis: a move
   that differs from Chessy's line is not declared wrong ("my move was also
@@ -240,9 +241,9 @@ gated on the engine *and* browser suites.
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
-| `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance) |
-| `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract off the main thread |
-| `assets/analysis-service.js` | Analysis transport: one interactive job, cancellation, watchdog + retry, validated IndexedDB result cache |
+| `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
+| `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract and throttling non-terminal progress off the main thread |
+| `assets/analysis-service.js` | Analysis transport: one interactive job, owner-scoped progress/cancellation, watchdog + retry, validated IndexedDB result cache |
 | `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |
 | `assets/moment-selector.js` | Pure, deterministic critical-moment evidence, collapse suppression, clustering and deep-admission policy |
 | `assets/moment-scan.js` | Explicit, sequential two-pass scan controller with durable checkpoints, pause/resume and spoiler-safe public state |

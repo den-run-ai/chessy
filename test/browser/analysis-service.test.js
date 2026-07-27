@@ -81,6 +81,70 @@ require('./helper').run('analysis-service', async function (t) {
   check(partial.res === false && partial.rec === false && partial.recResult === false,
     'a partial (complete:false) result is preserved through the worker and the cache, never marked complete');
 
+  // --- Real worker progress: truthful phases/root counts cross the versioned
+  //     protocol to the matching owner only. Messages are exact, monotonic and
+  //     throttled; a cache hit emits none because progress is never cached. ---
+  const progress = await page.evaluate(async function (opts) {
+    const events = [], foreign = [], cacheEvents = [];
+    const stop = ChessyAnalysisService.subscribe('browser-progress', function (p) {
+      events.push(JSON.parse(JSON.stringify(p)));
+    });
+    const stopForeign = ChessyAnalysisService.subscribe('another-owner', function (p) {
+      foreign.push(JSON.parse(JSON.stringify(p)));
+    });
+    const req = {
+      gameId: 'real-progress', ply: 0, gameRev: 1, fen: Chess.START_FEN,
+      opts: Object.assign({}, opts, {
+        // The service must strip this page callback rather than trying to clone
+        // it into the worker; subscribe() is the sole transport surface.
+        onProgress: function () { throw new Error('must stay on page'); }
+      })
+    };
+    const result = await ChessyAnalysisService.analyse(req, 'browser-progress');
+    stop(); stopForeign();
+
+    const stopCache = ChessyAnalysisService.subscribe('browser-progress', function (p) {
+      cacheEvents.push(JSON.parse(JSON.stringify(p)));
+    });
+    const cached = await ChessyAnalysisService.analyse(req, 'browser-progress');
+    stopCache();
+    return {
+      events: events, foreign: foreign, cacheEvents: cacheEvents,
+      complete: !!result && result.complete === true,
+      cached: !!cached
+    };
+  }, FAST);
+  let progressOrdered = progress.events.length >= 4;
+  const eventKeys = 'completedRoots,elapsedMs,jobId,owner,phase,totalRoots';
+  for (let i = 0; i < progress.events.length; i++) {
+    const e = progress.events[i];
+    if (Object.keys(e).sort().join(',') !== eventKeys ||
+        e.owner !== 'browser-progress' || e.elapsedMs < 0 ||
+        i && (e.jobId !== progress.events[0].jobId ||
+          e.elapsedMs < progress.events[i - 1].elapsedMs)) progressOrdered = false;
+    if (!i) continue;
+    const p = progress.events[i - 1];
+    if (e.phase === p.phase && e.completedRoots < p.completedRoots) progressOrdered = false;
+    // Phase completion and transition are deliberately immediate; all other
+    // same-phase, non-final updates honor the worker's 100 ms throttle.
+    if (e.phase === p.phase && e.completedRoots !== e.totalRoots &&
+        e.elapsedMs - p.elapsedMs < 100) progressOrdered = false;
+  }
+  const first = progress.events[0], second = progress.events[1];
+  const roots = progress.events.filter(function (e) {
+    return e.phase === 'root-verification';
+  });
+  check(progress.complete && progress.cached && progressOrdered &&
+    first && first.phase === 'initial-scan' && first.completedRoots === 0 &&
+    first.totalRoots === 1 &&
+    second && second.phase === 'initial-scan' && second.completedRoots === 1 &&
+    second.totalRoots === 1 &&
+    roots.length >= 2 && roots[0].completedRoots === 0 &&
+    roots[roots.length - 1].completedRoots === roots[roots.length - 1].totalRoots,
+    'the real worker forwards exact, monotonic, throttled scan/root progress to its active owner');
+  check(progress.foreign.length === 0 && progress.cacheEvents.length === 0,
+    'another owner sees no progress, and an identical cache hit replays no progress messages');
+
   // --- The heavy search runs ONLY in the worker: the page main thread never
   //     invokes ChessyAnalysisCore.analyse (patched here as a tripwire). ---
   const offMain = await page.evaluate(async function (opts) {
