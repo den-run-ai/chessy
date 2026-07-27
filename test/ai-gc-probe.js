@@ -137,73 +137,100 @@ if (args[0] === '--child') {
       pauseMs: +(after.pauseMs - before.pauseMs).toFixed(2)
     };
   }
-
-  const out = { ref: ref || 'worktree', mode: mode, node: process.version };
-  global.gc();
-  out.baselineHeapMB = +(process.memoryUsage().heapUsed / 1048576).toFixed(1);
-
-  if (mode === 'fixed') {
-    out.passes = [];
-    for (let pass = 0; pass < 2; pass++) {
-      const before = snap();
-      let nodes = 0, qnodes = 0, wall = 0, peakHeap = 0;
-      for (const [, fen] of POSITIONS) {
-        const r = think(fen, { maxDepth: 5, quiesce: true }, 0xC0FFEE);
-        nodes += r.nodes; qnodes += r.qnodes; wall += r.wallMs;
-        const h = process.memoryUsage().heapUsed;
-        if (h > peakHeap) peakHeap = h;
-      }
-      out.passes.push({
-        pass: pass, wallMs: +wall.toFixed(1), nodes: nodes, qnodes: qnodes,
-        gc: delta(before, snap()), peakHeapMB: +(peakHeap / 1048576).toFixed(1)
+  // GC performance entries are delivered to the observer callback on later
+  // event-loop turns. A fully synchronous workload would reach its snapshot
+  // (and process exit) with every entry still undelivered and the tally at
+  // zero, so every snap() below is preceded by a few timer turns.
+  function settleGc() {
+    let turns = Promise.resolve();
+    for (let i = 0; i < 4; i++) {
+      turns = turns.then(function () {
+        return new Promise(function (resolve) { setTimeout(resolve, 5); });
       });
     }
-  } else if (mode === 'timed') {
-    think(CANONICAL[0][1], { maxDepth: 30, timeMs: 1000, quiesce: true }, 0xC0FFEE);
-    const before = snap();
-    let nodes = 0, qnodes = 0, peakHeap = 0;
-    out.thinks = [];
-    for (const [name, fen] of CANONICAL) {
-      const r = think(fen, { maxDepth: 30, timeMs: 5000, quiesce: true }, 0xC0FFEE);
-      nodes += r.nodes; qnodes += r.qnodes;
-      const h = process.memoryUsage().heapUsed;
-      if (h > peakHeap) peakHeap = h;
-      out.thinks.push({
-        name: name, depth: r.depth, nodes: r.nodes,
-        overshootMs: +(r.wallMs - 5000).toFixed(1)
-      });
-    }
-    out.gc = delta(before, snap());
-    out.nodes = nodes;
-    out.qnodes = qnodes;
-    out.peakHeapMB = +(peakHeap / 1048576).toFixed(1);
-  } else if (mode === 'soak') {
-    const startedAt = Date.now();
-    const endAt = startedAt + seconds * 1000;
-    const before = snap();
-    out.samples = [];
-    for (let i = 0; Date.now() < endAt; i++) {
-      const [, fen] = CANONICAL[i % CANONICAL.length];
-      const r = think(fen, { maxDepth: 30, timeMs: 5000, quiesce: true }, 0xC0FFEE + i);
-      out.samples.push({
-        t: +((Date.now() - startedAt) / 1000).toFixed(0),
-        nps: Math.round(((r.nodes + r.qnodes) / r.wallMs) * 1000),
-        depth: r.depth,
-        heapMB: +(process.memoryUsage().heapUsed / 1048576).toFixed(1)
-      });
-    }
-    out.gc = delta(before, snap());
-  } else {
-    console.error('unknown --mode "' + mode + '"');
-    process.exit(2);
+    return turns;
   }
 
-  global.gc();
-  out.retainedHeapMB = +(process.memoryUsage().heapUsed / 1048576).toFixed(1);
-  out.totalHeapMB = +(v8.getHeapStatistics().total_heap_size / 1048576).toFixed(1);
-  console.log(JSON.stringify(out));
-  observer.disconnect();
-  process.exit(0);
+  (async function childMain() {
+    const out = { ref: ref || 'worktree', mode: mode, node: process.version };
+    global.gc();
+    await settleGc();
+    out.baselineHeapMB = +(process.memoryUsage().heapUsed / 1048576).toFixed(1);
+
+    if (mode === 'fixed') {
+      out.passes = [];
+      for (let pass = 0; pass < 2; pass++) {
+        await settleGc();
+        const before = snap();
+        let nodes = 0, qnodes = 0, wall = 0, peakHeap = 0;
+        for (const [, fen] of POSITIONS) {
+          const r = think(fen, { maxDepth: 5, quiesce: true }, 0xC0FFEE);
+          nodes += r.nodes; qnodes += r.qnodes; wall += r.wallMs;
+          const h = process.memoryUsage().heapUsed;
+          if (h > peakHeap) peakHeap = h;
+        }
+        await settleGc();
+        out.passes.push({
+          pass: pass, wallMs: +wall.toFixed(1), nodes: nodes, qnodes: qnodes,
+          gc: delta(before, snap()), peakHeapMB: +(peakHeap / 1048576).toFixed(1)
+        });
+      }
+    } else if (mode === 'timed') {
+      think(CANONICAL[0][1], { maxDepth: 30, timeMs: 1000, quiesce: true }, 0xC0FFEE);
+      await settleGc();
+      const before = snap();
+      let nodes = 0, qnodes = 0, peakHeap = 0;
+      out.thinks = [];
+      for (const [name, fen] of CANONICAL) {
+        const r = think(fen, { maxDepth: 30, timeMs: 5000, quiesce: true }, 0xC0FFEE);
+        nodes += r.nodes; qnodes += r.qnodes;
+        const h = process.memoryUsage().heapUsed;
+        if (h > peakHeap) peakHeap = h;
+        out.thinks.push({
+          name: name, depth: r.depth, nodes: r.nodes,
+          overshootMs: +(r.wallMs - 5000).toFixed(1)
+        });
+      }
+      await settleGc();
+      out.gc = delta(before, snap());
+      out.nodes = nodes;
+      out.qnodes = qnodes;
+      out.peakHeapMB = +(peakHeap / 1048576).toFixed(1);
+    } else if (mode === 'soak') {
+      const startedAt = Date.now();
+      const endAt = startedAt + seconds * 1000;
+      await settleGc();
+      const before = snap();
+      out.samples = [];
+      for (let i = 0; Date.now() < endAt; i++) {
+        const [, fen] = CANONICAL[i % CANONICAL.length];
+        const r = think(fen, { maxDepth: 30, timeMs: 5000, quiesce: true }, 0xC0FFEE + i);
+        out.samples.push({
+          t: +((Date.now() - startedAt) / 1000).toFixed(0),
+          nps: Math.round(((r.nodes + r.qnodes) / r.wallMs) * 1000),
+          depth: r.depth,
+          heapMB: +(process.memoryUsage().heapUsed / 1048576).toFixed(1)
+        });
+      }
+      await settleGc();
+      out.gc = delta(before, snap());
+    } else {
+      console.error('unknown --mode "' + mode + '"');
+      process.exit(2);
+    }
+
+    global.gc();
+    await settleGc();
+    out.retainedHeapMB = +(process.memoryUsage().heapUsed / 1048576).toFixed(1);
+    out.totalHeapMB = +(v8.getHeapStatistics().total_heap_size / 1048576).toFixed(1);
+    console.log(JSON.stringify(out));
+    observer.disconnect();
+    process.exit(0);
+  })().catch(function (error) {
+    console.error(error && error.stack || String(error));
+    process.exit(1);
+  });
+  return;
 }
 
 // --------------------------------------------------------------- driver mode
