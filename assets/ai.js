@@ -484,9 +484,33 @@
     return (m.from << 9) | (m.to << 3) | (m.promotion ? PROMO_IDX[m.promotion] : 0);
   }
 
-  function makeCtx(quiesce, deadline, nodeLimit) {
+  // Conservative LMR experiment: reduce only a fifth-or-later quiet move in
+  // an already-null-window node. This deliberately excludes the wider
+  // depth-4/PV-node scope rejected in #55. A reduced scout that improves the
+  // bound is always verified again at the full depth.
+  function lmrReduces(state, next, m, depth, quietCount, inChk,
+    ttPk, ply, nullNode, alpha, beta, ctx) {
+    if (!ctx.useLmr || !ctx.quiesce || depth < 5 || quietCount < 4 ||
+        !nullNode || inChk || m.captured || m.promotion || m.castle ||
+        alpha <= -MATE_NEAR || beta >= MATE_NEAR ||
+        state.halfmove + depth + QMAX >= 100) return false;
+    const pk = packMove(m), killers = ctx.killers[ply];
+    if (pk === ttPk ||
+        (killers && (pk === killers[0] || pk === killers[1]))) return false;
+    const hist = state.turn === 'w' ? ctx.histW : ctx.histB;
+    if (hist[m.from * 64 + m.to] > 0) return false;
+    // Advanced pawn pushes are forcing enough to retain the full draft.
+    if (m.piece[1] === 'P' &&
+        (state.turn === 'w' ? m.to < 24 : m.to >= 40)) return false;
+    const enemy = state.turn === 'w' ? 'b' : 'w';
+    return !Chess.isAttacked(
+      next.board, next.board.indexOf(enemy + 'K'), state.turn);
+  }
+
+  function makeCtx(quiesce, deadline, nodeLimit, useLmr) {
     return {
       quiesce: !!quiesce,
+      useLmr: useLmr === true,
       deadline: deadline,
       // Only a missing/null limit means "unbounded". An explicit 0 is a real
       // (already-exhausted) budget: it must return without searching, not be
@@ -497,6 +521,8 @@
       qnodes: 0,       // quiescence share of nodes
       cutoffs: 0,      // beta cutoffs in the main search
       researches: 0,   // scout/aspiration repeats at full window
+      lmrApplied: 0,   // reduced-depth null-window scouts
+      lmrResearched: 0,// reduced scouts verified again at full depth
       tt: new Map(),
       killers: [],                    // per-ply [primary, secondary] packed quiet moves
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
@@ -703,6 +729,10 @@
   // than generating fully-legal move lists at every node).
   function searchNode(state, depth, alpha, beta, ply, ctx) {
     checkTime(ctx);
+    // Preserve the node's entry-window identity. TT bounds may tighten a wide
+    // (PV) window later; that must never make this node newly LMR-eligible.
+    const nullNode = beta - alpha === 1;
+    const alphaEntry = alpha, betaEntry = beta;
     // Repetition-dependency out-param (read by the PARENT after this call
     // returns): the shallowest ancestor ply this node's score depended on.
     // Infinity = the score is position-intrinsic and safe to cache.
@@ -759,6 +789,8 @@
     // move is useful for ordering at any draft. With delta pruning removed,
     // quiescence-derived scores are sound alpha-beta bounds, so — like main-
     // search entries — they are served to any window, including null scouts.
+    // When Play LMR is enabled, entries can contain its verified selective
+    // bounds; deterministic analysis creates contexts with LMR disabled.
     const useTT = state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
     let ttPk = 0;
     if (useTT) {
@@ -785,6 +817,7 @@
     let best = maximizing ? -Infinity : Infinity;
     let bestPk = 0;
     let anyLegal = false;
+    let quietCount = 0;
     let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
     ctx.path1.push(r1); ctx.path2.push(r2);
@@ -796,6 +829,12 @@
       const next = Chess.applyMove(state, m);
       const ks = m.piece[1] === 'K' ? m.to : kingSq;
       if (Chess.isAttacked(next.board, ks, enemy)) continue; // illegal: king left in check
+      // Keep the inactive-depth path virtually free: completed root depths
+      // through five never call the move-level predicate.
+      const reduction = ctx.useLmr && depth >= 5 && quietCount >= 4 &&
+        lmrReduces(state, next, m, depth, quietCount, inChk,
+          ttPk, ply, nullNode, alphaEntry, betaEntry, ctx) ? 1 : 0;
+      if (reduction) ctx.lmrApplied++;
       let score, childRep;
       // Principal variation search: the first legal move gets the full
       // window; later moves get a null-window scout ("can this beat the
@@ -805,29 +844,42 @@
       // dependency is the MINIMUM over its scout and re-search — a path-
       // dependent draw seen by either must reach the TT guard below.
       //
-      // With no delta pruning anywhere, every leaf (main search and
-      // quiescence) is a plain alpha-beta bound, so PVS here is a sound
+      // With LMR disabled, no delta pruning means every leaf (main search and
+      // quiescence) is a plain alpha-beta bound, so PVS here is an exact
       // transform of alpha-beta: a scout never silently discards a better move
       // (an earlier quiescent-delta-pruning variant did — depth-2 PVS picked
       // b8c6 -7 over the true best d7d5 -307, pinned in test/ai-tactics.js
       // against an independent minimax oracle; removing delta pruning removes
       // that whole failure mode). Move selection is confirmed by the 16-position
-      // bench (--exact) and the tactics suite. The only remaining path
-      // dependence is repetition draws, tracked via childRep/repPly below.
+      // bench (--exact) and the tactics suite. Play may additionally enable
+      // the guarded selective LMR scout below; repetition dependence remains
+      // tracked via childRep/repPly in both modes.
       if (!anyLegal) {
         score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
         childRep = ctx.repPly;
       } else if (maximizing) {
-        score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
+        score = searchNode(
+          next, depth - 1 - reduction, alpha, alpha + 1, ply + 1, ctx);
         childRep = ctx.repPly;
+        if (reduction && score > alpha) {
+          ctx.researches++; ctx.lmrResearched++;
+          score = searchNode(next, depth - 1, alpha, alpha + 1, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
         if (score > alpha && score < beta) {
           ctx.researches++;
           score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
           if (ctx.repPly < childRep) childRep = ctx.repPly;
         }
       } else {
-        score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
+        score = searchNode(
+          next, depth - 1 - reduction, beta - 1, beta, ply + 1, ctx);
         childRep = ctx.repPly;
+        if (reduction && score < beta) {
+          ctx.researches++; ctx.lmrResearched++;
+          score = searchNode(next, depth - 1, beta - 1, beta, ply + 1, ctx);
+          if (ctx.repPly < childRep) childRep = ctx.repPly;
+        }
         if (score < beta && score > alpha) {
           ctx.researches++;
           score = searchNode(next, depth - 1, alpha, beta, ply + 1, ctx);
@@ -835,6 +887,7 @@
         }
       }
       anyLegal = true;
+      if (!m.captured && !m.promotion) quietCount++;
       if (childRep < repMin) repMin = childRep;
       if (maximizing ? score > best : score < best) {
         best = score;
@@ -980,14 +1033,16 @@
     if (status.over) {
       return {
         move: null, depth: 0, score: 0, scorePov: 'white', nodes: 0, qnodes: 0,
-        cutoffs: 0, researches: 0, pvUci: [], rootOrderUci: [],
+        cutoffs: 0, researches: 0, lmrApplied: 0, lmrResearched: 0,
+        pvUci: [], rootOrderUci: [],
         pvSource: 'final-tt-best-effort', attemptedDepth: null,
         elapsedMs: Date.now() - startedAt, stopReason: 'game-over'
       };
     }
     const moves = Chess.legalMoves(state);
     const maximizing = state.turn === 'w';
-    const ctx = makeCtx(opts.quiesce, deadline, opts.nodeLimit);
+    const ctx = makeCtx(
+      opts.quiesce, deadline, opts.nodeLimit, opts.lmr !== false);
 
     // Seed the game's actual occurrence counts (the keys of the repetition
     // table are 4-field FENs, already ep-normalized like our repetition
@@ -1134,6 +1189,7 @@
     // Freeze all authoritative counters before the diagnostic TT walk below.
     const nodes = ctx.nodes, qnodes = ctx.qnodes;
     const cutoffs = ctx.cutoffs, researches = ctx.researches;
+    const lmrApplied = ctx.lmrApplied, lmrResearched = ctx.lmrResearched;
     const rootOrder = items.slice().sort(function (a, b) {
       return a.initialIndex - b.initialIndex;
     }).map(function (it) { return uciMove(it.move); });
@@ -1145,6 +1201,7 @@
       move: best.move, depth: completed, attemptedDepth: attemptedDepth,
       score: bestScore, scorePov: 'white', nodes: nodes, qnodes: qnodes,
       cutoffs: cutoffs, researches: researches,
+      lmrApplied: lmrApplied, lmrResearched: lmrResearched,
       rootOrderUci: rootOrder,
       pvUci: finalPv, pvSource: 'final-tt-best-effort',
       elapsedMs: elapsedMs, stopReason: stopReason
@@ -1293,6 +1350,8 @@
     evaluate: evaluate,
     search: search,
     makeCtx: makeCtx,
+    lmrReduces: lmrReduces,
+    packMove: packMove,
     ttPackedMove: ttPackedMove,
     sanitizeTelemetry: sanitizeTelemetry,
     hashKey: hashKey,

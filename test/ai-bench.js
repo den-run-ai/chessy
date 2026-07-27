@@ -130,6 +130,8 @@ function bench(ctx, fen, depth) {
     qnodes: r.qnodes || 0,
     cutoffs: r.cutoffs || 0,
     researches: r.researches || 0,
+    lmrApplied: r.lmrApplied || 0,
+    lmrResearched: r.lmrResearched || 0,
     depth: r.depth,
     score: r.score,
     move: r.move ? ctx.Chess.sqName(r.move.from) + ctx.Chess.sqName(r.move.to) + (r.move.promotion || '') : '-'
@@ -149,6 +151,8 @@ function summarize(samples, label) {
     const other = samples[i];
     if (other.nodes !== first.nodes || other.qnodes !== first.qnodes ||
         other.cutoffs !== first.cutoffs || other.researches !== first.researches ||
+        other.lmrApplied !== first.lmrApplied ||
+        other.lmrResearched !== first.lmrResearched ||
         other.depth !== first.depth || other.score !== first.score ||
         other.move !== first.move) {
       throw new Error(label + ' search changed across identical timed repetitions');
@@ -335,6 +339,8 @@ async function main() {
     const b = bench(cand, POSITIONS[3][1]);
     if (a.nodes !== b.nodes || a.qnodes !== b.qnodes ||
         a.cutoffs !== b.cutoffs || a.researches !== b.researches ||
+        a.lmrApplied !== b.lmrApplied ||
+        a.lmrResearched !== b.lmrResearched ||
         a.depth !== b.depth || a.move !== b.move || a.score !== b.score) {
       throw new Error('candidate search is not deterministic under a fixed seed');
     }
@@ -347,6 +353,7 @@ async function main() {
   let logRatioSum = 0, flagged = 0, mismatches = 0;
   let logSpeedRatioSum = 0;
   let totC = 0, totB = 0, msC = 0, msB = 0, rsC = 0, rsB = 0;
+  let lmrC = 0, lmrReC = 0;
   const ratios = []; // { ratio, name } per position, for worst-case / p90
   const speedRatios = []; // candidate/base NPS per position, for worst-case / p10
   console.log('depth ' + DEPTH + (BASE ? ', base ' + BASE : ''));
@@ -373,8 +380,10 @@ async function main() {
       let line = name.padEnd(34) + ' cand ' + String(c.nodes).padStart(8) +
         ' n ' + String(c.researches).padStart(4) + ' rs  d' + c.depth + ' ' +
         String(c.score).padStart(6) + ' ' + c.move.padEnd(6) +
-        ' ' + c.ms.toFixed(1).padStart(8) + ' ms';
+        ' ' + c.ms.toFixed(1).padStart(8) + ' ms  lmr ' +
+        c.lmrApplied + '/' + c.lmrResearched;
       totC += c.nodes; msC += c.ms; rsC += c.researches;
+      lmrC += c.lmrApplied; lmrReC += c.lmrResearched;
       if (BASE) {
         const b = pair.base;
         totB += b.nodes; msB += b.ms; rsB += b.researches;
@@ -410,7 +419,8 @@ async function main() {
   }
 
   console.log('\ncandidate: ' + totC + ' nodes, ' + msC.toFixed(1) +
-    ' ms, ' + rsC + ' re-searches');
+    ' ms, ' + rsC + ' re-searches, LMR ' + lmrC +
+    ' applied / ' + lmrReC + ' verified');
   if (BASE) {
     const geo = Math.exp(logRatioSum / POSITIONS.length);
     const speedGeo = Math.exp(logSpeedRatioSum / POSITIONS.length);
