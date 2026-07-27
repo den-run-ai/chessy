@@ -50,12 +50,33 @@ the >=1.50x/>=1.25x device gate thresholds, with parity intact.
 ## GitHub Actions targets
 
 Run the **WASM mobile probe** workflow; per-target JSON artifacts and the
-aggregated `$GITHUB_STEP_SUMMARY` table are the canonical record. Recorded
-runs:
+aggregated `$GITHUB_STEP_SUMMARY` table are the canonical record.
 
-| Run | Trigger | Result |
-|---|---|---|
-| (fill in after first CI run) | | |
+[Run 1 (30296955152)](https://github.com/den-run-ai/chessy/actions/runs/30296955152)
+at `c57eedc`, defaults (depth 5, reps 2, min-ms 100, five 4):
+
+| target | parity d1–5 | fixed-node abort | paired NPS geomean | worst family | slower families |
+|---|---|---|---:|---|---|
+| node-host (Node v22.23.1) | PASS 90 | PASS | 23.4709x | 15.9136x (promotion race) | 0/9 |
+| chromium (HeadlessChrome 149, V8) | PASS 90 | PASS | 7.1178x | 6.4101x (promotion race) | 0/9 |
+| chromium-throttle4 (4x CPU throttle) | PASS 90 | PASS | 7.2042x | 6.3658x (promotion race) | 0/9 |
+| webkit (desktop JSC 605.1.15) | PASS 90 | PASS | 9.7530x | 7.3996x (KID) | 0/9 |
+| **ios-safari (real Mobile Safari, iOS 18.7 sim, arm64)** | **PASS 90** | **PASS** | **9.4429x** | **8.0598x (Dragon)** | **0/9** |
+| android-chrome (real Chrome, x86_64 emulator) | — failed on a probe-script bug (fixed in `7e4c375`); see run 2 | | | | |
+
+Five-second diagnostics (all four hard positions, wasm vs js completed
+depth): ios-safari **d7 vs d5 on 4/4**; webkit d7 vs d5–d6 on 4/4; chromium
+d7 vs d5–d6 on 4/4; node-host d7 vs d4–d5 on 4/4. No case was shallower.
+
+Observations: the Node-host ~23x compresses to **~7–10x inside browser
+engines** (both V8 and JavaScriptCore) — the browser-runtime shrinkage the
+spike's GO-TO-DEVICES disposition anticipated — while staying far above the
+physical-device thresholds (>=1.50x geomean / >=1.25x p10). A 4x CPU
+throttle does not move the ratio (7.20x vs 7.12x), evidence the ratio is
+robust to uniform slowdown. Real Mobile Safari (JSC on arm64) matches
+desktop WebKit's picture.
+
+(Android emulator Chrome result: run 2, appended below when recorded.)
 
 ### CI evidence scope
 
