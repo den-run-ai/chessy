@@ -49,6 +49,13 @@ function posInt(name, dflt) {
 }
 const TIME_MS = posInt('time', 5000);
 const PAIRS = posInt('pairs', 2);
+// Odd counts would give every position one more AB than BA round (or vice
+// versa, by position index), correlating host drift with position — the
+// same reason ai-bench.js requires an even --reps.
+if (PAIRS % 2 !== 0) {
+  console.error('--pairs must be an even integer so AB/BA orders balance per position');
+  process.exit(2);
+}
 const WARM_MS = posInt('warm', 1000);
 const JSON_OUT = opt('json', null);
 const WORKER_TIMEOUT_MS = 15 * 60 * 1000;
