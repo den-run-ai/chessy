@@ -34,9 +34,12 @@ adb shell settings put global transition_animation_scale 0 || true
 adb shell settings put global animator_duration_scale 0 || true
 
 echo "--- chrome package check"
-if ! adb shell pm list packages | tr -d '\r' | grep -q '^package:com.android.chrome$'; then
+# Capture first, grep second: `adb | grep -q` under pipefail reads a SIGPIPE
+# from grep's early exit as "package missing" even when it matched.
+packages=$(adb shell pm list packages | tr -d '\r' || true)
+if ! printf '%s\n' "$packages" | grep -q '^package:com.android.chrome$'; then
   echo "FAIL: com.android.chrome not present on this emulator image"
-  adb shell pm list packages | tr -d '\r' | grep -i -e chrome -e webview || true
+  printf '%s\n' "$packages" | grep -i -e chrome -e webview || true
   exit 1
 fi
 
