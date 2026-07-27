@@ -9,15 +9,38 @@
  * watchdog retry + graceful final failure, cache identity separation, partial
  * (complete:false) preservation, and the guarantee that the heavy search never
  * runs on the main thread.
+ *
+ * The E3b runtime tranche (#87) extends this with the three service-level
+ * contracts the eval scorecard deliberately does not grade:
+ *   cache    — a persisted record is served bit-identically with provenance
+ *              intact and no recompute, and only after re-passing the same
+ *              validation gate as a live worker reply (a corrupted record is
+ *              recomputed, never served);
+ *   cancel   — a superseded or cancelled job never publishes: its promise is
+ *              null, its late replies write neither the persistent cache nor
+ *              the in-memory handoff, and one interactive job holds under a
+ *              rapid re-request storm;
+ *   progress — reported work is consistent with the declared node budget, a
+ *              budget-capped run is visibly partial end to end (the
+ *              reflection-panel rule in assets/reflection.js), and the moment
+ *              scan's progress stream over the REAL service is monotonic and
+ *              never claims completion while work remains.
  */
 'use strict';
 require('../assets/engine.js');
 require('../assets/ai.js');
 require('../assets/analysis-core.js');
 require('../assets/analysis-service.js');
+// The E3b progress tranche drives the REAL moment-scan controller over the
+// real service (both loaded here, before any document shim exists, so the
+// controller's DOM listeners are skipped exactly as in a worker-less page).
+require('../assets/analysis-result.js');
+require('../assets/moment-selector.js');
+require('../assets/moment-scan.js');
 const Chess = globalThis.Chess;
 const Core = globalThis.ChessyAnalysisCore;
 const Svc = globalThis.ChessyAnalysisService;
+const Scan = globalThis.ChessyMomentScan;
 
 let passed = 0, failed = 0;
 function check(ok, label, detail) {
@@ -77,6 +100,112 @@ function makeStore() {
     analysisKey: function (g, p, f, e, c) { return [g, p, f, e, c].join('|'); },
     getAnalysis: function (k) { return Promise.resolve(map.get(k)); },
     putAnalysis: function (rec) { map.set(rec.key, rec); return Promise.resolve(); }
+  };
+}
+
+// ---- E3b helpers: seeded persistent records, gated lookups, scan fixtures.
+function cloneJson(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+
+// The cache identity EXACTLY as the service computes it before dispatch
+// (buildOpts folds req.positions into opts, then ChessyAnalysisCore.identity).
+function identOf(req) {
+  const opts = Object.assign({}, req.opts || {});
+  if (req.positions) opts.positions = req.positions;
+  return Core.identity(Chess.parseFen(req.fen), opts);
+}
+
+// A record shaped exactly like the service's persist() would write it,
+// simulating a prior session's validated write (or, when `result` is
+// deliberately mismatched, a corrupted/miswritten row under a correct key).
+function recordFor(store, req, result) {
+  const ident = identOf(req);
+  const key = store.analysisKey(
+    req.gameId, req.ply, ident.positionFingerprint, ident.engineId, ident.configHash);
+  return { key: key, ident: ident, rec: {
+    key: key, gameId: req.gameId, ply: req.ply, gameRev: req.gameRev,
+    fingerprint: ident.positionFingerprint,
+    engineId: ident.engineId, configHash: ident.configHash,
+    complete: result.complete !== false, result: result, createdAt: 1
+  } };
+}
+
+function seedRecord(store, req, result) {
+  const r = recordFor(store, req, result);
+  store._map.set(r.key, r.rec);
+  return r;
+}
+
+// A store whose getAnalysis promises resolve only when the test releases them,
+// so a cancel/supersede can be interleaved INSIDE the lookup window.
+function gatedStore() {
+  const map = new Map(), gates = [];
+  return {
+    _map: map, _gates: gates,
+    analysisKey: function (g, p, f, e, c) { return [g, p, f, e, c].join('|'); },
+    getAnalysis: function () {
+      const gate = {};
+      gate.promise = new Promise(function (r) { gate.release = r; });
+      gates.push(gate);
+      return gate.promise;
+    },
+    putAnalysis: function (rec) { map.set(rec.key, rec); return Promise.resolve(); }
+  };
+}
+
+// makeStore plus the durable-job seam the scan controller checkpoints through.
+function makeScanStore() {
+  const s = makeStore();
+  const jobs = new Map(), games = new Map();
+  s._jobs = jobs; s._games = games;
+  s.getJob = function (id) { return Promise.resolve(cloneJson(jobs.get(id))); };
+  s.putJob = function (job) { jobs.set(job.gameId, cloneJson(job)); return Promise.resolve(job.gameId); };
+  s.putJobIfGame = function (job, expected) {
+    const g = games.get(job.gameId);
+    const same = !!g && !!expected && JSON.stringify({
+      id: g.id, setupFen: g.setupFen || null, playerColor: g.playerColor || null,
+      sans: g.sans || [], clocks: g.clocks || [], timeControl: g.timeControl || null
+    }) === JSON.stringify(expected);
+    if (!same) return Promise.resolve(false);
+    jobs.set(job.gameId, cloneJson(job));
+    return Promise.resolve(true);
+  };
+  s.getGame = function (id) { return Promise.resolve(cloneJson(games.get(id))); };
+  return s;
+}
+
+// Replay a short game for the scan seam. Each picker returns the move to play
+// from (state, legalMoves); everything downstream (sans, states, fens,
+// positions) is derived with the real engine so the fixture can never drift
+// from what the scan will recompute.
+function replayReview(id, setupFen, pickers) {
+  let s = Chess.parseFen(setupFen);
+  s.history = [];
+  s.positions = {};
+  s.positions[Chess.positionKey(s)] = 1;
+  const states = [s], fens = [Chess.toFen(s)];
+  for (const pick of pickers) {
+    const legal = Chess.legalMoves(s);
+    s = Chess.playMove(s, pick(s, legal));
+    states.push(s);
+    fens.push(Chess.toFen(s));
+  }
+  const game = {
+    id: id, setupFen: setupFen, playerColor: 'w',
+    sans: s.history.map(function (h) { return h.san; }),
+    clocks: s.history.map(function () { return null; }),
+    timeControl: 'none'
+  };
+  return { game: game, gs: s, states: states, fens: fens, ply: 0 };
+}
+
+function byUci(u) {
+  return function (state, legal) {
+    const m = legal.find(function (x) {
+      return Chess.sqName(x.from) + Chess.sqName(x.to) +
+        (x.promotion ? x.promotion.toLowerCase() : '') === u;
+    });
+    if (!m) throw new Error('fixture move not legal: ' + u);
+    return m;
   };
 }
 
@@ -282,6 +411,283 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const tampered = await Svc.analyse(Object.assign({}, REQ, { gameId: 'T' }));
   check(tampered === null && store4._map.size === 0,
     'a reply that does not match the requested position is rejected and not cached');
+
+  // ====================== E3b §1 — cache (#87) ======================
+
+  // --- Cold persistent hit: a record from a PRIOR SESSION (fresh gameId, so
+  //     the in-memory handoff is cold) is served without recompute — the very
+  //     object the store returned, provenance intact — and no worker is even
+  //     constructed. ---
+  const coldStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: coldStore });
+  const coldReq = Object.assign({}, REQ, { gameId: 'e3b-cold' });
+  const coldTruth = Core.analyse(Chess.parseFen(START), FAST);
+  const coldSeed = seedRecord(coldStore, coldReq, coldTruth);
+  const dCold = Svc.stats().dispatches;
+  const coldRes = await Svc.analyse(Object.assign({}, coldReq));
+  check(coldRes === coldTruth && Svc.stats().dispatches === dCold && made.length === 0,
+    'a validated record from a prior session is served as-is: no dispatch, no worker, no recompute');
+  check(!!coldRes && coldRes.engine.id === Core.ENGINE_ID &&
+    coldRes.engine.version === Core.ENGINE_VERSION &&
+    coldRes.engine.configHash === coldSeed.ident.configHash &&
+    coldRes.positionFingerprint === coldSeed.ident.positionFingerprint,
+    'the served result keeps its provenance (engine id/version/configHash, fingerprint) intact');
+
+  // A budget-capped partial that was honestly persisted is served back still
+  // partial: the data half of the reflection-panel rule (assets/reflection.js
+  // shows a partial as visibly partial — the transport must never let a
+  // complete:false result resurface dressed up as complete).
+  const coldPartialStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: coldPartialStore });
+  const coldPartialOpts = { maxDepth: 4, nodeLimit: 8000, multiPV: 3, nodeBudget: 1 };
+  const coldPartialReq = Object.assign({}, REQ, { gameId: 'e3b-cold-partial', opts: coldPartialOpts });
+  const coldPartialTruth = Core.analyse(Chess.parseFen(START), coldPartialOpts);
+  seedRecord(coldPartialStore, coldPartialReq, coldPartialTruth);
+  const coldPartialRes = await Svc.analyse(Object.assign({}, coldPartialReq));
+  check(coldPartialRes === coldPartialTruth && coldPartialRes.complete === false && made.length === 0,
+    'a persisted partial (complete:false) is re-served still visibly partial, never as complete');
+
+  // --- Corruption: a record under a CORRECT key whose payload does not match
+  //     the request is rejected and recomputed, never served. The read side
+  //     reuses the same validMatch gate as a live worker reply; each of its
+  //     five legs (fingerprint, config, turn, engine id, engine version) is
+  //     proven able to turn the gate red, and the recompute overwrites the
+  //     bad entry via persist. ---
+  const foreignFen = START.replace(' 0 1', ' 40 1'); // same board, foreign halfmove history
+  const corruptions = [
+    { id: 'e3b-corrupt-fp', label: 'a foreign-position payload (fingerprint mismatch)',
+      make: function () { return Core.analyse(Chess.parseFen(foreignFen), FAST); } },
+    { id: 'e3b-corrupt-cfg', label: 'a foreign-config payload (configHash mismatch)',
+      make: function () { return Core.analyse(Chess.parseFen(START), Object.assign({}, FAST, { multiPV: 2 })); } },
+    { id: 'e3b-corrupt-turn', label: 'a turn-corrupted payload',
+      make: function () { const c = cloneJson(coldTruth); c.turn = 'b'; return c; } },
+    // Provenance corruption keeps the expected configHash (an honest foreign
+    // build would key a different hash) while lying in the engine fields.
+    { id: 'e3b-corrupt-engid', label: 'an engine-id-corrupted payload',
+      make: function () { const c = cloneJson(coldTruth); c.engine.id = 'imposter'; return c; } },
+    { id: 'e3b-corrupt-engver', label: 'an engine-version-corrupted payload',
+      make: function () { const c = cloneJson(coldTruth); c.engine.version = '0.0.1'; return c; } }
+  ];
+  for (const corruption of corruptions) {
+    const badStore = makeStore();
+    reset({ factory: factoryOf({ mode: 'normal' }), store: badStore });
+    // Distinct gameIds keep every case's key cold in the module-private
+    // in-memory handoff, so each one exercises the persistent read path.
+    const badReq = Object.assign({}, REQ, { gameId: corruption.id });
+    const badSeed = seedRecord(badStore, badReq, corruption.make());
+    const badRes = await Svc.analyse(Object.assign({}, badReq));
+    await delay(5); // let the recompute's best-effort persist settle
+    const overwritten = badStore._map.get(badSeed.key);
+    check(!!badRes && made.length === 1 && norm(badRes) === norm(coldTruth),
+      corruption.label + ' is rejected and recomputed, never served');
+    check(!!overwritten && norm(overwritten.result) === norm(coldTruth) && overwritten.complete === true,
+      'the recompute overwrites the corrupted entry: ' + corruption.label);
+  }
+
+  // ====================== E3b §2 — cancel (#87) ======================
+
+  // --- A superseded job's late reply, and a cancelled job's own late reply,
+  //     never publish: no promise value, no persistent write, no in-memory
+  //     handoff entry — the next identical request misses and recomputes. ---
+  const lateStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }, { mode: 'normal' }), store: lateStore });
+  const late1 = Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
+  await delay(1); // let the lookup miss and dispatch the stalled worker
+  const late2 = Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
+  check((await late1) === null, 'the superseded twin request resolves null');
+  await delay(1); // the active job's own lookup misses and dispatches too
+  const lateW1 = made[0], lateW2 = made[1];
+  const lateGood = Core.analyse(Chess.parseFen(START), FAST);
+  lateW1.terminated = false; // the terminate lost the race with an in-flight reply
+  lateW1.deliver({ v: PROTOCOL, jobId: lateW1.posts[0].jobId, result: lateGood });
+  let late2Settled = false;
+  late2.then(function () { late2Settled = true; });
+  await delay(5);
+  check(lateStore._map.size === 0 && late2Settled === false,
+    'a superseded job\'s late valid reply writes nothing and cannot settle the active job');
+  Svc.cancel();
+  check((await late2) === null, 'cancel() resolves the active job null');
+  lateW2.terminated = false;
+  lateW2.deliver({ v: PROTOCOL, jobId: lateW2.posts[0].jobId, result: lateGood });
+  await delay(5);
+  check(lateStore._map.size === 0,
+    'a cancelled job\'s own late reply publishes nothing to the persistent cache');
+  const dLate = Svc.stats().dispatches;
+  const lateAfter = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-late' }));
+  check(!!lateAfter && Svc.stats().dispatches === dLate + 1 && lateStore._map.size === 1,
+    'after the cancelled work the identical request misses (no ghost handoff) and recomputes');
+
+  // --- One interactive job under a rapid re-request storm: every predecessor
+  //     resolves null, at most one worker is ever left alive, each dispatched
+  //     worker got exactly one post, and only the winner publishes. ---
+  reset({ factory: factoryOf({ mode: 'normal' }) }); // no store: dispatch is synchronous
+  const dStorm = Svc.stats().dispatches;
+  const storm = [];
+  for (let i = 0; i < 5; i++) {
+    storm.push(Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-storm' })));
+  }
+  const stormRes = await Promise.all(storm);
+  const stormIds = made.map(function (w) { return w.posts[0] && w.posts[0].jobId; });
+  check(stormRes.slice(0, 4).every(function (r) { return r === null; }) &&
+    !!stormRes[4] && stormRes[4].turn === 'w',
+    'under a rapid re-request storm every superseded promise is null and only the last wins');
+  check(made.length === 5 && Svc.stats().dispatches === dStorm + 5 &&
+    made.slice(0, 4).every(function (w) { return w.terminated; }) &&
+    made[4].terminated === false &&
+    made.every(function (w) { return w.posts.length === 1; }) &&
+    new Set(stormIds).size === 5,
+    'one-interactive-job holds under the storm: predecessors terminated, one alive, one post each');
+
+  // --- Cancel and supersede INSIDE the persistent-lookup window: the late
+  //     lookup result must neither dispatch nor publish nor pre-empt the
+  //     successor, and the service is left healthy. ---
+  const gateStore = gatedStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: gateStore });
+  const gateReq = Object.assign({}, REQ, { gameId: 'e3b-gate' });
+  const gateCancelled = Svc.analyse(Object.assign({}, gateReq));
+  Svc.cancel();
+  check((await gateCancelled) === null, 'cancel during the cache lookup resolves the job null');
+  gateStore._gates[0].release(recordFor(gateStore, gateReq, coldTruth).rec);
+  await delay(5);
+  check(made.length === 0 && gateStore._map.size === 0,
+    'a lookup resolving after cancel neither dispatches nor publishes');
+  const gateB = Svc.analyse(Object.assign({}, gateReq));
+  const gateC = Svc.analyse(Object.assign({}, gateReq)); // supersedes B mid-lookup
+  check((await gateB) === null, 'the request superseded during its lookup resolves null');
+  gateStore._gates[1].release(recordFor(gateStore, gateReq, coldTruth).rec);
+  let gateCSettled = false;
+  gateC.then(function () { gateCSettled = true; });
+  await delay(5);
+  check(gateCSettled === false && made.length === 0,
+    'a predecessor\'s valid lookup record can never settle or pre-empt the successor');
+  gateStore._gates[2].release(undefined); // the successor's own lookup: a miss
+  const gateCRes = await gateC;
+  check(!!gateCRes && gateCRes.turn === 'w' && made.length === 1,
+    'the successor survives the stale lookup and completes on its own dispatch');
+
+  // --- cancel() after completion is inert: published results stay published. ---
+  const postStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: postStore });
+  const postFirst = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-post' }));
+  Svc.cancel();
+  const dPost = Svc.stats().dispatches;
+  const postSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'e3b-post' }));
+  check(!!postFirst && postSecond === postFirst &&
+    Svc.stats().dispatches === dPost && postStore._map.size === 1,
+    'cancel() after completion unpublishes nothing: the identical request still hits');
+
+  // ====================== E3b §3 — progress (#87) ======================
+
+  // --- Budget consistency through the full transport: reported work never
+  //     exceeds the declared budget (scan + two verification passes, counted
+  //     exactly by the engine), a capped run is visibly partial, and a larger
+  //     budget on identical input can only report more work. ---
+  reset({ factory: factoryOf({ mode: 'normal' }) });
+  const BUD = { maxDepth: 4, nodeLimit: 3000, multiPV: 3, pvLen: 6 };
+  const capped = await Svc.analyse(Object.assign({}, REQ,
+    { gameId: 'e3b-bud', opts: Object.assign({}, BUD, { nodeBudget: 2000 }) }));
+  const ample = await Svc.analyse(Object.assign({}, REQ,
+    { gameId: 'e3b-bud', opts: Object.assign({}, BUD, { nodeBudget: 400000 }) }));
+  check(!!capped && capped.complete === false && !!ample && ample.complete === true,
+    'the node budget is the completeness boundary: a capped run is partial, an ample run complete');
+  check(capped.nodes <= 3000 + 2 * 2000 && ample.nodes <= 3000 + 2 * 400000,
+    'reported nodes never exceed the declared budget (scan + deep-verify + shallow-verify)');
+  check(capped.nodes < ample.nodes && capped.depth === ample.depth && capped.depth >= 1,
+    'a larger budget on identical input reports strictly more work at the same scan-fixed depth');
+
+  // --- The moment scan's progress stream over the REAL service: monotonic
+  //     counters, requests that declare a shipped profile, replies whose
+  //     reported work fits that profile's budget, and a 'done' that is never
+  //     claimed while work remains. The fixture blunder (missing Rxa8+) is
+  //     graded by the real engine; the quiet White move is DERIVED from the
+  //     engine's own best line, so nomination thresholds hold across engine
+  //     versions. ---
+  const scanStore = makeScanStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: scanStore });
+  const quickProfile = Scan.profiles.quick;
+  const seamReview = replayReview('e3b-scan', 'r3k3/8/8/8/8/8/8/R3K3 w - - 0 1', [
+    byUci('a1b1'), // White misses Rxa8+ — the one real moment
+    byUci('e8d7'),
+    function (state, legal) { // White plays its own engine-best: regret 0, never nominated
+      const best = Core.analyse(state, Object.assign({}, quickProfile,
+        { positions: state.positions })).bestLines[0].move;
+      return legal.find(function (m) {
+        return m.from === best.from && m.to === best.to &&
+          (m.promotion || null) === (best.promotion || null);
+      });
+    },
+    function (state, legal) { return legal[0]; }
+  ]);
+  scanStore._games.set('e3b-scan', cloneJson(seamReview.game));
+
+  const seamEvents = [];
+  const realDoc = globalThis.document, realCE = globalThis.CustomEvent;
+  globalThis.document = {
+    dispatchEvent: function (e) { seamEvents.push(cloneJson(e.detail)); }
+  };
+  globalThis.CustomEvent = function (type, init) {
+    this.type = type;
+    this.detail = init && init.detail;
+  };
+  const seamCalls = [];
+  globalThis.ChessyAnalysisService = { // the controller resolves this global per call
+    analyse: function (req, owner) {
+      const call = { opts: cloneJson(req.opts), owner: owner, res: undefined };
+      seamCalls.push(call);
+      return Svc.analyse(req, owner).then(function (res) { call.res = res; return res; });
+    },
+    cancel: function (owner) { return arguments.length ? Svc.cancel(owner) : Svc.cancel(); }
+  };
+  let seamDone;
+  try {
+    seamDone = await Scan.start(seamReview, { restart: true });
+    await delay(20); // any stray post-completion emit would land here
+  } finally {
+    globalThis.ChessyAnalysisService = Svc;
+    if (realDoc === undefined) delete globalThis.document;
+    else globalThis.document = realDoc;
+    if (realCE === undefined) delete globalThis.CustomEvent;
+    else globalThis.CustomEvent = realCE;
+  }
+  Scan.invalidate();
+
+  const stream = seamEvents.filter(function (e) { return e !== null; });
+  const doneIdx = stream.findIndex(function (e) { return e.state === 'done'; });
+  let monotone = stream.length > 0;
+  for (let i = 0; i < stream.length; i++) {
+    const e = stream[i];
+    if (e.gameId !== 'e3b-scan' || e.total !== 2 || e.checked > e.total ||
+        e.verifyIndex > e.verifyTotal || e.verifyTotal > 2 || e.error !== null) monotone = false;
+    if (i === 0) continue;
+    const p = stream[i - 1];
+    if (e.checked < p.checked || e.checked - p.checked > 1 || e.cursorPly < p.cursorPly ||
+        e.pass < p.pass || e.verifyIndex < p.verifyIndex || e.verifyTotal < p.verifyTotal) monotone = false;
+  }
+  check(stream.length >= 5 && monotone,
+    'the scan progress stream over the real service is monotonic and self-consistent');
+  check(doneIdx === stream.length - 1 && stream[doneIdx].checked === 2 &&
+    stream[doneIdx].pass === 2 && stream[doneIdx].verifyTotal === 1 &&
+    stream[doneIdx].verifyIndex === stream[doneIdx].verifyTotal &&
+    stream[doneIdx].unresolvedCount === 0,
+    'done is claimed exactly once, last, with no work remaining (never a dressed-up partial)');
+  check(!!seamDone && seamDone.state === 'done' && seamDone.checked === 2 && seamDone.total === 2,
+    'the returned public state agrees with the stream: both decisions checked, blunder verified');
+  const sanitized = stream.every(function (e) {
+    return e.moments.every(function (m) {
+      return Object.keys(m).sort().join(',') === 'playedSan,ply';
+    });
+  });
+  const seamProfiles = [Scan.profiles.quick, Scan.profiles.quickFallback, Scan.profiles.deep];
+  const budgeted = seamCalls.length >= 3 && seamCalls.every(function (call) {
+    const declared = seamProfiles.some(function (prof) {
+      return call.opts.nodeLimit === prof.nodeLimit && call.opts.nodeBudget === prof.nodeBudget &&
+        call.opts.maxDepth === prof.maxDepth && call.opts.multiPV === prof.multiPV;
+    });
+    return declared && call.owner === 'moment-scan' && !!call.res &&
+      call.res.depth >= 1 && call.res.nodes <= call.opts.nodeLimit + 2 * call.opts.nodeBudget;
+  });
+  check(budgeted && sanitized,
+    'every scan request declares a shipped profile, every reply fits its budget, and public moments stay sanitized');
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);
