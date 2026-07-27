@@ -107,12 +107,12 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **Reflection → lesson cards** — flag one of your own positions in Review;
   the engine stays hidden until you answer the reflection questions, and each
   probe snapshots the answers as submitted (a rewrite after the verdict can't
-  reach that probe's card). One request runs at a time — Verify disables while
-  it's in flight — and you can revise your answers and re-probe the same
-  moment, which updates its **one card per moment** (game + ply) in place. You
-  own the diagnosis: a move that differs from Chessy's line is not declared
-  wrong ("my move was also sound" is a first-class cause), and you write the
-  one-sentence lesson.
+  reach that probe's card). One request runs at a time — Verify shows monotonic
+  elapsed time and an accessible Cancel action, with no fabricated ETA — and
+  you can revise your answers and re-probe the same moment, which updates its
+  **one card per moment** (game + ply) in place. You own the diagnosis: a move
+  that differs from Chessy's line is not declared wrong ("my move was also
+  sound" is a first-class cause), and you write the one-sentence lesson.
 - **Train** — due lesson cards replayed on the mini board, on the fixed
   **1 / 3 / 7 / 14 / 30 / 90-day** spaced ladder (Good climbs a rung, Hard
   repeats it, Again retries in ten minutes). No background timers — the queue

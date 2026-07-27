@@ -108,6 +108,211 @@ require('./helper').run('reflection', async function (t) {
   check(await page.locator('#verifyBox').isHidden(),
     'whitespace-only reflection is rejected (trimmed before validation)');
 
+  // Cancel Verify integration uses the REAL service with a controlled worker.
+  // This proves the visible clock advances, the button sends the reflection
+  // owner (not a global teardown), and cancelled/late worker replies cannot
+  // paint, persist an analysis, or found a card. A second run begins while the
+  // first worker is forced to reply late, exercising the token/timer race.
+  const beforeCancel = await page.evaluate(function () {
+    const gameId = CoachReview.current().game.id;
+    return Promise.all([
+      CoachStore.listAnalysesForGame(gameId),
+      CoachStore.listCards()
+    ]).then(function (out) {
+      return { gameId: gameId, analyses: out[0].length, cards: out[1].length };
+    });
+  });
+  await page.evaluate(function () {
+    window.__cancelHadFactory =
+      Object.prototype.hasOwnProperty.call(window, 'CHESSY_ANALYSIS_WORKER_FACTORY');
+    window.__cancelRealFactory = window.CHESSY_ANALYSIS_WORKER_FACTORY;
+    window.__cancelRealAnalyse = ChessyAnalysisService.analyse;
+    window.__cancelRealCancel = ChessyAnalysisService.cancel;
+    window.__cancelRequests = [];
+    window.__cancelOwners = [];
+    window.__cancelWorkers = [];
+
+    ChessyAnalysisService.analyse = function (req, owner) {
+      window.__cancelRequests.push({ req: req, owner: owner });
+      return window.__cancelRealAnalyse.call(ChessyAnalysisService, req, owner);
+    };
+    ChessyAnalysisService.cancel = function (owner) {
+      window.__cancelOwners.push(arguments.length ? owner : '(global)');
+      return window.__cancelRealCancel.apply(ChessyAnalysisService, arguments);
+    };
+    window.CHESSY_ANALYSIS_WORKER_FACTORY = function () {
+      const fake = {
+        terminated: false,
+        posts: [],
+        onmessage: null,
+        onerror: null,
+        postMessage: function (msg) { this.posts.push(msg); },
+        terminate: function () { this.terminated = true; }
+      };
+      window.__cancelWorkers.push(fake);
+      return fake;
+    };
+  });
+  await page.fill('#reflectThreat', 'cancelled threat');
+  await page.fill('#reflectCandidates', 'Qh4');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return window.__cancelWorkers.length === 1 &&
+      window.__cancelWorkers[0].posts.length === 1;
+  });
+  const elapsedStart = await page.evaluate(function () {
+    return parseFloat(document.getElementById('verifyElapsed').textContent.match(/\d+\.\d+/)[0]);
+  });
+  await page.waitForFunction(function (initial) {
+    const m = document.getElementById('verifyElapsed').textContent.match(/\d+\.\d+/);
+    return !!m && parseFloat(m[0]) > initial;
+  }, elapsedStart, { timeout: 5000 });
+  const runningUi = await page.evaluate(function () {
+    const activity = document.getElementById('verifyActivity');
+    const elapsed = document.getElementById('verifyElapsed').textContent;
+    return {
+      activityVisible: !activity.hidden,
+      groupName: activity.getAttribute('aria-label'),
+      elapsed: elapsed,
+      timerRole: document.getElementById('verifyElapsed').getAttribute('role'),
+      cancelText: document.getElementById('cancelVerify').textContent,
+      result: document.getElementById('verifyResult').textContent
+    };
+  });
+  check(runningUi.activityVisible && runningUi.groupName === 'Verification controls' &&
+        runningUi.timerRole === 'timer' &&
+        runningUi.cancelText === 'Cancel Verify' &&
+        runningUi.result.includes('Analysing') &&
+        /^Elapsed: \d+\.\d seconds$/.test(runningUi.elapsed) &&
+        !/ETA|remaining/i.test(runningUi.elapsed + ' ' + runningUi.result),
+    'running Verify exposes an accessible Cancel control and advancing elapsed time, without an ETA');
+
+  await page.click('#cancelVerify');
+  const cancelledUi = await page.evaluate(function () {
+    return {
+      owner: window.__cancelOwners[window.__cancelOwners.length - 1],
+      terminated: window.__cancelWorkers[0].terminated,
+      activityHidden: document.getElementById('verifyActivity').hidden,
+      cancelDisabled: document.getElementById('cancelVerify').disabled,
+      verifyEnabled: !document.getElementById('reflectVerify').disabled,
+      focus: document.activeElement.id,
+      result: document.getElementById('verifyResult').textContent,
+      lines: document.getElementById('verifyLines').children.length,
+      saveDisabled: document.getElementById('saveCard').disabled,
+      elapsed: document.getElementById('verifyElapsed').textContent
+    };
+  });
+  check(cancelledUi.owner === 'reflection' && cancelledUi.terminated &&
+        cancelledUi.activityHidden && cancelledUi.cancelDisabled &&
+        cancelledUi.verifyEnabled && cancelledUi.focus === 'reflectVerify' &&
+        cancelledUi.result.includes('cancelled') && cancelledUi.lines === 0 &&
+        cancelledUi.saveDisabled,
+    'Cancel Verify promptly terminates only reflection work and leaves a retryable, non-saveable state');
+  await page.waitForTimeout(250);
+  check((await page.textContent('#verifyElapsed')) === cancelledUi.elapsed,
+    'the elapsed clock stops after cancellation');
+
+  // Start again, then make the cancelled predecessor reply while this newer
+  // request owns the UI. Its old job id must neither stop the new clock nor
+  // replace the new "Analysing…" state.
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return window.__cancelWorkers.length === 2 &&
+      window.__cancelWorkers[1].posts.length === 1;
+  });
+  await page.evaluate(function () {
+    const oldWorker = window.__cancelWorkers[0];
+    const oldPost = oldWorker.posts[0];
+    const oldResult = window.__reflectionFixture(window.__cancelRequests[0].req, {
+      complete: true,
+      includePlayed: true
+    });
+    oldWorker.onmessage({
+      data: {
+        v: ChessyAnalysisService.PROTOCOL,
+        jobId: oldPost.jobId,
+        result: oldResult
+      }
+    });
+  });
+  await page.waitForTimeout(150);
+  check((await page.textContent('#verifyResult')).includes('Analysing') &&
+        await page.locator('#verifyActivity').isVisible() &&
+        !(await page.locator('#cancelVerify').isDisabled()),
+    'a cancelled predecessor’s late reply cannot stop or repaint a newer Verify');
+
+  // Let the current worker finish and persist, but hold reflection's durable
+  // source read. Cancel in that narrow post-transport/pre-verdict window:
+  // invalidate() must remove the just-published cache entry, and releasing the
+  // old source read afterwards must still be unable to repaint.
+  await page.evaluate(function () {
+    window.__cancelRealGetGame = CoachStore.getGame;
+    CoachStore.getGame = function (gameId) {
+      window.__cancelSourceReadStarted = true;
+      return new Promise(function (resolve, reject) {
+        window.__cancelSourceReadRelease = function () {
+          window.__cancelRealGetGame(gameId).then(resolve, reject);
+        };
+      });
+    };
+    const worker = window.__cancelWorkers[1];
+    const post = worker.posts[0];
+    const result = window.__reflectionFixture(window.__cancelRequests[1].req, {
+      complete: true,
+      includePlayed: true
+    });
+    worker.onmessage({
+      data: {
+        v: ChessyAnalysisService.PROTOCOL,
+        jobId: post.jobId,
+        result: result
+      }
+    });
+  });
+  await page.waitForFunction(function (baseline) {
+    if (!window.__cancelSourceReadStarted) return false;
+    return CoachStore.listAnalysesForGame(baseline.gameId).then(function (rows) {
+      return rows.length > baseline.analyses;
+    });
+  }, beforeCancel);
+  check(await page.locator('#verifyActivity').isVisible() &&
+        (await page.textContent('#verifyResult')).includes('Analysing'),
+    'Verify stays cancellable while its completed transport awaits the durable source check');
+  await page.click('#cancelVerify');
+  await page.evaluate(function () { window.__cancelSourceReadRelease(); });
+  await page.waitForFunction(function (baseline) {
+    return CoachStore.listAnalysesForGame(baseline.gameId).then(function (rows) {
+      return rows.length === baseline.analyses;
+    });
+  }, beforeCancel);
+  const afterCancel = await page.evaluate(function (gameId) {
+    return Promise.all([
+      CoachStore.listAnalysesForGame(gameId),
+      CoachStore.listCards()
+    ]).then(function (out) {
+      return {
+        analyses: out[0].length,
+        cards: out[1].length,
+        result: document.getElementById('verifyResult').textContent,
+        activityHidden: document.getElementById('verifyActivity').hidden
+      };
+    });
+  }, beforeCancel.gameId);
+  await page.evaluate(function () { CoachStore.getGame = window.__cancelRealGetGame; });
+  check(afterCancel.analyses === beforeCancel.analyses &&
+        afterCancel.cards === beforeCancel.cards &&
+        afterCancel.result.includes('cancelled') && afterCancel.activityHidden,
+    'cancelling during a source-read race removes the result and creates no verdict or lesson card');
+  await page.evaluate(function () {
+    ChessyAnalysisService.analyse = window.__cancelRealAnalyse;
+    ChessyAnalysisService.cancel = window.__cancelRealCancel;
+    if (window.__cancelHadFactory) {
+      window.CHESSY_ANALYSIS_WORKER_FACTORY = window.__cancelRealFactory;
+    } else {
+      delete window.CHESSY_ANALYSIS_WORKER_FACTORY;
+    }
+  });
+
   // One probe; the played mate IS Chessy's move.
   await page.fill('#reflectThreat', 'mate on h4');
   await page.fill('#reflectCandidates', 'Qh4');
@@ -125,6 +330,13 @@ require('./helper').run('reflection', async function (t) {
   check(await page.locator('#causeLabel').isHidden(),
     'no cause asked when the move matches');
   check(!(await page.locator('#reflectVerify').isDisabled()), 'probe button re-enables');
+  const completedClock = await page.textContent('#verifyElapsed');
+  check(await page.locator('#verifyActivity').isHidden() &&
+        await page.locator('#cancelVerify').isDisabled(),
+    'a completed Verify retires its elapsed timer and Cancel control');
+  await page.waitForTimeout(250);
+  check((await page.textContent('#verifyElapsed')) === completedClock,
+    'the elapsed clock stays stopped after successful completion');
   // Review v2: Chessy shows a few candidate lines (not one verdict), the top
   // line is the played mate, and it is marked as the player's move.
   check(await page.locator('#verifyLines li').count() >= 1,
@@ -629,7 +841,12 @@ require('./helper').run('reflection', async function (t) {
   await page.selectOption('#reflectEval', 'equal');
   await page.click('#reflectVerify');
   await page.click('#reviewBack'); // abandon mid-probe
+  const abandonedElapsed = await page.textContent('#verifyElapsed');
   await page.waitForTimeout(2500);
+  check(await page.locator('#verifyActivity').isHidden() &&
+        await page.locator('#cancelVerify').isDisabled() &&
+        (await page.textContent('#verifyElapsed')) === abandonedElapsed,
+    'leaving the reviewed game retires the active Cancel control and elapsed timer');
   await page.locator('.game-item').first().click();
   await page.click('#flagMoment'); // fresh moment, ply 0
   check(await page.locator('#verifyBox').isHidden(),
@@ -818,14 +1035,17 @@ require('./helper').run('reflection', async function (t) {
     return CoachStore.listCards().then(function (all) {
       return {
         verifyHidden: document.getElementById('verifyBox').hidden,
+        activityHidden: document.getElementById('verifyActivity').hidden,
+        cancelDisabled: document.getElementById('cancelVerify').disabled,
         cards: all.filter(function (card) {
           return card.gameId === 'same-id-reflection-owner';
         }).length
       };
     });
   });
-  check(staleVerify.verifyHidden && staleVerify.cards === 0,
-    'a deferred Verify cannot paint or found a card after a same-id source revision');
+  check(staleVerify.verifyHidden && staleVerify.activityHidden &&
+        staleVerify.cancelDisabled && staleVerify.cards === 0,
+    'a deferred Verify cannot keep timing, paint, or found a card after a same-id source revision');
 
   // Now produce a valid verdict for revision B, defer the card upsert itself,
   // replace/reopen the same id as revision C, and release the write. The store's

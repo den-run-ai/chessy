@@ -55,6 +55,12 @@
   // request reuse it while the persistent write remains non-blocking.
   var recent = new Map();
   var RECENT_CAP = 16;
+  // Cache mutations for one identity are ordered without blocking analysis
+  // delivery. In particular, invalidate(key) must run AFTER any already-started
+  // best-effort put for that key; otherwise a delayed put can land after the
+  // delete and resurrect a result the user explicitly cancelled. A later fresh
+  // put queues after that delete, so cancellation cannot erase its successor.
+  var cacheOps = new Map();
 
   function nowMs() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
 
@@ -105,6 +111,29 @@
     while (recent.size > RECENT_CAP) recent.delete(recent.keys().next().value);
   }
 
+  function enqueueCacheOp(key, op) {
+    var before = cacheOps.get(key);
+    // Every mutation is best effort. Swallow a predecessor's adapter failure
+    // before attempting the next operation, and swallow this operation's too,
+    // while preserving the per-key ordering chain.
+    function attempt() {
+      try { return Promise.resolve(op()).catch(function () {}); }
+      catch (e) { return Promise.resolve(); }
+    }
+    // Keep the historical fast path: when no mutation is pending, invoke the
+    // adapter now (putAnalysis may synchronously populate an in-memory store)
+    // while still tracking its async completion. Only contended identities
+    // need to wait on a predecessor.
+    var current = before
+      ? before.catch(function () {}).then(attempt)
+      : attempt();
+    cacheOps.set(key, current);
+    current.then(function () {
+      if (cacheOps.get(key) === current) cacheOps.delete(key);
+    });
+    return current;
+  }
+
   // A reply is trustworthy only if it describes the SAME engine identity,
   // position, config and turn the request asked about — a last guard against a
   // mismatched or corrupt result being cached or shown. The engine id/version
@@ -147,7 +176,7 @@
     settle(job, null);
   }
 
-  function ensureWorker() {
+  function ensureWorker(job) {
     if (worker) return worker;
     var factory = global.CHESSY_ANALYSIS_WORKER_FACTORY;
     try {
@@ -160,12 +189,21 @@
         return null;
       }
     } catch (e) { worker = null; return null; }
-    worker.onmessage = function (e) { onReply(e.data); };
-    worker.onerror = function () {
-      if (worker) { worker.terminate(); worker = null; }
-      if (active) recover(active);
+    // Bind callbacks to this exact worker/job. A queued event from a worker
+    // terminated during supersede/retry must never act through the mutable
+    // global reference and kill or consume a retry for its successor.
+    var instance = worker;
+    instance.onmessage = function (e) {
+      if (worker !== instance || active !== job || job.done) return;
+      onReply(e.data);
     };
-    return worker;
+    instance.onerror = function () {
+      if (worker !== instance || active !== job || job.done) return;
+      instance.terminate();
+      worker = null;
+      recover(job);
+    };
+    return instance;
   }
 
   function onReply(msg) {
@@ -199,7 +237,7 @@
   function dispatch(job) {
     if (job !== active || job.done) return;
     if (worker) { worker.terminate(); worker = null; }
-    if (job.attempts >= MAX_ATTEMPTS || !ensureWorker()) { settle(job, null); return; }
+    if (job.attempts >= MAX_ATTEMPTS || !ensureWorker(job)) { settle(job, null); return; }
     job.attempts++;
     job.watchdog = setTimeout(function () { recover(job); }, watchdogMs(job.opts));
     dispatches++;
@@ -220,11 +258,7 @@
       complete: result.complete !== false, // partial results are stored, flagged
       result: result, createdAt: nowMs()
     };
-    try {
-      return Promise.resolve(store.putAnalysis(rec)).catch(function () {});
-    } catch (e) {
-      return Promise.resolve(); // cache write is best-effort
-    }
+    return enqueueCacheOp(job.key, function () { return store.putAnalysis(rec); });
   }
 
   function run(job) {
@@ -311,7 +345,10 @@
       if (!key) return Promise.resolve();
       recent.delete(key);
       if (!store || !store.deleteAnalysis) return Promise.resolve();
-      return Promise.resolve(store.deleteAnalysis(key)).catch(function () {});
+      // Queue behind a put that onReply may already have started. This delete
+      // therefore remains the terminal mutation for all work accepted before
+      // invalidate(), even when that put is intentionally delayed.
+      return enqueueCacheOp(key, function () { return store.deleteAnalysis(key); });
     } catch (e) { return Promise.resolve(); }
   }
 
