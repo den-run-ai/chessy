@@ -51,9 +51,10 @@
   let selected = null;        // selected square index
   let flipped = false;
   let aiThinking = false;
-  // Owns the frozen live game while a New Game request is release-gated or
-  // committing its incomplete checkpoint. Object identity, not just gameId,
-  // prevents a stale attempt from resuming a newer attempt for the same game.
+  // Owns the frozen live game while a New Game request is release-gated,
+  // committing its incomplete checkpoint, or awaiting a failure decision.
+  // Object identity, not just gameId, prevents a stale attempt from resuming
+  // a newer attempt for the same game.
   let checkpointAttempt = null;
   let squares = [];           // 64 DOM cells, index = board index
 
@@ -944,8 +945,9 @@
   // Freeze the live turn as soon as Start is pressed — before the runtime
   // update gate and before IndexedDB. This makes the accepted position exact:
   // neither an AI reply nor a low clock can finish the game behind the modal.
-  // A cancelled/failed request resumes only when it still owns this exact
-  // attempt object; gameId alone is insufficient when a dialog is reopened.
+  // A cancelled request resumes only when it still owns this exact attempt
+  // object; a failed save stays frozen until Retry, Discard, or Cancel.
+  // gameId alone is insufficient when a dialog is reopened.
   function pauseCheckpointClock() {
     if (clocks.wMs === null || timeForfeit || Chess.gameStatus(state).over) return true;
     const color = state.turn;
@@ -1022,13 +1024,16 @@
     }).catch(function () {
       if (checkpointAttempt !== attempt || runtimeSeq !== freshStartSeq ||
           !newGameDialog.open || gameId !== attempt.gameId) return;
+      // Keep ownership, the clock, and any AI turn frozen while this modal
+      // blocks play. Cancel explicitly resumes; Retry and Discard replace
+      // this settled attempt from the same unchanged position.
+      attempt.phase = 'failed';
       newGameStatusEl.textContent =
         'This game could not be saved. Try again, cancel, or start without saving it.';
       newGameStartEl.textContent = 'Try saving again';
       newGameStartEl.disabled = false;
       newGameCancelEl.disabled = false;
       newGameDiscardEl.hidden = false;
-      resumeCheckpointGame(attempt);
     });
   }
 

@@ -455,4 +455,117 @@ require('./helper').run('incomplete game', async function (t) {
       clockRecord.reason === 'abandoned' &&
       await page.locator('#gameOverDialog[open]').count() === 0,
     'the held timed game is archived incomplete with no stale result modal');
+
+  // A rejected write is a decision state, not a return to live play. Keep a
+  // near-expiry clock frozen while the failure UI blocks moves, then resume
+  // that same remaining time only when the player explicitly cancels.
+  await mv('e2', 'e4');
+  await t.inject(function () {
+    const live = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    live.clocks.bMs = 3000;
+    localStorage.setItem('chessy-game-v1', JSON.stringify(live));
+  });
+  const failedClockFixture = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).clocks.bMs;
+  });
+  check(failedClockFixture > 1500 && failedClockFixture <= 3000,
+    'the failed-save clock fixture retains enough CI timing headroom');
+  await page.evaluate(function () {
+    CoachStore.__failedClockArchive = CoachStore.archiveGame;
+    CoachStore.archiveGame = function () {
+      return Promise.reject(new Error('quota'));
+    };
+    document.getElementById('newGame').click();
+    document.getElementById('newGameStart').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('newGameStatus').textContent.indexOf(
+      'could not be saved') !== -1;
+  });
+  const failedClockPausedAt = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).clocks.bMs;
+  });
+  await page.waitForTimeout(failedClockPausedAt + 400);
+  const failedClock = await page.evaluate(function () {
+    const live = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      dialogOpen: document.getElementById('newGameDialog').open,
+      gameOverOpen: document.getElementById('gameOverDialog').open,
+      active: document.getElementById('clockBlack').classList.contains('active'),
+      timeForfeit: live.timeForfeit,
+      remaining: live.clocks.bMs
+    };
+  });
+  check(failedClock.dialogOpen && !failedClock.gameOverOpen &&
+      !failedClock.active && !failedClock.timeForfeit &&
+      failedClock.remaining === failedClockPausedAt,
+    'a failed checkpoint keeps the blocked timed game frozen');
+  await page.evaluate(function () {
+    CoachStore.archiveGame = CoachStore.__failedClockArchive;
+    delete CoachStore.__failedClockArchive;
+  });
+  await page.click('#newGameCancel');
+  await page.waitForSelector('#gameOverDialog[open]');
+  const resumedClock = await page.evaluate(function () {
+    const live = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      dialogOpen: document.getElementById('newGameDialog').open,
+      timeForfeit: live.timeForfeit
+    };
+  });
+  check(!resumedClock.dialogOpen && resumedClock.timeForfeit &&
+      resumedClock.timeForfeit.color === 'b',
+    'Cancel resumes the same frozen clock and lets it expire normally');
+  await page.click('#gameOverClose');
+
+  // The same failed state must not restart a cancelled AI search behind the
+  // modal. Cancel is the explicit instruction to resume from the exact FEN.
+  await t.newGame({ mode: 'ai-b', difficulty: '1', timeControl: 'none' });
+  const failedAiId = await page.evaluate(function () {
+    CoachStore.__failedAiArchive = CoachStore.archiveGame;
+    CoachStore.archiveGame = function () {
+      return Promise.reject(new Error('quota'));
+    };
+    document.querySelector('#board .square[data-index="52"]').click(); // e2
+    document.querySelector('#board .square[data-index="36"]').click(); // e4
+    const id = JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
+    document.getElementById('newGame').click();
+    document.getElementById('newGameStart').click();
+    return id;
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('newGameStatus').textContent.indexOf(
+      'could not be saved') !== -1;
+  });
+  await page.waitForTimeout(1000);
+  const failedAi = await page.evaluate(function () {
+    const live = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      id: live.gameId,
+      sans: live.history.map(function (entry) { return entry.san; }),
+      dialogOpen: document.getElementById('newGameDialog').open
+    };
+  });
+  check(failedAi.dialogOpen && failedAi.id === failedAiId &&
+      failedAi.sans.join(' ') === 'e4',
+    'a failed checkpoint keeps the blocked AI position frozen');
+  await page.evaluate(function () {
+    CoachStore.archiveGame = CoachStore.__failedAiArchive;
+    delete CoachStore.__failedAiArchive;
+  });
+  await page.click('#newGameCancel');
+  await page.waitForFunction(function (id) {
+    const live = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return live.gameId === id && live.history.length === 2;
+  }, failedAiId);
+  const resumedAi = await page.evaluate(function () {
+    const live = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      sans: live.history.map(function (entry) { return entry.san; }),
+      dialogOpen: document.getElementById('newGameDialog').open
+    };
+  });
+  check(!resumedAi.dialogOpen && resumedAi.sans.length === 2 &&
+      resumedAi.sans[0] === 'e4',
+    'Cancel resumes exactly one AI reply from the frozen position');
 });
