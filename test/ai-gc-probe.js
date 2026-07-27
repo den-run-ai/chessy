@@ -12,14 +12,22 @@
  *          work to the base, so GC-event deltas (minor GCs are scavenges,
  *          i.e. young-allocation churn) measure allocation directly.
  *   timed  one shipped-budget think (maxDepth 30, quiesce, 5000 ms) per
- *          canonical hard position x4. Work differs by throughput, so GC
- *          counts are also normalized per million searched nodes.
+ *          canonical hard position x4. Work differs by throughput, so
+ *          compare GC per searched node, not raw counts.
  *   soak   continuous shipped-budget thinks cycling the canonical positions
  *          for --seconds. Heap is sampled per think: reusable per-ply
  *          buffers and high-water pools must PLATEAU, not grow — a leaking
  *          pool shows up as a rising floor, and NPS drift across the soak
  *          approximates sustained-load stability. This is NOT a physical
  *          thermal test; device soak stays a #113 phase-1 hardware task.
+ *
+ * Memory metrics: the search is a single synchronous call, so JS heap can
+ * only be sampled BETWEEN thinks — those samples are reported as
+ * postThinkHeapMB, never as a peak. The genuine high-water covering the
+ * search itself is peakRssMB (Linux VmHWM for the whole engine process;
+ * null on other platforms). NPS uses the engine's `nodes` counter alone:
+ * it already includes every quiescence node, qnodes being its quiescence
+ * share.
  *
  * Usage:
  *   node test/ai-gc-probe.js --base origin/main --mode fixed
@@ -137,6 +145,20 @@ if (args[0] === '--child') {
       pauseMs: +(after.pauseMs - before.pauseMs).toFixed(2)
     };
   }
+  // True process high-water mark (Linux VmHWM, kB). heapUsed can only be
+  // sampled BETWEEN synchronous thinks, after in-search allocation may
+  // already have been collected — so post-think samples are reported under
+  // an explicit postThinkHeapMB label, and VmHWM supplies the genuine peak
+  // covering the search itself (V8 heap + JIT + buffers). Null off-Linux.
+  function peakRssMB() {
+    try {
+      const status = fs.readFileSync('/proc/self/status', 'utf8');
+      const m = status.match(/^VmHWM:\s*(\d+)\s*kB$/m);
+      return m ? +(Number(m[1]) / 1024).toFixed(1) : null;
+    } catch (e) {
+      return null;
+    }
+  }
   // GC performance entries are delivered to the observer callback on later
   // event-loop turns. A fully synchronous workload would reach its snapshot
   // (and process exit) with every entry still undelivered and the tally at
@@ -172,7 +194,8 @@ if (args[0] === '--child') {
         await settleGc();
         out.passes.push({
           pass: pass, wallMs: +wall.toFixed(1), nodes: nodes, qnodes: qnodes,
-          gc: delta(before, snap()), peakHeapMB: +(peakHeap / 1048576).toFixed(1)
+          gc: delta(before, snap()),
+          postThinkHeapMB: +(peakHeap / 1048576).toFixed(1)
         });
       }
     } else if (mode === 'timed') {
@@ -195,7 +218,7 @@ if (args[0] === '--child') {
       out.gc = delta(before, snap());
       out.nodes = nodes;
       out.qnodes = qnodes;
-      out.peakHeapMB = +(peakHeap / 1048576).toFixed(1);
+      out.postThinkHeapMB = +(peakHeap / 1048576).toFixed(1);
     } else if (mode === 'soak') {
       const startedAt = Date.now();
       const endAt = startedAt + seconds * 1000;
@@ -205,11 +228,14 @@ if (args[0] === '--child') {
       for (let i = 0; Date.now() < endAt; i++) {
         const [, fen] = CANONICAL[i % CANONICAL.length];
         const r = think(fen, { maxDepth: 30, timeMs: 5000, quiesce: true }, 0xC0FFEE + i);
+        // `nodes` already counts every quiescence node (checkTime increments
+        // it before qnodes) — qnodes is the quiescence SHARE of the total, so
+        // adding the two would double-count and skew NPS by q-fraction.
         out.samples.push({
           t: +((Date.now() - startedAt) / 1000).toFixed(0),
-          nps: Math.round(((r.nodes + r.qnodes) / r.wallMs) * 1000),
+          nps: Math.round((r.nodes / r.wallMs) * 1000),
           depth: r.depth,
-          heapMB: +(process.memoryUsage().heapUsed / 1048576).toFixed(1)
+          postThinkHeapMB: +(process.memoryUsage().heapUsed / 1048576).toFixed(1)
         });
       }
       await settleGc();
@@ -223,6 +249,7 @@ if (args[0] === '--child') {
     await settleGc();
     out.retainedHeapMB = +(process.memoryUsage().heapUsed / 1048576).toFixed(1);
     out.totalHeapMB = +(v8.getHeapStatistics().total_heap_size / 1048576).toFixed(1);
+    out.peakRssMB = peakRssMB();
     console.log(JSON.stringify(out));
     observer.disconnect();
     process.exit(0);
