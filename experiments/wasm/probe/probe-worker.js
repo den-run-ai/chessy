@@ -74,6 +74,15 @@ function jsHeap() {
 
 let post = function (msg) { self.postMessage(msg); };
 
+// Yield the worker event loop between positions. Every timed measurement is
+// taken inside jsThink/wasmThink, so these idle gaps never enter a sample;
+// they exist to give the JS engine GC/idle opportunities so a multi-minute
+// synchronous burst cannot ratchet the renderer into a low-memory kill
+// (observed with Chrome on a 2.5 GB Android emulator).
+function tick() {
+  return new Promise(function (resolve) { setTimeout(resolve, 0); });
+}
+
 function jsThink(fen, opts) {
   Math.random = mkRand(SEED);
   const state = Chess.parseFen(fen);
@@ -166,6 +175,7 @@ async function runProbe(config) {
         diverged++;
         divergences.push({ depth: d, name: name, fields: diffs });
       }
+      await tick();
     }
     post({ type: 'progress', phase: 'parity', detail: { depth: d, checked: checked, diverged: diverged } });
   }
@@ -178,6 +188,7 @@ async function runProbe(config) {
     const j = jsThink(fen, { maxDepth: 30, quiesce: true, nodeLimit: config.abortNodes });
     const w = wasmThink(wasm, fen, { maxDepth: 30, quiesce: true, nodeLimit: config.abortNodes });
     if (compare(j, w).length) abortDiverged++;
+    await tick();
   }
   report.abortParity = { nodeLimit: config.abortNodes, diverged: abortDiverged, positions: POSITIONS.length };
   if (abortDiverged) report.failures.push('abort-parity');
@@ -210,6 +221,7 @@ async function runProbe(config) {
     const ratio = Math.exp(median(ratios.map(Math.log)));
     perPosition.push({ name: name, ratio: ratio, batch: batch });
     post({ type: 'progress', phase: 'nps', detail: { position: name, ratio: ratio } });
+    await tick();
   }
   const familyRatios = [];
   for (let i = 0; i < perPosition.length; i += 2) {
@@ -253,6 +265,7 @@ async function runProbe(config) {
         js: { depth: j.depth, attemptedDepth: j.attemptedDepth, nodes: j.nodes, ms: j.ms }
       });
       post({ type: 'progress', phase: 'five-second', detail: five[five.length - 1] });
+      await tick();
     }
     report.fiveSecond = five;
   }

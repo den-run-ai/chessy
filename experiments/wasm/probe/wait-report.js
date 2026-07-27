@@ -1,18 +1,25 @@
 /*
  * Wait for a probe final report file to appear, then summarize it and exit
- * 0 (ok:true) or 1 (not ok / timeout). Usage:
- *   node wait-report.js <path/to/final-target.json> [timeoutSeconds]
+ * 0 (ok:true) or 1 (not ok / timeout / stalled). Usage:
+ *   node wait-report.js <path/to/final-target.json> [timeoutSeconds] \
+ *     [progressLogPath] [staleSeconds]
+ * With a progress log path, the wait also fails fast when the probe stops
+ * reporting for staleSeconds (default 300) — a dead browser is diagnosed
+ * near its moment of death instead of after the full timeout.
  */
 'use strict';
 const fs = require('fs');
 
 const file = process.argv[2];
 const timeoutS = Number(process.argv[3] || 1500);
+const progressFile = process.argv[4] || null;
+const staleS = Number(process.argv[5] || 300);
 if (!file) {
-  console.error('usage: wait-report.js <final.json> [timeoutSeconds]');
+  console.error('usage: wait-report.js <final.json> [timeoutSeconds] [progressLog] [staleSeconds]');
   process.exit(2);
 }
 const deadline = Date.now() + timeoutS * 1000;
+const startedAt = Date.now();
 let lastNote = 0;
 
 function poll() {
@@ -49,6 +56,18 @@ function poll() {
   if (Date.now() >= deadline) {
     console.error('timeout waiting for ' + file);
     process.exit(1);
+  }
+  if (progressFile) {
+    let lastActivity = startedAt;
+    try {
+      lastActivity = fs.statSync(progressFile).mtimeMs;
+    } catch (e) { /* no progress yet: measure from start */ }
+    if (Date.now() - lastActivity > staleS * 1000) {
+      console.error('probe stalled: no progress in ' + staleS + 's (' +
+        (fs.existsSync(progressFile) ? 'last activity ' +
+          new Date(lastActivity).toISOString() : 'no progress ever received') + ')');
+      process.exit(1);
+    }
   }
   if (Date.now() - lastNote > 30000) {
     lastNote = Date.now();

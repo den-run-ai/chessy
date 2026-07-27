@@ -76,7 +76,20 @@ throttle does not move the ratio (7.20x vs 7.12x), evidence the ratio is
 robust to uniform slowdown. Real Mobile Safari (JSC on arm64) matches
 desktop WebKit's picture.
 
-(Android emulator Chrome result: run 2, appended below when recorded.)
+[Run 2 (30297382584)](https://github.com/den-run-ai/chessy/actions/runs/30297382584)
+at `7e4c375` re-ran everything green and reached real **Chrome for Android**
+(Chrome 113, Android 14, x86_64 emulator) for the first time. Its progress
+log records, before the Chrome process was low-memory-killed mid-NPS-phase
+on the default 2.5 GB emulator:
+
+- exact parity depths 1–5: **90 checks, 0 divergences**;
+- fixed-node abort screen: **18/18, 0 divergences**;
+- module instantiation 28.8 ms; first NPS families 7.74x / 5.64x (Ruy pair).
+
+So the functional reproduction on real Android Chrome is already
+established; the completed performance phases needed more emulator RAM
+(raised to 4 GB) plus GC-friendly yields between probe positions — both
+landed after run 2 along with fail-fast stall detection.
 
 ### CI evidence scope
 

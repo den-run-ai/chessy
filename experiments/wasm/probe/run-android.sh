@@ -53,11 +53,16 @@ echo "--- opening $URL"
 # Inner quotes keep the device-side shell from splitting the URL on '&'.
 adb shell "am start -a android.intent.action.VIEW -d '$URL' com.android.chrome"
 
-if node experiments/wasm/probe/wait-report.js "$OUT/final-${TARGET}.json" "$WAIT_S"; then
+# Stall detection (no progress POST for 300 s) fails fast, so the screenshot
+# and logcat below land near the browser's moment of death, not 40 min later.
+if node experiments/wasm/probe/wait-report.js "$OUT/final-${TARGET}.json" "$WAIT_S" \
+  "$OUT/progress-${TARGET}.log" 300; then
   exit 0
 fi
 
 echo "--- probe failed; collecting diagnostics"
 adb exec-out screencap -p > "$OUT/${TARGET}-screen.png" || true
-adb logcat -d -t 400 > "$OUT/${TARGET}-logcat.txt" || true
+adb logcat -d > "$OUT/${TARGET}-logcat.txt" || true
+adb shell dumpsys meminfo com.android.chrome > "$OUT/${TARGET}-meminfo.txt" 2>/dev/null || true
+adb shell dumpsys activity processes > "$OUT/${TARGET}-processes.txt" 2>/dev/null || true
 exit 1

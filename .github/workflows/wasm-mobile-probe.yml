@@ -178,10 +178,14 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # 2.5 GB default RAM low-memory-killed Chrome mid-probe (run 2);
+          # the differential workload needs headroom for the JS engine side.
+          ram-size: 4096M
+          heap-size: 576M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            OUT=probe-reports DEPTH=$DEPTH PARITY_DEPTH=$DEPTH REPS=$REPS MIN_MS=$MIN_MS FIVE=$FIVE WAIT_S=2400 bash experiments/wasm/probe/run-android.sh
+            OUT=probe-reports DEPTH=$DEPTH PARITY_DEPTH=$DEPTH REPS=$REPS MIN_MS=50 FIVE=$FIVE WAIT_S=2400 bash experiments/wasm/probe/run-android.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
