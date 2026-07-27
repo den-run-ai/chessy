@@ -18,6 +18,7 @@
  *   node test/ai-bench.js --base main      # candidate vs ref: node ratios
  *   node test/ai-bench.js --depth 6        # fixed search depth (default 5)
  *   node test/ai-bench.js --exact          # fail if the fixed search diverges
+ *   node test/ai-bench.js --semantic-exact # fail on move/score/depth only
  *   node test/ai-bench.js --base main --reps 4  # isolated, paired median NPS
  *
  * Both engines get an identical seeded Math.random (re-seeded per position),
@@ -39,6 +40,7 @@ const BASE = opt('base', null);
 const DEPTH = Number(opt('depth', 5));
 const REPS = Number(opt('reps', 1));
 const EXACT = args.includes('--exact');
+const SEMANTIC_EXACT = args.includes('--semantic-exact');
 if (!Number.isInteger(DEPTH) || DEPTH < 1 ||
     !Number.isInteger(REPS) || REPS < 1 || REPS > 20 ||
     (REPS > 1 && REPS % 2 !== 0)) {
@@ -130,6 +132,12 @@ function bench(ctx, fen, depth) {
     qnodes: r.qnodes || 0,
     cutoffs: r.cutoffs || 0,
     researches: r.researches || 0,
+    nullProbes: r.nullProbes || 0,
+    nullTriggers: r.nullTriggers || 0,
+    nullVerifiedCutoffs: r.nullVerifiedCutoffs || 0,
+    nullVerificationRejects: r.nullVerificationRejects || 0,
+    nullProbeNodes: r.nullProbeNodes || 0,
+    nullVerifyNodes: r.nullVerifyNodes || 0,
     depth: r.depth,
     score: r.score,
     move: r.move ? ctx.Chess.sqName(r.move.from) + ctx.Chess.sqName(r.move.to) + (r.move.promotion || '') : '-'
@@ -149,6 +157,12 @@ function summarize(samples, label) {
     const other = samples[i];
     if (other.nodes !== first.nodes || other.qnodes !== first.qnodes ||
         other.cutoffs !== first.cutoffs || other.researches !== first.researches ||
+        other.nullProbes !== first.nullProbes ||
+        other.nullTriggers !== first.nullTriggers ||
+        other.nullVerifiedCutoffs !== first.nullVerifiedCutoffs ||
+        other.nullVerificationRejects !== first.nullVerificationRejects ||
+        other.nullProbeNodes !== first.nullProbeNodes ||
+        other.nullVerifyNodes !== first.nullVerifyNodes ||
         other.depth !== first.depth || other.score !== first.score ||
         other.move !== first.move) {
       throw new Error(label + ' search changed across identical timed repetitions');
@@ -335,6 +349,12 @@ async function main() {
     const b = bench(cand, POSITIONS[3][1]);
     if (a.nodes !== b.nodes || a.qnodes !== b.qnodes ||
         a.cutoffs !== b.cutoffs || a.researches !== b.researches ||
+        a.nullProbes !== b.nullProbes ||
+        a.nullTriggers !== b.nullTriggers ||
+        a.nullVerifiedCutoffs !== b.nullVerifiedCutoffs ||
+        a.nullVerificationRejects !== b.nullVerificationRejects ||
+        a.nullProbeNodes !== b.nullProbeNodes ||
+        a.nullVerifyNodes !== b.nullVerifyNodes ||
         a.depth !== b.depth || a.move !== b.move || a.score !== b.score) {
       throw new Error('candidate search is not deterministic under a fixed seed');
     }
@@ -344,9 +364,11 @@ async function main() {
     cand: startTimingWorker(null),
     base: BASE ? startTimingWorker(BASE) : null
   } : null;
-  let logRatioSum = 0, flagged = 0, mismatches = 0;
+  let logRatioSum = 0, flagged = 0, treeMismatches = 0;
+  let semanticMismatches = 0;
   let logSpeedRatioSum = 0;
   let totC = 0, totB = 0, msC = 0, msB = 0, rsC = 0, rsB = 0;
+  let npC = 0, ntC = 0, ncC = 0, nrC = 0, npnC = 0, nvnC = 0;
   const ratios = []; // { ratio, name } per position, for worst-case / p90
   const speedRatios = []; // candidate/base NPS per position, for worst-case / p10
   console.log('depth ' + DEPTH + (BASE ? ', base ' + BASE : ''));
@@ -373,8 +395,13 @@ async function main() {
       let line = name.padEnd(34) + ' cand ' + String(c.nodes).padStart(8) +
         ' n ' + String(c.researches).padStart(4) + ' rs  d' + c.depth + ' ' +
         String(c.score).padStart(6) + ' ' + c.move.padEnd(6) +
-        ' ' + c.ms.toFixed(1).padStart(8) + ' ms';
+        ' ' + c.ms.toFixed(1).padStart(8) + ' ms' +
+        '  null ' + c.nullProbes + '/' + c.nullTriggers + '/' +
+        c.nullVerifiedCutoffs + '/' + c.nullVerificationRejects;
       totC += c.nodes; msC += c.ms; rsC += c.researches;
+      npC += c.nullProbes; ntC += c.nullTriggers;
+      ncC += c.nullVerifiedCutoffs; nrC += c.nullVerificationRejects;
+      npnC += c.nullProbeNodes; nvnC += c.nullVerifyNodes;
       if (BASE) {
         const b = pair.base;
         totB += b.nodes; msB += b.ms; rsB += b.researches;
@@ -389,13 +416,22 @@ async function main() {
           '  paired NPS ' + speedRatio.toFixed(3) +
           (pair.batch > 1 ? '  x' + pair.batch : '');
         if (ratio > 1.25) { line += '  <-- >1.25x'; flagged++; }
-        if (c.move !== b.move || c.score !== b.score || c.depth !== b.depth ||
-            c.nodes !== b.nodes || c.qnodes !== b.qnodes ||
-            c.cutoffs !== b.cutoffs || c.researches !== b.researches) {
-          line += '  [search diverges: base ' + b.move + ' ' + b.score +
+        const semanticDiff = c.move !== b.move || c.score !== b.score ||
+          c.depth !== b.depth;
+        const treeDiff = semanticDiff || c.nodes !== b.nodes ||
+          c.qnodes !== b.qnodes || c.cutoffs !== b.cutoffs ||
+          c.researches !== b.researches;
+        if (semanticDiff) {
+          line += '  [SEMANTIC DIVERGENCE: base ' + b.move + ' ' + b.score +
             ' d' + b.depth + ', ' + b.nodes + ' n, ' + b.qnodes + ' qn, ' +
             b.cutoffs + ' co, ' + b.researches + ' rs]';
-          mismatches++;
+          semanticMismatches++;
+        } else if (treeDiff) {
+          line += '  [tree differs: base ' + b.nodes + ' n, ' + b.qnodes +
+            ' qn, ' + b.cutoffs + ' co, ' + b.researches + ' rs]';
+        }
+        if (treeDiff) {
+          treeMismatches++;
         }
       }
       console.log(line);
@@ -411,6 +447,9 @@ async function main() {
 
   console.log('\ncandidate: ' + totC + ' nodes, ' + msC.toFixed(1) +
     ' ms, ' + rsC + ' re-searches');
+  console.log('candidate null: ' + npC + ' probes, ' + ntC + ' triggers, ' +
+    ncC + ' verified cutoffs, ' + nrC + ' rejected; ' +
+    npnC + ' probe nodes, ' + nvnC + ' verification nodes');
   if (BASE) {
     const geo = Math.exp(logRatioSum / POSITIONS.length);
     const speedGeo = Math.exp(logSpeedRatioSum / POSITIONS.length);
@@ -446,9 +485,14 @@ async function main() {
     console.log('p10 family paired NPS ratio:  ' + speedP10.ratio.toFixed(4) +
       '  (' + speedP10.name + ')');
     console.log('re-search ratio (cand/base): ' + (rsB ? (rsC / rsB).toFixed(3) : 'n/a'));
-    console.log('positions over 1.25x: ' + flagged + ', exact-search divergences: ' + mismatches);
-    if (EXACT && mismatches > 0) {
+    console.log('positions over 1.25x: ' + flagged +
+      ', semantic divergences: ' + semanticMismatches +
+      ', full-tree divergences: ' + treeMismatches);
+    if (EXACT && treeMismatches > 0) {
       throw new Error('--exact requires identical move, score, depth, nodes, qnodes, cutoffs and re-searches');
+    }
+    if (SEMANTIC_EXACT && semanticMismatches > 0) {
+      throw new Error('--semantic-exact requires identical move, score and completed depth');
     }
   }
 }

@@ -20,7 +20,8 @@ self.onmessage = function (e) {
     // to Math.random and possibly preferring a different move each run.
     seed: e.data.seed,
     randomize: e.data.randomize,
-    rootOrderUci: e.data.rootOrderUci
+    rootOrderUci: e.data.rootOrderUci,
+    nullMove: e.data.nullMove
   });
   // Return the complete, JSON-safe search evidence. Play records it alongside
   // the move so an archived incident can be attributed to a release, budget

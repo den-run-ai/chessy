@@ -127,7 +127,10 @@
   // can't run unbounded (its use flips `complete`). ctx.noDelta is set as a
   // retained no-op seam (delta pruning has been removed; quiescence is exact).
   function analysisCtx(quiesce, positions, nodeBudget) {
-    const ctx = ChessAI.makeCtx(quiesce, Infinity, nodeBudget);
+    // Coaching analysis remains deterministic and non-selective even though
+    // Play may use verified null-move pruning. This is the deep/shallow seam;
+    // the scan seam opts out separately below.
+    const ctx = ChessAI.makeCtx(quiesce, Infinity, nodeBudget, false);
     ctx.noDelta = true;
     if (positions) {
       for (const k of Object.keys(positions)) {
@@ -245,7 +248,8 @@
     const t0 = now();
     // 1) Scan (repetition-aware, deterministic) to fix the analysis depth.
     const scan = ChessAI.think(state, { maxDepth: maxDepth, nodeLimit: scanNodes,
-      quiesce: quiesce, positions: positions, randomize: false });
+      quiesce: quiesce, positions: positions, randomize: false,
+      nullMove: false });
     const depth = Math.max(1, scan.depth);
     out.depth = depth; out.nodes = scan.nodes; out.qnodes = scan.qnodes;
 

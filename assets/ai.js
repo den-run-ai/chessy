@@ -6,7 +6,7 @@
  *
  * Entry points:
  *   think(state, {maxDepth, timeMs, nodeLimit, quiesce, positions, seed,
- *     randomize, rootOrderUci}) — iterative deepening from depth 1 up to maxDepth,
+ *     randomize, rootOrderUci, nullMove}) — iterative deepening from depth 1 up to maxDepth,
  *     stopping early when the timeMs/nodeLimit budget runs out (the move
  *     from the last COMPLETED iteration is used) or a forced mate is found.
  *     seed makes the root shuffle reproducible; randomize:false disables it
@@ -342,6 +342,17 @@
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
   const QMAX = 16;          // quiescence ply bound: cut off runaway lines
+  // Verified null-move pruning. A probe skips one move plus NMP_REDUCTION
+  // plies; every apparent cutoff is then checked by a real-position search
+  // one ply shallower than the requested draft. The conservative depth floor
+  // keeps the reduced probe meaningful at Chessy's current search depths.
+  const NMP_REDUCTION = 2;
+  const NMP_MIN_DEPTH = 5;
+  // Static support keeps ambiguous tactical positions out of the reduced
+  // verification path. In the tracked Master defence the entire known-unsafe
+  // interval ends 58 cp beyond static eval; 64 cp excludes it in both colors
+  // while retaining a small power-of-two confidence buffer.
+  const NMP_STATIC_MARGIN = 64;
   // Quiet-check extension depth: for the first QCHECK_PLIES quiescence plies,
   // quiescence also searches quiet (non-capturing) checks (see quiesceNode).
   // 1 = only the horizon leaf itself, which is exactly where a quiet mating
@@ -484,9 +495,42 @@
     return (m.from << 9) | (m.to << 3) | (m.promotion ? PROMO_IDX[m.promotion] : 0);
   }
 
-  function makeCtx(quiesce, deadline, nodeLimit) {
+  // Null move is unsafe in sparse endings where zugzwang is common. Require
+  // the side to move to own a non-pawn piece and at least four non-pawn,
+  // non-king pieces on the board before even considering a probe.
+  function nullMaterialSafe(board, turn) {
+    let total = 0, own = 0;
+    for (let i = 0; i < 64; i++) {
+      const p = board[i];
+      if (!p || p[1] === 'P' || p[1] === 'K') continue;
+      total++;
+      if (p[0] === turn) own++;
+    }
+    return own > 0 && total >= 4;
+  }
+
+  // A null move is an artificial pass, not a Chess.applyMove operation. It
+  // clears en passant, advances the clocks as a reversible move would, and
+  // shares immutable board/castling data (real child moves clone both).
+  function nullState(state, enemy) {
+    return {
+      board: state.board,
+      turn: enemy,
+      castling: state.castling,
+      ep: null,
+      halfmove: state.halfmove + 1,
+      fullmove: state.fullmove + (state.turn === 'b' ? 1 : 0)
+    };
+  }
+
+  function makeCtx(quiesce, deadline, nodeLimit, useNull) {
     return {
       quiesce: !!quiesce,
+      // Direct search()/analysis contexts stay exact unless explicitly opted
+      // in. think() enables NMP for Play and analysis opts out at both seams.
+      useNull: useNull === true,
+      inNull: 0,       // synthetic subtree: isolate TT/repetition/heuristics
+      nmpDisabled: 0,  // mandatory real-position verification subtree
       deadline: deadline,
       // Only a missing/null limit means "unbounded". An explicit 0 is a real
       // (already-exhausted) budget: it must return without searching, not be
@@ -497,6 +541,12 @@
       qnodes: 0,       // quiescence share of nodes
       cutoffs: 0,      // beta cutoffs in the main search
       researches: 0,   // scout/aspiration repeats at full window
+      nullProbes: 0,
+      nullTriggers: 0,
+      nullVerifiedCutoffs: 0,
+      nullVerificationRejects: 0,
+      nullProbeNodes: 0,
+      nullVerifyNodes: 0,
       tt: new Map(),
       killers: [],                    // per-ply [primary, secondary] packed quiet moves
       histW: new Int32Array(4096),    // history heuristic: cutoff counts by from*64+to
@@ -599,7 +649,9 @@
     // into it) is scored by its material, and a path-dependent draw would leave
     // repPly = Infinity and let an ancestor cache a score its history can't hold.
     let rr1 = 0, rr2 = 0;
-    const trackRep = state.halfmove >= 4;
+    // A synthetic pass is not a legal repetition ancestor. Its entire
+    // subtree is intentionally history-free, including quiescence.
+    const trackRep = ctx.inNull === 0 && state.halfmove >= 4;
     if (trackRep) {
       hashState(state);
       rr1 = R1; rr2 = R2;
@@ -703,6 +755,10 @@
   // than generating fully-legal move lists at every node).
   function searchNode(state, depth, alpha, beta, ply, ctx) {
     checkTime(ctx);
+    // Preserve the caller's node type before a TT bound can tighten the
+    // window. A wide/PV node must never become NMP-eligible merely because
+    // cached information narrowed it.
+    const alphaEntry = alpha, betaEntry = beta;
     // Repetition-dependency out-param (read by the PARENT after this call
     // returns): the shallowest ancestor ply this node's score depended on.
     // Infinity = the score is position-intrinsic and safe to cache.
@@ -722,8 +778,11 @@
     // with the last piece is worth 0, not the rook.
     if (Chess.insufficientMaterial(state.board)) return 0;
 
-    hashState(state);
-    const h1 = H1, h2 = H2, r1 = R1, r2 = R2;
+    let h1 = 0, h2 = 0, r1 = 0, r2 = 0;
+    if (ctx.inNull === 0) {
+      hashState(state);
+      h1 = H1; h2 = H2; r1 = R1; r2 = R2;
+    }
 
     // Repetition awareness (shared with quiescence via checkRep). A position
     // scores as a draw when the line makes it the third occurrence against the
@@ -735,8 +794,10 @@
     // via ctx.repPly so no ancestor above caches a score built on it. A true
     // game-history threefold is path-independent (REP_PLY = Infinity) and stays
     // cacheable.
-    checkRep(ctx, r1, r2);
-    if (REP_DRAW) { ctx.repPly = REP_PLY; return 0; }
+    if (ctx.inNull === 0) {
+      checkRep(ctx, r1, r2);
+      if (REP_DRAW) { ctx.repPly = REP_PLY; return 0; }
+    }
 
     // Horizon: evaluate the leaf terminal-aware. A bare evaluate() cannot
     // tell a checkmate from a quiet position or a stalemate from a won one,
@@ -759,7 +820,8 @@
     // move is useful for ordering at any draft. With delta pruning removed,
     // quiescence-derived scores are sound alpha-beta bounds, so — like main-
     // search entries — they are served to any window, including null scouts.
-    const useTT = state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
+    const useTT = ctx.inNull === 0 &&
+      state.halfmove + depth + (ctx.quiesce ? QMAX : 0) < 100;
     let ttPk = 0;
     if (useTT) {
       const e = ctx.tt.get(h1);
@@ -782,12 +844,89 @@
     }
 
     const alphaOrig = alpha, betaOrig = beta;
+
+    // Always-verified null-move pruning. The artificial probe never touches
+    // TT, repetition state or ordering heuristics. A trigger is not itself a
+    // cutoff: the real position must cross the same bound at depth-1, with NMP
+    // disabled throughout that verification subtree. A failed verification is
+    // discarded and the ordinary full-depth search follows.
+    const nullDepth = depth - NMP_REDUCTION - 1;
+    const entryNullWindow = Number.isFinite(alphaEntry) &&
+      Number.isFinite(betaEntry) && betaEntry - alphaEntry === 1;
+    const nullEligible = ctx.useNull && ctx.quiesce &&
+      ctx.inNull === 0 && ctx.nmpDisabled === 0 &&
+      entryNullWindow && depth >= NMP_MIN_DEPTH && !inChk &&
+      alphaEntry > -MATE_NEAR && betaEntry < MATE_NEAR &&
+      nullMaterialSafe(state.board, turn) &&
+      state.halfmove + 1 + nullDepth + QMAX < 100;
+    if (nullEligible) {
+      const staticScore = evaluate(state.board);
+      const staticSupports = maximizing
+        ? staticScore >= beta + NMP_STATIC_MARGIN
+        : staticScore <= alpha - NMP_STATIC_MARGIN;
+      if (staticSupports) {
+        const probeStart = ctx.nodes;
+        const pathLength = ctx.path1.length;
+        let nullScore;
+        ctx.nullProbes++;
+        ctx.inNull++;
+        ctx.nmpDisabled++;
+        try {
+          nullScore = maximizing
+            ? searchNode(nullState(state, enemy), nullDepth,
+              beta - 1, beta, ply + 1, ctx)
+            : searchNode(nullState(state, enemy), nullDepth,
+              alpha, alpha + 1, ply + 1, ctx);
+        } finally {
+          ctx.inNull--;
+          ctx.nmpDisabled--;
+          ctx.path1.length = pathLength;
+          ctx.path2.length = pathLength;
+          ctx.nullProbeNodes += ctx.nodes - probeStart;
+          // No score or repetition dependency from an impossible path may
+          // escape into the real tree.
+          ctx.repPly = Infinity;
+        }
+        const triggered = maximizing
+          ? nullScore >= beta
+          : nullScore <= alpha;
+        if (triggered) {
+          ctx.nullTriggers++;
+          const verifyStart = ctx.nodes;
+          let verifyScore, verifyRep;
+          ctx.nmpDisabled++;
+          try {
+            verifyScore = maximizing
+              ? searchNode(state, depth - 1, beta - 1, beta, ply, ctx)
+              : searchNode(state, depth - 1, alpha, alpha + 1, ply, ctx);
+            verifyRep = ctx.repPly;
+          } finally {
+            ctx.nmpDisabled--;
+            ctx.nullVerifyNodes += ctx.nodes - verifyStart;
+          }
+          const confirmed = maximizing
+            ? verifyScore >= beta
+            : verifyScore <= alpha;
+          if (confirmed) {
+            ctx.nullVerifiedCutoffs++;
+            ctx.cutoffs++;
+            ctx.repPly = verifyRep;
+            // Fail hard at the proven boundary. Never propagate an artificial
+            // null score (especially a manufactured mate distance).
+            return maximizing ? beta : alpha;
+          }
+          ctx.nullVerificationRejects++;
+          ctx.repPly = Infinity;
+        }
+      }
+    }
+
     let best = maximizing ? -Infinity : Infinity;
     let bestPk = 0;
     let anyLegal = false;
     let repMin = Infinity; // shallowest ancestor ply any child's score depended on
 
-    ctx.path1.push(r1); ctx.path2.push(r2);
+    if (ctx.inNull === 0) { ctx.path1.push(r1); ctx.path2.push(r2); }
     const moveScratch = ctx.moveBuffers[ply] ||
       (ctx.moveBuffers[ply] = { moves: [], pool: [] });
     for (const m of orderMoves(
@@ -844,11 +983,13 @@
       else { if (best < beta) beta = best; }
       if (beta <= alpha) {
         ctx.cutoffs++;
-        if (!m.captured && !m.promotion) recordQuietCutoff(ctx, m, ply, depth, turn);
+        if (ctx.inNull === 0 && !m.captured && !m.promotion) {
+          recordQuietCutoff(ctx, m, ply, depth, turn);
+        }
         break;
       }
     }
-    ctx.path1.pop(); ctx.path2.pop();
+    if (ctx.inNull === 0) { ctx.path1.pop(); ctx.path2.pop(); }
     // Propagate the subtree's repetition dependency to the parent. A cycle
     // whose top is at or below THIS node (repMin >= ply) is contained in the
     // subtree — any path reaching this position again would contain the same
@@ -981,13 +1122,16 @@
       return {
         move: null, depth: 0, score: 0, scorePov: 'white', nodes: 0, qnodes: 0,
         cutoffs: 0, researches: 0, pvUci: [], rootOrderUci: [],
+        nullProbes: 0, nullTriggers: 0, nullVerifiedCutoffs: 0,
+        nullVerificationRejects: 0, nullProbeNodes: 0, nullVerifyNodes: 0,
         pvSource: 'final-tt-best-effort', attemptedDepth: null,
         elapsedMs: Date.now() - startedAt, stopReason: 'game-over'
       };
     }
     const moves = Chess.legalMoves(state);
     const maximizing = state.turn === 'w';
-    const ctx = makeCtx(opts.quiesce, deadline, opts.nodeLimit);
+    const ctx = makeCtx(
+      opts.quiesce, deadline, opts.nodeLimit, opts.nullMove !== false);
 
     // Seed the game's actual occurrence counts (the keys of the repetition
     // table are 4-field FENs, already ep-normalized like our repetition
@@ -1145,6 +1289,12 @@
       move: best.move, depth: completed, attemptedDepth: attemptedDepth,
       score: bestScore, scorePov: 'white', nodes: nodes, qnodes: qnodes,
       cutoffs: cutoffs, researches: researches,
+      nullProbes: ctx.nullProbes,
+      nullTriggers: ctx.nullTriggers,
+      nullVerifiedCutoffs: ctx.nullVerifiedCutoffs,
+      nullVerificationRejects: ctx.nullVerificationRejects,
+      nullProbeNodes: ctx.nullProbeNodes,
+      nullVerifyNodes: ctx.nullVerifyNodes,
       rootOrderUci: rootOrder,
       pvUci: finalPv, pvSource: 'final-tt-best-effort',
       elapsedMs: elapsedMs, stopReason: stopReason

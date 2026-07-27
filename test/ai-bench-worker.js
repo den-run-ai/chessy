@@ -50,6 +50,12 @@ function bench(fen, depth) {
     qnodes: r.qnodes || 0,
     cutoffs: r.cutoffs || 0,
     researches: r.researches || 0,
+    nullProbes: r.nullProbes || 0,
+    nullTriggers: r.nullTriggers || 0,
+    nullVerifiedCutoffs: r.nullVerifiedCutoffs || 0,
+    nullVerificationRejects: r.nullVerificationRejects || 0,
+    nullProbeNodes: r.nullProbeNodes || 0,
+    nullVerifyNodes: r.nullVerifyNodes || 0,
     depth: r.depth,
     score: r.score,
     move: r.move
@@ -62,6 +68,12 @@ function bench(fen, depth) {
 function sameSearch(a, b) {
   return a.nodes === b.nodes && a.qnodes === b.qnodes &&
     a.cutoffs === b.cutoffs && a.researches === b.researches &&
+    a.nullProbes === b.nullProbes &&
+    a.nullTriggers === b.nullTriggers &&
+    a.nullVerifiedCutoffs === b.nullVerifiedCutoffs &&
+    a.nullVerificationRejects === b.nullVerificationRejects &&
+    a.nullProbeNodes === b.nullProbeNodes &&
+    a.nullVerifyNodes === b.nullVerifyNodes &&
     a.depth === b.depth && a.score === b.score && a.move === b.move;
 }
 
