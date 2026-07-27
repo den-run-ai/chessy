@@ -76,20 +76,32 @@ throttle does not move the ratio (7.20x vs 7.12x), evidence the ratio is
 robust to uniform slowdown. Real Mobile Safari (JSC on arm64) matches
 desktop WebKit's picture.
 
-[Run 2 (30297382584)](https://github.com/den-run-ai/chessy/actions/runs/30297382584)
-at `7e4c375` re-ran everything green and reached real **Chrome for Android**
-(Chrome 113, Android 14, x86_64 emulator) for the first time. Its progress
-log records, before the Chrome process was low-memory-killed mid-NPS-phase
-on the default 2.5 GB emulator:
+[Run 5 (30302220792)](https://github.com/den-run-ai/chessy/actions/runs/30302220792)
+at `10c629e` is the first fully green run across **all six targets** —
+the canonical CI record:
 
-- exact parity depths 1–5: **90 checks, 0 divergences**;
-- fixed-node abort screen: **18/18, 0 divergences**;
-- module instantiation 28.8 ms; first NPS families 7.74x / 5.64x (Ruy pair).
+| target | parity d1–5 | abort | paired NPS geomean | worst family | slower families |
+|---|---|---|---:|---|---|
+| node-host | PASS 90 | PASS | 23.3807x | 16.0651x (promotion race) | 0/9 |
+| chromium | PASS 90 | PASS | 7.3892x | 6.5289x (promotion race) | 0/9 |
+| chromium-throttle4 | PASS 90 | PASS | 7.1287x | 6.1300x (promotion race) | 0/9 |
+| webkit | PASS 90 | PASS | 8.5230x | 7.5578x (KID) | 0/9 |
+| **ios-safari (real Mobile Safari, iOS 18.7, arm64)** | **PASS 90** | **PASS** | **10.3959x** | 7.7617x (KID) | **0/9** |
+| **android-chrome (real Chrome 113, Android 14 emulator)** | **PASS 90** | **PASS** | **6.7501x** | 5.9182x (promotion race) | **0/9** |
 
-So the functional reproduction on real Android Chrome is already
-established; the completed performance phases needed more emulator RAM
-(raised to 4 GB) plus GC-friendly yields between probe positions — both
-landed after run 2 along with fail-fast stall detection.
+Five-second diagnostics on the four hard positions: android-chrome wasm
+d6–d7 vs js d5–d6 (never shallower); ios-safari wasm d7 vs js d5 on 4/4;
+webkit and chromium d7 vs d5–d6 on 4/4.
+
+Getting the Android job green took three operational fixes, each recorded
+in its own commit with the failing-run evidence: a `pipefail`+`grep -q`
+SIGPIPE false-negative in the Chrome package check (run 1); a Chrome death
+that turned out to be Android killing the foreground app because
+`com.google.android.gms.persistent` died under the post-boot storm and
+Chrome "depends on provider …FontsProvider" in it (runs 2/4, full-logcat
+diagnosis); solved by 4 GB emulator RAM, GC-friendly yields between probe
+positions, a 60 s post-boot settle, and up-to-three launch retries with
+240 s progress-staleness detection (run 5, first attempt green).
 
 ### CI evidence scope
 
