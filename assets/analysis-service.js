@@ -21,10 +21,11 @@
  *   - Cache identity folds game revision, ply, the halfmove-and-repetition-aware
  *     position fingerprint, the engine version and the config hash. A stored
  *     result is persisted only when it VALIDATES against the originating
- *     request (same fingerprint, config and side to move) and must re-pass the
- *     same validation when SERVED back, so a corrupted or mismatched record is
- *     recomputed rather than published; complete AND partial (complete:false)
- *     results are stored, with the completeness flag preserved.
+ *     request (same engine identity, fingerprint, config and side to move) and
+ *     must re-pass the same validation when SERVED back, so a corrupted or
+ *     mismatched record is recomputed rather than published; complete AND
+ *     partial (complete:false) results are stored, with the completeness flag
+ *     preserved.
  *
  * A request is { gameId, ply, gameRev, fen, positions, opts }. analyse(req,
  * owner?) accepts an optional subsystem owner; cancel(owner) then abandons
@@ -104,11 +105,18 @@
     while (recent.size > RECENT_CAP) recent.delete(recent.keys().next().value);
   }
 
-  // A reply is trustworthy only if it describes the SAME position/config/turn
-  // the request asked about — a last guard against a mismatched or corrupt
-  // result being cached or shown.
+  // A reply is trustworthy only if it describes the SAME engine identity,
+  // position, config and turn the request asked about — a last guard against a
+  // mismatched or corrupt result being cached or shown. The engine id/version
+  // legs matter for SERVED cache rows: an honest result from another engine
+  // build keys a different configHash, but a corrupted payload can lie in its
+  // provenance fields while keeping the expected hash, and the full
+  // ChessyAnalysisResult.validate boundary downstream requires id/version to
+  // match the computed identity too.
   function validMatch(result, job) {
     return !!result && !!result.engine &&
+      result.engine.id === job.ident.engineId &&
+      result.engine.version === job.ident.version &&
       result.engine.configHash === job.ident.configHash &&
       result.positionFingerprint === job.ident.positionFingerprint &&
       result.turn === job.state.turn;

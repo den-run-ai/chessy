@@ -450,8 +450,9 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   // --- Corruption: a record under a CORRECT key whose payload does not match
   //     the request is rejected and recomputed, never served. The read side
   //     reuses the same validMatch gate as a live worker reply; each of its
-  //     three legs (fingerprint, config, turn) is proven able to turn the
-  //     gate red, and the recompute overwrites the bad entry via persist. ---
+  //     five legs (fingerprint, config, turn, engine id, engine version) is
+  //     proven able to turn the gate red, and the recompute overwrites the
+  //     bad entry via persist. ---
   const foreignFen = START.replace(' 0 1', ' 40 1'); // same board, foreign halfmove history
   const corruptions = [
     { id: 'e3b-corrupt-fp', label: 'a foreign-position payload (fingerprint mismatch)',
@@ -459,7 +460,13 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     { id: 'e3b-corrupt-cfg', label: 'a foreign-config payload (configHash mismatch)',
       make: function () { return Core.analyse(Chess.parseFen(START), Object.assign({}, FAST, { multiPV: 2 })); } },
     { id: 'e3b-corrupt-turn', label: 'a turn-corrupted payload',
-      make: function () { const c = cloneJson(coldTruth); c.turn = 'b'; return c; } }
+      make: function () { const c = cloneJson(coldTruth); c.turn = 'b'; return c; } },
+    // Provenance corruption keeps the expected configHash (an honest foreign
+    // build would key a different hash) while lying in the engine fields.
+    { id: 'e3b-corrupt-engid', label: 'an engine-id-corrupted payload',
+      make: function () { const c = cloneJson(coldTruth); c.engine.id = 'imposter'; return c; } },
+    { id: 'e3b-corrupt-engver', label: 'an engine-version-corrupted payload',
+      make: function () { const c = cloneJson(coldTruth); c.engine.version = '0.0.1'; return c; } }
   ];
   for (const corruption of corruptions) {
     const badStore = makeStore();
