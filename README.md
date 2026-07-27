@@ -47,8 +47,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **Game setup** — a New Game dialog chooses opponent (two players, or the
   computer as either color), difficulty, and time control; settings apply
   only when Start is pressed, so browsing the dialog never disturbs the
-  running game, and starting over always goes through an explicit
-  confirmation.
+  running game. Starting over after at least one move first saves the displaced
+  game to Review as **Incomplete · Abandoned**; if that checkpoint fails, the
+  current game stays in place unless the player explicitly starts without
+  saving it. Zero-move starts do not clutter the archive.
 - **Chess clocks** — optional Fischer time controls (5+3, 15+10, 30+20) for
   both players including the computer. Flag falls end the game, with the
   FIDE 6.9 nuance that the game is a draw — not a loss — when the flagging
@@ -78,11 +80,14 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   debug log (effective engine config, total/search time, counters and explicit
   White-POV score, release/execution/fallback path, stop reason, captured root
   order, best-effort PV, and the FEN before every move) for troubleshooting.
-- **Game archive (coaching foundation)** — finished games are recorded
-  automatically to IndexedDB, keyed on a per-game UUID (idempotent
-  re-archive; per-move clock/think and computer-search evidence, game-start
-  release, and the side you played are retained). A failed write is reported
-  in the game-over dialog (or on a page-level note once it has closed).
+- **Game archive (coaching foundation)** — finished games and non-empty games
+  displaced by New Game are recorded to IndexedDB, keyed on a per-game UUID
+  (idempotent re-archive; per-move clock/think and computer-search evidence,
+  game-start release, and the side you played are retained). Displaced games
+  use PGN `Result "*"` and `Termination "abandoned"` rather than inventing a
+  loss. A failed finish write is reported in the game-over dialog (or on a
+  page-level note once it has closed); a failed incomplete checkpoint keeps the
+  live game and reports inside New Game.
 - **Review (read-only)** — a Play/Review/Train/Progress tab bar; Review lists
   the archived games and browses any of them position by position on an
   accessible mini board (same ARIA grid model as the Play board,
@@ -229,7 +234,7 @@ gated on the engine *and* browser suites.
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards, analysis cache, resumable scan jobs) |
-| `assets/archive.js` | Records finished games into the store |
+| `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
 | `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance) |

@@ -26,9 +26,9 @@ require('./helper').run('setup', async function (t) {
   await page.click('#newGameCancel');
   check(await page.locator('#moveList .ply').count() === 1, 'cancelled dialog leaves the game untouched');
 
-  // The release check is asynchronous. Rapid Start clicks coalesce at the
-  // runtime layer and are generation-fenced here; cancelling while the check
-  // is pending must prevent every queued callback from replacing the game.
+  // The release check is asynchronous. The button disables after the first
+  // click, but duplicate programmatic events are still generation-fenced;
+  // cancelling while the check is pending prevents every callback.
   const activeId = await page.evaluate(function () {
     window.__realChessyRuntime = window.ChessyRuntime;
     window.__installRuntimeCheck = function () {
@@ -43,8 +43,11 @@ require('./helper').run('setup', async function (t) {
     return JSON.parse(localStorage.getItem('chessy-game-v1')).gameId;
   });
   await page.click('#newGame');
-  await page.click('#newGameStart');
-  await page.click('#newGameStart');
+  await page.evaluate(function () {
+    const start = document.getElementById('newGameStart');
+    start.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    start.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
   await page.click('#newGameCancel');
   await page.evaluate(function () { window.__resolveRuntimeCheck(true); });
   await page.waitForTimeout(0);
@@ -55,7 +58,7 @@ require('./helper').run('setup', async function (t) {
   check(cancelled.id === activeId && cancelled.plies === 1,
     'Cancel fences concurrent pending Start clicks');
 
-  // Without cancellation, only the latest concurrent Start callback acts.
+  // Without cancellation, only the latest duplicate Start callback acts.
   const canCountUuids = await page.evaluate(function () {
     window.__installRuntimeCheck();
     window.__uuidCalls = 0;
@@ -71,8 +74,11 @@ require('./helper').run('setup', async function (t) {
     }
   });
   await page.click('#newGame');
-  await page.click('#newGameStart');
-  await page.click('#newGameStart');
+  await page.evaluate(function () {
+    const start = document.getElementById('newGameStart');
+    start.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    start.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
   await page.evaluate(function () { window.__resolveRuntimeCheck(true); });
   await page.waitForFunction(function () {
     return !document.getElementById('newGameDialog').open;

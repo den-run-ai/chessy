@@ -111,7 +111,9 @@
         </div>
         <input type="file" id="restoreFile" accept=".json,application/json" hidden>
         <p class="coach-note" id="dataStatus" role="status" aria-live="polite"></p>
-        <p class="coach-note" id="reviewEmpty" hidden>No games archived yet — finish a game in Play.</p>
+        <p class="coach-note" id="reviewEmpty" hidden>
+          No games saved yet — finish a game or start a new one after making moves.
+        </p>
         <ol class="game-list" id="gameList" aria-label="Archived games"></ol>
       </div>
 
@@ -256,8 +258,10 @@
   <!-- Setup uses styled radio groups, NOT native selects: mobile browsers
        render select menus as system popovers that can cover the browser
        chrome and look detached from the dialog. -->
-  <dialog id="newGameDialog" class="setup" aria-labelledby="newGameTitle">
+  <dialog id="newGameDialog" class="setup" aria-labelledby="newGameTitle"
+          aria-describedby="newGameWarning newGameStatus">
     <h2 id="newGameTitle">New game</h2>
+    <p id="newGameWarning" class="coach-note" hidden></p>
     <fieldset class="choice stack">
       <legend>Opponent</legend>
       <div class="choice-options">
@@ -285,9 +289,11 @@
         <label><input type="radio" name="timeControl" value="1800+20"><span>30+20</span></label>
       </div>
     </fieldset>
+    <p id="newGameStatus" class="coach-note" role="status" aria-live="polite"></p>
     <div class="buttons setup-actions">
-      <button id="newGameStart" class="btn primary">Start game</button>
-      <button id="newGameCancel" class="btn">Cancel</button>
+      <button type="button" id="newGameStart" class="btn primary">Start game</button>
+      <button type="button" id="newGameDiscard" class="btn danger" hidden>Start without saving</button>
+      <button type="button" id="newGameCancel" class="btn">Cancel</button>
     </div>
   </dialog>
 

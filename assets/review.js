@@ -101,6 +101,8 @@
     if (typeof game.reason === 'string' &&
         game.reason.indexOf('time forfeit') === 0) {
       tags.Termination = 'time forfeit';
+    } else if (game.result === '*' && game.reason === 'abandoned') {
+      tags.Termination = 'abandoned';
     }
     return tags;
   }
@@ -184,15 +186,18 @@
       const list = $('gameList');
       list.innerHTML = '';
       $('reviewEmpty').hidden = games.length > 0;
-      $('reviewEmpty').textContent = 'No games archived yet — finish a game in Play.';
+      $('reviewEmpty').textContent =
+        'No games saved yet — finish a game or start a new one after making moves.';
       for (const g of games) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'game-item';
         const when = new Date(g.createdAt);
-        btn.textContent = gameLabel(g) + ' · ' + g.result +
-          (g.reason ? ' (' + g.reason + ')' : '') + ' · ' +
+        const outcome = g.result === '*'
+          ? ('Incomplete' + (g.reason === 'abandoned' ? ' · Abandoned' : ''))
+          : (g.result + (g.reason ? ' (' + g.reason + ')' : ''));
+        btn.textContent = gameLabel(g) + ' · ' + outcome + ' · ' +
           Math.ceil(g.plies / 2) + ' moves · ' + when.toLocaleDateString();
         btn.addEventListener('click', function () { openReview(g); });
         li.appendChild(btn);
@@ -287,9 +292,11 @@
     reviewBoard.render(state, { lastMove: last, check: kingSq });
     const side = state.turn === 'w' ? 'White' : 'Black';
     const played = r.ply < r.gs.history.length ? r.gs.history[r.ply] : null;
+    const savedEnd = r.game.result === '*'
+      ? 'saved incomplete position' : 'end of game';
     $('reviewStatus').textContent = 'Position ' + r.ply + '/' + r.gs.history.length +
       ' · ' + side + ' to move' + (inCheck ? ' (in check)' : '') +
-      (played ? ' · played here: ' + played.san : ' · end of game');
+      (played ? ' · played here: ' + played.san : ' · ' + savedEnd);
     $('revStart').disabled = r.ply === 0;
     $('revPrev').disabled = r.ply === 0;
     $('revNext').disabled = r.ply >= r.gs.history.length;

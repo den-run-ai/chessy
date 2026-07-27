@@ -258,6 +258,12 @@ require('./helper').run('archive', async function (t) {
 
   // A write that fails AFTER the dialog was closed reports to the
   // always-visible page note — a note inside a closed dialog is invisible.
+  // Boot a zero-ply live game first: the rejecting stub below is meant to
+  // exercise the subsequent CHECKMATE write, not the new incomplete-game
+  // checkpoint that now precedes replacement of a played position.
+  await t.inject(function () {
+    localStorage.removeItem('chessy-game-v1');
+  });
   await page.evaluate(function () {
     CoachStore.__realArchiveGame = CoachStore.archiveGame;
     CoachStore.archiveGame = function () {

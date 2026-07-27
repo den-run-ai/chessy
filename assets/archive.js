@@ -1,8 +1,7 @@
 /*
- * Chessy archive — records finished games into the coaching store
- * (assets/store.js). This is the whole slice: no UI reads the archive yet;
- * the Review browser, reflection, and spaced review build on it next
- * (roadmap #23).
+ * Chessy archive — records finished games and explicit New Game abandonment
+ * checkpoints into the coaching store (assets/store.js). Review, reflection,
+ * and spaced review consume those durable snapshots (roadmap #23).
  *
  * record() is IDEMPOTENT per game instance: the record's key is the
  * game's UUID (minted at New game/Rematch in app.js and persisted with
@@ -290,13 +289,18 @@
   }
 
   function clearPendingIf(id, token) {
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
+    if (raw === null) return true;
     const map = readPending();
-    if (!map) return;
+    if (!map) return false;
     const cur = map[id];
-    if (cur && cur.w === token) {
-      delete map[id];
-      writePending(map);
-    }
+    if (!cur) return true;
+    // A different token is a newer recovery source. Never clear it on behalf
+    // of this write, and let callers that require neutralization fail closed.
+    if (!token || cur.w !== token) return false;
+    delete map[id];
+    return writePending(map);
   }
 
   function commit(rec, token) {
@@ -306,28 +310,28 @@
     });
   }
 
-  // Resolves with the stored game id, or rejects when the write failed —
-  // the caller surfaces that (a training archive that silently drops
-  // games would corrupt every later statistic). A zero-ply game is still
-  // archived: a timed game can be forfeit on time before the first move.
-  // opts: { endedAt, startedRelease } — persisted completion time and the
-  // release that began the game, so a boot-time reconcile keeps chronology
-  // and attribution instead of stamping either with the restart.
-  function record(state, settings, status, gameId, opts) {
-    if (!gameId || !status.over) {
-      return Promise.resolve(null);
+  // Capture the exact pending entry an incomplete checkpoint supersedes.
+  // The abandonment path removes only this token before committing; a newer
+  // revision that replaced it in the meantime makes the checkpoint fail safe.
+  function pendingToken(id) {
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) {
+      return { known: false, token: null };
     }
+    if (raw === null) return { known: true, token: null };
+    const map = readPending();
+    if (!map) return { known: false, token: null };
+    const entry = map[id];
+    if (!entry) return { known: true, token: null };
+    if (typeof entry.w !== 'string' || !entry.w) {
+      return { known: false, token: null };
+    }
+    return { known: true, token: entry.w };
+  }
+
+  function makeRecord(state, settings, status, gameId, opts) {
     const sans = state.history.map(function (h) { return h.san; });
-    // Fenced ending: a specific finish cleared/replaced by Delete-all or
-    // Restore must not be (re)archived — covers the boot re-archive of the
-    // saved finished game and a reopened game-over. A REVISED ending of the
-    // same instance (Undo → different finish) has a different signature and is
-    // NOT fenced, so it archives normally.
-    const fence = fenceMatch(gameId, sans, status.result, status.reason);
-    if (fence === true) {
-      return Promise.resolve(null);
-    }
-    const rec = {
+    return {
       id: gameId,
       source: 'play',
       tags: {},
@@ -338,8 +342,8 @@
       // efficiency/impulse diagnoses have data behind them.
       clocks: state.history.map(function (h) { return h.clock || null; }),
       // Search evidence is parallel to SAN/clocks (null for human moves).
-      // Normalize here as a second trust boundary because this record is also
-      // copied into the localStorage durability queue before IndexedDB settles.
+      // Normalize here as a second trust boundary before either a direct
+      // checkpoint commit or a finished-game durability-queue copy.
       ai: state.history.map(function (h) {
         return h.ai && typeof ChessAI !== 'undefined' && ChessAI.sanitizeTelemetry
           ? ChessAI.sanitizeTelemetry(h.ai) : null;
@@ -353,8 +357,32 @@
       difficulty: settings.difficulty,
       timeControl: settings.timeControl,
       plies: state.history.length,
-      createdAt: (opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now()
+      createdAt: (opts && Number.isFinite(opts.archivedAt)) ? opts.archivedAt
+        : ((opts && Number.isFinite(opts.endedAt)) ? opts.endedAt : Date.now())
     };
+  }
+
+  // Resolves with the stored game id, or rejects when the write failed —
+  // the caller surfaces that (a training archive that silently drops
+  // games would corrupt every later statistic). A zero-ply game is still
+  // archived: a timed game can be forfeit on time before the first move.
+  // opts: { endedAt, startedRelease } — persisted completion time and the
+  // release that began the game, so a boot-time reconcile keeps chronology
+  // and attribution instead of stamping either with the restart.
+  function record(state, settings, status, gameId, opts) {
+    if (!gameId || !status.over) {
+      return Promise.resolve(null);
+    }
+    const rec = makeRecord(state, settings, status, gameId, opts);
+    // Fenced ending: a specific finish cleared/replaced by Delete-all or
+    // Restore must not be (re)archived — covers the boot re-archive of the
+    // saved finished game and a reopened game-over. A REVISED ending of the
+    // same instance (Undo → different finish) has a different signature and is
+    // NOT fenced, so it archives normally.
+    const fence = fenceMatch(gameId, rec.sans, rec.result, rec.reason);
+    if (fence === true) {
+      return Promise.resolve(null);
+    }
     // An unreadable/legacy fence is UNKNOWN: park this ending and surface a
     // failure, but never commit it and never silently discard its only copy.
     if (fence === null) {
@@ -374,6 +402,42 @@
       return Promise.resolve(null);
     }
     return commit(rec, park(rec));
+  }
+
+  // Preserve a non-empty game that New Game is about to replace. This is an
+  // archive checkpoint, not a chess result: PGN stays "*" and Review labels
+  // it Incomplete/Abandoned rather than scoring a resignation or loss.
+  //
+  // Unlike a finished ending, do NOT park this in the finished-game recovery
+  // queue. The caller keeps the live localStorage save until this direct
+  // IndexedDB commit succeeds; on failure it leaves that game in place and
+  // asks before discarding. Before the write, remove any OLDER parked finish
+  // for the same UUID: the live save is the recovery copy until IndexedDB
+  // succeeds, and pre-clearing avoids a half-success where the new row exists
+  // but the stale queue still wins Backup or the next boot.
+  function recordAbandoned(state, settings, status, gameId, opts) {
+    if (!gameId || !status || status.over || !state ||
+        !Array.isArray(state.history) || state.history.length === 0) {
+      return Promise.resolve(null);
+    }
+    const abandoned = { result: '*', reason: 'abandoned' };
+    const rec = makeRecord(state, settings, abandoned, gameId, opts);
+    const fence = fenceMatch(gameId, rec.sans, rec.result, rec.reason);
+    if (fence === true) return Promise.resolve(null);
+    if (fence === null) {
+      return Promise.reject(new Error('archive-clear fence is unavailable'));
+    }
+    if (operationActive()) {
+      return Promise.reject(new Error('a data operation is in progress'));
+    }
+    const pending = pendingToken(gameId);
+    if (!pending.known) {
+      return Promise.reject(new Error('archive recovery queue is unavailable'));
+    }
+    if (pending.token && !clearPendingIf(gameId, pending.token)) {
+      return Promise.reject(new Error('archive recovery queue could not be superseded'));
+    }
+    return commit(rec, null);
   }
 
   // Boot recovery for parked records whose commits never settled. Every
@@ -455,7 +519,8 @@
     return out;
   }
 
-  window.ChessyArchive = { record: record, reconcilePending: reconcilePending,
+  window.ChessyArchive = { record: record, recordAbandoned: recordAbandoned,
+    reconcilePending: reconcilePending,
     isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
     stageFenceEndings: stageFenceEndings, fenceKnown: fenceKnown, resetFence: resetFence,
     dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
