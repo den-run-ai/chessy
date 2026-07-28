@@ -113,6 +113,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
       - name: Bind first attempt and frozen provenance
         id: provenance
         env:
@@ -140,6 +144,7 @@ jobs:
           fi
           for file in \
             test/wasm-efficiency-match.js \
+            test/wasm-node-accounting-contract.js \
             test/ai-match-agg.js \
             test/ai-match-protocol.js \
             test/ai-match-openings.js \
@@ -179,6 +184,10 @@ jobs:
             echo "::error::Formal candidate Rust sources must not be symbolic links"
             exit 2
           fi
+          env -u NODE_OPTIONS -u NODE_PATH \
+            node "$HARNESS_DIR/test/wasm-node-accounting-contract.js" \
+            "$HARNESS_DIR/experiments/wasm/src" \
+            "$CANDIDATE_DIR/experiments/wasm/src"
           echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
           echo "harness_sha=$HARNESS_SHA" >> "$GITHUB_OUTPUT"
           printf 'protocol %s\ntrusted harness %s\ncandidate %s\nfrozen engine base %s\n' \

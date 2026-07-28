@@ -53,6 +53,12 @@ const FIXED_FIELDS = Object.freeze([
 const MATE_NEAR = 999000;
 const TIMED_OVERSHOOT_FRACTION = 0.02;
 const TIMED_OVERSHOOT_MIN_MS = 25;
+const COORDINATE_MOVE_RE = /^[a-h][1-8][a-h][1-8][QRBNqrbn]?$/;
+
+function isCoordinateMove(move) {
+  return COORDINATE_MOVE_RE.test(move) &&
+    move.slice(0, 2) !== move.slice(2, 4);
+}
 
 function canonicalPositions() {
   return bench.POSITIONS.map(function (position, index) {
@@ -228,6 +234,74 @@ function timedOvershootAllowance(timeMs) {
     Math.ceil(timeMs * TIMED_OVERSHOOT_FRACTION));
 }
 
+function assertSearchResultMetadata(result, label, maxDepth, mode) {
+  if (!result || !Number.isSafeInteger(maxDepth) || maxDepth < 1 ||
+      !Number.isSafeInteger(result.score) ||
+      !Number.isSafeInteger(result.depth) ||
+      result.depth < 0 || result.depth > maxDepth ||
+      (result.attemptedDepth !== null &&
+        (!Number.isSafeInteger(result.attemptedDepth) ||
+          result.attemptedDepth < 1 ||
+          result.attemptedDepth > maxDepth))) {
+    throw new Error(label + ' returned incoherent ' + mode +
+      ' score/depth metadata');
+  }
+  if (!Number.isSafeInteger(result.nodes) || result.nodes < 0 ||
+      !Number.isSafeInteger(result.qnodes) || result.qnodes < 0 ||
+      result.qnodes > result.nodes ||
+      !Number.isSafeInteger(result.cutoffs) || result.cutoffs < 0 ||
+      !Number.isSafeInteger(result.researches) || result.researches < 0) {
+    throw new Error(label + ' returned incoherent ' + mode +
+      (mode === 'timed' ? ' node counters' : ' search counters'));
+  }
+}
+
+function assertCompletedResult(result, label, maxDepth, mode) {
+  if (result.stopReason === 'max-depth') {
+    if (result.depth !== maxDepth || result.attemptedDepth !== null ||
+        result.nodes < 1 || Math.abs(result.score) >= MATE_NEAR ||
+        !isCoordinateMove(result.move)) {
+      throw new Error(label + ' reported inconsistent ' + mode +
+        ' max-depth (depth ' + result.depth + ', attemptedDepth ' +
+        JSON.stringify(result.attemptedDepth) + ', move ' +
+        JSON.stringify(result.move) + ', nodes ' + result.nodes + ')');
+    }
+    return true;
+  }
+  if (result.stopReason === 'mate') {
+    if (Math.abs(result.score) < MATE_NEAR ||
+        result.depth < 1 || result.attemptedDepth !== null ||
+        result.nodes < 1 || !isCoordinateMove(result.move)) {
+      throw new Error(label + ' reported inconsistent ' + mode + ' mate ' +
+        '(score ' + result.score + ', depth ' + result.depth +
+        ', attemptedDepth ' + JSON.stringify(result.attemptedDepth) +
+        ', move ' + JSON.stringify(result.move) +
+        ', nodes ' + result.nodes + ')');
+    }
+    return true;
+  }
+  if (result.stopReason === 'game-over') {
+    // Every deep-screen fixture is predeclared nonterminal. Treat even
+    // internally coherent terminal telemetry as a failed search contract.
+    throw new Error(label + ' reported game-over for a predeclared ' +
+      'nonterminal ' + mode + ' position');
+  }
+  return false;
+}
+
+function assertFixedResult(result, label, maxDepth) {
+  if (!result || !Number.isFinite(result.ms) || result.ms <= 0) {
+    throw new Error(label + ' returned invalid fixed-depth elapsed time ' +
+      JSON.stringify(result && result.ms));
+  }
+  assertSearchResultMetadata(result, label, maxDepth, 'fixed-depth');
+  if (!assertCompletedResult(
+    result, label, maxDepth, 'fixed-depth')) {
+    throw new Error(label + ' returned invalid fixed-depth stopReason ' +
+      JSON.stringify(result.stopReason));
+  }
+}
+
 function assertTimedResult(result, label, timeMs, maxDepth) {
   const allowanceMs = timedOvershootAllowance(timeMs);
   const maximumElapsedMs = timeMs + allowanceMs;
@@ -238,56 +312,22 @@ function assertTimedResult(result, label, timeMs, maxDepth) {
       'ms overshoot allowance (elapsed ' +
       JSON.stringify(result && result.ms) + 'ms)');
   }
-  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1 ||
-      !Number.isSafeInteger(result.score) ||
-      !Number.isSafeInteger(result.depth) ||
-      result.depth < 0 || result.depth > maxDepth ||
-      (result.attemptedDepth !== null &&
-        (!Number.isSafeInteger(result.attemptedDepth) ||
-          result.attemptedDepth < 1 ||
-          result.attemptedDepth > maxDepth))) {
-    throw new Error(label + ' returned incoherent timed score/depth metadata');
-  }
-  if (!Number.isSafeInteger(result.nodes) || result.nodes < 0 ||
-      !Number.isSafeInteger(result.qnodes) || result.qnodes < 0 ||
-      result.qnodes > result.nodes) {
-    throw new Error(label + ' returned incoherent timed node counters');
-  }
+  assertSearchResultMetadata(result, label, maxDepth, 'timed');
   if (result.stopReason === 'time-limit') {
     if ((result.attemptedDepth === null &&
           (result.depth < 1 || result.depth >= maxDepth)) ||
         (result.attemptedDepth !== null &&
-          result.attemptedDepth !== result.depth + 1)) {
+          result.attemptedDepth !== result.depth + 1) ||
+        result.nodes < 1 || Math.abs(result.score) >= MATE_NEAR ||
+        !isCoordinateMove(result.move)) {
       throw new Error(label + ' reported inconsistent time-limit depth ' +
         '(depth ' + result.depth + ', attemptedDepth ' +
-        JSON.stringify(result.attemptedDepth) + ')');
+        JSON.stringify(result.attemptedDepth) + ', move ' +
+        JSON.stringify(result.move) + ', nodes ' + result.nodes + ')');
     }
     return;
   }
-  if (result.stopReason === 'max-depth') {
-    if (result.depth !== maxDepth || result.attemptedDepth !== null) {
-      throw new Error(label + ' reported inconsistent timed max-depth ' +
-        '(depth ' + result.depth + ', attemptedDepth ' +
-        JSON.stringify(result.attemptedDepth) + ')');
-    }
-    return;
-  }
-  if (result.stopReason === 'mate') {
-    if (Math.abs(result.score) < MATE_NEAR ||
-        result.depth < 1 || result.attemptedDepth !== null) {
-      throw new Error(label + ' reported inconsistent timed mate ' +
-        '(score ' + result.score + ', depth ' + result.depth +
-        ', attemptedDepth ' + JSON.stringify(result.attemptedDepth) + ')');
-    }
-    return;
-  }
-  if (result.stopReason === 'game-over') {
-    if (result.depth !== 0 || result.attemptedDepth !== null ||
-        result.nodes !== 0 || result.qnodes !== 0) {
-      throw new Error(label + ' reported inconsistent timed game-over');
-    }
-    return;
-  }
+  if (assertCompletedResult(result, label, maxDepth, 'timed')) return;
   throw new Error(label + ' returned invalid timed stopReason ' +
     JSON.stringify(result.stopReason));
 }
@@ -351,6 +391,12 @@ function fixedPosition(candidate, reference, position, positionIndex, depth, pai
     const pair = runOrderedPair(
       candidate, reference, position.fen, options,
       (positionIndex + round) % 2 === 0);
+    assertFixedResult(
+      pair.candidate, position.name + ' round ' + (round + 1) + ' candidate',
+      depth);
+    assertFixedResult(
+      pair.reference, position.name + ' round ' + (round + 1) + ' reference',
+      depth);
     candidateSamples.push(pair.candidate);
     referenceSamples.push(pair.reference);
     npsRatios.push(
@@ -363,20 +409,6 @@ function fixedPosition(candidate, reference, position, positionIndex, depth, pai
     candidateSamples, position.name + ' candidate');
   const referenceResult = summarizeFixed(
     referenceSamples, position.name + ' reference');
-  if (candidateResult.depth < depth &&
-      candidateResult.stopReason !== 'mate' &&
-      candidateResult.stopReason !== 'game-over') {
-    throw new Error(position.name + ' candidate did not complete depth ' +
-      depth + ': d' + candidateResult.depth + ' ' +
-      candidateResult.stopReason);
-  }
-  if (referenceResult.depth < depth &&
-      referenceResult.stopReason !== 'mate' &&
-      referenceResult.stopReason !== 'game-over') {
-    throw new Error(position.name + ' reference did not complete depth ' +
-      depth + ': d' + referenceResult.depth + ' ' +
-      referenceResult.stopReason);
-  }
   return {
     name: position.name,
     family: position.family,
@@ -1043,6 +1075,10 @@ async function main(argv) {
     { maxDepth: 3, nodeLimit: 0, timeMs: 0, quiesce: true },
     true
   );
+  assertFixedResult(
+    fixedWarmup.candidate, canonical[0].name + ' warmup candidate', 3);
+  assertFixedResult(
+    fixedWarmup.reference, canonical[0].name + ' warmup reference', 3);
 
   console.log('candidate: ' + config.candidateLabel + ' (' +
     config.candidatePath + ')');
@@ -1135,6 +1171,7 @@ module.exports = Object.freeze({
   geometricMean: geometricMean,
   nearestRank: nearestRank,
   timedOvershootAllowance: timedOvershootAllowance,
+  assertFixedResult: assertFixedResult,
   assertTimedResult: assertTimedResult,
   aggregateFixed: aggregateFixed,
   fixedDepthGate: fixedDepthGate,

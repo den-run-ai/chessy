@@ -11,6 +11,7 @@ require('../assets/engine.js');
 const Chess = globalThis.Chess;
 const MatchProtocol = require('./ai-match-protocol');
 const match = require('./wasm-efficiency-match');
+const accounting = require('./wasm-node-accounting-contract');
 
 const ROOT = path.join(__dirname, '..');
 const SCRIPT = path.join(__dirname, 'wasm-efficiency-match.js');
@@ -21,6 +22,7 @@ const DEEP_WORKFLOW = path.join(
 const CANDIDATE = 'a'.repeat(40);
 const BASE = 'b'.repeat(40);
 const HARNESS = 'c'.repeat(40);
+const RUST_SRC = path.join(ROOT, 'experiments', 'wasm', 'src');
 let passed = 0;
 let failed = 0;
 
@@ -51,6 +53,16 @@ function throws(callback, pattern, label) {
   } catch (error) {
     check(pattern.test(error.message), label, error.message);
   }
+}
+
+function replaceOnce(source, before, after) {
+  const first = source.indexOf(before);
+  if (first === -1 || first !== source.lastIndexOf(before)) {
+    throw new Error('test mutation expected one occurrence of ' +
+      JSON.stringify(before));
+  }
+  return source.slice(0, first) + after +
+    source.slice(first + before.length);
 }
 
 console.log('frozen WASM efficiency protocol');
@@ -283,6 +295,176 @@ function scriptedEngine(badCall, mutation) {
 }
 
 console.log('maintainer-labeled Actions trigger');
+console.log('trusted node-accounting source contract');
+const trustedAccounting = accounting.readSources(RUST_SRC);
+accounting.validateSources(trustedAccounting, trustedAccounting);
+check(true, 'accepts the unchanged trusted accounting pipeline');
+{
+  const compatible = {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    ctx.researches = 0;\n',
+      '    ctx.researches = 0;\n' +
+      '    ctx.experiment_probe_nodes = 0;\n')
+  };
+  compatible.search = replaceOnce(
+    compatible.search,
+    '    context().rep_ply = REP_INFINITY;\n\n' +
+      '    let turn = position.turn;\n' +
+      '    let maximizing = turn == Color::White;',
+    '    context().rep_ply = REP_INFINITY;\n' +
+      '    let probe_start = context().nodes;\n' +
+      '    let _probe_delta = context().nodes - probe_start;\n\n' +
+      '    let turn = position.turn;\n' +
+      '    let maximizing = turn == Color::White;');
+  compatible.search +=
+    '\nconst ACCOUNTING_NOTE: &str = r#"{ context().nodes = 0; }"#;\n' +
+    '#[cfg(test)]\n' +
+    'mod candidate_accounting_tests {\n' +
+    '    #[test]\n' +
+    '    fn reset_is_test_only() { unsafe { super::reset_context(true, 1, 0); } }\n' +
+    '}\n';
+  accounting.validateSources(trustedAccounting, compatible);
+  check(true,
+    'permits experiment metrics and recursive work that retain trusted entry accounting');
+}
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().nodes = next_node;',
+      '    context().nodes = next_node / 10;')
+  });
+}, /changed trusted WASM node accounting: check_budget function/,
+'rejects a candidate that undercounts the trusted node increment');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    if !check_budget() {\n' +
+        '        return ABORT_SCORE;\n' +
+        '    }\n' +
+        '    context().rep_ply = REP_INFINITY;',
+      '    context().rep_ply = REP_INFINITY;')
+  });
+}, /changed trusted WASM node accounting: search_node accounting prologue/,
+'rejects removal of the recursive node-entry charge');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    ctx.nodes = 0;',
+      '    ctx.nodes = 500;')
+  });
+}, /changed trusted WASM node accounting: reset_context accounting prefix/,
+'rejects a candidate-controlled counter reset');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: replaceOnce(
+      trustedAccounting.lib,
+      '        nodes: search_result.nodes,',
+      '        nodes: search_result.nodes / 10,'),
+    search: trustedAccounting.search
+  });
+}, /changed trusted WASM node accounting: search function/,
+'rejects clamping the ABI-reported node count');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: replaceOnce(
+      trustedAccounting.lib,
+      'search::run(&mut position, max_depth, node_limit, time_ms, quiesce != 0)',
+      'search::run(&mut position, max_depth, 0, time_ms, quiesce != 0)'),
+    search: trustedAccounting.search
+  });
+}, /changed trusted WASM node accounting: search function/,
+'rejects bypassing the requested node limit at the ABI boundary');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    context().nodes = 0;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: node counter declarations, writes, and result fields/,
+'rejects an added write through the candidate accounting context');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    core::ptr::write(core::ptr::addr_of_mut!(context().nodes), 0);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: raw accounting escape surface/,
+'rejects a new raw-pointer counter mutation escape');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search +
+      '\nmacro_rules! rewrite_counter { ($field:ident) => {} }\n' +
+      'rewrite_counter!(nodes);\n'
+  });
+}, /changed trusted WASM node accounting: raw accounting escape surface/,
+'rejects macro-generated or unclassified counter access');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    reset_context(true, 0, 0);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: reset_context production call count/,
+'rejects a mid-search whole-context reset');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search +
+      '\nunsafe fn check_budget() -> bool { true }\n'
+  });
+}, /expected exactly one Rust function check_budget, found 2/,
+'rejects a duplicate accounting primitive');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: replaceOnce(
+      trustedAccounting.lib,
+      '#[no_mangle]\n' +
+        'pub unsafe extern "C" fn search(',
+      'pub unsafe extern "C" fn search(') +
+      '\n#[export_name = "search"]\n' +
+      'pub unsafe extern "C" fn forged_search() -> i32 { 0 }\n',
+    search: trustedAccounting.search
+  });
+}, /changed trusted WASM node accounting: search function/,
+'rejects replacing the trusted exported ABI entry point');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search + '\nmod unmetered_search;\n'
+  });
+}, /changed trusted WASM node accounting: production module declarations/,
+'rejects a new production source module outside the reviewed accounting tree');
+
 const workflow = fs.readFileSync(WORKFLOW, 'utf8');
 check(workflow.includes('pull_request_target:') &&
     workflow.includes('types: [labeled]') &&
@@ -322,6 +504,12 @@ check(workflow.includes(
     workflow.includes('EXPECTED_WORKFLOW_SHA: ${{ github.workflow_sha }}') &&
     workflow.includes(
       'Executing workflow revision does not match the trusted harness') &&
+    workflow.includes(
+      'node "$HARNESS_DIR/test/wasm-node-accounting-contract.js"') &&
+    workflow.includes(
+      '"$HARNESS_DIR/experiments/wasm/src"') &&
+    workflow.includes(
+      '"$CANDIDATE_DIR/experiments/wasm/src"') &&
     workflow.includes(
       'Formal candidate changes untrusted build or harness path') &&
     workflow.includes('seedbase: [0, 1, 2, 3]') &&

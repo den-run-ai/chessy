@@ -191,8 +191,10 @@ contract tests from a pinned trusted-harness commit rather than from the
 candidate checkout. Every timed candidate and reference search must also
 report coherent stop/depth metadata and finish within the requested budget
 plus a host-observed overshoot allowance of 2% or 25 ms, whichever is larger.
-An overrun or malformed timed result fails the measurement before completed
-depth can influence the diagnostic decision.
+Every fixed and timed result must also report safe counters, a real move, and
+a stop reason coherent with the predeclared nonterminal fixture. An overrun or
+malformed result fails the measurement before node or completed-depth evidence
+can influence the diagnostic decision.
 
 The diagnostic classifier requires activity in at least three canonical
 families and a material benefit: at least 5% lower depth-7 geomean nodes, or
@@ -232,6 +234,14 @@ Actions run. Its shard runner validates the node count, stop reason, and
 depth metadata after every candidate and reference search, not just during a
 startup probe. A formal v2 verdict cannot run without independently generated
 trusted provenance.
+
+Both workflows execute a source-accounting verifier from the trusted harness.
+It freezes the requested-budget forwarding and reported counters at the ABI,
+the reset and budget primitive, the recursive search/quiescence entry charges,
+and the iterative-deepening result pipeline. Candidate algorithms may add
+recursive work only while retaining those trusted accounting surfaces; added
+counter writes, removed entry charges, budget bypasses, or output clamping
+fail before either candidate module is accepted as evidence.
 
 ABI v1 has no seed or game-prefix-history input. Root ordering resets to the
 same embedded `0xC0FFEE` seed for every search, so the four manifest seed slots
