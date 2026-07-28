@@ -128,3 +128,49 @@ geomean warm NPS and 1.25x p10 family NPS, adds a completed ply in at least
 4/8 frozen hard five-second cases with no shallower case, and shows acceptable
 cold start, peak memory, 30-minute thermal behavior, battery use, and offline
 loading.
+
+## Mobile-target CI probe (stacked follow-up)
+
+The probe layer under `probe/` ran this experiment's differential protocol
+in a real Web Worker on every mobile-family target a GitHub-hosted runner
+provides, against the module built from this source by the pinned toolchain
+(Zig 0.16.0 + Binaryen 131; byte-identical to the recorded binaries).
+Canonical run:
+[30317174817](https://github.com/den-run-ai/chessy/actions/runs/30317174817)
+(depth 5, reps 2, min-ms 100, five 4; Android uses min-ms 50).
+
+| target | parity d1–5 | fixed-node abort | paired NPS geomean | worst family | slower families | linear memory |
+|---|---|---|---:|---|---|---:|
+| node-host (Node v22.23.1) | PASS 90 | PASS | 23.0229x | 16.4844x (promotion race) | 0/9 | 25.31 MiB |
+| chromium (HeadlessChrome 149, V8) | PASS 90 | PASS | 6.9318x | 6.5782x (promotion race) | 0/9 | 25.31 MiB |
+| chromium, 4x CPU throttle | PASS 90 | PASS | 7.0101x | 6.4624x (promotion race) | 0/9 | 25.31 MiB |
+| webkit (desktop JSC 605.1.15) | PASS 90 | PASS | 9.1748x | 7.7035x (KID) | 0/9 | 25.31 MiB |
+| **ios-safari (real Mobile Safari, iOS 18.7 sim, arm64)** | **PASS 90** | **PASS** | **9.9926x** | 8.2945x (KID) | **0/9** | 25.31 MiB |
+| **android-chrome (real Chrome 113, Android 14 emulator)** | **PASS 90** | **PASS** | **6.7955x** | 6.3837x (Lucena) | **0/9** | 25.31 MiB |
+
+Five-second diagnostics (hard positions, wasm vs js completed depth):
+android-chrome and ios-safari **d7 vs d5–d6 on 4/4**, chromium and webkit
+d7 vs d5–d6 on 4/4, node-host d7 vs d4–d5 on 4/4; no case anywhere was
+shallower.
+
+Readings against this experiment's open questions:
+
+- The host-only 24.45x compresses to **~7–10x inside real browser engines**
+  (both V8 and JavaScriptCore) — still far above the 1.50x/1.25x device
+  thresholds, with zero slower families on any target.
+- A 4x CPU throttle does not move the Chromium ratio (7.01x vs 6.93x),
+  evidence the ratio survives uniform slowdown.
+- The 25.31 MiB linear-memory reservation is confirmed inside real Mobile
+  Safari and Android Chrome workers without incident.
+
+Scope: these are emulator/simulator containers — functional reproduction
+plus engine-family performance signals. The physical-device gate above
+(ARM SoC wall-time, thermal soak, battery, jetsam/watchdog) is unchanged
+and still requires hardware; `probe/` is also the harness to open on those
+devices when that step happens.
+
+An independent same-contract reconstruction of this port (branch
+`claude/wasm-zig-mobile-validation-x0fwkv`, built before this source was
+published) agrees with this module search-for-search on all 36 cross-checked
+depth-6 and 100k-node-abort workloads — two implementations converging
+exactly on searches neither was verified against JS on.
