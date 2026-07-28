@@ -1,0 +1,188 @@
+# Chessy Rust/WASM feasibility experiment
+
+This directory ports Chessy's complete hot search loop to dependency-free Rust
+and `wasm32-unknown-unknown`. It tests whether the production-preferred language
+can preserve the exact search proven by the Zig spike while retaining its
+compact whole-search WebAssembly boundary.
+
+It is an isolated experiment. It does not change `assets/ai-worker.js`, the PWA
+cache, Play behavior, or the JavaScript fallback.
+
+## Scope
+
+The module owns position state, move generation, make/unmake, attack detection,
+evaluation, quiescence, the transposition table, move ordering, PVS, aspiration,
+and iterative deepening. JavaScript crosses the boundary once to load a FEN and
+once to start a search. The only callback inside the tree is the existing
+coarse deadline poll through `env.now_ms`.
+
+The experiment deliberately excludes:
+
+- SIMD, threads, WASI, libc, a garbage collector, an allocator, and per-node
+  allocation;
+- `wasm-bindgen` or any binding/runtime dependency;
+- SEE, LMR, null-move pruning, NNUE, or any other algorithmic change;
+- repetition-history transfer (the benchmark loads bare FENs, as
+  `test/ai-bench.js` does);
+- production worker, service-worker, UI, or release integration.
+
+The root move shuffle resets to Mulberry32 seed `0xC0FFEE` for every search,
+matching `test/ai-bench.js`. The seed remains frozen inside the experiment
+rather than expanding the ABI.
+
+## Language decision
+
+Draft PRs #124 and #125 established the Zig feasibility result and the reusable
+single-Web-Worker/mobile-target probe. This port leaves those branches intact
+as historical evidence and changes only the implementation language behind the
+same ABI and differential contract.
+
+Rust is the long-lived candidate because it supplies a stable toolchain,
+stronger compiler checks, testing/profiling support, and a larger maintainer
+ecosystem. The current experiment still uses substantial `unsafe` global state
+to match the fixed-memory Zig layout. It is explicitly single-worker and
+non-reentrant; the ABI rejects an attempted nested search. The port is
+justified only if Rust's maintenance benefits do not cost the measured search:
+
+- exact JavaScript parity remains mandatory;
+- deeper Rust/Zig differentials must remain exact;
+- the fast Rust binary must stay in the same compact size class;
+- the stacked worker/mobile matrix must be rerun against Rust rather than
+  inheriting Zig's measurements by assumption.
+
+The recorded host comparison clears those conditions. `RESULTS.md` contains the
+numbers and explains why the fast build, not the absolute smallest build, is
+the deployment candidate.
+
+## Reproducible builds
+
+The experiment pins Rust 1.97.1 (rustc commit
+`8bab26f4f68e0e26f0bb7960be334d5b520ea452`), target
+`wasm32-unknown-unknown`, and Binaryen 131. `Cargo.lock` contains no
+third-party packages. The build rejects ambient Rust flags and asserts the
+tool versions before compiling. Set `CHESSY_CARGO_BIN`,
+`CHESSY_RUSTC_BIN`, and `CHESSY_WASM_OPT_BIN` when the tools are not on
+`PATH`; `CHESSY_CARGO_TARGET_DIR` optionally relocates Cargo output.
+
+```sh
+./experiments/wasm/build.sh
+```
+
+The script builds two variants:
+
+- `dist/chessy-ai-fast.wasm`: Cargo `release` (`opt-level=3`, fat LTO), then
+  `wasm-opt -O3 --converge`;
+- `dist/chessy-ai-small.wasm`: Cargo `small` (`opt-level=z`, fat LTO), then
+  `wasm-opt -Oz --converge`.
+
+Both use `panic=abort`, one codegen unit, stripped symbols, a one-MiB stack, and
+an exact 405-page initial/maximum memory ceiling. Linking fails if a layout
+change exceeds the recorded 26,542,080-byte budget. Binaryen enables only the
+six default WebAssembly features permitted by the pinned Rust target; it does
+not authorize SIMD, threads, GC, or all proposals. The stacked workflow also
+checks the SHA-256 of the official Binaryen archive before building.
+
+The fast build decides runtime feasibility. The small build records the
+download floor. Generated `.wasm` files remain ignored.
+
+## Tests and benchmarks
+
+```sh
+(cd experiments/wasm && cargo test --locked --offline)
+node test/ai-wasm-parity.js --depth 5
+node experiments/wasm/bench.js --depth 5 --reps 2 --min-ms 100 --require-go
+```
+
+The Rust tests retain the Zig spike's perft, move-order, make/unmake, and
+evaluator-reference checks. The JavaScript differential compares move, score,
+completed/attempted depth, nodes, qnodes, cutoffs, re-searches, and stop reason
+on all 18 positions, plus fixed-node aborts and reset determinism.
+
+If a build lives elsewhere, pass it explicitly:
+
+```sh
+node test/ai-wasm-parity.js --wasm /path/to/chessy-ai.wasm --depth 5
+node experiments/wasm/bench.js --wasm /path/to/chessy-ai.wasm
+```
+
+To reproduce the deeper differential and direct language comparison, first
+build PR #124's pinned Zig source, then supply its fast module as the reference:
+
+```sh
+node test/ai-wasm-parity.js \
+  --reference-wasm /path/to/zig/chessy-ai-fast.wasm
+node experiments/wasm/bench.js \
+  --baseline-wasm /path/to/zig/chessy-ai-fast.wasm \
+  --depth 5 --reps 2 --min-ms 100
+```
+
+## Raw ABI, version 1
+
+The module has exactly one import:
+
+```text
+env.now_ms() -> f64
+```
+
+Fixed-depth searches pass `timeMs=0` and do not poll the host clock. Timed
+searches may call `env.now_ms`, but that callback must not mutate the module;
+nested search/load calls are rejected. Required exports are:
+
+```text
+memory
+input_ptr() -> u32
+result_ptr() -> u32
+load_position(fenLength: u32)
+search(maxDepth: u32, nodeLimit: u32, timeMs: u32, quiesce: u32) -> i32
+```
+
+JavaScript copies UTF-8 FEN bytes to `input_ptr()` and calls
+`load_position(length)`, checking the fixed 1,024-byte capacity before the
+copy. A zero `nodeLimit` or `timeMs` means unlimited. `maxDepth` is limited to
+111 so the 128-ply fixed storage also covers the 16-ply quiescence ceiling.
+`search()` returns zero on success, 1 if no position is loaded, 2 if the fixed
+transposition table saturated (which invalidates exact-tree comparison), and 3
+for an invalid depth or rejected re-entry.
+Search results are written at `result_ptr()` as this 64-byte little-endian
+record:
+
+| Offset | Type | Field |
+| ---: | --- | --- |
+| 0 | `u32` | ABI version, exactly `1` |
+| 4 | `u32` | struct size, exactly `64` |
+| 8 | `u32` | move: from bits 0–5, to bits 6–11, promotion bits 12–14 |
+| 12 | `i32` | score, from White's point of view |
+| 16 | `u32` | last fully completed depth |
+| 20 | `u32` | attempted depth, or `0xffffffff` for none |
+| 24 | `u64` | nodes |
+| 32 | `u64` | quiescence nodes |
+| 40 | `u64` | cutoffs |
+| 48 | `u64` | PVS/aspiration re-searches |
+| 56 | `u32` | stop-reason code |
+| 60 | `u32` | reserved, zero |
+
+Move `0xffffffff` means no move. Promotion codes are 0 none, 1 queen, 2 rook,
+3 bishop, and 4 knight. Stop-reason codes are 0 unknown, 1 max-depth, 2
+time-limit, 3 node-limit, 4 mate, and 5 game-over. Counters are rejected if they
+cannot be represented exactly by a JavaScript safe integer.
+
+`bench.js` hard-fails on an ABI version or struct-size mismatch before accepting
+any benchmark result.
+
+## Go/no-go funnel
+
+1. Rust unit tests and byte-reproducible fast/small builds.
+2. Exact JavaScript parity through depth 5, fixed-node abort parity, and reset
+   determinism.
+3. Direct Rust/Zig depth-6 and 100,000-node differentials, plus special-move
+   witnesses.
+4. Order-balanced host screen: at least 1.35x geomean versus JavaScript and no
+   mirrored family below 1.00x.
+5. The stacked Web Worker matrix on Node, Chromium, WebKit, Android Chrome in
+   the KVM emulator, and Mobile Safari in the arm64 iOS Simulator.
+6. Physical iPhone and midrange-Android testing for ARM wall time, cold start,
+   memory pressure, thermal soak, battery, watchdog behavior, and offline load.
+
+Passing the hosted matrix selects a production-language candidate; it does not
+by itself authorize replacing JavaScript in the shipped PWA. The physical
+device and production-integration gates remain explicit.
