@@ -80,6 +80,8 @@ jobs:
         run: node test/master-incident.test.js
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
+      - name: Verify the shipped WASM engine asset (digest + exact JS parity)
+        run: node test/wasm-asset.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
       - name: Run runtime-update gate tests

@@ -192,6 +192,18 @@
 
   // AI runs in a Web Worker so deep searches never freeze the board;
   // falls back to a synchronous call where workers are unavailable.
+
+  // Experimental Rust/WASM engine preference (#84/#113 device probe):
+  // page-level and persisted OUTSIDE the per-game settings, so the saved-game
+  // and archive schemas are untouched. Read fresh per request — flipping it
+  // mid-game applies from the computer's next move, which is exactly what an
+  // on-device A/B comparison needs. The worker labels every reply with the
+  // engine that actually answered, so provenance never depends on this flag.
+  const WASM_ENGINE_PREF = 'chessy-wasm-engine-v1';
+  function wasmEngineEnabled() {
+    try { return localStorage.getItem(WASM_ENGINE_PREF) === 'on'; }
+    catch (e) { return false; }
+  }
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // config/provenance for the in-flight search
   let aiWatchdog = null;      // guards against an alive-but-SILENT worker (see maybeAiMove)
@@ -665,7 +677,12 @@
       aiWorker.postMessage({
         id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
         quiesce: cfg.quiesce, positions: state.positions,
-        seed: aiPending.seed, randomize: aiPending.randomize
+        seed: aiPending.seed, randomize: aiPending.randomize,
+        // Experimental engine opt-in travels per request; the wasm URL joins
+        // the page's release unit like every other executable asset.
+        engine: wasmEngineEnabled() ? 'wasm' : 'js',
+        wasmUrl: 'chessy-ai-fast.wasm' +
+          (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : '')
       });
     } else {
       // Fallback: yield so the "thinking" status paints before the search.
@@ -726,7 +743,12 @@
         pvSource: result.pvSource,
         stopReason: result.stopReason,
         source: aiPending.source,
-        fallbackReason: aiPending.fallbackReason
+        fallbackReason: aiPending.fallbackReason,
+        // The engine that actually produced the move: the worker labels its
+        // replies ('wasm' or 'js', with engineFallback when a wasm request
+        // was answered by JavaScript); synchronous paths are always JS.
+        engine: result.engine,
+        engineFallback: result.engineFallback
       });
       aiPending = null;
     }
@@ -1091,8 +1113,20 @@
     setChoice('mode', settings.mode);
     setChoice('difficulty', settings.difficulty);
     setChoice('timeControl', settings.timeControl);
+    engineWasmEl.checked = wasmEngineEnabled();
     resetNewGamePrompt();
     newGameDialog.showModal();
+  });
+
+  // The experimental-engine checkbox persists IMMEDIATELY (independent of
+  // Start/Cancel): it is a page-level preference, not part of the game
+  // settings snapshot, and applies from the computer's next move.
+  const engineWasmEl = document.getElementById('engineWasm');
+  engineWasmEl.addEventListener('change', function () {
+    try {
+      if (engineWasmEl.checked) localStorage.setItem(WASM_ENGINE_PREF, 'on');
+      else localStorage.removeItem(WASM_ENGINE_PREF);
+    } catch (e) { /* private mode: the default JS engine still plays */ }
   });
 
   newGameStartEl.addEventListener('click', function () {

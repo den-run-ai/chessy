@@ -1245,6 +1245,10 @@
     const fallbackReasons = {
       'worker-error': true, watchdog: true
     };
+    const engines = { js: true, wasm: true };
+    const engineFallbacks = {
+      'wasm-load-error': true, 'wasm-search-error': true
+    };
     const sanitized = {
       release: releaseToken(value.release),
       depth: integer(value.depth) || 0,
@@ -1275,7 +1279,13 @@
       stopReason: reasons[value.stopReason] ? value.stopReason : 'unknown',
       source: sources[value.source] ? value.source : 'unknown',
       fallbackReason: fallbackReasons[value.fallbackReason]
-        ? value.fallbackReason : null
+        ? value.fallbackReason : null,
+      // Which engine produced the move. Telemetry recorded before the
+      // experimental Rust/WASM engine existed carries no field — every such
+      // move was JavaScript, so the default is factual, not invented.
+      engine: engines[value.engine] ? value.engine : 'js',
+      engineFallback: engineFallbacks[value.engineFallback]
+        ? value.engineFallback : null
     };
     // Missing rootOrderUci is the backwards-compatible marker for telemetry
     // recorded before reproducible root capture existed. Preserve that
