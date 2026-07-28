@@ -52,7 +52,7 @@ env:
   RUST_MANIFEST_SHA256: 03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf
   BINARYEN_URL: https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz
   BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
-  TRUSTED_DEEP_HARNESS_SHA: ca3be8212b9e8460fc30a99bf301f7a6633030ad
+  TRUSTED_DEEP_HARNESS_SHA: b4b05ab40f13e8b6d03532f5c93e9f4448785aa7
   TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489
 
 jobs:
@@ -129,7 +129,7 @@ jobs:
           CARGO_HOME: ${{ runner.temp }}/cargo-home
           RUSTUP_TOOLCHAIN: ${{ env.RUST_VERSION }}
         run: |
-          node experiments/wasm/deep-bench.test.js
+          node "$TRUSTED_DIR/experiments/wasm/deep-bench.test.js"
           CARGO_BIN=$(rustup which --toolchain "$RUST_VERSION" cargo)
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
           (
@@ -180,7 +180,7 @@ jobs:
       - name: Run divergent deep-search screen
         run: |
           mkdir -p deep-report
-          node experiments/wasm/deep-bench.js \
+          node "$TRUSTED_DIR/experiments/wasm/deep-bench.js" \
             --candidate "$RUNNER_TEMP/deep-wasm/candidate.wasm" \
             --reference "$RUNNER_TEMP/deep-wasm/reference.wasm" \
             --candidate-label "$CANDIDATE_SHA" \

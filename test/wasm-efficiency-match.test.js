@@ -363,7 +363,7 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02') &&
     deepWorkflow.includes(
-      'TRUSTED_DEEP_HARNESS_SHA: ca3be8212b9e8460fc30a99bf301f7a6633030ad') &&
+      'TRUSTED_DEEP_HARNESS_SHA: b4b05ab40f13e8b6d03532f5c93e9f4448785aa7') &&
     deepWorkflow.includes(
       'TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489') &&
     deepWorkflow.includes(
@@ -375,6 +375,14 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'cp "$TRUSTED_DRIVER" \\\n' +
       '            experiments/wasm/build.sh') &&
+    deepWorkflow.includes(
+      'node "$TRUSTED_DIR/experiments/wasm/deep-bench.test.js"') &&
+    deepWorkflow.includes(
+      'node "$TRUSTED_DIR/experiments/wasm/deep-bench.js"') &&
+    !deepWorkflow.includes(
+      'node experiments/wasm/deep-bench.test.js') &&
+    !deepWorkflow.includes(
+      'node experiments/wasm/deep-bench.js') &&
     !deepWorkflow.includes(
       'cp experiments/wasm/build.sh \\\n' +
       '            "$BASE_DIR/experiments/wasm/build.sh"') &&
@@ -382,7 +390,7 @@ check(deepWorkflow.includes(
       'cp "$BASE_DIR/experiments/wasm/build.sh" \\\n' +
       '            experiments/wasm/build.sh') &&
     !/uses: actions\/[^@\n]+@v[0-9]/.test(deepWorkflow),
-  'deep-search evidence uses a pinned compatible driver and immutable action revisions');
+  'deep-search evidence uses pinned trusted code and immutable action revisions');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
