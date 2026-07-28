@@ -42,13 +42,28 @@
     catch (e) { return true; }
   }
 
+  // Record the request marker and prove it landed. Read-ok/write-fail is the
+  // classic full-quota state, so setItem alone is not evidence.
   function markRequested() {
-    try { localStorage.setItem(REQUESTED_KEY, String(Date.now())); }
-    catch (e) { /* best effort */ }
+    try {
+      localStorage.setItem(REQUESTED_KEY, String(Date.now()));
+      return localStorage.getItem(REQUESTED_KEY) !== null;
+    } catch (e) { return false; }
+  }
+
+  function unmarkRequested() {
+    // A failed removal leaves the marker set — the conservative outcome
+    // (skip future requests), never a nag.
+    try { localStorage.removeItem(REQUESTED_KEY); } catch (e) { /* stays marked */ }
   }
 
   // Called after a durable archive write commits. At most one persist()
-  // attempt per page load, and at most one SETTLED attempt ever.
+  // attempt per page load, and at most one SETTLED attempt ever. The marker
+  // is written BEFORE the request: if it cannot be recorded (storage full or
+  // write-blocked), no request is made at all — otherwise a settled denial
+  // would be un-recordable and every later launch would re-prompt. Only a
+  // rejected/thrown persist() call (transient API error) clears the marker
+  // so a later session may retry.
   function noteDurableWrite() {
     var storage = manager();
     if (!storage || typeof storage.persist !== 'function') return;
@@ -62,13 +77,15 @@
     Promise.resolve(persisted).catch(function () { return false; })
       .then(function (already) {
         // Already persistent (an installed PWA, an earlier grant): record
-        // that so later launches skip the query entirely.
+        // that so later launches skip the query entirely. Best effort — if
+        // the marker cannot land, nothing was asked, so nothing can nag.
         if (already) { markRequested(); return; }
+        if (!markRequested()) return; // cannot record a settled answer → don't ask
         var req;
-        try { req = storage.persist(); } catch (e) { return; }
+        try { req = storage.persist(); } catch (e) { unmarkRequested(); return; }
         return Promise.resolve(req).then(
-          function () { markRequested(); },
-          function () { /* transient failure — a later session may retry */ });
+          function () { /* settled (granted or denied) — the marker stays */ },
+          function () { unmarkRequested(); });
       });
   }
 

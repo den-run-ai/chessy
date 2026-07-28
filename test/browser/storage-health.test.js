@@ -62,46 +62,64 @@ require('./helper').run('storage-health', async function (t) {
     'a StorageManager without estimate() still answers the persistence state');
 
   // ---- Full-app scenarios: stub navigator.storage BEFORE app scripts. ----
-  function stub(mode) {
-    return page.addInitScript(function (m) {
-      window.__persistCalls = 0;
-      function install(value) {
-        try {
-          Object.defineProperty(navigator, 'storage', { value: value, configurable: true });
-        } catch (e) {
-          Object.defineProperty(Navigator.prototype, 'storage', {
-            get: function () { return value; }, configurable: true
-          });
-        }
+  // ONE init script installed once, switching on a mode value the scenarios
+  // store in localStorage: repeated addInitScript calls would accumulate
+  // stubs whose relative execution order across navigations is not
+  // guaranteed, letting an old mode win a later scenario.
+  const MODE_KEY = 'chessy-test-storage-mode';
+  await page.addInitScript(function (keys) {
+    let m = null;
+    try { m = localStorage.getItem(keys.mode); } catch (e) { m = null; }
+    if (!m) return; // before any scenario: leave the real navigator.storage
+    window.__persistCalls = 0;
+    function install(value) {
+      try {
+        Object.defineProperty(navigator, 'storage', { value: value, configurable: true });
+      } catch (e) {
+        Object.defineProperty(Navigator.prototype, 'storage', {
+          get: function () { return value; }, configurable: true
+        });
       }
-      if (m === 'absent') { install(undefined); return; }
-      let granted = m === 'already';
-      install({
-        persisted: function () { return Promise.resolve(granted); },
-        persist: function () {
-          window.__persistCalls++;
-          if (m === 'error') return Promise.reject(new Error('persist api error'));
-          if (m === 'granted') { granted = true; return Promise.resolve(true); }
-          return Promise.resolve(false); // denied
-        },
-        estimate: function () {
-          return Promise.resolve({ usage: 512 * 1024 * 1024, quota: 2 * 1024 * 1024 * 1024 });
-        }
-      });
-    }, mode);
-  }
+    }
+    if (m === 'absent') { install(undefined); return; }
+    if (m === 'blocked-marker') {
+      // Block WRITES of the persistence marker only — the read-ok/write-fail
+      // shape of a full quota — leaving every other key (game saves, fences)
+      // working normally.
+      const realSet = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k) {
+        if (k === keys.flag) throw new Error('QuotaExceededError (test)');
+        return realSet.apply(this, arguments);
+      };
+    }
+    let granted = m === 'already';
+    install({
+      persisted: function () { return Promise.resolve(granted); },
+      persist: function () {
+        window.__persistCalls++;
+        if (m === 'error') return Promise.reject(new Error('persist api error'));
+        if (m === 'granted') { granted = true; return Promise.resolve(true); }
+        return Promise.resolve(false); // denied / blocked-marker
+      },
+      estimate: function () {
+        return Promise.resolve({ usage: 512 * 1024 * 1024, quota: 2 * 1024 * 1024 * 1024 });
+      }
+    });
+  }, { mode: MODE_KEY, flag: FLAG });
 
   // Fresh app state per scenario (the persist flag, saved game, archive).
+  // The mode key is written AFTER the clear so the app navigation — and any
+  // mid-scenario reload — boots with exactly this scenario's stub.
   async function resetState(mode) {
     await page.goto(t.url + 'blank');
-    await page.evaluate(function () {
+    await page.evaluate(function (arg) {
       localStorage.clear();
+      localStorage.setItem(arg.key, arg.mode);
       return new Promise(function (resolve) {
         const req = indexedDB.deleteDatabase('chessy-coach');
         req.onsuccess = req.onerror = req.onblocked = function () { resolve(); };
       });
-    });
-    await stub(mode);
+    }, { key: MODE_KEY, mode: mode });
     await page.goto(t.url);
     await page.waitForSelector('#board .square');
   }
@@ -184,21 +202,39 @@ require('./helper').run('storage-health', async function (t) {
     'a denial is a settled answer: later launches never nag');
 
   // --- API error: archiving is unaffected; the request may retry in a
-  // LATER session (flag unset) but never twice in one load.
+  // LATER session (the pre-armed flag is cleared on rejection) but never
+  // twice in one load.
   await resetState('error');
   await playFinishedGame();
   await page.waitForFunction(function () { return window.__persistCalls === 1; });
   await waitGameCount(1);
   await playFinishedGame();
   await waitGameCount(2);
-  check((await persistCalls()) === 1 && !(await flagSet()),
-    'a rejecting persist() is attempted once per load and leaves the flag unset');
+  // The flag is pre-armed before the request and cleared when it rejects —
+  // wait for the stable end state rather than sampling mid-transition.
+  await page.waitForFunction(function (k) {
+    return window.__persistCalls === 1 && localStorage.getItem(k) === null;
+  }, FLAG);
+  check(true,
+    'a rejecting persist() is attempted once per load and clears the pre-armed flag');
   await page.goto(t.url);
   await page.waitForSelector('#board .square');
   await playFinishedGame();
-  await page.waitForFunction(function () { return window.__persistCalls === 1; });
-  check(!(await flagSet()),
+  await page.waitForFunction(function (k) {
+    return window.__persistCalls === 1 && localStorage.getItem(k) === null;
+  }, FLAG);
+  check(true,
     'a later session may retry after a transient API failure');
+
+  // --- Marker write-blocked (read-ok/write-fail quota): never ask at all.
+  // A settled denial could not be recorded, so asking would nag on every
+  // later launch — the request is suppressed until the marker can land.
+  await resetState('blocked-marker');
+  await playFinishedGame();
+  await waitGameCount(1);
+  await page.waitForTimeout(150); // give a wrongful request time to surface
+  check((await persistCalls()) === 0 && !(await flagSet()),
+    'an unrecordable marker suppresses the persistence request entirely');
 
   // --- Already persistent (installed PWA): recorded without a request.
   await resetState('already');
