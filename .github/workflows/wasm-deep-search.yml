@@ -3,6 +3,18 @@
 # The candidate head and its exact origin/main merge-base are built
 # independently with the same pinned toolchain. Performance verdicts are
 # evidence, not CI pass/fail gates; malformed or incomplete measurements fail.
+#
+# TRUST SCOPE — diagnostic only. On pull_request and branch-push triggers,
+# every input to this workflow is candidate-controlled: the workflow file
+# itself (including the TRUSTED_* pins below), the checked-out sources, and
+# the reported results. The pins, contract runs, and input freezes below are
+# defense-in-depth hygiene that keeps honest experiments comparable; they
+# cannot and do not certify evidence against an adversarial author, because
+# a candidate commit can edit this file. Deep-screen output is therefore
+# never merge-authoritative. Merge-authoritative efficiency evidence comes
+# only from the formal v2 gate (wasm-efficiency.yml), which runs as
+# maintainer-labeled pull_request_target with all verdict code taken from
+# the trusted base revision, after human review of the exact candidate diff.
 
 name: WASM deep-search experiment
 
@@ -52,6 +64,8 @@ env:
   RUST_MANIFEST_SHA256: 03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf
   BINARYEN_URL: https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz
   BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
+  TRUSTED_DEEP_HARNESS_SHA: 1bb072c4446e0a3856360cb0f654444956ff4dcb
+  TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489
 
 jobs:
   compare:
@@ -60,12 +74,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out exact candidate head
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
@@ -77,13 +91,47 @@ jobs:
           BASE_SHA=$(git merge-base refs/remotes/origin/main HEAD)
           CANDIDATE_SHA=$(git rev-parse HEAD)
           BASE_DIR="$RUNNER_TEMP/chessy-origin-main"
+          TRUSTED_DIR="$RUNNER_TEMP/chessy-deep-harness"
+          git cat-file -e "$TRUSTED_DEEP_HARNESS_SHA^{commit}"
+          if [ "$(git merge-base "$TRUSTED_DEEP_HARNESS_SHA" HEAD)" != \
+              "$TRUSTED_DEEP_HARNESS_SHA" ]; then
+            echo "::error::Candidate is not descended from the trusted deep harness"
+            exit 2
+          fi
           git worktree add --detach "$BASE_DIR" "$BASE_SHA"
+          git worktree add --detach "$TRUSTED_DIR" \
+            "$TRUSTED_DEEP_HARNESS_SHA"
           echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
           echo "MAIN_TIP=$MAIN_TIP" >> "$GITHUB_ENV"
           echo "CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_ENV"
           echo "BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
-          printf 'candidate %s\nreference merge-base %s\ncurrent main %s\n' \
-            "$CANDIDATE_SHA" "$BASE_SHA" "$MAIN_TIP"
+          echo "TRUSTED_DIR=$TRUSTED_DIR" >> "$GITHUB_ENV"
+          printf 'candidate %s\nreference merge-base %s\ntrusted harness %s\ncurrent main %s\n' \
+            "$CANDIDATE_SHA" "$BASE_SHA" "$TRUSTED_DEEP_HARNESS_SHA" \
+            "$MAIN_TIP"
+
+      - name: Freeze diagnostic build inputs
+        run: |
+          # The accounting contract verifies experiments/wasm/src, so the
+          # remaining build-input surface (manifest, lockfile, toolchain
+          # file, and the absence of build scripts or cargo config) must
+          # match the pinned harness revision, or the compiled module could
+          # come from sources the verifier never saw. Candidates that need
+          # new build inputs must first land them in the harness.
+          for input in Cargo.toml Cargo.lock rust-toolchain.toml; do
+            if ! cmp -s "$TRUSTED_DIR/experiments/wasm/$input" \
+                "experiments/wasm/$input"; then
+              echo "::error::Candidate changed diagnostic build input $input"
+              exit 2
+            fi
+          done
+          for forbidden in experiments/wasm/build.rs \
+              experiments/wasm/.cargo .cargo; do
+            if [ -e "$forbidden" ]; then
+              echo "::error::Candidate added unverified build input $forbidden"
+              exit 2
+            fi
+          done
 
       - name: Install pinned Rust and Binaryen
         run: |
@@ -116,7 +164,10 @@ jobs:
           CARGO_HOME: ${{ runner.temp }}/cargo-home
           RUSTUP_TOOLCHAIN: ${{ env.RUST_VERSION }}
         run: |
-          node experiments/wasm/deep-bench.test.js
+          node "$TRUSTED_DIR/experiments/wasm/deep-bench.test.js"
+          node "$TRUSTED_DIR/test/wasm-node-accounting-contract.js" \
+            "$TRUSTED_DIR/experiments/wasm/src" \
+            "$GITHUB_WORKSPACE/experiments/wasm/src"
           CARGO_BIN=$(rustup which --toolchain "$RUST_VERSION" cargo)
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
           (
@@ -138,6 +189,14 @@ jobs:
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
           WASM_OPT_BIN="$RUNNER_TEMP/binaryen-version_131/bin/wasm-opt"
           mkdir -p "$RUNNER_TEMP/deep-wasm"
+          TRUSTED_DRIVER="$TRUSTED_DIR/experiments/wasm/build.sh"
+          echo "$TRUSTED_BUILD_DRIVER_SHA256  $TRUSTED_DRIVER" |
+            sha256sum -c -
+          # Neither candidate nor older merge-base driver changes may bias
+          # either side of the screen.
+          cp "$TRUSTED_DRIVER" "$BASE_DIR/experiments/wasm/build.sh"
+          cp "$TRUSTED_DRIVER" \
+            experiments/wasm/build.sh
           RUSTC="$RUSTC_BIN" \
             CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target-reference" \
             CHESSY_CARGO_BIN="$CARGO_BIN" \
@@ -159,7 +218,15 @@ jobs:
       - name: Run divergent deep-search screen
         run: |
           mkdir -p deep-report
-          node experiments/wasm/deep-bench.js \
+          {
+            echo '> Diagnostic evidence only: on pull_request and push'
+            echo '> triggers this workflow and its pins are'
+            echo '> candidate-controlled. Merge-authoritative efficiency'
+            echo '> evidence comes only from the maintainer-labeled formal'
+            echo '> v2 gate.'
+            echo ''
+          } >> "$GITHUB_STEP_SUMMARY"
+          node "$TRUSTED_DIR/experiments/wasm/deep-bench.js" \
             --candidate "$RUNNER_TEMP/deep-wasm/candidate.wasm" \
             --reference "$RUNNER_TEMP/deep-wasm/reference.wasm" \
             --candidate-label "$CANDIDATE_SHA" \
@@ -176,7 +243,7 @@ jobs:
 
       - name: Upload report and exact compared modules
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wasm-deep-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

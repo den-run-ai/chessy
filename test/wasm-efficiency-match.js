@@ -18,6 +18,7 @@
  *     --candidate-wasm /path/to/candidate.wasm \
  *     --reference-wasm /path/to/reference.wasm \
  *     --candidate-sha <40-hex> --base-sha <40-hex> \
+ *     --harness-sha <40-hex> \
  *     --seedbase 0 --openbase 0
  *
  * Fast manifest-only validation:
@@ -41,11 +42,15 @@ const NODES = PROTOCOL.budgetValue;
 const MAX_PLIES = PROTOCOL.maxPlies;
 const SHARD_OPENINGS = 20;
 const PROBE_NODES = 3000;
+const MATE_NEAR = 999000;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const DIGEST_RE = /^[0-9a-f]{64}$/;
+const FIXED_NODE_STOP_REASONS = new Set([
+  'node-limit', 'max-depth', 'mate'
+]);
 const VALUE_OPTIONS = new Set([
   'candidate-wasm', 'reference-wasm', 'candidate-sha', 'base-sha',
-  'seedbase', 'openbase'
+  'harness-sha', 'seedbase', 'openbase'
 ]);
 
 function usageError(message) {
@@ -95,9 +100,11 @@ function parseArgs(argv) {
 
   const candidateSha = required('candidate-sha');
   const baseSha = required('base-sha');
-  if (!SHA_RE.test(candidateSha) || !SHA_RE.test(baseSha)) {
-    throw usageError('--candidate-sha and --base-sha must be canonical ' +
-      '40-character lowercase commit SHAs');
+  const harnessSha = required('harness-sha');
+  if (!SHA_RE.test(candidateSha) || !SHA_RE.test(baseSha) ||
+      !SHA_RE.test(harnessSha)) {
+    throw usageError('--candidate-sha, --base-sha and --harness-sha must ' +
+      'be canonical 40-character lowercase commit SHAs');
   }
   if (candidateSha === baseSha) {
     throw usageError('formal WASM efficiency protocol requires distinct ' +
@@ -110,6 +117,7 @@ function parseArgs(argv) {
     referenceWasm: path.resolve(required('reference-wasm')),
     candidateSha,
     baseSha,
+    harnessSha,
     seedbase: coordinate('seedbase', 0, [0, 1, 2, 3]),
     openbase: coordinate('openbase', 0, [0, 20, 40, 60, 80])
   };
@@ -162,6 +170,60 @@ function sha256(bytes) {
   return digest;
 }
 
+function assertFixedNodeResult(result, label, nodeBudget, fen, ply) {
+  const where = label +
+    (Number.isSafeInteger(ply) ? ' at game ply ' + (ply + 1) : '') +
+    (fen ? ' (' + fen + ')' : '');
+  if (!result || !Number.isSafeInteger(result.nodes) ||
+      result.nodes <= 0 || result.nodes > nodeBudget) {
+    throw new Error(where + ' violated the ' + nodeBudget +
+      '-node budget (searched ' +
+      JSON.stringify(result && result.nodes) + ')');
+  }
+  if (!Number.isSafeInteger(result.qnodes) || result.qnodes < 0 ||
+      result.qnodes > result.nodes) {
+    throw new Error(where + ' returned invalid qnodes ' +
+      JSON.stringify(result.qnodes) + ' for ' + result.nodes + ' nodes');
+  }
+  if (!Number.isSafeInteger(result.score) ||
+      !Number.isSafeInteger(result.depth) ||
+      result.depth < 0 || result.depth > MAX_DEPTH ||
+      (result.attemptedDepth !== null &&
+        (!Number.isSafeInteger(result.attemptedDepth) ||
+          result.attemptedDepth < 1 ||
+          result.attemptedDepth > MAX_DEPTH))) {
+    throw new Error(where + ' returned incoherent score/depth metadata');
+  }
+  if (!FIXED_NODE_STOP_REASONS.has(result.stopReason)) {
+    throw new Error(where + ' returned invalid fixed-node stopReason ' +
+      JSON.stringify(result.stopReason));
+  }
+  if (result.stopReason === 'node-limit' && result.nodes !== nodeBudget) {
+    throw new Error(where + ' reported node-limit after ' + result.nodes +
+      ' nodes instead of the requested ' + nodeBudget);
+  }
+  if (result.stopReason === 'node-limit' &&
+      result.attemptedDepth !== null &&
+      result.attemptedDepth !== result.depth + 1) {
+    throw new Error(where + ' reported inconsistent node-limit depth ' +
+      '(depth ' + result.depth + ', attemptedDepth ' +
+      result.attemptedDepth + ')');
+  }
+  if (result.stopReason === 'max-depth' &&
+      (result.depth !== MAX_DEPTH || result.attemptedDepth !== null)) {
+    throw new Error(where + ' reported inconsistent max-depth completion ' +
+      '(depth ' + JSON.stringify(result.depth) + ', attemptedDepth ' +
+      JSON.stringify(result.attemptedDepth) + ')');
+  }
+  if (result.stopReason === 'mate' &&
+      (Math.abs(result.score) < MATE_NEAR ||
+        result.depth < 1 || result.attemptedDepth !== null)) {
+    throw new Error(where + ' reported inconsistent mate completion ' +
+      '(score ' + result.score + ', depth ' + result.depth +
+      ', attemptedDepth ' + JSON.stringify(result.attemptedDepth) + ')');
+  }
+}
+
 function assertBounded(engine, label) {
   const result = engine.search(Chess.START_FEN, {
     maxDepth: MAX_DEPTH,
@@ -169,8 +231,9 @@ function assertBounded(engine, label) {
     timeMs: 0,
     quiesce: true
   });
-  if (result.nodes > PROBE_NODES + 1 ||
-      result.stopReason !== 'node-limit') {
+  assertFixedNodeResult(
+    result, label + ' startup probe', PROBE_NODES, Chess.START_FEN, null);
+  if (result.stopReason !== 'node-limit') {
     throw new Error(label + ' does not honor the fixed-node contract ' +
       '(searched ' + result.nodes + ', stopReason ' +
       JSON.stringify(result.stopReason) + ' for ' + PROBE_NODES + ' nodes)');
@@ -198,12 +261,21 @@ function playGame(engines, sans, candidate, telemetry) {
     if (status.over) return scoreForWhite(status);
 
     const engine = engines[state.turn === 'w' ? 0 : 1];
-    const result = engine.search(Chess.toFen(state), {
+    const fen = Chess.toFen(state);
+    const result = engine.search(fen, {
       maxDepth: MAX_DEPTH,
       nodeLimit: NODES,
       timeMs: 0,
       quiesce: true
     });
+    assertFixedNodeResult(
+      result,
+      (engine === candidate ? 'candidate' : 'reference') +
+        ' WASM',
+      NODES,
+      fen,
+      plies
+    );
     if (engine === candidate) {
       telemetry.moves++;
       const depth = result.depth || 0;
@@ -295,6 +367,7 @@ async function runMatch(config, environment) {
   console.log('lower-bound-threshold: ' + PROTOCOL.lowerBoundThreshold);
   console.log('candidate-sha: ' + config.candidateSha);
   console.log('base-sha: ' + config.baseSha);
+  console.log('harness-sha: ' + config.harnessSha);
   console.log('candidate-wasm-sha256: ' + candidateDigest);
   console.log('base-wasm-sha256: ' + referenceDigest);
   console.log('budget-mode: ' + PROTOCOL.budgetMode);
@@ -368,7 +441,9 @@ module.exports = {
   parseArgs,
   openingState,
   validateOpenings,
+  assertFixedNodeResult,
   resolveMove,
+  playGame,
   runMatch,
   main
 };

@@ -3,6 +3,9 @@
 const assert = require('assert');
 const deep = require('./deep-bench.js');
 
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const PROMOTION_FEN = '8/4P3/8/8/8/8/2k5/4K3 w - - 0 1';
+
 let passed = 0;
 function test(name, callback) {
   callback();
@@ -171,6 +174,235 @@ test('rejects a candidate that loses the paired time-to-depth screen', function 
     shallower: 3
   });
   assert.strictEqual(decision.code, 'REJECT-TIME-TO-DEPTH');
+});
+
+test('validates fixed-depth early completions before exempting them', function () {
+  const completed = result(1000, 400);
+  const mate = result(1200, 500, {
+    score: 999100,
+    depth: 4,
+    attemptedDepth: null,
+    stopReason: 'mate'
+  });
+  const gameOver = result(0, 0, {
+    move: '-',
+    score: 0,
+    depth: 0,
+    attemptedDepth: null,
+    cutoffs: 0,
+    researches: 0,
+    stopReason: 'game-over',
+    ms: 1,
+    nps: null,
+    qshare: 0,
+    sampleMs: [1, 1]
+  });
+  deep.assertFixedResult(completed, 'candidate', 7, START);
+  deep.assertFixedResult(mate, 'candidate', 7, START);
+
+  throws(/inconsistent fixed-depth mate/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, mate, { score: 12 }), 'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth mate/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, mate, { attemptedDepth: 5 }), 'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth mate/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, mate, {
+        nodes: 0,
+        qnodes: 0
+      }),
+      'candidate', 7, START);
+  });
+  throws(/game-over for a predeclared nonterminal fixed-depth position/,
+    function () {
+      deep.assertFixedResult(gameOver, 'candidate', 7, START);
+    });
+  throws(/inconsistent fixed-depth max-depth/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, { move: '-' }), 'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth max-depth/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, { move: 'e2e2' }), 'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth mate/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, mate, { move: '-' }), 'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth max-depth/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, {
+        nodes: 0,
+        qnodes: 0
+      }),
+      'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth max-depth/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, { score: 999100 }), 'candidate', 7, START);
+  });
+  throws(/invalid fixed-depth elapsed time 0/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, { ms: 0 }), 'candidate', 7, START);
+  });
+  throws(/incoherent fixed-depth search counters/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, mate, { qnodes: mate.nodes + 1 }), 'candidate', 7, START);
+  });
+  throws(/inconsistent fixed-depth max-depth/, function () {
+    deep.assertFixedResult(
+      result(1000, 400, { depth: 6 }), 'candidate', 7, START);
+  });
+  throws(/invalid fixed-depth stopReason "time-limit"/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, mate, {
+        score: 12,
+        attemptedDepth: 5,
+        stopReason: 'time-limit'
+      }),
+      'candidate', 7, START);
+  });
+});
+
+test('enforces the timed host budget and stop metadata before scoring depth',
+  function () {
+    const timed = result(500000, 200000, {
+      depth: 10,
+      attemptedDepth: 11,
+      stopReason: 'time-limit',
+      ms: 5100
+    });
+    assert.strictEqual(deep.timedOvershootAllowance(5000), 100);
+    deep.assertTimedResult(timed, 'candidate', 5000, 30, START);
+
+    throws(/host-observed budget.*elapsed 5101ms/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, { ms: 5101 }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, { attemptedDepth: 12 }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, { score: 999100 }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          depth: 0,
+          attemptedDepth: null
+        }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          depth: 30,
+          attemptedDepth: null
+        }),
+        'candidate', 5000, 30, START);
+    });
+    deep.assertTimedResult(
+      Object.assign({}, timed, {
+        depth: 10,
+        attemptedDepth: null
+      }),
+      'candidate', 5000, 30, START);
+    throws(/invalid timed stopReason "node-limit"/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          attemptedDepth: 11,
+          stopReason: 'node-limit'
+        }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          move: '-',
+          nodes: 0,
+          qnodes: 0
+        }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent timed max-depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          depth: 29,
+          attemptedDepth: null,
+          stopReason: 'max-depth'
+        }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/inconsistent timed mate/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          score: 12,
+          depth: 8,
+          attemptedDepth: null,
+          stopReason: 'mate'
+        }),
+        'candidate', 5000, 30, START);
+    });
+    throws(/game-over for a predeclared nonterminal timed position/,
+      function () {
+        deep.assertTimedResult(
+          result(0, 0, {
+            move: '-',
+            score: 0,
+            depth: 0,
+            attemptedDepth: null,
+            cutoffs: 0,
+            researches: 0,
+            stopReason: 'game-over',
+            ms: 1
+          }),
+          'candidate', 5000, 30, START);
+      });
+  });
+
+test('resolves every reported move against the fixture arbiter', function () {
+  const completed = result(1000, 400);
+  deep.assertFixedResult(completed, 'candidate', 7, START);
+
+  throws(/not legal in the fixed-depth fixture/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, { move: 'e2e5' }), 'candidate', 7, START);
+  });
+  throws(/not legal in the fixed-depth fixture/, function () {
+    deep.assertFixedResult(
+      Object.assign({}, completed, { move: 'a7a5' }), 'candidate', 7, START);
+  });
+  throws(/missing the fixture FEN/, function () {
+    deep.assertFixedResult(completed, 'candidate', 7);
+  });
+
+  const timed = result(500000, 200000, {
+    depth: 10,
+    attemptedDepth: 11,
+    stopReason: 'time-limit',
+    ms: 5000
+  });
+  throws(/not legal in the timed fixture/, function () {
+    deep.assertTimedResult(
+      Object.assign({}, timed, { move: 'e2e5' }),
+      'candidate', 5000, 30, START);
+  });
+
+  // Promotion suffixes may arrive in either case from the WASM ABI.
+  deep.assertFixedResult(
+    Object.assign({}, completed, { move: 'e7e8q' }),
+    'candidate', 7, PROMOTION_FEN);
+  deep.assertFixedResult(
+    Object.assign({}, completed, { move: 'e7e8Q' }),
+    'candidate', 7, PROMOTION_FEN);
 });
 
 test('rejects narrow or marginal activity before strength testing', function () {

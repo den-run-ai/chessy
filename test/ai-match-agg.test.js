@@ -14,6 +14,7 @@ const OPENINGS = 100;
 const WORKFLOW = 'https://github.com/den-run-ai/chessy/actions/runs/123';
 const CANDIDATE = 'a'.repeat(40);
 const BASE = 'b'.repeat(40);
+const HARNESS = 'e'.repeat(40);
 const CANDIDATE_WASM = 'c'.repeat(64);
 const BASE_WASM = 'd'.repeat(64);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aggtest-'));
@@ -75,6 +76,7 @@ function shardFile(name, seed, over) {
     ['node-runtime', over.runtime || 'v22.0.0']
   ];
   if (protocolConfig.engineKind === 'wasm') {
+    fields.push(['harness-sha', over.harness || HARNESS]);
     fields.push([
       'candidate-wasm-sha256', over.candidateWasm || CANDIDATE_WASM
     ]);
@@ -96,6 +98,35 @@ function shardFile(name, seed, over) {
   }
   if (over.extra) lines.push(over.extra);
   const p = path.join(dir, name);
+  fs.writeFileSync(p, lines.join('\n') + '\n');
+  return p;
+}
+function provenanceFile(name, over) {
+  over = over || {};
+  const fields = [
+    ['protocol-id', over.protocol ||
+      MatchProtocol.PROTOCOLS.wasmEfficiencyFixedNode.id],
+    ['harness-sha', over.harness || HARNESS],
+    ['candidate-sha', over.candidate || CANDIDATE],
+    ['base-sha', over.base || BASE],
+    ['candidate-wasm-sha256',
+      over.candidateWasm || CANDIDATE_WASM],
+    ['base-wasm-sha256', over.baseWasm || BASE_WASM],
+    ['workflow-run', over.workflow || WORKFLOW]
+  ];
+  const p = path.join(dir, name);
+  const lines = fields.filter(function (entry) {
+    return entry[0] !== over.omit;
+  }).map(function (entry) {
+    return entry[0] + '=' + entry[1];
+  });
+  if (over.duplicate) {
+    const hit = fields.find(function (entry) {
+      return entry[0] === over.duplicate;
+    });
+    lines.push(over.duplicate + '=' + (hit ? hit[1] : 'duplicate'));
+  }
+  if (over.extra) lines.push(over.extra);
   fs.writeFileSync(p, lines.join('\n') + '\n');
   return p;
 }
@@ -131,11 +162,60 @@ const wasmFull = [
   shardFile('wasm-s2.txt', 2, { wasm: true }),
   shardFile('wasm-s3.txt', 3, { wasm: true })
 ];
+const wasmProvenance = provenanceFile('wasm-PROVENANCE');
 
 console.log('accepts canonical complete manifests');
 expect(full, 0, 'canonical 100x4 workflow manifest passes');
 expect(wasmFull, 0,
-  'canonical 100x4 WASM efficiency manifest passes at >49%');
+  'canonical 100x4 WASM efficiency manifest passes at >49%',
+  ['--provenance', wasmProvenance]);
+expectMessage(wasmFull, 2, 'requires --provenance',
+  'formal WASM evidence cannot pass without trusted provenance');
+expectMessage(wasmFull, 3, 'trusted provenance candidate-sha',
+  'trusted provenance rejects a different candidate SHA',
+  ['--provenance', provenanceFile('wrong-candidate-PROVENANCE', {
+    candidate: 'f'.repeat(40)
+  })]);
+expectMessage(wasmFull, 3, 'trusted provenance candidate-wasm-sha256',
+  'trusted provenance rejects a different candidate module',
+  ['--provenance', provenanceFile('wrong-module-PROVENANCE', {
+    candidateWasm: 'f'.repeat(64)
+  })]);
+expectMessage(wasmFull, 3, 'trusted provenance harness-sha',
+  'trusted provenance rejects a different harness SHA',
+  ['--provenance', provenanceFile('wrong-harness-PROVENANCE', {
+    harness: 'f'.repeat(40)
+  })]);
+expectMessage(wasmFull, 3, 'trusted provenance base-sha',
+  'trusted provenance rejects a different frozen base SHA',
+  ['--provenance', provenanceFile('wrong-base-PROVENANCE', {
+    base: 'f'.repeat(40)
+  })]);
+expectMessage(wasmFull, 3, 'trusted provenance base-wasm-sha256',
+  'trusted provenance rejects a different reference module',
+  ['--provenance', provenanceFile('wrong-reference-PROVENANCE', {
+    baseWasm: 'f'.repeat(64)
+  })]);
+expectMessage(wasmFull, 3, 'trusted provenance workflow-run',
+  'trusted provenance rejects a different workflow run',
+  ['--provenance', provenanceFile('wrong-workflow-PROVENANCE', {
+    workflow: 'https://github.com/den-run-ai/chessy/actions/runs/456'
+  })]);
+expectMessage(wasmFull, 2, 'missing trusted provenance field base-sha',
+  'trusted provenance rejects a missing field',
+  ['--provenance', provenanceFile('missing-field-PROVENANCE', {
+    omit: 'base-sha'
+  })]);
+expectMessage(wasmFull, 2, 'duplicate trusted provenance field candidate-sha',
+  'trusted provenance rejects a duplicate field',
+  ['--provenance', provenanceFile('duplicate-field-PROVENANCE', {
+    duplicate: 'candidate-sha'
+  })]);
+expectMessage(wasmFull, 2, 'malformed or unknown trusted provenance line',
+  'trusted provenance rejects an unknown field',
+  ['--provenance', provenanceFile('unknown-field-PROVENANCE', {
+    extra: 'surprise=value'
+  })]);
 expect([
   shardFile('local0.txt', 0, { formal: true, local: true }),
   shardFile('local1.txt', 1, { formal: true, local: true }),
@@ -208,7 +288,7 @@ const wasmIdentity = run([
   shardFile('wasm-identity-3.txt', 3, {
     wasm: true, records: identityRecords(3)
   })
-]);
+], ['--provenance', wasmProvenance]);
 check(wasmIdentity.status === 0 &&
     wasmIdentity.output.includes(
       'formal efficiency non-inferiority fixed-node gate') &&

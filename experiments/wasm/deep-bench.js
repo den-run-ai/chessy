@@ -27,6 +27,8 @@
 const fs = require('fs');
 const path = require('path');
 const bench = require('./bench.js');
+require(path.join(__dirname, '..', '..', 'assets', 'engine.js'));
+const Chess = globalThis.Chess;
 
 // Unbounded depth 8 on the middlegame fixtures can fill the engine's fixed
 // transposition table before completion. Keep this screen exact by using the
@@ -50,6 +52,49 @@ const FIXED_FIELDS = Object.freeze([
   'move', 'score', 'depth', 'attemptedDepth', 'nodes', 'qnodes', 'cutoffs',
   'researches', 'stopReason', 'experimentMetrics'
 ]);
+const MATE_NEAR = 999000;
+const TIMED_OVERSHOOT_FRACTION = 0.02;
+const TIMED_OVERSHOOT_MIN_MS = 25;
+const COORDINATE_MOVE_RE = /^[a-h][1-8][a-h][1-8][QRBNqrbn]?$/;
+
+function isCoordinateMove(move) {
+  return COORDINATE_MOVE_RE.test(move) &&
+    move.slice(0, 2) !== move.slice(2, 4);
+}
+
+// A coordinate-shaped move can still be illegal in the measured position.
+// Resolve every reported move against the same JavaScript arbiter the
+// formal match uses, so fabricated completion metadata cannot contribute
+// node or depth evidence.
+const LEGAL_MOVE_SETS = new Map();
+
+function legalMoveSet(fen) {
+  let moves = LEGAL_MOVE_SETS.get(fen);
+  if (!moves) {
+    const state = Chess.newGameState(fen);
+    moves = new Set(Chess.legalMoves(state).map(function (move) {
+      return (Chess.sqName(move.from) + Chess.sqName(move.to) +
+        (move.promotion || '')).toLowerCase();
+    }));
+    if (!moves.size) {
+      throw new Error('fixture FEN has no legal moves: ' + fen);
+    }
+    LEGAL_MOVE_SETS.set(fen, moves);
+  }
+  return moves;
+}
+
+function assertLegalMove(result, label, mode, fen) {
+  if (typeof fen !== 'string' || !fen) {
+    throw new Error(label + ' ' + mode +
+      ' validation is missing the fixture FEN');
+  }
+  if (!legalMoveSet(fen).has(String(result.move).toLowerCase())) {
+    throw new Error(label + ' reported a move that is not legal in the ' +
+      mode + ' fixture (move ' + JSON.stringify(result.move) +
+      ', fen ' + JSON.stringify(fen) + ')');
+  }
+}
 
 function canonicalPositions() {
   return bench.POSITIONS.map(function (position, index) {
@@ -216,6 +261,116 @@ function measuredResult(result) {
   };
 }
 
+function timedOvershootAllowance(timeMs) {
+  if (!Number.isSafeInteger(timeMs) || timeMs <= 0) {
+    throw new Error('timed search budget must be a positive safe integer');
+  }
+  return Math.max(
+    TIMED_OVERSHOOT_MIN_MS,
+    Math.ceil(timeMs * TIMED_OVERSHOOT_FRACTION));
+}
+
+function assertSearchResultMetadata(result, label, maxDepth, mode) {
+  if (!result || !Number.isSafeInteger(maxDepth) || maxDepth < 1 ||
+      !Number.isSafeInteger(result.score) ||
+      !Number.isSafeInteger(result.depth) ||
+      result.depth < 0 || result.depth > maxDepth ||
+      (result.attemptedDepth !== null &&
+        (!Number.isSafeInteger(result.attemptedDepth) ||
+          result.attemptedDepth < 1 ||
+          result.attemptedDepth > maxDepth))) {
+    throw new Error(label + ' returned incoherent ' + mode +
+      ' score/depth metadata');
+  }
+  if (!Number.isSafeInteger(result.nodes) || result.nodes < 0 ||
+      !Number.isSafeInteger(result.qnodes) || result.qnodes < 0 ||
+      result.qnodes > result.nodes ||
+      !Number.isSafeInteger(result.cutoffs) || result.cutoffs < 0 ||
+      !Number.isSafeInteger(result.researches) || result.researches < 0) {
+    throw new Error(label + ' returned incoherent ' + mode +
+      (mode === 'timed' ? ' node counters' : ' search counters'));
+  }
+}
+
+function assertCompletedResult(result, label, maxDepth, mode, fen) {
+  if (result.stopReason === 'max-depth') {
+    if (result.depth !== maxDepth || result.attemptedDepth !== null ||
+        result.nodes < 1 || Math.abs(result.score) >= MATE_NEAR ||
+        !isCoordinateMove(result.move)) {
+      throw new Error(label + ' reported inconsistent ' + mode +
+        ' max-depth (depth ' + result.depth + ', attemptedDepth ' +
+        JSON.stringify(result.attemptedDepth) + ', move ' +
+        JSON.stringify(result.move) + ', nodes ' + result.nodes + ')');
+    }
+    assertLegalMove(result, label, mode, fen);
+    return true;
+  }
+  if (result.stopReason === 'mate') {
+    if (Math.abs(result.score) < MATE_NEAR ||
+        result.depth < 1 || result.attemptedDepth !== null ||
+        result.nodes < 1 || !isCoordinateMove(result.move)) {
+      throw new Error(label + ' reported inconsistent ' + mode + ' mate ' +
+        '(score ' + result.score + ', depth ' + result.depth +
+        ', attemptedDepth ' + JSON.stringify(result.attemptedDepth) +
+        ', move ' + JSON.stringify(result.move) +
+        ', nodes ' + result.nodes + ')');
+    }
+    assertLegalMove(result, label, mode, fen);
+    return true;
+  }
+  if (result.stopReason === 'game-over') {
+    // Every deep-screen fixture is predeclared nonterminal. Treat even
+    // internally coherent terminal telemetry as a failed search contract.
+    throw new Error(label + ' reported game-over for a predeclared ' +
+      'nonterminal ' + mode + ' position');
+  }
+  return false;
+}
+
+function assertFixedResult(result, label, maxDepth, fen) {
+  if (!result || !Number.isFinite(result.ms) || result.ms <= 0) {
+    throw new Error(label + ' returned invalid fixed-depth elapsed time ' +
+      JSON.stringify(result && result.ms));
+  }
+  assertSearchResultMetadata(result, label, maxDepth, 'fixed-depth');
+  if (!assertCompletedResult(
+    result, label, maxDepth, 'fixed-depth', fen)) {
+    throw new Error(label + ' returned invalid fixed-depth stopReason ' +
+      JSON.stringify(result.stopReason));
+  }
+}
+
+function assertTimedResult(result, label, timeMs, maxDepth, fen) {
+  const allowanceMs = timedOvershootAllowance(timeMs);
+  const maximumElapsedMs = timeMs + allowanceMs;
+  if (!result || !Number.isFinite(result.ms) || result.ms <= 0 ||
+      result.ms > maximumElapsedMs) {
+    throw new Error(label + ' violated the ' + timeMs +
+      'ms host-observed budget plus ' + allowanceMs +
+      'ms overshoot allowance (elapsed ' +
+      JSON.stringify(result && result.ms) + 'ms)');
+  }
+  assertSearchResultMetadata(result, label, maxDepth, 'timed');
+  if (result.stopReason === 'time-limit') {
+    if ((result.attemptedDepth === null &&
+          (result.depth < 1 || result.depth >= maxDepth)) ||
+        (result.attemptedDepth !== null &&
+          result.attemptedDepth !== result.depth + 1) ||
+        result.nodes < 1 || Math.abs(result.score) >= MATE_NEAR ||
+        !isCoordinateMove(result.move)) {
+      throw new Error(label + ' reported inconsistent time-limit depth ' +
+        '(depth ' + result.depth + ', attemptedDepth ' +
+        JSON.stringify(result.attemptedDepth) + ', move ' +
+        JSON.stringify(result.move) + ', nodes ' + result.nodes + ')');
+    }
+    assertLegalMove(result, label, 'timed', fen);
+    return;
+  }
+  if (assertCompletedResult(result, label, maxDepth, 'timed', fen)) return;
+  throw new Error(label + ' returned invalid timed stopReason ' +
+    JSON.stringify(result.stopReason));
+}
+
 function summarizeFixed(samples, label) {
   const first = samples[0];
   for (let index = 1; index < samples.length; index++) {
@@ -275,6 +430,12 @@ function fixedPosition(candidate, reference, position, positionIndex, depth, pai
     const pair = runOrderedPair(
       candidate, reference, position.fen, options,
       (positionIndex + round) % 2 === 0);
+    assertFixedResult(
+      pair.candidate, position.name + ' round ' + (round + 1) + ' candidate',
+      depth, position.fen);
+    assertFixedResult(
+      pair.reference, position.name + ' round ' + (round + 1) + ' reference',
+      depth, position.fen);
     candidateSamples.push(pair.candidate);
     referenceSamples.push(pair.reference);
     npsRatios.push(
@@ -287,20 +448,6 @@ function fixedPosition(candidate, reference, position, positionIndex, depth, pai
     candidateSamples, position.name + ' candidate');
   const referenceResult = summarizeFixed(
     referenceSamples, position.name + ' reference');
-  if (candidateResult.depth < depth &&
-      candidateResult.stopReason !== 'mate' &&
-      candidateResult.stopReason !== 'game-over') {
-    throw new Error(position.name + ' candidate did not complete depth ' +
-      depth + ': d' + candidateResult.depth + ' ' +
-      candidateResult.stopReason);
-  }
-  if (referenceResult.depth < depth &&
-      referenceResult.stopReason !== 'mate' &&
-      referenceResult.stopReason !== 'game-over') {
-    throw new Error(position.name + ' reference did not complete depth ' +
-      depth + ': d' + referenceResult.depth + ' ' +
-      referenceResult.stopReason);
-  }
   return {
     name: position.name,
     family: position.family,
@@ -597,11 +744,25 @@ function timePosition(candidate, reference, position, positionIndex, config) {
       candidate, reference, position.fen, warmOptions,
       positionIndex % 2 === 0)
     : null;
+  if (warm) {
+    assertTimedResult(
+      warm.candidate, position.name + ' warmup candidate',
+      config.warmMs, warmOptions.maxDepth, position.fen);
+    assertTimedResult(
+      warm.reference, position.name + ' warmup reference',
+      config.warmMs, warmOptions.maxDepth, position.fen);
+  }
   const runs = [];
   for (let round = 0; round < config.timePairs; round++) {
     const pair = runOrderedPair(
       candidate, reference, position.fen, timedOptions,
       (positionIndex + round) % 2 === 0);
+    assertTimedResult(
+      pair.candidate, position.name + ' round ' + (round + 1) + ' candidate',
+      config.timeMs, timedOptions.maxDepth, position.fen);
+    assertTimedResult(
+      pair.reference, position.name + ' round ' + (round + 1) + ' reference',
+      config.timeMs, timedOptions.maxDepth, position.fen);
     runs.push({
       round: round,
       order: pair.order,
@@ -695,6 +856,8 @@ function aggregateTime(rows, timeMs, pairs) {
     positions: rows.length,
     pairsPerPosition: pairs,
     runs: runs.length,
+    overshootAllowanceMs: timedOvershootAllowance(timeMs),
+    maximumElapsedMs: timeMs + timedOvershootAllowance(timeMs),
     deeper: deeper,
     tied: tied,
     shallower: shallower,
@@ -858,6 +1021,10 @@ function fixedMarkdown(title, screen) {
 function timeMarkdown(title, screen) {
   const summary = screen.summary;
   let output = '## ' + title + '\n\n';
+  output += 'Every timed result passed a host-observed elapsed cap of **' +
+    summary.maximumElapsedMs + ' ms** (budget plus ' +
+    summary.overshootAllowanceMs + ' ms / 2%, whichever allowance is ' +
+    'larger) and coherent stop/depth metadata.\n\n';
   output += 'Candidate deeper / tied / shallower: **' + summary.deeper + ' / ' +
     summary.tied + ' / ' + summary.shallower + '**. Mean completed depth: ' +
     fmt(summary.candidateMeanDepth, 2) + ' / ' +
@@ -947,6 +1114,12 @@ async function main(argv) {
     { maxDepth: 3, nodeLimit: 0, timeMs: 0, quiesce: true },
     true
   );
+  assertFixedResult(
+    fixedWarmup.candidate, canonical[0].name + ' warmup candidate', 3,
+    canonical[0].fen);
+  assertFixedResult(
+    fixedWarmup.reference, canonical[0].name + ' warmup reference', 3,
+    canonical[0].fen);
 
   console.log('candidate: ' + config.candidateLabel + ' (' +
     config.candidatePath + ')');
@@ -1032,10 +1205,15 @@ async function main(argv) {
 module.exports = Object.freeze({
   DEPTH8_FAMILY_INDEXES: DEPTH8_FAMILY_INDEXES,
   WITNESSES: WITNESSES,
+  TIMED_OVERSHOOT_FRACTION: TIMED_OVERSHOOT_FRACTION,
+  TIMED_OVERSHOOT_MIN_MS: TIMED_OVERSHOOT_MIN_MS,
   parseOptions: parseOptions,
   median: median,
   geometricMean: geometricMean,
   nearestRank: nearestRank,
+  timedOvershootAllowance: timedOvershootAllowance,
+  assertFixedResult: assertFixedResult,
+  assertTimedResult: assertTimedResult,
   aggregateFixed: aggregateFixed,
   fixedDepthGate: fixedDepthGate,
   finalDecision: finalDecision,

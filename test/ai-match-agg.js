@@ -2,7 +2,8 @@
  * Aggregate self-play match shards into one opening-clustered verdict.
  *
  * Usage:
- *   node test/ai-match-agg.js [--openings 100] [--seeds 4] shard0.txt ...
+ *   node test/ai-match-agg.js [--openings 100] [--seeds 4]
+ *     [--provenance PROVENANCE] shard0.txt ...
  *
  * Every shard must carry exactly one canonical metadata field for protocol,
  * acceptance class/lower-bound threshold, candidate/base commits, budget
@@ -26,11 +27,29 @@ const { clusterStats } = require('./match-stats');
 const MatchProtocol = require('./ai-match-protocol');
 
 const argv = process.argv.slice(2);
+function fail(code, msg) { console.error('ERROR: ' + msg); process.exit(code); }
+const VALUE_OPTIONS = new Set(['openings', 'seeds', 'provenance']);
+const seenOptions = new Set();
+for (let index = 0; index < argv.length; index++) {
+  const argument = argv[index];
+  if (!argument.startsWith('--')) continue;
+  const name = argument.slice(2);
+  if (!VALUE_OPTIONS.has(name)) {
+    fail(2, 'unknown option --' + name);
+  }
+  if (seenOptions.has(name)) {
+    fail(2, '--' + name + ' may be supplied at most once');
+  }
+  seenOptions.add(name);
+  if (index + 1 >= argv.length || argv[index + 1].startsWith('--')) {
+    fail(2, '--' + name + ' requires a value');
+  }
+  index++;
+}
 function opt(name, dflt) {
   const i = argv.indexOf('--' + name);
   return i >= 0 ? argv[i + 1] : dflt;
 }
-function fail(code, msg) { console.error('ERROR: ' + msg); process.exit(code); }
 function posIntOpt(name, dflt) {
   const raw = opt(name, String(dflt));
   const n = Number(raw);
@@ -42,6 +61,7 @@ function posIntOpt(name, dflt) {
 
 const EXP_OPENINGS = posIntOpt('openings', 100);
 const EXP_SEEDS = posIntOpt('seeds', 4);
+const PROVENANCE_FILE = opt('provenance', null);
 if (EXP_OPENINGS !== MatchProtocol.OPENINGS_MANIFEST_COUNT) {
   fail(2, '--openings must match canonical manifest count ' +
     MatchProtocol.OPENINGS_MANIFEST_COUNT + ' (got ' + EXP_OPENINGS + ')');
@@ -49,10 +69,11 @@ if (EXP_OPENINGS !== MatchProtocol.OPENINGS_MANIFEST_COUNT) {
 const files = argv.filter(function (arg, i) {
   if (arg.indexOf('--') === 0) return false;
   return !(i > 0 &&
-    (argv[i - 1] === '--openings' || argv[i - 1] === '--seeds'));
+    VALUE_OPTIONS.has(argv[i - 1].replace(/^--/, '')));
 });
 if (!files.length) {
-  fail(2, 'usage: node test/ai-match-agg.js [--openings N] [--seeds M] <shard-file> ...');
+  fail(2, 'usage: node test/ai-match-agg.js [--openings N] [--seeds M] ' +
+    '[--provenance PROVENANCE] <shard-file> ...');
 }
 
 const REQUIRED = [
@@ -63,7 +84,9 @@ const REQUIRED = [
 ];
 const OPTIONAL = ['workflow-run'];
 const DIAGNOSTIC = ['pair-scores', 'shard', 'depth-dist', 'completed-depth'];
-const CONDITIONAL = ['candidate-wasm-sha256', 'base-wasm-sha256'];
+const CONDITIONAL = [
+  'harness-sha', 'candidate-wasm-sha256', 'base-wasm-sha256'
+];
 const KNOWN = new Set(REQUIRED.concat(OPTIONAL, DIAGNOSTIC, CONDITIONAL));
 
 function values(text, key) {
@@ -79,6 +102,51 @@ function exactOne(text, key, file) {
       ' field (found ' + found.length + ')');
   }
   return found[0];
+}
+function readProvenance(file) {
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch (error) {
+    fail(2, 'cannot read trusted provenance ' + file + ': ' + error.message);
+  }
+  const required = [
+    'protocol-id', 'harness-sha', 'candidate-sha', 'base-sha',
+    'candidate-wasm-sha256', 'base-wasm-sha256', 'workflow-run'
+  ];
+  const parsed = Object.create(null);
+  for (const line of text.split('\n').filter(Boolean)) {
+    const match = line.match(/^([a-z][a-z0-9-]*)=(.+)$/);
+    if (!match || !required.includes(match[1])) {
+      fail(2, file + ': malformed or unknown trusted provenance line ' +
+        JSON.stringify(line));
+    }
+    if (Object.prototype.hasOwnProperty.call(parsed, match[1])) {
+      fail(2, file + ': duplicate trusted provenance field ' + match[1]);
+    }
+    parsed[match[1]] = match[2];
+  }
+  for (const key of required) {
+    if (!Object.prototype.hasOwnProperty.call(parsed, key)) {
+      fail(2, file + ': missing trusted provenance field ' + key);
+    }
+  }
+  for (const key of ['harness-sha', 'candidate-sha', 'base-sha']) {
+    if (!/^[0-9a-f]{40}$/.test(parsed[key])) {
+      fail(2, file + ': ' + key +
+        ' must be canonical 40-character lowercase hex');
+    }
+  }
+  for (const key of ['candidate-wasm-sha256', 'base-wasm-sha256']) {
+    if (!/^[0-9a-f]{64}$/.test(parsed[key])) {
+      fail(2, file + ': ' + key +
+        ' must be canonical 64-character lowercase hex');
+    }
+  }
+  if (!/^https:\/\/[^\s]+\/actions\/runs\/[0-9]+$/.test(
+    parsed['workflow-run'])) {
+    fail(2, file + ': workflow-run is not a canonical Actions run URL');
+  }
+  return parsed;
 }
 function positive(value, key, file) {
   const n = Number(value);
@@ -104,7 +172,7 @@ const sets = {
   acceptance: new Set(),
   budget: new Set(), maxPlies: new Set(), runtime: new Set(),
   manifest: new Set(), total: new Set(), workflow: new Set(),
-  candidateWasm: new Set(), baseWasm: new Set()
+  harness: new Set(), candidateWasm: new Set(), baseWasm: new Set()
 };
 let workflowPresent = 0;
 
@@ -162,20 +230,29 @@ for (const file of files) {
       '" requires acceptance-class "' + protocol.acceptanceClass +
       '" and lower-bound-threshold ' + protocol.lowerBoundThreshold);
   }
+  const harnessValues = values(text, 'harness-sha');
   const candidateWasmValues = values(text, 'candidate-wasm-sha256');
   const baseWasmValues = values(text, 'base-wasm-sha256');
+  let harness = null;
   let candidateWasm = null;
   let baseWasm = null;
   if (protocol.engineKind === 'wasm') {
+    harness = exactOne(text, 'harness-sha', file);
     candidateWasm = exactOne(text, 'candidate-wasm-sha256', file);
     baseWasm = exactOne(text, 'base-wasm-sha256', file);
+    if (!/^[0-9a-f]{40}$/.test(harness)) {
+      fail(2, file +
+        ': harness-sha must be canonical 40-character lowercase hex');
+    }
     if (!/^[0-9a-f]{64}$/.test(candidateWasm) ||
         !/^[0-9a-f]{64}$/.test(baseWasm)) {
       fail(2, file +
         ': candidate/base WASM SHA-256 must be canonical 64-character lowercase hex');
     }
-  } else if (candidateWasmValues.length || baseWasmValues.length) {
-    fail(2, file + ': WASM digests are only valid for a WASM protocol');
+  } else if (harnessValues.length || candidateWasmValues.length ||
+      baseWasmValues.length) {
+    fail(2, file +
+      ': harness/module provenance is only valid for a WASM protocol');
   }
   if (manifestVersion !== MatchProtocol.OPENINGS_MANIFEST_VERSION ||
       manifestSha !== MatchProtocol.OPENINGS_MANIFEST_SHA256) {
@@ -218,6 +295,7 @@ for (const file of files) {
   sets.runtime.add(runtime);
   sets.manifest.add(manifestVersion + ':' + manifestSha);
   sets.total.add(String(total));
+  if (harness) sets.harness.add(harness);
   if (candidateWasm) sets.candidateWasm.add(candidateWasm);
   if (baseWasm) sets.baseWasm.add(baseWasm);
   if (workflow) {
@@ -291,6 +369,34 @@ if (workflowPresent !== 0 && workflowPresent !== files.length) {
 if (sets.workflow.size > 1) {
   fail(3, 'shards came from different workflow runs: ' +
     Array.from(sets.workflow).join(', '));
+}
+const aggregateProtocolId = Array.from(sets.protocol)[0];
+const aggregateProtocol = MatchProtocol.PROTOCOL_BY_ID[aggregateProtocolId];
+if (aggregateProtocol.formal &&
+    aggregateProtocol.engineKind === 'wasm' &&
+    !PROVENANCE_FILE) {
+  fail(2, 'formal WASM aggregation requires --provenance from the trusted ' +
+    'workflow boundary');
+}
+if (PROVENANCE_FILE) {
+  const expected = readProvenance(PROVENANCE_FILE);
+  const bindings = [
+    ['protocol-id', sets.protocol],
+    ['harness-sha', sets.harness],
+    ['candidate-sha', sets.candidate],
+    ['base-sha', sets.base],
+    ['candidate-wasm-sha256', sets.candidateWasm],
+    ['base-wasm-sha256', sets.baseWasm],
+    ['workflow-run', sets.workflow]
+  ];
+  for (const [key, set] of bindings) {
+    const actual = set.size === 1 ? Array.from(set)[0] : null;
+    if (actual !== expected[key]) {
+      fail(3, 'trusted provenance ' + key + ' ' +
+        JSON.stringify(expected[key]) + ' does not match shard value ' +
+        JSON.stringify(actual));
+    }
+  }
 }
 
 const missing = [];
