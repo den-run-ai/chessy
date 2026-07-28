@@ -61,9 +61,11 @@ untouched test split, and the tuner never writing `assets/ai.js`.
 - Dataset: `node test/ai-tune-gen.js --games 1600 --nodes 2500 --out ...`
   (schema 5, seed 1; all defaults — stride 2, skip 4, book-min 4,
   rand-extra 2, cp-exclude 2000, max-plies 220).
-- Fit: `node test/ai-tune.js --data ... --emit ...` (defaults: mix-out 0.5,
-  lambda grid {0.02, 0.05, 0.1, 0.2, 0.5, 1.0}, lr 0.3, iters 1500,
-  passes 3, val/test 15%/15%, split seed 1).
+- Fit: `node test/ai-tune.js --data ... --passes 6 --emit ...` (defaults:
+  mix-out 0.5, lambda grid {0.02, 0.05, 0.1, 0.2, 0.5, 1.0}, lr 0.3,
+  iters 1500, val/test 15%/15%, split seed 1). `--passes 6` was fixed before
+  the experiment run: the 90-game smoke pre-flight showed the 753-dimension
+  integer polish still improving after the default 3 passes.
 - Selection: lambda by validation CE with the baseline seeded in; final
   report on the untouched test split.
 - Admissibility gates, in order (a failure is terminal at its stage):
@@ -75,7 +77,10 @@ untouched test split, and the tuner never writing `assets/ai.js`.
      above 50%) — dispatched via the `ai-match.yml` workflow, NOT run
      locally.
 - A bounded local diagnostic match may be reported for direction only; it is
-  explicitly not merge evidence (README's match-protocol rules).
+  explicitly not merge evidence (README's match-protocol rules), and it is
+  run AT MOST ONCE per selected candidate: match results are never used to
+  iterate or re-select weights (the #104/#105 manifest rule — selection ends
+  at validation CE, before any game is played).
 
 ### Results — 2026-07-28 run
 
