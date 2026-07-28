@@ -123,6 +123,12 @@ jobs:
         run: node test/match-stats.test.js
       - name: Run match shard-aggregator tests
         run: node test/ai-match-agg.test.js
+      - name: Run evaluation-tuner correctness tests
+        # The tuner experiment itself is manual (test/ai-tune.js, like ai-bench
+        # and ai-match), but its correctness — feature fidelity vs evaluate(),
+        # orientation witnesses, convex-gradient identity, grouped-split
+        # hygiene, and the self-play data pipeline — is CI-gated.
+        run: node test/ai-tune.test.js
       - name: Run analysis-contract tests
         run: node test/analysis-core.test.js
       - name: Run PGN import tests

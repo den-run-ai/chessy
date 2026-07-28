@@ -177,7 +177,11 @@ node test/runtime-update.test.js
 
 The AI measurement tools are manual (too slow for PR CI). `node
 test/ai-bench.js --base origin/main` measures search nodes over 16 benchmark
-positions against a git ref. `test/ai-match.js` supports one formal paired
+positions against a git ref. `test/ai-tune-gen.js` and `test/ai-tune.js` are
+the manual evaluation-tuning workbench (deterministic self-play datasets and
+a convex full-weight-vector Texel fit; findings in
+`test/ai-tune-findings.md`, correctness CI-gated by `test/ai-tune.test.js`).
+`test/ai-match.js` supports one formal paired
 protocol plus diagnostic modes. Only `--formal --nodes 10000 --plies 180`
 aggregated over 100 openings x 4 seeds x both colors (800 games), against a
 distinct base commit, is the formal gate for a pure evaluation/strength
