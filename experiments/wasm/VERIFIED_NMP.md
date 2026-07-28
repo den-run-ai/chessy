@@ -20,8 +20,9 @@ cherry-pick or reopen PR #123.
 - No probe in check, near a mate bound, near the fifty-move horizon, or in
   sparse/zugzwang-prone material.
 - Static evaluation must clear the pruning bound by 64 cp.
-- The synthetic pass subtree cannot read or write the TT, repetition path,
-  killers, or history.
+- The synthetic pass subtree cannot read or write the TT or repetition path,
+  and cannot update killers or history. It may read the existing
+  killer/history scores for move ordering.
 - Every trigger is verified by searching the real position at `depth - 1`
   with null move disabled. Only the verified bound may cut off.
 - The stable 64-byte ABI is unchanged. The optional

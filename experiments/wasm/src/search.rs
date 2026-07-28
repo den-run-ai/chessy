@@ -128,6 +128,8 @@ struct Context {
     nmp_verification_rejects: u64,
     nmp_probe_nodes: u64,
     nmp_verify_nodes: u64,
+    #[cfg(test)]
+    nmp_forced_scores: Option<(i32, i32)>,
     rep_ply: u16,
     path1: [u32; MAX_PLY],
     path2: [u32; MAX_PLY],
@@ -161,6 +163,8 @@ impl Context {
         nmp_verification_rejects: 0,
         nmp_probe_nodes: 0,
         nmp_verify_nodes: 0,
+        #[cfg(test)]
+        nmp_forced_scores: None,
         rep_ply: 0,
         path1: [0; MAX_PLY],
         path2: [0; MAX_PLY],
@@ -251,6 +255,10 @@ unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
     ctx.nmp_verification_rejects = 0;
     ctx.nmp_probe_nodes = 0;
     ctx.nmp_verify_nodes = 0;
+    #[cfg(test)]
+    {
+        ctx.nmp_forced_scores = None;
+    }
     ctx.rep_ply = REP_INFINITY;
     ctx.path_len = 0;
     ctx.tt_count = 0;
@@ -878,9 +886,10 @@ unsafe fn search_node(
 
     // Always-verified null-move pruning. Eligibility uses the entry window,
     // before a TT bound can narrow it. The artificial pass cannot touch the
-    // TT, repetition paths, killers, or history. A trigger is only a hint:
-    // the real position must cross the same bound at depth - 1 before the
-    // cutoff is accepted.
+    // TT or repetition paths and cannot update killers or history. It may
+    // read the existing killer/history scores for move ordering. A trigger is
+    // only a hint: the real position must cross the same bound at depth - 1
+    // before the cutoff is accepted.
     let null_depth = depth - NMP_REDUCTION - 1;
     let entry_null_window = alpha_initial > -SCORE_INF
         && beta_initial < SCORE_INF
@@ -904,6 +913,8 @@ unsafe fn search_node(
             static_score <= alpha - NMP_STATIC_MARGIN
         };
         if static_supports {
+            #[cfg(test)]
+            let forced_scores = context().nmp_forced_scores.take();
             let probe_start = context().nodes;
             context().nmp_probes += 1;
             context().in_null += 1;
@@ -914,6 +925,8 @@ unsafe fn search_node(
             } else {
                 search_node(position, null_depth, alpha, alpha + 1, ply + 1)
             };
+            #[cfg(test)]
+            let null_score = forced_scores.map_or(null_score, |scores| scores.0);
             unmake_null_move(position, null_undo);
             context().in_null -= 1;
             context().nmp_disabled -= 1;
@@ -937,6 +950,9 @@ unsafe fn search_node(
                 } else {
                     search_node(position, depth - 1, alpha, alpha + 1, ply)
                 };
+                #[cfg(test)]
+                let verify_score =
+                    forced_scores.map_or(verify_score, |scores| scores.1);
                 let verify_rep = context().rep_ply;
                 context().nmp_disabled -= 1;
                 context().nmp_verify_nodes += context().nodes - verify_start;
@@ -1439,6 +1455,25 @@ mod nmp_tests {
     }
 
     #[test]
+    fn null_move_clears_and_restores_nonempty_en_passant() {
+        let _guard = test_lock();
+        let fen =
+            b"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+        let mut position = engine::parse_fen(fen).unwrap();
+        let original = position;
+        assert!(position.ep != engine::NO_SQUARE);
+
+        let undo = make_null_move(&mut position);
+        assert!(position.turn == Color::White);
+        assert!(position.ep == engine::NO_SQUARE);
+        assert!(position.halfmove == 1);
+        assert!(position.fullmove == 2);
+
+        unmake_null_move(&mut position, undo);
+        assert!(position == original);
+    }
+
+    #[test]
     fn depth_and_tactical_guards_preserve_baseline() {
         let _guard = test_lock();
         unsafe {
@@ -1493,6 +1528,37 @@ mod nmp_tests {
                 assert!(experiment_metric(4) > 0);
                 assert!(experiment_metric(5) > 0);
             }
+        }
+    }
+
+    #[test]
+    fn rejected_verification_unwinds_before_full_depth_search() {
+        let _guard = test_lock();
+        unsafe {
+            let baseline = search_window(KID, 5, 44, 45, false);
+            let mut position = engine::parse_fen(KID).unwrap();
+            let original = position;
+            reset_context(true, 0, 0);
+            context().use_nmp = true;
+            // Exercise the real probe and verification searches, then force
+            // this test-only score pair across the cutoff boundary. Production
+            // guards and release builds have no score override.
+            context().nmp_forced_scores = Some((45, 44));
+
+            let score = search_node(&mut position, 5, 44, 45, 0);
+
+            assert_eq!(score, baseline);
+            assert_eq!(experiment_metric(0), 1);
+            assert_eq!(experiment_metric(1), 1);
+            assert_eq!(experiment_metric(2), 0);
+            assert_eq!(experiment_metric(3), 1);
+            assert!(experiment_metric(4) > 0);
+            assert!(experiment_metric(5) > 0);
+            assert_eq!(context().in_null, 0);
+            assert_eq!(context().nmp_disabled, 0);
+            assert_eq!(context().path_len, 0);
+            assert!(context().nmp_forced_scores.is_none());
+            assert!(position == original);
         }
     }
 
