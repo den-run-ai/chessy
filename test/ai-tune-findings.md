@@ -146,9 +146,25 @@ The convex-tuning question is now answered with data, not argument.
 
 **Exploratory control (label ablation, not a selection run).** A second fit
 with `--mix-out 1.0` (pure game-outcome targets, the #63 labelling) on the
-same dataset/split isolates what the blended labels contributed. Result to
-be appended when the run completes; it emits no candidate and selects
-nothing.
+same dataset/split isolates what the blended labels contributed. It emitted
+no candidate and selected nothing; numbers for the record (absolute losses
+are not comparable to the blended run — pure-outcome targets are noisier;
+baseline test CE 0.532160 here vs 0.511040 blended):
+
+| lambda | train Δ% | val Δ% | moved (aux/table) | untouched test |
+|---|---|---|---|---|
+| 0.02 | +3.027 | +1.960 | 17 / 642 | **−0.372% (worse)** |
+| 0.05 | +2.148 | +1.635 | 17 / 535 | — |
+| 0.1 | +1.583 | +1.297 | 17 / 432 | — |
+| 0.2 | +1.087 | +0.944 | 14 / 284 | — |
+| 0.5 | +0.628 | +0.609 | 13 / 132 | — |
+| 1.0 | +0.351 | +0.243 | 11 / 62 | — |
+
+Pure-outcome labels made everything worse in exactly the predicted
+direction: apparent validation gains 3× larger, weight movement wilder
+(659/753 moved, max table delta 61 cp vs 31), and the test refusal 6×
+deeper (−0.372% vs −0.059%). The blended labels did the anti-overfitting
+work they were designed for — and even so, no transferable gain exists.
 
 ### Interpretation limits
 
