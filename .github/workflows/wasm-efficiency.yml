@@ -263,6 +263,8 @@ jobs:
           WASM_OPT_BIN="$RUNNER_TEMP/binaryen-version_131/bin/wasm-opt"
           MODULE_DIR="$RUNNER_TEMP/wasm-efficiency-reference"
           mkdir -p "$MODULE_DIR"
+          cp "$GITHUB_WORKSPACE/trusted/experiments/wasm/build.sh" \
+            "$BASE_DIR/experiments/wasm/build.sh"
           RUSTC="$RUSTC_BIN" \
             CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target-reference" \
             CHESSY_CARGO_BIN="$CARGO_BIN" \

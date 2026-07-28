@@ -16,6 +16,8 @@ const ROOT = path.join(__dirname, '..');
 const SCRIPT = path.join(__dirname, 'wasm-efficiency-match.js');
 const WORKFLOW = path.join(
   ROOT, '.github', 'workflows', 'wasm-efficiency.yml');
+const DEEP_WORKFLOW = path.join(
+  ROOT, '.github', 'workflows', 'wasm-deep-search.yml');
 const CANDIDATE = 'a'.repeat(40);
 const BASE = 'b'.repeat(40);
 const HARNESS = 'c'.repeat(40);
@@ -341,6 +343,9 @@ check(workflow.includes(
       'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093') &&
     !/uses: actions\/[^@\n]+@v[0-9]/.test(workflow) &&
     workflow.includes(
+      'cp "$GITHUB_WORKSPACE/trusted/experiments/wasm/build.sh" \\\n' +
+      '            "$BASE_DIR/experiments/wasm/build.sh"') &&
+    workflow.includes(
       'cp "$TRUSTED_DIR/experiments/wasm/build.sh"') &&
     workflow.includes(
       'node "$GITHUB_WORKSPACE/trusted/test/wasm-efficiency-match.js"') &&
@@ -349,6 +354,19 @@ check(workflow.includes(
     workflow.includes('--provenance "$PROVENANCE"') &&
     !workflow.includes('node test/ai-match-agg.js'),
   'trusted v2 jobs isolate candidate compilation and bind the frozen reference, shards, provenance and aggregation');
+
+const deepWorkflow = fs.readFileSync(DEEP_WORKFLOW, 'utf8');
+check(deepWorkflow.includes(
+      'actions/checkout@11d5960a326750d5838078e36cf38b85af677262') &&
+    deepWorkflow.includes(
+      'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020') &&
+    deepWorkflow.includes(
+      'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02') &&
+    deepWorkflow.includes(
+      'cp experiments/wasm/build.sh \\\n' +
+      '            "$BASE_DIR/experiments/wasm/build.sh"') &&
+    !/uses: actions\/[^@\n]+@v[0-9]/.test(deepWorkflow),
+  'deep-search evidence uses one build driver and immutable action revisions');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
