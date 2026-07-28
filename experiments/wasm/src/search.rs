@@ -340,7 +340,16 @@ unsafe fn tt_lookup(h1: u32) -> *mut TTEntry {
     core::ptr::null_mut()
 }
 
+#[inline]
+fn tt_unavailable(count: usize, saturated: bool) -> bool {
+    saturated || count >= TT_CAPACITY
+}
+
 unsafe fn tt_store(h1: u32, h2: u32, depth: i32, ply: usize, raw_score: i32, flag: u8, mv: u32) {
+    if tt_unavailable(context().tt_count, context().tt_saturated) {
+        context().tt_saturated = true;
+        return;
+    }
     let mut score = raw_score;
     if score > MATE_NEAR {
         score += ply as i32;
@@ -363,6 +372,9 @@ unsafe fn tt_store(h1: u32, h2: u32, depth: i32, ply: usize, raw_score: i32, fla
                 flag,
             };
             context().tt_count += 1;
+            if context().tt_count == TT_CAPACITY {
+                context().tt_saturated = true;
+            }
             return;
         }
         if (*entry).h1 == h1 {
@@ -380,6 +392,14 @@ unsafe fn tt_store(h1: u32, h2: u32, depth: i32, ply: usize, raw_score: i32, fla
 }
 
 unsafe fn check_budget() -> bool {
+    // A full open-addressed table makes every subsequent lookup/store scan all
+    // 1,048,576 slots. The ABI reports saturation as a hard search error, so
+    // continuing cannot produce a usable result and can turn one overflow
+    // into an effectively hung worker.
+    if tt_unavailable(context().tt_count, context().tt_saturated) {
+        context().tt_saturated = true;
+        return false;
+    }
     if context().nodes >= context().node_limit {
         context().abort_reason = StopReason::NodeLimit;
         return false;
@@ -867,6 +887,10 @@ unsafe fn search_node(
             EXACT
         };
         tt_store(hash.h1, hash.h2, depth, ply, best, flag, best_move);
+        if tt_unavailable(context().tt_count, context().tt_saturated) {
+            context().tt_saturated = true;
+            return ABORT_SCORE;
+        }
     }
     best
 }
@@ -1157,4 +1181,14 @@ pub fn abi_move(mv: Move) -> u32 {
         _ => 0,
     };
     engine::move_from(mv) as u32 | ((engine::move_to(mv) as u32) << 6) | (promotion << 12)
+}
+
+#[cfg(test)]
+mod tt_saturation_tests {
+    #[test]
+    fn full_table_short_circuits_before_an_unknown_probe() {
+        assert!(!super::tt_unavailable(super::TT_CAPACITY - 1, false));
+        assert!(super::tt_unavailable(super::TT_CAPACITY, false));
+        assert!(super::tt_unavailable(0, true));
+    }
 }

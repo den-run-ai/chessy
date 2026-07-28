@@ -124,16 +124,20 @@
         }
         // ABI: zero nodeLimit/timeMs mean unlimited; status 2 means the fixed
         // TT saturated, which invalidates an exact-tree comparison.
+        const startedSearch = performance.now();
         const status = search(
           opts.maxDepth || 0,
           opts.nodeLimit || 0,
           opts.timeMs || 0,
           opts.quiesce ? 1 : 0
         );
+        const elapsedMs = performance.now() - startedSearch;
         if (status !== 0) {
           throw new Error('search() failed with status ' + status);
         }
-        return decodeResult(exports.memory, resultPointer());
+        const result = decodeResult(exports.memory, resultPointer());
+        result.ms = elapsedMs;
+        return result;
       }
     };
   }

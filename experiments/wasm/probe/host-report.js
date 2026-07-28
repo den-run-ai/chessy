@@ -146,9 +146,13 @@ async function main() {
     families: familyRatios,
     perPosition: perPosition
   };
+  report.nps.gate = bench.gateOutcome(geo, familyRatios);
+  if (report.nps.gate.code !== 'GO-TO-DEVICES') {
+    report.failures.push('nps-gate:' + report.nps.gate.code);
+  }
   console.log('paired NPS geomean ' + geo.toFixed(4) + ', worst family ' +
     sortedFam[0].ratio.toFixed(4) + ' (' + sortedFam[0].name + '), slower families ' +
-    report.nps.slowerFamilies + '/9');
+    report.nps.slowerFamilies + '/9; gate ' + report.nps.gate.code);
 
   // 4. Five-second diagnostics (order-balanced single pairs).
   if (FIVE > 0) {

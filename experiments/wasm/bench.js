@@ -214,10 +214,10 @@ async function loadWasmEngine(wasmPath, label) {
           encoded.byteLength + ' > ' + INPUT_BYTES);
       }
       if (!Number.isInteger(options.maxDepth) ||
-          options.maxDepth < 0 ||
+          options.maxDepth < 1 ||
           options.maxDepth > MAX_SEARCH_DEPTH) {
         throw new RangeError(
-          'maxDepth must be an integer from 0 through ' + MAX_SEARCH_DEPTH);
+          'maxDepth must be an integer from 1 through ' + MAX_SEARCH_DEPTH);
       }
       const pointer = checkedPointer(
         inputPointer(), 'input_ptr()', encoded.byteLength, exports.memory);

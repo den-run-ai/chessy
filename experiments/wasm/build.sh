@@ -56,7 +56,7 @@ esac
 
 wasm_opt_version=$("$WASM_OPT_BIN" --version)
 case "$wasm_opt_version" in
-  *"version $BINARYEN_VERSION "*) ;;
+  *"version $BINARYEN_VERSION"|*"version $BINARYEN_VERSION "*) ;;
   *)
     echo "error: expected Binaryen $BINARYEN_VERSION, got: $wasm_opt_version" >&2
     exit 2
@@ -80,6 +80,7 @@ build_one() {
     cd "$SCRIPT_DIR"
     CARGO_INCREMENTAL=0 \
     CARGO_TARGET_DIR="$TARGET_DIR" \
+    RUSTC="$RUSTC_BIN" \
     SOURCE_DATE_EPOCH=0 \
     RUSTFLAGS="$PINNED_LINK_FLAGS" \
       "$CARGO_BIN" build --locked --offline \
