@@ -570,7 +570,7 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'node "$TRUSTED_DIR/test/wasm-node-accounting-contract.js"') &&
     deepWorkflow.includes(
-      '"$BASE_DIR/experiments/wasm/src"') &&
+      '"$TRUSTED_DIR/experiments/wasm/src"') &&
     deepWorkflow.includes(
       '"$GITHUB_WORKSPACE/experiments/wasm/src"') &&
     !deepWorkflow.includes(

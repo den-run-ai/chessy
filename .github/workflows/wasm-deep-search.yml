@@ -131,7 +131,7 @@ jobs:
         run: |
           node "$TRUSTED_DIR/experiments/wasm/deep-bench.test.js"
           node "$TRUSTED_DIR/test/wasm-node-accounting-contract.js" \
-            "$BASE_DIR/experiments/wasm/src" \
+            "$TRUSTED_DIR/experiments/wasm/src" \
             "$GITHUB_WORKSPACE/experiments/wasm/src"
           CARGO_BIN=$(rustup which --toolchain "$RUST_VERSION" cargo)
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
