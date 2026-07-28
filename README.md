@@ -237,7 +237,7 @@ gated on the engine *and* browser suites.
 | `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
-| `assets/store.js` | IndexedDB coaching store (games, lesson cards, analysis cache, resumable scan jobs) |
+| `assets/store.js` | IndexedDB coaching store (games, lesson cards, bounded LRU analysis cache, resumable scan jobs) |
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
