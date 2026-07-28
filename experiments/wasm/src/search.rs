@@ -52,6 +52,8 @@ pub struct SearchResult {
     pub qnodes: u64,
     pub cutoffs: u64,
     pub researches: u64,
+    pub lmr_applied: u64,
+    pub lmr_verified: u64,
     pub stop_reason: StopReason,
     pub tt_saturated: bool,
 }
@@ -108,6 +110,7 @@ impl RootItem {
 
 struct Context {
     quiesce: bool,
+    use_lmr: bool,
     has_deadline: bool,
     deadline: f64,
     node_limit: u64,
@@ -116,6 +119,8 @@ struct Context {
     qnodes: u64,
     cutoffs: u64,
     researches: u64,
+    lmr_applied: u64,
+    lmr_verified: u64,
     rep_ply: u16,
     path1: [u32; MAX_PLY],
     path2: [u32; MAX_PLY],
@@ -132,6 +137,7 @@ struct Context {
 impl Context {
     const ZERO: Self = Self {
         quiesce: false,
+        use_lmr: false,
         has_deadline: false,
         deadline: 0.0,
         node_limit: 0,
@@ -140,6 +146,8 @@ impl Context {
         qnodes: 0,
         cutoffs: 0,
         researches: 0,
+        lmr_applied: 0,
+        lmr_verified: 0,
         rep_ply: 0,
         path1: [0; MAX_PLY],
         path2: [0; MAX_PLY],
@@ -205,6 +213,7 @@ const Z2: [u32; Z_SIZE] = make_zobrist(0x85EBCA6B);
 unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
     let ctx = context();
     ctx.quiesce = quiesce;
+    ctx.use_lmr = cfg!(feature = "guarded-lmr");
     ctx.has_deadline = time_ms != 0;
     ctx.deadline = if time_ms != 0 {
         now_ms() + time_ms as f64
@@ -221,6 +230,8 @@ unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
     ctx.qnodes = 0;
     ctx.cutoffs = 0;
     ctx.researches = 0;
+    ctx.lmr_applied = 0;
+    ctx.lmr_verified = 0;
     ctx.rep_ply = REP_INFINITY;
     ctx.path_len = 0;
     ctx.tt_count = 0;
@@ -505,6 +516,72 @@ unsafe fn record_quiet_cutoff(mv: Move, ply: usize, depth: i32, turn: Color) {
     }
 }
 
+/// Conservative one-ply LMR predicate from the archived JavaScript experiment
+/// in PR #122. `position` is the position *after* `mv`; all other position
+/// attributes describe the node on entry, before the move and before any TT
+/// bound can tighten its window.
+#[allow(clippy::too_many_arguments)]
+unsafe fn lmr_reduces(
+    position: &Position,
+    mv: Move,
+    depth: i32,
+    quiet_count: usize,
+    in_check: bool,
+    tt_move: u32,
+    ply: usize,
+    entry_null_window: bool,
+    alpha_entry: i32,
+    beta_entry: i32,
+    halfmove_entry: u16,
+    turn: Color,
+) -> bool {
+    if !context().use_lmr
+        || !context().quiesce
+        || depth < 5
+        || quiet_count < 4
+        || !entry_null_window
+        || in_check
+        || engine::move_is_capture(mv)
+        || engine::move_promotion(mv).is_some()
+        || engine::move_castle(mv).is_some()
+        || alpha_entry <= -MATE_NEAR
+        || beta_entry >= MATE_NEAR
+        || halfmove_entry as i32 + depth + QMAX as i32 >= 100
+    {
+        return false;
+    }
+
+    let packed_move = tt_pack_move(mv);
+    let killers = context().killers[ply];
+    if packed_move == tt_move || packed_move == killers[0] || packed_move == killers[1] {
+        return false;
+    }
+
+    let history_index = engine::move_from(mv) as usize * 64 + engine::move_to(mv) as usize;
+    let history = if turn == Color::White {
+        context().hist_white[history_index]
+    } else {
+        context().hist_black[history_index]
+    };
+    if history > 0 {
+        return false;
+    }
+
+    // Advanced pawn pushes are forcing enough to retain the full draft.
+    if engine::piece_type(engine::move_piece(mv)) == Some(PieceType::Pawn) {
+        let destination = engine::move_to(mv);
+        if (turn == Color::White && destination < 24)
+            || (turn == Color::Black && destination >= 40)
+        {
+            return false;
+        }
+    }
+
+    // `make_move` has already changed the side to move, so this asks whether
+    // the quiet candidate checks its opponent.
+    !engine::in_check(position, engine::opposite(turn))
+}
+
 unsafe fn generate_pseudo_at(position: &Position, ply: usize) -> usize {
     let output = &mut *core::ptr::addr_of_mut!(CONTEXT.moves[ply]);
     engine::generate_pseudo(position, output)
@@ -699,9 +776,15 @@ unsafe fn search_node(
     if !check_budget() {
         return ABORT_SCORE;
     }
+    // Preserve the node's entry-window identity. TT bounds below may tighten a
+    // wide (PV) window, but that must never make the node newly LMR-eligible.
+    let entry_null_window = beta_initial as i64 - alpha_initial as i64 == 1;
+    let alpha_entry = alpha_initial;
+    let beta_entry = beta_initial;
     context().rep_ply = REP_INFINITY;
 
     let turn = position.turn;
+    let halfmove_entry = position.halfmove;
     let maximizing = turn == Color::White;
     let in_check = engine::in_check(position, turn);
     let fifty = position.halfmove >= 100;
@@ -789,6 +872,7 @@ unsafe fn search_node(
     let mut best = if maximizing { -SCORE_INF } else { SCORE_INF };
     let mut best_move = 0;
     let mut any_legal = false;
+    let mut quiet_count = 0;
     let mut rep_min = REP_INFINITY;
 
     push_path(hash.r1, hash.r2);
@@ -805,14 +889,56 @@ unsafe fn search_node(
             continue;
         }
 
+        // The archived guard is intentionally inactive through completed root
+        // depth five: child nodes need depth >= 5, an entry null window, and
+        // four previously searched legal quiets before this predicate runs.
+        let reduction = if cfg!(feature = "guarded-lmr")
+            && context().use_lmr
+            && depth >= 5
+            && quiet_count >= 4
+            && lmr_reduces(
+                position,
+                mv,
+                depth,
+                quiet_count,
+                in_check,
+                tt_move,
+                ply,
+                entry_null_window,
+                alpha_entry,
+                beta_entry,
+                halfmove_entry,
+                turn,
+            )
+        {
+            context().lmr_applied += 1;
+            1
+        } else {
+            0
+        };
+
         let mut score;
         let mut child_rep;
         if !any_legal {
             score = search_node(position, depth - 1, alpha, beta, ply + 1);
             child_rep = context().rep_ply;
         } else if maximizing {
-            score = search_node(position, depth - 1, alpha, alpha + 1, ply + 1);
+            score = search_node(
+                position,
+                depth - 1 - reduction,
+                alpha,
+                alpha + 1,
+                ply + 1,
+            );
             child_rep = context().rep_ply;
+            if score != ABORT_SCORE && reduction != 0 && score > alpha {
+                context().researches += 1;
+                context().lmr_verified += 1;
+                score = search_node(position, depth - 1, alpha, alpha + 1, ply + 1);
+                if context().rep_ply < child_rep {
+                    child_rep = context().rep_ply;
+                }
+            }
             if score != ABORT_SCORE && score > alpha && score < beta {
                 context().researches += 1;
                 score = search_node(position, depth - 1, alpha, beta, ply + 1);
@@ -821,8 +947,22 @@ unsafe fn search_node(
                 }
             }
         } else {
-            score = search_node(position, depth - 1, beta - 1, beta, ply + 1);
+            score = search_node(
+                position,
+                depth - 1 - reduction,
+                beta - 1,
+                beta,
+                ply + 1,
+            );
             child_rep = context().rep_ply;
+            if score != ABORT_SCORE && reduction != 0 && score < beta {
+                context().researches += 1;
+                context().lmr_verified += 1;
+                score = search_node(position, depth - 1, beta - 1, beta, ply + 1);
+                if context().rep_ply < child_rep {
+                    child_rep = context().rep_ply;
+                }
+            }
             if score != ABORT_SCORE && score < beta && score > alpha {
                 context().researches += 1;
                 score = search_node(position, depth - 1, alpha, beta, ply + 1);
@@ -838,6 +978,9 @@ unsafe fn search_node(
             return ABORT_SCORE;
         }
         any_legal = true;
+        if !engine::move_is_capture(mv) && engine::move_promotion(mv).is_none() {
+            quiet_count += 1;
+        }
         if child_rep < rep_min {
             rep_min = child_rep;
         }
@@ -1000,6 +1143,8 @@ pub unsafe fn run(
             qnodes: 0,
             cutoffs: 0,
             researches: 0,
+            lmr_applied: 0,
+            lmr_verified: 0,
             stop_reason: StopReason::GameOver,
             tt_saturated: false,
         };
@@ -1167,8 +1312,21 @@ pub unsafe fn run(
         qnodes: context().qnodes,
         cutoffs: context().cutoffs,
         researches: context().researches,
+        lmr_applied: context().lmr_applied,
+        lmr_verified: context().lmr_verified,
         stop_reason,
         tt_saturated: context().tt_saturated,
+    }
+}
+
+/// Optional experiment telemetry, read synchronously after `run` returns.
+/// Unknown indexes deliberately read as zero so the ABI can grow without
+/// forcing every benchmark harness to upgrade in lockstep.
+pub unsafe fn experiment_metric(index: u32) -> u64 {
+    match index {
+        0 => context().lmr_applied,
+        1 => context().lmr_verified,
+        _ => 0,
     }
 }
 
@@ -1190,5 +1348,296 @@ mod tt_saturation_tests {
         assert!(!super::tt_unavailable(super::TT_CAPACITY - 1, false));
         assert!(super::tt_unavailable(super::TT_CAPACITY, false));
         assert!(super::tt_unavailable(0, true));
+    }
+}
+
+#[cfg(test)]
+mod lmr_tests {
+    use super::*;
+
+    const MID_FEN: &[u8] =
+        b"r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 1";
+    const MIRRORED_MID_FEN: &[u8] =
+        b"r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R b KQkq - 0 1";
+
+    fn gives_check(position: &mut Position, mv: Move) -> bool {
+        let mover = position.turn;
+        let enemy = engine::opposite(mover);
+        let undo = engine::make_move(position, mv);
+        let result = engine::in_check(position, enemy);
+        engine::unmake_move(position, mv, undo);
+        result
+    }
+
+    fn find_move<F>(position: &mut Position, mut predicate: F) -> Move
+    where
+        F: FnMut(&mut Position, Move) -> bool,
+    {
+        let mut moves = [0; MAX_MOVES];
+        let count = engine::generate_legal(position, &mut moves);
+        let mut index = 0;
+        while index < count {
+            let mv = moves[index];
+            if predicate(position, mv) {
+                return mv;
+            }
+            index += 1;
+        }
+        panic!("guard fixture has no matching legal move");
+    }
+
+    unsafe fn reset_lmr(quiesce: bool, enabled: bool) {
+        reset_context(quiesce, 0, 0);
+        context().use_lmr = enabled;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn reduces(
+        position: &mut Position,
+        mv: Move,
+        depth: i32,
+        quiet_count: usize,
+        in_check: bool,
+        tt_move: u32,
+        entry_null_window: bool,
+        alpha_entry: i32,
+        beta_entry: i32,
+        ply: usize,
+    ) -> bool {
+        let turn = position.turn;
+        let halfmove = position.halfmove;
+        let undo = engine::make_move(position, mv);
+        let result = lmr_reduces(
+            position,
+            mv,
+            depth,
+            quiet_count,
+            in_check,
+            tt_move,
+            ply,
+            entry_null_window,
+            alpha_entry,
+            beta_entry,
+            halfmove,
+            turn,
+        );
+        engine::unmake_move(position, mv, undo);
+        result
+    }
+
+    unsafe fn active_null_window(fen: &[u8], alpha: i32, beta: i32, enabled: bool) -> i32 {
+        let mut position = engine::parse_fen(fen).unwrap();
+        reset_lmr(true, enabled);
+        let score = search_node(&mut position, 5, alpha, beta, 0);
+        assert_ne!(score, ABORT_SCORE);
+        score
+    }
+
+    #[test]
+    fn guarded_lmr_predicate_search_and_metrics() {
+        unsafe {
+            let mut mid = engine::parse_fen(MID_FEN).unwrap();
+            let quiet = find_move(&mut mid, |position, mv| {
+                !engine::move_is_capture(mv)
+                    && engine::move_promotion(mv).is_none()
+                    && engine::move_castle(mv).is_none()
+                    && engine::piece_type(engine::move_piece(mv)) != Some(PieceType::Pawn)
+                    && !gives_check(position, mv)
+            });
+            let capture =
+                find_move(&mut mid, |_, mv| engine::move_is_capture(mv));
+            let castle =
+                find_move(&mut mid, |_, mv| engine::move_castle(mv).is_some());
+
+            reset_lmr(true, true);
+            assert!(reduces(
+                &mut mid, quiet, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            assert!(!reduces(
+                &mut mid, quiet, 4, 4, false, 0, true, 100, 101, 0
+            ));
+            assert!(!reduces(
+                &mut mid, quiet, 5, 3, false, 0, true, 100, 101, 0
+            ));
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, false, 0, false, 100, 101, 0
+            ));
+
+            reset_lmr(true, false);
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            reset_lmr(false, true);
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            reset_lmr(true, true);
+
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, true, 0, true, 100, 101, 0
+            ));
+            assert!(!reduces(
+                &mut mid, capture, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            assert!(!reduces(
+                &mut mid, castle, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            assert!(!reduces(
+                &mut mid,
+                quiet,
+                5,
+                4,
+                false,
+                0,
+                true,
+                -MATE_NEAR,
+                -MATE_NEAR + 1,
+                0,
+            ));
+            assert!(!reduces(
+                &mut mid,
+                quiet,
+                5,
+                4,
+                false,
+                0,
+                true,
+                MATE_NEAR - 1,
+                MATE_NEAR,
+                0,
+            ));
+
+            let mut promotion_position =
+                engine::parse_fen(b"4k3/P7/8/8/8/8/8/4K3 w - - 0 1").unwrap();
+            let promotion = find_move(&mut promotion_position, |_, mv| {
+                engine::move_promotion(mv) == Some(PieceType::Queen)
+            });
+            assert!(!reduces(
+                &mut promotion_position,
+                promotion,
+                5,
+                4,
+                false,
+                0,
+                true,
+                100,
+                101,
+                0,
+            ));
+
+            let mut rook_position =
+                engine::parse_fen(b"4k3/8/8/8/8/8/8/R3K3 w - - 0 1").unwrap();
+            let checking = find_move(&mut rook_position, |position, mv| {
+                !engine::move_is_capture(mv)
+                    && engine::move_promotion(mv).is_none()
+                    && gives_check(position, mv)
+            });
+            assert!(!reduces(
+                &mut rook_position,
+                checking,
+                5,
+                4,
+                false,
+                0,
+                true,
+                100,
+                101,
+                0,
+            ));
+
+            let packed_quiet = tt_pack_move(quiet);
+            assert!(!reduces(
+                &mut mid,
+                quiet,
+                5,
+                4,
+                false,
+                packed_quiet,
+                true,
+                100,
+                101,
+                0,
+            ));
+            context().killers[0][0] = packed_quiet;
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            context().killers[0] = [0, 0];
+            let history_index =
+                engine::move_from(quiet) as usize * 64 + engine::move_to(quiet) as usize;
+            context().hist_white[history_index] = 1;
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            context().hist_white[history_index] = 0;
+
+            let mut white_pawn_position =
+                engine::parse_fen(b"7k/8/4P3/8/8/8/8/K7 w - - 0 1").unwrap();
+            let white_advanced = find_move(&mut white_pawn_position, |_, mv| {
+                engine::piece_type(engine::move_piece(mv)) == Some(PieceType::Pawn)
+                    && engine::move_to(mv) < 24
+            });
+            assert!(!reduces(
+                &mut white_pawn_position,
+                white_advanced,
+                5,
+                4,
+                false,
+                0,
+                true,
+                100,
+                101,
+                0,
+            ));
+
+            let mut black_pawn_position =
+                engine::parse_fen(b"k7/8/8/8/8/4p3/8/7K b - - 0 1").unwrap();
+            let black_advanced = find_move(&mut black_pawn_position, |_, mv| {
+                engine::piece_type(engine::move_piece(mv)) == Some(PieceType::Pawn)
+                    && engine::move_to(mv) >= 40
+            });
+            assert!(!reduces(
+                &mut black_pawn_position,
+                black_advanced,
+                5,
+                4,
+                false,
+                0,
+                true,
+                -101,
+                -100,
+                0,
+            ));
+
+            mid.halfmove = 80;
+            assert!(!reduces(
+                &mut mid, quiet, 5, 4, false, 0, true, 100, 101, 0
+            ));
+            mid.halfmove = 0;
+
+            if cfg!(feature = "guarded-lmr") {
+                active_null_window(MID_FEN, 100, 101, true);
+                let maximizing_applied = context().lmr_applied;
+                let maximizing_verified = context().lmr_verified;
+                assert!(maximizing_applied > 0);
+                assert!(maximizing_verified <= maximizing_applied);
+                assert_eq!(experiment_metric(0), maximizing_applied);
+                assert_eq!(experiment_metric(1), maximizing_verified);
+                assert_eq!(experiment_metric(2), 0);
+
+                active_null_window(MIRRORED_MID_FEN, -101, -100, true);
+                assert!(context().lmr_applied > 0);
+                assert!(context().lmr_verified <= context().lmr_applied);
+            }
+
+            active_null_window(MID_FEN, 100, 101, false);
+            assert_eq!(context().lmr_applied, 0);
+            assert_eq!(context().lmr_verified, 0);
+
+            let mut inactive_root = engine::parse_fen(MID_FEN).unwrap();
+            let result = run(&mut inactive_root, 5, 0, 0, true);
+            assert_eq!(result.lmr_applied, 0);
+            assert_eq!(result.lmr_verified, 0);
+        }
     }
 }

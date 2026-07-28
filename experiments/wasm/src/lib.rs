@@ -127,6 +127,17 @@ pub unsafe extern "C" fn search(
     }
 }
 
+/// Optional algorithm-experiment telemetry from the most recent search.
+///
+/// Index 0 is guarded-LMR applications and index 1 is the number of reduced
+/// scouts that improved the bound and therefore received mandatory full-depth
+/// verification. Unknown indexes return zero. The stable v1 result record is
+/// intentionally unchanged.
+#[no_mangle]
+pub unsafe extern "C" fn experiment_metric(index: u32) -> u64 {
+    search::experiment_metric(index)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

@@ -16,12 +16,12 @@ and iterative deepening. JavaScript crosses the boundary once to load a FEN and
 once to start a search. The only callback inside the tree is the existing
 coarse deadline poll through `env.now_ms`.
 
-The experiment deliberately excludes:
+The base port deliberately excludes:
 
 - SIMD, threads, WASI, libc, a garbage collector, an allocator, and per-node
   allocation;
 - `wasm-bindgen` or any binding/runtime dependency;
-- SEE, LMR, null-move pruning, NNUE, or any other algorithmic change;
+- SEE, null-move pruning, NNUE, or any other algorithmic change;
 - repetition-history transfer (the benchmark loads bare FENs, as
   `test/ai-bench.js` does);
 - production worker, service-worker, UI, or release integration.
@@ -29,6 +29,13 @@ The experiment deliberately excludes:
 The root move shuffle resets to Mulberry32 seed `0xC0FFEE` for every search,
 matching `test/ai-bench.js`. The seed remains frozen inside the experiment
 rather than expanding the ABI.
+
+This experimental branch enables the exact guarded one-ply LMR predicate
+archived in PR #122 through Cargo's default `guarded-lmr` feature. Build with
+`--no-default-features` to retain the baseline search behavior. The stable v1
+result record remains unchanged; the optional `experiment_metric(index)` export
+reports LMR applications at index 0 and mandatory full-depth verifications at
+index 1.
 
 ## Language decision
 
@@ -135,6 +142,7 @@ input_ptr() -> u32
 result_ptr() -> u32
 load_position(fenLength: u32)
 search(maxDepth: u32, nodeLimit: u32, timeMs: u32, quiesce: u32) -> i32
+experiment_metric(index: u32) -> u64  # optional experiment telemetry
 ```
 
 JavaScript copies UTF-8 FEN bytes to `input_ptr()` and calls
@@ -168,7 +176,9 @@ time-limit, 3 node-limit, 4 mate, and 5 game-over. Counters are rejected if they
 cannot be represented exactly by a JavaScript safe integer.
 
 `bench.js` hard-fails on an ABI version or struct-size mismatch before accepting
-any benchmark result.
+any benchmark result. When `experiment_metric` is exported it also reads the
+two guarded-LMR counters after each synchronous search; older v1 modules without
+the optional export remain valid baselines.
 
 ## Divergent deep-search experiments
 

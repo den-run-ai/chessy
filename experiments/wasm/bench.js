@@ -348,8 +348,22 @@ function signatureDifferences(candidate, baseline) {
   });
 }
 
-function sameSearch(a, b) {
-  return signatureDifferences(a, b).length === 0;
+function experimentMetricDifferences(candidate, baseline) {
+  const candidateMetrics = candidate.experimentMetrics;
+  const baselineMetrics = baseline.experimentMetrics;
+  if (!candidateMetrics && !baselineMetrics) return [];
+  if (!candidateMetrics || !baselineMetrics ||
+      candidateMetrics.length !== baselineMetrics.length) {
+    return ['experiment metric shape changed'];
+  }
+  const differences = [];
+  for (let index = 0; index < candidateMetrics.length; index++) {
+    if (candidateMetrics[index] !== baselineMetrics[index]) {
+      differences.push('experiment metric ' + index + ': candidate=' +
+        candidateMetrics[index] + ', baseline=' + baselineMetrics[index]);
+    }
+  }
+  return differences;
 }
 
 function median(values) {
@@ -369,9 +383,11 @@ function geometricMean(values) {
 function summarize(samples, label) {
   const first = samples[0];
   for (let i = 1; i < samples.length; i++) {
-    if (!sameSearch(samples[i], first)) {
+    const differences = signatureDifferences(samples[i], first)
+      .concat(experimentMetricDifferences(samples[i], first));
+    if (differences.length) {
       throw new Error(label + ' changed across identical timed repetitions: ' +
-        signatureDifferences(samples[i], first).join('; '));
+        differences.join('; '));
     }
   }
   const timings = samples.map(function (sample) { return sample.ms; });
@@ -514,6 +530,9 @@ async function main(argv) {
   };
   const positionRatios = [];
   let firstSearchMs = null;
+  let lmrApplied = 0;
+  let lmrVerified = 0;
+  let hasExperimentMetrics = false;
 
   console.log('Chessy WASM feasibility screen');
   console.log('candidate: ' + wasm.path);
@@ -543,6 +562,11 @@ async function main(argv) {
     if (differences.length) {
       throw new Error('exact-search mismatch at ' + name + ': ' +
         differences.join('; '));
+    }
+    if (pair.wasm.experimentMetrics) {
+      hasExperimentMetrics = true;
+      lmrApplied += pair.wasm.experimentMetrics[0];
+      lmrVerified += pair.wasm.experimentMetrics[1];
     }
     positionRatios.push(pair.speedRatio);
     console.log(
@@ -592,6 +616,10 @@ async function main(argv) {
     ' ms; first search: ' + firstSearchMs.toFixed(2) + ' ms');
   console.log('linear memory: ' + wasm.initialMemoryBytes + ' bytes initial, ' +
     wasm.memoryBytes() + ' bytes final/peak-observed');
+  if (hasExperimentMetrics) {
+    console.log('guarded LMR: ' + lmrApplied + ' applied, ' +
+      lmrVerified + ' full-depth verifications');
+  }
   console.log('decision: ' + outcome.code + ' — ' + outcome.reason);
 
   if (config.requireGo && outcome.code !== 'GO-TO-DEVICES') {

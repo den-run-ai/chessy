@@ -9,6 +9,13 @@ rust-version = "1.97.1"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
 
+[features]
+# This branch is an isolated algorithm experiment.  Keeping the candidate
+# behind a Cargo feature also provides the unchanged baseline search behavior
+# with `--no-default-features`, without changing the raw search ABI.
+default = ["guarded-lmr"]
+guarded-lmr = []
+
 [profile.release]
 codegen-units = 1
 debug = false
