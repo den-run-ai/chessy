@@ -210,13 +210,18 @@ check(normalized.pvUci.join(' ') === 'a4a3 b2b4' &&
     normalized.fallbackReason === 'watchdog' &&
     normalized.scorePov === 'white' && normalized.seed === -1,
   'new telemetry is bounded and malformed PV entries are dropped');
-check(normalized.engine === 'wasm' &&
-    normalized.engineFallback === 'wasm-load-error' &&
+check(normalized.engine === 'wasm' && normalized.engineFallback === null &&
     ChessAI.sanitizeTelemetry({ depth: 1, quiesce: false, ms: 1,
       engine: 'mystery', engineFallback: 'mystery' }).engine === 'js' &&
     ChessAI.sanitizeTelemetry({ depth: 1, quiesce: false, ms: 1,
       engine: 'mystery', engineFallback: 'mystery' }).engineFallback === null,
-  'engine provenance survives sanitizing and unknown engines collapse to js');
+  'engine provenance survives; unknown engines collapse to js and a ' +
+  'contradictory wasm+fallback pair drops the fallback label');
+const jsFallback = ChessAI.sanitizeTelemetry({ depth: 1, quiesce: false,
+  ms: 1, engine: 'js', engineFallback: 'wasm-search-error' });
+check(jsFallback.engine === 'js' &&
+    jsFallback.engineFallback === 'wasm-search-error',
+  'a JavaScript answer keeps its wasm-fallback label (the real worker shape)');
 
 const injectedRelease = 'r54} 99. Qh8# {';
 const hostile = ChessAI.sanitizeTelemetry({
@@ -251,7 +256,9 @@ const badEvidence = [
   Object.assign({}, positionNormalized, { scorePov: 'side-to-move' }),
   Object.assign({}, positionNormalized, { fallbackReason: 'mystery' }),
   Object.assign({}, positionNormalized, { engine: 'mystery' }),
-  Object.assign({}, positionNormalized, { engineFallback: 'mystery' })
+  Object.assign({}, positionNormalized, { engineFallback: 'mystery' }),
+  Object.assign({}, positionNormalized,
+    { engine: 'wasm', engineFallback: 'wasm-load-error' })
 ];
 check(badEvidence.every(function (ai) {
   return /AI telemetry/.test(CoachStore.validateGameRecord(

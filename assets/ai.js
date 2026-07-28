@@ -1282,9 +1282,13 @@
         ? value.fallbackReason : null,
       // Which engine produced the move. Telemetry recorded before the
       // experimental Rust/WASM engine existed carries no field — every such
-      // move was JavaScript, so the default is factual, not invented.
+      // move was JavaScript, so the default is factual, not invented. A
+      // fallback label can only accompany the JavaScript engine: the worker
+      // contract is that any wasm fallback means JavaScript answered, so a
+      // wasm+fallback pair is contradictory and the label is dropped.
       engine: engines[value.engine] ? value.engine : 'js',
-      engineFallback: engineFallbacks[value.engineFallback]
+      engineFallback: (!engines[value.engine] || value.engine === 'js') &&
+        engineFallbacks[value.engineFallback]
         ? value.engineFallback : null
     };
     // Missing rootOrderUci is the backwards-compatible marker for telemetry

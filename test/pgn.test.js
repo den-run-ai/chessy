@@ -193,7 +193,7 @@ const archivedTelemetryRecord = {
     cutoffs: 10, researches: 2, score: -141, scorePov: 'white',
     stopReason: 'time-limit', source: 'sync-fallback',
     fallbackReason: 'watchdog', rootOrderUci: blackRootOrder,
-    engine: 'wasm', engineFallback: 'wasm-load-error',
+    engine: 'js', engineFallback: 'wasm-load-error',
     pvUci: ['e7e5'], pvSource: 'final-tt-best-effort'
   }],
   result: '*',
@@ -215,7 +215,7 @@ check(archivedTelemetry.includes('engine depth 4+quiescence, 5002 ms') &&
       blackRootOrder.join('/')) &&
     archivedTelemetry.includes('search 5000 ms, release r55, source sync-fallback') &&
     archivedTelemetry.includes('fallback watchdog') &&
-    archivedTelemetry.includes('engine wasm') &&
+    archivedTelemetry.includes('engine js') &&
     archivedTelemetry.includes('engine-fallback wasm-load-error') &&
     archivedTelemetry.includes('PV e7e5 (best effort)') &&
     archivedTelemetry.includes('[%clk 0:04:58]') &&
