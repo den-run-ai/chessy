@@ -895,7 +895,7 @@ unsafe fn search_node(
         && alpha_initial > -MATE_NEAR
         && beta_initial < MATE_NEAR
         && null_material_safe(position, turn)
-        && position.halfmove as i32 + 1 + null_depth + QMAX as i32 < 100;
+        && (position.halfmove as i32) + 1 + null_depth + (QMAX as i32) < 100;
     if null_eligible {
         let static_score = eval::evaluate(position);
         let static_supports = if maximizing {
