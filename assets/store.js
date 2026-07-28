@@ -945,6 +945,115 @@
     return null;
   }
 
+  // Optional versioned equivalence evidence on a card (Train v2 E2, #76):
+  // the accepted-move set Train grades alternative answers against, with
+  // criterion/provider provenance and coverage. ABSENT (or null) is the
+  // legacy shape and always valid; once present it must be internally
+  // coherent AND agree with the card and position it grades — a forged or
+  // damaged accepted set would otherwise auto-accept arbitrary moves.
+  function validateCardEquivalence(eq, state, legal, cardBestUci, prefix) {
+    function bad(what) { return prefix + ' has equivalence evidence with ' + what; }
+    if (!eq || typeof eq !== 'object' || Array.isArray(eq)) {
+      return prefix + ' has non-object equivalence evidence';
+    }
+    var c = eq.criterion;
+    if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id ||
+        !Number.isInteger(c.version) || c.version < 1 ||
+        typeof c.basis !== 'string' || !c.basis ||
+        !c.params || typeof c.params !== 'object') {
+      return bad('an invalid criterion');
+    }
+    var p = eq.provider;
+    if (!p || typeof p !== 'object' ||
+        typeof p.engineId !== 'string' || !p.engineId ||
+        typeof p.version !== 'string' || !p.version ||
+        typeof p.configHash !== 'string' || !p.configHash) {
+      return bad('an invalid provider');
+    }
+    if (typeof eq.positionFingerprint !== 'string' || !eq.positionFingerprint) {
+      return bad('an invalid position fingerprint');
+    }
+    if (eq.turn !== state.turn) return bad('a turn that contradicts fenBefore');
+    if (!Number.isInteger(eq.depth) || eq.depth < 1) return bad('an invalid depth');
+    // Evidence may only come from a COMPLETE analysis (the criterion refuses
+    // partial results), so a stored partial marker is malformed by definition.
+    if (eq.complete !== true) return bad('a non-complete evidence marker');
+    if (eq.coverage !== 'all-roots' && eq.coverage !== 'candidates') {
+      return bad('an unknown coverage');
+    }
+    if (eq.legalRootCount !== legal.length) {
+      return bad('a legal-root count that contradicts fenBefore');
+    }
+    if (!Number.isInteger(eq.candidateLineCount) || eq.candidateLineCount < 1 ||
+        eq.candidateLineCount > legal.length) {
+      return bad('an invalid candidate-line count');
+    }
+    if (eq.coverage === 'all-roots' && eq.candidateLineCount !== legal.length) {
+      return bad('all-roots coverage without all roots');
+    }
+    if (!Number.isInteger(eq.coveredRootCount) ||
+        eq.coveredRootCount < eq.candidateLineCount ||
+        eq.coveredRootCount > legal.length) {
+      return bad('an invalid covered-root count');
+    }
+    if (eq.stability !== null && eq.stability !== undefined) {
+      var st = eq.stability;
+      if (!st || typeof st !== 'object' || Array.isArray(st) ||
+          !Array.isArray(st.depths) ||
+          !st.depths.every(function (d) { return Number.isInteger(d) && d >= 1; }) ||
+          typeof st.bestMoveStable !== 'boolean') {
+        return bad('invalid stability evidence');
+      }
+    }
+    var legalUci = Object.create(null);
+    legal.forEach(function (m) {
+      legalUci[Chess.sqName(m.from) + Chess.sqName(m.to) +
+        (m.promotion ? m.promotion.toLowerCase() : '')] = true;
+    });
+    function entryError(e) {
+      if (!e || typeof e !== 'object' || Array.isArray(e)) return 'a non-object move entry';
+      if (typeof e.uci !== 'string' || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(e.uci) ||
+          !legalUci[e.uci]) {
+        return 'a move entry that is not legal in fenBefore';
+      }
+      if (typeof e.san !== 'string' || !e.san) return 'a move entry without SAN';
+      function optCp(v) { return v === undefined || v === null || Number.isFinite(v); }
+      if (!optCp(e.scoreCpWhite) || !optCp(e.scoreCpPlayer)) {
+        return 'a move entry with a non-finite score';
+      }
+      var mateOk = e.mate === undefined || e.mate === null ||
+        (typeof e.mate === 'object' && !Array.isArray(e.mate) &&
+         typeof e.mate.forWhite === 'boolean' &&
+         Number.isInteger(e.mate.inPlies) && e.mate.inPlies > 0);
+      if (!mateOk) return 'a move entry with a malformed mate';
+      var hasEval = Number.isFinite(e.scoreCpWhite) ||
+        (e.mate && typeof e.mate === 'object');
+      if (!hasEval) return 'a move entry without an evaluation';
+      return null;
+    }
+    var bestErr = entryError(eq.best);
+    if (bestErr) return bad(bestErr + ' (best)');
+    // The evidence must grade THIS card: a best move disagreeing with the
+    // card's saved bestMove would let Train accept moves against a different
+    // verdict than the one the player approved.
+    if (eq.best.uci !== cardBestUci) {
+      return bad('a best move that contradicts the card');
+    }
+    if (!Array.isArray(eq.accepted) || eq.accepted.length < 1 ||
+        eq.accepted.length > eq.coveredRootCount) {
+      return bad('an invalid accepted set');
+    }
+    var seen = Object.create(null);
+    for (var ai = 0; ai < eq.accepted.length; ai++) {
+      var accErr = entryError(eq.accepted[ai]);
+      if (accErr) return bad(accErr + ' (accepted ' + ai + ')');
+      if (seen[eq.accepted[ai].uci]) return bad('a duplicate accepted move');
+      seen[eq.accepted[ai].uci] = true;
+    }
+    if (!seen[eq.best.uci]) return bad('an accepted set omitting the best move');
+    return null;
+  }
+
   // Shared card-record trust boundary. Restore uses this before replacing the
   // archive; Train also uses it after a raw IndexedDB read so one damaged row
   // cannot make otherwise valid due cards disappear. This is deliberately
@@ -990,6 +1099,18 @@
       if (typeof r.bestSan !== 'string' ||
           Chess.toSan(state, best, legal) !== r.bestSan) {
         return prefix + ' has an invalid bestSan';
+      }
+      // Optional equivalence evidence (Train v2 E2): absent/null is the
+      // legacy shape; present must cohere with this exact position and card.
+      if (r.equivalence !== undefined && r.equivalence !== null) {
+        if (typeof Chess.sqName !== 'function') {
+          return prefix + ' cannot be checked by this release';
+        }
+        var cardBestUci = Chess.sqName(best.from) + Chess.sqName(best.to) +
+          (best.promotion ? best.promotion.toLowerCase() : '');
+        var eqError = validateCardEquivalence(
+          r.equivalence, state, legal, cardBestUci, prefix);
+        if (eqError) return eqError;
       }
     } catch (e) {
       return prefix + ' has an unusable training position';
