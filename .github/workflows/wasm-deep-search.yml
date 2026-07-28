@@ -52,6 +52,8 @@ env:
   RUST_MANIFEST_SHA256: 03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf
   BINARYEN_URL: https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz
   BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
+  TRUSTED_DEEP_HARNESS_SHA: ca3be8212b9e8460fc30a99bf301f7a6633030ad
+  TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489
 
 jobs:
   compare:
@@ -77,13 +79,24 @@ jobs:
           BASE_SHA=$(git merge-base refs/remotes/origin/main HEAD)
           CANDIDATE_SHA=$(git rev-parse HEAD)
           BASE_DIR="$RUNNER_TEMP/chessy-origin-main"
+          TRUSTED_DIR="$RUNNER_TEMP/chessy-deep-harness"
+          git cat-file -e "$TRUSTED_DEEP_HARNESS_SHA^{commit}"
+          if [ "$(git merge-base "$TRUSTED_DEEP_HARNESS_SHA" HEAD)" != \
+              "$TRUSTED_DEEP_HARNESS_SHA" ]; then
+            echo "::error::Candidate is not descended from the trusted deep harness"
+            exit 2
+          fi
           git worktree add --detach "$BASE_DIR" "$BASE_SHA"
+          git worktree add --detach "$TRUSTED_DIR" \
+            "$TRUSTED_DEEP_HARNESS_SHA"
           echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
           echo "MAIN_TIP=$MAIN_TIP" >> "$GITHUB_ENV"
           echo "CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_ENV"
           echo "BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
-          printf 'candidate %s\nreference merge-base %s\ncurrent main %s\n' \
-            "$CANDIDATE_SHA" "$BASE_SHA" "$MAIN_TIP"
+          echo "TRUSTED_DIR=$TRUSTED_DIR" >> "$GITHUB_ENV"
+          printf 'candidate %s\nreference merge-base %s\ntrusted harness %s\ncurrent main %s\n' \
+            "$CANDIDATE_SHA" "$BASE_SHA" "$TRUSTED_DEEP_HARNESS_SHA" \
+            "$MAIN_TIP"
 
       - name: Install pinned Rust and Binaryen
         run: |
@@ -138,8 +151,13 @@ jobs:
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
           WASM_OPT_BIN="$RUNNER_TEMP/binaryen-version_131/bin/wasm-opt"
           mkdir -p "$RUNNER_TEMP/deep-wasm"
-          # Candidate driver changes must not bias either side of the screen.
-          cp "$BASE_DIR/experiments/wasm/build.sh" \
+          TRUSTED_DRIVER="$TRUSTED_DIR/experiments/wasm/build.sh"
+          echo "$TRUSTED_BUILD_DRIVER_SHA256  $TRUSTED_DRIVER" |
+            sha256sum -c -
+          # Neither candidate nor older merge-base driver changes may bias
+          # either side of the screen.
+          cp "$TRUSTED_DRIVER" "$BASE_DIR/experiments/wasm/build.sh"
+          cp "$TRUSTED_DRIVER" \
             experiments/wasm/build.sh
           RUSTC="$RUSTC_BIN" \
             CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target-reference" \
