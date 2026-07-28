@@ -551,7 +551,7 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02') &&
     deepWorkflow.includes(
-      'TRUSTED_DEEP_HARNESS_SHA: b4b05ab40f13e8b6d03532f5c93e9f4448785aa7') &&
+      'TRUSTED_DEEP_HARNESS_SHA: cafc585555c6dd9216ea07bdd3b4ea3e8d78d877') &&
     deepWorkflow.includes(
       'TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489') &&
     deepWorkflow.includes(
@@ -567,6 +567,12 @@ check(deepWorkflow.includes(
       'node "$TRUSTED_DIR/experiments/wasm/deep-bench.test.js"') &&
     deepWorkflow.includes(
       'node "$TRUSTED_DIR/experiments/wasm/deep-bench.js"') &&
+    deepWorkflow.includes(
+      'node "$TRUSTED_DIR/test/wasm-node-accounting-contract.js"') &&
+    deepWorkflow.includes(
+      '"$BASE_DIR/experiments/wasm/src"') &&
+    deepWorkflow.includes(
+      '"$GITHUB_WORKSPACE/experiments/wasm/src"') &&
     !deepWorkflow.includes(
       'node experiments/wasm/deep-bench.test.js') &&
     !deepWorkflow.includes(
