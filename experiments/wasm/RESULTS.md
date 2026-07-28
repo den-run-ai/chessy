@@ -160,3 +160,40 @@ module and rerun its complete matrix. Preserve the browser protocol and report
 fresh Rust results; do not copy Zig's run. If that stays green, Rust becomes the
 default implementation candidate for the physical-device and production
 design work.
+
+## Hosted Web Worker/mobile-target matrix
+
+The stacked mobile probe ran the Rust module from source in GitHub Actions at
+commit `b17fc19a89400aa66f1898873992ecf12b57c90f`. The canonical code-only run is
+[30324384519](https://github.com/den-run-ai/chessy/actions/runs/30324384519);
+all build, probe, and aggregate jobs passed on its first attempt.
+
+| Target | Depth 1-5 parity | Fixed-node abort | NPS geomean | Worst family | Slower families |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Android Chrome | 90/90 | 18/18 | **7.6121x** | 6.3048x | 0/9 |
+| Chromium | 90/90 | 18/18 | **7.3286x** | 6.9119x | 0/9 |
+| Chromium, 4x CPU throttle | 90/90 | 18/18 | **7.5811x** | 6.8070x | 0/9 |
+| iOS Safari | 90/90 | 18/18 | **9.8122x** | 8.4589x | 0/9 |
+| Node host | 90/90 | 18/18 | **24.5234x** | 17.8642x | 0/9 |
+| Playwright WebKit | 90/90 | 18/18 | **9.4631x** | 8.4359x | 0/9 |
+
+Across the matrix, exact parity passed 540/540 searches and fixed-node abort
+parity passed 108/108 searches, with no slower mirrored family. Every target
+reported the expected 26,542,080-byte (25.31 MiB) linear-memory reservation.
+The fast module was 32,083 bytes raw and 16,165 bytes Brotli; the optimized
+module SHA-256 was
+`dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db`,
+matching the feasibility build. The workflow also rebuilt in a separate target
+directory and byte-compared every raw and optimized output.
+
+For the four hard five-second positions, Rust/WASM completed depth 7 in all 24
+target-position cells. JavaScript completed depth 4-6, so Rust was never
+shallower. The browser ratios remain in the same broad range as the Zig mobile
+probe, but the separate hosted runs are not a controlled Rust-versus-Zig speed
+comparison.
+
+This clears the hosted browser-engine gate, not the physical-device gate.
+Android used an x86_64 KVM emulator and iOS used an arm64 simulator. Real
+midrange Android and iPhone hardware still must establish ARM wall time,
+30-minute thermal behavior, battery use, jetsam/memory pressure, and watchdog
+behavior before production approval.
