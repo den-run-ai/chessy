@@ -173,6 +173,78 @@ test('rejects a candidate that loses the paired time-to-depth screen', function 
   assert.strictEqual(decision.code, 'REJECT-TIME-TO-DEPTH');
 });
 
+test('enforces the timed host budget and stop metadata before scoring depth',
+  function () {
+    const timed = result(500000, 200000, {
+      depth: 10,
+      attemptedDepth: 11,
+      stopReason: 'time-limit',
+      ms: 5100
+    });
+    assert.strictEqual(deep.timedOvershootAllowance(5000), 100);
+    deep.assertTimedResult(timed, 'candidate', 5000, 30);
+
+    throws(/host-observed budget.*elapsed 5101ms/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, { ms: 5101 }),
+        'candidate', 5000, 30);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, { attemptedDepth: 12 }),
+        'candidate', 5000, 30);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          depth: 0,
+          attemptedDepth: null
+        }),
+        'candidate', 5000, 30);
+    });
+    throws(/inconsistent time-limit depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          depth: 30,
+          attemptedDepth: null
+        }),
+        'candidate', 5000, 30);
+    });
+    deep.assertTimedResult(
+      Object.assign({}, timed, {
+        depth: 10,
+        attemptedDepth: null
+      }),
+      'candidate', 5000, 30);
+    throws(/invalid timed stopReason "node-limit"/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          attemptedDepth: 11,
+          stopReason: 'node-limit'
+        }),
+        'candidate', 5000, 30);
+    });
+    throws(/inconsistent timed max-depth/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          depth: 29,
+          attemptedDepth: null,
+          stopReason: 'max-depth'
+        }),
+        'candidate', 5000, 30);
+    });
+    throws(/inconsistent timed mate/, function () {
+      deep.assertTimedResult(
+        Object.assign({}, timed, {
+          score: 12,
+          depth: 8,
+          attemptedDepth: null,
+          stopReason: 'mate'
+        }),
+        'candidate', 5000, 30);
+    });
+  });
+
 test('rejects narrow or marginal activity before strength testing', function () {
   const narrow = deep.aggregateFixed([
     row('active-a', 80, 100),

@@ -186,6 +186,14 @@ time-to-depth outcomes. A diagnostic decision never makes a rejected
 experiment fail CI; only a broken or incomplete measurement does. Tactics,
 strength, physical-device, and production gates remain separate.
 
+The workflow executes `deep-bench.js`, its imported `bench.js`, and their
+contract tests from a pinned trusted-harness commit rather than from the
+candidate checkout. Every timed candidate and reference search must also
+report coherent stop/depth metadata and finish within the requested budget
+plus a host-observed overshoot allowance of 2% or 25 ms, whichever is larger.
+An overrun or malformed timed result fails the measurement before completed
+depth can influence the diagnostic decision.
+
 The diagnostic classifier requires activity in at least three canonical
 families and a material benefit: at least 5% lower depth-7 geomean nodes, or
 more candidate-deeper than candidate-shallower outcomes in the paired

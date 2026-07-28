@@ -50,6 +50,9 @@ const FIXED_FIELDS = Object.freeze([
   'move', 'score', 'depth', 'attemptedDepth', 'nodes', 'qnodes', 'cutoffs',
   'researches', 'stopReason', 'experimentMetrics'
 ]);
+const MATE_NEAR = 999000;
+const TIMED_OVERSHOOT_FRACTION = 0.02;
+const TIMED_OVERSHOOT_MIN_MS = 25;
 
 function canonicalPositions() {
   return bench.POSITIONS.map(function (position, index) {
@@ -214,6 +217,79 @@ function measuredResult(result) {
     qshare: result.nodes ? result.qnodes / result.nodes : 0,
     experimentMetrics: result.experimentMetrics
   };
+}
+
+function timedOvershootAllowance(timeMs) {
+  if (!Number.isSafeInteger(timeMs) || timeMs <= 0) {
+    throw new Error('timed search budget must be a positive safe integer');
+  }
+  return Math.max(
+    TIMED_OVERSHOOT_MIN_MS,
+    Math.ceil(timeMs * TIMED_OVERSHOOT_FRACTION));
+}
+
+function assertTimedResult(result, label, timeMs, maxDepth) {
+  const allowanceMs = timedOvershootAllowance(timeMs);
+  const maximumElapsedMs = timeMs + allowanceMs;
+  if (!result || !Number.isFinite(result.ms) || result.ms <= 0 ||
+      result.ms > maximumElapsedMs) {
+    throw new Error(label + ' violated the ' + timeMs +
+      'ms host-observed budget plus ' + allowanceMs +
+      'ms overshoot allowance (elapsed ' +
+      JSON.stringify(result && result.ms) + 'ms)');
+  }
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1 ||
+      !Number.isSafeInteger(result.score) ||
+      !Number.isSafeInteger(result.depth) ||
+      result.depth < 0 || result.depth > maxDepth ||
+      (result.attemptedDepth !== null &&
+        (!Number.isSafeInteger(result.attemptedDepth) ||
+          result.attemptedDepth < 1 ||
+          result.attemptedDepth > maxDepth))) {
+    throw new Error(label + ' returned incoherent timed score/depth metadata');
+  }
+  if (!Number.isSafeInteger(result.nodes) || result.nodes < 0 ||
+      !Number.isSafeInteger(result.qnodes) || result.qnodes < 0 ||
+      result.qnodes > result.nodes) {
+    throw new Error(label + ' returned incoherent timed node counters');
+  }
+  if (result.stopReason === 'time-limit') {
+    if ((result.attemptedDepth === null &&
+          (result.depth < 1 || result.depth >= maxDepth)) ||
+        (result.attemptedDepth !== null &&
+          result.attemptedDepth !== result.depth + 1)) {
+      throw new Error(label + ' reported inconsistent time-limit depth ' +
+        '(depth ' + result.depth + ', attemptedDepth ' +
+        JSON.stringify(result.attemptedDepth) + ')');
+    }
+    return;
+  }
+  if (result.stopReason === 'max-depth') {
+    if (result.depth !== maxDepth || result.attemptedDepth !== null) {
+      throw new Error(label + ' reported inconsistent timed max-depth ' +
+        '(depth ' + result.depth + ', attemptedDepth ' +
+        JSON.stringify(result.attemptedDepth) + ')');
+    }
+    return;
+  }
+  if (result.stopReason === 'mate') {
+    if (Math.abs(result.score) < MATE_NEAR ||
+        result.depth < 1 || result.attemptedDepth !== null) {
+      throw new Error(label + ' reported inconsistent timed mate ' +
+        '(score ' + result.score + ', depth ' + result.depth +
+        ', attemptedDepth ' + JSON.stringify(result.attemptedDepth) + ')');
+    }
+    return;
+  }
+  if (result.stopReason === 'game-over') {
+    if (result.depth !== 0 || result.attemptedDepth !== null ||
+        result.nodes !== 0 || result.qnodes !== 0) {
+      throw new Error(label + ' reported inconsistent timed game-over');
+    }
+    return;
+  }
+  throw new Error(label + ' returned invalid timed stopReason ' +
+    JSON.stringify(result.stopReason));
 }
 
 function summarizeFixed(samples, label) {
@@ -597,11 +673,25 @@ function timePosition(candidate, reference, position, positionIndex, config) {
       candidate, reference, position.fen, warmOptions,
       positionIndex % 2 === 0)
     : null;
+  if (warm) {
+    assertTimedResult(
+      warm.candidate, position.name + ' warmup candidate',
+      config.warmMs, warmOptions.maxDepth);
+    assertTimedResult(
+      warm.reference, position.name + ' warmup reference',
+      config.warmMs, warmOptions.maxDepth);
+  }
   const runs = [];
   for (let round = 0; round < config.timePairs; round++) {
     const pair = runOrderedPair(
       candidate, reference, position.fen, timedOptions,
       (positionIndex + round) % 2 === 0);
+    assertTimedResult(
+      pair.candidate, position.name + ' round ' + (round + 1) + ' candidate',
+      config.timeMs, timedOptions.maxDepth);
+    assertTimedResult(
+      pair.reference, position.name + ' round ' + (round + 1) + ' reference',
+      config.timeMs, timedOptions.maxDepth);
     runs.push({
       round: round,
       order: pair.order,
@@ -695,6 +785,8 @@ function aggregateTime(rows, timeMs, pairs) {
     positions: rows.length,
     pairsPerPosition: pairs,
     runs: runs.length,
+    overshootAllowanceMs: timedOvershootAllowance(timeMs),
+    maximumElapsedMs: timeMs + timedOvershootAllowance(timeMs),
     deeper: deeper,
     tied: tied,
     shallower: shallower,
@@ -858,6 +950,10 @@ function fixedMarkdown(title, screen) {
 function timeMarkdown(title, screen) {
   const summary = screen.summary;
   let output = '## ' + title + '\n\n';
+  output += 'Every timed result passed a host-observed elapsed cap of **' +
+    summary.maximumElapsedMs + ' ms** (budget plus ' +
+    summary.overshootAllowanceMs + ' ms / 2%, whichever allowance is ' +
+    'larger) and coherent stop/depth metadata.\n\n';
   output += 'Candidate deeper / tied / shallower: **' + summary.deeper + ' / ' +
     summary.tied + ' / ' + summary.shallower + '**. Mean completed depth: ' +
     fmt(summary.candidateMeanDepth, 2) + ' / ' +
@@ -1032,10 +1128,14 @@ async function main(argv) {
 module.exports = Object.freeze({
   DEPTH8_FAMILY_INDEXES: DEPTH8_FAMILY_INDEXES,
   WITNESSES: WITNESSES,
+  TIMED_OVERSHOOT_FRACTION: TIMED_OVERSHOOT_FRACTION,
+  TIMED_OVERSHOOT_MIN_MS: TIMED_OVERSHOOT_MIN_MS,
   parseOptions: parseOptions,
   median: median,
   geometricMean: geometricMean,
   nearestRank: nearestRank,
+  timedOvershootAllowance: timedOvershootAllowance,
+  assertTimedResult: assertTimedResult,
   aggregateFixed: aggregateFixed,
   fixedDepthGate: fixedDepthGate,
   finalDecision: finalDecision,
