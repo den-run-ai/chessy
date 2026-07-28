@@ -202,6 +202,47 @@ The loader records exactly 16 non-negative, JavaScript-safe slots after every
 search. Implementations must return zero for unused/out-of-range slots. The
 baseline may omit the export; ABI v1 and its 64-byte result stay unchanged.
 
+## Formal efficiency non-inferiority match
+
+`test/wasm-efficiency-match.js` is the separately gated strength-safety check
+for a Rust/WASM search optimization that has already demonstrated a material
+efficiency benefit. It builds on the frozen match corpus and clustered
+statistics, but compares two exact WASM modules rather than accidentally
+replaying the unchanged `assets/ai.js` engine:
+
+- 10,000 nodes per move and a 180-ply cap;
+- 100 frozen openings, four seed slots, and both colours (800 games);
+- one-sided 95% lower confidence bound over the 100 per-opening means;
+- pass only when that lower bound is **strictly above 49%**.
+
+This is an efficiency non-inferiority gate, not the separate pure-strength
+claim whose lower bound must exceed 50%. Candidate/base source commits and
+both optimized-module SHA-256 digests are bound into every shard. The
+aggregator rejects mixed, duplicated, missing, or non-canonical evidence.
+
+ABI v1 has no seed or game-prefix-history input. Root ordering resets to the
+same embedded `0xC0FFEE` seed for every search, so the four manifest seed slots
+are deterministic repeats for WASM. They do not inflate the analysis:
+`test/match-stats.js` still treats the opening as the independent unit
+(`n = 100`, never 400 pairs). Keeping the 20-shard `4 x 5` geometry preserves
+the frozen protocol and gives a direct completeness check; it does not claim
+four independent observations per opening.
+
+The Actions workflow is intentionally marker-only. It does not run when the
+shared harness PR is opened or updated. To launch one complete experiment,
+add `.github/wasm-efficiency-run` to the candidate pull request containing
+exactly:
+
+```text
+chessy-wasm-fixed-node-efficiency-10000x4x100x180-v1
+```
+
+The workflow builds the candidate and frozen
+`808a2ef3e140718facd384acfebdd8781f1db162` source with Rust 1.97.1 and
+Binaryen 131 once, verifies the downloaded modules in every shard, and emits
+the verdict only after all 20 first-attempt artifacts tile the full manifest.
+Do not rerun selected shards or a valid statistical miss.
+
 ## Go/no-go funnel
 
 1. Rust unit tests and byte-reproducible fast/small builds.

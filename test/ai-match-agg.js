@@ -7,8 +7,9 @@
  * Every shard must carry exactly one canonical metadata field for protocol,
  * acceptance class/lower-bound threshold, candidate/base commits, budget
  * mode/value, max plies, opening-manifest version/hash, Node runtime, records
- * and opening count. workflow-run is optional for local artifacts, but must be
- * present on every shard or none, and identical when present.
+ * and opening count. Rust/WASM protocols additionally bind the exact candidate
+ * and base module SHA-256 digests. workflow-run is optional for local
+ * artifacts, but must be present on every shard or none, and identical when present.
  * Unknown/duplicate metadata is rejected.
  *
  * Exit codes:
@@ -62,7 +63,8 @@ const REQUIRED = [
 ];
 const OPTIONAL = ['workflow-run'];
 const DIAGNOSTIC = ['pair-scores', 'shard', 'depth-dist', 'completed-depth'];
-const KNOWN = new Set(REQUIRED.concat(OPTIONAL, DIAGNOSTIC));
+const CONDITIONAL = ['candidate-wasm-sha256', 'base-wasm-sha256'];
+const KNOWN = new Set(REQUIRED.concat(OPTIONAL, DIAGNOSTIC, CONDITIONAL));
 
 function values(text, key) {
   return text.split('\n').map(function (line) {
@@ -101,7 +103,8 @@ const sets = {
   candidate: new Set(), base: new Set(), protocol: new Set(),
   acceptance: new Set(),
   budget: new Set(), maxPlies: new Set(), runtime: new Set(),
-  manifest: new Set(), total: new Set(), workflow: new Set()
+  manifest: new Set(), total: new Set(), workflow: new Set(),
+  candidateWasm: new Set(), baseWasm: new Set()
 };
 let workflowPresent = 0;
 
@@ -116,7 +119,7 @@ for (const file of files) {
       fail(2, file + ': unknown metadata field "' + m[1] + '"');
     }
   }
-  for (const key of DIAGNOSTIC.concat(OPTIONAL)) {
+  for (const key of DIAGNOSTIC.concat(OPTIONAL, CONDITIONAL)) {
     const count = values(text, key).length;
     if (count > 1) fail(2, file + ' contains duplicate ' + key + ' fields');
   }
@@ -159,6 +162,21 @@ for (const file of files) {
       '" requires acceptance-class "' + protocol.acceptanceClass +
       '" and lower-bound-threshold ' + protocol.lowerBoundThreshold);
   }
+  const candidateWasmValues = values(text, 'candidate-wasm-sha256');
+  const baseWasmValues = values(text, 'base-wasm-sha256');
+  let candidateWasm = null;
+  let baseWasm = null;
+  if (protocol.engineKind === 'wasm') {
+    candidateWasm = exactOne(text, 'candidate-wasm-sha256', file);
+    baseWasm = exactOne(text, 'base-wasm-sha256', file);
+    if (!/^[0-9a-f]{64}$/.test(candidateWasm) ||
+        !/^[0-9a-f]{64}$/.test(baseWasm)) {
+      fail(2, file +
+        ': candidate/base WASM SHA-256 must be canonical 64-character lowercase hex');
+    }
+  } else if (candidateWasmValues.length || baseWasmValues.length) {
+    fail(2, file + ': WASM digests are only valid for a WASM protocol');
+  }
   if (manifestVersion !== MatchProtocol.OPENINGS_MANIFEST_VERSION ||
       manifestSha !== MatchProtocol.OPENINGS_MANIFEST_SHA256) {
     fail(2, file + ': unknown opening-manifest version/hash ' +
@@ -200,6 +218,8 @@ for (const file of files) {
   sets.runtime.add(runtime);
   sets.manifest.add(manifestVersion + ':' + manifestSha);
   sets.total.add(String(total));
+  if (candidateWasm) sets.candidateWasm.add(candidateWasm);
+  if (baseWasm) sets.baseWasm.add(baseWasm);
   if (workflow) {
     workflowPresent++;
     sets.workflow.add(workflow);
@@ -297,13 +317,17 @@ const budget = Array.from(sets.budget)[0].split(':');
 const protocolId = Array.from(sets.protocol)[0];
 const protocol = MatchProtocol.PROTOCOL_BY_ID[protocolId];
 const protocolPass = cs.lo95 > protocol.lowerBoundThreshold;
+const efficiencyGate =
+  protocol.acceptanceClass === 'efficiency-noninferiority';
 console.log('\ncombined: ' + all.length + ' pairs, ' + (all.length * 2) +
   ' games  candidate ' + Array.from(sets.candidate)[0] + '  vs base ' +
   Array.from(sets.base)[0] + '  ' + budget[1] +
   (budget[0] === 'nodes' ? ' nodes/move' : ' ms/move'));
 console.log('protocol: ' + protocolId +
   (protocol.formal
-    ? ' (formal strict-strength fixed-node gate)'
+    ? efficiencyGate
+      ? ' (formal efficiency non-inferiority fixed-node gate)'
+      : ' (formal strict-strength fixed-node gate)'
     : budget[0] === 'time'
       ? ' (DRAFT equal-time diagnostic; non-auditable)'
       : ' (non-formal fixed-node diagnostic)'));
@@ -316,9 +340,13 @@ console.log('W ' + w + ' / D ' + d + ' / L ' + l +
   '%  over ' + cs.nClusters + ' openings (' + cs.nPairs + ' pairs)');
 console.log('RESULT: ' + (protocolPass
   ? protocol.formal
-    ? 'PASS — strict strength gate met'
+    ? efficiencyGate
+      ? 'PASS — efficiency non-inferiority gate met'
+      : 'PASS — strict strength gate met'
     : cs.verdict
   : protocol.formal
-    ? 'FAIL — strict strength gate not met (lower bound at or below 50%)'
+    ? efficiencyGate
+      ? 'FAIL — efficiency non-inferiority gate not met (lower bound at or below 49%)'
+      : 'FAIL — strict strength gate not met (lower bound at or below 50%)'
     : cs.verdict));
 process.exit(protocolPass ? 0 : 1);

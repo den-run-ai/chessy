@@ -14,6 +14,8 @@ const OPENINGS = 100;
 const WORKFLOW = 'https://github.com/den-run-ai/chessy/actions/runs/123';
 const CANDIDATE = 'a'.repeat(40);
 const BASE = 'b'.repeat(40);
+const CANDIDATE_WASM = 'c'.repeat(64);
+const BASE_WASM = 'd'.repeat(64);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aggtest-'));
 let passed = 0, failed = 0;
 
@@ -41,6 +43,8 @@ function shardFile(name, seed, over) {
   const mode = over.mode || 'nodes';
   const protocol = over.protocol || (mode === 'time'
     ? MatchProtocol.PROTOCOLS.timeDiagnostic.id
+    : over.wasm
+      ? MatchProtocol.PROTOCOLS.wasmEfficiencyFixedNode.id
     : over.formal
       ? MatchProtocol.PROTOCOLS.formalFixedNode.id
       : mode === 'nodes'
@@ -70,6 +74,12 @@ function shardFile(name, seed, over) {
       over.manifestSha || MatchProtocol.OPENINGS_MANIFEST_SHA256],
     ['node-runtime', over.runtime || 'v22.0.0']
   ];
+  if (protocolConfig.engineKind === 'wasm') {
+    fields.push([
+      'candidate-wasm-sha256', over.candidateWasm || CANDIDATE_WASM
+    ]);
+    fields.push(['base-wasm-sha256', over.baseWasm || BASE_WASM]);
+  }
   if (!over.local) fields.push(['workflow-run', over.workflow || WORKFLOW]);
   fields.push(['records', JSON.stringify(recs)]);
   fields.push(['openings-total', over.total || String(OPENINGS)]);
@@ -115,9 +125,17 @@ const diagnosticFull = [
   shardFile('diag0.txt', 0), shardFile('diag1.txt', 1),
   shardFile('diag2.txt', 2), shardFile('diag3.txt', 3)
 ];
+const wasmFull = [
+  shardFile('wasm-s0.txt', 0, { wasm: true }),
+  shardFile('wasm-s1.txt', 1, { wasm: true }),
+  shardFile('wasm-s2.txt', 2, { wasm: true }),
+  shardFile('wasm-s3.txt', 3, { wasm: true })
+];
 
 console.log('accepts canonical complete manifests');
 expect(full, 0, 'canonical 100x4 workflow manifest passes');
+expect(wasmFull, 0,
+  'canonical 100x4 WASM efficiency manifest passes at >49%');
 expect([
   shardFile('local0.txt', 0, { formal: true, local: true }),
   shardFile('local1.txt', 1, { formal: true, local: true }),
@@ -177,6 +195,27 @@ check(strictIdentity.status === 1 &&
     strictIdentity.output.includes('lower bound at or below 50%'),
   'formal pure-strength protocol rejects an identity result at exactly 50%',
   'exit ' + strictIdentity.status + ': ' + strictIdentity.output.trim());
+const wasmIdentity = run([
+  shardFile('wasm-identity-0.txt', 0, {
+    wasm: true, records: identityRecords(0)
+  }),
+  shardFile('wasm-identity-1.txt', 1, {
+    wasm: true, records: identityRecords(1)
+  }),
+  shardFile('wasm-identity-2.txt', 2, {
+    wasm: true, records: identityRecords(2)
+  }),
+  shardFile('wasm-identity-3.txt', 3, {
+    wasm: true, records: identityRecords(3)
+  })
+]);
+check(wasmIdentity.status === 0 &&
+    wasmIdentity.output.includes(
+      'formal efficiency non-inferiority fixed-node gate') &&
+    wasmIdentity.output.includes(
+      'PASS — efficiency non-inferiority gate met'),
+  'formal efficiency protocol accepts identity at 50% without claiming strength',
+  'exit ' + wasmIdentity.status + ': ' + wasmIdentity.output.trim());
 const diagnosticIdentity = run([
   shardFile('diagnostic-identity.txt', 0, {
     local: true, records: identityRecords(0)
@@ -225,6 +264,11 @@ expect([full[0], full[1], full[2],
     workflow: 'https://github.com/den-run-ai/chessy/actions/runs/456'
   })],
 3, 'different workflow run -> exit 3');
+expect([wasmFull[0], wasmFull[1], wasmFull[2],
+  shardFile('wasm-digest-mismatch.txt', 3, {
+    wasm: true, candidateWasm: 'e'.repeat(64)
+  })],
+3, 'different candidate WASM digest -> exit 3');
 
 console.log('rejects malformed or non-canonical metadata');
 expect([shardFile('bad-sha.txt', 0, { candidate: 'ABC' })], 2,
@@ -267,6 +311,15 @@ expect([shardFile('unknown-field.txt', 0, { extra: 'mystery-field: x' })], 2,
 expect([shardFile('wrong-total.txt', 0, { total: '99' })], 2,
   'opening total disagrees with canonical manifest -> exit 2',
   ['--seeds', '1']);
+expect([shardFile('wasm-missing-digest.txt', 0, {
+  wasm: true, omit: 'candidate-wasm-sha256'
+})], 2, 'WASM protocol requires exact module digests', ['--seeds', '1']);
+expect([shardFile('wasm-bad-digest.txt', 0, {
+  wasm: true, candidateWasm: 'ABC'
+})], 2, 'WASM digest must be canonical SHA-256', ['--seeds', '1']);
+expect([shardFile('js-with-wasm-digest.txt', 0, {
+  extra: 'candidate-wasm-sha256: ' + CANDIDATE_WASM
+})], 2, 'non-WASM protocol rejects WASM-only provenance', ['--seeds', '1']);
 
 console.log('rejects malformed records');
 function mutatedRecords(over) {

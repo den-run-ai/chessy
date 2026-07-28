@@ -208,6 +208,16 @@ selectively rerun shards, combine artifacts across dispatches, or retry a
 valid statistical miss. Start a fresh complete 20-shard run for a genuinely
 new experiment, because post-selection invalidates the predeclared result.
 
+Rust/WASM search optimizations use a separate formal efficiency
+non-inferiority protocol after first demonstrating a material efficiency
+benefit. `test/wasm-efficiency-match.js` compares exact candidate and frozen
+base modules at the same 10,000-node, 100-opening x 4-seed x both-colours,
+180-ply contract; it passes only when the opening-clustered one-sided 95%
+lower bound is strictly above 49%. The marker-only
+`WASM fixed-node efficiency gate` workflow is documented in
+`experiments/wasm/README.md`; adding the shared harness alone does not launch
+the 800-game run.
+
 Browser suites drive the real app headless via Playwright — replay,
 board accessibility (ARIA grid + keyboard), New Game setup + validated
 restore + offline status, chess clocks (including a real flag fall and a
