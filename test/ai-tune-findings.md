@@ -82,10 +82,83 @@ untouched test split, and the tuner never writing `assets/ai.js`.
   iterate or re-select weights (the #104/#105 manifest rule — selection ends
   at validation CE, before any game is played).
 
-### Results — 2026-07-28 run
+### Results — 2026-07-28 run: NO ADMISSIBLE CANDIDATE
 
-RESULTS-PENDING (filled in by the experiment run; this section is committed
-with the run's exact numbers).
+**Decision: no evaluation-weight change ships.** The validation-selected
+candidate FAILED the first admissibility condition — it does not lower the
+untouched test loss — so the gate sequence never started (no tactics run, no
+bench, no match, no manifest spend). The shipped weights stand, now with a
+much stronger negative result behind them than #63's.
+
+- **Data**: 1,595 games (82.8% decisive), 54,356 sampled quiet positions,
+  51,354 after dedup (3,002 book-shared duplicates dropped), 51.0% White to
+  move. Grouped split: train 1,115 games / 35,726 positions, val 239 / 7,601,
+  test 239 / 8,027. Exact regeneration:
+  `node test/ai-tune-gen.js --games 1600 --nodes 2500 --seed 1 --out ...`
+  (dataset sha256 `4bf2ecace4193fe2…`).
+- **Calibration**: K = 0.6800 fitted on baseline weights against train
+  outcomes (cf. ~0.41–0.48 on #63's 700-node data — the 2,500-node scores
+  are substantially more outcome-predictive, as intended).
+- **Fidelity**: reconstruction equals `evaluate()` on all 403 baseline and
+  399 fully-perturbed-table positions before fitting.
+
+Lambda sweep (fit on train, selected on validation, baseline in the
+candidate set; blended targets, rounded scoring):
+
+| lambda | train Δ% | val Δ% | moved (aux/table) |
+|---|---|---|---|
+| 0.02 | +0.860 | **+0.615** | 16 / 557 |
+| 0.05 | +0.623 | +0.517 | 17 / 427 |
+| 0.1 | +0.465 | +0.424 | 16 / 305 |
+| 0.2 | +0.326 | +0.317 | 13 / 167 |
+| 0.5 | +0.172 | +0.132 | 11 / 60 |
+| 1.0 | +0.080 | +0.067 | 9 / 31 |
+
+Validation preferred the least-regularised grid point (lambda = 0.02,
+573/753 weights moved, max table delta 31 cp) — and the **untouched test
+split refused it**: baseline CE 0.511040 vs candidate CE 0.511343
+(−0.059%, i.e. *worse*; reference MSE 0.030527 vs 0.030894, also worse).
+The candidate also tripped the sanity flags that #63 taught us to read as
+objective misalignment: queen mobility driven to 0 and a non-monotonic
+endgame passed-pawn ladder — the same pathology class as #63's
+zero-knight-mobility fit, surfacing at the least-regularised corner even
+with 4× the data, per-position blended labels, and a convex objective.
+
+**Reading.** The validation gains grow monotonically as lambda shrinks while
+the test set says "worse than baseline": at this data scale the val split
+(239 games) rewards fitting self-play-distribution quirks that do not
+transfer even to a *same-distribution* holdout — let alone to play. The
+convex machinery did its job (unique optimum, exact gradients, deterministic
+runs); what is missing is not optimization power but *signal*: within the
+linear-in-features evaluation family, the shipped PeSTO-based weights are
+already at or beyond what ~50k mid-budget self-play positions can improve
+on. This materially strengthens #63's conclusion — round 1 could not move 19
+auxiliary weights; round 2 could not move any of the 753 parameters, under a
+strictly better objective, labels, and data.
+
+**Implication for #105 (NNUE).** This is direct evidence for the capacity
+hypothesis: the remaining evaluation headroom is not reachable by re-weighting
+the existing linear features, however well optimised — it requires either new
+hand-crafted feature terms (the #101 route, which failed its strength gate)
+or a model family with feature interactions (the tiny-NNUE experiment #105
+tracks, whose non-convex hidden layer is exactly what buys the capacity).
+The convex-tuning question is now answered with data, not argument.
+
+**Exploratory control (label ablation, not a selection run).** A second fit
+with `--mix-out 1.0` (pure game-outcome targets, the #63 labelling) on the
+same dataset/split isolates what the blended labels contributed. Result to
+be appended when the run completes; it emits no candidate and selects
+nothing.
+
+### Interpretation limits
+
+- Conclusions are specific to this data distribution (2,500-node self-play
+  from corpus openings). A much larger dataset, deeper labels (e.g.
+  10k-node re-labelling), or result-blended targets from *stronger external
+  games* could still move weights — that would be a new preregistered round.
+- The test split shares the self-play distribution; a test-loss improvement
+  would still only have been a hypothesis pending the strength gates. Its
+  absence, though, is terminal by design.
 
 ### Shipping constraints (why a passing candidate still does not auto-ship)
 
