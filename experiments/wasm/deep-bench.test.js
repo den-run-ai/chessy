@@ -236,4 +236,8 @@ test('pins the two uploaded iPhone witnesses without embedding the PGN', functio
   );
 });
 
+test('keeps exact depth 8 on the bounded endgame families', function () {
+  assert.deepStrictEqual(deep.DEPTH8_FAMILY_INDEXES, [4, 5, 6, 7]);
+});
+
 console.log(passed + ' passed');

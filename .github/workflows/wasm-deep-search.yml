@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       depth8_count:
-        description: 'depth-8 hard positions (0-4)'
+        description: 'depth-8 bounded positions (0-4)'
         default: '4'
       fixed_pairs:
         description: 'fixed-depth AB/BA pairs (even)'
