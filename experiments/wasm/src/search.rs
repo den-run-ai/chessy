@@ -1394,6 +1394,13 @@ mod tt_saturation_tests {
 #[cfg(test)]
 mod nmp_tests {
     use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn test_lock() -> MutexGuard<'static, ()> {
+        TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     const KID: &[u8] =
         b"r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1";
@@ -1420,6 +1427,7 @@ mod nmp_tests {
 
     #[test]
     fn null_move_restores_position_metadata() {
+        let _guard = test_lock();
         let mut position = engine::parse_fen(KID).unwrap();
         let original = position;
         let undo = make_null_move(&mut position);
@@ -1432,6 +1440,7 @@ mod nmp_tests {
 
     #[test]
     fn depth_and_tactical_guards_preserve_baseline() {
+        let _guard = test_lock();
         unsafe {
             let baseline = search_window(KID, 4, 44, 45, false);
             let candidate = search_window(KID, 4, 44, 45, true);
@@ -1453,6 +1462,7 @@ mod nmp_tests {
 
     #[test]
     fn sparse_zugzwang_material_never_probes() {
+        let _guard = test_lock();
         unsafe {
             let fen = b"8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1";
             let baseline = search_window(fen, 6, -200, -199, false);
@@ -1464,6 +1474,7 @@ mod nmp_tests {
 
     #[test]
     fn eligible_cutoff_is_verified_in_real_position() {
+        let _guard = test_lock();
         unsafe {
             for (fen, alpha, beta, maximizing) in
                 [(KID, 44, 45, true), (KID_MIRRORED, -45, -44, false)]
@@ -1487,6 +1498,7 @@ mod nmp_tests {
 
     #[test]
     fn fifty_move_horizon_and_abort_unwinding_are_safe() {
+        let _guard = test_lock();
         unsafe {
             let at_last_safe_horizon =
                 b"r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 80 1";
@@ -1515,6 +1527,7 @@ mod nmp_tests {
 
     #[test]
     fn synthetic_repetition_and_shared_tt_stay_isolated() {
+        let _guard = test_lock();
         unsafe {
             let mut position = engine::parse_fen(KID).unwrap();
             reset_context(true, 0, 0);
