@@ -181,7 +181,7 @@ any benchmark result.
 `deep-bench.js` compares a candidate WASM module with its exact, frozen
 `origin/main` merge-base build without requiring identical trees. Its default
 screen runs fixed depth 7 over the canonical 18-position/mirrored corpus,
-fixed depth 8 over four hard positions, and two order-balanced five-second
+fixed depth 8 over four tractable endgame positions, and two order-balanced five-second
 pairs over all 18 positions. It also replays two AI-to-move witnesses from the
 2026-07-28 iPhone A14 debug game: the depth-6, 83%-quiescence position before
 `18...Nb4` and the depth-9 peak before `27...Rb8`.

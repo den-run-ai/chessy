@@ -13,7 +13,7 @@
  *
  * Defaults:
  *   fixed depth 7 over the canonical 18 positions
- *   fixed depth 8 over four hard positions
+ *   fixed depth 8 over four tractable endgame positions
  *   two order-balanced candidate/reference pairs at each fixed depth
  *   two order-balanced 5-second pairs over all 18 positions
  *   two additional iPhone A14 witnesses from the 2026-07-28 debug game
@@ -28,7 +28,11 @@ const fs = require('fs');
 const path = require('path');
 const bench = require('./bench.js');
 
-const HARD_FAMILY_INDEXES = Object.freeze([1, 2, 3, 8]);
+// Unbounded depth 8 on the middlegame fixtures can fill the engine's fixed
+// transposition table before completion. Keep this screen exact by using the
+// four bounded endgame families; difficult middlegames and the mobile
+// witnesses remain covered by the paired time-to-depth screen.
+const DEPTH8_FAMILY_INDEXES = Object.freeze([4, 5, 6, 7]);
 const WITNESSES = Object.freeze([
   Object.freeze({
     name: 'iPhone A14 18...Nb4 (83% qshare, d6 at 5s)',
@@ -58,10 +62,10 @@ function canonicalPositions() {
   });
 }
 
-function hardPositions(count) {
-  return HARD_FAMILY_INDEXES.slice(0, count).map(function (familyIndex) {
+function depth8Positions(count) {
+  return DEPTH8_FAMILY_INDEXES.slice(0, count).map(function (familyIndex) {
     return {
-      name: bench.FAMILIES[familyIndex][0] + ' (depth-8 hard subset)',
+      name: bench.FAMILIES[familyIndex][0] + ' (depth-8 bounded subset)',
       family: bench.FAMILIES[familyIndex][0],
       mirrored: false,
       fen: bench.FAMILIES[familyIndex][1]
@@ -128,8 +132,8 @@ function parseOptions(argv) {
     depth: integerOption(options, 'depth', 7, 1, 64),
     fixedPairs: evenOption(options, 'fixed-pairs', 2, 2, 10),
     depth8Count: integerOption(
-      options, 'depth8', HARD_FAMILY_INDEXES.length, 0,
-      HARD_FAMILY_INDEXES.length),
+      options, 'depth8', DEPTH8_FAMILY_INDEXES.length, 0,
+      DEPTH8_FAMILY_INDEXES.length),
     timeMs: integerOption(options, 'time-ms', 5000, 100, 60000),
     timePairs: evenOption(options, 'time-pairs', 2, 2, 10),
     warmMs: integerOption(options, 'warm-ms', 250, 0, 5000),
@@ -892,7 +896,7 @@ function renderMarkdown(report) {
     report.fixedDepth);
   if (report.depth8) {
     output += fixedMarkdown(
-      'Optional fixed-depth 8 hard subset', report.depth8);
+      'Optional fixed-depth 8 bounded subset', report.depth8);
   }
   output += fixedMarkdown(
     'iPhone A14 debug-game witnesses at fixed depth ' +
@@ -992,7 +996,7 @@ async function main(argv) {
     candidate, reference, canonical, config.depth, config.fixedPairs);
   report.depth8 = config.depth8Count
     ? runFixedScreen(
-      candidate, reference, hardPositions(config.depth8Count), 8,
+      candidate, reference, depth8Positions(config.depth8Count), 8,
       config.fixedPairs)
     : null;
   report.witnessFixed = runFixedScreen(
@@ -1026,7 +1030,7 @@ async function main(argv) {
 }
 
 module.exports = Object.freeze({
-  HARD_FAMILY_INDEXES: HARD_FAMILY_INDEXES,
+  DEPTH8_FAMILY_INDEXES: DEPTH8_FAMILY_INDEXES,
   WITNESSES: WITNESSES,
   parseOptions: parseOptions,
   median: median,
