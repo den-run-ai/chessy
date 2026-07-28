@@ -1,0 +1,24 @@
+[package]
+name = "chessy-ai-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+rust-version = "1.97.1"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[profile.release]
+codegen-units = 1
+debug = false
+incremental = false
+lto = "fat"
+opt-level = 3
+overflow-checks = false
+panic = "abort"
+strip = "symbols"
+
+[profile.small]
+inherits = "release"
+opt-level = "z"
