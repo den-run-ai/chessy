@@ -63,6 +63,22 @@ require('./helper').run('wasm-engine', async function (t) {
   check(Array.isArray(wasmRun.ai.pvUci) && wasmRun.ai.pvUci.length === 0 &&
       !Object.prototype.hasOwnProperty.call(wasmRun.ai, 'rootOrderUci'),
     'WASM raw-ABI evidence honestly omits PV and captured root order');
+  const debugPgn = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    let s = Chess.newGameState();
+    saved.history.forEach(function (entry, i) {
+      const move = Chess.legalMoves(s).find(function (m) {
+        return m.from === entry.move.from && m.to === entry.move.to &&
+          (m.promotion || null) === (entry.move.promotion || null);
+      });
+      s = Chess.playMove(s, move);
+      s.history[i].ai = entry.ai;
+    });
+    return Chess.toPgn(s, {}, true);
+  });
+  check(debugPgn.includes('engine wasm') &&
+      !debugPgn.includes('engine-fallback'),
+    'the debug PGN log names the WASM engine for opted-in moves');
 
   // ---- The preference is page-level and survives a reload ----
   await page.reload();

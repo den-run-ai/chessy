@@ -468,6 +468,17 @@
       if (ai.fallbackReason === 'worker-error' || ai.fallbackReason === 'watchdog') {
         details.push('fallback ' + ai.fallbackReason);
       }
+      // Engine implementation provenance (#84/#113 WASM rollout): which
+      // engine answered, and whether a WASM request fell back to JavaScript
+      // inside the worker. Enum-checked like fallbackReason so restored
+      // records cannot inject comment syntax.
+      if (ai.engine === 'js' || ai.engine === 'wasm') {
+        details.push('engine ' + ai.engine);
+      }
+      if (ai.engineFallback === 'wasm-load-error' ||
+          ai.engineFallback === 'wasm-search-error') {
+        details.push('engine-fallback ' + ai.engineFallback);
+      }
       if (Array.isArray(ai.pvUci) && ai.pvUci.length) {
         details.push('PV ' + ai.pvUci.join(' ') +
           (ai.pvSource === 'final-tt-best-effort' ? ' (best effort)' : ''));
