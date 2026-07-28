@@ -91,6 +91,7 @@ download floor. Generated `.wasm` files remain ignored.
 (cd experiments/wasm && cargo test --locked --offline)
 node test/ai-wasm-parity.js --depth 5
 node experiments/wasm/bench.js --depth 5 --reps 2 --min-ms 100 --require-go
+node experiments/wasm/deep-bench.test.js
 ```
 
 The Rust tests retain the Zig spike's perft, move-order, make/unmake, and
@@ -168,6 +169,38 @@ cannot be represented exactly by a JavaScript safe integer.
 
 `bench.js` hard-fails on an ABI version or struct-size mismatch before accepting
 any benchmark result.
+
+## Divergent deep-search experiments
+
+`deep-bench.js` compares a candidate WASM module with its exact, frozen
+`origin/main` merge-base build without requiring identical trees. Its default
+screen runs fixed depth 7 over the canonical 18-position/mirrored corpus,
+fixed depth 8 over four hard positions, and two order-balanced five-second
+pairs over all 18 positions. It also replays two AI-to-move witnesses from the
+2026-07-28 iPhone A14 debug game: the depth-6, 83%-quiescence position before
+`18...Nb4` and the depth-9 peak before `27...Rb8`.
+
+The JSON and Markdown reports retain per-position and per-family nodes, qnodes,
+NPS, wall time, move/score/depth divergence, aggregate and tail metrics, and
+time-to-depth outcomes. A diagnostic decision never makes a rejected
+experiment fail CI; only a broken or incomplete measurement does. Tactics,
+strength, physical-device, and production gates remain separate.
+
+The diagnostic classifier requires activity in at least three canonical
+families and a material benefit: at least 5% lower depth-7 geomean nodes, or
+more candidate-deeper than candidate-shallower outcomes in the paired
+five-second screen. It also retains no-regression checks for geomean nodes,
+fixed-depth wall time, and the 1.25x per-position node tail.
+
+Candidate branches may optionally export:
+
+```text
+experiment_metric(index: u32) -> u64
+```
+
+The loader records exactly 16 non-negative, JavaScript-safe slots after every
+search. Implementations must return zero for unused/out-of-range slots. The
+baseline may omit the export; ABI v1 and its 64-byte result stay unchanged.
 
 ## Go/no-go funnel
 
