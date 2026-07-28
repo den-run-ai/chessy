@@ -31,7 +31,7 @@ const PROTOCOLS = Object.freeze({
     formal: true
   }),
   wasmEfficiencyFixedNode: Object.freeze({
-    id: 'chessy-wasm-fixed-node-efficiency-10000x4x100x180-v1',
+    id: 'chessy-wasm-fixed-node-efficiency-10000x4x100x180-v2',
     budgetMode: 'nodes',
     budgetValue: 10000,
     maxPlies: 180,

@@ -1,85 +1,207 @@
 # Formal efficiency non-inferiority gate for divergent Rust/WASM search
-# candidates. It is intentionally marker-triggered: adding/updating the exact
-# marker in a candidate pull request launches one predeclared
+# candidates. It is intentionally maintainer-triggered from the trusted base
+# revision: applying the exact gate label to an eligible candidate pull
+# request launches one predeclared
 # 10,000-node, 100-opening x 4-seed x both-colours (800-game) experiment.
 # Merely adding this workflow to the shared harness does not launch the match.
 #
 # Never rerun a valid statistical miss or selected shards. Change the candidate
-# commit and marker for a genuinely new experiment; only an invalid
+# commit for a genuinely new experiment; only an invalid
 # infrastructure run may be replaced by a fresh complete run.
 
 name: WASM fixed-node efficiency gate
 
 on:
-  pull_request:
-    paths:
-      - '.github/wasm-efficiency-run'
+  pull_request_target:
+    types: [labeled]
 
 permissions:
+  actions: read
   contents: read
 
+run-name: WASM efficiency v2 ${{ github.event.pull_request.head.sha }} via ${{ github.event.label.name }}
+
 concurrency:
-  group: wasm-efficiency-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: wasm-efficiency-pr-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
   cancel-in-progress: false
 
 env:
-  PROTOCOL_ID: chessy-wasm-fixed-node-efficiency-10000x4x100x180-v1
-  BASE_SHA: 808a2ef3e140718facd384acfebdd8781f1db162
+  PROTOCOL_ID: chessy-wasm-fixed-node-efficiency-10000x4x100x180-v2
+  ENGINE_BASE_SHA: 808a2ef3e140718facd384acfebdd8781f1db162
   RUST_VERSION: '1.97.1'
   RUST_COMMIT: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
   RUST_MANIFEST_URL: https://static.rust-lang.org/dist/2026-07-16/channel-rust-1.97.1.toml
   RUST_MANIFEST_SHA256: 03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf
   BINARYEN_URL: https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz
   BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
+  REFERENCE_WASM_SHA256: dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db
 
 jobs:
-  build:
-    name: Build exact candidate and frozen-base modules
+  bind:
+    name: Bind trusted harness and exact candidate
+    if: github.event.label.name == 'run-wasm-efficiency-v2'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     outputs:
       candidate_sha: ${{ steps.provenance.outputs.candidate_sha }}
+      harness_sha: ${{ steps.provenance.outputs.harness_sha }}
     steps:
-      - name: Check out exact candidate head
-        uses: actions/checkout@v4
+      - name: Admit only a same-repository pull request to main
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          ACTUAL_BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          ACTUAL_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          ACTUAL_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL_BASE_REPOSITORY" != "$EXPECTED_REPOSITORY" ] ||
+             [ "$ACTUAL_HEAD_REPOSITORY" != "$EXPECTED_REPOSITORY" ] ||
+             [ "$ACTUAL_BASE_REF" != "main" ]; then
+            echo "::error::The trusted efficiency gate only accepts same-repository pull requests targeting main"
+            exit 2
+          fi
+
+      - name: Reject a second sample for the same candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          expected_title="WASM efficiency v2 $CANDIDATE_SHA via run-wasm-efficiency-v2"
+          page=1
+          while :; do
+            response=$(
+              curl --fail --silent --show-error --retry 3 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/wasm-efficiency.yml/runs?event=pull_request_target&per_page=100&page=$page"
+            )
+            prior=$(
+              jq --arg title "$expected_title" \
+                --argjson current "$CURRENT_RUN_ID" \
+                '[.workflow_runs[] |
+                  select(.id != $current and .display_title == $title)] |
+                  length' <<< "$response"
+            )
+            if [ "$prior" -ne 0 ]; then
+              echo "::error::This exact candidate SHA already has a formal v2 workflow run"
+              exit 2
+            fi
+            count=$(jq '.workflow_runs | length' <<< "$response")
+            if [ "$count" -lt 100 ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+
+      - name: Check out trusted base harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Check out exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: 22
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Bind marker, first attempt, and frozen provenance
+      - name: Bind first attempt and frozen provenance
         id: provenance
+        env:
+          EXPECTED_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HARNESS_SHA: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_RUN_ATTEMPT" != "1" ]; then
-            echo "::error::Reruns are inadmissible; push a fresh marker commit for an invalid run"
+            echo "::error::Reruns are inadmissible; push a fresh reviewed candidate commit for an invalid run"
             exit 2
           fi
-          if [ ! -f .github/wasm-efficiency-run ]; then
-            echo "::error::Missing exact efficiency-gate marker"
+          HARNESS_DIR="$GITHUB_WORKSPACE/trusted"
+          CANDIDATE_DIR="$GITHUB_WORKSPACE/candidate"
+          HARNESS_SHA=$(git -C "$HARNESS_DIR" rev-parse HEAD)
+          CANDIDATE_SHA=$(git -C "$CANDIDATE_DIR" rev-parse HEAD)
+          if [ "$HARNESS_SHA" != "$EXPECTED_HARNESS_SHA" ] ||
+             [ "$CANDIDATE_SHA" != "$EXPECTED_CANDIDATE_SHA" ]; then
+            echo "::error::Checkout SHA does not match the pull-request event"
             exit 2
           fi
-          if ! printf '%s\n' "$PROTOCOL_ID" |
-            cmp -s - .github/wasm-efficiency-run; then
-            echo "::error::Marker must contain exactly $PROTOCOL_ID"
+          if [ "$EXPECTED_WORKFLOW_SHA" != "$HARNESS_SHA" ]; then
+            echo "::error::Executing workflow revision does not match the trusted harness"
             exit 2
           fi
-          CANDIDATE_SHA=$(git rev-parse HEAD)
-          git cat-file -e "$BASE_SHA^{commit}"
-          if [ "$(git merge-base "$BASE_SHA" "$CANDIDATE_SHA")" != "$BASE_SHA" ]; then
-            echo "::error::Candidate is not descended from frozen base $BASE_SHA"
+          for file in \
+            test/wasm-efficiency-match.js \
+            test/ai-match-agg.js \
+            test/ai-match-protocol.js \
+            test/ai-match-openings.js \
+            test/match-stats.js \
+            assets/engine.js \
+            assets/wasm-engine.js; do
+            if [ ! -f "$HARNESS_DIR/$file" ]; then
+              echo "::error::Trusted harness is missing $file"
+              exit 2
+            fi
+          done
+          git -C "$CANDIDATE_DIR" cat-file -e "$ENGINE_BASE_SHA^{commit}"
+          if [ "$(git -C "$CANDIDATE_DIR" merge-base \
+              "$ENGINE_BASE_SHA" "$CANDIDATE_SHA")" != "$ENGINE_BASE_SHA" ]; then
+            echo "::error::Candidate is not descended from frozen engine base $ENGINE_BASE_SHA"
             exit 2
           fi
-          BASE_DIR="$RUNNER_TEMP/chessy-frozen-main"
-          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
-          echo "BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
-          echo "CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_ENV"
+          git -C "$CANDIDATE_DIR" cat-file -e "$HARNESS_SHA^{commit}"
+          if [ "$(git -C "$CANDIDATE_DIR" merge-base \
+              "$HARNESS_SHA" "$CANDIDATE_SHA")" != "$HARNESS_SHA" ]; then
+            echo "::error::Candidate is not descended from the trusted main harness"
+            exit 2
+          fi
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              experiments/wasm/*.md|\
+              experiments/wasm/src/*.rs) ;;
+              *)
+                echo "::error::Formal candidate changes untrusted build or harness path $file"
+                exit 2
+                ;;
+            esac
+          done < <(git -C "$CANDIDATE_DIR" diff \
+            --no-renames --name-only -z "$HARNESS_SHA" "$CANDIDATE_SHA")
+          if find "$CANDIDATE_DIR/experiments/wasm/src" \
+              -type l -print -quit | grep -q .; then
+            echo "::error::Formal candidate Rust sources must not be symbolic links"
+            exit 2
+          fi
           echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
-          printf 'protocol %s\ncandidate %s\nfrozen base %s\n' \
-            "$PROTOCOL_ID" "$CANDIDATE_SHA" "$BASE_SHA"
+          echo "harness_sha=$HARNESS_SHA" >> "$GITHUB_OUTPUT"
+          printf 'protocol %s\ntrusted harness %s\ncandidate %s\nfrozen engine base %s\n' \
+            "$PROTOCOL_ID" "$HARNESS_SHA" "$CANDIDATE_SHA" \
+            "$ENGINE_BASE_SHA"
+
+  build-reference:
+    name: Build trusted frozen-base module
+    needs: bind
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out trusted harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.bind.outputs.harness_sha }}
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
 
       - name: Install pinned Rust and Binaryen
         run: |
@@ -107,26 +229,29 @@ jobs:
             sha256sum -c -
           tar xzf "$RUNNER_TEMP/binaryen.tar.gz" -C "$RUNNER_TEMP"
 
-      - name: Test match contract and both Rust sources
+      - name: Test trusted contract and frozen Rust source
         env:
           RUSTUP_HOME: ${{ runner.temp }}/rustup-home
           CARGO_HOME: ${{ runner.temp }}/cargo-home
           RUSTUP_TOOLCHAIN: ${{ env.RUST_VERSION }}
         run: |
           set -euo pipefail
-          node test/wasm-efficiency-match.test.js
+          HARNESS_DIR="$GITHUB_WORKSPACE/trusted"
+          BASE_DIR="$RUNNER_TEMP/chessy-frozen-main"
+          git -C "$HARNESS_DIR" cat-file -e "$ENGINE_BASE_SHA^{commit}"
+          git -C "$HARNESS_DIR" worktree add --detach \
+            "$BASE_DIR" "$ENGINE_BASE_SHA"
+          env -u NODE_OPTIONS -u NODE_PATH \
+            node "$HARNESS_DIR/test/wasm-efficiency-match.test.js"
           CARGO_BIN=$(rustup which --toolchain "$RUST_VERSION" cargo)
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
-          (
-            cd experiments/wasm
-            RUSTC="$RUSTC_BIN" "$CARGO_BIN" test --locked --offline
-          )
           (
             cd "$BASE_DIR/experiments/wasm"
             RUSTC="$RUSTC_BIN" "$CARGO_BIN" test --locked --offline
           )
+          echo "BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
 
-      - name: Build and bind exact compared modules
+      - name: Build and verify trusted reference module
         env:
           RUSTUP_HOME: ${{ runner.temp }}/rustup-home
           CARGO_HOME: ${{ runner.temp }}/cargo-home
@@ -136,7 +261,7 @@ jobs:
           CARGO_BIN=$(rustup which --toolchain "$RUST_VERSION" cargo)
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
           WASM_OPT_BIN="$RUNNER_TEMP/binaryen-version_131/bin/wasm-opt"
-          MODULE_DIR="$RUNNER_TEMP/wasm-efficiency-modules"
+          MODULE_DIR="$RUNNER_TEMP/wasm-efficiency-reference"
           mkdir -p "$MODULE_DIR"
           RUSTC="$RUSTC_BIN" \
             CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target-reference" \
@@ -146,34 +271,105 @@ jobs:
             sh "$BASE_DIR/experiments/wasm/build.sh"
           cp "$BASE_DIR/experiments/wasm/dist/chessy-ai-fast.wasm" \
             "$MODULE_DIR/reference.wasm"
+          echo "$REFERENCE_WASM_SHA256  $MODULE_DIR/reference.wasm" |
+            sha256sum -c -
+
+      - name: Upload trusted reference module
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wasm-efficiency-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wasm-efficiency-reference/reference.wasm
+          if-no-files-found: error
+
+  build-candidate:
+    name: Build exact untrusted candidate module
+    needs: bind
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out trusted build driver
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.bind.outputs.harness_sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Check out exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ needs.bind.outputs.candidate_sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned Rust and Binaryen
+        run: |
+          set -euo pipefail
+          export RUSTUP_HOME="$RUNNER_TEMP/rustup-home"
+          export CARGO_HOME="$RUNNER_TEMP/cargo-home"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          curl -sSL -o "$RUNNER_TEMP/rust-manifest.toml" \
+            "$RUST_MANIFEST_URL"
+          echo "$RUST_MANIFEST_SHA256  $RUNNER_TEMP/rust-manifest.toml" |
+            sha256sum -c -
+          rustup toolchain install "$RUST_VERSION" --profile minimal \
+            --target wasm32-unknown-unknown
+          rustup run "$RUST_VERSION" rustc --version --verbose |
+            tee "$RUNNER_TEMP/rustc-version.txt"
+          grep -Fx "release: $RUST_VERSION" \
+            "$RUNNER_TEMP/rustc-version.txt"
+          grep -Fx "commit-hash: $RUST_COMMIT" \
+            "$RUNNER_TEMP/rustc-version.txt"
+          grep -Fx "LLVM version: 22.1.6" \
+            "$RUNNER_TEMP/rustc-version.txt"
+          rustup run "$RUST_VERSION" cargo --version
+          curl -sSL -o "$RUNNER_TEMP/binaryen.tar.gz" "$BINARYEN_URL"
+          echo "$BINARYEN_SHA256  $RUNNER_TEMP/binaryen.tar.gz" |
+            sha256sum -c -
+          tar xzf "$RUNNER_TEMP/binaryen.tar.gz" -C "$RUNNER_TEMP"
+
+      - name: Build exact candidate source with trusted driver
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+          RUSTUP_TOOLCHAIN: ${{ env.RUST_VERSION }}
+          EXPECTED_CANDIDATE_SHA: ${{ needs.bind.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          CANDIDATE_DIR="$GITHUB_WORKSPACE/candidate"
+          if [ "$(git -C "$CANDIDATE_DIR" rev-parse HEAD)" != \
+              "$EXPECTED_CANDIDATE_SHA" ]; then
+            echo "::error::Candidate checkout moved after provenance binding"
+            exit 2
+          fi
+          CARGO_BIN=$(rustup which --toolchain "$RUST_VERSION" cargo)
+          RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
+          WASM_OPT_BIN="$RUNNER_TEMP/binaryen-version_131/bin/wasm-opt"
+          TRUSTED_DIR="$GITHUB_WORKSPACE/trusted"
+          cp "$TRUSTED_DIR/experiments/wasm/build.sh" \
+            "$CANDIDATE_DIR/experiments/wasm/build.sh"
           RUSTC="$RUSTC_BIN" \
             CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target-candidate" \
             CHESSY_CARGO_BIN="$CARGO_BIN" \
             CHESSY_RUSTC_BIN="$RUSTC_BIN" \
             CHESSY_WASM_OPT_BIN="$WASM_OPT_BIN" \
-            sh experiments/wasm/build.sh
-          cp experiments/wasm/dist/chessy-ai-fast.wasm \
+            sh "$CANDIDATE_DIR/experiments/wasm/build.sh"
+          MODULE_DIR="$RUNNER_TEMP/wasm-efficiency-candidate"
+          mkdir -p "$MODULE_DIR"
+          cp "$CANDIDATE_DIR/experiments/wasm/dist/chessy-ai-fast.wasm" \
             "$MODULE_DIR/candidate.wasm"
-          (
-            cd "$MODULE_DIR"
-            sha256sum candidate.wasm reference.wasm | tee SHA256SUMS
-            {
-              echo "protocol-id=$PROTOCOL_ID"
-              echo "candidate-sha=$CANDIDATE_SHA"
-              echo "base-sha=$BASE_SHA"
-            } > PROVENANCE
-          )
 
-      - name: Upload exact compared modules
-        uses: actions/upload-artifact@v4
+      - name: Upload exact candidate module
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wasm-efficiency-modules-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/wasm-efficiency-modules/
+          name: wasm-efficiency-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wasm-efficiency-candidate/candidate.wasm
           if-no-files-found: error
 
   formal-shard:
     name: Formal shard (seed ${{ matrix.seedbase }}, opening block ${{ matrix.openbase }})
-    needs: build
+    needs: [bind, build-reference, build-candidate]
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
@@ -183,24 +379,33 @@ jobs:
         seedbase: [0, 1, 2, 3]
         openbase: [0, 20, 40, 60, 80]
     steps:
-      - name: Check out exact candidate head
-        uses: actions/checkout@v4
+      - name: Check out trusted harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ needs.build.outputs.candidate_sha }}
+          ref: ${{ needs.bind.outputs.harness_sha }}
+          path: trusted
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
-      - name: Download exact compared modules
-        uses: actions/download-artifact@v4
+      - name: Download exact candidate module
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: wasm-efficiency-modules-${{ github.run_id }}-${{ github.run_attempt }}
+          name: wasm-efficiency-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wasm-efficiency-modules
 
-      - name: Verify and run formal shard
+      - name: Download trusted reference module
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wasm-efficiency-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wasm-efficiency-modules
+
+      - name: Bind exact modules and run formal shard
         env:
-          CANDIDATE_SHA: ${{ needs.build.outputs.candidate_sha }}
+          CANDIDATE_SHA: ${{ needs.bind.outputs.candidate_sha }}
+          HARNESS_SHA: ${{ needs.bind.outputs.harness_sha }}
           SEEDBASE: ${{ matrix.seedbase }}
           OPENBASE: ${{ matrix.openbase }}
           CHESSY_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -211,53 +416,96 @@ jobs:
             exit 2
           fi
           MODULE_DIR="$RUNNER_TEMP/wasm-efficiency-modules"
-          (
-            cd "$MODULE_DIR"
-            sha256sum -c SHA256SUMS
-            grep -Fx "protocol-id=$PROTOCOL_ID" PROVENANCE
-            grep -Fx "candidate-sha=$CANDIDATE_SHA" PROVENANCE
-            grep -Fx "base-sha=$BASE_SHA" PROVENANCE
+          CANDIDATE_WASM_SHA=$(
+            sha256sum "$MODULE_DIR/candidate.wasm" | awk '{print $1}'
           )
+          BASE_WASM_SHA=$(
+            sha256sum "$MODULE_DIR/reference.wasm" | awk '{print $1}'
+          )
+          if [ "$BASE_WASM_SHA" != "$REFERENCE_WASM_SHA256" ]; then
+            echo "::error::Downloaded reference module is not the pinned frozen-base build"
+            exit 2
+          fi
+          printf 'candidate module %s\nreference module %s\n' \
+            "$CANDIDATE_WASM_SHA" "$BASE_WASM_SHA"
           FILE="match-results-wasm-efficiency-s${SEEDBASE}-o${OPENBASE}.txt"
-          node test/wasm-efficiency-match.js \
+          env -u NODE_OPTIONS -u NODE_PATH \
+            node "$GITHUB_WORKSPACE/trusted/test/wasm-efficiency-match.js" \
             --candidate-wasm "$MODULE_DIR/candidate.wasm" \
             --reference-wasm "$MODULE_DIR/reference.wasm" \
             --candidate-sha "$CANDIDATE_SHA" \
-            --base-sha "$BASE_SHA" \
+            --base-sha "$ENGINE_BASE_SHA" \
+            --harness-sha "$HARNESS_SHA" \
             --seedbase "$SEEDBASE" \
             --openbase "$OPENBASE" | tee "$FILE"
 
       - name: Upload formal shard
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wasm-efficiency-shard-s${{ matrix.seedbase }}-o${{ matrix.openbase }}
           path: match-results-wasm-efficiency-s${{ matrix.seedbase }}-o${{ matrix.openbase }}.txt
           if-no-files-found: error
 
   formal-aggregate:
-    name: Complete 800-game efficiency verdict
-    needs: [build, formal-shard]
-    if: always()
+    name: ${{ github.event.label.name == 'run-wasm-efficiency-v2' && 'Complete 800-game efficiency verdict' || 'WASM gate not requested' }}
+    needs: [bind, build-reference, build-candidate, formal-shard]
+    if: always() && github.event.label.name == 'run-wasm-efficiency-v2'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Check out exact candidate head
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.build.outputs.candidate_sha }}
+      - name: Require every trusted prerequisite
+        env:
+          BIND_RESULT: ${{ needs.bind.result }}
+          REFERENCE_RESULT: ${{ needs.build-reference.result }}
+          CANDIDATE_RESULT: ${{ needs.build-candidate.result }}
+          SHARD_RESULT: ${{ needs.formal-shard.result }}
+        run: |
+          set -euo pipefail
+          for result in \
+            "$BIND_RESULT" "$REFERENCE_RESULT" \
+            "$CANDIDATE_RESULT" "$SHARD_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required build or shard job did not succeed"
+              exit 5
+            fi
+          done
 
-      - uses: actions/setup-node@v4
+      - name: Check out trusted harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.bind.outputs.harness_sha }}
+          path: trusted
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
       - name: Download all formal shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: wasm-efficiency-shard-*
           path: match-results
           merge-multiple: true
 
+      - name: Download exact candidate module
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wasm-efficiency-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wasm-efficiency-modules
+
+      - name: Download trusted reference module
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wasm-efficiency-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wasm-efficiency-modules
+
       - name: Enforce complete formal efficiency verdict
+        env:
+          CANDIDATE_SHA: ${{ needs.bind.outputs.candidate_sha }}
+          HARNESS_SHA: ${{ needs.bind.outputs.harness_sha }}
+          CHESSY_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_RUN_ATTEMPT" != "1" ]; then
@@ -281,8 +529,32 @@ jobs:
             echo "::error::Expected exactly 20 formal shard files, found $count"
             exit 5
           fi
+          MODULE_DIR="$RUNNER_TEMP/wasm-efficiency-modules"
+          CANDIDATE_WASM_SHA=$(
+            sha256sum "$MODULE_DIR/candidate.wasm" | awk '{print $1}'
+          )
+          BASE_WASM_SHA=$(
+            sha256sum "$MODULE_DIR/reference.wasm" | awk '{print $1}'
+          )
+          if [ "$BASE_WASM_SHA" != "$REFERENCE_WASM_SHA256" ]; then
+            echo "::error::Downloaded reference module is not the pinned frozen-base build"
+            exit 2
+          fi
+          PROVENANCE="$RUNNER_TEMP/wasm-efficiency-PROVENANCE"
+          {
+            echo "protocol-id=$PROTOCOL_ID"
+            echo "harness-sha=$HARNESS_SHA"
+            echo "candidate-sha=$CANDIDATE_SHA"
+            echo "base-sha=$ENGINE_BASE_SHA"
+            echo "candidate-wasm-sha256=$CANDIDATE_WASM_SHA"
+            echo "base-wasm-sha256=$BASE_WASM_SHA"
+            echo "workflow-run=$CHESSY_WORKFLOW_RUN"
+          } > "$PROVENANCE"
           set +e
-          node test/ai-match-agg.js "${files[@]}" | tee aggregate.txt
+          env -u NODE_OPTIONS -u NODE_PATH \
+            node "$GITHUB_WORKSPACE/trusted/test/ai-match-agg.js" \
+            --provenance "$PROVENANCE" \
+            "${files[@]}" | tee aggregate.txt
           status=${PIPESTATUS[0]}
           set -e
           cat aggregate.txt >> "$GITHUB_STEP_SUMMARY"
@@ -290,7 +562,7 @@ jobs:
 
       - name: Upload aggregate verdict
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wasm-efficiency-verdict-${{ github.run_id }}-${{ github.run_attempt }}
           path: aggregate.txt
