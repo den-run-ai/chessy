@@ -30,6 +30,18 @@ const PROTOCOLS = Object.freeze({
     lowerBoundThreshold: 0.50,
     formal: true
   }),
+  wasmEfficiencyFixedNode: Object.freeze({
+    id: 'chessy-wasm-fixed-node-efficiency-10000x4x100x180-v1',
+    budgetMode: 'nodes',
+    budgetValue: 10000,
+    maxPlies: 180,
+    openings: OPENINGS_MANIFEST_COUNT,
+    seeds: 4,
+    acceptanceClass: 'efficiency-noninferiority',
+    lowerBoundThreshold: 0.49,
+    engineKind: 'wasm',
+    formal: true
+  }),
   nodeDiagnostic: Object.freeze({
     id: 'chessy-fixed-node-diagnostic-v1',
     budgetMode: 'nodes',
