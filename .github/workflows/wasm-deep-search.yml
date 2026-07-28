@@ -138,8 +138,9 @@ jobs:
           RUSTC_BIN=$(rustup which --toolchain "$RUST_VERSION" rustc)
           WASM_OPT_BIN="$RUNNER_TEMP/binaryen-version_131/bin/wasm-opt"
           mkdir -p "$RUNNER_TEMP/deep-wasm"
-          cp experiments/wasm/build.sh \
-            "$BASE_DIR/experiments/wasm/build.sh"
+          # Candidate driver changes must not bias either side of the screen.
+          cp "$BASE_DIR/experiments/wasm/build.sh" \
+            experiments/wasm/build.sh
           RUSTC="$RUSTC_BIN" \
             CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target-reference" \
             CHESSY_CARGO_BIN="$CARGO_BIN" \

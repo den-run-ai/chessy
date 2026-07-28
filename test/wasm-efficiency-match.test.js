@@ -363,10 +363,13 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02') &&
     deepWorkflow.includes(
+      'cp "$BASE_DIR/experiments/wasm/build.sh" \\\n' +
+      '            experiments/wasm/build.sh') &&
+    !deepWorkflow.includes(
       'cp experiments/wasm/build.sh \\\n' +
       '            "$BASE_DIR/experiments/wasm/build.sh"') &&
     !/uses: actions\/[^@\n]+@v[0-9]/.test(deepWorkflow),
-  'deep-search evidence uses one build driver and immutable action revisions');
+  'deep-search evidence uses the trusted-base driver and immutable action revisions');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
