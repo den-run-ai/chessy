@@ -24,6 +24,9 @@ const QCHECK_PLIES: usize = 1;
 const MAX_PLY: usize = 128;
 pub const MAX_SEARCH_DEPTH: u32 = (MAX_PLY - QMAX - 1) as u32;
 const REP_INFINITY: u16 = 0xffff;
+const NMP_REDUCTION: i32 = 2;
+const NMP_MIN_DEPTH: i32 = 5;
+const NMP_STATIC_MARGIN: i32 = 64;
 
 const TT_CAPACITY: usize = 1 << 20;
 const TT_MASK: usize = TT_CAPACITY - 1;
@@ -116,6 +119,15 @@ struct Context {
     qnodes: u64,
     cutoffs: u64,
     researches: u64,
+    use_nmp: bool,
+    in_null: u8,
+    nmp_disabled: u8,
+    nmp_probes: u64,
+    nmp_triggers: u64,
+    nmp_verified_cutoffs: u64,
+    nmp_verification_rejects: u64,
+    nmp_probe_nodes: u64,
+    nmp_verify_nodes: u64,
     rep_ply: u16,
     path1: [u32; MAX_PLY],
     path2: [u32; MAX_PLY],
@@ -140,6 +152,15 @@ impl Context {
         qnodes: 0,
         cutoffs: 0,
         researches: 0,
+        use_nmp: true,
+        in_null: 0,
+        nmp_disabled: 0,
+        nmp_probes: 0,
+        nmp_triggers: 0,
+        nmp_verified_cutoffs: 0,
+        nmp_verification_rejects: 0,
+        nmp_probe_nodes: 0,
+        nmp_verify_nodes: 0,
         rep_ply: 0,
         path1: [0; MAX_PLY],
         path2: [0; MAX_PLY],
@@ -221,6 +242,15 @@ unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
     ctx.qnodes = 0;
     ctx.cutoffs = 0;
     ctx.researches = 0;
+    ctx.use_nmp = true;
+    ctx.in_null = 0;
+    ctx.nmp_disabled = 0;
+    ctx.nmp_probes = 0;
+    ctx.nmp_triggers = 0;
+    ctx.nmp_verified_cutoffs = 0;
+    ctx.nmp_verification_rejects = 0;
+    ctx.nmp_probe_nodes = 0;
+    ctx.nmp_verify_nodes = 0;
     ctx.rep_ply = REP_INFINITY;
     ctx.path_len = 0;
     ctx.tt_count = 0;
@@ -534,6 +564,57 @@ unsafe fn has_legal_move(
     false
 }
 
+fn null_material_safe(position: &Position, turn: Color) -> bool {
+    let mut total = 0_u8;
+    let mut own = 0_u8;
+    let mut square = 0;
+    while square < position.board.len() {
+        let piece = position.board[square];
+        if piece != Piece::Empty {
+            let kind = engine::piece_type(piece).unwrap();
+            if kind != PieceType::Pawn && kind != PieceType::King {
+                total += 1;
+                if engine::piece_color(piece) == Some(turn) {
+                    own += 1;
+                }
+            }
+        }
+        square += 1;
+    }
+    own > 0 && total >= 4
+}
+
+#[derive(Clone, Copy)]
+struct NullUndo {
+    turn: Color,
+    ep: u8,
+    halfmove: u16,
+    fullmove: u16,
+}
+
+fn make_null_move(position: &mut Position) -> NullUndo {
+    let undo = NullUndo {
+        turn: position.turn,
+        ep: position.ep,
+        halfmove: position.halfmove,
+        fullmove: position.fullmove,
+    };
+    position.turn = engine::opposite(position.turn);
+    position.ep = engine::NO_SQUARE;
+    position.halfmove = position.halfmove.saturating_add(1);
+    if undo.turn == Color::Black {
+        position.fullmove = position.fullmove.saturating_add(1);
+    }
+    undo
+}
+
+fn unmake_null_move(position: &mut Position, undo: NullUndo) {
+    position.turn = undo.turn;
+    position.ep = undo.ep;
+    position.halfmove = undo.halfmove;
+    position.fullmove = undo.fullmove;
+}
+
 unsafe fn quiesce_node(
     position: &mut Position,
     alpha_initial: i32,
@@ -561,7 +642,7 @@ unsafe fn quiesce_node(
         r1: 0,
         r2: 0,
     };
-    let track_repetition = position.halfmove >= 4;
+    let track_repetition = context().in_null == 0 && position.halfmove >= 4;
     if track_repetition {
         hash = hash_position(position);
         if let Some(ancestor) = check_repetition(hash.r1, hash.r2) {
@@ -712,10 +793,18 @@ unsafe fn search_node(
         return 0;
     }
 
-    let hash = hash_position(position);
-    if let Some(ancestor) = check_repetition(hash.r1, hash.r2) {
-        context().rep_ply = ancestor;
-        return 0;
+    let mut hash = Hash {
+        h1: 0,
+        h2: 0,
+        r1: 0,
+        r2: 0,
+    };
+    if context().in_null == 0 {
+        hash = hash_position(position);
+        if let Some(ancestor) = check_repetition(hash.r1, hash.r2) {
+            context().rep_ply = ancestor;
+            return 0;
+        }
     }
 
     if depth <= 0 {
@@ -743,7 +832,7 @@ unsafe fn search_node(
     let mut beta = beta_initial;
     let remaining_to_fifty =
         position.halfmove as i32 + depth + if context().quiesce { QMAX as i32 } else { 0 };
-    let use_tt = remaining_to_fifty < 100;
+    let use_tt = context().in_null == 0 && remaining_to_fifty < 100;
     let mut tt_move = 0;
     if use_tt {
         let entry = tt_lookup(hash.h1);
@@ -786,12 +875,100 @@ unsafe fn search_node(
 
     let alpha_original = alpha;
     let beta_original = beta;
+
+    // Always-verified null-move pruning. Eligibility uses the entry window,
+    // before a TT bound can narrow it. The artificial pass cannot touch the
+    // TT, repetition paths, killers, or history. A trigger is only a hint:
+    // the real position must cross the same bound at depth - 1 before the
+    // cutoff is accepted.
+    let null_depth = depth - NMP_REDUCTION - 1;
+    let entry_null_window = alpha_initial > -SCORE_INF
+        && beta_initial < SCORE_INF
+        && beta_initial - alpha_initial == 1;
+    let null_eligible = context().use_nmp
+        && context().quiesce
+        && context().in_null == 0
+        && context().nmp_disabled == 0
+        && entry_null_window
+        && depth >= NMP_MIN_DEPTH
+        && !in_check
+        && alpha_initial > -MATE_NEAR
+        && beta_initial < MATE_NEAR
+        && null_material_safe(position, turn)
+        && position.halfmove as i32 + 1 + null_depth + QMAX as i32 < 100;
+    if null_eligible {
+        let static_score = eval::evaluate(position);
+        let static_supports = if maximizing {
+            static_score >= beta + NMP_STATIC_MARGIN
+        } else {
+            static_score <= alpha - NMP_STATIC_MARGIN
+        };
+        if static_supports {
+            let probe_start = context().nodes;
+            context().nmp_probes += 1;
+            context().in_null += 1;
+            context().nmp_disabled += 1;
+            let null_undo = make_null_move(position);
+            let null_score = if maximizing {
+                search_node(position, null_depth, beta - 1, beta, ply + 1)
+            } else {
+                search_node(position, null_depth, alpha, alpha + 1, ply + 1)
+            };
+            unmake_null_move(position, null_undo);
+            context().in_null -= 1;
+            context().nmp_disabled -= 1;
+            context().nmp_probe_nodes += context().nodes - probe_start;
+            context().rep_ply = REP_INFINITY;
+            if null_score == ABORT_SCORE {
+                return ABORT_SCORE;
+            }
+
+            let triggered = if maximizing {
+                null_score >= beta
+            } else {
+                null_score <= alpha
+            };
+            if triggered {
+                context().nmp_triggers += 1;
+                let verify_start = context().nodes;
+                context().nmp_disabled += 1;
+                let verify_score = if maximizing {
+                    search_node(position, depth - 1, beta - 1, beta, ply)
+                } else {
+                    search_node(position, depth - 1, alpha, alpha + 1, ply)
+                };
+                let verify_rep = context().rep_ply;
+                context().nmp_disabled -= 1;
+                context().nmp_verify_nodes += context().nodes - verify_start;
+                if verify_score == ABORT_SCORE {
+                    return ABORT_SCORE;
+                }
+
+                let confirmed = if maximizing {
+                    verify_score >= beta
+                } else {
+                    verify_score <= alpha
+                };
+                if confirmed {
+                    context().nmp_verified_cutoffs += 1;
+                    context().cutoffs += 1;
+                    context().rep_ply = verify_rep;
+                    return if maximizing { beta } else { alpha };
+                }
+                context().nmp_verification_rejects += 1;
+                context().rep_ply = REP_INFINITY;
+            }
+        }
+    }
+
     let mut best = if maximizing { -SCORE_INF } else { SCORE_INF };
     let mut best_move = 0;
     let mut any_legal = false;
     let mut rep_min = REP_INFINITY;
 
-    push_path(hash.r1, hash.r2);
+    if context().in_null == 0 {
+        push_path(hash.r1, hash.r2);
+    }
     let count = generate_pseudo_at(position, ply);
     order_moves(ply, count, tt_move, turn);
 
@@ -834,7 +1011,9 @@ unsafe fn search_node(
         engine::unmake_move(position, mv, undo);
 
         if score == ABORT_SCORE {
-            pop_path();
+            if context().in_null == 0 {
+                pop_path();
+            }
             return ABORT_SCORE;
         }
         any_legal = true;
@@ -854,14 +1033,19 @@ unsafe fn search_node(
         }
         if beta <= alpha {
             context().cutoffs += 1;
-            if !engine::move_is_capture(mv) && engine::move_promotion(mv).is_none() {
+            if context().in_null == 0
+                && !engine::move_is_capture(mv)
+                && engine::move_promotion(mv).is_none()
+            {
                 record_quiet_cutoff(mv, ply, depth, turn);
             }
             break;
         }
         index += 1;
     }
-    pop_path();
+    if context().in_null == 0 {
+        pop_path();
+    }
     context().rep_ply = rep_min;
 
     if !any_legal {
@@ -1183,6 +1367,20 @@ pub fn abi_move(mv: Move) -> u32 {
     engine::move_from(mv) as u32 | ((engine::move_to(mv) as u32) << 6) | (promotion << 12)
 }
 
+/// Experiment-only counters read by the deep-search benchmark. The shipped
+/// result ABI remains unchanged; an unknown metric index returns zero.
+pub unsafe fn experiment_metric(index: u32) -> u64 {
+    match index {
+        0 => context().nmp_probes,
+        1 => context().nmp_triggers,
+        2 => context().nmp_verified_cutoffs,
+        3 => context().nmp_verification_rejects,
+        4 => context().nmp_probe_nodes,
+        5 => context().nmp_verify_nodes,
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod tt_saturation_tests {
     #[test]
@@ -1190,5 +1388,162 @@ mod tt_saturation_tests {
         assert!(!super::tt_unavailable(super::TT_CAPACITY - 1, false));
         assert!(super::tt_unavailable(super::TT_CAPACITY, false));
         assert!(super::tt_unavailable(0, true));
+    }
+}
+
+#[cfg(test)]
+mod nmp_tests {
+    use super::*;
+
+    const KID: &[u8] =
+        b"r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1";
+    const KID_MIRRORED: &[u8] =
+        b"r1bq1rk1/pp3ppp/2n2n2/2p1p3/3pP3/3P2P1/PPP1N1BP/R1BQ1RK1 b - - 0 1";
+    const DEFENCE: &[u8] =
+        b"r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27";
+    const DEFENCE_MIRRORED: &[u8] =
+        b"2r4k/p5p1/3b3p/1p5b/3Ppn1q/1B2N3/1PPQ1PP1/R3R1K1 w - - 0 27";
+    const IN_CHECK: &[u8] = b"6k1/5ppp/8/8/8/2N5/6PP/r5K1 w - - 0 1";
+
+    unsafe fn search_window(
+        fen: &[u8],
+        depth: i32,
+        alpha: i32,
+        beta: i32,
+        enabled: bool,
+    ) -> i32 {
+        let mut position = engine::parse_fen(fen).unwrap();
+        reset_context(true, 0, 0);
+        context().use_nmp = enabled;
+        search_node(&mut position, depth, alpha, beta, 0)
+    }
+
+    #[test]
+    fn null_move_restores_position_metadata() {
+        let mut position = engine::parse_fen(KID).unwrap();
+        let original = position;
+        let undo = make_null_move(&mut position);
+        assert!(position.turn == Color::Black);
+        assert!(position.ep == engine::NO_SQUARE);
+        assert!(position.halfmove == original.halfmove + 1);
+        unmake_null_move(&mut position, undo);
+        assert!(position == original);
+    }
+
+    #[test]
+    fn depth_and_tactical_guards_preserve_baseline() {
+        unsafe {
+            let baseline = search_window(KID, 4, 44, 45, false);
+            let candidate = search_window(KID, 4, 44, 45, true);
+            assert_eq!(candidate, baseline);
+            assert_eq!(experiment_metric(0), 0);
+
+            for (fen, alpha, beta) in [
+                (IN_CHECK, -1000, -999),
+                (DEFENCE, -70, -69),
+                (DEFENCE_MIRRORED, 69, 70),
+            ] {
+                let baseline = search_window(fen, 5, alpha, beta, false);
+                let candidate = search_window(fen, 5, alpha, beta, true);
+                assert_eq!(candidate, baseline);
+                assert_eq!(experiment_metric(0), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_zugzwang_material_never_probes() {
+        unsafe {
+            let fen = b"8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1";
+            let baseline = search_window(fen, 6, -200, -199, false);
+            let candidate = search_window(fen, 6, -200, -199, true);
+            assert_eq!(candidate, baseline);
+            assert_eq!(experiment_metric(0), 0);
+        }
+    }
+
+    #[test]
+    fn eligible_cutoff_is_verified_in_real_position() {
+        unsafe {
+            for (fen, alpha, beta, maximizing) in
+                [(KID, 44, 45, true), (KID_MIRRORED, -45, -44, false)]
+            {
+                let baseline = search_window(fen, 5, alpha, beta, false);
+                let score = search_window(fen, 5, alpha, beta, true);
+                if maximizing {
+                    assert!(score >= beta && baseline >= beta);
+                } else {
+                    assert!(score <= alpha && baseline <= alpha);
+                }
+                assert_eq!(experiment_metric(0), 1);
+                assert_eq!(experiment_metric(1), 1);
+                assert_eq!(experiment_metric(2), 1);
+                assert_eq!(experiment_metric(3), 0);
+                assert!(experiment_metric(4) > 0);
+                assert!(experiment_metric(5) > 0);
+            }
+        }
+    }
+
+    #[test]
+    fn fifty_move_horizon_and_abort_unwinding_are_safe() {
+        unsafe {
+            let at_last_safe_horizon =
+                b"r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 80 1";
+            let beyond_safe_horizon =
+                b"r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 81 1";
+            let _ = search_window(at_last_safe_horizon, 5, 44, 45, true);
+            assert_eq!(experiment_metric(0), 1);
+            assert_eq!(experiment_metric(2), 1);
+            let _ = search_window(beyond_safe_horizon, 5, 44, 45, true);
+            assert_eq!(experiment_metric(0), 0);
+
+            let mut position = engine::parse_fen(KID).unwrap();
+            let original = position;
+            reset_context(true, 500, 0);
+            context().use_nmp = true;
+            let score = search_node(&mut position, 5, 44, 45, 0);
+            assert_eq!(score, ABORT_SCORE);
+            assert_eq!(context().nmp_probes, 1);
+            assert_eq!(context().nmp_triggers, 1);
+            assert_eq!(context().in_null, 0);
+            assert_eq!(context().nmp_disabled, 0);
+            assert_eq!(context().path_len, 0);
+            assert!(position == original);
+        }
+    }
+
+    #[test]
+    fn synthetic_repetition_and_shared_tt_stay_isolated() {
+        unsafe {
+            let mut position = engine::parse_fen(KID).unwrap();
+            reset_context(true, 0, 0);
+            context().use_nmp = true;
+
+            let null_undo = make_null_move(&mut position);
+            let artificial = hash_position(&mut position);
+            unmake_null_move(&mut position, null_undo);
+            context().path1[0] = artificial.r1;
+            context().path2[0] = artificial.r2;
+            context().path_len = 1;
+
+            let score = search_node(&mut position, 5, 44, 45, 0);
+            assert_eq!(score, 45);
+            assert_eq!(context().nmp_probes, 1);
+            assert_eq!(context().nmp_verified_cutoffs, 1);
+            assert_eq!(context().path_len, 1);
+
+            context().path_len = 0;
+            context().use_nmp = false;
+            let warm_exact =
+                search_node(&mut position, 4, -SCORE_INF, SCORE_INF, 0);
+            assert_ne!(warm_exact, ABORT_SCORE);
+
+            reset_context(true, 0, 0);
+            context().use_nmp = false;
+            let fresh_exact =
+                search_node(&mut position, 4, -SCORE_INF, SCORE_INF, 0);
+            assert_eq!(warm_exact, fresh_exact);
+        }
     }
 }

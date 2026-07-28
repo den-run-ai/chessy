@@ -127,6 +127,13 @@ pub unsafe extern "C" fn search(
     }
 }
 
+/// Optional experiment instrumentation. Production consumers ignore this
+/// export and continue to use the unchanged ABI v1 result structure.
+#[no_mangle]
+pub unsafe extern "C" fn experiment_metric(index: u32) -> u64 {
+    search::experiment_metric(index)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
