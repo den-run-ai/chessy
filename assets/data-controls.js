@@ -634,6 +634,8 @@
         const neutralized = fenceRecovery();
         suspendWrites(false);
         opInFlight = false;
+        // A restored archive is durable data worth protecting too (#82).
+        if (window.ChessyStorageHealth) ChessyStorageHealth.noteDurableWrite();
         const msg = 'Restored ' + total(counts) + ' record' + (total(counts) === 1 ? '' : 's') +
           ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards).' +
           (neutralized ? '' : ' Reload once storage is available so the old game cannot return.');
