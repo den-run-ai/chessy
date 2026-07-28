@@ -641,7 +641,7 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02') &&
     deepWorkflow.includes(
-      'TRUSTED_DEEP_HARNESS_SHA: cafc585555c6dd9216ea07bdd3b4ea3e8d78d877') &&
+      'TRUSTED_DEEP_HARNESS_SHA: 1bb072c4446e0a3856360cb0f654444956ff4dcb') &&
     deepWorkflow.includes(
       'TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489') &&
     deepWorkflow.includes(
