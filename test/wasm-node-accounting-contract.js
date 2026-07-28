@@ -6,6 +6,16 @@
  * code may still add work by recursively calling search_node/quiesce_node;
  * those trusted entry prologues charge every such call.
  *
+ * Scope: this contract is a lexical tripwire for the known classes of
+ * accounting bypass (counter rewrites, raw-pointer/macro escapes, ABI
+ * clamps, whole-Context replacement, import aliasing). Lexical analysis of
+ * a general-purpose language cannot be adversarially complete, so a clean
+ * contract run is necessary but not sufficient evidence: final admission
+ * authority for the formal gate remains the maintainer's review of the
+ * exact candidate diff before applying the run label. New evasion patterns
+ * are handled by extending the tripwire, not by treating the contract as a
+ * proof.
+ *
  * Usage:
  *   node test/wasm-node-accounting-contract.js \
  *     /path/to/trusted/experiments/wasm/src \
@@ -182,6 +192,53 @@ function extractBracedItem(source, label, expression) {
   fail('Rust ' + label + ' has an unbalanced body');
 }
 
+function extractAllBracedItems(source, expression) {
+  const masked = maskRustNonCode(source);
+  const items = [];
+  for (const match of masked.matchAll(expression)) {
+    let start = source.lastIndexOf('\n', match.index) + 1;
+    let previousEnd = start > 0 ? start - 1 : 0;
+    while (start > 0) {
+      const previousStart = source.lastIndexOf('\n', previousEnd - 1) + 1;
+      const previous = source.slice(previousStart, previousEnd).trim();
+      if (!previous.startsWith('#[')) break;
+      start = previousStart;
+      previousEnd = start > 0 ? start - 1 : 0;
+    }
+    const open = masked.indexOf('{', match.index);
+    if (open === -1) fail('Rust item has no braced body');
+    let depth = 0;
+    let end = -1;
+    for (let index = open; index < masked.length; index++) {
+      if (masked[index] === '{') depth++;
+      if (masked[index] === '}') {
+        depth--;
+        if (depth === 0) {
+          end = index + 1;
+          break;
+        }
+        if (depth < 0) break;
+      }
+    }
+    if (end === -1) fail('Rust item has an unbalanced body');
+    items.push(source.slice(start, end));
+  }
+  return items;
+}
+
+function bracedItemHeaders(source, expression) {
+  return extractAllBracedItems(source, expression).map(function (item) {
+    return item.slice(0, item.indexOf('{')).replace(/\s+/g, ' ').trim();
+  }).sort();
+}
+
+function itemAttributePrefix(source, label, expression) {
+  const item = extractBracedItem(source, label, expression);
+  const keyword = item.search(/\b(?:pub\s+)?(?:struct|enum|union|impl)\b/);
+  if (keyword === -1) fail('Rust ' + label + ' has no item keyword');
+  return item.slice(0, keyword).trim();
+}
+
 function prefixThrough(source, name, marker) {
   const fn = extractFunction(source, name);
   const first = fn.indexOf(marker);
@@ -290,6 +347,44 @@ function moduleLines(source) {
   return maskedLines.reduce(function (lines, masked, index) {
     if (/^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+[A-Za-z_][A-Za-z0-9_]*/.test(
       masked)) {
+      lines.push(sourceLines[index].trim());
+    }
+    return lines;
+  }, []);
+}
+
+function importLines(source) {
+  source = withoutCfgTestModules(source);
+  const maskedLines = maskRustNonCode(source).split(/\r?\n/);
+  const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
+  return maskedLines.reduce(function (lines, masked, index) {
+    if (/^\s*(?:pub(?:\([^)]*\))?\s+)?use\b/.test(masked)) {
+      lines.push(sourceLines[index].trim());
+    }
+    return lines;
+  }, []);
+}
+
+function contextTypeLines(source) {
+  source = withoutCfgTestModules(source);
+  const maskedLines = maskRustNonCode(source).split(/\r?\n/);
+  const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
+  return maskedLines.reduce(function (lines, masked, index) {
+    if (/\bContext\b/.test(masked)) {
+      lines.push(sourceLines[index].trim());
+    }
+    return lines;
+  }, []);
+}
+
+function forbiddenMutationLines(source) {
+  source = withoutCfgTestModules(source);
+  const maskedLines = maskRustNonCode(source).split(/\r?\n/);
+  const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
+  return maskedLines.reduce(function (lines, masked, index) {
+    if (/\bclone_from\b|\bclone_into\b|\btransmute\b/.test(masked) ||
+        /\bmem\s*::\s*(?:replace|swap|take)\b/.test(masked) ||
+        /\bas\s*\*\s*(?:mut|const)\b/.test(masked)) {
       lines.push(sourceLines[index].trim());
     }
     return lines;
@@ -412,6 +507,35 @@ function validateSources(trusted, candidate) {
   compare('classified critical identifier uses',
     JSON.stringify(projectFiles(trustedFiles, criticalUseProjection)),
     JSON.stringify(projectFiles(candidateFiles, criticalUseProjection)));
+  // Field-level classification cannot see a whole-Context replacement
+  // (e.g. a derived Clone plus clone_from restoring a snapshotted counter
+  // state). Candidates may add their own experiment fields to Context, so
+  // the struct body stays open; instead the struct's outer attributes, the
+  // set of impl headers targeting the type, all production type-name uses,
+  // the replacement vocabulary, and the import surface are frozen.
+  compare('Context struct attributes',
+    itemAttributePrefix(
+      withoutCfgTestModules(trusted.search), 'Context struct',
+      /\bstruct\s+Context\s*\{/g),
+    itemAttributePrefix(
+      withoutCfgTestModules(candidate.search), 'Context struct',
+      /\bstruct\s+Context\s*\{/g));
+  compare('Context impl headers',
+    JSON.stringify(bracedItemHeaders(
+      withoutCfgTestModules(trusted.search),
+      /\bimpl\b[^{;]*\bContext\b[^{;]*\{/g)),
+    JSON.stringify(bracedItemHeaders(
+      withoutCfgTestModules(candidate.search),
+      /\bimpl\b[^{;]*\bContext\b[^{;]*\{/g)));
+  compare('Context type surface',
+    JSON.stringify(projectFiles(trustedFiles, contextTypeLines)),
+    JSON.stringify(projectFiles(candidateFiles, contextTypeLines)));
+  compare('whole-context mutation vocabulary',
+    JSON.stringify(projectFiles(trustedFiles, forbiddenMutationLines)),
+    JSON.stringify(projectFiles(candidateFiles, forbiddenMutationLines)));
+  compare('production use imports',
+    JSON.stringify(projectFiles(trustedFiles, importLines)),
+    JSON.stringify(projectFiles(candidateFiles, importLines)));
   return true;
 }
 
@@ -461,6 +585,12 @@ if (require.main === module) {
 module.exports = Object.freeze({
   maskRustNonCode: maskRustNonCode,
   extractFunction: extractFunction,
+  extractAllBracedItems: extractAllBracedItems,
+  bracedItemHeaders: bracedItemHeaders,
+  itemAttributePrefix: itemAttributePrefix,
+  importLines: importLines,
+  contextTypeLines: contextTypeLines,
+  forbiddenMutationLines: forbiddenMutationLines,
   accountingLines: accountingLines,
   escapeLines: escapeLines,
   criticalUseProjection: criticalUseProjection,

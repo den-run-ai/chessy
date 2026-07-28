@@ -322,12 +322,15 @@ check(true, 'accepts the unchanged trusted accounting pipeline');
     '\nconst ACCOUNTING_NOTE: &str = r#"{ context().nodes = 0; }"#;\n' +
     '#[cfg(test)]\n' +
     'mod candidate_accounting_tests {\n' +
+    '    use super::*;\n' +
+    '    use std::sync::Mutex;\n' +
     '    #[test]\n' +
     '    fn reset_is_test_only() { unsafe { super::reset_context(true, 1, 0); } }\n' +
     '}\n';
   accounting.validateSources(trustedAccounting, compatible);
   check(true,
-    'permits experiment metrics and recursive work that retain trusted entry accounting');
+    'permits experiment metrics, test-only imports, and recursive work that ' +
+    'retain trusted entry accounting');
 }
 throws(function () {
   accounting.validateSources(trustedAccounting, {
@@ -464,6 +467,93 @@ throws(function () {
   });
 }, /changed trusted WASM node accounting: production module declarations/,
 'rejects a new production source module outside the reviewed accounting tree');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      'struct Context {',
+      '#[derive(Clone)]\nstruct Context {')
+  });
+}, /changed trusted WASM node accounting: Context struct attributes/,
+'rejects deriving Clone on the accounting context');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search +
+      '\nimpl Clone for Context\n' +
+      '{ fn clone(&self) -> Self { todo!() } }\n'
+  });
+}, /changed trusted WASM node accounting: Context impl headers/,
+'rejects a hand-written Clone impl for the accounting context');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    context().clone_from(&SNAPSHOT);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: whole-context mutation vocabulary/,
+'rejects restoring a snapshotted context through clone_from');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    core::mem::swap(&mut context().cutoffs, ' +
+        '&mut context().researches);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: whole-context mutation vocabulary/,
+'rejects mem::swap access to accounting context fields');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    let escape = (&mut context().cutoffs) as *mut u64;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: whole-context mutation vocabulary/,
+'rejects raw-pointer casts that sidestep field classification');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    let snapshot: Context = todo!();\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: Context type surface/,
+'rejects new production uses of the accounting context type');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search + '\nuse core::mem;\n'
+  });
+}, /changed trusted WASM node accounting: production use imports/,
+'rejects new production imports that could alias mutation primitives');
 
 const workflow = fs.readFileSync(WORKFLOW, 'utf8');
 check(workflow.includes('pull_request_target:') &&
@@ -585,6 +675,18 @@ check(deepWorkflow.includes(
       '            experiments/wasm/build.sh') &&
     !/uses: actions\/[^@\n]+@v[0-9]/.test(deepWorkflow),
   'deep-search evidence uses pinned trusted code and immutable action revisions');
+check(deepWorkflow.includes('TRUST SCOPE — diagnostic only') &&
+    deepWorkflow.includes('never merge-authoritative') &&
+    deepWorkflow.includes('Diagnostic evidence only'),
+  'deep-search declares its candidate-controlled diagnostic trust scope');
+check(deepWorkflow.includes('Freeze diagnostic build inputs') &&
+    deepWorkflow.includes(
+      'for input in Cargo.toml Cargo.lock rust-toolchain.toml; do') &&
+    deepWorkflow.includes(
+      'Candidate changed diagnostic build input') &&
+    deepWorkflow.includes(
+      'Candidate added unverified build input'),
+  'deep-search freezes the module build inputs beside the verified sources');
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

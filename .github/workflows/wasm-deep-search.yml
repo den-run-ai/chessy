@@ -3,6 +3,18 @@
 # The candidate head and its exact origin/main merge-base are built
 # independently with the same pinned toolchain. Performance verdicts are
 # evidence, not CI pass/fail gates; malformed or incomplete measurements fail.
+#
+# TRUST SCOPE — diagnostic only. On pull_request and branch-push triggers,
+# every input to this workflow is candidate-controlled: the workflow file
+# itself (including the TRUSTED_* pins below), the checked-out sources, and
+# the reported results. The pins, contract runs, and input freezes below are
+# defense-in-depth hygiene that keeps honest experiments comparable; they
+# cannot and do not certify evidence against an adversarial author, because
+# a candidate commit can edit this file. Deep-screen output is therefore
+# never merge-authoritative. Merge-authoritative efficiency evidence comes
+# only from the formal v2 gate (wasm-efficiency.yml), which runs as
+# maintainer-labeled pull_request_target with all verdict code taken from
+# the trusted base revision, after human review of the exact candidate diff.
 
 name: WASM deep-search experiment
 
@@ -98,6 +110,29 @@ jobs:
             "$CANDIDATE_SHA" "$BASE_SHA" "$TRUSTED_DEEP_HARNESS_SHA" \
             "$MAIN_TIP"
 
+      - name: Freeze diagnostic build inputs
+        run: |
+          # The accounting contract verifies experiments/wasm/src, so the
+          # remaining build-input surface (manifest, lockfile, toolchain
+          # file, and the absence of build scripts or cargo config) must
+          # match the pinned harness revision, or the compiled module could
+          # come from sources the verifier never saw. Candidates that need
+          # new build inputs must first land them in the harness.
+          for input in Cargo.toml Cargo.lock rust-toolchain.toml; do
+            if ! cmp -s "$TRUSTED_DIR/experiments/wasm/$input" \
+                "experiments/wasm/$input"; then
+              echo "::error::Candidate changed diagnostic build input $input"
+              exit 2
+            fi
+          done
+          for forbidden in experiments/wasm/build.rs \
+              experiments/wasm/.cargo .cargo; do
+            if [ -e "$forbidden" ]; then
+              echo "::error::Candidate added unverified build input $forbidden"
+              exit 2
+            fi
+          done
+
       - name: Install pinned Rust and Binaryen
         run: |
           export RUSTUP_HOME="$RUNNER_TEMP/rustup-home"
@@ -183,6 +218,14 @@ jobs:
       - name: Run divergent deep-search screen
         run: |
           mkdir -p deep-report
+          {
+            echo '> Diagnostic evidence only: on pull_request and push'
+            echo '> triggers this workflow and its pins are'
+            echo '> candidate-controlled. Merge-authoritative efficiency'
+            echo '> evidence comes only from the maintainer-labeled formal'
+            echo '> v2 gate.'
+            echo ''
+          } >> "$GITHUB_STEP_SUMMARY"
           node "$TRUSTED_DIR/experiments/wasm/deep-bench.js" \
             --candidate "$RUNNER_TEMP/deep-wasm/candidate.wasm" \
             --reference "$RUNNER_TEMP/deep-wasm/reference.wasm" \

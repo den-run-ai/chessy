@@ -27,6 +27,8 @@
 const fs = require('fs');
 const path = require('path');
 const bench = require('./bench.js');
+require(path.join(__dirname, '..', '..', 'assets', 'engine.js'));
+const Chess = globalThis.Chess;
 
 // Unbounded depth 8 on the middlegame fixtures can fill the engine's fixed
 // transposition table before completion. Keep this screen exact by using the
@@ -58,6 +60,40 @@ const COORDINATE_MOVE_RE = /^[a-h][1-8][a-h][1-8][QRBNqrbn]?$/;
 function isCoordinateMove(move) {
   return COORDINATE_MOVE_RE.test(move) &&
     move.slice(0, 2) !== move.slice(2, 4);
+}
+
+// A coordinate-shaped move can still be illegal in the measured position.
+// Resolve every reported move against the same JavaScript arbiter the
+// formal match uses, so fabricated completion metadata cannot contribute
+// node or depth evidence.
+const LEGAL_MOVE_SETS = new Map();
+
+function legalMoveSet(fen) {
+  let moves = LEGAL_MOVE_SETS.get(fen);
+  if (!moves) {
+    const state = Chess.newGameState(fen);
+    moves = new Set(Chess.legalMoves(state).map(function (move) {
+      return (Chess.sqName(move.from) + Chess.sqName(move.to) +
+        (move.promotion || '')).toLowerCase();
+    }));
+    if (!moves.size) {
+      throw new Error('fixture FEN has no legal moves: ' + fen);
+    }
+    LEGAL_MOVE_SETS.set(fen, moves);
+  }
+  return moves;
+}
+
+function assertLegalMove(result, label, mode, fen) {
+  if (typeof fen !== 'string' || !fen) {
+    throw new Error(label + ' ' + mode +
+      ' validation is missing the fixture FEN');
+  }
+  if (!legalMoveSet(fen).has(String(result.move).toLowerCase())) {
+    throw new Error(label + ' reported a move that is not legal in the ' +
+      mode + ' fixture (move ' + JSON.stringify(result.move) +
+      ', fen ' + JSON.stringify(fen) + ')');
+  }
 }
 
 function canonicalPositions() {
@@ -256,7 +292,7 @@ function assertSearchResultMetadata(result, label, maxDepth, mode) {
   }
 }
 
-function assertCompletedResult(result, label, maxDepth, mode) {
+function assertCompletedResult(result, label, maxDepth, mode, fen) {
   if (result.stopReason === 'max-depth') {
     if (result.depth !== maxDepth || result.attemptedDepth !== null ||
         result.nodes < 1 || Math.abs(result.score) >= MATE_NEAR ||
@@ -266,6 +302,7 @@ function assertCompletedResult(result, label, maxDepth, mode) {
         JSON.stringify(result.attemptedDepth) + ', move ' +
         JSON.stringify(result.move) + ', nodes ' + result.nodes + ')');
     }
+    assertLegalMove(result, label, mode, fen);
     return true;
   }
   if (result.stopReason === 'mate') {
@@ -278,6 +315,7 @@ function assertCompletedResult(result, label, maxDepth, mode) {
         ', move ' + JSON.stringify(result.move) +
         ', nodes ' + result.nodes + ')');
     }
+    assertLegalMove(result, label, mode, fen);
     return true;
   }
   if (result.stopReason === 'game-over') {
@@ -289,20 +327,20 @@ function assertCompletedResult(result, label, maxDepth, mode) {
   return false;
 }
 
-function assertFixedResult(result, label, maxDepth) {
+function assertFixedResult(result, label, maxDepth, fen) {
   if (!result || !Number.isFinite(result.ms) || result.ms <= 0) {
     throw new Error(label + ' returned invalid fixed-depth elapsed time ' +
       JSON.stringify(result && result.ms));
   }
   assertSearchResultMetadata(result, label, maxDepth, 'fixed-depth');
   if (!assertCompletedResult(
-    result, label, maxDepth, 'fixed-depth')) {
+    result, label, maxDepth, 'fixed-depth', fen)) {
     throw new Error(label + ' returned invalid fixed-depth stopReason ' +
       JSON.stringify(result.stopReason));
   }
 }
 
-function assertTimedResult(result, label, timeMs, maxDepth) {
+function assertTimedResult(result, label, timeMs, maxDepth, fen) {
   const allowanceMs = timedOvershootAllowance(timeMs);
   const maximumElapsedMs = timeMs + allowanceMs;
   if (!result || !Number.isFinite(result.ms) || result.ms <= 0 ||
@@ -325,9 +363,10 @@ function assertTimedResult(result, label, timeMs, maxDepth) {
         JSON.stringify(result.attemptedDepth) + ', move ' +
         JSON.stringify(result.move) + ', nodes ' + result.nodes + ')');
     }
+    assertLegalMove(result, label, 'timed', fen);
     return;
   }
-  if (assertCompletedResult(result, label, maxDepth, 'timed')) return;
+  if (assertCompletedResult(result, label, maxDepth, 'timed', fen)) return;
   throw new Error(label + ' returned invalid timed stopReason ' +
     JSON.stringify(result.stopReason));
 }
@@ -393,10 +432,10 @@ function fixedPosition(candidate, reference, position, positionIndex, depth, pai
       (positionIndex + round) % 2 === 0);
     assertFixedResult(
       pair.candidate, position.name + ' round ' + (round + 1) + ' candidate',
-      depth);
+      depth, position.fen);
     assertFixedResult(
       pair.reference, position.name + ' round ' + (round + 1) + ' reference',
-      depth);
+      depth, position.fen);
     candidateSamples.push(pair.candidate);
     referenceSamples.push(pair.reference);
     npsRatios.push(
@@ -708,10 +747,10 @@ function timePosition(candidate, reference, position, positionIndex, config) {
   if (warm) {
     assertTimedResult(
       warm.candidate, position.name + ' warmup candidate',
-      config.warmMs, warmOptions.maxDepth);
+      config.warmMs, warmOptions.maxDepth, position.fen);
     assertTimedResult(
       warm.reference, position.name + ' warmup reference',
-      config.warmMs, warmOptions.maxDepth);
+      config.warmMs, warmOptions.maxDepth, position.fen);
   }
   const runs = [];
   for (let round = 0; round < config.timePairs; round++) {
@@ -720,10 +759,10 @@ function timePosition(candidate, reference, position, positionIndex, config) {
       (positionIndex + round) % 2 === 0);
     assertTimedResult(
       pair.candidate, position.name + ' round ' + (round + 1) + ' candidate',
-      config.timeMs, timedOptions.maxDepth);
+      config.timeMs, timedOptions.maxDepth, position.fen);
     assertTimedResult(
       pair.reference, position.name + ' round ' + (round + 1) + ' reference',
-      config.timeMs, timedOptions.maxDepth);
+      config.timeMs, timedOptions.maxDepth, position.fen);
     runs.push({
       round: round,
       order: pair.order,
@@ -1076,9 +1115,11 @@ async function main(argv) {
     true
   );
   assertFixedResult(
-    fixedWarmup.candidate, canonical[0].name + ' warmup candidate', 3);
+    fixedWarmup.candidate, canonical[0].name + ' warmup candidate', 3,
+    canonical[0].fen);
   assertFixedResult(
-    fixedWarmup.reference, canonical[0].name + ' warmup reference', 3);
+    fixedWarmup.reference, canonical[0].name + ' warmup reference', 3,
+    canonical[0].fen);
 
   console.log('candidate: ' + config.candidateLabel + ' (' +
     config.candidatePath + ')');
