@@ -1,6 +1,6 @@
 //! Allocation-free scalar port of the shipped Chessy Play search.
 
-use crate::{engine, eval};
+use crate::{engine, eval, see};
 use engine::{Color, Move, Piece, PieceType, Position, MAX_MOVES};
 
 #[cfg(not(test))]
@@ -116,6 +116,8 @@ struct Context {
     qnodes: u64,
     cutoffs: u64,
     researches: u64,
+    see_calls: u64,
+    see_pruned: u64,
     rep_ply: u16,
     path1: [u32; MAX_PLY],
     path2: [u32; MAX_PLY],
@@ -140,6 +142,8 @@ impl Context {
         qnodes: 0,
         cutoffs: 0,
         researches: 0,
+        see_calls: 0,
+        see_pruned: 0,
         rep_ply: 0,
         path1: [0; MAX_PLY],
         path2: [0; MAX_PLY],
@@ -221,6 +225,8 @@ unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
     ctx.qnodes = 0;
     ctx.cutoffs = 0;
     ctx.researches = 0;
+    ctx.see_calls = 0;
+    ctx.see_pruned = 0;
     ctx.rep_ply = REP_INFINITY;
     ctx.path_len = 0;
     ctx.tt_count = 0;
@@ -649,6 +655,16 @@ unsafe fn quiesce_node(
             index += 1;
             continue;
         }
+        let gives_check = engine::in_check(position, enemy);
+        if see_prune_eligible(mv, in_check, gives_check, alpha, beta) {
+            context().see_calls += 1;
+            if see::evaluate_after(position, mv) < 0 {
+                context().see_pruned += 1;
+                engine::unmake_move(position, mv, undo);
+                index += 1;
+                continue;
+            }
+        }
         let score = quiesce_node(position, alpha, beta, ply + 1, qply + 1);
         let child_rep = context().rep_ply;
         engine::unmake_move(position, mv, undo);
@@ -687,6 +703,34 @@ unsafe fn quiesce_node(
     }
     context().rep_ply = rep_min;
     best
+}
+
+#[inline]
+fn see_prune_eligible(
+    mv: Move,
+    in_check: bool,
+    gives_check: bool,
+    alpha: i32,
+    beta: i32,
+) -> bool {
+    if in_check
+        || gives_check
+        || beta - alpha <= 1
+        || !engine::move_is_capture(mv)
+        || engine::move_promotion(mv).is_some()
+        // A capture on either back rank can be answered by a promotion
+        // recapture. Target-only material SEE assumes either side may stop,
+        // but a hypothetical promotion can give check and constrain that
+        // choice. Keep those rare cases out of pruning entirely.
+        || matches!(engine::row_of(engine::move_to(mv)), 0 | 7)
+    {
+        return false;
+    }
+    // If victim >= attacker, declining every recapture already proves the
+    // exchange non-negative. Avoid SEE on that common, safely bounded case.
+    let victim = engine::piece_type(engine::move_captured(mv)).unwrap();
+    let attacker = engine::piece_type(engine::move_piece(mv)).unwrap();
+    see::piece_value(victim) < see::piece_value(attacker)
 }
 
 unsafe fn search_node(
@@ -1183,6 +1227,15 @@ pub fn abi_move(mv: Move) -> u32 {
     engine::move_from(mv) as u32 | ((engine::move_to(mv) as u32) << 6) | (promotion << 12)
 }
 
+/// Optional benchmark counters kept outside the stable result ABI.
+pub unsafe fn experiment_metric(index: u32) -> u64 {
+    match index {
+        0 => context().see_calls,
+        1 => context().see_pruned,
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod tt_saturation_tests {
     #[test]
@@ -1190,5 +1243,108 @@ mod tt_saturation_tests {
         assert!(!super::tt_unavailable(super::TT_CAPACITY - 1, false));
         assert!(super::tt_unavailable(super::TT_CAPACITY, false));
         assert!(super::tt_unavailable(0, true));
+    }
+}
+
+#[cfg(test)]
+mod see_search_tests {
+    use super::*;
+
+    fn capture(promotion: Option<PieceType>) -> Move {
+        engine::pack_move(
+            60,
+            28,
+            Piece::WhiteRook,
+            Piece::BlackPawn,
+            promotion,
+            false,
+            None,
+            false,
+        )
+    }
+
+    #[test]
+    fn see_pruning_requires_every_safety_guard() {
+        let mv = capture(None);
+        assert!(see_prune_eligible(mv, false, false, -100, 100));
+        assert!(!see_prune_eligible(mv, true, false, -100, 100));
+        assert!(!see_prune_eligible(mv, false, true, -100, 100));
+        assert!(!see_prune_eligible(mv, false, false, 0, 1));
+        assert!(!see_prune_eligible(
+            capture(Some(PieceType::Queen)),
+            false,
+            false,
+            -100,
+            100
+        ));
+        for target in [4, 60] {
+            let back_rank_capture = engine::pack_move(
+                28,
+                target,
+                Piece::WhiteRook,
+                Piece::BlackPawn,
+                None,
+                false,
+                None,
+                false,
+            );
+            assert!(!see_prune_eligible(
+                back_rank_capture,
+                false,
+                false,
+                -100,
+                100
+            ));
+        }
+    }
+
+    #[test]
+    fn see_fast_bound_skips_equal_or_favorable_captures() {
+        let favorable = engine::pack_move(
+            57,
+            42,
+            Piece::WhiteKnight,
+            Piece::BlackQueen,
+            None,
+            false,
+            None,
+            false,
+        );
+        let equal = engine::pack_move(
+            48,
+            41,
+            Piece::WhitePawn,
+            Piece::BlackPawn,
+            None,
+            false,
+            None,
+            false,
+        );
+        assert!(!see_prune_eligible(favorable, false, false, -100, 100));
+        assert!(!see_prune_eligible(equal, false, false, -100, 100));
+    }
+
+    #[test]
+    fn checking_capture_is_exempt_using_the_post_move_check_state() {
+        let mut position =
+            engine::parse_fen(b"4k3/8/8/r3p3/8/8/8/4R1K1 w - - 0 1").unwrap();
+        let mut moves = [0; MAX_MOVES];
+        let count = engine::generate_legal(&mut position, &mut moves);
+        let mv = moves[..count]
+            .iter()
+            .copied()
+            .find(|&candidate| {
+                engine::move_from(candidate) == 60 && engine::move_to(candidate) == 28
+            })
+            .unwrap();
+        let enemy = engine::opposite(position.turn);
+        let undo = engine::make_move(&mut position, mv);
+        let gives_check = engine::in_check(&position, enemy);
+        assert!(gives_check);
+        assert!(!see_prune_eligible(mv, false, gives_check, -100, 100));
+        // This is genuinely a losing capture, so the check exemption—not the
+        // SEE sign—protects it from pruning.
+        assert_eq!(see::evaluate_after(&position, mv), -400);
+        engine::unmake_move(&mut position, mv, undo);
     }
 }

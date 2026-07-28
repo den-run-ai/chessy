@@ -162,6 +162,12 @@ record:
 | 56 | `u32` | stop-reason code |
 | 60 | `u32` | reserved, zero |
 
+Algorithm experiments may additionally export
+`experiment_metric(index: u32) -> u64`. It is deliberately outside the stable
+64-byte ABI and may be absent from the production module. For the targeted SEE
+quiescence experiment, index `0` is the number of full SEE calls and index `1`
+is the number of losing captures pruned; unknown indices return zero.
+
 Move `0xffffffff` means no move. Promotion codes are 0 none, 1 queen, 2 rook,
 3 bishop, and 4 knight. Stop-reason codes are 0 unknown, 1 max-depth, 2
 time-limit, 3 node-limit, 4 mate, and 5 game-over. Counters are rejected if they

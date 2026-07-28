@@ -4,6 +4,7 @@
 mod engine;
 mod eval;
 mod search;
+mod see;
 
 use engine::Position;
 
@@ -125,6 +126,15 @@ pub unsafe extern "C" fn search(
     } else {
         0
     }
+}
+
+/// Optional experiment telemetry. This deliberately sits outside the stable
+/// 64-byte result ABI so production ABI-v1 loaders remain compatible.
+///
+/// 0 = SEE calls, 1 = captures pruned by SEE, all other indices = 0.
+#[no_mangle]
+pub unsafe extern "C" fn experiment_metric(index: u32) -> u64 {
+    search::experiment_metric(index)
 }
 
 #[cfg(test)]
