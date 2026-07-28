@@ -191,6 +191,8 @@ check(legacy && legacy.depth === 5 && legacy.quiesce && legacy.ms === 123 &&
     legacy.stopReason === 'unknown' &&
     !Object.prototype.hasOwnProperty.call(legacy, 'rootOrderUci'),
   'legacy evidence upgrades without inventing an empty captured root order');
+check(legacy.engine === 'js' && legacy.engineFallback === null,
+  'pre-WASM evidence normalizes to the JavaScript engine it actually used');
 const normalized = ChessAI.sanitizeTelemetry({
   release: 'r54', depth: 4, attemptedDepth: 5, maxDepth: 30,
   quiesce: true, timeMs: 5000, seed: 4294967295, randomize: true,
@@ -199,7 +201,8 @@ const normalized = ChessAI.sanitizeTelemetry({
   scorePov: 'white',
   pvUci: ['a4a3', 'b2b4', 'bad'], pvSource: 'final-tt-best-effort',
   rootOrderUci: ['a4a3', 'a4b4'],
-  stopReason: 'time-limit', source: 'sync-fallback', fallbackReason: 'watchdog'
+  stopReason: 'time-limit', source: 'sync-fallback', fallbackReason: 'watchdog',
+  engine: 'wasm', engineFallback: 'wasm-load-error'
 });
 check(normalized.pvUci.join(' ') === 'a4a3 b2b4' &&
     normalized.rootOrderUci.join(' ') === 'a4a3 a4b4' &&
@@ -207,6 +210,13 @@ check(normalized.pvUci.join(' ') === 'a4a3 b2b4' &&
     normalized.fallbackReason === 'watchdog' &&
     normalized.scorePov === 'white' && normalized.seed === -1,
   'new telemetry is bounded and malformed PV entries are dropped');
+check(normalized.engine === 'wasm' &&
+    normalized.engineFallback === 'wasm-load-error' &&
+    ChessAI.sanitizeTelemetry({ depth: 1, quiesce: false, ms: 1,
+      engine: 'mystery', engineFallback: 'mystery' }).engine === 'js' &&
+    ChessAI.sanitizeTelemetry({ depth: 1, quiesce: false, ms: 1,
+      engine: 'mystery', engineFallback: 'mystery' }).engineFallback === null,
+  'engine provenance survives sanitizing and unknown engines collapse to js');
 
 const injectedRelease = 'r54} 99. Qh8# {';
 const hostile = ChessAI.sanitizeTelemetry({
@@ -239,7 +249,9 @@ const badEvidence = [
   Object.assign({}, positionNormalized, { rootOrderUci: ['a4a3', 'a4a3'] }),
   Object.assign({}, positionNormalized, { rootOrderUci: undefined }),
   Object.assign({}, positionNormalized, { scorePov: 'side-to-move' }),
-  Object.assign({}, positionNormalized, { fallbackReason: 'mystery' })
+  Object.assign({}, positionNormalized, { fallbackReason: 'mystery' }),
+  Object.assign({}, positionNormalized, { engine: 'mystery' }),
+  Object.assign({}, positionNormalized, { engineFallback: 'mystery' })
 ];
 check(badEvidence.every(function (ai) {
   return /AI telemetry/.test(CoachStore.validateGameRecord(

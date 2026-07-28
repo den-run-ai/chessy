@@ -635,6 +635,8 @@
     };
     var sources = { worker: true, sync: true, 'sync-fallback': true, unknown: true };
     var fallbacks = { 'worker-error': true, watchdog: true };
+    var engines = { js: true, wasm: true };
+    var engineFallbacks = { 'wasm-load-error': true, 'wasm-search-error': true };
     function optInt(v) {
       return v === undefined || v === null || (Number.isInteger(v) && v >= 0);
     }
@@ -666,6 +668,12 @@
       if (v.source !== undefined && !sources[v.source]) return false;
       if (v.fallbackReason !== undefined && v.fallbackReason !== null &&
           !fallbacks[v.fallbackReason]) return false;
+      // A missing engine is pre-WASM telemetry (JavaScript by construction);
+      // once present it must name a known engine and fallback provenance.
+      if (v.engine !== undefined && v.engine !== null &&
+          !engines[v.engine]) return false;
+      if (v.engineFallback !== undefined && v.engineFallback !== null &&
+          !engineFallbacks[v.engineFallback]) return false;
       if (v.pvSource !== undefined && v.pvSource !== null &&
           v.pvSource !== 'final-tt-best-effort') return false;
       if (v.pvUci !== undefined &&
