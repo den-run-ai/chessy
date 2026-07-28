@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chessy WASM probe</title>
+<style>
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; margin: 1rem; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+  .ok { color: #0a7a2f; } .fail { color: #b00020; }
+</style>
+</head>
+<body>
+<h1>Chessy WASM ↔ JS differential probe</h1>
+<p id="status">starting…</p>
+<div id="log"></div>
+<script>
+'use strict';
+// Query params: depth, parityDepth, reps, minMs, abortNodes, five, target,
+// report (report POST endpoint path, default /probe-report).
+(function () {
+  var q = new URLSearchParams(location.search);
+  var config = {
+    depth: Number(q.get('depth') || 5),
+    parityDepth: Number(q.get('parityDepth') || q.get('depth') || 5),
+    reps: Number(q.get('reps') || 2),
+    minMs: Number(q.get('minMs') || 100),
+    abortNodes: Number(q.get('abortNodes') || 5000),
+    five: Number(q.get('five') || 1),
+    target: q.get('target') || 'unknown',
+    assetsBase: '',
+    wasmUrl: q.get('wasmUrl') || '/experiments/wasm/dist/chessy-ai-fast.wasm'
+  };
+  var reportPath = q.get('report') || '/probe-report';
+  var statusEl = document.getElementById('status');
+  var logEl = document.getElementById('log');
+
+  function log(line) {
+    logEl.textContent += line + '\n';
+  }
+  function send(kind, body) {
+    // Best-effort result delivery; the page title is the CDP-visible fallback.
+    try {
+      return fetch(reportPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: kind, target: config.target, body: body })
+      }).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+  }
+
+  var worker;
+  try {
+    worker = new Worker('/experiments/wasm/probe/probe-worker.js');
+  } catch (e) {
+    statusEl.textContent = 'FAIL: worker create: ' + e;
+    document.title = 'PROBE-FAIL';
+    send('final', { ok: false, failures: ['worker-create'], error: String(e) });
+    return;
+  }
+  worker.onerror = function (e) {
+    statusEl.textContent = 'FAIL: worker error: ' + e.message;
+    statusEl.className = 'fail';
+    document.title = 'PROBE-FAIL';
+    send('final', { ok: false, failures: ['worker-error'], error: e.message + ' @ ' + e.filename + ':' + e.lineno });
+  };
+  worker.onmessage = function (e) {
+    var msg = e.data;
+    if (msg.type === 'progress') {
+      var line = msg.phase + ': ' + JSON.stringify(msg.detail);
+      statusEl.textContent = 'running — ' + msg.phase;
+      log(line);
+      send('progress', msg);
+      return;
+    }
+    if (msg.type === 'final') {
+      var r = msg.report;
+      window.__probeResult = r;
+      statusEl.textContent = r.ok ? 'PASS' : 'FAIL: ' + (r.failures || []).join(', ');
+      statusEl.className = r.ok ? 'ok' : 'fail';
+      log(JSON.stringify(r, null, 2));
+      send('final', r).then(function () {
+        document.title = r.ok ? 'PROBE-DONE' : 'PROBE-FAIL';
+      });
+    }
+  };
+  send('progress', { type: 'progress', phase: 'page-loaded', detail: { ua: navigator.userAgent } });
+  worker.postMessage(config);
+})();
+</script>
+</body>
+</html>

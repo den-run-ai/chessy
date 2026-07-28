@@ -1,0 +1,250 @@
+# Mobile-target probe for the Zig/WASM feasibility experiment (#84 / #113,
+# stacked on PR #124).
+#
+# Runs the experiment's differential protocol (exact parity, fixed-node abort
+# parity, order-balanced paired NPS, five-second depth) against the shipped
+# JS engine on every mobile-family target a hosted runner can provide:
+#   - node-host:        the original host checkpoint
+#   - chromium/webkit:  desktop builds of the two mobile engine families
+#                       (V8 = Android Chrome, JavaScriptCore = iOS Safari),
+#                       plus a CPU-throttled Chromium minimum-device proxy
+#   - android-emulator: REAL Chrome for Android on an x86_64 emulator (KVM)
+#   - ios-simulator:    REAL Mobile Safari on an arm64 iOS Simulator
+#
+# The module is built from source by experiments/wasm/build.sh with the
+# pinned toolchain (generated binaries are intentionally not committed) and
+# shared with every probe job as an artifact.
+#
+# What this run cannot establish (the physical-device gate): real ARM SoC
+# wall-time, 30-minute thermal soak, battery, jetsam/memory-pressure and
+# watchdog behavior. Those still require physical hardware.
+#
+# Deliberately NOT wired into PR CI (repo convention for heavy tools):
+# trigger manually, or by pushing to the probe branch.
+
+name: WASM mobile probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      depth:
+        description: 'bench depth (parity runs 1..depth)'
+        default: '5'
+      reps:
+        description: 'paired AB/BA repetitions (even)'
+        default: '2'
+      min_ms:
+        description: 'batch short searches to at least this many ms'
+        default: '100'
+      five:
+        description: 'five-second diagnostic positions (0-4)'
+        default: '4'
+  push:
+    branches:
+      - claude/wasm-mobile-probe-on-124
+    paths:
+      - 'experiments/wasm/**'
+      - 'test/ai-wasm-parity.js'
+      - '.github/workflows/wasm-mobile-probe.yml'
+
+permissions:
+  contents: read
+
+env:
+  DEPTH: ${{ github.event.inputs.depth || '5' }}
+  REPS: ${{ github.event.inputs.reps || '2' }}
+  MIN_MS: ${{ github.event.inputs.min_ms || '100' }}
+  FIVE: ${{ github.event.inputs.five || '4' }}
+  ZIG_URL: https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+  ZIG_SHA256: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+  BINARYEN_URL: https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz
+  BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
+
+jobs:
+  build:
+    name: build (zig 0.16.0 + wasm-opt 131)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned toolchain
+        run: |
+          curl -sSL -o zig.tar.xz "$ZIG_URL"
+          echo "$ZIG_SHA256  zig.tar.xz" | sha256sum -c -
+          tar xf zig.tar.xz
+          curl -sSL -o binaryen.tar.gz "$BINARYEN_URL"
+          echo "$BINARYEN_SHA256  binaryen.tar.gz" | sha256sum -c -
+          tar xzf binaryen.tar.gz
+      - name: Build experiment module (fast + small)
+        run: |
+          CHESSY_ZIG_BIN="$PWD/zig-x86_64-linux-0.16.0/zig" \
+            CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+            sh experiments/wasm/build.sh
+          sha256sum experiments/wasm/dist/*.wasm | tee experiments/wasm/dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-dist
+          path: experiments/wasm/dist/
+
+  host:
+    name: node-host checkpoint (parity + paired NPS)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: experiments/wasm/dist/
+      - name: Run canonical parity suite
+        run: node test/ai-wasm-parity.js
+      - name: Run host probe report
+        run: |
+          mkdir -p probe-reports
+          node experiments/wasm/probe/host-report.js --depth "$DEPTH" \
+            --reps "$REPS" --min-ms "$MIN_MS" --five "$FIVE" \
+            --json probe-reports/final-node-host.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasm-probe-host
+          path: probe-reports/
+
+  browser:
+    name: ${{ matrix.name }} (desktop build of mobile engine family)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: chromium
+            engine: chromium
+            throttle: 0
+          - name: chromium-throttle4
+            engine: chromium
+            throttle: 4
+          - name: webkit
+            engine: webkit
+            throttle: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: experiments/wasm/dist/
+      - name: Install Playwright (pinned, repo CI version)
+        run: npm install --no-save playwright@1.61.1
+      - name: Install ${{ matrix.engine }}
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Run probe
+        run: |
+          mkdir -p probe-reports
+          node experiments/wasm/probe/server.js --port 8123 \
+            --out probe-reports &
+          sleep 1
+          node experiments/wasm/probe/run-playwright.js \
+            --browser ${{ matrix.engine }} --throttle ${{ matrix.throttle }} \
+            --depth "$DEPTH" --reps "$REPS" --min-ms "$MIN_MS" --five "$FIVE" \
+            --target ${{ matrix.name }} \
+            --json "probe-reports/final-${{ matrix.name }}.json" \
+            --timeout 2400
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasm-probe-${{ matrix.name }}
+          path: probe-reports/
+
+  android-emulator:
+    name: android-chrome (real Chrome, x86_64 emulator, KVM)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: experiments/wasm/dist/
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run probe in Chrome for Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          # The 2.5 GB default RAM let post-boot GMS churn take Chrome down
+          # (see probe/run-android.sh); the differential workload also needs
+          # headroom for the JS engine side.
+          ram-size: 4096M
+          heap-size: 576M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            OUT=probe-reports DEPTH=$DEPTH PARITY_DEPTH=$DEPTH REPS=$REPS MIN_MS=50 FIVE=$FIVE WAIT_S=900 bash experiments/wasm/probe/run-android.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasm-probe-android-chrome
+          path: probe-reports/
+
+  ios-simulator:
+    name: ios-safari (real Mobile Safari, arm64 iOS Simulator)
+    runs-on: macos-15
+    needs: build
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: experiments/wasm/dist/
+      - name: Run probe in Mobile Safari (iOS Simulator)
+        run: |
+          OUT=probe-reports DEPTH=$DEPTH PARITY_DEPTH=$DEPTH REPS=$REPS \
+            MIN_MS=$MIN_MS FIVE=$FIVE WAIT_S=2400 \
+            bash experiments/wasm/probe/run-ios-sim.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasm-probe-ios-safari
+          path: probe-reports/
+
+  summary:
+    name: aggregate verdicts
+    runs-on: ubuntu-latest
+    needs: [host, browser, android-emulator, ios-simulator]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wasm-probe-*
+          path: all-reports
+      - name: Summarize
+        run: |
+          node experiments/wasm/probe/summarize.js all-reports summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-probe-summary
+          path: summary.md
