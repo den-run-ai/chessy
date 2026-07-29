@@ -8,13 +8,13 @@
  *
  * Scope: this contract is a lexical tripwire for the known classes of
  * accounting bypass (counter rewrites, raw-pointer/macro escapes, ABI
- * clamps, whole-Context replacement, import aliasing). Lexical analysis of
- * a general-purpose language cannot be adversarially complete, so a clean
- * contract run is necessary but not sufficient evidence: final admission
- * authority for the formal gate remains the maintainer's review of the
- * exact candidate diff before applying the run label. New evasion patterns
- * are handled by extending the tripwire, not by treating the contract as a
- * proof.
+ * clamps, whole-Context replacement, import aliasing, unmetered recursive
+ * helpers). Lexical analysis of a general-purpose language cannot be
+ * adversarially complete, so a clean contract run is necessary but not
+ * sufficient evidence: final admission authority for the formal gate remains
+ * the maintainer's review of the exact candidate diff before applying the run
+ * label. New evasion patterns are handled by extending the tripwire, not by
+ * treating the contract as a proof.
  *
  * Usage:
  *   node test/wasm-node-accounting-contract.js \
@@ -224,6 +224,285 @@ function extractAllBracedItems(source, expression) {
     items.push(source.slice(start, end));
   }
   return items;
+}
+
+function functionDefinitions(source, file) {
+  const production = withoutCfgTestModules(source);
+  const masked = maskRustNonCode(production);
+  const impls = [];
+  for (const match of masked.matchAll(/\bimpl\b/g)) {
+    const open = masked.indexOf('{', match.index);
+    const semicolon = masked.indexOf(';', match.index);
+    if (open === -1 || (semicolon !== -1 && semicolon < open)) continue;
+    let depth = 0;
+    let end = -1;
+    for (let index = open; index < masked.length; index++) {
+      if (masked[index] === '{') depth++;
+      if (masked[index] === '}') {
+        depth--;
+        if (depth === 0) {
+          end = index + 1;
+          break;
+        }
+      }
+    }
+    if (end === -1) fail('Rust impl has an unbalanced body');
+    const header = masked.slice(match.index, open).replace(/\s+/g, ' ');
+    const traitImpl = /\bfor\s+([A-Za-z_][A-Za-z0-9_:]*)/.exec(header);
+    let owner;
+    if (traitImpl) {
+      owner = traitImpl[1].split('::').pop();
+    } else {
+      let rest = header.slice('impl'.length).trim();
+      if (rest.startsWith('<')) {
+        let angles = 0;
+        let cursor = 0;
+        for (; cursor < rest.length; cursor++) {
+          if (rest[cursor] === '<') angles++;
+          if (rest[cursor] === '>') {
+            angles--;
+            if (angles === 0) {
+              cursor++;
+              break;
+            }
+          }
+        }
+        rest = rest.slice(cursor).trim();
+      }
+      const inherent = /^([A-Za-z_][A-Za-z0-9_:]*)/.exec(rest);
+      owner = inherent ? inherent[1].split('::').pop() : null;
+    }
+    impls.push({ open: open, end: end, owner: owner });
+  }
+
+  const expression = /\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\b/g;
+  const definitions = [];
+  for (const match of masked.matchAll(expression)) {
+    let parentheses = 0;
+    let brackets = 0;
+    let angles = 0;
+    let open = -1;
+    let declaration = false;
+    for (let index = match.index; index < masked.length; index++) {
+      const token = masked[index];
+      if (token === '(') parentheses++;
+      else if (token === ')') parentheses--;
+      else if (token === '[') brackets++;
+      else if (token === ']') brackets--;
+      else if (token === '<') angles++;
+      else if (token === '>' && angles > 0) angles--;
+      else if (parentheses === 0 && brackets === 0 && angles === 0) {
+        if (token === '{') {
+          open = index;
+          break;
+        }
+        if (token === ';') {
+          declaration = true;
+          break;
+        }
+      }
+    }
+    if (declaration) continue;
+    if (open === -1) fail('Rust function ' + match[1] + ' has no body');
+    let depth = 0;
+    let end = -1;
+    for (let index = open; index < masked.length; index++) {
+      if (masked[index] === '{') depth++;
+      if (masked[index] === '}') {
+        depth--;
+        if (depth === 0) {
+          end = index + 1;
+          break;
+        }
+      }
+    }
+    if (end === -1) {
+      fail('Rust function ' + match[1] + ' has an unbalanced body');
+    }
+    const enclosingFunction = definitions.find(function (item) {
+      return item.open < match.index && match.index < item.end;
+    });
+    const enclosingImpl = impls.find(function (item) {
+      return item.open < match.index && match.index < item.end;
+    });
+    const owner = !enclosingFunction && enclosingImpl ?
+      enclosingImpl.owner : null;
+    definitions.push({
+      id: file + ':' + (owner || '<free>') + ':' +
+        match[1] + ':' + match.index,
+      file: file,
+      module: path.basename(file, '.rs'),
+      owner: owner,
+      name: match[1],
+      body: production.slice(open + 1, end - 1),
+      open: open,
+      end: end
+    });
+  }
+  return definitions;
+}
+
+function unmeteredRecursionCycles(files) {
+  const definitions = Object.keys(files).sort().reduce(function (all, file) {
+    return all.concat(functionDefinitions(files[file], file));
+  }, []);
+  const byId = new Map();
+  for (const definition of definitions) {
+    byId.set(definition.id, definition);
+  }
+
+  // The frozen prologues charge every entry through these exact functions.
+  // Remove them from the graph: any cycle left behind can recur without
+  // passing through a trusted node charge.
+  function isMetered(definition) {
+    return definition.file === 'search.rs' &&
+      definition.owner === null &&
+      (definition.name === 'search_node' ||
+       definition.name === 'quiesce_node');
+  }
+  const graph = new Map();
+  const modules = new Set(definitions.map(function (definition) {
+    return definition.module;
+  }));
+
+  function hasFunctionReference(definition, target, body) {
+    const name = target.name;
+    const expression = new RegExp('\\b' + name + '\\b', 'g');
+    for (const match of body.matchAll(expression)) {
+      const before = body.slice(0, match.index);
+      const after = body.slice(match.index + name.length);
+      const ufcs =
+        /<\s*([A-Za-z_][A-Za-z0-9_:]*)\s+as\s+[^;{}]*>\s*::\s*$/.exec(
+          before);
+      const qualifier = /([A-Za-z_][A-Za-z0-9_]*)\s*::\s*$/.exec(before);
+      if (/^\s*::(?!\s*<)/.test(after)) continue;
+      const called = /^\s*(?:::\s*<[^;{}()]*>)?\s*\(/.test(after);
+      const valueContext = /(?:=|,|\()\s*&?\s*$/.test(before) &&
+        /^\s*(?:[,;)\]}]|$)/.test(after);
+      if (!called && !valueContext) continue;
+
+      if (ufcs) {
+        const typePath = ufcs[1].split('::').filter(function (part) {
+          return part !== 'crate' && part !== 'self' && part !== 'super';
+        });
+        const owner = typePath.pop();
+        const module = typePath.pop();
+        if (target.owner === owner &&
+            (module ? target.module === module :
+             target.file === definition.file)) return true;
+        continue;
+      }
+
+      if (qualifier) {
+        const prefix = qualifier[1];
+        if (modules.has(prefix)) {
+          if (target.module === prefix && target.owner === null) return true;
+          continue;
+        }
+        if (prefix === 'crate') continue;
+        if (prefix === 'self' || prefix === 'super') {
+          if (target.file === definition.file && target.owner === null) {
+            return true;
+          }
+          continue;
+        }
+        if (prefix === 'Self') {
+          if (target.file === definition.file &&
+              target.owner === definition.owner) return true;
+          continue;
+        }
+        if (target.owner === prefix) {
+          const typePath = new RegExp(
+            '(?:\\bcrate\\s*::\\s*)?([A-Za-z_][A-Za-z0-9_]*)' +
+            '\\s*::\\s*' + prefix + '\\s*::\\s*$').exec(before);
+          if (typePath ? target.module === typePath[1] :
+              target.file === definition.file) return true;
+        }
+        continue;
+      }
+
+      const receiver = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/.exec(before);
+      if (receiver) {
+        if (receiver[1] === 'self') {
+          if (target.file === definition.file &&
+              target.owner === definition.owner) return true;
+        } else if (target.owner !== null) {
+          return true;
+        }
+        continue;
+      }
+      if (target.file === definition.file && target.owner === null) return true;
+    }
+    return false;
+  }
+
+  for (const definition of definitions) {
+    if (isMetered(definition)) continue;
+    const edges = new Set();
+    const body = maskRustNonCode(definition.body);
+    for (const targetDefinition of definitions) {
+      if (isMetered(targetDefinition)) continue;
+      const name = targetDefinition.name;
+      const direct = hasFunctionReference(
+        definition, targetDefinition, body);
+      const qualified = new RegExp(
+        '\\b(?:crate\\s*::\\s*)?' + targetDefinition.module +
+        '\\s*::\\s*' + name + '\\b\\s*' +
+        '(?:::\\s*<[^;{}()]*>)?\\s*\\(').test(body) &&
+        targetDefinition.owner === null;
+      if (direct || qualified) edges.add(targetDefinition.id);
+    }
+    graph.set(definition.id, edges);
+  }
+
+  let nextIndex = 0;
+  const indices = new Map();
+  const lowlinks = new Map();
+  const stack = [];
+  const onStack = new Set();
+  const cycles = [];
+
+  function visit(id) {
+    indices.set(id, nextIndex);
+    lowlinks.set(id, nextIndex);
+    nextIndex++;
+    stack.push(id);
+    onStack.add(id);
+
+    for (const target of graph.get(id) || []) {
+      if (!graph.has(target)) continue;
+      if (!indices.has(target)) {
+        visit(target);
+        lowlinks.set(id, Math.min(lowlinks.get(id), lowlinks.get(target)));
+      } else if (onStack.has(target)) {
+        lowlinks.set(id, Math.min(lowlinks.get(id), indices.get(target)));
+      }
+    }
+
+    if (lowlinks.get(id) !== indices.get(id)) return;
+    const component = [];
+    let member;
+    do {
+      member = stack.pop();
+      onStack.delete(member);
+      component.push(member);
+    } while (member !== id);
+    const selfRecursive = component.length === 1 &&
+      (graph.get(component[0]) || new Set()).has(component[0]);
+    if (component.length > 1 || selfRecursive) {
+      cycles.push(component.map(function (item) {
+        const definition = byId.get(item);
+        return definition.file + '::' +
+          (definition.owner ? definition.owner + '::' : '') +
+          definition.name;
+      }).sort().join(' <-> '));
+    }
+  }
+
+  for (const id of Array.from(graph.keys()).sort()) {
+    if (!indices.has(id)) visit(id);
+  }
+  return cycles.sort();
 }
 
 function bracedItemHeaders(source, expression) {
@@ -536,6 +815,9 @@ function validateSources(trusted, candidate) {
   compare('production use imports',
     JSON.stringify(projectFiles(trustedFiles, importLines)),
     JSON.stringify(projectFiles(candidateFiles, importLines)));
+  compare('unmetered recursive call cycles',
+    JSON.stringify(unmeteredRecursionCycles(trustedFiles)),
+    JSON.stringify(unmeteredRecursionCycles(candidateFiles)));
   return true;
 }
 
