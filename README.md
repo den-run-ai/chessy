@@ -24,12 +24,16 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   search knows about draws: repetitions of game or search-path positions and
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own
-  mating material. Five difficulty levels: Easy/Medium/Hard/Expert are
-  increasing search depths (1/2/3/5 plies); **Master** adds quiescence search
-  (captures are resolved past the horizon, so it stops falling for exchange
-  tricks, with a bounded quiet-check extension so a mating check just past the
-  horizon isn't missed) and thinks on a 5-second-per-move budget, deepening as
-  far as the clock allows.
+  mating material. All five difficulty levels use quiescent iterative
+  deepening. On the default Rust/WASM backend, Easy/Medium/Hard/Expert target
+  reproducible 10k/36k/230k/1.44M-node caps; each also has a five-second
+  safety ceiling, so slower devices or the JavaScript fallback can stop
+  earlier. **Master** thinks for five seconds and deepens as far as the device
+  allows. Rust/WASM is on by default with an explicit JavaScript fallback and
+  opt-out. The displayed 1500/1700/1900/2100/2300+ bands are provisional
+  calibration targets on an external engine-rating scale—not certified FIDE,
+  Chess.com, or Lichess ratings; absolute and adjacent-level certification
+  remains tracked in #87/#113.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,
@@ -174,6 +178,7 @@ node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
+node test/level-presets.test.js     # target bands, budgets, JS/WASM parity
 node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
 ```
@@ -247,6 +252,7 @@ gated on the engine *and* browser suites.
 | `index.html` | App shell |
 | `assets/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
 | `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
+| `assets/level-presets.js` | Stable difficulty IDs, provisional rating targets, and search budgets |
 | `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |

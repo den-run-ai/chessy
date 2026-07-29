@@ -1,8 +1,8 @@
 /*
- * Experimental Rust/WASM engine toggle (#84/#113 flagged rollout): default
- * OFF (JavaScript answers), opt-in via the New Game dialog, per-move engine
- * provenance in the live save, page-level persistence across reloads, and
- * in-worker fallback to JavaScript when the module cannot be used.
+ * Rust/WASM Play backend (#84/#113): default ON, explicit standard-engine
+ * opt-out, per-move engine provenance in the live save, page-level preference
+ * persistence across reloads, and in-worker fallback to JavaScript when the
+ * module cannot be used.
  */
 'use strict';
 require('./helper').run('wasm-engine', async function (t) {
@@ -25,44 +25,33 @@ require('./helper').run('wasm-engine', async function (t) {
     });
   }
 
-  // ---- Default OFF: the JavaScript engine answers, labelled as such ----
+  // ---- Default ON: the WASM engine answers, labelled as such ----
   await t.newGame({ mode: 'ai-w', difficulty: '1' });
   await waitForFirstAiMove();
   const defaultRun = await firstAi();
-  check(defaultRun.ai.engine === 'js' && defaultRun.ai.engineFallback === null &&
-      defaultRun.ai.source === 'worker',
-    'default games use the JavaScript engine and record it');
-  const defaultUnchecked = await page.evaluate(function () {
+  check(defaultRun.ai.engine === 'wasm' && defaultRun.ai.engineFallback === null &&
+      defaultRun.ai.source === 'worker' && defaultRun.ai.fallbackReason === null,
+    'default games use the Rust/WASM engine and record it');
+  check(defaultRun.ai.release === defaultRun.release &&
+      defaultRun.ai.maxDepth === 30 && defaultRun.ai.nodeLimit === 10000 &&
+      defaultRun.ai.timeMs === 5000 && defaultRun.ai.quiesce === true &&
+      defaultRun.ai.nodes === defaultRun.ai.nodeLimit &&
+      defaultRun.ai.stopReason === 'node-limit' &&
+      defaultRun.ai.depth >= 1 &&
+      defaultRun.ai.attemptedDepth === defaultRun.ai.depth + 1 &&
+      defaultRun.ai.scorePov === 'white',
+    'WASM telemetry carries the recalibrated Easy budget and counters');
+  check(Array.isArray(defaultRun.ai.pvUci) && defaultRun.ai.pvUci.length === 0 &&
+      !Object.prototype.hasOwnProperty.call(defaultRun.ai, 'rootOrderUci'),
+    'WASM raw-ABI evidence honestly omits PV and captured root order');
+  const defaultChecked = await page.evaluate(function () {
     document.getElementById('newGame').click();
     const checked = document.getElementById('engineWasm').checked;
     document.getElementById('newGameCancel').click();
-    return !checked;
+    return checked;
   });
-  check(defaultUnchecked, 'the experimental-engine checkbox starts unchecked');
+  check(defaultChecked, 'the faster-engine checkbox starts checked');
 
-  // ---- Opt in through the dialog: the WASM engine answers ----
-  await page.click('#newGame');
-  await page.click('#engineWasm + span');
-  await t.pick('mode', 'ai-w');
-  await t.pick('difficulty', '1');
-  await page.click('#newGameStart');
-  await page.waitForFunction(function () {
-    return !document.getElementById('newGameDialog').open;
-  });
-  await waitForFirstAiMove();
-  const wasmRun = await firstAi();
-  check(wasmRun.ai.engine === 'wasm' && wasmRun.ai.engineFallback === null &&
-      wasmRun.ai.source === 'worker' && wasmRun.ai.fallbackReason === null,
-    'opted-in games record the WASM engine with no fallback');
-  check(wasmRun.ai.release === wasmRun.release &&
-      wasmRun.ai.depth === 1 && wasmRun.ai.maxDepth === 1 &&
-      wasmRun.ai.stopReason === 'max-depth' &&
-      Number.isInteger(wasmRun.ai.nodes) && wasmRun.ai.nodes > 0 &&
-      wasmRun.ai.scorePov === 'white',
-    'WASM telemetry carries release, budget, depth and counters like JS');
-  check(Array.isArray(wasmRun.ai.pvUci) && wasmRun.ai.pvUci.length === 0 &&
-      !Object.prototype.hasOwnProperty.call(wasmRun.ai, 'rootOrderUci'),
-    'WASM raw-ABI evidence honestly omits PV and captured root order');
   const debugPgn = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
     let s = Chess.newGameState();
@@ -78,7 +67,22 @@ require('./helper').run('wasm-engine', async function (t) {
   });
   check(debugPgn.includes('engine wasm') &&
       !debugPgn.includes('engine-fallback'),
-    'the debug PGN log names the WASM engine for opted-in moves');
+    'the debug PGN log names the default WASM engine');
+
+  // ---- Opt out through the dialog: the standard engine answers ----
+  await page.click('#newGame');
+  await page.click('#engineWasm + span');
+  await t.pick('mode', 'ai-w');
+  await t.pick('difficulty', '1');
+  await page.click('#newGameStart');
+  await page.waitForFunction(function () {
+    return !document.getElementById('newGameDialog').open;
+  });
+  await waitForFirstAiMove();
+  const jsRun = await firstAi();
+  check(jsRun.ai.engine === 'js' && jsRun.ai.engineFallback === null &&
+      jsRun.ai.source === 'worker',
+    'opted-out games use the standard engine and record it');
 
   // ---- The preference is page-level and survives a reload ----
   await page.reload();
@@ -87,9 +91,9 @@ require('./helper').run('wasm-engine', async function (t) {
     document.getElementById('newGame').click();
     const checked = document.getElementById('engineWasm').checked;
     document.getElementById('newGameCancel').click();
-    return checked;
+    return !checked;
   });
-  check(persisted, 'the experimental-engine preference survives a reload');
+  check(persisted, 'the standard-engine opt-out survives a reload');
 
   // ---- In-worker fallback: an unusable module answers with JavaScript ----
   // ai.js fetches with HTTP 200 but is not WebAssembly, so instantiation

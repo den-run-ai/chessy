@@ -5,8 +5,8 @@
  * canonical pinned-toolchain build validated by PRs #126/#127 (Rust 1.97.1
  * commit 8bab26f4f, Binaryen 131), and the production loader
  * (assets/wasm-engine.js) must return exact JavaScript-parity results for
- * the shipped Play configurations — including quiesce OFF, which the
- * fixed-depth levels use and the experiment-phase evidence did not sweep.
+ * quiescent shipped Play and the legacy quiescence-off configuration retained
+ * as a compatibility witness.
  *
  * Hermetic: runs against committed bytes, no toolchain required.
  *   node test/wasm-asset.test.js
@@ -124,10 +124,10 @@ async function main() {
         { maxDepth: 1, quiesce: true });
     });
 
-  // ---- Exact parity for the shipped Play configurations ----
+  // ---- Exact parity for shipped and legacy Play configurations ----
   // The bench harness pins the JS root shuffle to the module's embedded
-  // seed, exactly like the #126/#127 evidence. quiesce:true mirrors Master;
-  // quiesce:false mirrors the fixed-depth levels (Easy..Expert).
+  // seed, exactly like the #126/#127 evidence. All current levels use
+  // quiesce:true; false remains a useful pre-r69 compatibility witness.
   const wasm = await bench.loadWasmEngine(WASM_PATH, 'shipped');
   const js = bench.loadJsEngine();
   for (const quiesce of [true, false]) {
