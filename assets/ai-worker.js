@@ -6,12 +6,12 @@ importScripts('engine.js' + self.location.search,
   'ai.js' + self.location.search,
   'wasm-engine.js' + self.location.search);
 
-/* Experimental Rust/WASM engine (#84/#113 device probe): the page opts a
- * request in per message. The module is fetched and instantiated once per
- * worker, only on the first opted-in request, so default-off players pay
- * no memory or startup cost. EVERY wasm failure — load or search — answers
- * with the JavaScript engine instead and labels the reply, so a Play move
- * can never be lost to the experiment. A worker whose module failed to
+/* Rust/WASM Play engine (#84/#113): the page selects it per message. The
+ * module is fetched and instantiated once per worker, only on the first WASM
+ * request, so explicit standard-engine opt-outs pay no memory or startup cost.
+ * EVERY wasm failure — load or search — answers with the JavaScript engine
+ * instead and labels the reply, so a Play move can never be lost. A worker
+ * whose module failed to
  * load stays on JavaScript for its lifetime (the page-level watchdog and
  * new-game paths create fresh workers). */
 let wasmLoad = null;      // Promise for the singleton engine instance

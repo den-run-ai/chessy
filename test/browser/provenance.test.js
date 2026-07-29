@@ -8,8 +8,12 @@ const fs = require('fs');
 require('./helper').run('provenance', async function (t) {
   const page = t.page, check = t.check;
 
-  // AI as White moves immediately; Easy is a single completed draft, keeping
-  // this integration test quick while traversing the real worker/app path.
+  // Keep this provenance round-trip on the explicit standard-engine opt-out:
+  // unlike the raw WASM ABI, JavaScript carries PV/root-order evidence. Easy's
+  // 10k-node budget keeps the integration test quick.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-wasm-engine-v1', 'off');
+  });
   await t.newGame({ mode: 'ai-w', difficulty: '1' });
   await page.waitForFunction(function () {
     const raw = localStorage.getItem('chessy-game-v1');
@@ -35,14 +39,15 @@ require('./helper').run('provenance', async function (t) {
   const ai = live.ai;
   check(live.startedRelease === live.release && ai.release === live.release,
     'live save records game-start and per-move release identifiers');
-  check(ai.depth === 1 && ai.attemptedDepth === null && ai.maxDepth === 1 &&
-      ai.stopReason === 'max-depth',
+  check(ai.depth >= 1 && ai.attemptedDepth === ai.depth + 1 &&
+      ai.maxDepth === 30 && ai.stopReason === 'node-limit',
     'live telemetry distinguishes completed depth, attempted depth and stop reason');
   check(Number.isInteger(ai.nodes) && ai.nodes > 0 &&
       Number.isInteger(ai.qnodes) && Number.isFinite(ai.score) &&
       ai.scorePov === 'white',
     'live telemetry records node counts and an explicit score POV');
-  check(ai.timeMs === 10000 && ai.nodeLimit === null &&
+  check(ai.timeMs === 5000 && ai.nodeLimit === 10000 &&
+      ai.nodes === ai.nodeLimit && ai.quiesce === true &&
       ai.seed === null && ai.randomize === true,
     'live telemetry records the effective Play search config');
   check(Number.isFinite(ai.elapsedMs) && Number.isFinite(ai.searchMs) &&

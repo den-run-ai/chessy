@@ -82,6 +82,8 @@ jobs:
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM engine asset (digest + exact JS parity)
         run: node test/wasm-asset.test.js
+      - name: Verify recalibrated difficulty presets
+        run: node test/level-presets.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
       - name: Run runtime-update gate tests

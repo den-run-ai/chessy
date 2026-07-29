@@ -18,7 +18,11 @@
   const AI_DELAY_MS = 250;
   const PIECE_NAMES = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king' };
 
-  const DIFF_LABELS = { 1: 'Easy', 2: 'Medium', 3: 'Hard', 5: 'Expert', master: 'Master' };
+  const AI_LEVELS = ChessyLevelPresets.LEVELS;
+  const DIFF_LABELS = Object.keys(AI_LEVELS).reduce(function (labels, id) {
+    labels[id] = AI_LEVELS[id].label;
+    return labels;
+  }, {});
   const MODE_LABELS = {
     pvp: 'Two players', 'ai-b': 'White vs computer', 'ai-w': 'Black vs computer'
   };
@@ -193,16 +197,16 @@
   // AI runs in a Web Worker so deep searches never freeze the board;
   // falls back to a synchronous call where workers are unavailable.
 
-  // Experimental Rust/WASM engine preference (#84/#113 device probe):
-  // page-level and persisted OUTSIDE the per-game settings, so the saved-game
-  // and archive schemas are untouched. Read fresh per request — flipping it
-  // mid-game applies from the computer's next move, which is exactly what an
-  // on-device A/B comparison needs. The worker labels every reply with the
-  // engine that actually answered, so provenance never depends on this flag.
+  // Rust/WASM is the default Play backend after the hosted parity matrix and
+  // first physical-iPhone session passed (#126–#129 / #113). The preference
+  // remains page-level and outside the saved-game schema, and every load or
+  // search failure is still answered by the standard JavaScript engine with
+  // explicit provenance. Existing opt-in value "on" remains compatible;
+  // unchecked is stored explicitly because absence now means the default ON.
   const WASM_ENGINE_PREF = 'chessy-wasm-engine-v1';
   function wasmEngineEnabled() {
-    try { return localStorage.getItem(WASM_ENGINE_PREF) === 'on'; }
-    catch (e) { return false; }
+    try { return localStorage.getItem(WASM_ENGINE_PREF) !== 'off'; }
+    catch (e) { return true; }
   }
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // config/provenance for the in-flight search
@@ -612,20 +616,13 @@
     maybeAiMove();
   }
 
-  // Difficulty select values are search depths, except the named top level:
-  // Master searches with quiescence (captures are resolved past the horizon,
-  // and a bounded quiet-check extension catches mating checks one ply beyond
-  // it) under a per-move time budget, iteratively deepening as far as the clock
-  // allows. The budget is 5s, not 2s: the quiet-check extension makes the
-  // horizon-ply search sound but ~20% heavier, and on sharp positions the
-  // depth that first sees a forced mate (e.g. the mate that followed
-  // 27...Rxa2?? in game log chessy202607240238) only COMPLETES with the larger
-  // budget — 2s stopped one depth short and returned the blunder. The
-  // fixed-depth levels carry a generous budget purely as a safety net for
-  // pathological positions.
+  // Every level now uses the same quiescent iterative engine. Easy through
+  // Expert stop on a deterministic node budget; their five-second clock is
+  // only a safety ceiling for a slow/fallback backend. Master spends the full
+  // five-second product budget. This makes the ladder about searched work
+  // instead of treating a faster runtime as mere latency savings.
   function aiConfig() {
-    if (settings.difficulty === 'master') return { maxDepth: 30, timeMs: 5000, quiesce: true };
-    return { maxDepth: Number(settings.difficulty), timeMs: 10000, quiesce: false };
+    return AI_LEVELS[settings.difficulty] || AI_LEVELS[2];
   }
 
   function maybeAiMove(startedAt, fallbackReason) {
@@ -639,7 +636,7 @@
       depth: cfg.maxDepth,
       quiesce: cfg.quiesce,
       timeMs: cfg.timeMs,
-      nodeLimit: null,
+      nodeLimit: cfg.nodeLimit,
       // Casual Play still uses its historical unseeded shuffle. Record that
       // fact explicitly rather than inventing a seed after the move.
       seed: null,
@@ -675,11 +672,12 @@
       }, cfg.timeMs + 3000);
       aiWorker.searching = true; // this worker did real work (see onerror)
       aiWorker.postMessage({
-        id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
+        id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth,
+        timeMs: cfg.timeMs, nodeLimit: cfg.nodeLimit,
         quiesce: cfg.quiesce, positions: state.positions,
         seed: aiPending.seed, randomize: aiPending.randomize,
-        // Experimental engine opt-in travels per request; the wasm URL joins
-        // the page's release unit like every other executable asset.
+        // The selected engine travels per request; the wasm URL joins the
+        // page's release unit like every other executable asset.
         engine: wasmEngineEnabled() ? 'wasm' : 'js',
         wasmUrl: 'chessy-ai-fast.wasm' +
           (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : '')
@@ -689,7 +687,8 @@
       setTimeout(function () {
         if (id !== aiRequestId || !aiThinking) return;
         const result = ChessAI.think(state, {
-          maxDepth: cfg.maxDepth, timeMs: cfg.timeMs, quiesce: cfg.quiesce,
+          maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
+          nodeLimit: cfg.nodeLimit, quiesce: cfg.quiesce,
           positions: state.positions, seed: aiPending && aiPending.seed,
           randomize: aiPending ? aiPending.randomize : true
         });
@@ -1118,15 +1117,15 @@
     newGameDialog.showModal();
   });
 
-  // The experimental-engine checkbox persists IMMEDIATELY (independent of
+  // The engine checkbox persists IMMEDIATELY (independent of
   // Start/Cancel): it is a page-level preference, not part of the game
   // settings snapshot, and applies from the computer's next move.
   const engineWasmEl = document.getElementById('engineWasm');
   engineWasmEl.addEventListener('change', function () {
     try {
-      if (engineWasmEl.checked) localStorage.setItem(WASM_ENGINE_PREF, 'on');
-      else localStorage.removeItem(WASM_ENGINE_PREF);
-    } catch (e) { /* private mode: the default JS engine still plays */ }
+      if (engineWasmEl.checked) localStorage.removeItem(WASM_ENGINE_PREF);
+      else localStorage.setItem(WASM_ENGINE_PREF, 'off');
+    } catch (e) { /* private mode: default WASM still has labelled JS fallback */ }
   });
 
   newGameStartEl.addEventListener('click', function () {
