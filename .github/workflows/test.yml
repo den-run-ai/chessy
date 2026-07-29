@@ -123,6 +123,8 @@ jobs:
         run: node test/match-stats.test.js
       - name: Run match shard-aggregator tests
         run: node test/ai-match-agg.test.js
+      - name: Validate formal WASM efficiency match contract
+        run: node test/wasm-efficiency-match.test.js
       - name: Run analysis-contract tests
         run: node test/analysis-core.test.js
       - name: Run PGN import tests

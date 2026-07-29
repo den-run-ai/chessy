@@ -107,10 +107,17 @@ async function main() {
     /exceeds WASM input capacity/,
     function () { wasm.search('x'.repeat(1025), searchOptions); });
   expectThrow('rejects a depth beyond fixed search storage',
-    /maxDepth must be an integer from 0 through 111/,
+    /maxDepth must be an integer from 1 through 111/,
     function () {
       wasm.search(WasmBench.POSITIONS[0][1], Object.assign({}, searchOptions, {
         maxDepth: 112
+      }));
+    });
+  expectThrow('rejects depth zero instead of silently searching depth one',
+    /maxDepth must be an integer from 1 through 111/,
+    function () {
+      wasm.search(WasmBench.POSITIONS[0][1], Object.assign({}, searchOptions, {
+        maxDepth: 0
       }));
     });
 

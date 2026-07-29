@@ -113,10 +113,10 @@ function jsThink(fen, opts) {
 }
 
 function wasmThink(wasm, fen, opts) {
-  const t0 = performance.now();
-  const r = wasm.search(fen, opts);
-  r.ms = performance.now() - t0;
-  return r;
+  // SpikeAbi times only the native search() call, matching jsThink's timer
+  // around ChessAI.think(). FEN encoding/loading is setup on both sides and
+  // must not be charged only to WASM.
+  return wasm.search(fen, opts);
 }
 
 function compare(j, w) {
@@ -244,6 +244,16 @@ async function runProbe(config) {
     families: familyRatios,
     perPosition: perPosition
   };
+  report.nps.gate = geo < 1.25
+    ? { code: 'NO-GO', reason: 'geomean is below the 1.25x early-stop floor' }
+    : geo < 1.35
+      ? { code: 'PROFILE-ONCE', reason: 'geomean is below the documented 1.35x device gate' }
+      : report.nps.slowerFamilies
+        ? { code: 'NO-GO', reason: report.nps.slowerFamilies + ' mirrored family/families are slower than JavaScript' }
+        : { code: 'GO-TO-DEVICES', reason: 'geomean is at least 1.35x and no mirrored family is slower' };
+  if (report.nps.gate.code !== 'GO-TO-DEVICES') {
+    report.failures.push('nps-gate:' + report.nps.gate.code);
+  }
   report.memory.afterNpsJsHeap = jsHeap();
 
   // 4. Five-second diagnostics (order-balanced single pairs).

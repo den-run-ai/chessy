@@ -91,6 +91,7 @@ download floor. Generated `.wasm` files remain ignored.
 (cd experiments/wasm && cargo test --locked --offline)
 node test/ai-wasm-parity.js --depth 5
 node experiments/wasm/bench.js --depth 5 --reps 2 --min-ms 100 --require-go
+node experiments/wasm/deep-bench.test.js
 ```
 
 The Rust tests retain the Zig spike's perft, move-order, make/unmake, and
@@ -168,6 +169,112 @@ cannot be represented exactly by a JavaScript safe integer.
 
 `bench.js` hard-fails on an ABI version or struct-size mismatch before accepting
 any benchmark result.
+
+## Divergent deep-search experiments
+
+`deep-bench.js` compares a candidate WASM module with its exact, frozen
+`origin/main` merge-base build without requiring identical trees. Its default
+screen runs fixed depth 7 over the canonical 18-position/mirrored corpus,
+fixed depth 8 over four tractable endgame positions, and two order-balanced five-second
+pairs over all 18 positions. It also replays two AI-to-move witnesses from the
+2026-07-28 iPhone A14 debug game: the depth-6, 83%-quiescence position before
+`18...Nb4` and the depth-9 peak before `27...Rb8`.
+
+The JSON and Markdown reports retain per-position and per-family nodes, qnodes,
+NPS, wall time, move/score/depth divergence, aggregate and tail metrics, and
+time-to-depth outcomes. A diagnostic decision never makes a rejected
+experiment fail CI; only a broken or incomplete measurement does. Tactics,
+strength, physical-device, and production gates remain separate.
+
+The workflow executes `deep-bench.js`, its imported `bench.js`, and their
+contract tests from a pinned trusted-harness commit rather than from the
+candidate checkout. Every timed candidate and reference search must also
+report coherent stop/depth metadata and finish within the requested budget
+plus a host-observed overshoot allowance of 2% or 25 ms, whichever is larger.
+Every fixed and timed result must also report safe counters, a real move, and
+a stop reason coherent with the predeclared nonterminal fixture. An overrun or
+malformed result fails the measurement before node or completed-depth evidence
+can influence the diagnostic decision.
+
+The diagnostic classifier requires activity in at least three canonical
+families and a material benefit: at least 5% lower depth-7 geomean nodes, or
+more candidate-deeper than candidate-shallower outcomes in the paired
+five-second screen. It also retains no-regression checks for geomean nodes,
+fixed-depth wall time, and the 1.25x per-position node tail.
+
+Candidate branches may optionally export:
+
+```text
+experiment_metric(index: u32) -> u64
+```
+
+The loader records exactly 16 non-negative, JavaScript-safe slots after every
+search. Implementations must return zero for unused/out-of-range slots. The
+baseline may omit the export; ABI v1 and its 64-byte result stay unchanged.
+
+## Formal efficiency non-inferiority match
+
+`test/wasm-efficiency-match.js` is the separately gated strength-safety check
+for a Rust/WASM search optimization that has already demonstrated a material
+efficiency benefit. It builds on the frozen match corpus and clustered
+statistics, but compares two exact WASM modules rather than accidentally
+replaying the unchanged `assets/ai.js` engine:
+
+- 10,000 nodes per move and a 180-ply cap;
+- 100 frozen openings, four seed slots, and both colours (800 games);
+- one-sided 95% lower confidence bound over the 100 per-opening means;
+- pass only when that lower bound is **strictly above 49%**.
+
+This is an efficiency non-inferiority gate, not the separate pure-strength
+claim whose lower bound must exceed 50%. Candidate/base source commits and
+both optimized-module SHA-256 digests are bound into every shard. The
+aggregator rejects mixed, duplicated, missing, or non-canonical evidence.
+Protocol v2 additionally binds the exact trusted-main harness commit and
+Actions run. Its shard runner validates the node count, stop reason, and
+depth metadata after every candidate and reference search, not just during a
+startup probe. A formal v2 verdict cannot run without independently generated
+trusted provenance.
+
+Both workflows execute a source-accounting verifier from the trusted harness.
+It freezes the requested-budget forwarding and reported counters at the ABI,
+the reset and budget primitive, the recursive search/quiescence entry charges,
+and the iterative-deepening result pipeline. Candidate algorithms may add
+recursive work only while retaining those trusted accounting surfaces; added
+counter writes, removed entry charges, budget bypasses, or output clamping
+fail before either candidate module is accepted as evidence.
+
+ABI v1 has no seed or game-prefix-history input. Root ordering resets to the
+same embedded `0xC0FFEE` seed for every search, so the four manifest seed slots
+are deterministic repeats for WASM. They do not inflate the analysis:
+`test/match-stats.js` still treats the opening as the independent unit
+(`n = 100`, never 400 pairs). Keeping the 20-shard `4 x 5` geometry preserves
+the frozen protocol and gives a direct completeness check; it does not claim
+four independent observations per opening.
+
+The Actions workflow is intentionally maintainer-label gated. It does not run
+when the shared harness PR or a candidate PR is opened or updated. It accepts
+only a same-repository pull request targeting `main` whose diff is confined to
+Rust sources and experiment notes. After reviewing that exact candidate head
+and allowed-file diff, a maintainer launches one complete experiment by
+applying the `run-wasm-efficiency-v2` label. Ordinary pushes do not launch the
+800-game matrix, and a second run for the same candidate SHA is rejected. A
+later push makes the recorded candidate SHA stale: remove the label, review
+the new exact head, and reapply it only for a genuinely new complete
+experiment. Re-running a completed attempt is inadmissible. Replacing an
+infrastructure-invalid run also requires a fresh reviewed commit and therefore
+a new candidate SHA.
+
+The trusted-main workflow admits only candidate Rust-source and
+experiment-note changes. It compiles that source with the trusted build driver
+in an isolated job, while a separate trusted job builds the frozen
+`808a2ef3e140718facd384acfebdd8781f1db162` source with Rust 1.97.1 and
+Binaryen 131 and verifies its pinned module digest. Fresh trusted jobs
+recompute both downloaded module digests, run every shard and the aggregator
+from the exact base commit, and emit the verdict only after all 20
+first-attempt artifacts tile the full manifest. Evidence produced by protocol
+v1 did not have these trust and per-search checks and is therefore
+inadmissible for a v2 merge gate. Do not rerun selected shards or a valid
+statistical miss.
 
 ## Go/no-go funnel
 

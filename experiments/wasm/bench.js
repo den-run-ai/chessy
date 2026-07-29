@@ -26,6 +26,7 @@ const ABI_VERSION = 1;
 const RESULT_BYTES = 64;
 const INPUT_BYTES = 1024;
 const MAX_SEARCH_DEPTH = 111;
+const EXPERIMENT_METRIC_SLOTS = 16;
 const NONE_U32 = 0xffffffff;
 const SEED = 0xC0FFEE;
 
@@ -196,6 +197,9 @@ async function loadWasmEngine(wasmPath, label) {
   const resultPointer = requiredFunction(exports, 'result_ptr');
   const loadPosition = requiredFunction(exports, 'load_position');
   const search = requiredFunction(exports, 'search');
+  const experimentMetric = typeof exports.experiment_metric === 'function'
+    ? exports.experiment_metric
+    : null;
   const encoder = new TextEncoder();
   const initialMemoryBytes = exports.memory.buffer.byteLength;
 
@@ -214,10 +218,10 @@ async function loadWasmEngine(wasmPath, label) {
           encoded.byteLength + ' > ' + INPUT_BYTES);
       }
       if (!Number.isInteger(options.maxDepth) ||
-          options.maxDepth < 0 ||
+          options.maxDepth < 1 ||
           options.maxDepth > MAX_SEARCH_DEPTH) {
         throw new RangeError(
-          'maxDepth must be an integer from 0 through ' + MAX_SEARCH_DEPTH);
+          'maxDepth must be an integer from 1 through ' + MAX_SEARCH_DEPTH);
       }
       const pointer = checkedPointer(
         inputPointer(), 'input_ptr()', encoded.byteLength, exports.memory);
@@ -239,6 +243,20 @@ async function loadWasmEngine(wasmPath, label) {
         throw new Error('search() failed with status ' + status);
       }
       const result = decodeResult(exports.memory, resultPointer());
+      if (experimentMetric) {
+        result.experimentMetrics = [];
+        for (let index = 0; index < EXPERIMENT_METRIC_SLOTS; index++) {
+          const value = experimentMetric(index);
+          if (typeof value !== 'bigint' || value < 0n ||
+              value > BigInt(Number.MAX_SAFE_INTEGER)) {
+            throw new Error('experiment_metric(' + index +
+              ') must return a non-negative safe u64, got ' + String(value));
+          }
+          result.experimentMetrics.push(Number(value));
+        }
+      } else {
+        result.experimentMetrics = null;
+      }
       result.ms = elapsedMs;
       return result;
     },
@@ -585,6 +603,7 @@ async function main(argv) {
 module.exports = Object.freeze({
   ABI_VERSION: ABI_VERSION,
   RESULT_BYTES: RESULT_BYTES,
+  EXPERIMENT_METRIC_SLOTS: EXPERIMENT_METRIC_SLOTS,
   NONE_U32: NONE_U32,
   SEED: SEED,
   STOP_REASONS: STOP_REASONS,
