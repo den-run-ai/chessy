@@ -123,7 +123,10 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 - **Progress** — a read-only descriptive snapshot: games archived, lesson
   cards, due-now, 30-day reviews, and per-cause tallies. The one narrow signal
   ("matched Chessy's saved move on first try") is labelled as exactly that —
-  **no headline accuracy**, weakness ranking, or confidence claims.
+  **no headline accuracy**, weakness ranking, or confidence claims. A Storage
+  block shows the persistent-storage state and approximate usage/quota;
+  persistence is requested once, after the first durable archive write, and
+  reduces eviction exposure without guaranteeing it.
 - **Coaching data controls** — paste or upload one PGN into the archive
   (legality-validated and deduplicated), back up games/cards to versioned JSON,
   including release/search provenance, atomically restore a validated backup,
@@ -248,6 +251,7 @@ gated on the engine *and* browser suites.
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards, bounded LRU analysis cache, resumable scan jobs) |
+| `assets/storage-health.js` | One-time persistent-storage request (after the first durable archive write) and the Progress storage snapshot |
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
@@ -259,7 +263,7 @@ gated on the engine *and* browser suites.
 | `assets/moment-scan.js` | Explicit, sequential two-pass scan controller with durable checkpoints, pause/resume and spoiler-safe public state |
 | `assets/reflection.js` | Manual reflection flow: flag → answer → contract analysis → lesson card |
 | `assets/train.js` | Train view: due-card queue on the fixed spaced-review ladder |
-| `assets/progress.js` | Progress view: read-only descriptive counts |
+| `assets/progress.js` | Progress view: read-only descriptive counts and storage health |
 | `assets/style.css` | Styling |
 | `sw.js` | Service worker (precache; network-first navigations, stale-while-revalidate assets) |
 | `manifest.webmanifest` | PWA manifest |

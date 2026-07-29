@@ -16,8 +16,10 @@ require('../assets/ai.js');
 require('../assets/analysis-core.js');
 const AnalysisResult = require('../assets/analysis-result.js');
 const Equivalence = require('../assets/equivalence.js');
+require('../assets/store.js');
 const Chess = globalThis.Chess;
 const AC = globalThis.ChessyAnalysisCore;
+const Store = globalThis.CoachStore;
 
 let passed = 0, failed = 0;
 function check(ok, label, detail) {
@@ -151,6 +153,31 @@ const legal = Chess.legalMoves(start);
 const cp = function (score, i) { return cpLine(start, legal[i], score); };
 
 {
+  const best = cp(30, 0);
+  const within = cp(0, 1);
+  const outside = cp(-10, 2);
+  const accepted = Equivalence.comparePersisted(
+    clone(Equivalence.CRITERION), best, within, start.turn);
+  const rejected = Equivalence.comparePersisted(
+    clone(Equivalence.CRITERION), best, outside, start.turn);
+  const changed = clone(Equivalence.CRITERION);
+  changed.params.cpTolerance = 300;
+  const unsupported = Equivalence.comparePersisted(
+    changed, best, outside, start.turn);
+  const outranking = Equivalence.comparePersisted(
+    clone(Equivalence.CRITERION), within, best, start.turn);
+  check(accepted.ok && accepted.acceptable && accepted.gapCp === 30 &&
+        accepted.bestNotWorse,
+    'persisted-pair validation accepts the exact inclusive v1 boundary');
+  check(rejected.ok && !rejected.acceptable && rejected.gapCp === 40,
+    'persisted-pair validation rejects a legal line outside v1 tolerance');
+  check(!unsupported.ok && unsupported.reason === 'criterion',
+    'persisted-pair validation fails closed on changed criterion parameters');
+  check(outranking.ok && outranking.acceptable && !outranking.bestNotWorse,
+    'persisted-pair validation detects a line outranking the claimed best');
+}
+
+{
   const result = fixture(start, [cp(30, 0), cp(10, 1), cp(0, 2), cp(-10, 3)],
     { stable: true });
   const best = grade(result, start, result.bestLines[0].uci);
@@ -197,6 +224,67 @@ const cp = function (score, i) { return cpLine(start, legal[i], score); };
       result.bestLines.slice(0, 3).map(function (l) { return l.uci; }).join(','),
     'the accepted set is exactly the lines within tolerance',
     over.accepted.map(function (l) { return l.uci; }).join(','));
+}
+
+// ---------------------------------------------------------------------------
+console.log('persisted source binding');
+// ---------------------------------------------------------------------------
+{
+  const fp = AC.positionFingerprint(start, start.positions);
+  const result = fixture(start, [cp(30, 0), cp(10, 1)], { stable: true });
+  result.positionFingerprint = fp;
+  const expected = {
+    identity: Object.assign({}, IDENTITY, { positionFingerprint: fp })
+  };
+  const ev = grade(result, start, result.bestLines[0].uci, expected);
+  const card = {
+    gameId: 'source-game',
+    ply: 0,
+    fenBefore: Chess.toFen(start),
+    playedSan: result.bestLines[0].san,
+    bestSan: result.bestLines[0].san,
+    bestMove: {
+      from: result.bestLines[0].move.from,
+      to: result.bestLines[0].move.to,
+      promotion: result.bestLines[0].move.promotion || null
+    },
+    due: 1,
+    step: -1,
+    attempts: [],
+    equivalence: {
+      criterion: clone(ev.criterion),
+      provider: clone(ev.provider),
+      positionFingerprint: ev.positionFingerprint,
+      turn: ev.turn,
+      depth: ev.depth,
+      complete: ev.complete,
+      coverage: ev.coverage,
+      legalRootCount: ev.legalRootCount,
+      candidateLineCount: ev.candidateLineCount,
+      coveredRootCount: ev.coveredRootCount,
+      stability: clone(ev.stability),
+      best: clone(ev.best),
+      accepted: clone(ev.accepted)
+    }
+  };
+  const game = {
+    id: 'source-game',
+    setupFen: null,
+    sans: [result.bestLines[0].san]
+  };
+  check(Store.validateCardRecord(card, null, game) === null,
+    'persisted evidence reproduces from its archived game and ply');
+  const transplanted = clone(card);
+  const otherPositions = {};
+  otherPositions[Chess.positionKey(start)] = 2;
+  transplanted.equivalence.positionFingerprint =
+    AC.positionFingerprint(start, otherPositions);
+  check(/repetition history/.test(
+    Store.validateCardRecord(transplanted, null, game) || ''),
+  'same-FEN evidence from a different repetition history fails closed');
+  check(/without its source game/.test(
+    Store.validateCardRecord(card) || ''),
+  'positive evidence cannot validate without its referenced source game');
 }
 
 // ---------------------------------------------------------------------------

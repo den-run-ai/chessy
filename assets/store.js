@@ -319,6 +319,37 @@
       });
   }
 
+  // Replay the exact archived source to a card ply with the repetition table
+  // intact. A FEN alone is insufficient provenance: the same board and clocks
+  // reached through a different history can have a different threefold
+  // evaluation and therefore a different accepted-move set.
+  function replayGameToPly(game, ply) {
+    try {
+      if (!game || !Array.isArray(game.sans) ||
+          !Number.isInteger(ply) || ply < 0 || ply > game.sans.length) {
+        return null;
+      }
+      var state = game.setupFen ?
+        Chess.parseFen(game.setupFen) : Chess.newGameState();
+      if (!state.positions) {
+        state.positions = {};
+        state.positions[Chess.positionKey(state)] = 1;
+      }
+      if (!Array.isArray(state.history)) state.history = [];
+      for (var i = 0; i < ply; i++) {
+        var legal = Chess.legalMoves(state);
+        var move = legal.find(function (candidate) {
+          return Chess.toSan(state, candidate, legal) === game.sans[i];
+        });
+        if (!move) return null;
+        state = Chess.playMove(state, move);
+      }
+      return { state: state, fen: Chess.toFen(state) };
+    } catch (e) {
+      return null;
+    }
+  }
+
   function addCard(card) {
     return tx('cards', 'readwrite', function (s) { return s.add(card); });
   }
@@ -945,18 +976,156 @@
     return null;
   }
 
+  // Optional versioned equivalence evidence on a card (Train v2 E2, #76):
+  // the accepted-move set Train grades alternative answers against, with
+  // criterion/provider provenance and coverage. ABSENT (or null) is the
+  // legacy shape and always valid; once present it must be internally
+  // coherent AND agree with the card and position it grades — a forged or
+  // damaged accepted set would otherwise auto-accept arbitrary moves.
+  function validateCardEquivalence(eq, state, legal, cardBestUci, prefix) {
+    function bad(what) { return prefix + ' has equivalence evidence with ' + what; }
+    if (!eq || typeof eq !== 'object' || Array.isArray(eq)) {
+      return prefix + ' has non-object equivalence evidence';
+    }
+    // Present evidence is consumed as a positive grading trust boundary.
+    // Legacy cards without it remain valid, but a release missing either
+    // validator must fail closed instead of accepting a set it cannot check.
+    if (typeof global.ChessyAnalysisResult === 'undefined' ||
+        typeof global.ChessyAnalysisResult.validEval !== 'function' ||
+        typeof global.ChessyEquivalence === 'undefined' ||
+        typeof global.ChessyEquivalence.comparePersisted !== 'function') {
+      return bad('unavailable validation support');
+    }
+    var c = eq.criterion;
+    if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id ||
+        !Number.isInteger(c.version) || c.version < 1 ||
+        typeof c.basis !== 'string' || !c.basis ||
+        !c.params || typeof c.params !== 'object' || Array.isArray(c.params)) {
+      return bad('an invalid criterion');
+    }
+    var p = eq.provider;
+    if (!p || typeof p !== 'object' ||
+        typeof p.engineId !== 'string' || !p.engineId ||
+        typeof p.version !== 'string' || !p.version ||
+        typeof p.configHash !== 'string' || !p.configHash) {
+      return bad('an invalid provider');
+    }
+    if (typeof eq.positionFingerprint !== 'string' || !eq.positionFingerprint) {
+      return bad('an invalid position fingerprint');
+    }
+    if (eq.turn !== state.turn) return bad('a turn that contradicts fenBefore');
+    if (!Number.isInteger(eq.depth) || eq.depth < 1) return bad('an invalid depth');
+    // Evidence may only come from a COMPLETE analysis (the criterion refuses
+    // partial results), so a stored partial marker is malformed by definition.
+    if (eq.complete !== true) return bad('a non-complete evidence marker');
+    if (eq.coverage !== 'all-roots' && eq.coverage !== 'candidates') {
+      return bad('an unknown coverage');
+    }
+    if (eq.legalRootCount !== legal.length) {
+      return bad('a legal-root count that contradicts fenBefore');
+    }
+    if (!Number.isInteger(eq.candidateLineCount) || eq.candidateLineCount < 1 ||
+        eq.candidateLineCount > legal.length) {
+      return bad('an invalid candidate-line count');
+    }
+    if (eq.coverage === 'all-roots' && eq.candidateLineCount !== legal.length) {
+      return bad('all-roots coverage without all roots');
+    }
+    if (eq.coverage === 'candidates' && eq.candidateLineCount >= legal.length) {
+      return bad('candidate coverage that contains all roots');
+    }
+    if (!Number.isInteger(eq.coveredRootCount) ||
+        eq.coveredRootCount < eq.candidateLineCount ||
+        eq.coveredRootCount > legal.length ||
+        eq.coveredRootCount > eq.candidateLineCount + 1) {
+      return bad('an invalid covered-root count');
+    }
+    if (eq.stability !== null && eq.stability !== undefined) {
+      var st = eq.stability;
+      if (!st || typeof st !== 'object' || Array.isArray(st) ||
+          !Array.isArray(st.depths) ||
+          st.depths.length !== 2 ||
+          st.depths[0] !== eq.depth - 1 || st.depths[1] !== eq.depth ||
+          typeof st.bestMoveStable !== 'boolean') {
+        return bad('invalid stability evidence');
+      }
+    }
+    var legalUci = Object.create(null);
+    legal.forEach(function (m) {
+      var uci = Chess.sqName(m.from) + Chess.sqName(m.to) +
+        (m.promotion ? m.promotion.toLowerCase() : '');
+      legalUci[uci] = {
+        move: m,
+        san: Chess.toSan(state, m, legal)
+      };
+    });
+    function entryError(e) {
+      if (!e || typeof e !== 'object' || Array.isArray(e)) return 'a non-object move entry';
+      if (typeof e.uci !== 'string' || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(e.uci) ||
+          !legalUci[e.uci]) {
+        return 'a move entry that is not legal in fenBefore';
+      }
+      if (e.san !== legalUci[e.uci].san) {
+        return 'a move entry with non-canonical SAN';
+      }
+      if (!global.ChessyAnalysisResult.validEval(e, state.turn)) {
+        return 'a move entry with an invalid evaluation';
+      }
+      return null;
+    }
+    var bestErr = entryError(eq.best);
+    if (bestErr) return bad(bestErr + ' (best)');
+    var criterionCheck = global.ChessyEquivalence.comparePersisted(
+      c, eq.best, eq.best, state.turn);
+    if (!criterionCheck.ok) return bad('an unsupported criterion');
+    // The evidence must grade THIS card: a best move disagreeing with the
+    // card's saved bestMove would let Train accept moves against a different
+    // verdict than the one the player approved.
+    if (eq.best.uci !== cardBestUci) {
+      return bad('a best move that contradicts the card');
+    }
+    if (!Array.isArray(eq.accepted) || eq.accepted.length < 1 ||
+        eq.accepted.length > eq.coveredRootCount) {
+      return bad('an invalid accepted set');
+    }
+    var seen = Object.create(null);
+    for (var ai = 0; ai < eq.accepted.length; ai++) {
+      var accErr = entryError(eq.accepted[ai]);
+      if (accErr) return bad(accErr + ' (accepted ' + ai + ')');
+      if (seen[eq.accepted[ai].uci]) return bad('a duplicate accepted move');
+      var comparison = global.ChessyEquivalence.comparePersisted(
+        c, eq.best, eq.accepted[ai], state.turn);
+      if (!comparison.ok || !comparison.acceptable) {
+        return bad('an accepted move that contradicts the criterion');
+      }
+      if (!comparison.bestNotWorse) {
+        return bad('an accepted move that outranks the claimed best');
+      }
+      if (eq.accepted[ai].uci === eq.best.uci &&
+          !comparison.sameEvaluation) {
+        return bad('an accepted best move with a contradictory evaluation');
+      }
+      seen[eq.accepted[ai].uci] = true;
+    }
+    if (!seen[eq.best.uci]) return bad('an accepted set omitting the best move');
+    return null;
+  }
+
   // Shared card-record trust boundary. Restore uses this before replacing the
   // archive; Train also uses it after a raw IndexedDB read so one damaged row
   // cannot make otherwise valid due cards disappear. This is deliberately
   // validation only: callers quarantine bad rows in memory and never rewrite
   // or delete the stored source.
-  function validateCardRecord(r, prefix) {
+  function validateCardRecord(r, prefix, sourceGame) {
     prefix = prefix || 'card record';
     if (!r || typeof r !== 'object' || Array.isArray(r)) {
       return prefix + ' is not an object';
     }
     if (typeof r.gameId !== 'string') {
       return prefix + ' is missing a gameId';
+    }
+    if (!Number.isInteger(r.ply) || r.ply < 0) {
+      return prefix + ' has an invalid ply';
     }
     // Train dereferences fenBefore with Chess.parseFen. parseFen is lenient,
     // so use the strict six-field validator before the view touches it.
@@ -990,6 +1159,41 @@
       if (typeof r.bestSan !== 'string' ||
           Chess.toSan(state, best, legal) !== r.bestSan) {
         return prefix + ' has an invalid bestSan';
+      }
+      // Optional equivalence evidence (Train v2 E2): absent/null is the
+      // legacy shape; present must cohere with this exact position and card.
+      if (r.equivalence !== undefined && r.equivalence !== null) {
+        if (typeof Chess.sqName !== 'function') {
+          return prefix + ' cannot be checked by this release';
+        }
+        var cardBestUci = Chess.sqName(best.from) + Chess.sqName(best.to) +
+          (best.promotion ? best.promotion.toLowerCase() : '');
+        var eqError = validateCardEquivalence(
+          r.equivalence, state, legal, cardBestUci, prefix);
+        if (eqError) return eqError;
+        // Positive evidence is safe to consume only when its fingerprint
+        // reproduces from the card's actual archived game and ply. Merely
+        // persisting another repetition map beside the evidence would not
+        // establish this link: a forged backup could transplant both.
+        if (!sourceGame || sourceGame.id !== r.gameId ||
+            !Array.isArray(sourceGame.sans) ||
+            r.ply >= sourceGame.sans.length) {
+          return prefix + ' has equivalence evidence without its source game and ply';
+        }
+        var source = replayGameToPly(sourceGame, r.ply);
+        if (!source || source.fen !== r.fenBefore) {
+          return prefix + ' has equivalence evidence from a different source position';
+        }
+        if (typeof global.ChessyAnalysisCore === 'undefined' ||
+            typeof global.ChessyAnalysisCore.positionFingerprint !== 'function') {
+          return prefix + ' cannot be checked by this release';
+        }
+        var expectedFingerprint =
+          global.ChessyAnalysisCore.positionFingerprint(
+            source.state, source.state.positions);
+        if (r.equivalence.positionFingerprint !== expectedFingerprint) {
+          return prefix + ' has equivalence evidence from a different repetition history';
+        }
       }
     } catch (e) {
       return prefix + ' has an unusable training position';
@@ -1072,9 +1276,6 @@
           gamesById[r.id] = r;
         }
         if (name === 'cards') {
-          const cardError = validateCardRecord(
-            r, 'store "cards" record ' + j);
-          if (cardError) return cardError;
           var game = gamesById[r.gameId];
           if (!game) {
             return 'store "cards" record ' + j + ' references a missing game';
@@ -1082,6 +1283,9 @@
           if (!Number.isInteger(r.ply) || r.ply < 0 || r.ply >= game.sans.length) {
             return 'store "cards" record ' + j + ' references a missing ply';
           }
+          const cardError = validateCardRecord(
+            r, 'store "cards" record ' + j, game);
+          if (cardError) return cardError;
         }
       }
     }

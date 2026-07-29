@@ -23,7 +23,35 @@
     dl.appendChild(dd);
   }
 
+  // Storage health (#82): persistence state + approximate usage. Rendered
+  // INDEPENDENTLY of the archive lists — eviction exposure and quota are at
+  // their most relevant exactly when IndexedDB reads are failing. Missing
+  // module (partial cache eviction) clears the block rather than leaving a
+  // stale snapshot.
+  function renderStorage() {
+    const dl = $('storageStats');
+    const note = $('storageNote');
+    if (!dl) return Promise.resolve();
+    if (typeof ChessyStorageHealth === 'undefined') {
+      dl.innerHTML = '';
+      if (note) note.hidden = true;
+      return Promise.resolve();
+    }
+    return ChessyStorageHealth.snapshot().then(function (snap) {
+      const d = ChessyStorageHealth.describe(snap);
+      dl.innerHTML = '';
+      stat(dl, 'Persistent storage', d.state);
+      stat(dl, 'Storage used', d.usage);
+      if (note) note.hidden = false;
+    }).catch(function () {
+      dl.innerHTML = '';
+      stat(dl, 'Storage state unavailable', '—');
+      if (note) note.hidden = true;
+    });
+  }
+
   function renderProgress() {
+    const storageDone = renderStorage();
     return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
       const games = r[0], cards = r[1];
       const now = Date.now();
@@ -61,6 +89,10 @@
       // Clear the cause tallies too: a prior successful snapshot left
       // beneath the failure message would present stale counts as current.
       $('causeStats').innerHTML = '';
+    }).then(function () {
+      // The view's render promise covers the storage block too (it never
+      // rejects — renderStorage handles its own failures).
+      return storageDone;
     });
   }
 

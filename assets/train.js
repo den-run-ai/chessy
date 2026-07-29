@@ -52,14 +52,27 @@
 
   function loadTrain() {
     showSkippedCards(0);
-    return CoachStore.dueCards(Date.now()).then(function (storedCards) {
+    // Evidence fingerprints include repetition history, so validate each
+    // enriched card against its archived source game before Train may consume
+    // the accepted set. One games read avoids an IndexedDB transaction per
+    // due card and lets each damaged row be quarantined independently.
+    return Promise.all([
+      CoachStore.dueCards(Date.now()),
+      CoachStore.listGames()
+    ]).then(function (stored) {
+      const storedCards = stored[0];
+      const gamesById = Object.create(null);
+      stored[1].forEach(function (game) {
+        if (game && typeof game.id === 'string') gamesById[game.id] = game;
+      });
       // Quarantine each row independently and only in memory. filter()
       // preserves the due-time order returned by the IndexedDB index.
       const cards = [];
       let skipped = 0;
       for (const card of storedCards) {
         const error = typeof CoachStore.validateCardRecord === 'function'
-          ? CoachStore.validateCardRecord(card)
+          ? CoachStore.validateCardRecord(
+            card, null, card && gamesById[card.gameId])
           : 'validation unavailable';
         if (error) skipped++;
         else cards.push(card);

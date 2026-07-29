@@ -527,11 +527,12 @@
       // move was reached; if it does include one, it must still be the played
       // move. Complete results always require it.
       let checked = { ok: false };
+      let expected = null;
       try {
         const identityOpts = Object.assign({}, analysisReq.opts, {
           positions: analysisReq.positions
         });
-        const expected = {
+        expected = {
           identity: ChessyAnalysisCore.identity(sourceState, identityOpts),
           requireComplete: false,
           requirePlayed: res.complete === true,
@@ -622,6 +623,37 @@
       $('verifyResult').textContent = sentence + ' Chessy estimate, not authoritative analysis.';
       $('causeLabel').hidden = match;
 
+      // Train v2 E2 (#76): attempt-independent equivalence EVIDENCE for this
+      // verdict — the versioned accepted-move set (with provider/criterion
+      // provenance and coverage) that Train grades alternative answers
+      // against. Enrichment, never a gate: a missing module or a fail-closed
+      // grade leaves the card exactly as before (saved best move only). The
+      // played move is passed only because grade() requires some attempt; the
+      // persisted fields below are all attempt-independent.
+      let equivalence = null;
+      if (window.ChessyEquivalence && expected) {
+        try {
+          const ev = ChessyEquivalence.grade(res, sourceState, expected, playedUci);
+          if (ev && ev.ok) {
+            equivalence = JSON.parse(JSON.stringify({
+              criterion: ev.criterion,
+              provider: ev.provider,
+              positionFingerprint: ev.positionFingerprint,
+              turn: ev.turn,
+              depth: ev.depth,
+              complete: ev.complete,
+              coverage: ev.coverage,
+              legalRootCount: ev.legalRootCount,
+              candidateLineCount: ev.candidateLineCount,
+              coveredRootCount: ev.coveredRootCount,
+              stability: ev.stability,
+              best: ev.best,
+              accepted: ev.accepted
+            }));
+          }
+        } catch (e) { equivalence = null; }
+      }
+
       verdict = {
         gameId: flagged.gameId, ply: ply, fenBefore: fenBefore,
         gameRev: gameRev, review: flagged.review, source: analysisSource,
@@ -629,7 +661,8 @@
         bestMove: { from: bm.from, to: bm.to, promotion: bm.promotion || null },
         bestScore: cardScore(top), depth: res.depth, complete: true,
         kind: match ? 'match' : 'differ',
-        reflection: reflection
+        reflection: reflection,
+        equivalence: equivalence
       };
       $('saveCard').disabled = false;
     }).catch(function () {
@@ -674,6 +707,11 @@
       playedSan: v.playedSan, bestSan: v.bestSan, bestMove: v.bestMove,
       bestScore: v.bestScore, depth: v.depth, complete: v.complete !== false, kind: v.kind,
       cause: cause, lesson: lesson, reflection: v.reflection,
+      // Explicitly null (not omitted) when this verdict produced no
+      // equivalence evidence: the moment-keyed upsert MERGES fields over an
+      // existing card, and stale evidence from an earlier verdict must never
+      // survive under a re-saved card whose best move it may contradict.
+      equivalence: v.equivalence || null,
       due: now,  // first review is immediate (the "learn" step)
       step: -1   // -1 = not yet on the day ladder (Train slice)
     };

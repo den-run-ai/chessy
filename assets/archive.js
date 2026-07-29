@@ -306,6 +306,10 @@
   function commit(rec, token) {
     return CoachStore.archiveGame(rec).then(function (storedId) {
       if (token) clearPendingIf(rec.id, token);
+      // First durable archive write → one-time persistent-storage request
+      // (#82). Best-effort and synchronously guarded: it can neither fail
+      // nor delay the archive result.
+      if (window.ChessyStorageHealth) ChessyStorageHealth.noteDurableWrite();
       return storedId;
     });
   }
