@@ -315,11 +315,27 @@ check(true, 'accepts the unchanged trusted accounting pipeline');
       '    let maximizing = turn == Color::White;',
     '    context().rep_ply = REP_INFINITY;\n' +
       '    let probe_start = context().nodes;\n' +
-      '    let _probe_delta = context().nodes - probe_start;\n\n' +
+      '    let _probe_delta = context().nodes - probe_start;\n' +
+      '    let _candidate_guard = candidate_guard(position);\n\n' +
       '    let turn = position.turn;\n' +
       '    let maximizing = turn == Color::White;');
   compatible.search +=
-    '\nconst ACCOUNTING_NOTE: &str = r#"{ context().nodes = 0; }"#;\n' +
+    '\nfn candidate_guard(position: &Position) -> bool {\n' +
+    '    position.halfmove < 100\n' +
+    '}\n' +
+    'fn helper_alpha() { let helper_beta = 1; }\n' +
+    'fn helper_beta() { let helper_alpha = 1; }\n' +
+    'struct HelperAlpha;\n' +
+    'impl HelperAlpha {\n' +
+    '    fn alpha(&self) { self.beta(); }\n' +
+    '    fn beta(&self) {}\n' +
+    '}\n' +
+    'struct HelperBeta;\n' +
+    'impl HelperBeta {\n' +
+    '    fn beta(&self) { self.alpha(); }\n' +
+    '    fn alpha(&self) {}\n' +
+    '}\n' +
+    'const ACCOUNTING_NOTE: &str = r#"{ context().nodes = 0; }"#;\n' +
     '#[cfg(test)]\n' +
     'mod candidate_accounting_tests {\n' +
     '    use super::*;\n' +
@@ -329,8 +345,8 @@ check(true, 'accepts the unchanged trusted accounting pipeline');
     '}\n';
   accounting.validateSources(trustedAccounting, compatible);
   check(true,
-    'permits experiment metrics, test-only imports, and recursive work that ' +
-    'retain trusted entry accounting');
+    'permits metrics, non-recursive helpers, test-only imports, and metered ' +
+    'recursive work');
 }
 throws(function () {
   accounting.validateSources(trustedAccounting, {
@@ -355,6 +371,171 @@ throws(function () {
   });
 }, /changed trusted WASM node accounting: search_node accounting prologue/,
 'rejects removal of the recursive node-entry charge');
+throws(function () {
+  const helper =
+    '\nunsafe fn unmetered_helper<T: Copy + Into<Option<u8>>>(\n' +
+    '    position: &mut Position,\n' +
+    '    scratch: &[u8; 1],\n' +
+    '    marker: T,\n' +
+    '    depth: i32,\n' +
+    ') -> i32 {\n' +
+    '    if depth <= 0 { return eval::evaluate(position); }\n' +
+    '    let mut moves = [0; MAX_MOVES];\n' +
+    '    let count = engine::generate_pseudo(position, &mut moves);\n' +
+    '    if count == 0 { return eval::evaluate(position); }\n' +
+    '    let undo = engine::make_move(position, moves[0]);\n' +
+    '    let score = unmetered_helper(position, scratch, marker, depth - 1);\n' +
+    '    engine::unmake_move(position, moves[0], undo);\n' +
+    '    score\n' +
+    '}\n';
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    let scratch = [0_u8; 1];\n' +
+        '    let _hidden = unmetered_helper(position, &scratch, 1_u8, depth);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;') +
+      helper
+  });
+}, /changed trusted WASM node accounting: unmetered recursive call cycles/,
+'rejects a new recursive helper that bypasses node-entry accounting');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    fn nested_helper(depth: i32) -> i32 {\n' +
+        '        if depth <= 0 { 0 } else { nested_helper(depth - 1) }\n' +
+        '    }\n' +
+        '    let _hidden = nested_helper(depth);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;')
+  });
+}, /changed trusted WASM node accounting: unmetered recursive call cycles/,
+'rejects a nested recursive helper inside a charged entry');
+throws(function () {
+  const helpers =
+    '\nfn unmetered_a(depth: i32) -> i32 {\n' +
+    '    if depth <= 0 { return 0; }\n' +
+    '    unmetered_b(depth - 1)\n' +
+    '}\n' +
+    'fn unmetered_b(depth: i32) -> i32 {\n' +
+    '    if depth <= 0 { return 0; }\n' +
+    '    unmetered_a(depth - 1)\n' +
+    '}\n';
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    let _hidden = unmetered_a(depth);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;') +
+      helpers
+  });
+}, /changed trusted WASM node accounting: unmetered recursive call cycles/,
+'rejects mutually recursive helpers that bypass node-entry accounting');
+throws(function () {
+  const helpers =
+    '\nstruct Unmetered;\n' +
+    'impl Unmetered {\n' +
+    '    unsafe fn a(position: &mut Position, depth: i32) -> i32 {\n' +
+    '        if depth <= 0 { return eval::evaluate(position); }\n' +
+    '        Self::b(position, depth - 1)\n' +
+    '    }\n' +
+    '    unsafe fn b(position: &mut Position, depth: i32) -> i32 {\n' +
+    '        if depth <= 0 { return eval::evaluate(position); }\n' +
+    '        Unmetered::a(position, depth - 1)\n' +
+    '    }\n' +
+    '}\n';
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    let _hidden = Unmetered::a(position, depth);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;') +
+      helpers
+  });
+}, /changed trusted WASM node accounting: unmetered recursive call cycles/,
+'rejects associated-function recursion outside charged entries');
+throws(function () {
+  const helper =
+    '\ntrait Recur {\n' +
+    '    unsafe fn r(position: &mut Position, depth: i32) -> i32;\n' +
+    '}\n' +
+    'struct Hidden;\n' +
+    'impl Recur for Hidden {\n' +
+    '    unsafe fn r(position: &mut Position, depth: i32) -> i32 {\n' +
+    '        if depth <= 0 { return eval::evaluate(position); }\n' +
+    '        <Hidden as Recur>::r(position, depth - 1)\n' +
+    '    }\n' +
+    '}\n';
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    context().rep_ply = REP_INFINITY;\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n' +
+        '    let _hidden = <Hidden as Recur>::r(position, depth);\n\n' +
+        '    let turn = position.turn;\n' +
+        '    let maximizing = turn == Color::White;') +
+      helper
+  });
+}, /changed trusted WASM node accounting: unmetered recursive call cycles/,
+'rejects UFCS trait recursion outside charged entries');
+throws(function () {
+  const search = replaceOnce(
+    trustedAccounting.search,
+    '    context().rep_ply = REP_INFINITY;\n\n' +
+      '    let turn = position.turn;\n' +
+      '    let maximizing = turn == Color::White;',
+    '    context().rep_ply = REP_INFINITY;\n' +
+      '    let _hidden = crate::engine::EngineCycle::a(position, depth);\n\n' +
+      '    let turn = position.turn;\n' +
+      '    let maximizing = turn == Color::White;') +
+    '\npub(crate) struct SearchCycle;\n' +
+    'impl SearchCycle {\n' +
+    '    pub(crate) unsafe fn b(position: &mut Position, depth: i32) -> i32 {\n' +
+    '        crate::engine::EngineCycle::a(position, depth - 1)\n' +
+    '    }\n' +
+    '}\n';
+  const engine = trustedAccounting.files['engine.rs'] +
+    '\npub(crate) struct EngineCycle;\n' +
+    'impl EngineCycle {\n' +
+    '    pub(crate) unsafe fn a(position: &mut Position, depth: i32) -> i32 {\n' +
+    '        crate::search::SearchCycle::b(position, depth - 1)\n' +
+    '    }\n' +
+    '}\n';
+  const files = Object.assign({}, trustedAccounting.files, {
+    'engine.rs': engine,
+    'search.rs': search
+  });
+  accounting.validateSources(trustedAccounting, {
+    lib: files['lib.rs'],
+    search: search,
+    files: files
+  });
+}, /changed trusted WASM node accounting: unmetered recursive call cycles/,
+'rejects cross-module associated-function recursion');
 throws(function () {
   accounting.validateSources(trustedAccounting, {
     lib: trustedAccounting.lib,
