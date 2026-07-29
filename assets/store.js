@@ -956,11 +956,20 @@
     if (!eq || typeof eq !== 'object' || Array.isArray(eq)) {
       return prefix + ' has non-object equivalence evidence';
     }
+    // Present evidence is consumed as a positive grading trust boundary.
+    // Legacy cards without it remain valid, but a release missing either
+    // validator must fail closed instead of accepting a set it cannot check.
+    if (typeof global.ChessyAnalysisResult === 'undefined' ||
+        typeof global.ChessyAnalysisResult.validEval !== 'function' ||
+        typeof global.ChessyEquivalence === 'undefined' ||
+        typeof global.ChessyEquivalence.comparePersisted !== 'function') {
+      return bad('unavailable validation support');
+    }
     var c = eq.criterion;
     if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id ||
         !Number.isInteger(c.version) || c.version < 1 ||
         typeof c.basis !== 'string' || !c.basis ||
-        !c.params || typeof c.params !== 'object') {
+        !c.params || typeof c.params !== 'object' || Array.isArray(c.params)) {
       return bad('an invalid criterion');
     }
     var p = eq.provider;
@@ -991,24 +1000,33 @@
     if (eq.coverage === 'all-roots' && eq.candidateLineCount !== legal.length) {
       return bad('all-roots coverage without all roots');
     }
+    if (eq.coverage === 'candidates' && eq.candidateLineCount >= legal.length) {
+      return bad('candidate coverage that contains all roots');
+    }
     if (!Number.isInteger(eq.coveredRootCount) ||
         eq.coveredRootCount < eq.candidateLineCount ||
-        eq.coveredRootCount > legal.length) {
+        eq.coveredRootCount > legal.length ||
+        eq.coveredRootCount > eq.candidateLineCount + 1) {
       return bad('an invalid covered-root count');
     }
     if (eq.stability !== null && eq.stability !== undefined) {
       var st = eq.stability;
       if (!st || typeof st !== 'object' || Array.isArray(st) ||
           !Array.isArray(st.depths) ||
-          !st.depths.every(function (d) { return Number.isInteger(d) && d >= 1; }) ||
+          st.depths.length !== 2 ||
+          st.depths[0] !== eq.depth - 1 || st.depths[1] !== eq.depth ||
           typeof st.bestMoveStable !== 'boolean') {
         return bad('invalid stability evidence');
       }
     }
     var legalUci = Object.create(null);
     legal.forEach(function (m) {
-      legalUci[Chess.sqName(m.from) + Chess.sqName(m.to) +
-        (m.promotion ? m.promotion.toLowerCase() : '')] = true;
+      var uci = Chess.sqName(m.from) + Chess.sqName(m.to) +
+        (m.promotion ? m.promotion.toLowerCase() : '');
+      legalUci[uci] = {
+        move: m,
+        san: Chess.toSan(state, m, legal)
+      };
     });
     function entryError(e) {
       if (!e || typeof e !== 'object' || Array.isArray(e)) return 'a non-object move entry';
@@ -1016,23 +1034,19 @@
           !legalUci[e.uci]) {
         return 'a move entry that is not legal in fenBefore';
       }
-      if (typeof e.san !== 'string' || !e.san) return 'a move entry without SAN';
-      function optCp(v) { return v === undefined || v === null || Number.isFinite(v); }
-      if (!optCp(e.scoreCpWhite) || !optCp(e.scoreCpPlayer)) {
-        return 'a move entry with a non-finite score';
+      if (e.san !== legalUci[e.uci].san) {
+        return 'a move entry with non-canonical SAN';
       }
-      var mateOk = e.mate === undefined || e.mate === null ||
-        (typeof e.mate === 'object' && !Array.isArray(e.mate) &&
-         typeof e.mate.forWhite === 'boolean' &&
-         Number.isInteger(e.mate.inPlies) && e.mate.inPlies > 0);
-      if (!mateOk) return 'a move entry with a malformed mate';
-      var hasEval = Number.isFinite(e.scoreCpWhite) ||
-        (e.mate && typeof e.mate === 'object');
-      if (!hasEval) return 'a move entry without an evaluation';
+      if (!global.ChessyAnalysisResult.validEval(e, state.turn)) {
+        return 'a move entry with an invalid evaluation';
+      }
       return null;
     }
     var bestErr = entryError(eq.best);
     if (bestErr) return bad(bestErr + ' (best)');
+    var criterionCheck = global.ChessyEquivalence.comparePersisted(
+      c, eq.best, eq.best, state.turn);
+    if (!criterionCheck.ok) return bad('an unsupported criterion');
     // The evidence must grade THIS card: a best move disagreeing with the
     // card's saved bestMove would let Train accept moves against a different
     // verdict than the one the player approved.
@@ -1048,6 +1062,18 @@
       var accErr = entryError(eq.accepted[ai]);
       if (accErr) return bad(accErr + ' (accepted ' + ai + ')');
       if (seen[eq.accepted[ai].uci]) return bad('a duplicate accepted move');
+      var comparison = global.ChessyEquivalence.comparePersisted(
+        c, eq.best, eq.accepted[ai], state.turn);
+      if (!comparison.ok || !comparison.acceptable) {
+        return bad('an accepted move that contradicts the criterion');
+      }
+      if (!comparison.bestNotWorse) {
+        return bad('an accepted move that outranks the claimed best');
+      }
+      if (eq.accepted[ai].uci === eq.best.uci &&
+          !comparison.sameEvaluation) {
+        return bad('an accepted best move with a contradictory evaluation');
+      }
       seen[eq.accepted[ai].uci] = true;
     }
     if (!seen[eq.best.uci]) return bad('an accepted set omitting the best move');

@@ -151,6 +151,31 @@ const legal = Chess.legalMoves(start);
 const cp = function (score, i) { return cpLine(start, legal[i], score); };
 
 {
+  const best = cp(30, 0);
+  const within = cp(0, 1);
+  const outside = cp(-10, 2);
+  const accepted = Equivalence.comparePersisted(
+    clone(Equivalence.CRITERION), best, within, start.turn);
+  const rejected = Equivalence.comparePersisted(
+    clone(Equivalence.CRITERION), best, outside, start.turn);
+  const changed = clone(Equivalence.CRITERION);
+  changed.params.cpTolerance = 300;
+  const unsupported = Equivalence.comparePersisted(
+    changed, best, outside, start.turn);
+  const outranking = Equivalence.comparePersisted(
+    clone(Equivalence.CRITERION), within, best, start.turn);
+  check(accepted.ok && accepted.acceptable && accepted.gapCp === 30 &&
+        accepted.bestNotWorse,
+    'persisted-pair validation accepts the exact inclusive v1 boundary');
+  check(rejected.ok && !rejected.acceptable && rejected.gapCp === 40,
+    'persisted-pair validation rejects a legal line outside v1 tolerance');
+  check(!unsupported.ok && unsupported.reason === 'criterion',
+    'persisted-pair validation fails closed on changed criterion parameters');
+  check(outranking.ok && outranking.acceptable && !outranking.bestNotWorse,
+    'persisted-pair validation detects a line outranking the claimed best');
+}
+
+{
   const result = fixture(start, [cp(30, 0), cp(10, 1), cp(0, 2), cp(-10, 3)],
     { stable: true });
   const best = grade(result, start, result.bestLines[0].uci);

@@ -152,6 +152,55 @@
     };
   }
 
+  /*
+   * Re-check a persisted best/accepted pair without trusting the card's
+   * declaration that the move was accepted. This deliberately supports the
+   * exact shipped v1 identity only: future criteria must add an explicit
+   * compatibility branch rather than silently interpreting old evidence with
+   * new rules.
+   */
+  function comparePersisted(criterion, best, attempt, turn) {
+    try {
+      const params = criterion && criterion.params;
+      if (!criterion || typeof criterion !== 'object' ||
+          criterion.id !== CRITERION.id ||
+          criterion.version !== CRITERION.version ||
+          criterion.basis !== CRITERION.basis ||
+          !params || typeof params !== 'object' || Array.isArray(params) ||
+          Object.keys(params).length !== 1 ||
+          params.cpTolerance !== CRITERION.params.cpTolerance) {
+        return failure('criterion');
+      }
+      if ((turn !== 'w' && turn !== 'b') ||
+          !AnalysisResult.validEval(best, turn) ||
+          !AnalysisResult.validEval(attempt, turn)) {
+        return failure('evaluation');
+      }
+      const cmp = compareToBest(best, attempt, turn, params.cpTolerance);
+      const sameEvaluation =
+        best.scoreCpWhite === attempt.scoreCpWhite &&
+        best.scoreCpPlayer === attempt.scoreCpPlayer &&
+        ((!best.mate && !attempt.mate) ||
+         (!!best.mate && !!attempt.mate &&
+          best.mate.forWhite === attempt.mate.forWhite &&
+          best.mate.inPlies === attempt.mate.inPlies));
+      return deepFreeze({
+        ok: true,
+        reason: cmp.why,
+        verdict: null,
+        acceptable: cmp.acceptable,
+        gapCp: cmp.gapCp,
+        // A validated analysis sorts `best` first. Persisted evidence that
+        // contains a supposedly accepted line which outranks it is therefore
+        // internally contradictory even when the tolerance would accept it.
+        bestNotWorse: AnalysisResult.compareEval(best, attempt, turn) >= 0,
+        sameEvaluation: sameEvaluation
+      });
+    } catch (err) {
+      return failure('comparison-error');
+    }
+  }
+
   // Rejection evidence must be steady: the best move unchanged across the
   // result's own final depth step. `validate` checks the flag's shape only,
   // so its truth is consulted here, where it decides fail-open vs fail-closed.
@@ -335,6 +384,7 @@
 
   return {
     CRITERION: CRITERION,
-    grade: grade
+    grade: grade,
+    comparePersisted: comparePersisted
   };
 });

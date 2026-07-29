@@ -529,6 +529,29 @@ require('./helper').run('reflection', async function (t) {
         fn(copy.equivalence, copy);
         return CoachStore.validateCardRecord(copy);
       }
+      function appendRejected(eq, card) {
+        const state = Chess.parseFen(card.fenBefore);
+        const legal = Chess.legalMoves(state);
+        const seen = {};
+        eq.accepted.forEach(function (a) { seen[a.uci] = true; });
+        const move = legal.find(function (m) {
+          const uci = Chess.sqName(m.from) + Chess.sqName(m.to) +
+            (m.promotion ? m.promotion.toLowerCase() : '');
+          return !seen[uci];
+        });
+        const uci = Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
+        eq.accepted.push({
+          uci: uci,
+          san: Chess.toSan(state, move, legal),
+          scoreCpWhite: 0,
+          scoreCpPlayer: 0,
+          mate: null
+        });
+        // Preserve a generated count shape: one played-line probe may sit
+        // outside the candidate list.
+        eq.coveredRootCount = Math.max(eq.coveredRootCount, eq.accepted.length);
+      }
       return {
         legacyNull: (function () {
           const copy = JSON.parse(JSON.stringify(cs[0]));
@@ -540,18 +563,36 @@ require('./helper').run('reflection', async function (t) {
         missingBest: mutate(function (eq) {
           eq.accepted = eq.accepted.filter(function (a) { return a.uci !== eq.best.uci; });
         }),
+        rejectedAccepted: mutate(function (eq, card) {
+          appendRejected(eq, card);
+        }),
+        nonCanonicalSan: mutate(function (eq) { eq.accepted[0].san += '!'; }),
+        invalidEval: mutate(function (eq) { eq.accepted[0].scoreCpWhite = 0; }),
+        bestEvalMismatch: mutate(function (eq) {
+          if (eq.accepted[0].mate) eq.accepted[0].mate.inPlies += 1;
+          else {
+            eq.accepted[0].scoreCpWhite -= 1;
+            eq.accepted[0].scoreCpPlayer += eq.turn === 'w' ? -1 : 1;
+          }
+        }),
         wrongRoots: mutate(function (eq) { eq.legalRootCount += 1; }),
         partial: mutate(function (eq) { eq.complete = false; }),
-        badCriterion: mutate(function (eq) { eq.criterion.version = 0; })
+        badCriterion: mutate(function (eq) { eq.criterion.params.cpTolerance = 300; }),
+        badStability: mutate(function (eq) {
+          eq.stability = { depths: [], bestMoveStable: true };
+        })
       };
     });
   });
   check(eqRejections.legacyNull === null,
     'a null equivalence field remains the valid legacy shape');
   check(!!eqRejections.illegalAccepted && !!eqRejections.bestMismatch &&
-        !!eqRejections.missingBest && !!eqRejections.wrongRoots &&
-        !!eqRejections.partial && !!eqRejections.badCriterion,
-    'illegal accepted moves, best mismatch/omission, wrong root count, partial marker and bad criterion all quarantine');
+        !!eqRejections.missingBest && !!eqRejections.rejectedAccepted &&
+        !!eqRejections.nonCanonicalSan && !!eqRejections.invalidEval &&
+        !!eqRejections.bestEvalMismatch && !!eqRejections.wrongRoots &&
+        !!eqRejections.partial && !!eqRejections.badCriterion &&
+        !!eqRejections.badStability,
+    'forged accepted moves, SAN/eval contradictions, malformed coverage and unsupported criteria all quarantine');
 
   // The same boundary guards restore: a backup carrying forged evidence is
   // rejected outright, while the genuine card round-trips.
@@ -561,15 +602,27 @@ require('./helper').run('reflection', async function (t) {
         const games = r[0].filter(function (g) { return g.id === r[1][0].gameId; });
         function envelope(cardMutator) {
           const card = JSON.parse(JSON.stringify(r[1][0]));
-          if (cardMutator) cardMutator(card.equivalence);
+          if (cardMutator) cardMutator(card.equivalence, card);
           return { format: 'chessy-coach-backup', version: 1, dbVersion: 6,
             exportedAt: Date.now(), stores: { games: games, cards: [card] } };
         }
         return {
           genuine: CoachStore.validateBackup(envelope(null)),
-          forged: CoachStore.validateBackup(envelope(function (eq) {
-            eq.accepted.push({ uci: 'a2a3', san: 'a3', scoreCpWhite: 0,
-              scoreCpPlayer: 0, mate: null });
+          forged: CoachStore.validateBackup(envelope(function (eq, card) {
+            const state = Chess.parseFen(card.fenBefore);
+            const legal = Chess.legalMoves(state);
+            const seen = {};
+            eq.accepted.forEach(function (a) { seen[a.uci] = true; });
+            const move = legal.find(function (m) {
+              const uci = Chess.sqName(m.from) + Chess.sqName(m.to) +
+                (m.promotion ? m.promotion.toLowerCase() : '');
+              return !seen[uci];
+            });
+            const uci = Chess.sqName(move.from) + Chess.sqName(move.to) +
+              (move.promotion ? move.promotion.toLowerCase() : '');
+            eq.accepted.push({ uci: uci, san: Chess.toSan(state, move, legal),
+              scoreCpWhite: 0, scoreCpPlayer: 0, mate: null });
+            eq.coveredRootCount = Math.max(eq.coveredRootCount, eq.accepted.length);
           }))
         };
       });
