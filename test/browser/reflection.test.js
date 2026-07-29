@@ -1433,23 +1433,34 @@ require('./helper').run('reflection', async function (t) {
   });
   check(raceCount === 1, 'two racing saves for one moment yield one card (atomic upsert)');
 
-  // Attempt history is graded AGAINST the card's canonical move: a
-  // re-save that changes that move must reset the history (Progress would
-  // otherwise read old correct/incorrect flags against the new move),
-  // while a re-save keeping the move preserves it.
+  // Attempt history is graded against an exact exercise: position/history,
+  // canonical move and saved evidence. A re-save changing any of them must
+  // reset the history, while a wording-only re-save preserves it.
   const history = await page.evaluate(function () {
     const moment = { gameId: 'attempt-reset', ply: 2 };
     const withBest = function (from, to, extra) {
       return Object.assign({ bestMove: { from: from, to: to, promotion: null } },
         moment, extra || {});
     };
-    return CoachStore.upsertCardByMoment(withBest(0, 8), { createdAt: 1, attempts: [] })
+    const firstExercise = {
+      fenBefore: 'exercise-a',
+      equivalence: { positionFingerprint: 'history-a' }
+    };
+    const secondExercise = {
+      fenBefore: 'exercise-b',
+      equivalence: { positionFingerprint: 'history-b' }
+    };
+    function seedAttempt() {
+      return CoachStore.listCards().then(function (all) {
+        const card = all.find(function (c) { return c.gameId === 'attempt-reset'; });
+        card.attempts = [{ at: 1, grade: 'good', correct: true }];
+        return CoachStore.updateCard(card);
+      });
+    }
+    return CoachStore.upsertCardByMoment(
+      withBest(0, 8, firstExercise), { createdAt: 1, attempts: [] })
       .then(function () {
-        return CoachStore.listCards().then(function (all) {
-          const card = all.find(function (c) { return c.gameId === 'attempt-reset'; });
-          card.attempts = [{ at: 1, grade: 'good', correct: true }];
-          return CoachStore.updateCard(card);
-        });
+        return seedAttempt();
       })
       .then(function () { // same canonical move → history kept
         return CoachStore.upsertCardByMoment(withBest(0, 8, { lesson: 'reworded' }), {});
@@ -1459,19 +1470,37 @@ require('./helper').run('reflection', async function (t) {
           return all.find(function (c) { return c.gameId === 'attempt-reset'; }).attempts.length;
         });
       })
-      .then(function (keptCount) { // different canonical move → history reset
-        return CoachStore.upsertCardByMoment(withBest(0, 16), {}).then(function () {
-          return CoachStore.listCards().then(function (all) {
-            return { kept: keptCount,
-                     afterChange: all.find(function (c) {
-                       return c.gameId === 'attempt-reset';
-                     }).attempts.length };
+      .then(function (keptCount) { // same move, different position/evidence → reset
+        return CoachStore.upsertCardByMoment(withBest(0, 8, secondExercise), {})
+          .then(function () {
+            return CoachStore.listCards().then(function (all) {
+              return {
+                kept: keptCount,
+                afterPositionChange: all.find(function (c) {
+                  return c.gameId === 'attempt-reset';
+                }).attempts.length
+              };
+            });
+          });
+      })
+      .then(function (counts) {
+        return seedAttempt().then(function () {
+          // Different canonical move on the same new position also resets.
+          return CoachStore.upsertCardByMoment(
+            withBest(0, 16, secondExercise), {}).then(function () {
+            return CoachStore.listCards().then(function (all) {
+              counts.afterMoveChange = all.find(function (c) {
+                return c.gameId === 'attempt-reset';
+              }).attempts.length;
+              return counts;
+            });
           });
         });
       });
   });
-  check(history.kept === 1 && history.afterChange === 0,
-    'changing the canonical move resets attempt history; keeping it preserves it');
+  check(history.kept === 1 && history.afterPositionChange === 0 &&
+        history.afterMoveChange === 0,
+    'wording-only re-saves preserve attempts; position/evidence or move changes reset them');
 
   // Revising an archived ending IN PLACE (same-tab replay edit) removes
   // the lesson cards flagged on the abandoned continuation — they refer

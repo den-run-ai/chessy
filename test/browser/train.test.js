@@ -483,4 +483,480 @@ require('./helper').run('train', async function (t) {
     return document.getElementById('trainEmpty').textContent.indexOf('No cards due') !== -1;
   });
   check(true, 'Refresh retries the load once storage is available again');
+
+  // ---- E2 (#76): verified equivalent moves ------------------------------
+  // Fresh slate, then three cards on a two-rooks mate-in-one position:
+  //  A) candidates-coverage evidence accepting BOTH mating rook moves —
+  //     answering with the non-saved one is verified equivalent;
+  //  B) all-roots stable accepted-only evidence — an absent answer remains
+  //     unknown because omission cannot prove rejection after restore/damage;
+  //  C) candidates coverage on a DIFFERENT position (a hanging queen the
+  //     attempt fails to take), answered OUTSIDE the covered set — the live
+  //     engine check settles it as not equivalent by a decisive cp gap. (A
+  //     mate-in-one is deliberately NOT used here: its search stops at depth
+  //     one, whose single-depth "stability" the criterion refuses to reject
+  //     on — honest unknown, not a verdict.)
+  await page.evaluate(function () {
+    return CoachStore.deleteAllData().then(function () {
+      const F = 'k7/8/1K6/8/8/8/8/6RR w - - 0 1';
+      const FC = 'rnbqkbnr/pppppppp/8/8/4r3/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 1';
+      const state = Chess.parseFen(F);
+      state.positions = {};
+      state.positions[Chess.positionKey(state)] = 1;
+      state.history = [];
+      const legal = Chess.legalMoves(state);
+      const stateC = Chess.parseFen(FC);
+      stateC.positions = {};
+      stateC.positions[Chess.positionKey(stateC)] = 1;
+      stateC.history = [];
+      const legalC = Chess.legalMoves(stateC);
+      const now = Date.now();
+      const mate = { forWhite: true, inPlies: 1 };
+      const bestEntry = { uci: 'g1g8', san: 'Rg8#', scoreCpWhite: null,
+        scoreCpPlayer: null, mate: mate };
+      const altEntry = { uci: 'h1h8', san: 'Rh8#', scoreCpWhite: null,
+        scoreCpPlayer: null, mate: mate };
+      const criterion = JSON.parse(JSON.stringify({
+        id: ChessyEquivalence.CRITERION.id,
+        version: ChessyEquivalence.CRITERION.version,
+        basis: ChessyEquivalence.CRITERION.basis,
+        params: ChessyEquivalence.CRITERION.params }));
+      function evidence(coverage) {
+        return {
+          criterion: JSON.parse(JSON.stringify(criterion)),
+          provider: { engineId: 'chessy-js', version: 'seeded', configHash: 'seeded' },
+          positionFingerprint:
+            ChessyAnalysisCore.positionFingerprint(state, state.positions),
+          turn: 'w', depth: 9, complete: true,
+          coverage: coverage,
+          candidateLineCount: coverage === 'all-roots' ? legal.length : 3,
+          legalRootCount: legal.length,
+          coveredRootCount: coverage === 'all-roots' ? legal.length : 3,
+          stability: { depths: [8, 9], bestMoveStable: true },
+          best: JSON.parse(JSON.stringify(bestEntry)),
+          accepted: [JSON.parse(JSON.stringify(bestEntry)),
+            JSON.parse(JSON.stringify(altEntry))]
+        };
+      }
+      const pawnBest = { uci: 'd3e4', san: 'dxe4', scoreCpWhite: 455,
+        scoreCpPlayer: 455, mate: null };
+      const evidenceC = {
+        criterion: JSON.parse(JSON.stringify(criterion)),
+        provider: { engineId: 'chessy-js', version: 'seeded', configHash: 'seeded' },
+        positionFingerprint:
+          ChessyAnalysisCore.positionFingerprint(stateC, stateC.positions),
+        turn: 'w', depth: 9, complete: true,
+        coverage: 'candidates', candidateLineCount: 3,
+        legalRootCount: legalC.length, coveredRootCount: 3,
+        stability: { depths: [8, 9], bestMoveStable: true },
+        best: JSON.parse(JSON.stringify(pawnBest)),
+        accepted: [JSON.parse(JSON.stringify(pawnBest))]
+      };
+      function card(gameId, due, fen, bestUci, bestSan, eq) {
+        return {
+          gameId: gameId, ply: 0, fenBefore: fen,
+          playedSan: 'Kb1', bestSan: bestSan,
+          bestMove: { from: Chess.sqIndex(bestUci.slice(0, 2)),
+            to: Chess.sqIndex(bestUci.slice(2, 4)), promotion: null },
+          bestScore: 900, depth: 9, kind: 'differ', cause: 'calculation',
+          lesson: 'Take what hangs', reflection: {},
+          createdAt: now, due: due, step: -1, attempts: [],
+          equivalence: eq
+        };
+      }
+      function game(id, fen, san) {
+        return {
+          id: id, source: 'play', tags: {}, sans: [san], setupFen: fen,
+          playerColor: 'w', clocks: [], result: '*', reason: 'abandoned',
+          mode: 'pvp', difficulty: '2', timeControl: 'none', plies: 1,
+          createdAt: now
+        };
+      }
+      return Promise.all([
+        CoachStore.putGame(game('eqA', F, 'Rg8#')),
+        CoachStore.putGame(game('eqB', F, 'Rg8#')),
+        CoachStore.putGame(game('eqgame', FC, 'dxe4'))
+      ]).then(function () {
+        return CoachStore.addCard(card('eqA', now - 3000, F, 'g1g8', 'Rg8#',
+          evidence('candidates')));
+      }).then(function () {
+        return CoachStore.addCard(card('eqB', now - 2000, F, 'g1g8', 'Rg8#',
+          evidence('all-roots')));
+      }).then(function () {
+        return CoachStore.addCard(card('eqgame', now - 1000, FC, 'd3e4', 'dxe4',
+          evidenceC));
+      });
+    });
+  });
+  await page.click('#trainRefresh');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  check((await page.textContent('#trainCount')).includes('3 due'),
+    'the evidence-bearing cards load (validateCardRecord accepts them)');
+
+  // A) verified equivalent: the OTHER mating rook move is accepted.
+  await tsq('h1').click();
+  await tsq('h8').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  const eqOutcome = await page.textContent('#trainOutcome');
+  check(eqOutcome.includes('✓') && eqOutcome.includes('accepts it as equivalent') &&
+        eqOutcome.includes('Suggested grade: Good'),
+    'an accepted-set answer is verified equivalent with a Good suggestion');
+  check(await page.locator('#trainCheck').isHidden(),
+    'a card-evidence verdict needs no live check');
+  await page.click('#gradeGood');
+  await page.waitForSelector('#trainReveal[hidden]', { state: 'attached' });
+  check(await page.evaluate(function () {
+    return Promise.all([CoachStore.listCards(), CoachStore.getGame('eqA')])
+      .then(function (stored) {
+      const cards = stored[0];
+      const c = cards.find(function (x) { return x.gameId === 'eqA'; });
+      const a = c.attempts[0];
+      return c.attempts.length === 1 && a.correct === false &&
+        a.attemptedUci === 'h1h8' && a.attemptedSan === 'Rh8#' &&
+        a.verdict === 'equivalent' && a.equivalent === true &&
+        a.evidenceSource === 'card-evidence' &&
+        !!a.criterion && a.criterion.version >= 1 &&
+        !!a.provider && a.provider.engineId === 'chessy-js' &&
+        a.recommendedGrade === 'good' && a.grade === 'good' &&
+        Number.isFinite(a.presentedDue) && a.priorStep === -1 &&
+        c.step === 0 &&
+        CoachStore.validateCardRecord(c, null, stored[1]) === null;
+    });
+  }), 'the attempt records verdict, provenance, suggested+chosen grade, due and step');
+
+  // Enriched attempt history is itself a restore trust boundary. Every field
+  // is an atomic bundle, the move/SAN/correct flag must match this card, and
+  // card evidence must point back to this card's exact criterion/provider.
+  const attemptGate = await page.evaluate(function () {
+    return Promise.all([
+      CoachStore.listCards(), CoachStore.getGame('eqA'), CoachStore.exportAll()
+    ]).then(function (stored) {
+      const card = stored[0].find(function (x) { return x.gameId === 'eqA'; });
+      const game = stored[1];
+      const backup = stored[2];
+      function clone(value) { return JSON.parse(JSON.stringify(value)); }
+      function reject(mutator) {
+        const forged = clone(card);
+        mutator(forged.attempts[0]);
+        return !!CoachStore.validateCardRecord(forged, null, game);
+      }
+      const forgedBackup = clone(backup);
+      const backupCard = forgedBackup.stores.cards.find(function (x) {
+        return x.gameId === 'eqA';
+      });
+      backupCard.attempts[0].equivalent = false;
+      return {
+        genuine: CoachStore.validateCardRecord(card, null, game),
+        backupGenuine: CoachStore.validateBackup(backup),
+        backupForged: CoachStore.validateBackup(forgedBackup),
+        partial: reject(function (a) { delete a.provider; }),
+        badGrade: reject(function (a) { a.grade = 'easy'; }),
+        illegalUci: reject(function (a) { a.attemptedUci = 'a1a1'; }),
+        badSan: reject(function (a) { a.attemptedSan = 'Rh8'; }),
+        badCorrect: reject(function (a) { a.correct = true; }),
+        badEquivalent: reject(function (a) { a.equivalent = false; }),
+        badReason: reject(function (a) { a.verdictReason = 'cp-gap'; }),
+        badSource: reject(function (a) { a.evidenceSource = 'live-analysis'; }),
+        badCriterion: reject(function (a) { a.criterion.version += 1; }),
+        badProvider: reject(function (a) { a.provider.configHash = 'other'; }),
+        badGap: reject(function (a) { a.gapCp = 31.5; }),
+        badRecommendation: reject(function (a) { a.recommendedGrade = 'again'; })
+      };
+    });
+  });
+  check(attemptGate.genuine === null && attemptGate.backupGenuine === null &&
+        !!attemptGate.backupForged && attemptGate.partial &&
+        attemptGate.badGrade && attemptGate.illegalUci && attemptGate.badSan &&
+        attemptGate.badCorrect && attemptGate.badEquivalent &&
+        attemptGate.badReason && attemptGate.badSource &&
+        attemptGate.badCriterion && attemptGate.badProvider &&
+        attemptGate.badGap && attemptGate.badRecommendation,
+    'card and restore validation reject partial, forged or contradictory attempt evidence');
+
+  // B) Even all-roots + stable-best metadata cannot turn absence from an
+  // accepted-ONLY snapshot into a negative verdict. Hold the source read so
+  // the live check cannot settle before the player grades the honest unknown.
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await page.evaluate(function () {
+    CoachStore.__eqBRealGetGame = CoachStore.getGame;
+    CoachStore.getGame = function (id) {
+      if (id !== 'eqB') return CoachStore.__eqBRealGetGame(id);
+      return new Promise(function (resolve) {
+        window.__eqBReleaseSource = function () {
+          CoachStore.__eqBRealGetGame(id).then(resolve);
+        };
+      });
+    };
+  });
+  await tsq('h1').click();
+  await tsq('h2').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  const neOutcome = await page.textContent('#trainOutcome');
+  check(neOutcome.includes('≠') && neOutcome.includes('grade yourself honestly') &&
+        !neOutcome.includes('Suggested grade: Again'),
+    'absence from all-roots accepted-only evidence remains unknown');
+  check((await page.textContent('#trainCheck')).includes('Checking'),
+    'an absent move is sent to live checking instead of inferred wrong');
+  await page.click('#gradeAgain');
+  await page.waitForSelector('#trainReveal[hidden]', { state: 'attached' });
+  check(await page.evaluate(function () {
+    window.__eqBReleaseSource();
+    CoachStore.getGame = CoachStore.__eqBRealGetGame;
+    return Promise.all([CoachStore.listCards(), CoachStore.getGame('eqB')])
+      .then(function (stored) {
+      const cards = stored[0];
+      const c = cards.find(function (x) { return x.gameId === 'eqB'; });
+      const a = c.attempts[0];
+      return a.verdict === 'unknown' && a.equivalent === null &&
+        a.evidenceSource === null && a.criterion === null &&
+        a.provider === null && a.recommendedGrade === null &&
+        a.grade === 'again' &&
+        CoachStore.validateCardRecord(c, null, stored[1]) === null;
+    });
+  }), 'the absent attempt records an honest unknown verdict and the player’s grade');
+
+  // C) outside the covered set: unknown → the live engine check settles it.
+  // a3 ignores the hanging rook on e4 (dxe4 wins it outright), so the
+  // criterion must reject it by a decisive cp gap — and the analysis (same
+  // identity construction as reflection's) lands in the shared cache. A
+  // full opening board keeps quiescence tame so the deep profile COMPLETES;
+  // a budget-capped partial would honestly refuse to judge instead (which
+  // is why sparse queen endings are deliberately not used here).
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+
+  // First prove that leaving Train cancels the owner-scoped deep job. A
+  // controlled worker stalls after dispatch; navigation must terminate it,
+  // clear the hidden status, and make late progress unable to repaint. The
+  // ungraded card remains due and is presented again on re-entry.
+  await page.evaluate(function () {
+    window.__trainCancelHadFactory =
+      Object.prototype.hasOwnProperty.call(window, 'CHESSY_ANALYSIS_WORKER_FACTORY');
+    window.__trainCancelRealFactory = window.CHESSY_ANALYSIS_WORKER_FACTORY;
+    window.__trainCancelRealCancel = ChessyAnalysisService.cancel;
+    window.__trainCancelOwners = [];
+    window.__trainCancelWorkers = [];
+    ChessyAnalysisService.cancel = function (owner) {
+      window.__trainCancelOwners.push(arguments.length ? owner : '(global)');
+      return window.__trainCancelRealCancel.apply(ChessyAnalysisService, arguments);
+    };
+    window.CHESSY_ANALYSIS_WORKER_FACTORY = function () {
+      const fake = {
+        terminated: false,
+        posts: [],
+        onmessage: null,
+        onerror: null,
+        postMessage: function (msg) { this.posts.push(msg); },
+        terminate: function () { this.terminated = true; }
+      };
+      window.__trainCancelWorkers.push(fake);
+      return fake;
+    };
+  });
+  await tsq('a2').click();
+  await tsq('a3').click();
+  await page.waitForFunction(function () {
+    return window.__trainCancelWorkers.length === 1 &&
+      window.__trainCancelWorkers[0].posts.length === 1;
+  });
+  await page.click('#tabPlay');
+  const leftTrain = await page.evaluate(function () {
+    const worker = window.__trainCancelWorkers[0];
+    const post = worker.posts[0];
+    const note = document.getElementById('trainCheck');
+    const before = {
+      owner: window.__trainCancelOwners[window.__trainCancelOwners.length - 1],
+      terminated: worker.terminated,
+      hidden: note.hidden,
+      text: note.textContent,
+      playVisible: !document.getElementById('viewPlay').hidden,
+      focusOutside: !document.getElementById('viewTrain')
+        .contains(document.activeElement)
+    };
+    // A terminated Worker cannot really reply, but invoke the captured handler
+    // to model a queued event that crossed the cancellation boundary.
+    worker.onmessage({
+      data: {
+        v: ChessyAnalysisService.PROTOCOL,
+        jobId: post.jobId,
+        progress: {
+          phase: 'root-verification',
+          completedRoots: 1,
+          totalRoots: 20,
+          elapsedMs: 10
+        }
+      }
+    });
+    return before;
+  });
+  await page.waitForTimeout(100);
+  check(leftTrain.owner === 'train' && leftTrain.terminated &&
+        leftTrain.hidden && leftTrain.text === '' &&
+        leftTrain.playVisible && leftTrain.focusOutside &&
+        await page.locator('#trainCheck').isHidden() &&
+        (await page.textContent('#trainCheck')) === '',
+    'leaving Train terminates only its live check and late progress cannot repaint the hidden view');
+  await page.evaluate(function () {
+    ChessyAnalysisService.cancel = window.__trainCancelRealCancel;
+    if (window.__trainCancelHadFactory) {
+      window.CHESSY_ANALYSIS_WORKER_FACTORY = window.__trainCancelRealFactory;
+    } else {
+      delete window.CHESSY_ANALYSIS_WORKER_FACTORY;
+    }
+  });
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  check((await page.textContent('#trainCount')).includes('1 due'),
+    'the cancelled, ungraded card remains due when Train is reopened');
+
+  await tsq('a2').click();
+  await tsq('a3').click();
+  await page.waitForSelector('#trainReveal:not([hidden])');
+  check((await page.textContent('#trainOutcome')).includes('grade yourself honestly'),
+    'an uncovered answer keeps the honest differs wording while the check runs');
+  await page.waitForFunction(function () {
+    return document.getElementById('trainCheck').textContent.indexOf('Chessy checked') !== -1;
+  }, null, { timeout: 90000 });
+  const liveNote = await page.textContent('#trainCheck');
+  check(liveNote.includes('✗') && liveNote.includes('a3') &&
+        liveNote.includes('falls short of dxe4') &&
+        liveNote.includes('Suggested grade: Again'),
+    'the live check rejects the rook-ignoring attempt by its gap (' + liveNote + ')');
+  await page.click('#gradeAgain');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
+  check(await page.evaluate(function () {
+    return Promise.all([CoachStore.listCards(), CoachStore.getGame('eqgame')])
+      .then(function (stored) {
+      const cards = stored[0];
+      const c = cards.find(function (x) { return x.gameId === 'eqgame'; });
+      const a = c.attempts[0];
+      return a.verdict === 'not-equivalent' && a.equivalent === false &&
+        a.evidenceSource === 'live-analysis' &&
+        !!a.provider && typeof a.provider.engineId === 'string' &&
+        !!a.criterion && Number.isInteger(a.criterion.version) &&
+        CoachStore.validateCardRecord(c, null, stored[1]) === null;
+    });
+  }), 'the live-checked attempt records live-analysis provenance');
+  check(await page.evaluate(function () {
+    return CoachStore.listAnalysesForGame('eqgame').then(function (rows) {
+      return rows.length >= 1;
+    });
+  }), 'the live check cached its analysis under the shared identity');
+
+  // Poison only an INNER analysis field while retaining the matching cache
+  // identity. Train must reject and evict that row, then force an immediate
+  // identical retry past IndexedDB even while the delete is still pending.
+  const goodCachedResult = await page.evaluate(function () {
+    return Promise.all([
+      CoachStore.listAnalysesForGame('eqgame'), CoachStore.listCards()
+    ]).then(function (stored) {
+      const row = stored[0][0];
+      const good = JSON.parse(JSON.stringify(row.result));
+      row.result.bestLines[0].san = 'forged SAN';
+      const card = stored[1].find(function (x) { return x.gameId === 'eqgame'; });
+      card.due = Date.now() - 1;
+      return Promise.all([
+        CoachStore.putAnalysis(row), CoachStore.updateCard(card)
+      ]).then(function () { return good; });
+    });
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await page.evaluate(function () {
+    window.__poisonDispatches = ChessyAnalysisService.stats().dispatches;
+    window.__poisonInvalidations = 0;
+    window.__poisonRealInvalidate = ChessyAnalysisService.invalidate;
+    ChessyAnalysisService.invalidate = function (req) {
+      window.__poisonInvalidations++;
+      return window.__poisonRealInvalidate(req);
+    };
+    window.__poisonRealDelete = CoachStore.deleteAnalysis;
+    window.__poisonDeleteStarted = false;
+    CoachStore.deleteAnalysis = function (key) {
+      window.__poisonDeleteStarted = true;
+      return new Promise(function (resolve, reject) {
+        window.__poisonReleaseDelete = function () {
+          return window.__poisonRealDelete(key).then(resolve, reject);
+        };
+      });
+    };
+  });
+  await tsq('a2').click();
+  await tsq('a3').click();
+  await page.waitForFunction(function () {
+    return document.getElementById('trainCheck').textContent
+      .indexOf('could not fully check') !== -1 &&
+      window.__poisonDeleteStarted;
+  });
+  check(await page.evaluate(function () {
+    return window.__poisonInvalidations === 1 &&
+      ChessyAnalysisService.stats().dispatches === window.__poisonDispatches;
+  }), 'a malformed matching-key cache hit is rejected and scheduled for eviction');
+
+  await page.click('#tabPlay');
+  await page.click('#tabTrain');
+  await page.waitForSelector('#trainCardBox:not([hidden])');
+  await page.evaluate(function () {
+    window.__poisonWorkers = [];
+    window.__poisonHadFactory =
+      Object.prototype.hasOwnProperty.call(window, 'CHESSY_ANALYSIS_WORKER_FACTORY');
+    window.__poisonRealFactory = window.CHESSY_ANALYSIS_WORKER_FACTORY;
+    window.CHESSY_ANALYSIS_WORKER_FACTORY = function () {
+      const fake = {
+        posts: [], onmessage: null, onerror: null, terminated: false,
+        postMessage: function (msg) { this.posts.push(msg); },
+        terminate: function () { this.terminated = true; }
+      };
+      window.__poisonWorkers.push(fake);
+      return fake;
+    };
+  });
+  await tsq('a2').click();
+  await tsq('a3').click();
+  await page.waitForFunction(function () {
+    return window.__poisonWorkers.length === 1 &&
+      window.__poisonWorkers[0].posts.length === 1;
+  });
+  check(await page.evaluate(function () {
+    return ChessyAnalysisService.stats().dispatches ===
+      window.__poisonDispatches + 1;
+  }), 'the immediate identical retry bypasses the still-present poisoned row');
+  await page.evaluate(function (result) {
+    const fake = window.__poisonWorkers[0];
+    fake.onmessage({
+      data: {
+        v: ChessyAnalysisService.PROTOCOL,
+        jobId: fake.posts[0].jobId,
+        result: result
+      }
+    });
+  }, goodCachedResult);
+  await page.waitForFunction(function () {
+    return document.getElementById('trainCheck').textContent
+      .indexOf('Chessy checked') !== -1;
+  });
+  await page.evaluate(function () {
+    const released = window.__poisonReleaseDelete();
+    CoachStore.deleteAnalysis = window.__poisonRealDelete;
+    ChessyAnalysisService.invalidate = window.__poisonRealInvalidate;
+    if (window.__poisonHadFactory) {
+      window.CHESSY_ANALYSIS_WORKER_FACTORY = window.__poisonRealFactory;
+    } else {
+      delete window.CHESSY_ANALYSIS_WORKER_FACTORY;
+    }
+    return released;
+  });
+  await page.waitForFunction(function () {
+    return CoachStore.listAnalysesForGame('eqgame').then(function (rows) {
+      return rows.some(function (row) {
+        return row.result && row.result.bestLines &&
+          row.result.bestLines[0] &&
+          row.result.bestLines[0].san !== 'forged SAN';
+      });
+    });
+  });
+  check(true, 'the fresh validated result replaces the evicted poisoned cache entry');
+  await page.click('#gradeAgain');
+  await page.waitForSelector('#trainEmpty:not([hidden])');
 });
