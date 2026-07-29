@@ -209,6 +209,8 @@
       // Keeping `importing` true through the refresh also blocks a second
       // silent paste while the still-open dialog's refreshGames() is pending
       // (close() → invalidate() clears it).
+      // A committed import is a durable archive write too (#82).
+      if (window.ChessyStorageHealth) ChessyStorageHealth.noteDurableWrite();
       return Promise.resolve(CoachReview.refreshGames()).then(function () {
         if (myGen !== generation) return;
         close();
