@@ -362,15 +362,43 @@
   function persist(job, result) {
     var store = global.CoachStore;
     if (!store || !store.putAnalysis || !job.key) return Promise.resolve();
+    var at = nowMs();
     var rec = {
       key: job.key, gameId: job.req.gameId, ply: job.req.ply,
       gameRev: job.req.gameRev,
       fingerprint: job.ident.positionFingerprint,
       engineId: job.ident.engineId, configHash: job.ident.configHash,
       complete: result.complete !== false, // partial results are stored, flagged
-      result: result, createdAt: nowMs()
+      result: result, createdAt: at,
+      // Recency for the bounded-cache policy (#82): stamped on write and
+      // refreshed on validated reuse, so LRU pruning has an honest order.
+      usedAt: at
     };
-    return enqueueCacheOp(job.key, function () { return store.putAnalysis(rec); });
+    var put = enqueueCacheOp(job.key, function () { return store.putAnalysis(rec); });
+    // Bounded-cache maintenance (#82) runs strictly AFTER the put settles and
+    // in its own store transaction: the fresh result commits (or fails) on
+    // its own, and a pruning failure can neither abort that write nor reach
+    // this job. protectKey pins the record just written even against a
+    // skewed clock stamping it older than the survivors.
+    if (store.maintainAnalysesCache) {
+      put.then(function () {
+        try {
+          Promise.resolve(store.maintainAnalysesCache({ protectKey: job.key }))
+            .catch(function () {});
+        } catch (e) { /* best effort */ }
+      });
+    }
+    return put;
+  }
+
+  // Refresh a stored entry's recency after a validated cache reuse so LRU
+  // pruning ranks entries by actual usefulness. Ordered per key behind any
+  // in-flight put/delete for the same identity; failures never reach the
+  // served result.
+  function touchUsed(key) {
+    var store = global.CoachStore;
+    if (!store || !store.touchAnalysis || !key) return;
+    enqueueCacheOp(key, function () { return store.touchAnalysis(key); });
   }
 
   function run(job) {
@@ -385,6 +413,9 @@
 
     var hot = !job.req.fresh && job.key && recent.get(job.key);
     if (hot && hot.gameRev === job.req.gameRev) {
+      // The in-memory handoff mirrors a persisted entry; keep that entry's
+      // recency truthful so a hot identity is not pruned as cold.
+      touchUsed(job.key);
       settle(job, hot.result);
       return;
     }
@@ -406,6 +437,7 @@
           // recomputed — and overwritten via persist — never published.
           if (rec && rec.gameRev === job.req.gameRev && rec.result &&
               validMatch(rec.result, job)) {
+            touchUsed(job.key);
             settle(job, rec.result);                        // validated fresh cache hit
           } else {
             dispatch(job);

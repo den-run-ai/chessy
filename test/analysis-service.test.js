@@ -271,6 +271,70 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   check((await Svc.analyse(Object.assign({}, REQ, { gameId: 'cache-fails' }))) !== null,
     'a failed best-effort cache write does not hide a valid analysis result');
 
+  // --- Bounded cache (#82): each write stamps recency and triggers one
+  //     maintenance pass protecting the fresh key ---
+  const boundStore = makeStore();
+  const maintainCalls = [];
+  boundStore.maintainAnalysesCache = function (opts) {
+    maintainCalls.push(opts || null);
+    return Promise.resolve({ count: 1, pruned: 0 });
+  };
+  reset({ factory: factoryOf({ mode: 'normal' }), store: boundStore });
+  const boundRes = await Svc.analyse(Object.assign({}, REQ, { gameId: 'bound' }));
+  await delay(5);
+  const boundRec = Array.from(boundStore._map.values())[0];
+  check(!!boundRes && !!boundRec && Number.isFinite(boundRec.usedAt) &&
+    boundRec.usedAt === boundRec.createdAt,
+    'a persisted analysis is stamped with a usedAt recency equal to its createdAt');
+  check(maintainCalls.length === 1 && !!maintainCalls[0] &&
+    maintainCalls[0].protectKey === boundRec.key,
+    'each cache write triggers one maintenance pass protecting the fresh key');
+
+  // Pruning is strictly best-effort: neither an async rejection nor a
+  // synchronous throw from maintenance may reach the served result or undo
+  // the already-committed cache write.
+  const pruneFailStore = makeStore();
+  pruneFailStore.maintainAnalysesCache = function () {
+    return Promise.reject(new Error('prune-broken'));
+  };
+  reset({ factory: factoryOf({ mode: 'normal' }), store: pruneFailStore });
+  const pruneFailRes = await Svc.analyse(Object.assign({}, REQ, { gameId: 'prune-fail' }));
+  await delay(5);
+  check(pruneFailRes !== null && pruneFailStore._map.size === 1,
+    'a rejecting maintenance pass affects neither the served result nor the committed write');
+  const pruneThrowStore = makeStore();
+  pruneThrowStore.maintainAnalysesCache = function () { throw new Error('sync-broken'); };
+  reset({ factory: factoryOf({ mode: 'normal' }), store: pruneThrowStore });
+  const pruneThrowRes = await Svc.analyse(Object.assign({}, REQ, { gameId: 'prune-throw' }));
+  await delay(5);
+  check(pruneThrowRes !== null && pruneThrowStore._map.size === 1,
+    'a synchronously throwing maintenance pass is equally irrelevant to the result');
+
+  // --- Bounded cache (#82): validated reuse refreshes recency (touch) ---
+  const touchStore = makeStore();
+  const touched = [];
+  touchStore.touchAnalysis = function (k) { touched.push(k); return Promise.resolve(true); };
+  const touchReq = Object.assign({}, REQ, { gameId: 'touch-idb' });
+  const seededTouch = seedRecord(touchStore, touchReq, Core.analyse(Chess.parseFen(START), FAST));
+  reset({ store: touchStore }); // no worker factory: a wrongful dispatch would resolve null
+  const touchServed = await Svc.analyse(Object.assign({}, touchReq));
+  await delay(5);
+  check(!!touchServed && norm(touchServed) === norm(seededTouch.rec.result) &&
+    touched.length === 1 && touched[0] === seededTouch.key,
+    'a validated persisted-cache hit refreshes that entry\'s recency');
+
+  const hotStore = makeStore();
+  const hotTouched = [];
+  hotStore.touchAnalysis = function (k) { hotTouched.push(k); return Promise.resolve(true); };
+  reset({ factory: factoryOf({ mode: 'normal' }), store: hotStore });
+  const hotFirst = await Svc.analyse(Object.assign({}, REQ, { gameId: 'touch-hot' }));
+  const dHot = Svc.stats().dispatches;
+  const hotSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'touch-hot' }));
+  await delay(5);
+  check(!!hotFirst && !!hotSecond && Svc.stats().dispatches === dHot &&
+    hotTouched.length === 1,
+    'an in-memory handoff hit also refreshes the persisted entry\'s recency');
+
   // --- Cache separates configurations, halfmove clocks and repetition histories ---
   reset({ factory: factoryOf({ mode: 'normal' }), store: store });
   await Svc.analyse(Object.assign({}, REQ, { opts: Object.assign({}, FAST, { multiPV: 2 }) }));

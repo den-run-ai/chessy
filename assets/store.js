@@ -9,7 +9,9 @@
  *   analyses: { key, gameId, ply, ... } — one bounded engine analysis per
  *            (game, ply, position fingerprint, engine, config); the caller
  *            builds `key` via analysisKey() so the SAME FEN reached with a
- *            different repetition history is a DISTINCT entry.
+ *            different repetition history is a DISTINCT entry. This store is
+ *            a RECOMPUTABLE cache with a deterministic growth bound (#82) —
+ *            see "Bounded analyses cache" below.
  *   analysisJobs: { gameId, state, cursorPly, moments, ... } — one
  *            reload-safe, resumable two-pass scan per game (Phase 5).
  *
@@ -475,6 +477,126 @@
   function listAnalysesForGame(gameId) {
     return tx('analyses', 'readonly', function (s) {
       return s.index('gameId').getAll(IDBKeyRange.only(gameId));
+    });
+  }
+
+  // ---- Bounded analyses cache (#82) ------------------------------------
+  // The analyses store is a recomputable engine cache, so it gets a
+  // deterministic growth policy where the durable stores get none:
+  //
+  //   - COUNT-BOUNDED: above ANALYSES_CACHE_MAX entries, maintenance prunes
+  //     the least-recently-used entries down to ANALYSES_CACHE_TRIM_TO. The
+  //     hysteresis gap keeps steady-state writes from re-scanning the store
+  //     on every put. Count bounds SIZE too: each record is capped by the
+  //     analysis-result contract (bounded MultiPV lines and PV lengths over
+  //     a bounded legal-root set — a few KB of JSON), so the cache tops out
+  //     around single-digit megabytes, far under any realistic quota.
+  //   - RECENCY: usedAt (stamped on write, refreshed on validated reuse via
+  //     touchAnalysis), falling back to createdAt for records written before
+  //     usedAt existed, then 0 — so unstampable legacy rows prune first.
+  //     Ties order by key, ascending, so the prune set is deterministic.
+  //   - SCOPE: one readwrite transaction over the analyses store ONLY.
+  //     Games, cards, review scheduling, and resumable scan state
+  //     (analysisJobs) are structurally out of reach of a prune.
+  //   - INDEPENDENCE: maintenance runs in its OWN transaction, after — and
+  //     never inside — the transaction persisting a fresh analysis, so a
+  //     pruning failure cannot abort or discard the result being produced.
+  //     `protectKey` additionally pins that fresh record even if a skewed
+  //     clock stamped it older than the survivors.
+  //
+  // No schema bump: usedAt is an optional field and pruning walks the store
+  // cursor instead of requiring a new index.
+  var ANALYSES_CACHE_MAX = 512;
+  var ANALYSES_CACHE_TRIM_TO = 384;
+
+  function analysesCachePolicy() {
+    return { max: ANALYSES_CACHE_MAX, trimTo: ANALYSES_CACHE_TRIM_TO };
+  }
+
+  function analysisRecency(rec) {
+    if (rec && Number.isFinite(rec.usedAt)) return rec.usedAt;
+    if (rec && Number.isFinite(rec.createdAt)) return rec.createdAt;
+    return 0;
+  }
+
+  // Refresh one cached analysis' recency after a validated reuse. Resolves
+  // true when the entry existed and was re-stamped; a missing key is a
+  // no-op (never creates an entry). Get and put share one transaction so a
+  // concurrent eviction cannot resurrect a deleted record.
+  function touchAnalysis(key) {
+    return openForWrite().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('analyses', 'readwrite');
+        const s = t.objectStore('analyses');
+        const getReq = s.get(key);
+        let touched = false;
+        getReq.onsuccess = function () {
+          const rec = getReq.result;
+          if (!rec) return;
+          rec.usedAt = Date.now();
+          s.put(rec);
+          touched = true;
+        };
+        t.oncomplete = function () { resolve(touched); };
+        t.onerror = function () { reject(getReq.error || t.error); };
+        t.onabort = function () {
+          reject(getReq.error || t.error || new Error('transaction aborted'));
+        };
+      });
+    });
+  }
+
+  // One bounded maintenance pass over the analyses cache: when the store
+  // holds more than ANALYSES_CACHE_MAX entries, delete the least-recently
+  // used ones down to ANALYSES_CACHE_TRIM_TO (never touching
+  // opts.protectKey). Count check, scan, and deletes share ONE readwrite
+  // transaction over analyses only, so the pass is atomic — it either
+  // commits whole or leaves the cache exactly as it was — and an under-cap
+  // store commits with zero writes. Resolves { count, pruned } where count
+  // is the entry count BEFORE pruning. Respects the destructive-operation
+  // lock like every other write.
+  function maintainAnalysesCache(opts) {
+    const protectKey = opts && typeof opts.protectKey === 'string' ? opts.protectKey : null;
+    return openForWrite().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction('analyses', 'readwrite');
+        const s = t.objectStore('analyses');
+        const out = { count: 0, pruned: 0 };
+        const countReq = s.count();
+        countReq.onsuccess = function () {
+          const count = countReq.result;
+          out.count = count;
+          if (count <= ANALYSES_CACHE_MAX) return; // under cap — zero writes
+          const entries = [];
+          const cur = s.openCursor();
+          cur.onsuccess = function () {
+            const c = cur.result;
+            if (c) {
+              // Only (key, recency) is retained: the walk never materializes
+              // the full result payloads outside the cursor step.
+              entries.push({ key: c.primaryKey, at: analysisRecency(c.value) });
+              c.continue();
+              return;
+            }
+            entries.sort(function (a, b) {
+              if (a.at !== b.at) return a.at - b.at;
+              return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+            });
+            let excess = count - ANALYSES_CACHE_TRIM_TO;
+            for (let i = 0; i < entries.length && excess > 0; i++) {
+              if (protectKey !== null && entries[i].key === protectKey) continue;
+              s.delete(entries[i].key);
+              excess--;
+              out.pruned++;
+            }
+          };
+        };
+        t.oncomplete = function () { resolve(out); };
+        t.onerror = function () { reject(countReq.error || t.error); };
+        t.onabort = function () {
+          reject(countReq.error || t.error || new Error('transaction aborted'));
+        };
+      });
     });
   }
 
@@ -1046,6 +1168,9 @@
     getAnalysis: getAnalysis,
     deleteAnalysis: deleteAnalysis,
     listAnalysesForGame: listAnalysesForGame,
+    touchAnalysis: touchAnalysis,
+    maintainAnalysesCache: maintainAnalysesCache,
+    analysesCachePolicy: analysesCachePolicy,
     putJob: putJob,
     putJobIfGame: putJobIfGame,
     getJob: getJob,

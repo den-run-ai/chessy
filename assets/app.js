@@ -1556,6 +1556,16 @@
       });
   }
 
+  // Bounded analyses-cache maintenance (#82): one best-effort pass per boot
+  // catches a cache left over cap when a post-write prune failed or never
+  // ran. Under cap it is a single count in one read-write transaction; it
+  // only ever deletes recomputable analysis entries, and a failure (no
+  // IndexedDB, a data operation holding the lock) is silently irrelevant to
+  // Play and coaching.
+  if (window.CoachStore && CoachStore.maintainAnalysesCache) {
+    CoachStore.maintainAnalysesCache().catch(function () {});
+  }
+
   render();
   maybeAiMove();
 })();
