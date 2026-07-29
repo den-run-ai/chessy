@@ -55,7 +55,8 @@ require('./helper').run('level-presets', async function (t) {
     }
   }
 
-  const setupCopy = await page.textContent('#newGameDialog');
+  const setupCopy = (await page.textContent('#newGameDialog'))
+    .replace(/\s+/g, ' ').trim();
   check(setupCopy.includes('default Rust/WASM backend') &&
       setupCopy.includes('may stop early') &&
       setupCopy.includes('Not FIDE, Chess.com, or Lichess ratings'),
