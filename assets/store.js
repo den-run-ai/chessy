@@ -445,17 +445,26 @@
               if (c.value.ply !== fields.ply) { c.continue(); return; }
               outcome = 'updated';
               const merged = Object.assign({}, c.value, fields);
-              // Attempt history is only meaningful against the move it was
-              // graded on: if a re-save changed the card's canonical move,
-              // the old attempts' correct/incorrect flags would silently be
-              // read against the NEW move (Train, Progress). Start the
-              // history over.
+              // Attempt history is only meaningful against the exact exercise
+              // it graded: position/repetition context, canonical move and
+              // persisted card evidence. Keeping it across a source revision
+              // can make legal/SAN fields describe another board, or make
+              // card-evidence provenance point at an accepted set the card no
+              // longer carries. Start that history over on any such change.
               const oldBest = c.value.bestMove || null;
               const newBest = fields.bestMove || null;
               const sameBest = (!oldBest && !newBest) || (!!oldBest && !!newBest &&
                 oldBest.from === newBest.from && oldBest.to === newBest.to &&
                 (oldBest.promotion || null) === (newBest.promotion || null));
-              if (!sameBest) merged.attempts = [];
+              const sameFen =
+                (c.value.fenBefore || null) === (merged.fenBefore || null);
+              let sameEvidence = false;
+              try {
+                sameEvidence =
+                  JSON.stringify(c.value.equivalence || null) ===
+                  JSON.stringify(merged.equivalence || null);
+              } catch (e) { /* non-JSON evidence is never the same exercise */ }
+              if (!sameBest || !sameFen || !sameEvidence) merged.attempts = [];
               s.put(merged);
             } else {
               s.add(Object.assign({}, freshDefaults, fields));
@@ -1139,15 +1148,19 @@
         typeof Chess.parseFen !== 'function' ||
         typeof Chess.gameStatus !== 'function' ||
         typeof Chess.legalMoves !== 'function' ||
-        typeof Chess.toSan !== 'function') {
+        typeof Chess.toSan !== 'function' ||
+        typeof Chess.sqName !== 'function') {
       return prefix + ' cannot be checked by this release';
     }
+    var cardBestUci = null;
+    var state = null;
+    var legal = null;
     try {
-      var state = Chess.parseFen(r.fenBefore);
+      state = Chess.parseFen(r.fenBefore);
       if (Chess.gameStatus(state).over) {
         return prefix + ' has a terminal training position';
       }
-      var legal = Chess.legalMoves(state);
+      legal = Chess.legalMoves(state);
       var best = legal.find(function (move) {
         return r.bestMove && move.from === r.bestMove.from &&
           move.to === r.bestMove.to &&
@@ -1160,14 +1173,11 @@
           Chess.toSan(state, best, legal) !== r.bestSan) {
         return prefix + ' has an invalid bestSan';
       }
+      cardBestUci = Chess.sqName(best.from) + Chess.sqName(best.to) +
+        (best.promotion ? best.promotion.toLowerCase() : '');
       // Optional equivalence evidence (Train v2 E2): absent/null is the
       // legacy shape; present must cohere with this exact position and card.
       if (r.equivalence !== undefined && r.equivalence !== null) {
-        if (typeof Chess.sqName !== 'function') {
-          return prefix + ' cannot be checked by this release';
-        }
-        var cardBestUci = Chess.sqName(best.from) + Chess.sqName(best.to) +
-          (best.promotion ? best.promotion.toLowerCase() : '');
         var eqError = validateCardEquivalence(
           r.equivalence, state, legal, cardBestUci, prefix);
         if (eqError) return eqError;
@@ -1207,8 +1217,200 @@
       return prefix + ' has a non-array attempts';
     }
     if (Array.isArray(r.attempts) && !r.attempts.every(function (a) {
-      return !!a && typeof a === 'object' && Number.isFinite(a.at) &&
-        typeof a.correct === 'boolean';
+      var GRADES = ['good', 'hard', 'again'];
+      if (!a || typeof a !== 'object' || Array.isArray(a) ||
+          !Number.isFinite(a.at) || GRADES.indexOf(a.grade) < 0 ||
+          typeof a.correct !== 'boolean') {
+        return false;
+      }
+      // Legacy attempts are exactly the shipped {at, grade, correct} shape.
+      // Once ANY E2 field is present, require the complete enriched record:
+      // optional-at-the-schema-level must not mean a half-written provenance
+      // object can survive restore.
+      var fields = [
+        'attemptedUci', 'attemptedSan', 'verdict', 'verdictReason',
+        'equivalent', 'gapCp', 'evidenceSource', 'criterion', 'provider',
+        'recommendedGrade', 'presentedDue', 'priorStep'
+      ];
+      var enriched = fields.some(function (name) {
+        return Object.prototype.hasOwnProperty.call(a, name);
+      });
+      if (!enriched) return true;
+      if (!fields.every(function (name) {
+        return Object.prototype.hasOwnProperty.call(a, name);
+      })) return false;
+
+      if (typeof a.attemptedUci !== 'string' ||
+          !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(a.attemptedUci) ||
+          typeof a.attemptedSan !== 'string' || !a.attemptedSan ||
+          !Number.isFinite(a.presentedDue) ||
+          !Number.isInteger(a.priorStep) || a.priorStep < -1 || a.priorStep > 5) {
+        return false;
+      }
+      var attemptedMove = legal.find(function (move) {
+        return Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '') === a.attemptedUci;
+      });
+      if (!attemptedMove ||
+          Chess.toSan(state, attemptedMove, legal) !== a.attemptedSan ||
+          a.correct !== (a.attemptedUci === cardBestUci)) {
+        return false;
+      }
+
+      var verdictOk = a.verdict === null || a.verdict === 'best' ||
+        a.verdict === 'equivalent' || a.verdict === 'not-equivalent' ||
+        a.verdict === 'unknown';
+      var reasonOk = a.verdictReason === null ||
+        (typeof a.verdictReason === 'string' && !!a.verdictReason);
+      var sourceOk = a.evidenceSource === null ||
+        a.evidenceSource === 'card-evidence' ||
+        a.evidenceSource === 'live-analysis';
+      var maxGap = global.ChessyAnalysisResult &&
+        global.ChessyAnalysisResult.MAX_CP_ABS * 2;
+      var gapOk = a.gapCp === null ||
+        (Number.isSafeInteger(a.gapCp) && a.gapCp >= 0 &&
+         Number.isSafeInteger(maxGap) && a.gapCp <= maxGap);
+      var recommendedOk = a.recommendedGrade === null ||
+        GRADES.indexOf(a.recommendedGrade) >= 0;
+      if (!verdictOk || !reasonOk || !sourceOk || !gapOk || !recommendedOk) {
+        return false;
+      }
+
+      var expectedEquivalent =
+        a.verdict === 'best' || a.verdict === 'equivalent' ? true
+          : a.verdict === 'not-equivalent' ? false : null;
+      if (a.equivalent !== expectedEquivalent) return false;
+      if (a.verdict === null && a.verdictReason !== null) return false;
+      if (a.verdict !== null && !a.verdictReason) return false;
+
+      function validCriterion(value) {
+        var current = global.ChessyEquivalence &&
+          global.ChessyEquivalence.CRITERION;
+        return !!value && typeof value === 'object' && !Array.isArray(value) &&
+          !!current && value.id === current.id &&
+          value.version === current.version;
+      }
+      function validProvider(value) {
+        return !!value && typeof value === 'object' && !Array.isArray(value) &&
+          typeof value.engineId === 'string' && !!value.engineId &&
+          typeof value.version === 'string' && !!value.version &&
+          typeof value.configHash === 'string' && !!value.configHash;
+      }
+      function sameProvider(left, right) {
+        return validProvider(left) && validProvider(right) &&
+          left.engineId === right.engineId &&
+          left.version === right.version &&
+          left.configHash === right.configHash;
+      }
+      function oneOf(value, values) {
+        return values.indexOf(value) >= 0;
+      }
+      if (a.evidenceSource === null) {
+        if (a.criterion !== null || a.provider !== null || a.gapCp !== null ||
+            (a.verdict !== null && a.verdict !== 'unknown')) {
+          return false;
+        }
+        if ((a.verdict === null && a.verdictReason !== null) ||
+            (a.verdict === 'unknown' &&
+             (a.correct || a.verdictReason !== 'not-covered'))) {
+          return false;
+        }
+      } else if (!validCriterion(a.criterion) || !validProvider(a.provider) ||
+                 a.verdict === null) {
+        return false;
+      }
+      if (a.evidenceSource === 'card-evidence') {
+        var cardEq = r.equivalence;
+        if (!cardEq || !cardEq.criterion ||
+            a.criterion.id !== cardEq.criterion.id ||
+            a.criterion.version !== cardEq.criterion.version ||
+            !sameProvider(a.provider, cardEq.provider)) {
+          return false;
+        }
+        if (a.verdict === 'best') {
+          if (!a.correct || a.verdictReason !== 'saved-best' ||
+              a.attemptedUci !== cardEq.best.uci ||
+              a.gapCp !== (cardEq.best.mate ? null : 0)) {
+            return false;
+          }
+        } else if (a.verdict === 'equivalent') {
+          var accepted = cardEq.accepted.find(function (entry) {
+            return entry.uci === a.attemptedUci;
+          });
+          if (a.correct || !accepted || accepted.uci === cardEq.best.uci ||
+              a.verdictReason !== 'accepted-set') {
+            return false;
+          }
+          var acceptedGap =
+            !accepted.mate && !cardEq.best.mate &&
+            Number.isFinite(accepted.scoreCpPlayer) &&
+            Number.isFinite(cardEq.best.scoreCpPlayer)
+              ? cardEq.best.scoreCpPlayer - accepted.scoreCpPlayer : null;
+          if (a.gapCp !== acceptedGap) return false;
+        } else {
+          return false;
+        }
+      }
+      if (a.evidenceSource === 'live-analysis') {
+        if (a.correct) return false;
+        var liveReasonOk =
+          (a.verdict === 'best' && a.verdictReason === 'engine-best') ||
+          (a.verdict === 'equivalent' && oneOf(a.verdictReason, [
+            'forced-mate-either-way', 'attempt-not-worse',
+            'equal-resistance', 'within-tolerance'
+          ])) ||
+          (a.verdict === 'not-equivalent' && oneOf(a.verdictReason, [
+            'faster-mate-against', 'walks-into-mate',
+            'missed-forced-mate', 'cp-gap'
+          ])) ||
+          (a.verdict === 'unknown' && oneOf(a.verdictReason, [
+            'not-covered', 'unstable-best'
+          ]));
+        if (!liveReasonOk) return false;
+      }
+
+      var expectedRecommendation =
+        a.verdict === 'best' || a.verdict === 'equivalent' ? 'good'
+          : a.verdict === 'not-equivalent' ? 'again' : null;
+      // An exact saved move without equivalence evidence is still a narrow
+      // historic `correct` answer and receives Good despite verdict=null.
+      if (a.verdict === null && a.correct && a.evidenceSource === null) {
+        expectedRecommendation = 'good';
+      }
+      if (a.recommendedGrade !== expectedRecommendation) return false;
+      if (a.verdict === 'best' && a.gapCp !== null && a.gapCp !== 0) {
+        return false;
+      }
+      if (a.evidenceSource === 'live-analysis' &&
+          a.verdict === 'equivalent' &&
+          a.verdictReason === 'within-tolerance' &&
+          (!Number.isFinite(a.gapCp) ||
+           a.gapCp > global.ChessyEquivalence.CRITERION.params.cpTolerance)) {
+        return false;
+      }
+      if (a.evidenceSource === 'live-analysis' &&
+          a.verdict === 'equivalent' &&
+          a.verdictReason !== 'within-tolerance' && a.gapCp !== null) {
+        return false;
+      }
+      if (a.evidenceSource === 'live-analysis' &&
+          a.verdict === 'not-equivalent' &&
+          a.verdictReason === 'cp-gap' &&
+          (!Number.isFinite(a.gapCp) ||
+           a.gapCp <= global.ChessyEquivalence.CRITERION.params.cpTolerance)) {
+        return false;
+      }
+      if (a.evidenceSource === 'live-analysis' &&
+          a.verdict === 'not-equivalent' &&
+          a.verdictReason !== 'cp-gap' && a.gapCp !== null) {
+        return false;
+      }
+      if (a.evidenceSource === 'live-analysis' &&
+          a.verdict === 'unknown' &&
+          a.verdictReason === 'not-covered' && a.gapCp !== null) {
+        return false;
+      }
+      return true;
     })) {
       return prefix + ' has an invalid attempt';
     }

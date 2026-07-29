@@ -285,6 +285,89 @@ console.log('persisted source binding');
   check(/without its source game/.test(
     Store.validateCardRecord(card) || ''),
   'positive evidence cannot validate without its referenced source game');
+
+  const alt = result.bestLines[1];
+  const enriched = {
+    at: 2,
+    grade: 'good',
+    correct: false,
+    attemptedUci: alt.uci,
+    attemptedSan: alt.san,
+    verdict: 'equivalent',
+    verdictReason: 'accepted-set',
+    equivalent: true,
+    gapCp: 20,
+    evidenceSource: 'card-evidence',
+    criterion: { id: ev.criterion.id, version: ev.criterion.version },
+    provider: clone(ev.provider),
+    recommendedGrade: 'good',
+    presentedDue: 1,
+    priorStep: -1
+  };
+  const attemptCard = clone(card);
+  attemptCard.attempts = [enriched];
+  check(Store.validateCardRecord(attemptCard, null, game) === null,
+    'a complete enriched attempt binds canonical move, verdict and card provenance');
+
+  function attemptVariant(mutator) {
+    const candidate = clone(attemptCard);
+    mutator(candidate.attempts[0], candidate);
+    return candidate;
+  }
+  const exact = attemptVariant(function (a, candidate) {
+    candidate.equivalence = null;
+    a.correct = true;
+    a.attemptedUci = result.bestLines[0].uci;
+    a.attemptedSan = result.bestLines[0].san;
+    a.verdict = null;
+    a.verdictReason = null;
+    a.equivalent = null;
+    a.gapCp = null;
+    a.evidenceSource = null;
+    a.criterion = null;
+    a.provider = null;
+  });
+  const pending = attemptVariant(function (a) {
+    a.verdict = 'unknown';
+    a.verdictReason = 'not-covered';
+    a.equivalent = null;
+    a.gapCp = null;
+    a.evidenceSource = null;
+    a.criterion = null;
+    a.provider = null;
+    a.recommendedGrade = null;
+  });
+  const liveRejected = attemptVariant(function (a) {
+    a.verdict = 'not-equivalent';
+    a.verdictReason = 'cp-gap';
+    a.equivalent = false;
+    a.gapCp = 40;
+    a.evidenceSource = 'live-analysis';
+    a.recommendedGrade = 'again';
+  });
+  const legacy = clone(card);
+  legacy.attempts = [{ at: 2, grade: 'hard', correct: false }];
+  check([exact, pending, liveRejected, legacy].every(function (candidate) {
+    return Store.validateCardRecord(candidate, null, game) === null;
+  }), 'legacy, exact, pending-unknown and live-analysis attempt shapes stay valid');
+
+  const rejectedAttempts = [
+    attemptVariant(function (a) { delete a.provider; }),
+    attemptVariant(function (a) { a.grade = 'easy'; }),
+    attemptVariant(function (a) { a.attemptedUci = 'a1a1'; }),
+    attemptVariant(function (a) { a.attemptedSan = 'forged'; }),
+    attemptVariant(function (a) { a.correct = true; }),
+    attemptVariant(function (a) { a.equivalent = false; }),
+    attemptVariant(function (a) { a.verdictReason = 'cp-gap'; }),
+    attemptVariant(function (a) { a.evidenceSource = 'live-analysis'; }),
+    attemptVariant(function (a) { a.criterion.version += 1; }),
+    attemptVariant(function (a) { a.provider.configHash = 'other'; }),
+    attemptVariant(function (a) { a.gapCp = 20.5; }),
+    attemptVariant(function (a) { a.recommendedGrade = 'again'; })
+  ];
+  check(rejectedAttempts.every(function (candidate) {
+    return !!Store.validateCardRecord(candidate, null, game);
+  }), 'partial, forged and cross-field contradictory attempt evidence fails closed');
 }
 
 // ---------------------------------------------------------------------------
