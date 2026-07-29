@@ -494,22 +494,25 @@ require('./helper').run('reflection', async function (t) {
   // accepted-move set containing the saved best move.
   const evidence = await page.evaluate(function () {
     return Promise.resolve(CoachStore.listCards()).then(function (cs) {
-      const eq = cs[0].equivalence;
-      const crit = ChessyEquivalence.CRITERION;
-      return {
-        present: !!eq,
-        criterionMatches: !!eq && eq.criterion.id === crit.id &&
-          eq.criterion.version === crit.version && eq.criterion.basis === crit.basis,
-        providerShape: !!eq && typeof eq.provider.engineId === 'string' &&
-          typeof eq.provider.version === 'string' &&
-          typeof eq.provider.configHash === 'string',
-        complete: !!eq && eq.complete === true,
-        coverageSane: !!eq && (eq.coverage === 'all-roots' || eq.coverage === 'candidates') &&
-          Number.isInteger(eq.legalRootCount) && eq.legalRootCount > 0,
-        acceptedHasBest: !!eq && Array.isArray(eq.accepted) &&
-          eq.accepted.some(function (a) { return a.uci === eq.best.uci; }),
-        validates: CoachStore.validateCardRecord(cs[0]) === null
-      };
+      return CoachStore.getGame(cs[0].gameId).then(function (game) {
+        const eq = cs[0].equivalence;
+        const crit = ChessyEquivalence.CRITERION;
+        return {
+          present: !!eq,
+          criterionMatches: !!eq && eq.criterion.id === crit.id &&
+            eq.criterion.version === crit.version && eq.criterion.basis === crit.basis,
+          providerShape: !!eq && typeof eq.provider.engineId === 'string' &&
+            typeof eq.provider.version === 'string' &&
+            typeof eq.provider.configHash === 'string',
+          complete: !!eq && eq.complete === true,
+          coverageSane: !!eq &&
+            (eq.coverage === 'all-roots' || eq.coverage === 'candidates') &&
+            Number.isInteger(eq.legalRootCount) && eq.legalRootCount > 0,
+          acceptedHasBest: !!eq && Array.isArray(eq.accepted) &&
+            eq.accepted.some(function (a) { return a.uci === eq.best.uci; }),
+          validates: CoachStore.validateCardRecord(cs[0], null, game) === null
+        };
+      });
     });
   });
   check(evidence.present && evidence.criterionMatches && evidence.providerShape,
@@ -524,64 +527,77 @@ require('./helper').run('reflection', async function (t) {
   // auto-accept arbitrary moves.
   const eqRejections = await page.evaluate(function () {
     return Promise.resolve(CoachStore.listCards()).then(function (cs) {
-      function mutate(fn) {
-        const copy = JSON.parse(JSON.stringify(cs[0]));
-        fn(copy.equivalence, copy);
-        return CoachStore.validateCardRecord(copy);
-      }
-      function appendRejected(eq, card) {
-        const state = Chess.parseFen(card.fenBefore);
-        const legal = Chess.legalMoves(state);
-        const seen = {};
-        eq.accepted.forEach(function (a) { seen[a.uci] = true; });
-        const move = legal.find(function (m) {
-          const uci = Chess.sqName(m.from) + Chess.sqName(m.to) +
-            (m.promotion ? m.promotion.toLowerCase() : '');
-          return !seen[uci];
-        });
-        const uci = Chess.sqName(move.from) + Chess.sqName(move.to) +
-          (move.promotion ? move.promotion.toLowerCase() : '');
-        eq.accepted.push({
-          uci: uci,
-          san: Chess.toSan(state, move, legal),
-          scoreCpWhite: 0,
-          scoreCpPlayer: 0,
-          mate: null
-        });
-        // Preserve a generated count shape: one played-line probe may sit
-        // outside the candidate list.
-        eq.coveredRootCount = Math.max(eq.coveredRootCount, eq.accepted.length);
-      }
-      return {
-        legacyNull: (function () {
+      return CoachStore.getGame(cs[0].gameId).then(function (game) {
+        function mutate(fn) {
           const copy = JSON.parse(JSON.stringify(cs[0]));
-          copy.equivalence = null;
-          return CoachStore.validateCardRecord(copy);
-        })(),
-        illegalAccepted: mutate(function (eq) { eq.accepted[0].uci = 'a1a8'; }),
-        bestMismatch: mutate(function (eq) { eq.best.uci = 'e2e4'; }),
-        missingBest: mutate(function (eq) {
-          eq.accepted = eq.accepted.filter(function (a) { return a.uci !== eq.best.uci; });
-        }),
-        rejectedAccepted: mutate(function (eq, card) {
-          appendRejected(eq, card);
-        }),
-        nonCanonicalSan: mutate(function (eq) { eq.accepted[0].san += '!'; }),
-        invalidEval: mutate(function (eq) { eq.accepted[0].scoreCpWhite = 0; }),
-        bestEvalMismatch: mutate(function (eq) {
-          if (eq.accepted[0].mate) eq.accepted[0].mate.inPlies += 1;
-          else {
-            eq.accepted[0].scoreCpWhite -= 1;
-            eq.accepted[0].scoreCpPlayer += eq.turn === 'w' ? -1 : 1;
-          }
-        }),
-        wrongRoots: mutate(function (eq) { eq.legalRootCount += 1; }),
-        partial: mutate(function (eq) { eq.complete = false; }),
-        badCriterion: mutate(function (eq) { eq.criterion.params.cpTolerance = 300; }),
-        badStability: mutate(function (eq) {
-          eq.stability = { depths: [], bestMoveStable: true };
-        })
-      };
+          fn(copy.equivalence, copy);
+          return CoachStore.validateCardRecord(copy, null, game);
+        }
+        function appendRejected(eq, card) {
+          const state = Chess.parseFen(card.fenBefore);
+          const legal = Chess.legalMoves(state);
+          const seen = {};
+          eq.accepted.forEach(function (a) { seen[a.uci] = true; });
+          const move = legal.find(function (m) {
+            const uci = Chess.sqName(m.from) + Chess.sqName(m.to) +
+              (m.promotion ? m.promotion.toLowerCase() : '');
+            return !seen[uci];
+          });
+          const uci = Chess.sqName(move.from) + Chess.sqName(move.to) +
+            (move.promotion ? move.promotion.toLowerCase() : '');
+          eq.accepted.push({
+            uci: uci,
+            san: Chess.toSan(state, move, legal),
+            scoreCpWhite: 0,
+            scoreCpPlayer: 0,
+            mate: null
+          });
+          // Preserve a generated count shape: one played-line probe may sit
+          // outside the candidate list.
+          eq.coveredRootCount = Math.max(eq.coveredRootCount, eq.accepted.length);
+        }
+        return {
+          legacyNull: (function () {
+            const copy = JSON.parse(JSON.stringify(cs[0]));
+            copy.equivalence = null;
+            return CoachStore.validateCardRecord(copy, null, game);
+          })(),
+          illegalAccepted: mutate(function (eq) { eq.accepted[0].uci = 'a1a8'; }),
+          bestMismatch: mutate(function (eq) { eq.best.uci = 'e2e4'; }),
+          missingBest: mutate(function (eq) {
+            eq.accepted = eq.accepted.filter(function (a) {
+              return a.uci !== eq.best.uci;
+            });
+          }),
+          rejectedAccepted: mutate(function (eq, card) {
+            appendRejected(eq, card);
+          }),
+          nonCanonicalSan: mutate(function (eq) { eq.accepted[0].san += '!'; }),
+          invalidEval: mutate(function (eq) { eq.accepted[0].scoreCpWhite = 0; }),
+          bestEvalMismatch: mutate(function (eq) {
+            if (eq.accepted[0].mate) eq.accepted[0].mate.inPlies += 1;
+            else {
+              eq.accepted[0].scoreCpWhite -= 1;
+              eq.accepted[0].scoreCpPlayer += eq.turn === 'w' ? -1 : 1;
+            }
+          }),
+          wrongRoots: mutate(function (eq) { eq.legalRootCount += 1; }),
+          partial: mutate(function (eq) { eq.complete = false; }),
+          badCriterion: mutate(function (eq) {
+            eq.criterion.params.cpTolerance = 300;
+          }),
+          badStability: mutate(function (eq) {
+            eq.stability = { depths: [], bestMoveStable: true };
+          }),
+          transplantedHistory: mutate(function (eq, card) {
+            const state = Chess.parseFen(card.fenBefore);
+            state.positions = {};
+            state.positions[Chess.positionKey(state)] = 2;
+            eq.positionFingerprint =
+              ChessyAnalysisCore.positionFingerprint(state, state.positions);
+          })
+        };
+      });
     });
   });
   check(eqRejections.legacyNull === null,
@@ -591,7 +607,7 @@ require('./helper').run('reflection', async function (t) {
         !!eqRejections.nonCanonicalSan && !!eqRejections.invalidEval &&
         !!eqRejections.bestEvalMismatch && !!eqRejections.wrongRoots &&
         !!eqRejections.partial && !!eqRejections.badCriterion &&
-        !!eqRejections.badStability,
+        !!eqRejections.badStability && !!eqRejections.transplantedHistory,
     'forged accepted moves, SAN/eval contradictions, malformed coverage and unsupported criteria all quarantine');
 
   // The same boundary guards restore: a backup carrying forged evidence is
@@ -608,6 +624,13 @@ require('./helper').run('reflection', async function (t) {
         }
         return {
           genuine: CoachStore.validateBackup(envelope(null)),
+          transplanted: CoachStore.validateBackup(envelope(function (eq, card) {
+            const state = Chess.parseFen(card.fenBefore);
+            state.positions = {};
+            state.positions[Chess.positionKey(state)] = 2;
+            eq.positionFingerprint =
+              ChessyAnalysisCore.positionFingerprint(state, state.positions);
+          })),
           forged: CoachStore.validateBackup(envelope(function (eq, card) {
             const state = Chess.parseFen(card.fenBefore);
             const legal = Chess.legalMoves(state);
@@ -627,8 +650,9 @@ require('./helper').run('reflection', async function (t) {
         };
       });
   });
-  check(backupGate.genuine === null && !!backupGate.forged,
-    'restore accepts the genuine enriched backup and rejects a forged accepted set');
+  check(backupGate.genuine === null && !!backupGate.forged &&
+        !!backupGate.transplanted,
+    'restore accepts genuine evidence and rejects forged moves or transplanted repetition history');
 
   // Re-saving the SAME moment updates its one card — no duplicates.
   await page.fill('#reflectThreat', 'mate on h4, second look');
