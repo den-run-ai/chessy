@@ -79,6 +79,12 @@ function replayAndVerifySource() {
   check(sha256(game.moves.map(function (move) { return move.san; }).join('\n')) ===
       fixture.sanSha256,
     'canonical SAN SHA-256 matches the frozen game');
+  check(regression.playedUci === 'c5d4' && regression.playedSan === 'Bd4' &&
+      regression.targetUci === 'e5e4' && regression.targetSan === 'e4',
+    'regression metadata is bound to literal Bd4 and e4 identities');
+  check(game.moves[regression.ply] &&
+      game.moves[regression.ply].san === 'Bd4',
+    'frozen PGN records 11...Bd4 at the regression ply');
 
   let state = Chess.newGameState();
   for (let ply = 0; ply < game.moves.length; ply++) {
@@ -123,14 +129,18 @@ function verifyOracleFixture() {
   const rows = oracle.forcedRoot;
   const moves = rows.map(function (row) { return row.moveUci; });
   const e4 = rows.find(function (row) {
-    return row.moveUci === regression.targetUci;
+    return row.moveUci === 'e5e4';
   });
   const bd4 = rows.find(function (row) {
-    return row.moveUci === regression.playedUci;
+    return row.moveUci === 'c5d4';
   });
+  const legal = new Set(Chess.legalMoves(
+    Chess.parseFen(regression.fen)).map(uci));
   check(oracle.candidateCount === 4 && oracle.exhaustiveLegalMoves === false &&
       rows.length === 4 && new Set(moves).size === 4,
     'pinned Stockfish Lite scope is four unique forced-root candidates');
+  check(moves.every(function (move) { return legal.has(move); }),
+    'all four forced-root candidates are legal in the frozen position');
   check(/four preselected legal moves/.test(oracle.scope) &&
       /not an exhaustive ranking/.test(oracle.scope),
     'oracle scope is explicitly non-exhaustive');
