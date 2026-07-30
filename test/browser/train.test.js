@@ -154,7 +154,7 @@ require('./helper').run('train', async function (t) {
   check((await page.textContent('#trainOutcome')).includes('≠') &&
         (await page.textContent('#trainOutcome')).includes('grade yourself honestly'),
     'a differing answer is reported honestly, not declared wrong');
-  check((await page.textContent('#trainLesson')).includes('Line went wrong on the reply'),
+  check((await page.textContent('#trainLesson')).includes('Opponent reply was not verified'),
     'reveal names the player-diagnosed cause');
   await page.click('#gradeAgain');
   await page.waitForSelector('#trainEmpty:not([hidden])');
