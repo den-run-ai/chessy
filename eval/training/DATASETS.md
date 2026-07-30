@@ -29,9 +29,54 @@ Stockfish is a GPL-licensed external build-time tool, not an MIT dependency.
 Do not vendor its executable or `nnue-pytorch` into Chessy merely to run the
 pipeline. If Stockfish is redistributed, its GPL obligations apply separately.
 
-The locked `11...Bd4` incident position, its color/rank mirrors, nearby-budget
-probes, and positions from the same source-game lineage remain denied from
-training and exploration. They are post-fit evidence only.
+### Working release position on generated output
+
+This is Chessy's documented working release position, not legal advice or a
+guarantee about any particular artifact. The GNU/FSF FAQ says that a program's
+output is [not generally covered by the copyright on the program's
+code](https://www.gnu.org/licenses/gpl-faq.en.html#WhatCaseIsOutputGPL), while
+output that copies substantial protected material from the program can require
+a [different analysis](https://www.gnu.org/licenses/gpl-faq.en.html#GPLOutput).
+On that basis, Chessy does not presume that Stockfish's numeric CP/WDL labels
+or machine-readable chess moves become GPL-covered merely because Stockfish
+generated them. If output copied protectable Stockfish expression, that
+working position would not resolve the issue.
+
+Three questions remain separate:
+
+- distributing the Stockfish executable or covered code invokes the GPL
+  obligations for that software;
+- input positions and databases retain their CC0, CC BY, ODbL, DbCL, LGPL, or
+  other upstream status; relabelling does not clear those rights or notices;
+- generated label corpora, fitted HCE parameters, and NNUE checkpoints need an
+  explicit artifact-license decision. The repository's MIT license does not
+  automatically attach to them.
+
+Preserve the pinned teacher and input provenance even when no Stockfish binary
+is distributed. Before any public release of labels, HCE parameters, or NNUE
+checkpoints, record an artifact-specific legal review and the chosen license.
+
+The locked `11...Bd4` incident position, its color/rank mirrors, and its
+broader structural position family are actively denied from corpus selection,
+teacher relabelling, and training. This budget-independent family denial also
+rejects a corpus record produced by relabelling the position at a nearby node
+budget.
+
+Two broader controls are deliberately marked pending in `heldout-v1.json`.
+The static Lichess evaluated-position export has no stable source-game IDs, and
+the incident fixture does not identify a corresponding upstream Lichess game,
+so same-source-game-lineage quarantine cannot yet be enforced. It requires a
+pinned CC0 PGN-derived corpus and an explicit incident source-game identifier.
+A fit using only the static FEN export may exercise the research pipeline, but
+is policy-ineligible for public artifact release until that lineage condition
+is satisfied. This is currently a documented policy gate, not an executable
+release gate.
+
+The nearby budgets are already preregistered as 8,268,594 and 10,106,060 nodes
+in `hce-r3-fit-v1.json`. Ad hoc probe runs are not corpus records, and no
+execution evidence or results exist until a broadly validated candidate
+reaches the post-fit gate. Do not describe preregistration as completed probe
+execution or the pending lineage control as active enforcement.
 
 ## Primary CC0 sources
 
@@ -193,7 +238,11 @@ Before any training or model release:
 4. Confirm that raw and transformed data remain outside the Git tree.
 5. Apply privacy minimization and legality/full-state validation.
 6. Apply the frozen incident-family denylist before any split or augmentation.
-7. Group splits by source game or generation lineage to prevent leakage.
+7. For sources carrying stable lineage, group splits by source game or
+   generation lineage. A FEN-only source must record lineage as unavailable
+   and cannot claim this control.
 8. Generate final labels with the pinned external Stockfish teacher.
 9. Record the complete run manifest and output checksums.
-10. Re-run the license gate before publishing a corpus, parameters, or weights.
+10. Record legal review and an explicit license decision for generated labels,
+    HCE parameters, and NNUE checkpoints.
+11. Re-run the license gate before publishing a corpus, parameters, or weights.

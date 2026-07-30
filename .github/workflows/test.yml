@@ -93,12 +93,17 @@ jobs:
           node test/training/license-policy.test.js
           node test/training/corpus.test.js
           node test/training/label-stockfish.test.js
+          node test/training/smoke-stockfish.test.js
       - name: Validate HCE R3 representation and NNUE G1 feature contracts
         run: |
           node test/training/hce-r3-features.test.js
           node test/training/hce-r3-linear.test.js
           node test/training/hce-r3-pack-stream.test.js
           node test/training/nnue-g1.test.js
+      - name: Validate the NNUE trainer trust boundary
+        run: |
+          python -m py_compile tools/training/train-nnue.py
+          python tools/training/train-nnue.py --self-test
       - name: Validate pinned convex HCE solver math
         run: |
           python -m pip install 'numpy==2.3.5' 'scipy==1.17.0'
@@ -171,6 +176,53 @@ jobs:
         run: node test/moment-selector.test.js
       - name: Run resumable moment-scan tests
         run: node test/moment-scan.test.js
+
+  stockfish-teacher-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download and run the pinned Stockfish 18 teacher
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          set -euo pipefail
+          teacher=eval/training/teacher-sf18-100kn-v1.json
+          archive_url=$(node -p "require('./$teacher').engine.archive.url")
+          archive_name=$(node -p "require('./$teacher').engine.archive.path")
+          archive_sha=$(node -p "require('./$teacher').engine.archive.sha256")
+          executable_member=$(node -p "require('./$teacher').engine.executable.archivePath")
+          archive="$RUNNER_TEMP/$archive_name"
+          extract="$RUNNER_TEMP/stockfish-18"
+          output="$RUNNER_TEMP/stockfish-smoke/sf18-100kn"
+          mkdir -p "$extract" "$(dirname "$output")"
+          exec > >(tee "$RUNNER_TEMP/stockfish-smoke/runner.log") 2>&1
+
+          curl --fail --location --silent --show-error --retry 3 \
+            --output "$archive" "$archive_url"
+          printf '%s  %s\n' "$archive_sha" "$archive" | sha256sum -c -
+          tar -xf "$archive" -C "$extract"
+          executable="$extract/$executable_member"
+          test -f "$executable"
+          chmod +x "$executable"
+
+          node test/training/smoke-stockfish.js \
+            --archive "$archive" \
+            --stockfish "$executable" \
+            --output "$output"
+      - name: Upload Stockfish teacher smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stockfish18-100kn-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/stockfish-smoke/runner.log
+            ${{ runner.temp }}/stockfish-smoke/sf18-100kn.provenance.json
+            ${{ runner.temp }}/stockfish-smoke/sf18-100kn.uci.log
+          if-no-files-found: warn
 
   browser:
     runs-on: ubuntu-latest

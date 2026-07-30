@@ -167,6 +167,33 @@ function validateHeldoutIdentity(manifest, fixtureBytes) {
     fixture.regression.r69Replay &&
     fixture.regression.r69Replay.nodeLimit === manifest.incident.exactNodeGate,
   'held-out source fixture disagrees with the incident manifest');
+  const exclusion = manifest.exclusion;
+  const controls = exclusion && exclusion.controls;
+  assert(E4.stableJson(exclusion && exclusion.applyBefore) ===
+    E4.stableJson([
+      'augmentation',
+      'deduplication',
+      'split-assignment',
+      'exploration-label-use',
+      'teacher-relabel',
+      'training'
+    ]) &&
+    controls && controls.incidentClusterAndFamily &&
+    controls.incidentClusterAndFamily.status === 'enforced' &&
+    controls.sameSourceGameLineage &&
+    controls.sameSourceGameLineage.status === 'pending-source-game-id' &&
+    controls.sameSourceGameLineage.mechanism === null &&
+    controls.nearbyBudgetProbes &&
+    controls.nearbyBudgetProbes.trainingStatus ===
+      'enforced-by-incident-family' &&
+    controls.nearbyBudgetProbes.budgetStatus === 'preregistered' &&
+    E4.stableJson(controls.nearbyBudgetProbes.nodes) ===
+      E4.stableJson([8268594, 10106060]) &&
+    controls.nearbyBudgetProbes.budgetContract ===
+      'eval/training/hce-r3-fit-v1.json#/lockedPostFitGate/nearbyNodes' &&
+    controls.nearbyBudgetProbes.executionEvidenceStatus ===
+      'pending-post-fit-execution',
+  'held-out exclusion control status drifted');
   return {
     fen: manifest.incident.fen,
     cluster: manifest.symmetryPolicy.clusterSha256,

@@ -17,6 +17,7 @@ import os
 import random
 import re
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -893,6 +894,8 @@ def shuffled(
     records: Iterable[dict], seed: int, capacity: int
 ) -> Iterator[dict]:
     """Bounded deterministic shuffle; input file order and seed are frozen."""
+    if capacity <= 0:
+        raise ValueError("shuffle capacity must be positive")
     rng = random.Random(seed)
     buffer: list[dict] = []
     for record in records:
@@ -907,6 +910,8 @@ def shuffled(
 
 
 def batches(records: Iterable[dict], batch_size: int) -> Iterator[list[dict]]:
+    if batch_size <= 0:
+        raise ValueError("batch size must be positive")
     batch: list[dict] = []
     for record in records:
         batch.append(record)
@@ -920,6 +925,356 @@ def batches(records: Iterable[dict], batch_size: int) -> Iterator[list[dict]]:
 def load_json(filename: Path) -> dict:
     with filename.open("r", encoding="utf-8") as stream:
         return json.load(stream)
+
+
+def self_test() -> None:
+    """Exercise the PyTorch-free trainer and its production trust boundary."""
+    checks = 0
+
+    def check(condition: bool, label: str) -> None:
+        nonlocal checks
+        if not condition:
+            raise AssertionError(label)
+        checks += 1
+
+    def equal(actual: Any, expected: Any, label: str) -> None:
+        check(actual == expected, f"{label}: expected {expected!r}, got {actual!r}")
+
+    def rejects(
+        exception: type[BaseException],
+        message: str,
+        action: Any,
+        label: str,
+    ) -> None:
+        nonlocal checks
+        try:
+            action()
+        except exception as error:
+            if message not in str(error):
+                raise AssertionError(
+                    f"{label}: wrong error {error!r}; expected {message!r}"
+                ) from error
+        else:
+            raise AssertionError(f"{label}: expected {exception.__name__}")
+        checks += 1
+
+    root = Path(__file__).resolve().parents[2]
+    contracts = load_contracts(root)
+    equal(contracts.teacher["id"], "sf18-100kn-v1", "teacher identity")
+    equal(
+        contracts.teacher["search"]["nodeLimit"],
+        100000,
+        "teacher node limit",
+    )
+    equal(
+        contracts.heldout["symmetryPolicy"]["clusterSha256"],
+        cluster_key(contracts.heldout["incident"]["fen"]),
+        "held-out cluster digest",
+    )
+    equal(
+        contracts.heldout["symmetryPolicy"]["positionFamilySha256"],
+        position_family_key(contracts.heldout["incident"]["fen"]),
+        "held-out family digest",
+    )
+
+    feature_fen = "4k3/8/8/8/8/8/P6q/4K3 w - -"
+    equal(
+        feature_indices(feature_fen, "w"),
+        [48, 380, 695, 708],
+        "white-perspective feature indices",
+    )
+    equal(
+        feature_indices(feature_fen, "b"),
+        [271, 380, 392, 708],
+        "black-perspective feature indices",
+    )
+    equal(
+        len(feature_indices(feature_fen, "w")),
+        4,
+        "one active feature per piece",
+    )
+    rejects(
+        ValueError,
+        "perspective must be w or b",
+        lambda: feature_indices(feature_fen, "x"),
+        "invalid feature perspective",
+    )
+
+    castling_fen = "r3k2r/8/8/8/8/8/8/R3K2R w qKkQ -"
+    equal(
+        parse_position(castling_fen).fen4,
+        "r3k2r/8/8/8/8/8/8/R3K2R w KQkq -",
+        "castling normalization",
+    )
+    rejects(
+        ValueError,
+        "castling right lacks its king or rook",
+        lambda: parse_position("4k3/8/8/8/8/8/8/4K3 w K -"),
+        "source castling validation",
+    )
+    rejects(
+        ValueError,
+        "pawn on rank 1 or rank 8",
+        lambda: parse_position("P3k3/8/8/8/8/8/8/4K3 w - -"),
+        "back-rank pawn validation",
+    )
+    rejects(
+        ValueError,
+        "kings cannot occupy adjacent squares",
+        lambda: parse_position("8/8/8/8/8/8/4k3/4K3 w - -"),
+        "adjacent king validation",
+    )
+
+    source_fen = "r3k2r/p7/8/8/8/8/7P/R3K2R w - -"
+    variants = symmetry_fens(source_fen)
+    equal(len(variants), 4, "four declared symmetry transforms")
+    equal(
+        {canonical_fen4(variant) for variant in variants},
+        {canonical_fen4(source_fen)},
+        "canonical FEN symmetry invariance",
+    )
+    equal(
+        {cluster_key(variant) for variant in variants},
+        {cluster_key(source_fen)},
+        "cluster symmetry invariance",
+    )
+    equal(
+        {position_family_key(variant) for variant in variants},
+        {position_family_key(source_fen)},
+        "position-family symmetry invariance",
+    )
+    equal(
+        [
+            role_for_family(f"{cell:012x}" + "0" * 52)
+            for cell in (209, 210, 255, 300, 345)
+        ],
+        [
+            "shared-train",
+            "hce-validation",
+            "hce-test",
+            "nnue-validation",
+            "nnue-test",
+        ],
+        "role boundaries",
+    )
+
+    records = [{"id": number} for number in range(8)]
+    shuffled_once = list(shuffled(records, 17, 3))
+    equal(
+        [record["id"] for record in shuffled_once],
+        [2, 1, 4, 5, 6, 0, 3, 7],
+        "bounded shuffle contract",
+    )
+    equal(
+        list(shuffled(records, 17, 3)),
+        shuffled_once,
+        "bounded shuffle determinism",
+    )
+    equal(
+        sorted(record["id"] for record in shuffled_once),
+        list(range(8)),
+        "bounded shuffle is a permutation",
+    )
+    rejects(
+        ValueError,
+        "shuffle capacity must be positive",
+        lambda: list(shuffled(records, 17, 0)),
+        "zero shuffle capacity",
+    )
+    equal(
+        [[record["id"] for record in batch] for batch in batches(records, 3)],
+        [[0, 1, 2], [3, 4, 5], [6, 7]],
+        "batch boundaries",
+    )
+    rejects(
+        ValueError,
+        "batch size must be positive",
+        lambda: list(batches(records, 0)),
+        "zero batch size",
+    )
+
+    def find_role_fen(role: str) -> str:
+        for white_file in range(8):
+            for black_file in range(8):
+                rank7 = ["1"] * 8
+                rank2 = ["1"] * 8
+                rank7[black_file] = "p"
+                rank2[white_file] = "P"
+
+                def board_rank(squares: list[str]) -> str:
+                    result = ""
+                    empty = 0
+                    for square in squares:
+                        if square == "1":
+                            empty += 1
+                        else:
+                            if empty:
+                                result += str(empty)
+                                empty = 0
+                            result += square
+                    if empty:
+                        result += str(empty)
+                    return result
+
+                fen = (
+                    "4k3/"
+                    + board_rank(rank7)
+                    + "/8/8/8/8/"
+                    + board_rank(rank2)
+                    + "/4K3 w - -"
+                )
+                if role_for_family(position_family_key(fen)) == role:
+                    return fen
+        raise AssertionError(f"could not construct a {role} self-test FEN")
+
+    def teacher_record(fen: str, role: str, snapshot_sha: str) -> dict[str, Any]:
+        family = position_family_key(fen)
+        teacher = contracts.teacher
+        return {
+            "schema": contracts.config["data"]["schema"],
+            "id": sha256_text(snapshot_sha + "\n" + fen),
+            "fen": fen,
+            "canonicalFen": canonical_fen4(fen),
+            "cluster": cluster_key(fen),
+            "role": role,
+            "positionFamily": family,
+            "strata": {},
+            "source": {
+                "dataset": "lichess-evaluated-positions",
+                "license": "CC0-1.0",
+                "snapshotSha256": snapshot_sha,
+            },
+            "teacher": {
+                "id": teacher["id"],
+                "release": teacher["engine"]["release"],
+                "commit": teacher["engine"]["sourceCommit"],
+                "manifestSha256": contracts.teacher_sha256,
+                "nodes": teacher["search"]["nodeLimit"],
+                "cpWhite": 0,
+                "wdlWhite": [250, 500, 250],
+                "targetWhite": 0.5,
+                "bestMoveUci": "e1d1",
+                "pvUci": ["e1d1"],
+                "depth": 10,
+                "seldepth": 12,
+                "scoreNodes": teacher["search"]["nodeLimit"],
+                "reportedNodes": teacher["search"]["nodeLimit"],
+            },
+        }
+
+    def write_sidecar(
+        filename: Path,
+        rows: int,
+        selection_sha: str,
+        selection_contract_sha: str,
+    ) -> Path:
+        teacher = contracts.teacher
+        manifest = {
+            "schemaVersion": 1,
+            "state": contracts.config["data"]["trustBoundary"]["sidecarState"],
+            "output": {
+                "path": filename.name,
+                "rows": rows,
+                "sha256": sha256_file(filename),
+            },
+            "input": {
+                "selectionManifest": {
+                    "sha256": selection_sha,
+                    "selectionContractSha256": selection_contract_sha,
+                    "certificationStatus": "frozen",
+                },
+                "shard": {"rows": rows, "sha256": "3" * 64},
+            },
+            "exclusions": {"rows": 0, "sha256": "4" * 64},
+            "teacher": {
+                "manifest": {"sha256": contracts.teacher_sha256},
+                "id": teacher["id"],
+                "release": teacher["engine"]["release"],
+                "commit": teacher["engine"]["sourceCommit"],
+                "executableSha256": teacher["engine"]["executable"]["sha256"],
+                "license": teacher["engine"]["license"],
+                "use": teacher["engine"]["integration"],
+                "nodes": teacher["search"]["nodeLimit"],
+                "scorePovFromEngine": teacher["labels"]["enginePov"],
+                "storedScorePov": teacher["labels"]["storedPov"],
+                "networks": expected_teacher_networks(teacher),
+                "options": expected_teacher_options(teacher),
+                "watchdog": teacher["watchdog"],
+                "transcript": {"sha256": "5" * 64},
+            },
+        }
+        sidecar = Path(
+            str(filename)
+            + contracts.config["data"]["trustBoundary"]["sidecarSuffix"]
+        )
+        sidecar.write_text(
+            json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return sidecar
+
+    with tempfile.TemporaryDirectory(prefix="chessy-nnue-self-test-") as temporary:
+        directory = Path(temporary)
+        snapshot_sha = "0" * 64
+        selection_sha = "1" * 64
+        selection_contract_sha = "2" * 64
+        train_file = directory / "train.ndjson"
+        validation_file = directory / "validation.ndjson"
+        train_record = teacher_record(
+            find_role_fen("shared-train"), "shared-train", snapshot_sha
+        )
+        validation_record = teacher_record(
+            find_role_fen("nnue-validation"),
+            "nnue-validation",
+            snapshot_sha,
+        )
+        train_file.write_text(
+            json.dumps(train_record, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        validation_file.write_text(
+            json.dumps(validation_record, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        write_sidecar(train_file, 1, selection_sha, selection_contract_sha)
+        write_sidecar(validation_file, 1, selection_sha, selection_contract_sha)
+        validated = validate_inputs(
+            [str(train_file)], [str(validation_file)], root
+        )
+        report = validation_report(validated, contracts)
+        equal(
+            report["status"],
+            "validated-pinned-teacher-inputs",
+            "full trust-boundary validation",
+        )
+        equal(
+            report["selectionManifestSha256"],
+            selection_sha,
+            "selection provenance propagation",
+        )
+        equal(
+            report["sourceSnapshotSha256"],
+            snapshot_sha,
+            "source provenance propagation",
+        )
+        assert_inputs_unchanged(validated)
+        checks += 1
+        train_file.write_text(
+            json.dumps(train_record, sort_keys=True) + "\n ",
+            encoding="utf-8",
+        )
+        rejects(
+            RuntimeError,
+            "input shard changed during training",
+            lambda: assert_inputs_unchanged(validated),
+            "post-validation input mutation",
+        )
+        rejects(
+            ValueError,
+            "trainer is not allowed to read role nnue-test",
+            lambda: list(iter_records([validation_file], "nnue-test")),
+            "test-role refusal",
+        )
+
+    print(f"{checks} PyTorch-free NNUE trainer self-test checks passed")
 
 
 def train(args: argparse.Namespace) -> None:
@@ -1094,6 +1449,11 @@ def train(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="run the PyTorch-free trainer contract self-test",
+    )
     parser.add_argument("--features", help="print the frozen 768 feature indices")
     parser.add_argument("--perspective", choices=("w", "b"))
     parser.add_argument(
@@ -1108,6 +1468,9 @@ def main() -> None:
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--output")
     args = parser.parse_args()
+    if args.self_test:
+        self_test()
+        return
     if args.features is not None:
         if args.perspective is None:
             parser.error("--features requires --perspective")

@@ -16,7 +16,11 @@ function check(value, message) {
 
 const heldoutPath = path.join(__dirname, '..', '..', 'eval', 'training', 'heldout-v1.json');
 const heldout = JSON.parse(fs.readFileSync(heldoutPath, 'utf8'));
+const hceFit = JSON.parse(fs.readFileSync(path.join(
+  __dirname, '..', '..', 'eval', 'training', 'hce-r3-fit-v1.json'), 'utf8'));
 const incident = heldout.incident.fen;
+const heldoutControlStatus =
+  Prepare.validateHeldoutExclusionPolicy(heldout);
 
 assert.deepStrictEqual(Corpus.symmetryFens(incident), heldout.symmetryPolicy.fens4);
 checks++;
@@ -36,6 +40,37 @@ for (const fen of heldout.symmetryPolicy.fens4) {
     heldout.symmetryPolicy.positionFamilySha256);
   checks += 2;
 }
+assert.deepStrictEqual(heldoutControlStatus, {
+  incidentFamily: 'enforced',
+  sameSourceGameLineage: 'pending-source-game-id',
+  nearbyBudgetTraining: 'enforced-by-incident-family',
+  nearbyBudgetPreregistration: 'preregistered',
+  nearbyBudgetNodes: [8268594, 10106060],
+  nearbyBudgetContract:
+    'eval/training/hce-r3-fit-v1.json#/lockedPostFitGate/nearbyNodes',
+  nearbyBudgetExecutionEvidence: 'pending-post-fit-execution'
+});
+checks++;
+assert.deepStrictEqual(
+  heldout.exclusion.controls.nearbyBudgetProbes.nodes,
+  hceFit.lockedPostFitGate.nearbyNodes
+);
+checks++;
+assert.throws(function () {
+  const overstated = JSON.parse(JSON.stringify(heldout));
+  overstated.exclusion.controls.sameSourceGameLineage.status = 'enforced';
+  Prepare.validateHeldoutExclusionPolicy(overstated);
+}, /control status drifted/);
+checks++;
+assert.throws(function () {
+  const incomplete = JSON.parse(JSON.stringify(heldout));
+  incomplete.exclusion.applyBefore =
+    incomplete.exclusion.applyBefore.filter(function (stage) {
+      return stage !== 'exploration-label-use';
+    });
+  Prepare.validateHeldoutExclusionPolicy(incomplete);
+}, /control status drifted/);
+checks++;
 
 const stateVariants = [
   'r3k2r/8/8/8/8/8/8/R3K2R w KQkq -',
@@ -116,11 +151,19 @@ async function integration() {
       evalRecord,
       {
         fen: incident,
-        evals: [{ depth: 20, knodes: 1, pvs: [{ cp: -90, line: 'e5e4' }] }]
+        evals: [{
+          depth: 20,
+          knodes: 8268,
+          pvs: [{ cp: -90, line: 'e5e4' }]
+        }]
       },
       {
         fen: heldout.symmetryPolicy.fens4[1],
-        evals: [{ depth: 20, knodes: 1, pvs: [{ cp: -90, line: 'd5d4' }] }]
+        evals: [{
+          depth: 20,
+          knodes: 10106,
+          pvs: [{ cp: -90, line: 'd5d4' }]
+        }]
       },
       {
         fen: '4k3/8/8/8/8/2N5/4P3/4K3 b - -',
@@ -152,10 +195,24 @@ async function integration() {
       'awaiting-opening-freeze');
     assert.strictEqual(first.exclusions.pendingCertificationAllowedForTestOnly,
       true);
+    assert.strictEqual(first.exclusions.incidentFamilyControlStatus,
+      'enforced');
+    assert.strictEqual(first.exclusions.sameSourceGameLineageControlStatus,
+      'pending-source-game-id');
+    assert.strictEqual(first.exclusions.nearbyBudgetTrainingControlStatus,
+      'enforced-by-incident-family');
+    assert.strictEqual(first.exclusions.nearbyBudgetPreregistrationStatus,
+      'preregistered');
+    assert.deepStrictEqual(first.exclusions.nearbyBudgetNodes,
+      [8268594, 10106060]);
+    assert.strictEqual(first.exclusions.nearbyBudgetContract,
+      'eval/training/hce-r3-fit-v1.json#/lockedPostFitGate/nearbyNodes');
+    assert.strictEqual(first.exclusions.nearbyBudgetExecutionEvidenceStatus,
+      'pending-post-fit-execution');
     assert.strictEqual(first.adapter.corpusContractSha256,
       Corpus.sha256(fs.readFileSync(path.join(__dirname, 'corpus.js'))));
     assert.match(first.adapter.selectionContractSha256, /^[0-9a-f]{64}$/);
-    checks += 8;
+    checks += 15;
     assert.strictEqual(
       fs.readFileSync(path.join(outA, 'manifest.json'), 'utf8'),
       fs.readFileSync(path.join(outB, 'manifest.json'), 'utf8'));
@@ -172,6 +229,8 @@ async function integration() {
       'incident symmetry cluster is absent from every output shard');
     check(!selectedText.includes(heldout.symmetryPolicy.positionFamilySha256),
       'incident position family is absent from every output shard');
+    check(first.counts.incidentClusterExcluded === 2,
+      'incident-family quarantine is independent of nearby source label budgets');
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

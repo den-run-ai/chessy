@@ -281,6 +281,14 @@ function selectionManifest(sourceSha256, shardPath, body) {
         contracts.heldout.symmetryPolicy.clusterSha256,
       incidentPositionFamilySha256:
         contracts.heldout.symmetryPolicy.positionFamilySha256,
+      incidentFamilyControlStatus: 'enforced',
+      sameSourceGameLineageControlStatus: 'pending-source-game-id',
+      nearbyBudgetTrainingControlStatus: 'enforced-by-incident-family',
+      nearbyBudgetPreregistrationStatus: 'preregistered',
+      nearbyBudgetNodes: [8268594, 10106060],
+      nearbyBudgetContract:
+        'eval/training/hce-r3-fit-v1.json#/lockedPostFitGate/nearbyNodes',
+      nearbyBudgetExecutionEvidenceStatus: 'pending-post-fit-execution',
       certificationManifest:
         path.relative(ROOT, E4.PATHS.certification),
       certificationManifestSha256: certificationSha256,
@@ -404,6 +412,27 @@ async function integration() {
     const records = await Label.loadRecords(shardPath, context);
     equal(records.length, 1);
     equal(records[0].id, record.id);
+
+    const overstatedControlPath =
+      path.join(temporary, 'overstated-control-manifest.json');
+    const overstatedControl =
+      selectionManifest(sourceSha256, shardName, body);
+    overstatedControl.exclusions.sameSourceGameLineageControlStatus =
+      'enforced';
+    fs.writeFileSync(
+      overstatedControlPath,
+      Prepare.stableJson(overstatedControl) + '\n'
+    );
+    await rejects(
+      () => Label.loadSelectionContext(
+        overstatedControlPath,
+        shardPath,
+        contracts,
+        { allowPendingCertificationForTest: true }
+      ),
+      /misstates held-out control enforcement/,
+      'teacher relabelling rejects a manifest that overstates pending controls'
+    );
 
     const artifactPaths = {
       input: shardPath,

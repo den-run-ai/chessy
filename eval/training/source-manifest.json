@@ -20,6 +20,13 @@
     "downloadSha256Required": true,
     "incidentFamilyDenylistRequired": true,
     "groupSplitBySourceLineageRequired": true,
+    "sourceLineageGate": {
+      "requiredForReleasedFitCorpus": true,
+      "staticFenSourceWithoutLineage": "policy-ineligible-for-public-release",
+      "mayClaimEnforcedWithoutLineage": false,
+      "enforcement": "policy-only",
+      "executableReleaseGateImplemented": false
+    },
     "finalFitLabels": {
       "requiredProducer": "pinned-external-stockfish",
       "allowUpstreamLabelsAsFinalFitLabels": false,
@@ -43,6 +50,25 @@
         "outputSha256"
       ]
     },
+    "generatedArtifactLicenseReview": {
+      "status": "working-release-position-not-legal-advice",
+      "gnuFaqReferences": [
+        "https://www.gnu.org/licenses/gpl-faq.en.html#WhatCaseIsOutputGPL",
+        "https://www.gnu.org/licenses/gpl-faq.en.html#GPLOutput"
+      ],
+      "stockfishOutputPosition": "Numeric labels are not presumed GPL-covered merely because a GPL program produced them; copied protectable program material would require a separate analysis.",
+      "stockfishBinaryObligationsAreSeparate": true,
+      "inputDatasetRightsRemainApplicable": true,
+      "teacherProvenanceRequired": true,
+      "mitLicenseIsNotAutomatic": true,
+      "artifactLicenseDecisionRequired": true,
+      "legalReviewBeforePublicRelease": true,
+      "coveredArtifacts": [
+        "generated-label-corpora",
+        "hce-parameter-sets",
+        "nnue-checkpoints"
+      ]
+    },
     "optionalSourceGate": {
       "enabledByDefault": false,
       "explicitSourceIdOptInRequired": true,
@@ -62,7 +88,8 @@
       "incident-family-denylist-applied",
       "source-lineage-group-split-applied",
       "pinned-stockfish-labels-generated",
-      "run-manifest-and-output-checksums-recorded"
+      "run-manifest-and-output-checksums-recorded",
+      "generated-artifact-license-and-legal-review-recorded"
     ]
   },
   "sources": [
@@ -468,7 +495,7 @@
         "url": "https://github.com/official-stockfish/Stockfish/blob/master/Copying.txt"
       },
       "bundled": false,
-      "note": "A software license is not a dataset license. Record the pinned binary and network hashes for every label run."
+      "note": "A software license is not a dataset license. Record the pinned binary and network hashes for every label run; apply policy.generatedArtifactLicenseReview before publishing labels, parameters, or checkpoints."
     },
     {
       "id": "maia2-reference",

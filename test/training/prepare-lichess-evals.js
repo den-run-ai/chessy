@@ -92,6 +92,45 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
+function validateHeldoutExclusionPolicy(heldout) {
+  const exclusion = heldout && heldout.exclusion;
+  const controls = exclusion && exclusion.controls;
+  const incident = controls && controls.incidentClusterAndFamily;
+  const lineage = controls && controls.sameSourceGameLineage;
+  const nearby = controls && controls.nearbyBudgetProbes;
+  const expectedApplyBefore = [
+    'augmentation',
+    'deduplication',
+    'split-assignment',
+    'exploration-label-use',
+    'teacher-relabel',
+    'training'
+  ];
+  if (stableJson(exclusion && exclusion.applyBefore) !==
+        stableJson(expectedApplyBefore) ||
+      !incident || incident.status !== 'enforced' ||
+      !lineage || lineage.status !== 'pending-source-game-id' ||
+      lineage.mechanism !== null ||
+      !nearby ||
+      nearby.trainingStatus !== 'enforced-by-incident-family' ||
+      nearby.budgetStatus !== 'preregistered' ||
+      stableJson(nearby.nodes) !== stableJson([8268594, 10106060]) ||
+      nearby.budgetContract !==
+        'eval/training/hce-r3-fit-v1.json#/lockedPostFitGate/nearbyNodes' ||
+      nearby.executionEvidenceStatus !== 'pending-post-fit-execution') {
+    throw new Error('held-out exclusion control status drifted');
+  }
+  return Object.freeze({
+    incidentFamily: incident.status,
+    sameSourceGameLineage: lineage.status,
+    nearbyBudgetTraining: nearby.trainingStatus,
+    nearbyBudgetPreregistration: nearby.budgetStatus,
+    nearbyBudgetNodes: Object.freeze(nearby.nodes.slice()),
+    nearbyBudgetContract: nearby.budgetContract,
+    nearbyBudgetExecutionEvidence: nearby.executionEvidenceStatus
+  });
+}
+
 async function closeStream(stream) {
   stream.end();
   await once(stream, 'finish');
@@ -142,6 +181,7 @@ async function prepare(options) {
   }
   const heldoutText = fs.readFileSync(heldoutPath, 'utf8');
   const heldout = JSON.parse(heldoutText);
+  const heldoutControlStatus = validateHeldoutExclusionPolicy(heldout);
   const certificationPath = path.resolve(
     options['certification-manifest'] || E4.PATHS.certification);
   const certificationText = fs.readFileSync(certificationPath, 'utf8');
@@ -343,6 +383,17 @@ async function prepare(options) {
         manifestSha256: Corpus.sha256(heldoutText),
         incidentClusterSha256: heldout.symmetryPolicy.clusterSha256,
         incidentPositionFamilySha256: heldout.symmetryPolicy.positionFamilySha256,
+        incidentFamilyControlStatus: heldoutControlStatus.incidentFamily,
+        sameSourceGameLineageControlStatus:
+          heldoutControlStatus.sameSourceGameLineage,
+        nearbyBudgetTrainingControlStatus:
+          heldoutControlStatus.nearbyBudgetTraining,
+        nearbyBudgetPreregistrationStatus:
+          heldoutControlStatus.nearbyBudgetPreregistration,
+        nearbyBudgetNodes: heldoutControlStatus.nearbyBudgetNodes,
+        nearbyBudgetContract: heldoutControlStatus.nearbyBudgetContract,
+        nearbyBudgetExecutionEvidenceStatus:
+          heldoutControlStatus.nearbyBudgetExecutionEvidence,
         certificationManifest: path.relative(
           path.join(__dirname, '..', '..'), certificationPath),
         certificationManifestSha256: Corpus.sha256(certificationText),
@@ -392,4 +443,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs, fileSha256, stableJson, prepare };
+module.exports = {
+  parseArgs,
+  fileSha256,
+  stableJson,
+  validateHeldoutExclusionPolicy,
+  prepare
+};

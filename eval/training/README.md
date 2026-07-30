@@ -62,7 +62,16 @@ fit.
 The static Lichess export has no game lineage or halfmove/fullmove state. It is
 therefore suitable for static evaluation fitting, not repetition/fifty-move
 training. A later CC0 PGN slice supplies complete states and source-game
-grouping. Upstream mixed Stockfish labels are sampling evidence only.
+grouping. Until that slice and an incident source-game identifier are pinned,
+the same-source-game incident quarantine is explicitly pending, not enforced.
+Static-FEN-only fits may exercise the research pipeline but are
+policy-ineligible for public artifact release until that lineage condition is
+satisfied; no executable release gate currently consumes this policy.
+The incident cluster and broader structural family are enforced now, so a
+training record for the position is rejected regardless of its label budget.
+The nearby budgets are already preregistered at 8,268,594 and 10,106,060
+nodes; only their post-fit execution evidence and results remain pending.
+Upstream mixed Stockfish labels are sampling evidence only.
 
 ## Build a deterministic multi-million selection
 
@@ -99,6 +108,36 @@ role-incomplete runs fail closed. The output deliberately states
 
 Use the official external Stockfish 18 build. Record the archive, executable,
 and NNUE hashes; do not vendor the GPL binary:
+
+Before spending corpus-scale compute, run the real teacher admission smoke:
+
+```sh
+node test/training/smoke-stockfish.js \
+  --archive /data/stockfish-ubuntu-x86-64-avx2.tar \
+  --stockfish /opt/stockfish-18/stockfish \
+  --output /data/smoke/sf18-100kn
+```
+
+The smoke refuses overrides and verifies the checked-in archive and executable
+SHA-256 values, exports and hashes both embedded NNUEs, then drives the same
+UCI initialization, watchdog, `go nodes 100000`, parser, and exact-score
+eligibility path used by the production labeler. It commits
+`sf18-100kn.uci.log` and then `sf18-100kn.provenance.json`, each atomically and
+without replacement. The provenance file is the last-written pass/failure
+commit marker; consumers must require it and verify its transcript SHA-256
+rather than treating the two files as an atomic transaction. The provenance
+records both the exact score-line nodes and the terminal reported nodes,
+because an eligible exact CP/WDL line can precede a bounded terminal line that
+crosses 100,000 nodes. It also records platform/runtime metadata. A failed
+engine/network smoke exits nonzero while retaining handled-failure provenance
+and transcript diagnostics. An exclusive prefix lock plus no-replace hard-link
+commits prevent concurrent or later runs from replacing existing evidence.
+Exported GPL network files live in a system-temporary directory outside CI's
+explicit artifact allowlist and are removed on handled success or failure; an
+abrupt process kill therefore cannot make CI upload those network files with
+partial smoke evidence.
+
+Only after that admission succeeds, label the frozen selection:
 
 ```sh
 node test/training/label-stockfish.js \
@@ -243,8 +282,12 @@ globs above pass every shard under the corresponding option. Repeat either
 option if the inputs span multiple directories. To validate all sidecars and
 records without installing or importing PyTorch, run the same shard arguments
 with `--validate-inputs` and omit the architecture, seed, device, and output.
-CI exercises this PyTorch-free trust-boundary mode; a full PyTorch training
-execution is not yet exercised in CI.
+CI byte-compiles the complete trainer and runs `--self-test`, which exercises
+FEN parsing, exact feature maps, symmetry/role derivation, deterministic
+shuffle/batching, generated authenticated train/validation shards, provenance
+propagation, and post-validation mutation refusal without importing PyTorch.
+A production-shard validation run and a full PyTorch training execution are
+not yet exercised in CI.
 
 Run all three frozen seeds. Architecture selection uses the median validation
 run, not the luckiest run. H128 may be trained for evidence but cannot ship
@@ -259,3 +302,11 @@ Dataset licenses do not become MIT merely because the pipeline code is MIT.
 Only manifests, contracts, and small authored smoke fixtures belong in Git.
 Raw archives, selected shards, labels, checkpoints, logs, and teacher
 executables remain external.
+
+`DATASETS.md` records the working release position for Stockfish-generated
+output. In short, numeric output is not presumed GPL-covered merely because a
+GPL program generated it, absent copied protectable program material; binary
+GPL obligations and input-dataset rights are separate. This is not legal
+advice. Generated label corpora, HCE parameters, and NNUE checkpoints require
+preserved provenance, an explicit artifact-license decision, and legal review
+before public release—the repository's MIT license is not automatic.

@@ -428,6 +428,24 @@ function validateSelectionManifest(
         contracts.heldout.symmetryPolicy.positionFamilySha256) {
     throw new Error('selection manifest does not bind the frozen held-out exclusions');
   }
+  const heldoutControlStatus =
+    Prepare.validateHeldoutExclusionPolicy(contracts.heldout);
+  if (manifest.exclusions.incidentFamilyControlStatus !==
+        heldoutControlStatus.incidentFamily ||
+      manifest.exclusions.sameSourceGameLineageControlStatus !==
+        heldoutControlStatus.sameSourceGameLineage ||
+      manifest.exclusions.nearbyBudgetTrainingControlStatus !==
+        heldoutControlStatus.nearbyBudgetTraining ||
+      manifest.exclusions.nearbyBudgetPreregistrationStatus !==
+        heldoutControlStatus.nearbyBudgetPreregistration ||
+      Prepare.stableJson(manifest.exclusions.nearbyBudgetNodes) !==
+        Prepare.stableJson(heldoutControlStatus.nearbyBudgetNodes) ||
+      manifest.exclusions.nearbyBudgetContract !==
+        heldoutControlStatus.nearbyBudgetContract ||
+      manifest.exclusions.nearbyBudgetExecutionEvidenceStatus !==
+        heldoutControlStatus.nearbyBudgetExecutionEvidence) {
+    throw new Error('selection manifest misstates held-out control enforcement');
+  }
   const certification = validateCertificationBinding(
     manifest, contracts, validationOptions
   );
@@ -592,12 +610,19 @@ function validateSelectionRecord(record, context) {
 }
 
 class UciEngine {
-  constructor(executable, transcript, watchdog) {
+  constructor(executable, transcript, watchdog, workingDirectory) {
     this.watchdog = watchdog;
     this.exited = false;
     this.exit = null;
     this.stdinError = null;
-    this.child = spawn(executable, [], { stdio: ['pipe', 'pipe', 'inherit'] });
+    const spawnOptions = { stdio: ['pipe', 'pipe', 'inherit'] };
+    if (workingDirectory !== undefined) {
+      if (typeof workingDirectory !== 'string' || !workingDirectory) {
+        throw new Error('Stockfish working directory must be a non-empty path');
+      }
+      spawnOptions.cwd = workingDirectory;
+    }
+    this.child = spawn(executable, [], spawnOptions);
     this.lines = readline.createInterface({ input: this.child.stdout, crlfDelay: Infinity });
     this.iterator = this.lines[Symbol.asyncIterator]();
     this.transcript = transcript || { append: function () {} };
@@ -695,6 +720,21 @@ class UciEngine {
       this.watchdog.readyTimeoutMs,
       'initial readyok'
     );
+  }
+
+  async exportNetworks(exportCommand) {
+    if (typeof exportCommand !== 'string' ||
+        !/^export_net [A-Za-z0-9._-]+ [A-Za-z0-9._-]+$/.test(exportCommand)) {
+      throw new Error('Stockfish network export command is not a safe two-file command');
+    }
+    this.send(exportCommand);
+    this.send('isready');
+    await this.readUntil(
+      line => line === 'readyok',
+      this.watchdog.readyTimeoutMs,
+      'network export readyok'
+    );
+    return exportCommand.split(/\s+/).slice(1);
   }
 
   async label(fen4, nodes, uci) {

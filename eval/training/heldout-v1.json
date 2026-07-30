@@ -42,8 +42,29 @@
       "teacher-relabel",
       "training"
     ],
-    "excludeSameSourceGameLineage": true,
-    "excludeNearbyBudgetProbes": true,
+    "controls": {
+      "incidentClusterAndFamily": {
+        "status": "enforced",
+        "mechanism": "Selection and downstream label/training validators recompute and reject symmetryPolicy.clusterSha256 and symmetryPolicy.positionFamilySha256."
+      },
+      "sameSourceGameLineage": {
+        "status": "pending-source-game-id",
+        "mechanism": null,
+        "reason": "The static Lichess evaluated-position export has no stable source-game ID, and the incident fixture does not identify a matching upstream Lichess game. This control requires a pinned CC0 PGN-derived corpus and an explicit incident source-game identifier."
+      },
+      "nearbyBudgetProbes": {
+        "trainingStatus": "enforced-by-incident-family",
+        "trainingMechanism": "A record for the incident position or any structural-family member is rejected independently of its source evaluation depth, nodes, or label budget.",
+        "budgetStatus": "preregistered",
+        "nodes": [
+          8268594,
+          10106060
+        ],
+        "budgetContract": "eval/training/hce-r3-fit-v1.json#/lockedPostFitGate/nearbyNodes",
+        "executionEvidenceStatus": "pending-post-fit-execution",
+        "reason": "The nearby node budgets are frozen before fitting. No probe execution evidence or results exist until a broadly validated candidate reaches the post-fit gate."
+      }
+    },
     "allowInTrainingMetrics": false,
     "allowInValidationMetrics": false,
     "allowInTestLoss": false

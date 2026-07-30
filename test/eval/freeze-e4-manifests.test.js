@@ -11,6 +11,7 @@ const path = require('path');
 const E4 = require('./e4-protocol.js');
 const Freezer = require('./freeze-e4-manifests.js');
 const Corpus = require('../training/corpus.js');
+const Prepare = require('../training/prepare-lichess-evals.js');
 
 let passed = 0;
 let failed = 0;
@@ -76,6 +77,7 @@ function syntheticCandidates(count) {
        serial++) {
     const board = new Array(64).fill(null);
     board[4] = 'k';
+    board[57] = 'N';
     board[60] = 'K';
     whitePawnSquares.forEach(function (square, bit) {
       if (serial & (1 << bit)) board[square] = 'P';
@@ -112,6 +114,30 @@ function normalizeCandidates(raw) {
   return raw.map(function (candidate, index) {
     return Freezer.validateCandidate(candidate, index + 1);
   });
+}
+
+function relocateWhiteKnight(fen) {
+  const parsed = Corpus.parseFen4(fen);
+  const board = parsed.board.flat();
+  const from = board.indexOf('N');
+  const to = 42;
+  if (from < 0 || board[to] !== null) {
+    throw new Error('synthetic opening lacks the expected movable white knight');
+  }
+  board[from] = null;
+  board[to] = 'N';
+  return boardToFen(board);
+}
+
+function evaluatedPosition(fen, cp) {
+  return {
+    fen,
+    evals: [{
+      depth: 20,
+      knodes: 100,
+      pvs: [{ cp, line: 'a2a3' }]
+    }]
+  };
 }
 
 function requestFor(sourceSha256) {
@@ -303,6 +329,60 @@ async function main() {
       function () {
         Freezer.writeJsonPair(explorationPath, certificationPath, first);
       });
+
+    const certifiedOpening = first.certification.openingClusters[0];
+    const certifiedFamilyVariant = relocateWhiteKnight(certifiedOpening.fen);
+    check(
+      Corpus.clusterKey(certifiedFamilyVariant) !==
+        Corpus.clusterKey(certifiedOpening.fen) &&
+      Corpus.positionFamilyKey(certifiedFamilyVariant) ===
+        Corpus.positionFamilyKey(certifiedOpening.fen),
+    'frozen-certification test fixture has a family-only variant');
+    const selectedFamilies = new Set([
+      ...selectedFamilySet(first.certification, componentById),
+      ...selectedFamilySet(first.exploration, componentById)
+    ]);
+    const safeComponent = components.find(function (component) {
+      return component.positionFamilies.every(function (family) {
+        return !selectedFamilies.has(family);
+      });
+    });
+    check(Boolean(safeComponent),
+      'frozen-certification test fixture retains one safe corpus component');
+    const corpusInput = path.join(temporary, 'corpus-source.jsonl');
+    const corpusOutput = path.join(temporary, 'corpus-selection');
+    const corpusText = [
+      evaluatedPosition(certifiedOpening.fen, 12),
+      evaluatedPosition(certifiedFamilyVariant, 13),
+      evaluatedPosition(safeComponent.opening.fen, 14)
+    ].map(JSON.stringify).join('\n') + '\n';
+    fs.writeFileSync(corpusInput, corpusText);
+    const selection = await Prepare.prepare({
+      input: corpusInput,
+      output: corpusOutput,
+      'source-sha256': Corpus.sha256(corpusText),
+      retrieved: '2026-07-30',
+      'certification-manifest': certificationPath,
+      modulus: '1',
+      numerator: '1',
+      shards: '1',
+      'minimum-selected': '1',
+      'allow-missing-roles': 'true'
+    });
+    check(
+      selection.exclusions.certificationStatus === 'frozen' &&
+      selection.exclusions.pendingCertificationAllowedForTestOnly === false &&
+      selection.exclusions.certificationClusterCount === 4000 &&
+      selection.counts.certificationClusterExcluded === 1 &&
+      selection.counts.certificationFamilyExcluded === 1 &&
+      selection.counts.selected === 1,
+    'production selection exercises non-empty frozen certification quarantine');
+    const selectedCorpus = fs.readFileSync(
+      path.join(corpusOutput, 'selection-000.ndjson'), 'utf8');
+    check(
+      !selectedCorpus.includes(Corpus.clusterKey(certifiedOpening.fen)) &&
+      !selectedCorpus.includes(Corpus.positionFamilyKey(certifiedOpening.fen)),
+    'frozen certification cluster and family are absent from selected corpus');
 
     const tinyPath = path.join(temporary, 'tiny.ndjson');
     fs.writeFileSync(tinyPath, JSON.stringify(raw[0]) + '\n');
