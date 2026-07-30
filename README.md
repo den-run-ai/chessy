@@ -177,11 +177,19 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
+node test/master-e4-regression.test.js  # exact r69 11...Bd4 miss; add --require-fix to gate a candidate
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
 node test/level-presets.test.js     # target bands, budgets, JS/WASM parity
 node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
 ```
+
+The Master e4 diagnostic treats Git commit `8b887c4` and the recorded WASM
+SHA-256 as the immutable r69 artifact rather than committing a second binary.
+After the shipped WASM changes, the test keeps validating the source/oracle
+fixture but intentionally skips the exact r69 search signature; check out the
+recorded commit to reproduce that historical result. Its pinned Stockfish Lite
+comparison covers four forced root moves only, not every legal move.
 
 The AI measurement tools are manual (too slow for PR CI). `node
 test/ai-bench.js --base origin/main` measures search nodes over 16 benchmark

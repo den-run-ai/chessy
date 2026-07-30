@@ -1,0 +1,65 @@
+[Event "Chessy game"]
+[Site "Chessy offline PWA"]
+[Date "2026.07.29"]
+[Round "-"]
+[White "Human"]
+[Black "Chessy AI (Master)"]
+[Result "0-1"]
+[TimeControl "-"]
+
+1. e4 {before: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1} d5
+{engine depth 8+quiescence, 5028 ms, attempted depth 9, 7633919 nodes (4564490 q), score 31 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5004 ms, release r69, source worker, engine wasm; before: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1}
+2. exd5 {before: rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2}
+Nf6
+{engine depth 8+quiescence, 5002 ms, attempted depth 9, 7183359 nodes (4503120 q), score 47 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5001 ms, release r69, source worker, engine wasm; before: rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2}
+3. Nc3 {before: rnbqkb1r/ppp1pppp/5n2/3P4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 1 3}
+Nxd5
+{engine depth 8+quiescence, 5000 ms, attempted depth 9, 7327743 nodes (4629781 q), score 22 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: rnbqkb1r/ppp1pppp/5n2/3P4/8/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 3}
+4. Nxd5 {before: rnbqkb1r/ppp1pppp/8/3n4/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 0 4}
+Qxd5
+{engine depth 8+quiescence, 5001 ms, attempted depth 9, 8394751 nodes (4765094 q), score 15 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: rnbqkb1r/ppp1pppp/8/3N4/8/8/PPPP1PPP/R1BQKBNR b KQkq - 0 4}
+5. Nf3 {before: rnb1kb1r/ppp1pppp/8/3q4/8/8/PPPP1PPP/R1BQKBNR w KQkq - 0 5} Nc6
+{engine depth 7+quiescence, 5003 ms, attempted depth 8, 7448575 nodes (4537748 q), score -11 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5001 ms, release r69, source worker, engine wasm; before: rnb1kb1r/ppp1pppp/8/3q4/8/5N2/PPPP1PPP/R1BQKB1R b KQkq - 1 5}
+6. Be2 {before: r1b1kb1r/ppp1pppp/2n5/3q4/8/5N2/PPPP1PPP/R1BQKB1R w KQkq - 2 6}
+e5
+{engine depth 7+quiescence, 5001 ms, attempted depth 8, 7658495 nodes (4733746 q), score -25 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5001 ms, release r69, source worker, engine wasm; before: r1b1kb1r/ppp1pppp/2n5/3q4/8/5N2/PPPPBPPP/R1BQK2R b KQkq - 3 6}
+7. d3 {before: r1b1kb1r/ppp2ppp/2n5/3qp3/8/5N2/PPPPBPPP/R1BQK2R w KQkq e6 0 7}
+Bc5
+{engine depth 7+quiescence, 5002 ms, attempted depth 8, 7957503 nodes (4814561 q), score -35 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: r1b1kb1r/ppp2ppp/2n5/3qp3/8/3P1N2/PPP1BPPP/R1BQK2R b KQkq - 0 7}
+8. Bd2 {before: r1b1k2r/ppp2ppp/2n5/2bqp3/8/3P1N2/PPP1BPPP/R1BQK2R w KQkq - 1 8}
+Bf5
+{engine depth 7+quiescence, 5000 ms, attempted depth 8, 8369151 nodes (5038711 q), score -56 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: r1b1k2r/ppp2ppp/2n5/2bqp3/8/3P1N2/PPPBBPPP/R2QK2R b KQkq - 2 8}
+9. O-O {before: r3k2r/ppp2ppp/2n5/2bqpb2/8/3P1N2/PPPBBPPP/R2QK2R w KQkq - 3 9}
+O-O
+{engine depth 7+quiescence, 5002 ms, attempted depth 8, 9235455 nodes (5350061 q), score -52 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5001 ms, release r69, source worker, engine wasm; before: r3k2r/ppp2ppp/2n5/2bqpb2/8/3P1N2/PPPBBPPP/R2Q1RK1 b kq - 4 9}
+10. Rb1 {before: r4rk1/ppp2ppp/2n5/2bqpb2/8/3P1N2/PPPBBPPP/R2Q1RK1 w - - 5 10}
+Qxa2
+{engine depth 7+quiescence, 5001 ms, attempted depth 8, 9215999 nodes (5610339 q), score -84 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: r4rk1/ppp2ppp/2n5/2bqpb2/8/3P1N2/PPPBBPPP/1R1Q1RK1 b - - 6 10}
+11. b3 {before: r4rk1/ppp2ppp/2n5/2b1pb2/8/3P1N2/qPPBBPPP/1R1Q1RK1 w - - 0 11}
+Bd4
+{engine depth 7+quiescence, 5001 ms, attempted depth 8, 9187327 nodes (5727981 q), score -88 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 4999 ms, release r69, source worker, engine wasm; before: r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - - 0 11}
+12. Nxd4
+{before: r4rk1/ppp2ppp/2n5/4pb2/3b4/1P1P1N2/q1PBBPPP/1R1Q1RK1 w - - 1 12} Nxd4
+{engine depth 8+quiescence, 5000 ms, attempted depth 9, 9546751 nodes (5562237 q), score -108 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 4999 ms, release r69, source worker, engine wasm; before: r4rk1/ppp2ppp/2n5/4pb2/3N4/1P1P4/q1PBBPPP/1R1Q1RK1 b - - 0 12}
+13. Rc1 {before: r4rk1/ppp2ppp/8/4pb2/3n4/1P1P4/q1PBBPPP/1R1Q1RK1 w - - 0 13}
+Rad8
+{engine depth 7+quiescence, 5000 ms, attempted depth 8, 8712191 nodes (5827140 q), score -98 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: r4rk1/ppp2ppp/8/4pb2/3n4/1P1P4/q1PBBPPP/2RQ1RK1 b - - 1 13}
+14. Be3 {before: 3r1rk1/ppp2ppp/8/4pb2/3n4/1P1P4/q1PBBPPP/2RQ1RK1 w - - 2 14}
+Nxe2+
+{engine depth 8+quiescence, 5001 ms, attempted depth 9, 9959423 nodes (5536587 q), score -276 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/8/4pb2/3n4/1P1PB3/q1P1BPPP/2RQ1RK1 b - - 3 14}
+15. Qxe2 {before: 3r1rk1/ppp2ppp/8/4pb2/8/1P1PB3/q1P1nPPP/2RQ1RK1 w - - 0 15}
+Bxd3
+{engine depth 8+quiescence, 5001 ms, attempted depth 9, 8609791 nodes (5040130 q), score -272 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 4999 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/8/4pb2/8/1P1PB3/q1P1QPPP/2R2RK1 b - - 0 15}
+16. Qf3 {before: 3r1rk1/ppp2ppp/8/4p3/8/1P1bB3/q1P1QPPP/2R2RK1 w - - 0 16} Bxf1
+{engine depth 8+quiescence, 5001 ms, attempted depth 9, 8943615 nodes (5099690 q), score -285 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/8/4p3/8/1P1bBQ2/q1P2PPP/2R2RK1 b - - 1 16}
+17. Kxf1 {before: 3r1rk1/ppp2ppp/8/4p3/8/1P2BQ2/q1P2PPP/2R2bK1 w - - 0 17} Qa6+
+{engine depth 8+quiescence, 5001 ms, attempted depth 9, 8837119 nodes (5208024 q), score -292 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/8/4p3/8/1P2BQ2/q1P2PPP/2R2K2 b - - 0 17}
+18. Kg1 {before: 3r1rk1/ppp2ppp/q7/4p3/8/1P2BQ2/2P2PPP/2R2K2 w - - 1 18} e4
+{engine depth 7+quiescence, 5001 ms, attempted depth 8, 8089599 nodes (4914698 q), score -298 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/q7/4p3/8/1P2BQ2/2P2PPP/2R3K1 b - - 2 18}
+19. Qg3 {before: 3r1rk1/ppp2ppp/q7/8/4p3/1P2BQ2/2P2PPP/2R3K1 w - - 0 19} Qe2
+{engine depth 8+quiescence, 5001 ms, attempted depth 9, 9170943 nodes (5153267 q), score -382 (White POV), stop time-limit, config dmax 30/time 5000ms/random, search 5000 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/q7/8/4p3/1P2B1Q1/2P2PPP/2R3K1 b - - 1 19}
+20. Bh6 {before: 3r1rk1/ppp2ppp/8/8/4p3/1P2B1Q1/2P1qPPP/2R3K1 w - - 2 20} Qd1+
+{engine depth 1+quiescence, 3 ms, 168 nodes (127 q), score -999997 (White POV), stop mate, config dmax 30/time 5000ms/random, search 1 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/7B/8/4p3/1P4Q1/2P1qPPP/2R3K1 b - - 3 20}
+21. Rxd1 {before: 3r1rk1/ppp2ppp/7B/8/4p3/1P4Q1/2P2PPP/2Rq2K1 w - - 4 21} Rxd1#
+{engine depth 1+quiescence, 3 ms, 48 nodes (24 q), score -999999 (White POV), stop mate, config dmax 30/time 5000ms/random, search 0 ms, release r69, source worker, engine wasm; before: 3r1rk1/ppp2ppp/7B/8/4p3/1P4Q1/2P2PPP/3R2K1 b - - 0 21}
+{checkmate} 0-1
