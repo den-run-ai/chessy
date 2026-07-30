@@ -10,11 +10,18 @@ const os = require('os');
 const path = require('path');
 const E4 = require('./e4-protocol.js');
 const Freezer = require('./freeze-e4-manifests.js');
+const CandidateCompiler = require('./prepare-e4-opening-candidates.js');
 const Corpus = require('../training/corpus.js');
 const Prepare = require('../training/prepare-lichess-evals.js');
+const Label = require('../training/label-stockfish.js');
 
 let passed = 0;
 let failed = 0;
+const SOURCE_NAMESPACE =
+  'chessy.e4.lichess-standard-rated.2026-06';
+const RAW_ARCHIVE_SHA256 =
+  '8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79';
+const CANDIDATE_MANIFEST_SHA256 = '3'.repeat(64);
 
 function check(ok, label, detail) {
   if (ok) {
@@ -63,7 +70,12 @@ function boardToFen(board) {
     if (empty) text += String(empty);
     ranks.push(text);
   }
-  return ranks.join('/') + ' w - - 0 1';
+  return ranks.join('/') + ' w - - 0 7';
+}
+
+function opaqueId(kind, value) {
+  return SOURCE_NAMESPACE + ':' + kind + ':' +
+    E4.sha256('synthetic-freezer-fixture:' + kind + ':' + value);
 }
 
 function syntheticCandidates(count) {
@@ -93,8 +105,8 @@ function syntheticCandidates(count) {
     const index = candidates.length;
     candidates.push({
       schema: 'chessy.e4.opening-candidate.v1',
-      recordId: 'record-' + String(index).padStart(5, '0'),
-      sourceGameId: 'game-' + String(index).padStart(5, '0'),
+      recordId: opaqueId('candidate', String(index).padStart(5, '0')),
+      sourceGameId: opaqueId('game', String(index).padStart(5, '0')),
       fen,
       eco: String.fromCharCode(65 + (index % 5)) +
         String(index % 100).padStart(2, '0'),
@@ -140,18 +152,37 @@ function evaluatedPosition(fen, cp) {
   };
 }
 
-function requestFor(sourceSha256) {
+function provenanceFor(candidateNdjsonSha256) {
+  return {
+    rawArchiveSha256: RAW_ARCHIVE_SHA256,
+    candidateNdjsonSha256,
+    candidateManifestSha256: CANDIDATE_MANIFEST_SHA256,
+    source: {
+      id: 'lichess-standard-rated-pgn',
+      release: '2026-06',
+      url: 'https://database.lichess.org/standard/' +
+        'lichess_db_standard_rated_2026-06.pgn.zst',
+      license: 'CC0-1.0'
+    }
+  };
+}
+
+function requestFor(candidateNdjsonSha256) {
   const teacher = Freezer.loadTeacherIdentity();
+  const provenance = provenanceFor(candidateNdjsonSha256);
   return {
     schema: 'chessy.e4.freeze-request.v1',
     freezeBaseCommit: 'a'.repeat(40),
     source: {
+      id: 'lichess-standard-rated-pgn',
       name: 'Lichess database',
-      release: 'synthetic-cc0-v1',
-      url: 'https://example.invalid/synthetic-cc0-v1',
+      release: provenance.source.release,
+      url: provenance.source.url,
       license: 'CC0-1.0'
     },
-    sourceArchiveSha256: sourceSha256,
+    rawArchiveSha256: provenance.rawArchiveSha256,
+    candidateNdjsonSha256: provenance.candidateNdjsonSha256,
+    candidateManifestSha256: provenance.candidateManifestSha256,
     stockfish: {
       executableSha256: teacher.executableSha256,
       networkSha256s: teacher.networkSha256s
@@ -202,16 +233,16 @@ async function main() {
   const normalized = normalizeCandidates(raw);
   const sourceSha256 = '1'.repeat(64);
   const request = Freezer.validateRequest(
-    requestFor(sourceSha256), sourceSha256);
+    requestFor(sourceSha256), provenanceFor(sourceSha256));
   const components = Freezer.buildComponents(normalized);
   check(components.length === raw.length,
     'synthetic candidates form distinct structural components');
 
   const incident = Freezer.validateCandidate({
     schema: 'chessy.e4.opening-candidate.v1',
-    recordId: 'incident',
-    sourceGameId: 'incident-game',
-    fen: 'r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - - 0 11',
+    recordId: opaqueId('candidate', 'incident'),
+    sourceGameId: opaqueId('game', 'incident'),
+    fen: 'r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 w - - 0 7',
     eco: 'A00',
     openingFamily: 'locked-incident',
     initialBalanceCp: 0
@@ -229,9 +260,9 @@ async function main() {
 
   const mirroredRaw = syntheticCandidates(1)[0];
   const mirror = Object.assign({}, mirroredRaw, {
-    recordId: 'mirror-record',
-    sourceGameId: 'mirror-game',
-    fen: Corpus.transformFen4(mirroredRaw.fen, 'file-mirror')
+    recordId: opaqueId('candidate', 'mirror'),
+    sourceGameId: opaqueId('game', 'mirror'),
+    fen: Corpus.transformFen4(mirroredRaw.fen, 'file-mirror') + ' 0 7'
   });
   const mirrored = Freezer.buildComponents(normalizeCandidates([
     mirroredRaw, mirror
@@ -240,19 +271,36 @@ async function main() {
     mirrored[0].opening.sourceRecordIds.length === 2,
   'mirrors and transposed-equivalent boards share one component');
 
-  const selectorSha256 = Freezer.selectionCodeSha256();
+  const initialSelectorSnapshot = Freezer.loadSelectorSnapshot();
+  const selectorSha256 = initialSelectorSnapshot.sha256;
   const first = Freezer.compileManifests({
     request,
     components,
-    sourceSha256,
-    selectorSha256
+    candidateNdjsonSha256: sourceSha256,
+    selectorSha256,
+    templateSnapshot: initialSelectorSnapshot.templates
   });
   const second = Freezer.compileManifests({
     request,
     components: components.slice().reverse(),
-    sourceSha256,
+    candidateNdjsonSha256: sourceSha256,
     selectorSha256
   });
+  let withoutLocaleCollation = null;
+  const originalLocaleCompare = String.prototype.localeCompare;
+  try {
+    String.prototype.localeCompare = function () {
+      throw new Error('locale collation entered deterministic freezer');
+    };
+    withoutLocaleCollation = Freezer.compileManifests({
+      request,
+      components: components.slice().reverse(),
+      candidateNdjsonSha256: sourceSha256,
+      selectorSha256
+    });
+  } finally {
+    String.prototype.localeCompare = originalLocaleCompare;
+  }
   check(first.certification.assignments.length === 4000 &&
     first.certification.openingClusters.length === 4000 &&
     first.exploration.assignments.length === 5,
@@ -265,8 +313,13 @@ async function main() {
   check(first.certification.freeze.contentSha256 ===
     second.certification.freeze.contentSha256 &&
     first.exploration.freeze.contentSha256 ===
-    second.exploration.freeze.contentSha256,
+      second.exploration.freeze.contentSha256,
   'selection and canonical manifest IDs are independent of candidate array order');
+  check(first.certification.freeze.contentSha256 ===
+    withoutLocaleCollation.certification.freeze.contentSha256 &&
+    first.exploration.freeze.contentSha256 ===
+      withoutLocaleCollation.exploration.freeze.contentSha256,
+  'selection uses code-point order without host locale collation');
   check(E4.validateManifestSet(first.exploration, first.certification),
     'generated manifest pair passes the executable E4 validator');
 
@@ -292,12 +345,50 @@ async function main() {
       Freezer.validateCandidate(Object.assign({}, raw[0], { surprise: true }), 7);
     });
   expectThrow(
+    'candidate schema rejects raw source-game identity',
+    /opaque SHA-256 identity/,
+    function () {
+      Freezer.validateCandidate(Object.assign({}, raw[0], {
+        sourceGameId: 'https://lichess.org/AbCd1234'
+      }), 8);
+    });
+  expectThrow(
+    'candidate schema rejects malformed FEN move counters',
+    /halfmove clock/,
+    function () {
+      const fields = raw[0].fen.split(' ');
+      fields[4] = 'not-a-clock';
+      Freezer.validateCandidate(Object.assign({}, raw[0], {
+        fen: fields.join(' ')
+      }), 9);
+    });
+  expectThrow(
+    'candidate schema rejects a noncanonical six-field FEN',
+    /already be canonical/,
+    function () {
+      const fields = raw[0].fen.split(' ');
+      fields[3] = 'e6';
+      Freezer.validateCandidate(Object.assign({}, raw[0], {
+        fen: fields.join(' ')
+      }), 10);
+    });
+  expectThrow(
+    'candidate schema rejects counters outside candidate plies 12..20',
+    /candidate ply 12\.\.20/,
+    function () {
+      const fields = raw[0].fen.split(' ');
+      fields[5] = '999';
+      Freezer.validateCandidate(Object.assign({}, raw[0], {
+        fen: fields.join(' ')
+      }), 11);
+    });
+  expectThrow(
     'request rejects a changed Stockfish network identity',
     /network hashes\/order/,
     function () {
       const changed = requestFor(sourceSha256);
       changed.stockfish.networkSha256s[1] = 'f'.repeat(64);
-      Freezer.validateRequest(changed, sourceSha256);
+      Freezer.validateRequest(changed, provenanceFor(sourceSha256));
     });
   expectThrow(
     'undersized pool fails closed instead of reusing openings',
@@ -306,7 +397,7 @@ async function main() {
       Freezer.compileManifests({
         request,
         components: components.slice(0, 4000),
-        sourceSha256,
+        candidateNdjsonSha256: sourceSha256,
         selectorSha256
       });
     });
@@ -314,6 +405,29 @@ async function main() {
   const temporary = fs.mkdtempSync(
     path.join(os.tmpdir(), 'chessy-e4-freezer-test-'));
   try {
+    const repositoryRoot = path.join(__dirname, '..', '..');
+    const selectorCopyRoot = path.join(temporary, 'selector-copy');
+    const selectorSnapshot = Freezer.loadSelectorSnapshot(repositoryRoot);
+    selectorSnapshot.pins.forEach(function (pin) {
+      const target = path.join(selectorCopyRoot, pin.path);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(path.join(repositoryRoot, pin.path), target);
+    });
+    const copiedSnapshot = Freezer.loadSelectorSnapshot(selectorCopyRoot);
+    check(copiedSnapshot.sha256 === selectorSnapshot.sha256,
+      'selector snapshot captures the exact template and contract bytes');
+    fs.appendFileSync(path.join(
+      selectorCopyRoot,
+      'eval/e4/exploration-manifest.template.json'
+    ), '\n');
+    expectThrow(
+      'pre-write gate rejects selector/template mutation after capture',
+      /selector contract changed before frozen manifests were written/,
+      function () {
+        Freezer.assertSelectorSnapshotHash(
+          selectorCopyRoot, copiedSnapshot.sha256);
+      });
+
     const explorationPath = path.join(temporary, 'exploration.json');
     const certificationPath = path.join(temporary, 'certification.json');
     Freezer.writeJsonPair(explorationPath, certificationPath, first);
@@ -388,16 +502,128 @@ async function main() {
     fs.writeFileSync(tinyPath, JSON.stringify(raw[0]) + '\n');
     const tinySha = await Freezer.sha256File(tinyPath);
     const tinyRequest = requestFor(tinySha);
-    tinyRequest.sourceArchiveSha256 = '0'.repeat(64);
+    tinyRequest.candidateNdjsonSha256 = '0'.repeat(64);
     expectThrow(
       'freeze request is bound to the exact candidate-file SHA-256',
       /does not match/,
       function () {
-        Freezer.validateRequest(tinyRequest, tinySha);
+        Freezer.validateRequest(tinyRequest, provenanceFor(tinySha));
+      });
+    await expectReject(
+      'NDJSON reader rejects noncanonical JSON bytes',
+      /not canonical JSON/,
+      function () {
+        return Freezer.readCandidates(tinyPath);
+      });
+
+    const authenticatedPath = path.join(
+      temporary, 'authenticated-candidates.ndjson');
+    const authenticatedBytes = CandidateCompiler.renderNdjson([raw[0]]);
+    fs.writeFileSync(authenticatedPath, authenticatedBytes);
+    const contracts = Label.loadFrozenContracts();
+    const sidecar = CandidateCompiler.buildSidecar({
+      policy: CandidateCompiler.loadSourcePolicy(),
+      contracts,
+      dependencies: CandidateCompiler.dependencyHashes(),
+      outputBytes: authenticatedBytes,
+      outputPath: authenticatedPath,
+      actualExecutableSha256:
+        contracts.teacher.engine.executable.sha256,
+      result: {
+        rows: [raw[0]],
+        counts: {
+          gamesSeen: 1,
+          sourceFilterEligible: 1,
+          hashSampled: 1,
+          legalCandidatePositions: 1,
+          retainedForScoring: 1,
+          scored: 1,
+          outputRows: 1
+        },
+        exclusions: {}
+      }
+    });
+    const sidecarPath = authenticatedPath + '.manifest.json';
+    const sidecarBytes = Prepare.stableJson(sidecar) + '\n';
+    fs.writeFileSync(sidecarPath, sidecarBytes);
+    const authenticatedInput =
+      await Freezer.readCandidates(authenticatedPath);
+    const authenticatedProvenance = Freezer.loadCandidateProvenance(
+      sidecarPath, authenticatedPath, authenticatedInput);
+    check(
+      authenticatedInput.sha256 === E4.sha256(authenticatedBytes) &&
+      authenticatedInput.bytes === Buffer.byteLength(authenticatedBytes) &&
+      authenticatedProvenance.rawArchiveSha256 === RAW_ARCHIVE_SHA256 &&
+      authenticatedProvenance.candidateNdjsonSha256 ===
+        authenticatedInput.sha256 &&
+      authenticatedProvenance.candidateManifestSha256 ===
+        E4.sha256(sidecarBytes),
+    'single-pass candidate bytes and strict sidecar authenticate all three artifacts');
+
+    const changedSidecar = JSON.parse(JSON.stringify(sidecar));
+    changedSidecar.rawArchive.sha256 = '0'.repeat(64);
+    const changedSidecarPath = path.join(temporary, 'changed-sidecar.json');
+    fs.writeFileSync(
+      changedSidecarPath, Prepare.stableJson(changedSidecar) + '\n');
+    expectThrow(
+      'freezer rejects a sidecar with changed raw-archive provenance',
+      /raw archive identity drifted/,
+      function () {
+        Freezer.loadCandidateProvenance(
+          changedSidecarPath, authenticatedPath, authenticatedInput);
+      });
+    const posthocSidecar = JSON.parse(JSON.stringify(sidecar));
+    posthocSidecar.extraction.exclusions.posthoc = 1;
+    const posthocSidecarPath = path.join(
+      temporary, 'posthoc-sidecar.json');
+    fs.writeFileSync(
+      posthocSidecarPath, Prepare.stableJson(posthocSidecar) + '\n');
+    expectThrow(
+      'freezer rejects an unregistered sidecar exclusion reason',
+      /reason\/count is not registered/,
+      function () {
+        Freezer.loadCandidateProvenance(
+          posthocSidecarPath, authenticatedPath, authenticatedInput);
+      });
+
+    const duplicateGamePath = path.join(
+      temporary, 'duplicate-game.ndjson');
+    const duplicateGameRows = [
+      raw[0],
+      Object.assign({}, raw[1], {
+        sourceGameId: raw[0].sourceGameId
+      })
+    ].sort(function (left, right) {
+      return left.recordId < right.recordId ? -1 : 1;
+    });
+    fs.writeFileSync(
+      duplicateGamePath,
+      duplicateGameRows.map(E4.stableJson).join('\n') + '\n');
+    await expectReject(
+      'NDJSON reader rejects a second candidate from one source game',
+      /duplicate candidate sourceGameId/,
+      function () {
+        return Freezer.readCandidates(duplicateGamePath);
+      });
+
+    const invalidUtf8Path = path.join(temporary, 'invalid-utf8.ndjson');
+    const invalidUtf8Bytes = Buffer.from(E4.stableJson(raw[0]) + '\n');
+    const familyOffset = invalidUtf8Bytes.indexOf(
+      Buffer.from(raw[0].openingFamily));
+    if (familyOffset < 0) {
+      throw new Error('synthetic opening family was not serialized');
+    }
+    invalidUtf8Bytes[familyOffset] = 0xff;
+    fs.writeFileSync(invalidUtf8Path, invalidUtf8Bytes);
+    await expectReject(
+      'NDJSON reader rejects malformed UTF-8 bytes',
+      /must be valid UTF-8/,
+      function () {
+        return Freezer.readCandidates(invalidUtf8Path);
       });
 
     const malformedPath = path.join(temporary, 'malformed.ndjson');
-    fs.writeFileSync(malformedPath, JSON.stringify(Object.assign(
+    fs.writeFileSync(malformedPath, E4.stableJson(Object.assign(
       {}, raw[0], { unknown: 1 })) + '\n');
     await expectReject(
       'NDJSON reader rejects unknown candidate fields',

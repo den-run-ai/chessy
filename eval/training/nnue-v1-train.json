@@ -24,9 +24,9 @@
       "teacherManifest": "eval/training/teacher-sf18-100kn-v1.json",
       "teacherManifestSha256": "72bb9fd86921e0f2f7e7d092c5ab8b7704a3b69a6d4e27f1c381785026ccf34b",
       "heldoutManifest": "eval/training/heldout-v1.json",
-      "heldoutManifestSha256": "0cf560ed73b5a9d0dc680cf6576858d0b8892d6193ebdcf7050b300eb6669276",
+      "heldoutManifestSha256": "d481ccf533a89faef4c6bcc19860e3d9da1b3104d8c79d6aed09c7673b972823",
       "corpusContract": "test/training/corpus.js",
-      "corpusContractSha256": "c76c912eff2a4882a5da251b725227aedcf30cfc8f8240b761dd8c21c3737405",
+      "corpusContractSha256": "b21dcbbdef84996c1d308f86f652a08ea00b3d8284a040fa3958c183313b30f0",
       "requirements": [
         "adjacent sidecar hash and row count match each labelled shard",
         "all sidecars bind one frozen-certification selection manifest, one selection contract SHA-256, and the frozen teacher manifest",

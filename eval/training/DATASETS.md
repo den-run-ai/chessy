@@ -63,10 +63,13 @@ rejects a corpus record produced by relabelling the position at a nearby node
 budget.
 
 Two broader controls are deliberately marked pending in `heldout-v1.json`.
-The static Lichess evaluated-position export has no stable source-game IDs, and
-the incident fixture does not identify a corresponding upstream Lichess game,
-so same-source-game-lineage quarantine cannot yet be enforced. It requires a
-pinned CC0 PGN-derived corpus and an explicit incident source-game identifier.
+The static Lichess evaluated-position export has no stable source-game IDs.
+The separate CC0 PGN opening source can provide opaque game lineage for its
+own records, but the Bd4 incident fixture is a local Chessy offline-PWA
+regression record rather than an authenticated Lichess game. PGN lineage
+therefore cannot invent cross-source incident lineage; activating
+same-source-game incident quarantine requires authenticated lineage for the
+incident itself.
 A fit using only the static FEN export may exercise the research pipeline, but
 is policy-ineligible for public artifact release until that lineage condition
 is satisfied. This is currently a documented policy gate, not an executable
@@ -107,15 +110,21 @@ matter.
 ### Lichess standard rated games
 
 - Source and monthly downloads: <https://database.lichess.org/>
-- Download pattern:
-  `https://database.lichess.org/standard/lichess_db_standard_rated_YYYY-MM.pgn.zst`
+- Preregistered opening source:
+  `https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst`
+- Compressed bytes: `28,241,946,492`
+- SHA-256:
+  `8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79`
 - License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
-- Informational scale on 2026-07-30: 7,949,495,674 games in 2.51 TB compressed.
+- June 2026 is the latest complete month in the official standard archive list
+  as checked on 2026-07-31.
 
-Use selected, checksummed monthly snapshots to reconstruct complete legal
-states, diversify sampled positions, and group splits by source game. Filter
-to standard chess and explicitly reject bots, malformed games, unsuitable time
-controls, and known-bad historical ranges as required by an experiment.
+Use the authenticated direct archive bytes to reconstruct complete legal
+states, diversify sampled positions, and group splits by opaque source-game
+identity. Do not substitute the `.torrent`: its metadata is stale and does not
+authenticate the preregistered direct archive bytes. Filter to standard chess
+and explicitly reject bots, self-play, malformed games, players below the
+preregistered Elo floor, and unsuitable time controls.
 Lichess **broadcast** exports are a different CC BY-SA dataset and are not part
 of this primary source.
 

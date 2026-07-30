@@ -37,8 +37,11 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-let syntheticSerial = 0;
+let syntheticSerial = 1;
 const syntheticClusterIds = new Set();
+const syntheticFamilyIds = new Set();
+const SOURCE_NAMESPACE =
+  'chessy.e4.lichess-standard-rated.2026-06';
 
 function boardToFen(board) {
   const ranks = [];
@@ -57,7 +60,7 @@ function boardToFen(board) {
     if (empty) text += String(empty);
     ranks.push(text);
   }
-  return ranks.join('/') + ' w - - 0 1';
+  return ranks.join('/') + ' w - - 0 7';
 }
 
 function nextSyntheticOpening(openingId) {
@@ -66,47 +69,54 @@ function nextSyntheticOpening(openingId) {
     const board = new Array(64).fill(null);
     board[4] = 'k';
     board[60] = 'K';
-    const available = [];
-    for (let square = 0; square < 64; square++) {
-      if (!board[square]) available.push(square);
-    }
-    const firstIndex = serial % available.length;
-    const first = available[firstIndex];
-    available.splice(firstIndex, 1);
-    const secondIndex = Math.floor(serial / 62) % available.length;
-    const second = available[secondIndex];
-    available.splice(secondIndex, 1);
-    const pawnSquares = available.filter(square => {
-      const rank = square >> 3;
-      return rank > 0 && rank < 7;
+    board[57] = 'N';
+    board[2] = 'b';
+    [48, 49, 50, 51, 52, 53, 54].forEach(function (square, bit) {
+      if (serial & (1 << bit)) board[square] = 'P';
     });
-    const pawn = pawnSquares[Math.floor(serial / (62 * 61)) % pawnSquares.length];
-    board[first] = 'N';
-    board[second] = 'b';
-    board[pawn] = 'P';
+    [8, 9, 10, 11, 12, 13, 14].forEach(function (square, bit) {
+      if (serial & (1 << (bit + 7))) board[square] = 'p';
+    });
     const fen = boardToFen(board);
     const clusterId = Corpus.clusterKey(fen);
-    if (syntheticClusterIds.has(clusterId)) continue;
+    const familyId = Corpus.positionFamilyKey(fen);
+    if (syntheticClusterIds.has(clusterId) ||
+        syntheticFamilyIds.has(familyId)) continue;
     syntheticClusterIds.add(clusterId);
+    syntheticFamilyIds.add(familyId);
     return {
       clusterId,
-      openingId,
+      openingId: 'op-' + clusterId,
       fen,
       eco: 'A00',
       openingFamily: 'synthetic-stats-fixture',
       initialBalanceCp: 0,
-      sourceRecordIds: ['source-' + clusterId],
-      clusterMembers: ['member-' + clusterId]
+      sourceRecordIds: [
+        SOURCE_NAMESPACE + ':candidate:' +
+          E4.sha256('synthetic-stats-record:' + clusterId)
+      ],
+      sourceGameIds: [
+        SOURCE_NAMESPACE + ':game:' +
+          E4.sha256('synthetic-stats-game:' + clusterId)
+      ],
+      positionFamilyIds: [familyId],
+      clusterMembers: [fen]
     };
   }
 }
 
 function rehashManifest(manifest) {
+  manifest.openingClusters.sort(function (left, right) {
+    return left.clusterId < right.clusterId ? -1 :
+      left.clusterId > right.clusterId ? 1 : 0;
+  });
   manifest.freeze.openingSetSha256 =
     E4.canonicalSha256(manifest.openingClusters);
   manifest.freeze.assignmentSha256 =
     E4.canonicalSha256(manifest.assignments);
   manifest.freeze.contentSha256 = null;
+  manifest.manifestId = 'r69-cal-v1/cert/' +
+    manifest.freeze.openingSetSha256;
   manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
   return manifest;
 }
@@ -115,20 +125,26 @@ function frozenCertification() {
   const manifest = E4.readJson(E4.PATHS.certification);
   manifest.manifestId = 'r69-cal-v1/cert/synthetic-stats';
   manifest.status = 'frozen';
-  manifest.source.release = 'synthetic-stats-v1';
-  manifest.source.url = 'https://example.invalid/synthetic-stats-v1';
+  manifest.source.release = E4.EXPECTED.openingSourceRelease;
+  manifest.source.url = E4.EXPECTED.openingSourceUrl;
   manifest.freeze = {
     immutable: true,
     freezeBaseCommit: 'a'.repeat(40),
     contentSha256: null,
     openingSetSha256: null,
     assignmentSha256: null,
-    sourceArchiveSha256: '1'.repeat(64),
-    selectionCodeSha256: '2'.repeat(64),
+    rawArchiveSha256: E4.EXPECTED.openingRawArchiveSha256,
+    candidateNdjsonSha256: '2'.repeat(64),
+    candidateManifestSha256: '3'.repeat(64),
+    selectionCodeSha256: '4'.repeat(64),
     stockfishExecutableSha256: E4.EXPECTED.stockfishExecutableSha256,
     stockfishNetworkSha256s: E4.EXPECTED.stockfishNetworkSha256s.slice()
   };
-  E4.LEVELS.forEach(function (level) {
+  [
+    E4.LEVELS.find(function (level) { return level.id === 'master'; })
+  ].concat(E4.LEVELS.filter(function (level) {
+    return level.id !== 'master';
+  })).forEach(function (level) {
     level.anchors.forEach(function (anchor, anchorIndex) {
       const count = level.allocation[anchorIndex];
       for (let index = 0; index < count; index++) {
@@ -140,7 +156,7 @@ function frozenCertification() {
           levelOrPair: level.id,
           anchor,
           openingClusterId: opening.clusterId,
-          openingId,
+          openingId: opening.openingId,
           colors: ['white', 'black'],
           games: 2
         });
@@ -157,7 +173,7 @@ function frozenCertification() {
         levelOrPair: pair.pair,
         anchor: 'direct',
         openingClusterId: opening.clusterId,
-        openingId,
+        openingId: opening.openingId,
         colors: ['white', 'black'],
         games: 2
       });

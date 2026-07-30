@@ -150,7 +150,13 @@
               "assignmentSha256": {
                 "type": "null"
               },
-              "sourceArchiveSha256": {
+              "rawArchiveSha256": {
+                "type": "null"
+              },
+              "candidateNdjsonSha256": {
+                "type": "null"
+              },
+              "candidateManifestSha256": {
                 "type": "null"
               },
               "selectionCodeSha256": {
@@ -168,6 +174,22 @@
       },
       "else": {
         "properties": {
+          "source": {
+            "properties": {
+              "name": {
+                "const": "Lichess database"
+              },
+              "release": {
+                "const": "2026-06"
+              },
+              "url": {
+                "const": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst"
+              },
+              "license": {
+                "const": "CC0-1.0"
+              }
+            }
+          },
           "openingClusters": {
             "minItems": 1
           },
@@ -191,7 +213,13 @@
               "assignmentSha256": {
                 "$ref": "#/$defs/sha256"
               },
-              "sourceArchiveSha256": {
+              "rawArchiveSha256": {
+                "const": "8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79"
+              },
+              "candidateNdjsonSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "candidateManifestSha256": {
                 "$ref": "#/$defs/sha256"
               },
               "selectionCodeSha256": {
@@ -414,16 +442,17 @@
         "openingFamily",
         "initialBalanceCp",
         "sourceRecordIds",
+        "sourceGameIds",
+        "positionFamilyIds",
         "clusterMembers"
       ],
       "properties": {
         "clusterId": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/sha256"
         },
         "openingId": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^op-[0-9a-f]{64}$"
         },
         "fen": {
           "type": "string",
@@ -431,21 +460,42 @@
         },
         "eco": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[A-E][0-9]{2}$"
         },
         "openingFamily": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?!\\s)(?!.*\\s$)(?!.*(?:[Hh][Tt][Tt][Pp][Ss]?://|[Ll][Ii][Cc][Hh][Ee][Ss][Ss]\\.org/))[^\\u0000-\\u001f\\u007f]+$"
         },
         "initialBalanceCp": {
-          "type": "number"
+          "type": "integer",
+          "minimum": -200,
+          "maximum": 200
         },
         "sourceRecordIds": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^chessy\\.e4\\.lichess-standard-rated\\.2026-06:candidate:[0-9a-f]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "sourceGameIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^chessy\\.e4\\.lichess-standard-rated\\.2026-06:game:[0-9a-f]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "positionFamilyIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/sha256"
           },
           "uniqueItems": true
         },
@@ -512,7 +562,9 @@
         "contentSha256",
         "openingSetSha256",
         "assignmentSha256",
-        "sourceArchiveSha256",
+        "rawArchiveSha256",
+        "candidateNdjsonSha256",
+        "candidateManifestSha256",
         "selectionCodeSha256",
         "stockfishExecutableSha256",
         "stockfishNetworkSha256s"
@@ -546,7 +598,19 @@
             "null"
           ]
         },
-        "sourceArchiveSha256": {
+        "rawArchiveSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidateNdjsonSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidateManifestSha256": {
           "type": [
             "string",
             "null"

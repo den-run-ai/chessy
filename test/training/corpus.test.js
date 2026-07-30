@@ -93,6 +93,24 @@ const capturableEp =
 assert.strictEqual(Corpus.parseFen4(capturableEp).fen4,
   '4k3/8/8/3Pp3/8/8/8/4K3 w - e6');
 checks++;
+assert.deepStrictEqual(
+  {
+    halfmoveClock: Corpus.parseFen4(capturableEp).halfmoveClock,
+    fullmoveNumber: Corpus.parseFen4(capturableEp).fullmoveNumber,
+    fen6: Corpus.parseFen4(capturableEp).fen6
+  },
+  {
+    halfmoveClock: 0,
+    fullmoveNumber: 1,
+    fen6: capturableEp
+  });
+assert.throws(() => Corpus.parseFen4(
+  '4k3/8/8/3Pp3/8/8/8/4K3 w - e6 not-a-clock 1'),
+/halfmove clock/);
+assert.throws(() => Corpus.parseFen4(
+  '4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 0'),
+/fullmove number/);
+checks += 3;
 assert.throws(() => Corpus.parseFen4(
   '8/8/8/8/8/8/4k3/4K3 w - -'), /adjacent/);
 assert.throws(() => Corpus.validateSourceState(

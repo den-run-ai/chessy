@@ -61,9 +61,12 @@ fit.
 
 The static Lichess export has no game lineage or halfmove/fullmove state. It is
 therefore suitable for static evaluation fitting, not repetition/fifty-move
-training. A later CC0 PGN slice supplies complete states and source-game
-grouping. Until that slice and an incident source-game identifier are pinned,
-the same-source-game incident quarantine is explicitly pending, not enforced.
+training. The separately preregistered CC0 PGN opening source supplies complete
+states and opaque source-game grouping for E4 opening selection. That PGN
+lineage cannot establish lineage for the Bd4 incident: its fixture is a local
+Chessy offline-PWA regression record, not an authenticated Lichess game.
+Same-source-game incident quarantine therefore remains explicitly pending,
+not enforced, until the incident itself has authenticated lineage.
 Static-FEN-only fits may exercise the research pipeline but are
 policy-ineligible for public artifact release until that lineage condition is
 satisfied; no executable release gate currently consumes this policy.

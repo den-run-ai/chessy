@@ -106,7 +106,9 @@
     "contentSha256": null,
     "openingSetSha256": null,
     "assignmentSha256": null,
-    "sourceArchiveSha256": null,
+    "rawArchiveSha256": null,
+    "candidateNdjsonSha256": null,
+    "candidateManifestSha256": null,
     "selectionCodeSha256": null,
     "stockfishExecutableSha256": null,
     "stockfishNetworkSha256s": null

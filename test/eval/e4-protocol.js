@@ -49,6 +49,14 @@ const EXPECTED = Object.freeze({
     'c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7',
     '37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d'
   ]),
+  openingSourceName: 'Lichess database',
+  openingSourceRelease: '2026-06',
+  openingSourceUrl:
+    'https://database.lichess.org/standard/' +
+    'lichess_db_standard_rated_2026-06.pgn.zst',
+  openingSourceLicense: 'CC0-1.0',
+  openingRawArchiveSha256:
+    '8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79',
   heldoutFen: 'r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - - 0 11'
 });
 
@@ -96,10 +104,16 @@ const FREEZE_HASH_FIELDS = Object.freeze([
   'contentSha256',
   'openingSetSha256',
   'assignmentSha256',
-  'sourceArchiveSha256',
+  'rawArchiveSha256',
+  'candidateNdjsonSha256',
+  'candidateManifestSha256',
   'selectionCodeSha256',
   'stockfishExecutableSha256'
 ]);
+const OPAQUE_GAME_ID =
+  /^chessy\.e4\.lichess-standard-rated\.2026-06:game:[0-9a-f]{64}$/;
+const OPAQUE_RECORD_ID =
+  /^chessy\.e4\.lichess-standard-rated\.2026-06:candidate:[0-9a-f]{64}$/;
 
 function fail(message) {
   throw new Error(message);
@@ -566,33 +580,121 @@ function validateOpeningClusters(manifest, kind) {
     kind + ' frozen manifest needs literal opening clusters');
   const byCluster = new Map();
   const openingIds = new Set();
+  const sourceRecordIds = new Set();
+  const sourceGameIds = new Set();
+  const positionFamilyIds = new Set();
+  let priorClusterId = null;
   const heldoutCluster = TrainingCorpus.clusterKey(EXPECTED.heldoutFen);
+  const heldoutFamily =
+    TrainingCorpus.positionFamilyKey(EXPECTED.heldoutFen);
   manifest.openingClusters.forEach(function (opening, index) {
     const label = kind + ' openingClusters[' + index + ']';
     assert(isObject(opening), label + ' must be an object');
     assertSha(opening.clusterId, label + '.clusterId');
+    assert(priorClusterId == null || priorClusterId < opening.clusterId,
+      kind + ' openingClusters must be in strict clusterId order');
+    priorClusterId = opening.clusterId;
     assertSegment(opening.openingId, label + '.openingId');
+    assert(opening.openingId === 'op-' + opening.clusterId,
+      label + '.openingId must derive from its cluster ID');
     assert(!byCluster.has(opening.clusterId),
       kind + ' duplicate opening cluster ID: ' + opening.clusterId);
     assert(!openingIds.has(opening.openingId),
       kind + ' duplicate opening ID: ' + opening.openingId);
     assert(typeof opening.fen === 'string' && opening.fen.length > 0,
       label + '.fen is missing');
+    const parsedOpening = TrainingCorpus.validateSourceState(opening.fen);
+    assert(parsedOpening.fen6 !== null &&
+      parsedOpening.fen6 === opening.fen,
+    label + '.fen must be a canonical validated six-field FEN');
+    const openingPly = parsedOpening.turn === 'w' ?
+      2 * (parsedOpening.fullmoveNumber - 1) :
+      2 * parsedOpening.fullmoveNumber - 1;
+    assert(openingPly >= 12 && openingPly <= 20 &&
+      parsedOpening.halfmoveClock <= openingPly,
+    label + '.fen counters must derive from candidate ply 12..20');
     const computedCluster = TrainingCorpus.clusterKey(opening.fen);
     assert(opening.clusterId === computedCluster,
       label + '.clusterId does not match its canonical board/symmetry cluster');
     assert(computedCluster !== heldoutCluster,
       label + ' leaks the locked Master incident cluster');
-    assert(typeof opening.eco === 'string' && opening.eco.length > 0,
-      label + '.eco is missing');
+    assert(typeof opening.eco === 'string' &&
+      /^[A-E][0-9]{2}$/.test(opening.eco),
+    label + '.eco must match [A-E][0-9]{2}');
     assert(typeof opening.openingFamily === 'string' &&
-      opening.openingFamily.length > 0, label + '.openingFamily is missing');
-    assert(Number.isFinite(opening.initialBalanceCp),
-      label + '.initialBalanceCp must be finite');
+      opening.openingFamily.length > 0 &&
+      opening.openingFamily.length <= 256 &&
+      opening.openingFamily === opening.openingFamily.trim() &&
+      opening.openingFamily.normalize('NFC') === opening.openingFamily &&
+      !/[\u0000-\u001f\u007f]/.test(opening.openingFamily) &&
+      !/(?:https?:\/\/|lichess\.org\/)/i.test(opening.openingFamily),
+    label + '.openingFamily must be trimmed NFC text without controls or URLs');
+    assert(Number.isSafeInteger(opening.initialBalanceCp) &&
+      Math.abs(opening.initialBalanceCp) <= 200,
+    label + '.initialBalanceCp must be an integer in [-200, 200]');
     assert(Array.isArray(opening.sourceRecordIds) &&
       opening.sourceRecordIds.length > 0, label + '.sourceRecordIds is empty');
+    assert(Array.isArray(opening.sourceGameIds) &&
+      opening.sourceGameIds.length > 0, label + '.sourceGameIds is empty');
+    assert(Array.isArray(opening.positionFamilyIds) &&
+      opening.positionFamilyIds.length > 0,
+    label + '.positionFamilyIds is empty');
     assert(Array.isArray(opening.clusterMembers) &&
       opening.clusterMembers.length > 0, label + '.clusterMembers is empty');
+    assert(opening.clusterMembers.includes(opening.fen),
+      label + '.clusterMembers must contain the representative FEN');
+    [
+      ['sourceRecordIds', opening.sourceRecordIds],
+      ['sourceGameIds', opening.sourceGameIds],
+      ['positionFamilyIds', opening.positionFamilyIds],
+      ['clusterMembers', opening.clusterMembers]
+    ].forEach(function (entry) {
+      const sorted = entry[1].slice().sort();
+      assert(stableJson(entry[1]) === stableJson(sorted) &&
+        new Set(entry[1]).size === entry[1].length,
+      label + '.' + entry[0] + ' must be sorted and unique');
+    });
+    opening.sourceRecordIds.forEach(function (id) {
+      assert(OPAQUE_RECORD_ID.test(id),
+        label + '.sourceRecordIds contains a non-opaque ID');
+      assert(!sourceRecordIds.has(id),
+        kind + ' source record is reused across opening clusters: ' + id);
+      sourceRecordIds.add(id);
+    });
+    opening.sourceGameIds.forEach(function (id) {
+      assert(OPAQUE_GAME_ID.test(id),
+        label + '.sourceGameIds contains a non-opaque ID');
+      assert(!sourceGameIds.has(id),
+        kind + ' source game is reused across opening clusters: ' + id);
+      sourceGameIds.add(id);
+    });
+    opening.positionFamilyIds.forEach(function (id) {
+      assertSha(id, label + '.positionFamilyIds entry');
+      assert(id !== heldoutFamily,
+        label + ' leaks the locked Master incident position family');
+      assert(!positionFamilyIds.has(id),
+        kind + ' position family is reused across opening clusters: ' + id);
+      positionFamilyIds.add(id);
+    });
+    const derivedFamilies = Array.from(new Set(
+      opening.clusterMembers.map(function (fen, memberIndex) {
+        const parsed = TrainingCorpus.validateSourceState(fen);
+        assert(parsed.fen6 !== null && parsed.fen6 === fen,
+          label + '.clusterMembers[' + memberIndex +
+            '] must be a canonical validated six-field FEN');
+        const completedPly = parsed.turn === 'w' ?
+          2 * (parsed.fullmoveNumber - 1) :
+          2 * parsed.fullmoveNumber - 1;
+        assert(completedPly >= 12 && completedPly <= 20 &&
+          parsed.halfmoveClock <= completedPly,
+        label + '.clusterMembers[' + memberIndex +
+          '] counters must derive from candidate ply 12..20');
+        return TrainingCorpus.positionFamilyKey(fen);
+      })
+    )).sort();
+    assert(stableJson(opening.positionFamilyIds) ===
+      stableJson(derivedFamilies),
+    label + '.positionFamilyIds do not derive from clusterMembers');
     byCluster.set(opening.clusterId, opening);
     openingIds.add(opening.openingId);
   });
@@ -638,11 +740,26 @@ function validateFrozenHashes(manifest, kind) {
   assert(manifest.freeze.openingSetSha256 ===
     canonicalSha256(manifest.openingClusters),
   kind + ' opening-set hash drifted');
+  assert(manifest.manifestId === 'r69-cal-v1/' +
+    (kind === 'certification' ? 'cert/' : 'explore/') +
+      manifest.freeze.openingSetSha256,
+  kind + ' manifest ID must derive from its frozen opening-set hash');
   assert(manifest.freeze.assignmentSha256 ===
     canonicalSha256(manifest.assignments),
   kind + ' assignment hash drifted');
   assert(manifest.freeze.contentSha256 === manifestContentSha256(manifest),
     kind + ' content hash drifted');
+}
+
+function validateFrozenOpeningSource(manifest, kind) {
+  assert(manifest.source.name === EXPECTED.openingSourceName &&
+    manifest.source.release === EXPECTED.openingSourceRelease &&
+    manifest.source.url === EXPECTED.openingSourceUrl &&
+    manifest.source.license === EXPECTED.openingSourceLicense,
+  kind + ' frozen source must be the preregistered June 2026 Lichess archive');
+  assert(manifest.freeze.rawArchiveSha256 ===
+    EXPECTED.openingRawArchiveSha256,
+  kind + ' frozen raw-archive SHA-256 drifted from the preregistered source');
 }
 
 function assertAllClustersUsed(openingByCluster, used, kind) {
@@ -691,11 +808,47 @@ function validateExplorationManifest(manifest) {
     return true;
   }
 
-  assert(typeof manifest.source.name === 'string' && manifest.source.name.length &&
-    typeof manifest.source.release === 'string' && manifest.source.release.length &&
-    typeof manifest.source.url === 'string' && manifest.source.url.length,
-  'frozen exploration source name/release/URL are required');
+  validateFrozenOpeningSource(manifest, 'exploration');
   const openingByCluster = validateOpeningClusters(manifest, 'exploration');
+  const expectedAssignmentBuckets = [];
+  let declaredExplorationOpenings = 0;
+  manifest.schedules.forEach(function (schedule) {
+    assert(Number.isInteger(schedule.openingClusters) &&
+      schedule.openingClusters > 0,
+    'frozen exploration opening count missing for ' + schedule.level);
+    assert(schedule.games === schedule.openingClusters * 2,
+      'exploration game count must be two per opening for ' + schedule.level);
+    assert(Array.isArray(schedule.anchorAllocation) &&
+      schedule.anchorAllocation.length > 0,
+    'frozen exploration anchor allocation missing for ' + schedule.level);
+    const seenAnchors = new Set();
+    let openings = 0;
+    schedule.anchorAllocation.forEach(function (allocation) {
+      assert(schedule.allowedAnchors.includes(allocation.elo),
+        'exploration allocation uses a non-nearest anchor for ' +
+          schedule.level);
+      assert(!seenAnchors.has(allocation.elo),
+        'duplicate exploration anchor allocation for ' + schedule.level +
+          '/' + allocation.elo);
+      seenAnchors.add(allocation.elo);
+      assert(Number.isSafeInteger(allocation.openingClusters) &&
+        allocation.openingClusters > 0 &&
+        allocation.games === allocation.openingClusters * 2,
+      'exploration allocation games/count drifted for ' + schedule.level +
+        '/' + allocation.elo);
+      openings += allocation.openingClusters;
+      for (let index = 0; index < allocation.openingClusters; index++) {
+        expectedAssignmentBuckets.push(
+          schedule.level + '/' + allocation.elo);
+      }
+    });
+    assert(openings === schedule.openingClusters,
+      'exploration anchor allocations do not sum for ' + schedule.level);
+    declaredExplorationOpenings += openings;
+  });
+  assert(manifest.assignments.length === declaredExplorationOpenings &&
+    openingByCluster.size === declaredExplorationOpenings,
+  'exploration assignments/openings do not match declared schedule totals');
   const used = new Set();
   const seenAssignments = new Set();
   const byLevelAnchor = new Map();
@@ -708,38 +861,26 @@ function validateExplorationManifest(manifest) {
     assert(level, label + ' has an unknown level');
     assert(level.anchors.includes(assignment.anchor),
       label + ' uses an anchor outside the nearest-anchor set');
+    const bucket = assignment.level + '/' + assignment.anchor;
+    assert(expectedAssignmentBuckets[index] === bucket,
+      label + ' violates declared level/anchor block order');
     const key = assignment.level + '/' + assignment.anchor + '/' +
       assignment.openingClusterId;
     assert(!seenAssignments.has(key), 'duplicate exploration assignment: ' + key);
     seenAssignments.add(key);
+    assert(!used.has(assignment.openingClusterId),
+      'exploration opening cluster is assigned more than once: ' +
+        assignment.openingClusterId);
     used.add(assignment.openingClusterId);
-    const bucket = assignment.level + '/' + assignment.anchor;
     byLevelAnchor.set(bucket, (byLevelAnchor.get(bucket) || 0) + 1);
   });
   manifest.schedules.forEach(function (schedule) {
-    assert(Number.isInteger(schedule.openingClusters) &&
-      schedule.openingClusters > 0, 'frozen exploration opening count missing for ' +
-      schedule.level);
-    assert(schedule.games === schedule.openingClusters * 2,
-      'exploration game count must be two per opening for ' + schedule.level);
-    assert(Array.isArray(schedule.anchorAllocation) &&
-      schedule.anchorAllocation.length > 0,
-    'frozen exploration anchor allocation missing for ' + schedule.level);
-    let openings = 0;
     schedule.anchorAllocation.forEach(function (allocation) {
-      assert(schedule.allowedAnchors.includes(allocation.elo),
-        'exploration allocation uses a non-nearest anchor for ' + schedule.level);
-      assert(allocation.games === allocation.openingClusters * 2,
-        'exploration allocation games drifted for ' + schedule.level + '/' +
-        allocation.elo);
       assert(byLevelAnchor.get(schedule.level + '/' + allocation.elo) ===
         allocation.openingClusters,
       'exploration assignments do not match allocation for ' + schedule.level +
         '/' + allocation.elo);
-      openings += allocation.openingClusters;
     });
-    assert(openings === schedule.openingClusters,
-      'exploration anchor allocations do not sum for ' + schedule.level);
   });
   assertAllClustersUsed(openingByCluster, used, 'exploration');
   validateFrozenHashes(manifest, 'exploration');
@@ -780,15 +921,30 @@ function validateCertificationManifest(manifest) {
     return true;
   }
 
-  assert(typeof manifest.source.release === 'string' &&
-    manifest.source.release.length > 0 &&
-    typeof manifest.source.url === 'string' && manifest.source.url.length > 0,
-  'frozen certification source release/URL are required');
+  validateFrozenOpeningSource(manifest, 'certification');
   const openingByCluster = validateOpeningClusters(manifest, 'certification');
   const used = new Set();
   const seenAssignments = new Set();
   const counts = new Map();
   const clusters = new Map();
+  const expectedAssignmentKeys = [];
+  const masterFirst = [
+    LEVELS.find(function (level) { return level.id === 'master'; })
+  ].concat(LEVELS.filter(function (level) {
+    return level.id !== 'master';
+  }));
+  masterFirst.forEach(function (level) {
+    level.anchors.forEach(function (anchor, anchorIndex) {
+      for (let index = 0; index < level.allocation[anchorIndex]; index++) {
+        expectedAssignmentKeys.push('cert/' + level.id + '/' + anchor);
+      }
+    });
+  });
+  ADJACENT.forEach(function (pair) {
+    for (let index = 0; index < 400; index++) {
+      expectedAssignmentKeys.push('adjacent/' + pair.pair + '/direct');
+    }
+  });
 
   manifest.assignments.forEach(function (assignment, index) {
     const label = 'certification assignments[' + index + ']';
@@ -814,6 +970,8 @@ function validateCertificationManifest(manifest) {
         label + ' adjacent anchor must be direct');
       key = 'adjacent/' + pair.pair + '/direct';
     }
+    assert(expectedAssignmentKeys[index] === key,
+      label + ' violates Master-first certification block order');
     const unique = key + '/' + assignment.openingClusterId;
     assert(!seenAssignments.has(unique),
       'duplicate certification assignment: ' + unique);
@@ -821,6 +979,9 @@ function validateCertificationManifest(manifest) {
     counts.set(key, (counts.get(key) || 0) + 1);
     if (!clusters.has(key)) clusters.set(key, new Set());
     clusters.get(key).add(assignment.openingClusterId);
+    assert(!used.has(assignment.openingClusterId),
+      'certification opening cluster is assigned more than once: ' +
+        assignment.openingClusterId);
     used.add(assignment.openingClusterId);
   });
 
@@ -860,9 +1021,27 @@ function validateManifestSet(exploration, certification) {
   const explorationIds = new Set(exploration.openingClusters.map(function (row) {
     return row.clusterId;
   }));
+  const explorationGames = new Set(exploration.openingClusters.flatMap(
+    function (row) { return row.sourceGameIds; }));
+  const explorationRecords = new Set(exploration.openingClusters.flatMap(
+    function (row) { return row.sourceRecordIds; }));
+  const explorationFamilies = new Set(exploration.openingClusters.flatMap(
+    function (row) { return row.positionFamilyIds; }));
   certification.openingClusters.forEach(function (row) {
     assert(!explorationIds.has(row.clusterId),
       'exploration/certification opening cluster ID overlap: ' + row.clusterId);
+    row.sourceGameIds.forEach(function (id) {
+      assert(!explorationGames.has(id),
+        'exploration/certification source-game overlap: ' + id);
+    });
+    row.sourceRecordIds.forEach(function (id) {
+      assert(!explorationRecords.has(id),
+        'exploration/certification source-record overlap: ' + id);
+    });
+    row.positionFamilyIds.forEach(function (id) {
+      assert(!explorationFamilies.has(id),
+        'exploration/certification position-family overlap: ' + id);
+    });
   });
   return true;
 }

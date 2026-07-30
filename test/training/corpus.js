@@ -75,6 +75,21 @@ function parseFen4(fen) {
   if (fields.length !== 4 && fields.length !== 6) {
     throw new Error('FEN must contain four or six fields');
   }
+  let halfmoveClock = null, fullmoveNumber = null;
+  if (fields.length === 6) {
+    if (!/^(0|[1-9][0-9]*)$/.test(fields[4])) {
+      throw new Error('invalid halfmove clock: ' + fields[4]);
+    }
+    if (!/^[1-9][0-9]*$/.test(fields[5])) {
+      throw new Error('invalid fullmove number: ' + fields[5]);
+    }
+    halfmoveClock = Number(fields[4]);
+    fullmoveNumber = Number(fields[5]);
+    if (!Number.isSafeInteger(halfmoveClock) ||
+        !Number.isSafeInteger(fullmoveNumber)) {
+      throw new Error('FEN move counters must be safe integers');
+    }
+  }
   const board = expandBoard(fields[0]);
   const turn = fields[1];
   if (turn !== 'w' && turn !== 'b') throw new Error('invalid side to move: ' + turn);
@@ -120,12 +135,18 @@ function parseFen4(fen) {
       (file < 7 && board[sourceRank][file + 1] === capturer);
     if (!adjacent || board[capturedRank][file] !== captured) ep = '-';
   }
+  const fen4 = board.map(compressRank).join('/') + ' ' + turn + ' ' +
+    castling + ' ' + ep;
   return {
     board,
     turn,
     castling,
     ep,
-    fen4: board.map(compressRank).join('/') + ' ' + turn + ' ' + castling + ' ' + ep
+    halfmoveClock,
+    fullmoveNumber,
+    fen4,
+    fen6: fields.length === 6 ?
+      fen4 + ' ' + halfmoveClock + ' ' + fullmoveNumber : null
   };
 }
 

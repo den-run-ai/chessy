@@ -87,6 +87,8 @@ jobs:
         run: |
           node test/eval/e4-protocol.test.js
           node test/eval/e4-stats.test.js
+          node test/eval/e4-input-schemas.test.js
+          node test/eval/prepare-e4-opening-candidates.test.js
           node test/eval/freeze-e4-manifests.test.js
       - name: Validate shared HCE/NNUE corpus and teacher adapters
         run: |

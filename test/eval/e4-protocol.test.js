@@ -7,6 +7,7 @@
 
 const path = require('path');
 const E4 = require('./e4-protocol.js');
+const Corpus = require('../training/corpus.js');
 
 let passed = 0;
 let failed = 0;
@@ -42,8 +43,11 @@ function readTemplates() {
   };
 }
 
-let syntheticSerial = 0;
+let syntheticSerial = 1;
 const syntheticClusterIds = new Set();
+const syntheticFamilyIds = new Set();
+const SOURCE_NAMESPACE =
+  'chessy.e4.lichess-standard-rated.2026-06';
 
 function boardToFen(board) {
   const ranks = [];
@@ -62,7 +66,33 @@ function boardToFen(board) {
     if (empty) text += String(empty);
     ranks.push(text);
   }
-  return ranks.join('/') + ' w - - 0 1';
+  return ranks.join('/') + ' w - - 0 7';
+}
+
+function relocateWhiteKnight(fen) {
+  const parsed = Corpus.parseFen4(fen);
+  const board = parsed.board.flat();
+  const from = board.indexOf('N');
+  const to = 42;
+  if (from < 0 || board[to] !== null) {
+    throw new Error('synthetic opening lacks a movable white knight');
+  }
+  board[from] = null;
+  board[to] = 'N';
+  return boardToFen(board);
+}
+
+function heldoutFamilyVariant() {
+  const parsed = Corpus.parseFen4(E4.EXPECTED.heldoutFen);
+  const board = parsed.board.flat();
+  const from = 26; // c5
+  const to = 35; // d4
+  if (board[from] !== 'b' || board[to] !== null) {
+    throw new Error('held-out fixture lacks the expected c5 bishop');
+  }
+  board[from] = null;
+  board[to] = 'b';
+  return boardToFen(board);
 }
 
 function nextSyntheticOpening() {
@@ -71,29 +101,22 @@ function nextSyntheticOpening() {
     const board = new Array(64).fill(null);
     board[4] = 'k';
     board[60] = 'K';
-    const available = [];
-    for (let square = 0; square < 64; square++) {
-      if (!board[square]) available.push(square);
-    }
-    const firstIndex = serial % available.length;
-    const first = available[firstIndex];
-    available.splice(firstIndex, 1);
-    const secondIndex = Math.floor(serial / 62) % available.length;
-    const second = available[secondIndex];
-    available.splice(secondIndex, 1);
-    const pawnSquares = available.filter(square => {
-      const rank = square >> 3;
-      return rank > 0 && rank < 7;
+    board[57] = 'N';
+    board[2] = 'b';
+    [48, 49, 50, 51, 52, 53, 54].forEach(function (square, bit) {
+      if (serial & (1 << bit)) board[square] = 'P';
     });
-    const pawn = pawnSquares[Math.floor(serial / (62 * 61)) % pawnSquares.length];
-    board[first] = 'N';
-    board[second] = 'b';
-    board[pawn] = 'P';
+    [8, 9, 10, 11, 12, 13, 14].forEach(function (square, bit) {
+      if (serial & (1 << (bit + 7))) board[square] = 'p';
+    });
     const fen = boardToFen(board);
-    const clusterId = require('../training/corpus.js').clusterKey(fen);
-    if (syntheticClusterIds.has(clusterId)) continue;
+    const clusterId = Corpus.clusterKey(fen);
+    const positionFamilyId = Corpus.positionFamilyKey(fen);
+    if (syntheticClusterIds.has(clusterId) ||
+        syntheticFamilyIds.has(positionFamilyId)) continue;
     syntheticClusterIds.add(clusterId);
-    return { fen, clusterId };
+    syntheticFamilyIds.add(positionFamilyId);
+    return { fen, clusterId, positionFamilyId };
   }
 }
 
@@ -101,40 +124,57 @@ function opening(clusterId, openingId) {
   const generated = nextSyntheticOpening();
   return {
     clusterId: generated.clusterId,
-    openingId: openingId,
+    openingId: 'op-' + generated.clusterId,
     fen: generated.fen,
     eco: 'A00',
     openingFamily: 'synthetic-contract-fixture',
     initialBalanceCp: 0,
-    sourceRecordIds: ['source-' + generated.clusterId],
-    clusterMembers: ['member-' + generated.clusterId]
+    sourceRecordIds: [
+      SOURCE_NAMESPACE + ':candidate:' +
+        E4.sha256('synthetic-record:' + generated.clusterId)
+    ],
+    sourceGameIds: [
+      SOURCE_NAMESPACE + ':game:' +
+        E4.sha256('synthetic-game:' + generated.clusterId)
+    ],
+    positionFamilyIds: [generated.positionFamilyId],
+    clusterMembers: [generated.fen]
   };
 }
 
 function setFrozenMetadata(manifest) {
   manifest.status = 'frozen';
-  if (manifest.source.name == null) manifest.source.name = 'synthetic-openings';
-  manifest.source.release = 'synthetic-v1';
-  manifest.source.url = 'https://example.invalid/synthetic-v1';
+  manifest.source.name = E4.EXPECTED.openingSourceName;
+  manifest.source.release = E4.EXPECTED.openingSourceRelease;
+  manifest.source.url = E4.EXPECTED.openingSourceUrl;
   manifest.freeze = {
     immutable: true,
     freezeBaseCommit: 'a'.repeat(40),
     contentSha256: null,
     openingSetSha256: null,
     assignmentSha256: null,
-    sourceArchiveSha256: '1'.repeat(64),
-    selectionCodeSha256: '2'.repeat(64),
+    rawArchiveSha256: E4.EXPECTED.openingRawArchiveSha256,
+    candidateNdjsonSha256: '2'.repeat(64),
+    candidateManifestSha256: '3'.repeat(64),
+    selectionCodeSha256: '4'.repeat(64),
     stockfishExecutableSha256: E4.EXPECTED.stockfishExecutableSha256,
     stockfishNetworkSha256s: E4.EXPECTED.stockfishNetworkSha256s.slice()
   };
 }
 
 function rehash(manifest) {
+  manifest.openingClusters.sort(function (left, right) {
+    return left.clusterId < right.clusterId ? -1 :
+      left.clusterId > right.clusterId ? 1 : 0;
+  });
   manifest.freeze.openingSetSha256 =
     E4.canonicalSha256(manifest.openingClusters);
   manifest.freeze.assignmentSha256 =
     E4.canonicalSha256(manifest.assignments);
   manifest.freeze.contentSha256 = null;
+  manifest.manifestId = 'r69-cal-v1/' +
+    (manifest.kind === 'certification' ? 'cert/' : 'explore/') +
+      manifest.freeze.openingSetSha256;
   manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
   return manifest;
 }
@@ -159,7 +199,7 @@ function frozenExploration(template) {
       level: level.id,
       anchor: level.nominalElo,
       openingClusterId: row.clusterId,
-      openingId: openingId,
+      openingId: row.openingId,
       colors: ['white', 'black'],
       games: 2
     });
@@ -172,7 +212,11 @@ function frozenCertification(template) {
   manifest.manifestId = 'r69-cal-v1/cert/synthetic-frozen';
   setFrozenMetadata(manifest);
 
-  E4.LEVELS.forEach(function (level) {
+  [
+    E4.LEVELS.find(function (level) { return level.id === 'master'; })
+  ].concat(E4.LEVELS.filter(function (level) {
+    return level.id !== 'master';
+  })).forEach(function (level) {
     level.anchors.forEach(function (anchor, anchorIndex) {
       const count = level.allocation[anchorIndex];
       for (let index = 0; index < count; index++) {
@@ -185,7 +229,7 @@ function frozenCertification(template) {
           levelOrPair: level.id,
           anchor: anchor,
           openingClusterId: row.clusterId,
-          openingId: openingId,
+          openingId: row.openingId,
           colors: ['white', 'black'],
           games: 2
         });
@@ -204,7 +248,7 @@ function frozenCertification(template) {
         levelOrPair: pair.pair,
         anchor: 'direct',
         openingClusterId: row.clusterId,
-        openingId: openingId,
+        openingId: row.openingId,
         colors: ['white', 'black'],
         games: 2
       });
@@ -367,10 +411,116 @@ function main() {
       E4.validateExplorationManifest(manifest);
     });
 
+  expectThrow('frozen manifests reject source-release drift',
+    /frozen source must be the preregistered June 2026 Lichess archive/,
+    function () {
+      const manifest = clone(validExploration);
+      manifest.source.release = '2026-05';
+      rehash(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('frozen manifests reject raw-archive hash drift',
+    /raw-archive SHA-256 drifted from the preregistered source/,
+    function () {
+      const manifest = clone(validExploration);
+      manifest.freeze.rawArchiveSha256 = 'f'.repeat(64);
+      rehash(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('frozen manifest IDs derive from the opening-set hash',
+    /manifest ID must derive from its frozen opening-set hash/, function () {
+      const manifest = clone(validExploration);
+      manifest.manifestId = 'r69-cal-v1/explore/arbitrary';
+      manifest.freeze.contentSha256 = null;
+      manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('frozen opening clusters require canonical code-point order',
+    /openingClusters must be in strict clusterId order/,
+    function () {
+      const manifest = clone(validExploration);
+      manifest.openingClusters.reverse();
+      manifest.freeze.openingSetSha256 =
+        E4.canonicalSha256(manifest.openingClusters);
+      manifest.manifestId = 'r69-cal-v1/explore/' +
+        manifest.freeze.openingSetSha256;
+      manifest.freeze.contentSha256 = null;
+      manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('exploration rejects duplicate declared anchors',
+    /duplicate exploration anchor allocation/, function () {
+      const manifest = clone(validExploration);
+      manifest.schedules[0].anchorAllocation.push(
+        clone(manifest.schedules[0].anchorAllocation[0]));
+      rehash(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('exploration rejects opening reuse across schedules',
+    /exploration opening cluster is assigned more than once/, function () {
+      const manifest = clone(validExploration);
+      manifest.assignments[1].openingClusterId =
+        manifest.assignments[0].openingClusterId;
+      manifest.assignments[1].openingId =
+        manifest.assignments[0].openingId;
+      rehash(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('certification enforces the declared Master-first block order',
+    /violates Master-first certification block order/, function () {
+      const manifest = clone(validCertification);
+      const firstNonMaster = manifest.assignments.findIndex(
+        function (assignment) {
+          return assignment.scheduleKind === 'cert' &&
+            assignment.levelOrPair !== 'master';
+        });
+      const first = manifest.assignments[0];
+      manifest.assignments[0] = manifest.assignments[firstNonMaster];
+      manifest.assignments[firstNonMaster] = first;
+      rehash(manifest);
+      E4.validateCertificationManifest(manifest);
+    });
+
   expectThrow('frozen manifests reject opening content after hash drift',
     /opening-set hash drifted/, function () {
       const manifest = clone(validExploration);
       manifest.openingClusters[0].initialBalanceCp = 1;
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('frozen manifests reject URL-bearing opening-family metadata',
+    /without controls or URLs/, function () {
+      const manifest = clone(validExploration);
+      manifest.openingClusters[0].openingFamily =
+        'https://lichess.org/forbidden';
+      rehash(manifest);
+      E4.validateExplorationManifest(manifest);
+    });
+
+  expectThrow('frozen manifests reject a held-out family-only variant',
+    /locked Master incident position family/, function () {
+      const manifest = clone(validExploration);
+      const opening = manifest.openingClusters[0];
+      const oldClusterId = opening.clusterId;
+      const variant = heldoutFamilyVariant();
+      opening.fen = variant;
+      opening.clusterMembers = [variant];
+      opening.clusterId = Corpus.clusterKey(variant);
+      opening.openingId = 'op-' + opening.clusterId;
+      opening.positionFamilyIds = [Corpus.positionFamilyKey(variant)];
+      manifest.assignments.forEach(function (assignment) {
+        if (assignment.openingClusterId === oldClusterId) {
+          assignment.openingClusterId = opening.clusterId;
+          assignment.openingId = opening.openingId;
+        }
+      });
+      rehash(manifest);
       E4.validateExplorationManifest(manifest);
     });
 
@@ -385,6 +535,49 @@ function main() {
         if (assignment.openingClusterId === oldOpening.clusterId) {
           assignment.openingClusterId = overlappingOpening.clusterId;
           assignment.openingId = overlappingOpening.openingId;
+        }
+      });
+      rehash(certification);
+      E4.validateManifestSet(exploration, certification);
+    });
+
+  expectThrow('exploration/certification source-game overlap is rejected',
+    /source-game overlap/, function () {
+      const exploration = clone(validExploration);
+      const certification = clone(validCertification);
+      certification.openingClusters[0].sourceGameIds =
+        exploration.openingClusters[0].sourceGameIds.slice();
+      rehash(certification);
+      E4.validateManifestSet(exploration, certification);
+    });
+
+  expectThrow('exploration/certification source-record overlap is rejected',
+    /source-record overlap/, function () {
+      const exploration = clone(validExploration);
+      const certification = clone(validCertification);
+      certification.openingClusters[0].sourceRecordIds =
+        exploration.openingClusters[0].sourceRecordIds.slice();
+      rehash(certification);
+      E4.validateManifestSet(exploration, certification);
+    });
+
+  expectThrow('exploration/certification position-family overlap is rejected',
+    /position-family overlap/, function () {
+      const exploration = clone(validExploration);
+      const certification = clone(validCertification);
+      const target = certification.openingClusters[0];
+      const oldClusterId = target.clusterId;
+      const variant = relocateWhiteKnight(
+        exploration.openingClusters[0].fen);
+      target.fen = variant;
+      target.clusterMembers = [variant];
+      target.clusterId = Corpus.clusterKey(variant);
+      target.openingId = 'op-' + target.clusterId;
+      target.positionFamilyIds = [Corpus.positionFamilyKey(variant)];
+      certification.assignments.forEach(function (assignment) {
+        if (assignment.openingClusterId === oldClusterId) {
+          assignment.openingClusterId = target.clusterId;
+          assignment.openingId = target.openingId;
         }
       });
       rehash(certification);

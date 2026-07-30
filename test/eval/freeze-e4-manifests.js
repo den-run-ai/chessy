@@ -8,6 +8,7 @@
  *
  *   node test/eval/freeze-e4-manifests.js \
  *     --candidates /data/e4-opening-candidates.ndjson \
+ *     --candidate-manifest /data/e4-opening-candidates.ndjson.manifest.json \
  *     --request /data/e4-freeze-request.json \
  *     --exploration-out /data/e4-exploration-frozen.json \
  *     --certification-out /data/e4-certification-frozen.json
@@ -15,17 +16,23 @@
 'use strict';
 
 const crypto = require('crypto');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { TextDecoder } = require('util');
 const E4 = require('./e4-protocol.js');
 const Corpus = require('../training/corpus.js');
 
 const ROOT = path.join(__dirname, '..', '..');
+const EXPLORATION_TEMPLATE_RELATIVE =
+  'eval/e4/exploration-manifest.template.json';
+const CERTIFICATION_TEMPLATE_RELATIVE =
+  'eval/e4/certification-manifest.template.json';
 const EXPLORATION_TEMPLATE = path.join(
-  ROOT, 'eval', 'e4', 'exploration-manifest.template.json');
+  ROOT, EXPLORATION_TEMPLATE_RELATIVE);
 const CERTIFICATION_TEMPLATE = path.join(
-  ROOT, 'eval', 'e4', 'certification-manifest.template.json');
+  ROOT, CERTIFICATION_TEMPLATE_RELATIVE);
 const TEACHER_MANIFEST = path.join(
   ROOT, 'eval', 'training', 'teacher-sf18-100kn-v1.json');
 const SELECTOR_CONTRACT_PATHS = Object.freeze([
@@ -36,11 +43,22 @@ const SELECTOR_CONTRACT_PATHS = Object.freeze([
   'eval/e4/protocol-v1.json',
   'eval/e4/exploration-manifest.schema.json',
   'eval/e4/certification-manifest.schema.json',
-  'eval/e4/exploration-manifest.template.json',
-  'eval/e4/certification-manifest.template.json',
+  EXPLORATION_TEMPLATE_RELATIVE,
+  CERTIFICATION_TEMPLATE_RELATIVE,
+  'eval/e4/opening-candidate-source-v1.json',
+  'eval/e4/opening-candidate-source.schema.json',
+  'eval/e4/opening-candidate.schema.json',
+  'eval/e4/opening-candidate-sidecar.schema.json',
+  'eval/e4/freeze-request.schema.json',
+  'eval/training/source-manifest.json',
   'eval/training/heldout-v1.json',
   'test/fixtures/master-e4-regression-20260729.json',
-  'eval/training/teacher-sf18-100kn-v1.json'
+  'eval/training/teacher-sf18-100kn-v1.json',
+  'test/training/prepare-lichess-evals.js',
+  'test/training/label-stockfish.js',
+  'test/eval/prepare-e4-opening-candidates.js',
+  'assets/engine.js',
+  'assets/pgn.js'
 ]);
 const CANDIDATE_KEYS = Object.freeze([
   'schema',
@@ -55,12 +73,14 @@ const REQUEST_KEYS = Object.freeze([
   'schema',
   'freezeBaseCommit',
   'source',
-  'sourceArchiveSha256',
+  'rawArchiveSha256',
+  'candidateNdjsonSha256',
+  'candidateManifestSha256',
   'stockfish',
   'exploration'
 ]);
 const SOURCE_KEYS = Object.freeze([
-  'name', 'release', 'url', 'license'
+  'id', 'name', 'release', 'url', 'license'
 ]);
 const STOCKFISH_KEYS = Object.freeze([
   'executableSha256', 'networkSha256s'
@@ -71,6 +91,20 @@ const EXPLORATION_REQUEST_KEYS = Object.freeze([
 const ALLOCATION_KEYS = Object.freeze([
   'elo', 'openingClusters'
 ]);
+const PROVENANCE_KEYS = Object.freeze([
+  'rawArchiveSha256',
+  'candidateNdjsonSha256',
+  'candidateManifestSha256',
+  'source'
+]);
+const PROVENANCE_SOURCE_KEYS = Object.freeze([
+  'id', 'release', 'url', 'license'
+]);
+const OPAQUE_GAME_ID =
+  /^chessy\.e4\.lichess-standard-rated\.2026-06:game:[0-9a-f]{64}$/;
+const OPAQUE_RECORD_ID =
+  /^chessy\.e4\.lichess-standard-rated\.2026-06:candidate:[0-9a-f]{64}$/;
+const MAX_CANDIDATE_ROWS = 25000;
 const HELDOUT_MANIFEST = path.join(
   ROOT, 'eval', 'training', 'heldout-v1.json');
 
@@ -88,6 +122,10 @@ function isObject(value) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function compareText(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function assertExactKeys(value, expected, label) {
@@ -221,13 +259,80 @@ async function sha256File(file) {
   return hash.digest('hex');
 }
 
-function selectionCodeSha256(root) {
+function loadSelectorSnapshot(root) {
   const repositoryRoot = root || ROOT;
+  const captured = new Map();
   const pins = SELECTOR_CONTRACT_PATHS.map(function (relative) {
     const bytes = fs.readFileSync(path.join(repositoryRoot, relative));
+    captured.set(relative, bytes);
     return { path: relative, sha256: E4.sha256(bytes) };
   });
-  return E4.canonicalSha256(pins);
+  function parseTemplate(relative) {
+    try {
+      return JSON.parse(captured.get(relative).toString('utf8'));
+    } catch (error) {
+      fail(relative + ' is not valid JSON: ' +
+        String(error && error.message || error));
+    }
+  }
+  return {
+    sha256: E4.canonicalSha256(pins),
+    pins,
+    templates: {
+      exploration: parseTemplate(EXPLORATION_TEMPLATE_RELATIVE),
+      certification: parseTemplate(CERTIFICATION_TEMPLATE_RELATIVE)
+    }
+  };
+}
+
+function selectionCodeSha256(root) {
+  return loadSelectorSnapshot(root).sha256;
+}
+
+function assertSelectorSnapshotHash(root, expectedSha256) {
+  assertSha(expectedSha256, 'captured selection-code SHA-256');
+  const actual = selectionCodeSha256(root);
+  assert(actual === expectedSha256,
+    'selector contract changed before frozen manifests were written');
+  return actual;
+}
+
+function assertFreezeBaseCommit(root, expectedCommit) {
+  const repositoryRoot = root || ROOT;
+  assertGitSha(expectedCommit, 'freeze request base commit');
+  const head = childProcess.spawnSync(
+    'git', ['rev-parse', '--verify', 'HEAD'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8'
+    });
+  assert(head.status === 0,
+    'cannot resolve the repository HEAD for the freeze base');
+  const actualCommit = head.stdout.trim();
+  assertGitSha(actualCommit, 'repository HEAD');
+  assert(actualCommit === expectedCommit,
+    'freezeBaseCommit must equal the repository HEAD');
+
+  const tracked = childProcess.spawnSync(
+    'git', ['ls-files', '--error-unmatch', '--'].concat(
+      SELECTOR_CONTRACT_PATHS), {
+      cwd: repositoryRoot,
+      encoding: 'utf8'
+    });
+  assert(tracked.status === 0,
+    'every selector contract path must be tracked by the freeze-base commit');
+  [
+    ['diff', '--quiet', '--'],
+    ['diff', '--cached', '--quiet', '--']
+  ].forEach(function (prefix) {
+    const clean = childProcess.spawnSync(
+      'git', prefix.concat(SELECTOR_CONTRACT_PATHS), {
+        cwd: repositoryRoot,
+        encoding: 'utf8'
+      });
+    assert(clean.status === 0,
+      'selector contract paths must be clean at freezeBaseCommit');
+  });
+  return actualCommit;
 }
 
 function loadTeacherIdentity(root) {
@@ -259,12 +364,14 @@ function loadTeacherIdentity(root) {
   };
 }
 
-function validateRequest(request, sourceSha256, root) {
+function validateRequest(request, provenance, root) {
   assertExactKeys(request, REQUEST_KEYS, 'freeze request');
   assert(request.schema === 'chessy.e4.freeze-request.v1',
     'freeze request schema must be chessy.e4.freeze-request.v1');
   assertGitSha(request.freezeBaseCommit, 'freeze request base commit');
   assertExactKeys(request.source, SOURCE_KEYS, 'freeze request source');
+  assert(request.source.id === 'lichess-standard-rated-pgn',
+    'certification requires the allowlisted Lichess standard-rated PGN source');
   assert(request.source.name === 'Lichess database',
     'certification requires source.name="Lichess database"');
   assertText(request.source.release, 'source release', 256);
@@ -273,9 +380,25 @@ function validateRequest(request, sourceSha256, root) {
     'source URL must be an explicit HTTPS provenance URL');
   assert(request.source.license === 'CC0-1.0',
     'opening candidates must be explicitly CC0-1.0');
-  assertSha(request.sourceArchiveSha256, 'source archive SHA-256');
-  assert(request.sourceArchiveSha256 === sourceSha256,
-    'candidate file SHA-256 does not match request.sourceArchiveSha256');
+  assertSha(request.rawArchiveSha256, 'raw archive SHA-256');
+  assertSha(request.candidateNdjsonSha256, 'candidate NDJSON SHA-256');
+  assertSha(request.candidateManifestSha256, 'candidate manifest SHA-256');
+  assert(isObject(provenance), 'authenticated candidate provenance is required');
+  assertExactKeys(provenance, PROVENANCE_KEYS,
+    'authenticated candidate provenance');
+  assertExactKeys(provenance.source, PROVENANCE_SOURCE_KEYS,
+    'authenticated candidate provenance source');
+  assert(request.rawArchiveSha256 === provenance.rawArchiveSha256,
+    'raw archive SHA-256 does not match the candidate manifest');
+  assert(request.candidateNdjsonSha256 === provenance.candidateNdjsonSha256,
+    'candidate NDJSON SHA-256 does not match the parsed candidate bytes');
+  assert(request.candidateManifestSha256 === provenance.candidateManifestSha256,
+    'candidate manifest SHA-256 does not match its bytes');
+  ['id', 'release', 'url', 'license'].forEach(function (field) {
+    assert(request.source[field] === provenance.source[field],
+      'freeze request source.' + field +
+        ' does not match the candidate manifest');
+  });
 
   assertExactKeys(request.stockfish, STOCKFISH_KEYS,
     'freeze request Stockfish identity');
@@ -337,14 +460,33 @@ function validateCandidate(raw, lineNumber) {
     label + ' schema must be chessy.e4.opening-candidate.v1');
   assertText(raw.recordId, label + '.recordId', 512);
   assertText(raw.sourceGameId, label + '.sourceGameId', 512);
+  assert(OPAQUE_RECORD_ID.test(raw.recordId),
+    label + '.recordId must be a namespaced opaque SHA-256 identity');
+  assert(OPAQUE_GAME_ID.test(raw.sourceGameId),
+    label + '.sourceGameId must be a namespaced opaque SHA-256 identity');
   assertText(raw.fen, label + '.fen', 256);
   assert(typeof raw.eco === 'string' && /^[A-E][0-9]{2}$/.test(raw.eco),
     label + '.eco must match [A-E][0-9]{2}');
   assertText(raw.openingFamily, label + '.openingFamily', 256);
+  assert(raw.openingFamily.normalize('NFC') === raw.openingFamily &&
+    !/(?:https?:\/\/|lichess\.org\/)/i.test(raw.openingFamily),
+  label + '.openingFamily must be NFC text without a URL');
   assert(Number.isSafeInteger(raw.initialBalanceCp) &&
-    Math.abs(raw.initialBalanceCp) <= 32000,
-  label + '.initialBalanceCp must be an integer in [-32000, 32000]');
-  const fen = Corpus.validateSourceState(raw.fen).fen4;
+    Math.abs(raw.initialBalanceCp) <= 200,
+  label + '.initialBalanceCp must be an integer in [-200, 200]');
+  const parsed = Corpus.validateSourceState(raw.fen);
+  assert(parsed.fen6 !== null,
+    label + '.fen must retain validated halfmove/fullmove counters');
+  assert(raw.fen === parsed.fen6,
+    label + '.fen must already be canonical six-field FEN');
+  const completedPly = parsed.turn === 'w' ?
+    2 * (parsed.fullmoveNumber - 1) :
+    2 * parsed.fullmoveNumber - 1;
+  assert(completedPly >= 12 && completedPly <= 20,
+    label + '.fen must be the preregistered candidate ply 12..20');
+  assert(parsed.halfmoveClock <= completedPly,
+    label + '.fen halfmove clock exceeds elapsed game plies');
+  const fen = parsed.fen6;
   return {
     schema: raw.schema,
     recordId: raw.recordId,
@@ -361,15 +503,37 @@ function validateCandidate(raw, lineNumber) {
 async function readCandidates(file) {
   const records = [];
   const recordIds = new Set();
-  const input = fs.createReadStream(file, { encoding: 'utf8' });
+  const sourceGameIds = new Set();
+  const hash = crypto.createHash('sha256');
+  let byteLength = 0;
+  let lastByte = null;
+  let containsCarriageReturn = false;
+  let utf8Error = null;
+  const utf8 = new TextDecoder('utf-8', { fatal: true });
+  const input = fs.createReadStream(file);
+  input.on('data', function (chunk) {
+    hash.update(chunk);
+    byteLength += chunk.length;
+    if (chunk.includes(0x0d)) containsCarriageReturn = true;
+    if (chunk.length) lastByte = chunk[chunk.length - 1];
+    if (!utf8Error) {
+      try {
+        utf8.decode(chunk, { stream: true });
+      } catch (error) {
+        utf8Error = error;
+      }
+    }
+  });
   const lines = readline.createInterface({
     input,
     crlfDelay: Infinity
   });
   let lineNumber = 0;
+  let priorRecordId = null;
   for await (const line of lines) {
     lineNumber++;
-    if (!line.trim()) continue;
+    assert(line.length > 0,
+      'candidate NDJSON must not contain blank lines');
     let raw;
     try {
       raw = JSON.parse(line);
@@ -377,15 +541,90 @@ async function readCandidates(file) {
       fail('candidate line ' + lineNumber + ' is invalid JSON: ' +
         String(error && error.message || error));
     }
+    assert(line === E4.stableJson(raw),
+      'candidate line ' + lineNumber + ' is not canonical JSON');
     const candidate = validateCandidate(raw, lineNumber);
     assert(!recordIds.has(candidate.recordId),
       'duplicate candidate recordId at line ' + lineNumber + ': ' +
         candidate.recordId);
+    assert(!sourceGameIds.has(candidate.sourceGameId),
+      'duplicate candidate sourceGameId at line ' + lineNumber + ': ' +
+        candidate.sourceGameId);
+    assert(priorRecordId == null ||
+      priorRecordId < candidate.recordId,
+    'candidate rows must be in strict recordId order');
     recordIds.add(candidate.recordId);
+    sourceGameIds.add(candidate.sourceGameId);
+    priorRecordId = candidate.recordId;
     records.push(candidate);
+    assert(records.length <= MAX_CANDIDATE_ROWS,
+      'candidate NDJSON exceeds the frozen 25,000-row cap');
+  }
+  if (!utf8Error) {
+    try {
+      utf8.decode();
+    } catch (error) {
+      utf8Error = error;
+    }
   }
   assert(records.length > 0, 'candidate file contains no records');
-  return records;
+  assert(!utf8Error, 'candidate NDJSON must be valid UTF-8');
+  assert(!containsCarriageReturn,
+    'candidate NDJSON must use LF line endings');
+  assert(lastByte === 0x0a,
+    'candidate NDJSON must end with exactly one LF');
+  return {
+    records,
+    sha256: hash.digest('hex'),
+    bytes: byteLength
+  };
+}
+
+function loadCandidateProvenance(
+  candidateManifestPath, candidatePath, candidateInput, root
+) {
+  assert(isObject(candidateInput) &&
+    Array.isArray(candidateInput.records),
+  'single-pass candidate input is required');
+  assertSha(candidateInput.sha256, 'parsed candidate NDJSON SHA-256');
+  assert(Number.isSafeInteger(candidateInput.bytes) &&
+    candidateInput.bytes >= 0,
+  'parsed candidate byte count is invalid');
+
+  const manifestBytes = fs.readFileSync(candidateManifestPath);
+  let sidecar;
+  try {
+    sidecar = JSON.parse(manifestBytes.toString('utf8'));
+  } catch (error) {
+    fail('candidate manifest is invalid JSON: ' +
+      String(error && error.message || error));
+  }
+  // Lazy loading avoids a module-initialization cycle: the producer imports
+  // this module's candidate validator, while the freezer imports the
+  // producer's strict sidecar validator only after both modules are loaded.
+  const Compiler = require('./prepare-e4-opening-candidates.js');
+  Compiler.validateSidecar(sidecar, {
+    root: root || ROOT,
+    outputPath: candidatePath
+  });
+  assert(sidecar.output.sha256 === candidateInput.sha256,
+    'candidate sidecar output SHA-256 does not match parsed candidate bytes');
+  assert(sidecar.output.bytes === candidateInput.bytes,
+    'candidate sidecar output byte count does not match parsed candidate bytes');
+  assert(sidecar.output.rows === candidateInput.records.length,
+    'candidate sidecar output row count does not match parsed candidates');
+
+  return {
+    rawArchiveSha256: sidecar.rawArchive.sha256,
+    candidateNdjsonSha256: candidateInput.sha256,
+    candidateManifestSha256: E4.sha256(manifestBytes),
+    source: {
+      id: sidecar.rawArchive.id,
+      release: sidecar.rawArchive.release,
+      url: sidecar.rawArchive.url,
+      license: sidecar.rawArchive.license
+    }
+  };
 }
 
 class UnionFind {
@@ -463,8 +702,8 @@ function buildComponents(records) {
     const representatives = members.filter(function (record) {
       return record.boardCluster === clusterId;
     }).slice().sort(function (left, right) {
-      return left.fen.localeCompare(right.fen) ||
-        left.recordId.localeCompare(right.recordId);
+      return compareText(left.fen, right.fen) ||
+        compareText(left.recordId, right.recordId);
     });
     const representative = representatives[0];
     const sourceRecordIds = Array.from(new Set(members.map(function (record) {
@@ -484,6 +723,8 @@ function buildComponents(records) {
       openingFamily: representative.openingFamily,
       initialBalanceCp: representative.initialBalanceCp,
       sourceRecordIds,
+      sourceGameIds,
+      positionFamilyIds: positionFamilies,
       clusterMembers
     };
     const identity = {
@@ -506,7 +747,7 @@ function buildComponents(records) {
     });
   });
   components.sort(function (left, right) {
-    return left.clusterId.localeCompare(right.clusterId);
+    return compareText(left.clusterId, right.clusterId);
   });
   return components;
 }
@@ -530,8 +771,8 @@ function selectStratified(components, count, domain, state) {
     const rows = entry[1].slice().sort(function (left, right) {
       const leftKey = E4.sha256(domain + '\nrow\n' + left.selectionKey);
       const rightKey = E4.sha256(domain + '\nrow\n' + right.selectionKey);
-      return leftKey.localeCompare(rightKey) ||
-        left.clusterId.localeCompare(right.clusterId);
+      return compareText(leftKey, rightKey) ||
+        compareText(left.clusterId, right.clusterId);
     });
     return {
       stratum: entry[0],
@@ -540,8 +781,8 @@ function selectStratified(components, count, domain, state) {
       cursor: 0
     };
   }).sort(function (left, right) {
-    return left.order.localeCompare(right.order) ||
-      left.stratum.localeCompare(right.stratum);
+    return compareText(left.order, right.order) ||
+      compareText(left.stratum, right.stratum);
   });
 
   const selected = [];
@@ -586,14 +827,16 @@ function makeState() {
   };
 }
 
-function commonFreeze(request, sourceSha256, selectorSha256) {
+function commonFreeze(request, candidateNdjsonSha256, selectorSha256) {
   return {
     immutable: true,
     freezeBaseCommit: request.freezeBaseCommit,
     contentSha256: null,
     openingSetSha256: null,
     assignmentSha256: null,
-    sourceArchiveSha256: sourceSha256,
+    rawArchiveSha256: request.rawArchiveSha256,
+    candidateNdjsonSha256,
+    candidateManifestSha256: request.candidateManifestSha256,
     selectionCodeSha256: selectorSha256,
     stockfishExecutableSha256: request.stockfish.executableSha256,
     stockfishNetworkSha256s: request.stockfish.networkSha256s.slice()
@@ -602,7 +845,7 @@ function commonFreeze(request, sourceSha256, selectorSha256) {
 
 function finalizeManifest(manifest, kind) {
   manifest.openingClusters.sort(function (left, right) {
-    return left.clusterId.localeCompare(right.clusterId);
+    return compareText(left.clusterId, right.clusterId);
   });
   manifest.freeze.openingSetSha256 =
     E4.canonicalSha256(manifest.openingClusters);
@@ -635,20 +878,28 @@ function appendCertificationSelection(
 function compileManifests(options) {
   const request = options.request;
   const components = options.components;
-  const sourceSha256 = options.sourceSha256;
+  const candidateNdjsonSha256 = options.candidateNdjsonSha256;
   const selectorSha256 = options.selectorSha256;
   assert(Array.isArray(components) && components.length > 0,
     'opening components are required');
-  assertSha(sourceSha256, 'candidate source SHA-256');
+  assertSha(candidateNdjsonSha256, 'candidate NDJSON SHA-256');
   assertSha(selectorSha256, 'selection-code SHA-256');
 
-  const certification = clone(E4.readJson(
-    options.certificationTemplate || CERTIFICATION_TEMPLATE));
+  const templateSnapshot = options.templateSnapshot;
+  if (templateSnapshot !== undefined) {
+    assert(isObject(templateSnapshot) &&
+      isObject(templateSnapshot.exploration) &&
+      isObject(templateSnapshot.certification),
+    'captured exploration and certification templates are required');
+  }
+  const certification = clone(templateSnapshot ?
+    templateSnapshot.certification :
+    E4.readJson(options.certificationTemplate || CERTIFICATION_TEMPLATE));
   certification.status = 'frozen';
   certification.source.release = request.source.release;
   certification.source.url = request.source.url;
   certification.freeze = commonFreeze(
-    request, sourceSha256, selectorSha256);
+    request, candidateNdjsonSha256, selectorSha256);
   certification.openingClusters = [];
   certification.assignments = [];
 
@@ -688,14 +939,15 @@ function compileManifests(options) {
   });
   finalizeManifest(certification, 'certification');
 
-  const exploration = clone(E4.readJson(
-    options.explorationTemplate || EXPLORATION_TEMPLATE));
+  const exploration = clone(templateSnapshot ?
+    templateSnapshot.exploration :
+    E4.readJson(options.explorationTemplate || EXPLORATION_TEMPLATE));
   exploration.status = 'frozen';
   exploration.source.name = request.source.name;
   exploration.source.release = request.source.release;
   exploration.source.url = request.source.url;
   exploration.freeze = commonFreeze(
-    request, sourceSha256, selectorSha256);
+    request, candidateNdjsonSha256, selectorSha256);
   exploration.openingClusters = [];
   exploration.assignments = [];
   exploration.schedules.forEach(function (schedule, index) {
@@ -781,7 +1033,8 @@ function parseArgs(argv) {
     values[key] = argv[++index];
   }
   const allowed = new Set([
-    '--candidates', '--request', '--exploration-out', '--certification-out'
+    '--candidates', '--candidate-manifest', '--request',
+    '--exploration-out', '--certification-out'
   ]);
   Object.keys(values).forEach(function (key) {
     assert(allowed.has(key), 'unknown argument: ' + key);
@@ -794,25 +1047,40 @@ function parseArgs(argv) {
 
 async function run(argv, root) {
   const args = parseArgs(argv);
-  const sourceSha256 = await sha256File(args['--candidates']);
+  const repositoryRoot = root || ROOT;
+  const candidateInput = await readCandidates(args['--candidates']);
+  const provenance = loadCandidateProvenance(
+    args['--candidate-manifest'],
+    args['--candidates'],
+    candidateInput,
+    repositoryRoot);
   const requestRaw = JSON.parse(fs.readFileSync(args['--request'], 'utf8'));
-  const request = validateRequest(requestRaw, sourceSha256, root || ROOT);
-  const candidates = await readCandidates(args['--candidates']);
-  const components = buildComponents(candidates);
+  const request = validateRequest(requestRaw, provenance, repositoryRoot);
+  assertFreezeBaseCommit(repositoryRoot, request.freezeBaseCommit);
+  const selectorSnapshot = loadSelectorSnapshot(repositoryRoot);
+  const components = buildComponents(candidateInput.records);
   const manifests = compileManifests({
     request,
     components,
-    sourceSha256,
-    selectorSha256: selectionCodeSha256(root || ROOT)
+    candidateNdjsonSha256: candidateInput.sha256,
+    selectorSha256: selectorSnapshot.sha256,
+    templateSnapshot: selectorSnapshot.templates
   });
+  // The manifests were compiled only from the captured template objects.
+  // Reassert the commit/clean-tree boundary and every selector byte as the
+  // final operation before the paired no-replace write.
+  assertFreezeBaseCommit(repositoryRoot, request.freezeBaseCommit);
+  assertSelectorSnapshotHash(repositoryRoot, selectorSnapshot.sha256);
   writeJsonPair(
     args['--exploration-out'], args['--certification-out'], manifests);
   return {
-    candidateRecords: candidates.length,
+    candidateRecords: candidateInput.records.length,
     eligibleComponents: components.length,
     explorationOpeningClusters: manifests.exploration.openingClusters.length,
     certificationOpeningClusters: manifests.certification.openingClusters.length,
-    sourceSha256,
+    rawArchiveSha256: provenance.rawArchiveSha256,
+    candidateNdjsonSha256: provenance.candidateNdjsonSha256,
+    candidateManifestSha256: provenance.candidateManifestSha256,
     selectionCodeSha256: manifests.certification.freeze.selectionCodeSha256,
     explorationContentSha256:
       manifests.exploration.freeze.contentSha256,
@@ -830,11 +1098,15 @@ module.exports = Object.freeze({
   validateHeldoutIdentity,
   loadHeldoutIdentity,
   sha256File,
+  loadSelectorSnapshot,
   selectionCodeSha256,
+  assertSelectorSnapshotHash,
+  assertFreezeBaseCommit,
   loadTeacherIdentity,
   validateRequest,
   validateCandidate,
   readCandidates,
+  loadCandidateProvenance,
   balanceBucket,
   buildComponents,
   selectStratified,

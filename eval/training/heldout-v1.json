@@ -50,7 +50,7 @@
       "sameSourceGameLineage": {
         "status": "pending-source-game-id",
         "mechanism": null,
-        "reason": "The static Lichess evaluated-position export has no stable source-game ID, and the incident fixture does not identify a matching upstream Lichess game. This control requires a pinned CC0 PGN-derived corpus and an explicit incident source-game identifier."
+        "reason": "The Bd4 incident fixture is a local Chessy offline-PWA regression record, not a Lichess game record, and it has no authenticated upstream source-game identifier. A CC0 PGN-derived opening corpus can enforce lineage isolation among its own games but cannot invent cross-source lineage for this incident. Activating this separate control requires explicit authenticated incident lineage."
       },
       "nearbyBudgetProbes": {
         "trainingStatus": "enforced-by-incident-family",

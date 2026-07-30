@@ -1,0 +1,93 @@
+{
+  "schema": "chessy.e4.opening-candidate-source-policy.v1",
+  "status": "preregistered",
+  "source": {
+    "id": "lichess-standard-rated-pgn",
+    "dataset": "Lichess standard rated games",
+    "release": "2026-06",
+    "archive": {
+      "url": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst",
+      "bytes": 28241946492,
+      "sha256": "8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79",
+      "compression": "zstd",
+      "license": "CC0-1.0"
+    },
+    "forbiddenSources": [
+      {
+        "url": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst.torrent",
+        "accepted": false,
+        "reason": "stale-torrent-metadata-is-not-source-evidence"
+      }
+    ]
+  },
+  "filters": {
+    "initialPosition": "standard-only-no-SetUp-or-FEN",
+    "variantTags": [
+      "absent",
+      "Standard"
+    ],
+    "ratedSpeeds": [
+      "Blitz",
+      "Rapid",
+      "Classical"
+    ],
+    "ratedEventKinds": [
+      "game",
+      "tournament",
+      "swiss"
+    ],
+    "minimumElo": 1800,
+    "botTitle": "BOT",
+    "botsAllowed": false,
+    "selfPlayAllowed": false
+  },
+  "identity": {
+    "sitePrefix": "https://lichess.org/",
+    "gameIdRegex": "^[A-Za-z0-9]{8}$",
+    "caseSensitive": true,
+    "outputIdNamespace": "chessy.e4.lichess-standard-rated.2026-06",
+    "rawIdRetention": "forbidden-in-candidate-output"
+  },
+  "extraction": {
+    "metadata": {
+      "eco": "trimmed-[A-E][0-9]{2}",
+      "openingFamily": "NFC-trimmed-prefix-before-first-colon",
+      "maximumOpeningCharacters": 256
+    },
+    "candidatePly": {
+      "minimum": 12,
+      "maximum": 20,
+      "algorithm": "sha256-modulo-inclusive-window",
+      "domain": "chessy.e4.opening-candidate-ply.v1"
+    },
+    "sampling": {
+      "algorithm": "sha256-threshold-then-lowest-digest",
+      "domain": "chessy.e4.opening-candidate-sample.v1",
+      "modulus": 4096,
+      "numerator": 64,
+      "maximumCandidates": 25000,
+      "overflow": "retain-lowest-full-digests"
+    },
+    "teacher": {
+      "manifest": "eval/training/teacher-sf18-100kn-v1.json",
+      "id": "sf18-100kn-v1",
+      "engine": "Stockfish 18",
+      "nodeLimit": 100000,
+      "scorePov": "white"
+    },
+    "balance": {
+      "scoreKind": "exact-cp",
+      "maximumAbsoluteCp": 200,
+      "mateAllowed": false,
+      "boundAllowed": false
+    },
+    "incidentDenial": "cluster-and-position-family-before-scoring"
+  },
+  "output": {
+    "schema": "chessy.e4.opening-candidate.v1",
+    "format": "canonical-ndjson",
+    "order": "recordId-unicode-code-point",
+    "overwrite": false,
+    "sidecarSchema": "chessy.e4.opening-candidate-sidecar.v1"
+  }
+}
