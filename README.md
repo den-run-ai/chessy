@@ -107,17 +107,22 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   accessible progress and at most two move-location suggestions; scores,
   categories, and alternative moves remain hidden. Opening a suggestion
   navigates to that position and starts a fresh blank reflection, and scanning
-  is unavailable while a live timed game is running.
+  is unavailable while a live timed game is running. After that reflection
+  only, a complete, stable, non-equivalent result may offer one editable
+  evidence-backed lesson draft for the suggestion; ambiguous, equivalent,
+  incomplete, or unstable evidence offers none.
 - **Reflection → lesson cards** — flag one of your own positions in Review;
-  the engine stays hidden until you answer the reflection questions, and each
-  probe snapshots the answers as submitted (a rewrite after the verdict can't
-  reach that probe's card). One request runs at a time — Verify shows monotonic
+  the engine stays hidden until you answer versioned threat, candidate, line,
+  and evaluation prompts, and each probe snapshots the answers as submitted
+  (a rewrite after the verdict can't reach that probe's card). One request runs
+  at a time — Verify shows monotonic
   elapsed time, truthful initial-scan/root progress, and an accessible Cancel
   action, with no fabricated ETA or provisional score/PV streaming — and
   you can revise your answers and re-probe the same moment, which updates its
   **one card per moment** (game + ply) in place. You own the diagnosis: a move
   that differs from Chessy's line is not declared wrong ("my move was also
-  sound" is a first-class cause), and you write the one-sentence lesson.
+  sound" is a first-class cause); any verified draft can be edited, approved,
+  or skipped, and a card is created only on explicit approval/save.
 - **Train** — due lesson cards replayed on the mini board, on the fixed
   **1 / 3 / 7 / 14 / 30 / 90-day** spaced ladder (Good climbs a rung, Hard
   repeats it, Again retries in ten minutes). No background timers — the queue
@@ -265,6 +270,8 @@ gated on the engine *and* browser suites.
 | `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract and throttling non-terminal progress off the main thread |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, owner-scoped progress/cancellation, watchdog + retry, validated IndexedDB result cache |
 | `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |
+| `assets/calculation.js` | Versioned pre-engine reflection contract with legal canonical threat/candidate/line evidence |
+| `assets/lesson-proposal.js` | Pure post-Gate-0 policy for conservative, evidence-backed editable lesson drafts |
 | `assets/moment-selector.js` | Pure, deterministic critical-moment evidence, collapse suppression, clustering and deep-admission policy |
 | `assets/moment-scan.js` | Explicit, sequential two-pass scan controller with durable checkpoints, pause/resume and spoiler-safe public state |
 | `assets/reflection.js` | Manual reflection flow: flag → answer → contract analysis → lesson card |

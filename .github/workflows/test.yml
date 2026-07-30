@@ -139,6 +139,8 @@ jobs:
         run: node test/equivalence.test.js
       - name: Run structured Calculation contract tests (Train v2 E3)
         run: node test/calculation.test.js
+      - name: Run verified lesson-proposal policy tests
+        run: node test/lesson-proposal.test.js
       - name: Run critical-moment selector tests
         run: node test/moment-selector.test.js
       - name: Run resumable moment-scan tests

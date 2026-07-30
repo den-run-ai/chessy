@@ -187,15 +187,25 @@
         // derived from plies BEYOND the moves the two endings share now
         // references positions this game no longer contains; prune from the
         // FIRST DIVERGENT ply, leaving the shared prefix intact.
-        function pruneFromDivergence(id, oldSans, newSans) {
-          let p = 0;
-          while (p < oldSans.length && p < newSans.length && oldSans[p] === newSans[p]) p++;
+        function pruneFromDivergence(id, oldGame, newGame) {
+          const oldSans = oldGame.sans;
+          const newSans = newGame.sans;
+          let p = (oldGame.setupFen || null) === (newGame.setupFen || null)
+            ? 0 : -1;
+          while (p >= 0 && p < oldSans.length && p < newSans.length &&
+              oldSans[p] === newSans[p]) p++;
+          if (p < 0) p = 0;
           // Cards flagged past the divergence.
           const cc = t.objectStore('cards').index('gameId').openCursor(IDBKeyRange.only(id));
           cc.onsuccess = function () {
             const c = cc.result;
             if (!c) return;
-            if (c.value.ply >= p) c.delete();
+            // A proposal card binds the WHOLE completed scan source, not just
+            // its pre-move FEN. Any ending revision invalidates it even when
+            // that card's position lies in the shared prefix.
+            if (c.value.ply >= p ||
+                (c.value.lessonProposal !== undefined &&
+                 c.value.lessonProposal !== null)) c.delete();
             c.continue();
           };
           // Engine analyses of positions past the divergence are stale.
@@ -236,6 +246,13 @@
               });
             }
             ['candidates', 'shortlist', 'moments', 'unresolved'].forEach(pruneList);
+            // Decisions are keyed to the WHOLE scan identity, whose source
+            // revision covers the complete ending and clock record. Even a
+            // decision before the divergent ply belongs to the replaced scan,
+            // so retain none of them on a source revision.
+            if (Object.prototype.hasOwnProperty.call(job, 'proposalDecisions')) {
+              job.proposalDecisions = [];
+            }
 
             job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
               ? Math.min(job.cursorPly, p) : p;
@@ -258,14 +275,49 @@
             t.objectStore('analysisJobs').put(job);
           };
         }
+
+        // A same SAN/result ending may be re-offered with corrected clock,
+        // player-side, time-control, or setup provenance. Those fields do not
+        // change the human-visible ending, but they do change the scan source
+        // and therefore every automatic proposal. Drop proposal cards and the
+        // recomputable job; keep ordinary cards and engine analyses unless the
+        // initial board itself changed.
+        function invalidateChangedScanSource(id, oldGame, newGame) {
+          const positionChanged =
+            (oldGame.setupFen || null) !== (newGame.setupFen || null);
+          const cc = t.objectStore('cards').index('gameId').openCursor(
+            IDBKeyRange.only(id));
+          cc.onsuccess = function () {
+            const c = cc.result;
+            if (!c) return;
+            if (positionChanged ||
+                (c.value.lessonProposal !== undefined &&
+                 c.value.lessonProposal !== null)) c.delete();
+            c.continue();
+          };
+          if (positionChanged) {
+            const ac = t.objectStore('analyses').index('gameId').openCursor(
+              IDBKeyRange.only(id));
+            ac.onsuccess = function () {
+              const a = ac.result;
+              if (!a) return;
+              a.delete();
+              a.continue();
+            };
+          }
+          t.objectStore('analysisJobs').delete(id);
+        }
         getReq.onsuccess = function () {
           const existing = getReq.result;
           const record = Object.assign({}, game);
           if (existing) {
             if (sameEnding(existing, record)) {
               record.createdAt = Math.min(existing.createdAt, record.createdAt);
+              if (!sameJobSource(existing, record)) {
+                invalidateChangedScanSource(game.id, existing, record);
+              }
             } else {
-              pruneFromDivergence(game.id, existing.sans, record.sans); // revised ending
+              pruneFromDivergence(game.id, existing, record); // revised ending
             }
           }
           putReq = s.put(record);
@@ -648,7 +700,9 @@
   // One resumable, reload-safe two-pass scan per game, keyed on gameId:
   //   { schema, algorithm, gameId, sourceRev, analysisRev, scanColor,
   //     state, pass, cursorPly, checked, total, candidates, shortlist,
-  //     verifyIndex, moments: [{ ply, playedSan }], unresolved, updatedAt }
+  //     verifyIndex, moments: [{ ply, playedSan }], unresolved,
+  //     proposalDecisions?: [{ identity, proposalId, ordinal, ply, status }],
+  //     updatedAt }
   // archiveGame() prunes a job from the first divergent ply when its game is
   // revised, so a resume never trusts progress over positions that changed.
   function putJob(job) {
@@ -674,6 +728,470 @@
       sameArray(game.sans, expected.sans) &&
       sameArray(game.clocks, expected.clocks);
   }
+
+  // Stable identity for one exact critical-moment scan. Keep byte-for-byte
+  // aligned with moment-scan.js. The game id is intentionally folded into the
+  // opaque identity even though it is not an exposed claim field.
+  function lessonScanIdentity(job) {
+    return 'chessy-moment-scan:' + JSON.stringify([
+      job.schema,
+      job.algorithm,
+      job.gameId,
+      job.sourceRev,
+      job.analysisRev,
+      job.scanColor
+    ]);
+  }
+
+  var LESSON_CLAIM_KEYS = [
+    'algorithm', 'analysisRev', 'identity', 'jobSchema', 'ordinal',
+    'playedSan', 'ply', 'scanColor', 'sourceRev'
+  ];
+
+  function exactKeys(value, expected) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var keys = Object.keys(value).sort();
+    if (keys.length !== expected.length) return false;
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] !== expected[i]) return false;
+    }
+    return true;
+  }
+
+  function validLessonClaim(claim) {
+    return exactKeys(claim, LESSON_CLAIM_KEYS) &&
+      Number.isInteger(claim.jobSchema) && claim.jobSchema >= 1 &&
+      typeof claim.algorithm === 'string' && !!claim.algorithm &&
+      typeof claim.sourceRev === 'string' && !!claim.sourceRev &&
+      typeof claim.analysisRev === 'string' && !!claim.analysisRev &&
+      (claim.scanColor === 'w' || claim.scanColor === 'b' ||
+       claim.scanColor === 'both') &&
+      typeof claim.identity === 'string' && !!claim.identity &&
+      Number.isInteger(claim.ordinal) && claim.ordinal >= 0 &&
+      claim.ordinal < 2 &&
+      Number.isInteger(claim.ply) && claim.ply >= 0 &&
+      typeof claim.playedSan === 'string' && !!claim.playedSan;
+  }
+
+  // Reproduce the scan controller's exact source tokens at the durable store
+  // boundary. This intentionally does not trust an opaque identity supplied by
+  // the caller: backup validation has no analysisJobs cache to consult, and an
+  // approval must remain bound to the archived SAN/clock/player source after a
+  // round trip.
+  function lessonRevisionHash(str) {
+    var h = 5381;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  function lessonAnalysisRevision(game) {
+    return lessonRevisionHash(JSON.stringify({
+      setupFen: game && game.setupFen || null,
+      sans: game && Array.isArray(game.sans) ? game.sans : []
+    }));
+  }
+
+  function lessonSourceRevision(game, scanColor) {
+    return lessonRevisionHash(JSON.stringify({
+      analysis: lessonAnalysisRevision(game),
+      scanColor: scanColor,
+      playerColor: game && game.playerColor || null,
+      timeControl: game && game.timeControl || null,
+      clocks: game && Array.isArray(game.clocks) ? game.clocks : []
+    }));
+  }
+
+  function lessonClaimMatchesSource(claim, game) {
+    if (!validLessonClaim(claim) || !game ||
+        typeof game.id !== 'string' || !game.id ||
+        !Array.isArray(game.sans) || claim.ply >= game.sans.length ||
+        game.sans[claim.ply] !== claim.playedSan) return false;
+    var owned = game.playerColor;
+    if ((owned === 'w' || owned === 'b' || owned === 'both') &&
+        claim.scanColor !== owned) return false;
+    if (claim.analysisRev !== lessonAnalysisRevision(game) ||
+        claim.sourceRev !== lessonSourceRevision(game, claim.scanColor)) {
+      return false;
+    }
+    if (claim.identity !== 'chessy-moment-scan:' + JSON.stringify([
+      claim.jobSchema,
+      claim.algorithm,
+      game.id,
+      claim.sourceRev,
+      claim.analysisRev,
+      claim.scanColor
+    ])) return false;
+    var source = replayGameToPly(game, claim.ply);
+    return !!source && (claim.scanColor === 'both' ||
+      source.state.turn === claim.scanColor);
+  }
+
+  function lessonClaimMatchesJob(claim, job, gameId) {
+    if (!validLessonClaim(claim) || !job || typeof job !== 'object' ||
+        job.gameId !== gameId || job.state !== 'done' ||
+        job.schema !== claim.jobSchema ||
+        job.algorithm !== claim.algorithm ||
+        job.sourceRev !== claim.sourceRev ||
+        job.analysisRev !== claim.analysisRev ||
+        job.scanColor !== claim.scanColor ||
+        lessonScanIdentity(job) !== claim.identity ||
+        !Array.isArray(job.moments) || job.moments.length > 2 ||
+        claim.ordinal >= job.moments.length) return false;
+    var moment = job.moments[claim.ordinal];
+    return !!moment && typeof moment === 'object' &&
+      moment.ply === claim.ply && moment.playedSan === claim.playedSan;
+  }
+
+  function validProposalId(value) {
+    return typeof value === 'string' && !!value && value.length <= 512;
+  }
+
+  function proposalDecisionKey(identity, ordinal, ply) {
+    return JSON.stringify([identity, ordinal, ply]);
+  }
+
+  // analysisJobs is a recomputable cache and may contain relic or malformed
+  // optional metadata. Normalize defensively before every proposal decision:
+  // retain only rows for real moments of this exact job, collapse duplicate
+  // keys, and prefer "approved" over "skipped" so cache damage cannot hide a
+  // card that already exists.
+  function normalizeProposalDecisions(job, identity) {
+    var source = Array.isArray(job.proposalDecisions)
+      ? job.proposalDecisions : [];
+    var byKey = Object.create(null);
+    source.forEach(function (item) {
+      if (!item || typeof item !== 'object' ||
+          item.identity !== identity ||
+          !validProposalId(item.proposalId) ||
+          !Number.isInteger(item.ordinal) || item.ordinal < 0 ||
+          !Number.isInteger(item.ply) || item.ply < 0 ||
+          (item.status !== 'skipped' && item.status !== 'approved') ||
+          !Array.isArray(job.moments) ||
+          item.ordinal >= job.moments.length ||
+          !job.moments[item.ordinal] ||
+          job.moments[item.ordinal].ply !== item.ply) return;
+      var normalized = {
+        identity: identity,
+        proposalId: item.proposalId,
+        ordinal: item.ordinal,
+        ply: item.ply,
+        status: item.status
+      };
+      if (typeof item.updatedAt === 'number' && isFinite(item.updatedAt) &&
+          item.updatedAt >= 0) {
+        normalized.updatedAt = item.updatedAt;
+      }
+      var key = proposalDecisionKey(identity, item.ordinal, item.ply);
+      var prior = byKey[key];
+      if (!prior || (prior.status !== 'approved' &&
+          normalized.status === 'approved') ||
+          (prior.status === normalized.status &&
+           (normalized.updatedAt || 0) > (prior.updatedAt || 0))) {
+        byKey[key] = normalized;
+      }
+    });
+    job.proposalDecisions = Object.keys(byKey).map(function (key) {
+      return byKey[key];
+    }).sort(function (a, b) {
+      if (a.ordinal !== b.ordinal) return a.ordinal - b.ordinal;
+      return a.proposalId < b.proposalId ? -1 :
+        a.proposalId > b.proposalId ? 1 : 0;
+    });
+    return job.proposalDecisions;
+  }
+
+  function sameLessonClaim(a, b) {
+    if (!exactKeys(a, LESSON_CLAIM_KEYS) ||
+        !exactKeys(b, LESSON_CLAIM_KEYS)) return false;
+    for (var i = 0; i < LESSON_CLAIM_KEYS.length; i++) {
+      var key = LESSON_CLAIM_KEYS[i];
+      if (a[key] !== b[key]) return false;
+    }
+    return true;
+  }
+
+  function lessonProposalMatches(claim, proposalId, fields) {
+    var proposal = fields && fields.lessonProposal;
+    return !!proposal && typeof proposal === 'object' &&
+      proposal.proposalId === proposalId &&
+      sameLessonClaim(proposal.scan, claim);
+  }
+
+  function cardHasLessonProposal(card) {
+    // Cap accounting is deliberately fail-closed: a structurally plausible
+    // proposal row consumes a slot even if later card validation quarantines
+    // deeper evidence damage. Corruption must not enable a third automatic
+    // card; repairing/removing the damaged row restores the slot.
+    var proposal = card && card.lessonProposal;
+    var scan = proposal && proposal.scan;
+    return !!card && !!proposal && typeof proposal === 'object' &&
+      !Array.isArray(proposal) &&
+      validProposalId(proposal.proposalId) &&
+      validLessonClaim(scan) && card.ply === scan.ply;
+  }
+
+  function cardCarriesLessonProposal(card, claim) {
+    var proposal = card && card.lessonProposal;
+    return !!card && card.ply === claim.ply &&
+      !!proposal &&
+      sameLessonClaim(proposal.scan, claim);
+  }
+
+  function lessonApprovalMatchesCard(fields, expectedGame) {
+    if (!global.ChessyLessonProposal ||
+        typeof global.ChessyLessonProposal.validate !== 'function') {
+      return false;
+    }
+    var source = replayGameToPly(expectedGame, fields.ply);
+    if (!source || source.fen !== fields.fenBefore) return false;
+    return global.ChessyLessonProposal.validate(fields.lessonProposal, {
+      state: source.state,
+      reflection: fields.reflection,
+      equivalence: fields.equivalence,
+      card: fields
+    }) === null;
+  }
+
+  function mergeLessonProposalCard(existing, fields) {
+    var merged = Object.assign({}, existing, fields);
+    var oldBest = existing.bestMove || null;
+    var newBest = fields.bestMove || null;
+    var sameBest = (!oldBest && !newBest) || (!!oldBest && !!newBest &&
+      oldBest.from === newBest.from && oldBest.to === newBest.to &&
+      (oldBest.promotion || null) === (newBest.promotion || null));
+    var sameFen =
+      (existing.fenBefore || null) === (merged.fenBefore || null);
+    var sameEvidence = false;
+    try {
+      sameEvidence =
+        JSON.stringify(existing.equivalence || null) ===
+        JSON.stringify(merged.equivalence || null);
+    } catch (e) { /* non-JSON evidence is never the same exercise */ }
+    if (!sameBest || !sameFen || !sameEvidence) merged.attempts = [];
+    return merged;
+  }
+
+  // Commit one post-reflection proposal decision against the exact completed
+  // scan that issued its claim. Games, jobs and cards share ONE transaction:
+  // a source replacement, job restart, concurrent approval or double click
+  // therefore serializes before the guard/cap/upsert and cannot land a stale
+  // or third proposal card.
+  //
+  // decision: { action: 'skip'|'approve', proposalId }
+  // - skip writes only proposalDecisions and resolves 'skipped'
+  // - approve requires cardFields.lessonProposal to carry the same proposalId
+  //   and exact scan claim; it resolves 'saved' or 'updated'
+  // All mismatches resolve 'stale'; a third distinct proposal-origin card for
+  // this game resolves 'limit', even when another scan side/config produced
+  // the first two.
+  function decideLessonProposal(
+    claim, decision, cardFields, freshDefaults, expectedGame
+  ) {
+    // Snapshot the JSON-shaped boundary before opening IndexedDB. Otherwise a
+    // caller could mutate a claim/source/card object while open() is pending
+    // and change what the later transaction guards or persists.
+    try {
+      claim = JSON.parse(JSON.stringify(claim));
+      decision = JSON.parse(JSON.stringify(decision));
+      cardFields = cardFields == null
+        ? cardFields : JSON.parse(JSON.stringify(cardFields));
+      freshDefaults = freshDefaults == null
+        ? freshDefaults : JSON.parse(JSON.stringify(freshDefaults));
+      expectedGame = JSON.parse(JSON.stringify(expectedGame));
+    } catch (e) {
+      return Promise.resolve('stale');
+    }
+    var decisionKeys = ['action', 'proposalId'];
+    if (!validLessonClaim(claim) ||
+        !exactKeys(decision, decisionKeys) ||
+        (decision.action !== 'skip' && decision.action !== 'approve') ||
+        !validProposalId(decision.proposalId) ||
+        !expectedGame || typeof expectedGame !== 'object' ||
+        typeof expectedGame.id !== 'string' || !expectedGame.id ||
+        !lessonClaimMatchesSource(claim, expectedGame)) {
+      return Promise.resolve('stale');
+    }
+    if (decision.action === 'skip') {
+      if (cardFields !== undefined && cardFields !== null) {
+        return Promise.resolve('stale');
+      }
+    } else if (!cardFields || typeof cardFields !== 'object' ||
+        Array.isArray(cardFields) ||
+        Object.prototype.hasOwnProperty.call(cardFields, 'id') ||
+        (freshDefaults != null && (typeof freshDefaults !== 'object' ||
+         Array.isArray(freshDefaults) ||
+         Object.prototype.hasOwnProperty.call(freshDefaults, 'id'))) ||
+        cardFields.gameId !== expectedGame.id ||
+        cardFields.ply !== claim.ply ||
+        cardFields.playedSan !== claim.playedSan ||
+        !lessonProposalMatches(claim, decision.proposalId, cardFields) ||
+        !lessonApprovalMatchesCard(cardFields, expectedGame)) {
+      return Promise.resolve('stale');
+    }
+
+    return openForWrite().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(
+          ['games', 'analysisJobs', 'cards'], 'readwrite');
+        var games = t.objectStore('games');
+        var jobs = t.objectStore('analysisJobs');
+        var cards = t.objectStore('cards');
+        var gameReq = games.get(expectedGame.id);
+        var jobReq = null;
+        var cardCursor = null;
+        var jobPut = null;
+        var cardPut = null;
+        var outcome = 'stale';
+
+        function writeDecision(job, status) {
+          var rows = normalizeProposalDecisions(job, claim.identity);
+          var key = proposalDecisionKey(
+            claim.identity, claim.ordinal, claim.ply);
+          var found = -1;
+          for (var i = 0; i < rows.length; i++) {
+            if (proposalDecisionKey(
+              rows[i].identity, rows[i].ordinal, rows[i].ply) === key) {
+              found = i;
+              break;
+            }
+          }
+          var row = {
+            identity: claim.identity,
+            proposalId: decision.proposalId,
+            ordinal: claim.ordinal,
+            ply: claim.ply,
+            status: status,
+            updatedAt: Date.now()
+          };
+          if (found >= 0) rows[found] = row;
+          else rows.push(row);
+          rows.sort(function (a, b) {
+            if (a.ordinal !== b.ordinal) return a.ordinal - b.ordinal;
+            return a.proposalId < b.proposalId ? -1 :
+              a.proposalId > b.proposalId ? 1 : 0;
+          });
+          job.updatedAt = row.updatedAt;
+          jobPut = jobs.put(job);
+        }
+
+        function beginApprove(job) {
+          var target = null;
+          var proposalMoments = Object.create(null);
+          cardCursor = cards.index('gameId').openCursor(
+            IDBKeyRange.only(expectedGame.id));
+          cardCursor.onsuccess = function () {
+            var cursor = cardCursor.result;
+            if (cursor) {
+              var card = cursor.value;
+              if (!target && card && card.ply === claim.ply) {
+                target = card;
+              }
+              if (cardHasLessonProposal(card)) {
+                proposalMoments[card.ply] = true;
+              }
+              cursor.continue();
+              return;
+            }
+
+            var targetHasProposal = cardHasLessonProposal(target);
+            var proposalCount = Object.keys(proposalMoments).length;
+            if (proposalCount > 2 ||
+                (proposalCount >= 2 && !targetHasProposal)) {
+              outcome = 'limit';
+              return;
+            }
+
+            writeDecision(job, 'approved');
+            if (target) {
+              outcome = 'updated';
+              cardPut = cards.put(
+                mergeLessonProposalCard(target, cardFields));
+            } else {
+              outcome = 'saved';
+              cardPut = cards.add(Object.assign(
+                {}, freshDefaults || {}, cardFields));
+            }
+          };
+        }
+
+        function beginSkip(job, existing) {
+          var approvedCard = false;
+          cardCursor = cards.index('gameId').openCursor(
+            IDBKeyRange.only(expectedGame.id));
+          cardCursor.onsuccess = function () {
+            var cursor = cardCursor.result;
+            if (cursor) {
+              if (cardCarriesLessonProposal(
+                cursor.value, claim)) {
+                approvedCard = true;
+              }
+              cursor.continue();
+              return;
+            }
+            if (approvedCard) {
+              // A restarted job can legitimately have lost its optional
+              // decision cache while the durable approved card remains.
+              // Reconstruct the approved marker; never record a contradictory
+              // skip beside that card.
+              writeDecision(job, 'approved');
+              return;
+            }
+            if (existing && existing.status === 'approved') return;
+            outcome = 'skipped';
+            writeDecision(job, 'skipped');
+          };
+        }
+
+        gameReq.onsuccess = function () {
+          if (!sameJobSource(gameReq.result, expectedGame)) return;
+          jobReq = jobs.get(expectedGame.id);
+          jobReq.onsuccess = function () {
+            var job = jobReq.result;
+            if (!lessonClaimMatchesJob(
+              claim, job, expectedGame.id)) return;
+            var rows = normalizeProposalDecisions(job, claim.identity);
+            var decisionKey = proposalDecisionKey(
+              claim.identity, claim.ordinal, claim.ply);
+            var existing = null;
+            for (var i = 0; i < rows.length; i++) {
+              if (proposalDecisionKey(
+                rows[i].identity, rows[i].ordinal,
+                rows[i].ply) === decisionKey) {
+                existing = rows[i];
+                break;
+              }
+            }
+            if (decision.action === 'skip') {
+              // Skipping is idempotent, but it never downgrades an approval
+              // while leaving that approved card in place. The card scan also
+              // repairs a restarted job whose optional decision cache is gone.
+              beginSkip(job, existing);
+              return;
+            }
+            // A skip consumed this scan moment. A stale second tab must not
+            // turn that earlier explicit rejection into a card afterward.
+            if (existing && existing.status === 'skipped') return;
+            beginApprove(job);
+          };
+        };
+        t.oncomplete = function () { resolve(outcome); };
+        t.onerror = function () {
+          reject((cardCursor && cardCursor.error) ||
+            (cardPut && cardPut.error) || (jobPut && jobPut.error) ||
+            (jobReq && jobReq.error) || gameReq.error || t.error);
+        };
+        t.onabort = function () {
+          reject((cardCursor && cardCursor.error) ||
+            (cardPut && cardPut.error) || (jobPut && jobPut.error) ||
+            (jobReq && jobReq.error) || gameReq.error || t.error ||
+            new Error('transaction aborted'));
+        };
+      });
+    });
+  }
+
   function putJobIfGame(job, expectedGame) {
     return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
@@ -1251,6 +1769,36 @@
           }
         }
       }
+      // Train v2 E4 (#108): an approved automatic draft is optional enrichment
+      // (absent/null is the manual/legacy shape). When present, reproduce the
+      // exact scan source, structured reflection, stable equivalence evidence,
+      // generated finding, and player-edited card fields. analysisJobs is a
+      // disposable cache and is intentionally absent from backups, so the scan
+      // claim is re-derived directly from the durable archived game.
+      if (r.lessonProposal !== undefined && r.lessonProposal !== null) {
+        if (!global.ChessyLessonProposal ||
+            typeof global.ChessyLessonProposal.validate !== 'function') {
+          return prefix + ' cannot validate its lesson proposal';
+        }
+        if (!sourceGame || sourceGame.id !== r.gameId ||
+            !lessonClaimMatchesSource(r.lessonProposal.scan, sourceGame)) {
+          return prefix + ' has a lesson proposal from a different scan source';
+        }
+        var proposalSource = replayGameToPly(sourceGame, r.ply);
+        if (!proposalSource || proposalSource.fen !== r.fenBefore) {
+          return prefix + ' has a lesson proposal from a different source position';
+        }
+        var proposalError = global.ChessyLessonProposal.validate(
+          r.lessonProposal, {
+            state: proposalSource.state,
+            reflection: r.reflection,
+            equivalence: r.equivalence,
+            card: r
+          });
+        if (proposalError) {
+          return prefix + ' has ' + proposalError;
+        }
+      }
     } catch (e) {
       return prefix + ' has an unusable training position';
     }
@@ -1625,6 +2173,7 @@
     analysesCachePolicy: analysesCachePolicy,
     putJob: putJob,
     putJobIfGame: putJobIfGame,
+    decideLessonProposal: decideLessonProposal,
     getJob: getJob,
     deleteJob: deleteJob,
     exportAll: exportAll,

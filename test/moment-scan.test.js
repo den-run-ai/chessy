@@ -197,6 +197,45 @@ function reset() {
     pub.candidates === undefined && pub.shortlist === undefined &&
     done.candidates === undefined && done.shortlist === undefined,
     'state() and start() expose no scores, labels, better moves or internal candidates');
+  const claim = Scan.claimSuggestion(pub.moments[0]);
+  check(!!claim && Object.isFrozen(claim) &&
+    Object.keys(claim).sort().join(',') ===
+      'algorithm,analysisRev,identity,jobSchema,ordinal,playedSan,ply,scanColor,sourceRev' &&
+    claim.ordinal === 0 && claim.ply === pub.moments[0].ply &&
+    claim.playedSan === pub.moments[0].playedSan,
+    'a completed current-job member yields one immutable strict scan claim');
+  check(Scan.claimSuggestion({ ply: claim.ply, playedSan: claim.playedSan + '?' }) === null &&
+    Scan.claimSuggestion({ ply: 999, playedSan: claim.playedSan }) === null,
+    'invented or mismatched moments cannot claim completed scan provenance');
+  const storedWithDecisions = clone(jobs.get(black.game.id));
+  storedWithDecisions.proposalDecisions = [
+    {
+      identity: claim.identity, proposalId: 'same-proposal',
+      ordinal: 0, ply: claim.ply, status: 'skipped', updatedAt: 1
+    },
+    {
+      identity: claim.identity, proposalId: 'same-proposal',
+      ordinal: 0, ply: claim.ply, status: 'approved', updatedAt: 2
+    },
+    {
+      identity: claim.identity, proposalId: 'new-provider-proposal',
+      ordinal: 0, ply: claim.ply, status: 'skipped', updatedAt: 3
+    },
+    {
+      identity: 'wrong-scan', proposalId: 'relic',
+      ordinal: 0, ply: claim.ply, status: 'approved'
+    },
+    { malformed: true }
+  ];
+  jobs.set(black.game.id, storedWithDecisions);
+  await Scan.load(black);
+  const normalizedDecisions = jobs.get(black.game.id).proposalDecisions;
+  check(normalizedDecisions.length === 1 &&
+    normalizedDecisions[0].identity === claim.identity &&
+    normalizedDecisions[0].proposalId === 'same-proposal' &&
+    normalizedDecisions[0].status === 'approved' &&
+    Scan.state().proposalDecisions === undefined,
+    'reload keeps one approved decision per moment without changing publicState');
 
   reset();
   const both = autoReview('two-clocks', 4, 'both', null, [
@@ -251,6 +290,9 @@ function reset() {
   check(paused.state === 'paused' && paused.cursorPly === 1 &&
     paused.checked === 0 && jobs.get('paused').cursorPly === 1,
     'an interrupted analysis pauses at the unchanged next-decision cursor');
+  check(Scan.claimSuggestion({
+    ply: 1, playedSan: pausedReview.gs.history[1].san
+  }) === null, 'a paused/incomplete job cannot issue a suggestion claim');
   requests = [];
   const resumed = await Scan.resume(pausedReview);
   check(requests[0].ply === 1 && resumed.state === 'done' && resumed.checked === 1,
@@ -377,10 +419,18 @@ function reset() {
   const chosen = await Scan.start(unknown, { restart: true, scanColor: 'w' });
   check(chosen.state === 'done' && jobs.get('unknown').scanColor === 'w',
     'an explicit imported-side choice enables a deterministic scan');
+  const chosenClaim = chosen.moments.length
+    ? Scan.claimSuggestion(chosen.moments[0]) : null;
   Scan.invalidate();
   const remembered = await Scan.load(unknown);
   check(remembered.state === 'done' && jobs.get('unknown').scanColor === 'w',
     'the explicit imported-side choice survives reload in the durable job');
+  const rememberedClaim = remembered.moments.length
+    ? Scan.claimSuggestion(remembered.moments[0]) : null;
+  check((!chosenClaim && !rememberedClaim) ||
+    (!!chosenClaim && !!rememberedClaim &&
+     JSON.stringify(chosenClaim) === JSON.stringify(rememberedClaim)),
+    'the same durable completed scan reissues the identical strict claim');
   Scan.invalidate();
   requests = [];
   const restarted = await Scan.start(unknown, { restart: true });
