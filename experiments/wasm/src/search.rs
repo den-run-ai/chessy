@@ -233,7 +233,7 @@ unsafe fn pv_entry(index: usize) -> *mut u32 {
 /// Loading finishes before a search begins, and move generation overwrites
 /// every consumed lane, so this keeps ABI v2 inside the fixed 25.31 MiB memory.
 pub fn history_input_ptr() -> *mut u8 {
-    core::ptr::addr_of_mut!(CONTEXT.moves).cast::<u8>()
+    unsafe { core::ptr::addr_of_mut!(CONTEXT.moves).cast::<u8>() }
 }
 
 pub fn pv_ptr() -> u32 {
