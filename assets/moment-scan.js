@@ -93,6 +93,21 @@
     };
   }
 
+  // Stable identity for one exact scan. Keep this byte-for-byte aligned with
+  // store.js: proposal approval uses the identity to enforce its per-scan cap
+  // inside the same transaction as the card write. The game id is folded in
+  // without being exposed as an extra claim field.
+  function scanIdentity(job) {
+    return 'chessy-moment-scan:' + JSON.stringify([
+      job.schema,
+      job.algorithm,
+      job.gameId,
+      job.sourceRev,
+      job.analysisRev,
+      job.scanColor
+    ]);
+  }
+
   function scanColorFor(game, requested) {
     var own = game && game.playerColor;
     if (own === 'w' || own === 'b') return own;
@@ -154,6 +169,8 @@
     job.shortlist = Array.isArray(job.shortlist) ? job.shortlist : [];
     job.moments = Array.isArray(job.moments) ? job.moments : [];
     job.unresolved = Array.isArray(job.unresolved) ? job.unresolved : [];
+    job.proposalDecisions = Array.isArray(job.proposalDecisions)
+      ? job.proposalDecisions : [];
     return job;
   }
 
@@ -168,7 +185,8 @@
       total: job.total,
       verifyIndex: job.verifyIndex,
       verifyTotal: Array.isArray(job.shortlist) ? job.shortlist.length : 0,
-      moments: (Array.isArray(job.moments) ? job.moments : []).map(function (m) {
+      moments: (Array.isArray(job.moments) ? job.moments : [])
+        .slice(0, 2).map(function (m) {
         return { ply: m.ply, playedSan: m.playedSan };
       }),
       unresolvedCount: Array.isArray(job.unresolved) ? job.unresolved.length : 0,
@@ -467,6 +485,52 @@
       seenMoments[m.ply] = true;
       return true;
     }).slice(0, 2);
+    // Decision rows are cache metadata written by the atomic proposal store
+    // seam. There is one logical decision per exact scan moment, never exposed
+    // by publicState(), and malformed rows are safe to discard. Prefer an
+    // approved duplicate over a skipped one so cache damage cannot make an
+    // already-created card look rejected on reopen. Proposal ids remain audit
+    // provenance, but a provider/config change cannot prompt the same scan
+    // moment a second time.
+    var identity = scanIdentity(job);
+    var decisions = Object.create(null);
+    job.proposalDecisions.forEach(function (item) {
+      if (!item || typeof item !== 'object' ||
+          item.identity !== identity ||
+          typeof item.proposalId !== 'string' ||
+          !item.proposalId || item.proposalId.length > 512 ||
+          !Number.isInteger(item.ordinal) ||
+          item.ordinal < 0 || item.ordinal >= job.moments.length ||
+          !Number.isInteger(item.ply) ||
+          item.ply !== job.moments[item.ordinal].ply ||
+          (item.status !== 'skipped' && item.status !== 'approved')) return;
+      var key = JSON.stringify([item.identity, item.ordinal, item.ply]);
+      var normalized = {
+        identity: item.identity,
+        proposalId: item.proposalId,
+        ordinal: item.ordinal,
+        ply: item.ply,
+        status: item.status
+      };
+      if (typeof item.updatedAt === 'number' && isFinite(item.updatedAt) &&
+          item.updatedAt >= 0) {
+        normalized.updatedAt = item.updatedAt;
+      }
+      var prior = decisions[key];
+      if (!prior || (prior.status !== 'approved' &&
+          normalized.status === 'approved') ||
+          (prior.status === normalized.status &&
+           (normalized.updatedAt || 0) > (prior.updatedAt || 0))) {
+        decisions[key] = normalized;
+      }
+    });
+    job.proposalDecisions = Object.keys(decisions).map(function (key) {
+      return decisions[key];
+    }).sort(function (a, b) {
+      if (a.ordinal !== b.ordinal) return a.ordinal - b.ordinal;
+      return a.proposalId < b.proposalId ? -1 :
+        a.proposalId > b.proposalId ? 1 : 0;
+    });
     job.unresolved = job.unresolved.filter(function (item) {
       return !!item && typeof item === 'object' &&
         Number.isInteger(item.ply) && item.ply >= 0 &&
@@ -509,6 +573,7 @@
       verifyIndex: 0,
       moments: [],
       unresolved: [],
+      proposalDecisions: [],
       typicalThinkMsBySide: typicalThinkMsBySide(review, scanColor),
       updatedAt: now()
     };
@@ -630,6 +695,45 @@
 
   function state() { return publicState(current); }
 
+  // Claim a spoiler-safe suggestion only after its exact current scan has
+  // completed. The claim contains scalar provenance only, is immutable, and
+  // can therefore cross the reflection boundary without exposing scores,
+  // labels, engine lines or better moves. Invalid/stale/non-member moments do
+  // not receive a claim.
+  function claimSuggestion(moment) {
+    var job = current;
+    if (!job || job.state !== 'done' || running ||
+        !currentSource || currentSource.id !== job.gameId ||
+        job.schema !== JOB_SCHEMA || job.algorithm !== ALGORITHM ||
+        job.sourceRev !== sourceRevision(currentSource, job.scanColor) ||
+        job.analysisRev !== analysisRevision(currentSource) ||
+        !Array.isArray(job.moments) || job.moments.length > 2 ||
+        !moment || typeof moment !== 'object' ||
+        !Number.isInteger(moment.ply) ||
+        typeof moment.playedSan !== 'string') return null;
+    var ordinal = -1;
+    for (var i = 0; i < job.moments.length; i++) {
+      var candidate = job.moments[i];
+      if (candidate && candidate.ply === moment.ply &&
+          candidate.playedSan === moment.playedSan) {
+        ordinal = i;
+        break;
+      }
+    }
+    if (ordinal < 0) return null;
+    return Object.freeze({
+      jobSchema: job.schema,
+      algorithm: job.algorithm,
+      sourceRev: job.sourceRev,
+      analysisRev: job.analysisRev,
+      scanColor: job.scanColor,
+      identity: scanIdentity(job),
+      ordinal: ordinal,
+      ply: job.moments[ordinal].ply,
+      playedSan: job.moments[ordinal].playedSan
+    });
+  }
+
   if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('chessy:archivecleared', invalidate);
     document.addEventListener('chessy:reviewrender', function () {
@@ -647,6 +751,7 @@
     invalidate: invalidate,
     load: load,
     state: state,
+    claimSuggestion: claimSuggestion,
     analysisRevision: analysisRevision,
     sourceRevision: sourceRevision,
     profiles: {

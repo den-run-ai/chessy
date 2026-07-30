@@ -621,6 +621,13 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .coach-form h3 { font-size: 1rem; }
 .coach-form label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--muted); }
 .coach-form .input-error { color: var(--danger, #d9534f); }
+.lesson-proposal {
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 0.65rem;
+}
+.lesson-proposal h4 { margin-bottom: 0.35rem; }
 
 /* Chessy's candidate lines (Review v2): SAN + player-POV eval + a short PV,
    best-first. The played move's line is marked so the player can see where

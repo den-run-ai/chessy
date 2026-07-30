@@ -416,9 +416,18 @@
   function openSuggestion(moment) {
     if (!review || review.game.id !== scanGameId ||
         !moment || !Number.isInteger(moment.ply)) return;
+    const claim = window.ChessyMomentScan &&
+      typeof ChessyMomentScan.claimSuggestion === 'function'
+      ? ChessyMomentScan.claimSuggestion(moment) : null;
+    // Automatic lesson drafts may only originate from an exact, completed
+    // scan member. A stale or fabricated button is inert instead of silently
+    // degrading into a manual reflection with different ownership semantics.
+    if (!claim) return;
     if (!goToPly(moment.ply)) return;
     const reflection = window.ChessyReflection || window.CoachReflection;
-    if (reflection && reflection.beginCurrent) reflection.beginCurrent();
+    if (reflection && reflection.beginCurrent) {
+      reflection.beginCurrent({ suggestion: claim });
+    }
   }
 
   function renderMoments(state) {
@@ -426,7 +435,11 @@
     const list = $('scanMomentList');
     if (!wrap || !list) return;
     list.textContent = '';
-    const moments = state && Array.isArray(state.moments)
+    // Pass 2 can discover its first moment before the scan is complete, but a
+    // suggestion is claimable only from the final completed job. Keep partial
+    // findings out of the interactive list instead of rendering inert buttons.
+    const moments = state && state.state === 'done' &&
+      Array.isArray(state.moments)
       ? state.moments.slice(0, 2) : [];
     wrap.hidden = moments.length === 0;
     moments.forEach(function (moment) {
@@ -532,7 +545,8 @@
     renderProgressMeter(scanState);
     renderMoments(scanState);
     document.querySelectorAll('#scanMomentList .scan-moment').forEach(function (button) {
-      button.disabled = reflecting;
+      button.disabled = reflecting || live || scanBusy || scanNeedsReopen ||
+        !done;
     });
     // Hiding OR disabling a focused control may drop Chromium's focus to
     // <body>. Keep a deliberate status fallback while work is gated, then

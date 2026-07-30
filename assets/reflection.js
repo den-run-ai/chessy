@@ -28,6 +28,7 @@
       typeof ChessyAnalysisCore === 'undefined' ||
       typeof ChessyAnalysisResult === 'undefined' ||
       typeof ChessyCalculation === 'undefined' ||
+      typeof ChessyLessonProposal === 'undefined' ||
       typeof Chess === 'undefined') return;
 
   const $ = function (id) { return document.getElementById(id); };
@@ -37,7 +38,7 @@
     'threat-scan': 'Missed a threat',
     candidates: 'Good move not among candidates',
     evaluation: 'Judged it wrong',
-    calculation: 'Line went wrong on the reply',
+    calculation: 'Opponent reply was not verified',
     efficiency: 'Right idea, too much time',
     impulse: 'Moved too fast',
     'sound-alternative': 'My move was also sound',
@@ -77,7 +78,10 @@
       id: game.id,
       setupFen: game.setupFen || null,
       playerColor: game.playerColor || null,
-      sans: Array.isArray(game.sans) ? game.sans.slice() : []
+      sans: Array.isArray(game.sans) ? game.sans.slice() : [],
+      clocks: Array.isArray(game.clocks)
+        ? JSON.parse(JSON.stringify(game.clocks)) : [],
+      timeControl: game.timeControl || null
     };
   }
 
@@ -85,10 +89,17 @@
     if (!game || !source || game.id !== source.id ||
         (game.setupFen || null) !== source.setupFen ||
         (game.playerColor || null) !== source.playerColor ||
+        (game.timeControl || null) !== source.timeControl ||
         !Array.isArray(game.sans) || game.sans.length !== source.sans.length) {
       return false;
     }
-    return game.sans.every(function (san, i) { return san === source.sans[i]; });
+    let clocksMatch = false;
+    try {
+      clocksMatch = JSON.stringify(Array.isArray(game.clocks) ? game.clocks : []) ===
+        JSON.stringify(source.clocks);
+    } catch (e) { clocksMatch = false; }
+    return clocksMatch &&
+      game.sans.every(function (san, i) { return san === source.sans[i]; });
   }
 
   // A candidate line's eval from the moving side's POV. A mate line reads as
@@ -142,6 +153,15 @@
   // cancelled, so the next Verify bypasses the (evicted) cache and re-runs the
   // worker rather than racing a best-effort deletion.
   let retryFresh = null;
+
+  function resetProposalUi() {
+    $('lessonProposalBox').hidden = true;
+    $('lessonProposalEvidence').textContent = '';
+    $('lessonProposalStatus').hidden = true;
+    $('lessonProposalStatus').textContent = '';
+    $('skipLessonProposal').disabled = false;
+    $('saveCard').textContent = 'Save lesson card';
+  }
 
   function clearReflectionError() {
     const fields = [
@@ -295,6 +315,29 @@
       sameSource(r.game, flagged.source);
   }
 
+  function sameSuggestionJob(job, claim) {
+    if (!job || !claim || job.state !== 'done' ||
+        job.schema !== claim.jobSchema ||
+        job.algorithm !== claim.algorithm ||
+        job.sourceRev !== claim.sourceRev ||
+        job.analysisRev !== claim.analysisRev ||
+        job.scanColor !== claim.scanColor ||
+        !Array.isArray(job.moments) ||
+        job.moments.length > 2 ||
+        !Number.isInteger(claim.ordinal) ||
+        claim.ordinal < 0 || claim.ordinal >= job.moments.length) {
+      return false;
+    }
+    const identity = 'chessy-moment-scan:' + JSON.stringify([
+      job.schema, job.algorithm, job.gameId, job.sourceRev,
+      job.analysisRev, job.scanColor
+    ]);
+    if (claim.identity !== identity) return false;
+    const moment = job.moments[claim.ordinal];
+    return !!moment && moment.ply === claim.ply &&
+      moment.playedSan === claim.playedSan;
+  }
+
   // Only YOUR decisions can be flagged: reflection is about the player's own
   // move, not the opponent's or the computer's.
   function flaggable(r) {
@@ -341,9 +384,16 @@
     if (flagged && document.body.dataset.view !== 'review') cancelReflection();
   });
 
-  function beginCurrent() {
+  function beginCurrent(opts) {
+    opts = opts && opts.suggestion ? opts : {};
     const r = CoachReview.current();
     if (!flaggable(r)) return false;
+    const suggestion = opts.suggestion || null;
+    if (suggestion &&
+        (suggestion.ply !== r.ply ||
+         suggestion.playedSan !== r.gs.history[r.ply].san)) {
+      return false;
+    }
     // Reflection owns the foreground analysis lane. Pause the batch first;
     // owner-scoped cancellation ensures its late continuation cannot cancel a
     // reflection request that the player submits next.
@@ -361,7 +411,8 @@
       ply: r.ply,
       gameRev: gameRevOf(r.game),
       review: r,
-      source: sourceSnapshotOf(r.game)
+      source: sourceSnapshotOf(r.game),
+      suggestion: suggestion
     };
     verdict = null;
     // Fresh moment, fresh answers: reflection AND card fields reset, so a stale
@@ -377,6 +428,7 @@
     syncStructuredInputs();
     $('cardCause').value = '';
     $('cardLesson').value = '';
+    resetProposalUi();
     $('reflectForm').hidden = false;
     $('reflectVerify').disabled = false;
     $('verifyBox').hidden = true;
@@ -388,7 +440,7 @@
     return true;
   }
 
-  $('flagMoment').addEventListener('click', beginCurrent);
+  $('flagMoment').addEventListener('click', function () { beginCurrent(); });
 
   // One rendered candidate line: an explicit rank, SAN, the player-POV eval, a
   // short PV, and a "your move" tag when it is the move actually played. The
@@ -444,6 +496,7 @@
   // for an unusable one (illegal move, no eval, garbled provenance).
   function failVerify(message) {
     verdict = null;
+    resetProposalUi();
     $('verifyLines').textContent = '';
     $('verifyMeta').textContent = '';
     $('verifyMeta').classList.remove('partial');
@@ -523,6 +576,9 @@
       return;
     }
     const reflection = JSON.parse(JSON.stringify(built.value));
+    resetProposalUi();
+    $('cardCause').value = '';
+    $('cardLesson').value = '';
     const token = ++verifySeq;
     saveSeq++; // this verdict owns the card controls now
     const ply = r.ply;
@@ -548,6 +604,7 @@
     const wantFresh = retryFresh === momentKey;
     if (wantFresh) retryFresh = null;
     const analysisSource = flagged.source;
+    const suggestionClaim = flagged.suggestion;
     const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
       fen: fenBefore, positions: sourceState.positions, fresh: wantFresh,
@@ -571,12 +628,22 @@
         cancelReflection();
         return { abandoned: true };
       }
-      if (!CoachStore.getGame) return { res: res, sourceCurrent: false };
-      return Promise.resolve(CoachStore.getGame(analysisSource.id)).then(
-        function (game) {
-          return { res: res, sourceCurrent: sameSource(game, analysisSource) };
-        },
-        function () { return { res: res, sourceCurrent: false }; });
+      if (!CoachStore.getGame) {
+        return { res: res, sourceCurrent: false, suggestionJob: null };
+      }
+      const gameRead = Promise.resolve(CoachStore.getGame(analysisSource.id))
+        .catch(function () { return null; });
+      const jobRead = suggestionClaim && CoachStore.getJob
+        ? Promise.resolve(CoachStore.getJob(analysisSource.id))
+          .catch(function () { return null; })
+        : Promise.resolve(null);
+      return Promise.all([gameRead, jobRead]).then(function (values) {
+        return {
+          res: res,
+          sourceCurrent: sameSource(values[0], analysisSource),
+          suggestionJob: values[1]
+        };
+      });
     }).then(function (out) {
       if (!out || out.abandoned) return;
       stopVerifyRun(token);
@@ -714,10 +781,12 @@
       // played move is passed only because grade() requires some attempt; the
       // persisted fields below are all attempt-independent.
       let equivalence = null;
+      let playedGrade = null;
       if (window.ChessyEquivalence && expected) {
         try {
           const ev = ChessyEquivalence.grade(res, sourceState, expected, playedUci);
           if (ev && ev.ok) {
+            playedGrade = ev;
             equivalence = JSON.parse(JSON.stringify({
               criterion: ev.criterion,
               provider: ev.provider,
@@ -737,6 +806,63 @@
         } catch (e) { equivalence = null; }
       }
 
+      // #108: a scan suggestion may produce ONE editable lesson draft, but
+      // only after Gate 0 and only from the exact completed scan member plus a
+      // complete/stable `not-equivalent` grade. The pure policy suppresses
+      // every ambiguous/equivalent/unknown case and never reads raw DOM text.
+      let lessonDraft = null;
+      if (suggestionClaim) {
+        if (sameSuggestionJob(out.suggestionJob, suggestionClaim) &&
+            playedGrade) {
+          const candidateGrades = reflection.candidates.moves.map(function (move) {
+            if (move.uci === playedUci) return playedGrade;
+            try {
+              return ChessyEquivalence.grade(
+                res, sourceState, expected, move.uci);
+            } catch (e) {
+              return { ok: false, reason: 'candidate-grade-error', verdict: null };
+            }
+          });
+          try {
+            lessonDraft = ChessyLessonProposal.propose({
+              claim: suggestionClaim,
+              state: sourceState,
+              reflection: reflection,
+              playedGrade: playedGrade,
+              candidateGrades: candidateGrades
+            });
+          } catch (e) { lessonDraft = null; }
+        }
+        if (lessonDraft) {
+          const prior = out.suggestionJob &&
+            Array.isArray(out.suggestionJob.proposalDecisions)
+            ? out.suggestionJob.proposalDecisions.find(function (decision) {
+              return decision && decision.identity === suggestionClaim.identity &&
+                decision.ordinal === suggestionClaim.ordinal &&
+                decision.ply === suggestionClaim.ply &&
+                decision.status === 'skipped';
+            }) : null;
+          if (prior) lessonDraft = null;
+        }
+        if (lessonDraft) {
+          $('cardCause').value = lessonDraft.draft.cause;
+          $('cardLesson').value = lessonDraft.draft.lesson;
+          $('lessonProposalBox').hidden = false;
+          $('lessonProposalEvidence').textContent =
+            'Drafted from your pre-engine self-report and a complete, stable ' +
+            'accepted-move comparison. Edit either field before approving.';
+          $('saveCard').textContent = 'Approve lesson card';
+        } else {
+          $('lessonProposalStatus').hidden = false;
+          $('lessonProposalStatus').textContent =
+            sameSuggestionJob(out.suggestionJob, suggestionClaim)
+              ? 'No sufficiently verified lesson draft for this reflection. ' +
+                'You can still write your own.'
+              : 'This scan suggestion is no longer current, so no automatic ' +
+                'draft was created.';
+        }
+      }
+
       verdict = {
         gameId: flagged.gameId, ply: ply, fenBefore: fenBefore,
         gameRev: gameRev, review: flagged.review, source: analysisSource,
@@ -745,7 +871,8 @@
         bestScore: cardScore(top), depth: res.depth, complete: true,
         kind: match ? 'match' : 'differ',
         reflection: reflection,
-        equivalence: equivalence
+        equivalence: equivalence,
+        lessonDraft: lessonDraft
       };
       $('saveCard').disabled = false;
     }).catch(function () {
@@ -773,6 +900,13 @@
     // player's cause call ("my move was also sound" included).
     const lesson = $('cardLesson').value.trim();
     const cause = v.kind === 'match' ? 'match' : $('cardCause').value;
+    const lessonLimit = ChessyLessonProposal.MAX_LESSON_LENGTH || 500;
+    if (lesson.length > lessonLimit) {
+      $('cardSaved').hidden = false;
+      $('cardSaved').textContent =
+        'Keep the lesson to ' + lessonLimit + ' characters or fewer.';
+      return;
+    }
     if (!lesson || !cause) {
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = v.kind === 'match'
@@ -780,10 +914,31 @@
         : 'Pick a cause (your call) and write a one-sentence lesson first.';
       return;
     }
+    let lessonProposal = null;
+    if (v.lessonDraft) {
+      try {
+        lessonProposal =
+          ChessyLessonProposal.approve(v.lessonDraft, cause, lesson);
+      } catch (e) { lessonProposal = null; }
+      if (!lessonProposal) {
+        $('cardSaved').hidden = false;
+        $('cardSaved').textContent =
+          'This lesson draft could not be approved — Verify again.';
+        return;
+      }
+    }
+    if (lessonProposal &&
+        typeof CoachStore.decideLessonProposal !== 'function') {
+      $('cardSaved').hidden = false;
+      $('cardSaved').textContent =
+        'Proposal approval is unavailable in this release.';
+      return;
+    }
     const token = ++saveSeq;
     // Disable BEFORE the async write — a double-click (or a slow IndexedDB)
     // must not create duplicate cards for the same moment.
     $('saveCard').disabled = true;
+    if (lessonProposal) $('skipLessonProposal').disabled = true;
     const now = Date.now();
     const fields = {
       gameId: v.gameId, ply: v.ply, fenBefore: v.fenBefore,
@@ -795,6 +950,10 @@
       // existing card, and stale evidence from an earlier verdict must never
       // survive under a re-saved card whose best move it may contradict.
       equivalence: v.equivalence || null,
+      // Manual/re-Verify saves explicitly clear prior proposal evidence.
+      // Approved drafts carry their immutable generated/evidence snapshot plus
+      // the player's edited cause and lesson.
+      lessonProposal: lessonProposal,
       due: now,  // first review is immediate (the "learn" step)
       step: -1   // -1 = not yet on the day ladder (Train slice)
     };
@@ -802,11 +961,28 @@
     // existing card (back to the immediate learning step, history kept) instead
     // of minting a duplicate — atomically in the store, so even saves racing
     // from two tabs cannot create two cards.
-    CoachStore.upsertCardByMoment(fields, { createdAt: now, attempts: [] }, v.source)
+    const write = lessonProposal && CoachStore.decideLessonProposal
+      ? CoachStore.decideLessonProposal(
+        lessonProposal.scan,
+        { action: 'approve', proposalId: lessonProposal.proposalId },
+        fields,
+        { createdAt: now, attempts: [] },
+        v.source)
+      : CoachStore.upsertCardByMoment(
+        fields, { createdAt: now, attempts: [] }, v.source);
+    Promise.resolve(write)
       .then(function (outcome) {
       if (token !== saveSeq || verdict !== v) return;
       if (outcome === 'stale') {
         cancelReflection();
+        return;
+      }
+      if (outcome === 'limit') {
+        $('saveCard').disabled = false;
+        if (lessonProposal) $('skipLessonProposal').disabled = false;
+        $('cardSaved').hidden = false;
+        $('cardSaved').textContent =
+          'This game already has two approved proposal cards.';
         return;
       }
       $('cardSaved').hidden = false;
@@ -816,8 +992,59 @@
     }).catch(function () {
       if (token !== saveSeq || verdict !== v) return;
       $('saveCard').disabled = false; // failed write: let the user retry
+      if (lessonProposal) $('skipLessonProposal').disabled = false;
       $('cardSaved').hidden = false;
       $('cardSaved').textContent = 'Could not save the card — storage unavailable.';
+    });
+  });
+
+  $('skipLessonProposal').addEventListener('click', function () {
+    const v = verdict;
+    if (!v || !v.lessonDraft || !flagged ||
+        v.source !== flagged.source ||
+        !sameMoment(CoachReview.current()) ||
+        !CoachStore.decideLessonProposal) return;
+    const draft = v.lessonDraft;
+    const token = ++saveSeq;
+    $('skipLessonProposal').disabled = true;
+    $('saveCard').disabled = true;
+    Promise.resolve(CoachStore.decideLessonProposal(
+      draft.scan,
+      { action: 'skip', proposalId: draft.proposalId },
+      null,
+      null,
+      v.source
+    )).then(function (outcome) {
+      if (token !== saveSeq || verdict !== v) return;
+      if (outcome === 'stale') {
+        cancelReflection();
+        return;
+      }
+      if (outcome !== 'skipped') {
+        $('skipLessonProposal').disabled = false;
+        $('saveCard').disabled = false;
+        $('lessonProposalStatus').hidden = false;
+        $('lessonProposalStatus').textContent =
+          'Could not skip this draft because its scan decision changed.';
+        return;
+      }
+      v.lessonDraft = null;
+      $('lessonProposalBox').hidden = true;
+      $('lessonProposalEvidence').textContent = '';
+      $('cardCause').value = '';
+      $('cardLesson').value = '';
+      $('saveCard').textContent = 'Save lesson card';
+      $('saveCard').disabled = false;
+      $('lessonProposalStatus').hidden = false;
+      $('lessonProposalStatus').textContent =
+        'Draft skipped. No card was created; you can still write your own.';
+    }).catch(function () {
+      if (token !== saveSeq || verdict !== v) return;
+      $('skipLessonProposal').disabled = false;
+      $('saveCard').disabled = false;
+      $('lessonProposalStatus').hidden = false;
+      $('lessonProposalStatus').textContent =
+        'Could not skip the draft — storage unavailable.';
     });
   });
 
