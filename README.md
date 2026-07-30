@@ -177,6 +177,7 @@ plus tests for endings, special moves, SAN, undo, and the AI:
 node test/engine.test.js
 node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
+node test/master-e4-regression.test.js  # exact r69 11...Bd4 miss; add --require-fix to gate a candidate
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
 node test/level-presets.test.js     # target bands, budgets, JS/WASM parity
 node test/ai-match-cli.test.js      # match-budget validation/time smoke
