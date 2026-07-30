@@ -184,6 +184,13 @@ node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
 ```
 
+The Master e4 diagnostic treats Git commit `8b887c4` and the recorded WASM
+SHA-256 as the immutable r69 artifact rather than committing a second binary.
+After the shipped WASM changes, the test keeps validating the source/oracle
+fixture but intentionally skips the exact r69 search signature; check out the
+recorded commit to reproduce that historical result. Its pinned Stockfish Lite
+comparison covers four forced root moves only, not every legal move.
+
 The AI measurement tools are manual (too slow for PR CI). `node
 test/ai-bench.js --base origin/main` measures search nodes over 16 benchmark
 positions against a git ref. `test/ai-match.js` supports one formal paired

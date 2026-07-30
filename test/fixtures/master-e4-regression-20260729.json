@@ -1,6 +1,7 @@
 {
   "source": {
-    "filename": "chessy-20260729-1804-debug(1).pgn",
+    "filename": "chessy-20260729-1804-debug.pgn",
+    "attachmentFilename": "chessy-20260729-1804-debug(1).pgn",
     "sha256": "98dd474bf8c4c7efc3fbfa67dfa1c91411877cb431f4ccb65f430371e8f34a4a",
     "date": "2026.07.29",
     "release": "r69",
@@ -24,6 +25,10 @@
       "commit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
       "asset": "assets/chessy-ai-fast.wasm",
       "assetSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
+      "artifactPolicy": {
+        "kind": "git-history",
+        "note": "Commit 8b887c4a69f8b06bb50ad8d77be896f26938ed42:assets/chessy-ai-fast.wasm and the asset SHA are the immutable r69 artifact. The current-branch exact-signature check is skipped after the shipped asset changes; check out that commit to reproduce it."
+      },
       "maxDepth": 30,
       "nodeLimit": 9187327,
       "quiesce": true,
@@ -39,7 +44,7 @@
       "engine": "Stockfish 18",
       "targetUci": "e5e4",
       "reportedSwingCpApprox": 120,
-      "note": "The supplied full-engine review is authoritative for the reported gap; the pinned lite build below independently confirms the move ranking."
+      "note": "The supplied full-engine review is authoritative for the reported gap; the pinned lite build below independently ranks e4 first within its four-move forced-root sample."
     },
     "pinnedOracle": {
       "engine": "Stockfish 18 Lite WASM",
@@ -53,6 +58,10 @@
       "clearHashBetweenSearches": true,
       "command": "go depth 20 searchmoves <moveUci>",
       "scorePov": "side-to-move",
+      "scope": "Forced-root comparison of four preselected legal moves, not an exhaustive ranking of every legal move.",
+      "candidateCount": 4,
+      "exhaustiveLegalMoves": false,
+      "targetVsPlayedMarginCp": 48,
       "forcedRoot": [
         {
           "moveUci": "e5e4",

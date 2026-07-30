@@ -5,6 +5,10 @@
  * The default mode is a CI-safe known-regression diagnostic. It proves the
  * source game and, while the shipped asset is the pinned r69 binary, reproduces
  * the exact historical search. It deliberately does not bless Bd4 as correct.
+ * The binary is not duplicated as a test fixture: commit 8b887c4 plus its
+ * recorded SHA is the immutable artifact. Once the shipped WASM hash changes,
+ * exact r69 replay is intentionally skipped here and remains reproducible by
+ * checking out that commit.
  *
  * Once an algorithmic change has passed the strength/device gates, make the
  * behavior mandatory with:
@@ -26,7 +30,7 @@ const WASM_PATH = path.join(__dirname, '..', 'assets', 'chessy-ai-fast.wasm');
 const fixture = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'));
 const rawPgn = fs.readFileSync(PGN_PATH, 'utf8');
 const requireFix = process.argv.includes('--require-fix');
-let passed = 0, failed = 0;
+let passed = 0, failed = 0, skipped = 0;
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -42,6 +46,11 @@ function check(ok, label, detail) {
   }
 }
 
+function skip(label, detail) {
+  skipped++;
+  console.log(' SKIP ' + label + (detail ? ' — ' + detail : ''));
+}
+
 function uci(move) {
   return Chess.sqName(move.from) + Chess.sqName(move.to) +
     (move.promotion ? move.promotion.toLowerCase() : '');
@@ -50,6 +59,13 @@ function uci(move) {
 function replayAndVerifySource() {
   const game = ChessyPGN.parseGame(rawPgn);
   const regression = fixture.regression;
+  check(fixture.source.filename === 'chessy-20260729-1804-debug.pgn',
+    'source metadata keeps the canonical downloaded filename',
+    fixture.source.filename);
+  check(fixture.source.attachmentFilename ===
+      'chessy-20260729-1804-debug(1).pgn',
+    'source metadata distinguishes the uploaded attachment filename',
+    fixture.source.attachmentFilename);
   check(sha256(rawPgn) === fixture.source.sha256,
     'raw debug PGN SHA-256 matches the supplied artifact', sha256(rawPgn));
   check(game.valid, 'debug PGN parses and replays legally', game.error);
@@ -101,6 +117,32 @@ function replayAndVerifySource() {
     'replay ends in the recorded checkmate');
 }
 
+function verifyOracleFixture() {
+  const regression = fixture.regression;
+  const oracle = regression.pinnedOracle;
+  const rows = oracle.forcedRoot;
+  const moves = rows.map(function (row) { return row.moveUci; });
+  const e4 = rows.find(function (row) {
+    return row.moveUci === regression.targetUci;
+  });
+  const bd4 = rows.find(function (row) {
+    return row.moveUci === regression.playedUci;
+  });
+  check(oracle.candidateCount === 4 && oracle.exhaustiveLegalMoves === false &&
+      rows.length === 4 && new Set(moves).size === 4,
+    'pinned Stockfish Lite scope is four unique forced-root candidates');
+  check(/four preselected legal moves/.test(oracle.scope) &&
+      /not an exhaustive ranking/.test(oracle.scope),
+    'oracle scope is explicitly non-exhaustive');
+  check(!!e4 && rows.every(function (row) {
+    return row === e4 || e4.scoreCp > row.scoreCp;
+  }), 'Stockfish Lite ranks e4 first among the four tested moves');
+  check(!!e4 && !!bd4 &&
+      e4.scoreCp - bd4.scoreCp === oracle.targetVsPlayedMarginCp &&
+      oracle.targetVsPlayedMarginCp === 48,
+    'pinned e4 score exceeds Bd4 by the recorded 48 cp margin');
+}
+
 async function reproduceSearch() {
   const regression = fixture.regression;
   const baseline = regression.r69Replay;
@@ -131,8 +173,8 @@ async function reproduceSearch() {
       'pinned r69 WASM exactly reproduces 11...Bd4 and its search signature',
       JSON.stringify(result));
   } else {
-    console.log('  note shipped WASM differs from the frozen r69 asset; ' +
-      'historical exact-signature assertion skipped');
+    skip('exact r69 search signature', 'shipped WASM hash changed; replay ' +
+      baseline.commit + ':' + baseline.asset);
   }
 
   const fixed = result.move === regression.targetUci;
@@ -149,8 +191,10 @@ async function reproduceSearch() {
 
 async function main() {
   replayAndVerifySource();
+  verifyOracleFixture();
   await reproduceSearch();
-  console.log('\n' + passed + ' passed, ' + failed + ' failed');
+  console.log('\n' + passed + ' passed, ' + failed + ' failed, ' +
+    skipped + ' skipped');
   process.exitCode = failed ? 1 : 0;
 }
 
