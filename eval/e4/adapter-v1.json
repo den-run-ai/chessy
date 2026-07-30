@@ -1,0 +1,103 @@
+{
+  "schema": "chessy.e4.calibration-adapter.v1",
+  "adapterId": "E4-v1",
+  "status": "frozen",
+  "claimScale": "pinned Stockfish 18 UCI-Elo scale",
+  "productBaseline": {
+    "release": "r69",
+    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "wasmAsset": "assets/chessy-ai-fast.wasm",
+    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
+    "wasmGitBlob": "070f623012137ca65471f32997fd647e5561ffa3"
+  },
+  "searchContract": {
+    "maxDepth": 30,
+    "iterativeDeepening": true,
+    "quiesce": true,
+    "engineRootSeed": {
+      "kind": "embedded-fixed",
+      "hex": "0x00C0FFEE",
+      "integer": 12648430,
+      "configurable": false,
+      "acceptedAsSearchInput": false
+    }
+  },
+  "levels": [
+    {
+      "id": "easy",
+      "productId": "1",
+      "label": "Easy",
+      "nominalElo": 1500,
+      "shippedSearch": {
+        "nodeLimit": 10000,
+        "timeLimitMs": 5000
+      },
+      "certificationBand": {
+        "lowerElo": 1400,
+        "upperElo": 1600,
+        "interval": "two-sided-90-percent"
+      }
+    },
+    {
+      "id": "medium",
+      "productId": "2",
+      "label": "Medium",
+      "nominalElo": 1700,
+      "shippedSearch": {
+        "nodeLimit": 36000,
+        "timeLimitMs": 5000
+      },
+      "certificationBand": {
+        "lowerElo": 1600,
+        "upperElo": 1800,
+        "interval": "two-sided-90-percent"
+      }
+    },
+    {
+      "id": "hard",
+      "productId": "3",
+      "label": "Hard",
+      "nominalElo": 1900,
+      "shippedSearch": {
+        "nodeLimit": 230000,
+        "timeLimitMs": 5000
+      },
+      "certificationBand": {
+        "lowerElo": 1800,
+        "upperElo": 2000,
+        "interval": "two-sided-90-percent"
+      }
+    },
+    {
+      "id": "expert",
+      "productId": "5",
+      "label": "Expert",
+      "nominalElo": 2100,
+      "shippedSearch": {
+        "nodeLimit": 1440000,
+        "timeLimitMs": 5000
+      },
+      "certificationBand": {
+        "lowerElo": 2000,
+        "upperElo": 2200,
+        "interval": "two-sided-90-percent"
+      }
+    },
+    {
+      "id": "master",
+      "productId": "master",
+      "label": "Master",
+      "nominalElo": 2300,
+      "claim": "2300+",
+      "shippedSearch": {
+        "nodeLimit": null,
+        "timeLimitMs": 5000
+      },
+      "certificationBand": {
+        "lowerElo": 2300,
+        "upperElo": null,
+        "interval": "one-sided-95-percent-lower-bound"
+      }
+    }
+  ]
+}

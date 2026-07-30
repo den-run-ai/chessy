@@ -74,12 +74,38 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Run engine tests
         run: node test/engine.test.js
       - name: Replay exact Master screenshot incident
         run: node test/master-incident.test.js
       - name: Track known r69 Master e4 regression
         run: node test/master-e4-regression.test.js
+      - name: Validate frozen E4-v1 protocol and manifest contracts
+        run: |
+          node test/eval/e4-protocol.test.js
+          node test/eval/e4-stats.test.js
+          node test/eval/freeze-e4-manifests.test.js
+      - name: Validate shared HCE/NNUE corpus and teacher adapters
+        run: |
+          node test/training/license-policy.test.js
+          node test/training/corpus.test.js
+          node test/training/label-stockfish.test.js
+      - name: Validate HCE R3 representation and NNUE G1 feature contracts
+        run: |
+          node test/training/hce-r3-features.test.js
+          node test/training/hce-r3-linear.test.js
+          node test/training/hce-r3-pack-stream.test.js
+          node test/training/nnue-g1.test.js
+      - name: Validate pinned convex HCE solver math
+        run: |
+          python -m pip install 'numpy==2.3.5' 'scipy==1.17.0'
+          node --check test/training/hce-r3-pack-stream.js
+          python -m py_compile tools/training/pack-hce.py
+          python tools/training/pack-hce.py --self-test
+          python tools/training/hce-fit.py --self-test
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM engine asset (digest + exact JS parity)

@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "id": "sf18-100kn-v1",
+  "status": "teacher-identity-frozen",
+  "engine": {
+    "name": "Stockfish 18",
+    "release": "sf_18",
+    "sourceCommit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+    "archive": {
+      "url": "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-ubuntu-x86-64-avx2.tar",
+      "path": "stockfish-ubuntu-x86-64-avx2.tar",
+      "sha256": "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964"
+    },
+    "executable": {
+      "archivePath": "stockfish/stockfish-ubuntu-x86-64-avx2",
+      "sha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9"
+    },
+    "networks": [
+      {
+        "option": "EvalFile",
+        "embeddedName": "nn-c288c895ea92.nnue",
+        "exportCommand": "export_net big.nnue small.nnue",
+        "sha256": "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7",
+        "bytes": 108919594
+      },
+      {
+        "option": "EvalFileSmall",
+        "embeddedName": "nn-37f18f62d772.nnue",
+        "exportCommand": "export_net big.nnue small.nnue",
+        "sha256": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d",
+        "bytes": 3519630
+      }
+    ],
+    "license": "GPL-3.0-or-later",
+    "integration": "external-build-time-process-only",
+    "redistributedByChessy": false
+  },
+  "uci": {
+    "Threads": 1,
+    "Hash": 64,
+    "Ponder": false,
+    "MultiPV": 1,
+    "SyzygyPath": "<empty>",
+    "UCI_LimitStrength": false,
+    "UCI_ShowWDL": true,
+    "ClearHashBeforeEveryPosition": true,
+    "UciNewGameBeforeEveryPosition": true,
+    "IsReadyBeforeEveryPosition": true
+  },
+  "search": {
+    "command": "go nodes 100000",
+    "nodeLimit": 100000,
+    "clockLimit": null,
+    "mateRecordsAllowedForFit": false
+  },
+  "watchdog": {
+    "uciStartupTimeoutMs": 30000,
+    "readyTimeoutMs": 30000,
+    "positionTimeoutMs": 120000,
+    "quitTimeoutMs": 10000,
+    "failureDisposition": "kill-teacher-and-delete-partial-shard-artifacts"
+  },
+  "labels": {
+    "enginePov": "side-to-move",
+    "storedPov": "white",
+    "fields": [
+      "cpWhite",
+      "wdlWhite",
+      "targetWhite",
+      "bestMoveUci",
+      "pvUci",
+      "depth",
+      "seldepth",
+      "scoreNodes",
+      "reportedNodes"
+    ],
+    "targetWhite": "(wdlWhite.win + 0.5 * wdlWhite.draw) / total",
+    "eligibility": {
+      "scoreKind": "exact-cp",
+      "boundScoresAllowed": false,
+      "scoreSelection": "latest-unbounded-exact-cp-info-before-bestmove",
+      "terminalBoundAllowedAsEffortEvidence": true,
+      "scoreNodesMayBeBelowLimit": true,
+      "mateInvalidatesEarlierExactCp": true,
+      "wdlRequired": true,
+      "wdlTotal": 1000,
+      "reportedNodesMustMeetOrExceedLimit": true,
+      "bestMoveMustMatchPvHead": true,
+      "depthAndSeldepthRequired": true,
+      "ineligibleDisposition": "deterministic-exclusion-ledger"
+    }
+  },
+  "provenance": {
+    "selectionManifestRequired": true,
+    "selectionShardHashRequired": true,
+    "selectionContractSha256Required": true,
+    "frozenCertificationManifestRequired": true,
+    "recomputeRecordFields": [
+      "id",
+      "canonicalFen",
+      "cluster",
+      "positionFamily",
+      "role"
+    ],
+    "rejectHeldoutClusterOrFamily": true,
+    "teacherMetadataSource": "this checked-in manifest only"
+  },
+  "deepQualitySlice": {
+    "status": "optional-predeclared-validation-only",
+    "positions": "20000-50000 independent records",
+    "nodeLimit": 1000000,
+    "allowedForArchitectureOrLambdaSelection": false
+  }
+}

@@ -1,0 +1,442 @@
+{
+  "schema": "chessy.e4.protocol.v1",
+  "protocolId": "E4-v1",
+  "status": "frozen",
+  "decisionSource": {
+    "issue": 87,
+    "url": "https://github.com/den-run-ai/chessy/issues/87"
+  },
+  "claimScale": "pinned Stockfish 18 UCI-Elo scale",
+  "adapter": {
+    "path": "eval/e4/adapter-v1.json",
+    "sha256": "e936608c9d0064789be14c585d2711743b2f4152d9603d44eb0357f5b3a4ff0b"
+  },
+  "statistics": {
+    "path": "eval/e4/stats-v1.json",
+    "sha256": "4decc7bdc4facade1a05c867cec475f6299d8866df1a7c8d9e55e4daacbb6e5b"
+  },
+  "productBaseline": {
+    "release": "r69",
+    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "wasmAsset": "assets/chessy-ai-fast.wasm",
+    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
+    "wasmGitBlob": "070f623012137ca65471f32997fd647e5561ffa3",
+    "mutationPolicy": "unchanged"
+  },
+  "seedContracts": {
+    "engineRoot": {
+      "kind": "embedded-fixed",
+      "hex": "0x00C0FFEE",
+      "integer": 12648430,
+      "configurable": false,
+      "acceptedAsSearchInput": false,
+      "note": "The r69 Rust/WASM ABI has no seed input. Every search uses the embedded root-order seed."
+    },
+    "manifestDerived": {
+      "algorithm": "SHA-256",
+      "input": "UTF-8(manifest-content-sha256 || opening-id || E4-v1)",
+      "concatenation": "raw-without-separators",
+      "output": "64-lowercase-hex",
+      "sharedAcrossOpeningColors": true,
+      "allowedUses": [
+        "schedule-order",
+        "result-id-seed-segment",
+        "bootstrap-cluster-key"
+      ],
+      "searchUse": false
+    },
+    "statisticalBootstrap": {
+      "rngSeed": 20260730,
+      "replicates": 10000,
+      "clusterUnit": "opening",
+      "pairedColors": true,
+      "stratifiedBy": "schedule-kind/level-or-pair/anchor"
+    }
+  },
+  "anchor": {
+    "engine": "Stockfish 18",
+    "releaseTag": "sf_18",
+    "sourceCommit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+    "archive": {
+      "name": "stockfish-ubuntu-x86-64-avx2.tar",
+      "sha256": "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964"
+    },
+    "executableSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
+    "networkSha256s": [
+      "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7",
+      "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d"
+    ],
+    "frozenRunHashes": [
+      "executableSha256",
+      "networkSha256s[EvalFile,EvalFileSmall]"
+    ],
+    "uci": {
+      "UCI_LimitStrength": true,
+      "Threads": 1,
+      "Hash": 64,
+      "Ponder": false,
+      "MultiPV": 1,
+      "SyzygyPath": "",
+      "Move Overhead": 10
+    },
+    "uciPerExternalAssignment": {
+      "UCI_Elo": "assignment.anchor",
+      "applyBeforeEveryGame": true,
+      "adjacentProductMatchesUseAnchorEngine": false
+    },
+    "book": "none",
+    "go": {
+      "movetimeMs": 1000
+    },
+    "beforeEveryGame": [
+      "ucinewgame",
+      "clear-hash",
+      "isready"
+    ]
+  },
+  "openingPolicy": {
+    "exploration": {
+      "sourceLicense": "CC0-1.0",
+      "separateFromCertification": true,
+      "fixedGameCount": null,
+      "countSpecifiedByProtocol": false,
+      "countMustBeDeclaredAndFrozenBeforeRun": true,
+      "anchorSelection": "nearest-only",
+      "mayChangeShippedBudgets": false
+    },
+    "certification": {
+      "source": "mechanically-selected Lichess CC0 holdout",
+      "sourceLicense": "CC0-1.0",
+      "untouchedAfterFreeze": true,
+      "strata": [
+        "ECO",
+        "opening-family",
+        "initial-balance"
+      ],
+      "clusterTogether": [
+        "mirrors",
+        "transpositions",
+        "positions-from-the-same-source-game"
+      ],
+      "postResultRemoval": false
+    },
+    "legacyContinuitySuite": {
+      "openings": 100,
+      "seeds": 4,
+      "runs": 1,
+      "purpose": "continuity-only",
+      "poolWithE4": false
+    }
+  },
+  "certificationSchedules": {
+    "external": [
+      {
+        "level": "easy",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorAllocation": [
+          {
+            "elo": 1400,
+            "openingClusters": 100,
+            "games": 200
+          },
+          {
+            "elo": 1500,
+            "openingClusters": 200,
+            "games": 400
+          },
+          {
+            "elo": 1600,
+            "openingClusters": 100,
+            "games": 200
+          }
+        ]
+      },
+      {
+        "level": "medium",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorAllocation": [
+          {
+            "elo": 1600,
+            "openingClusters": 100,
+            "games": 200
+          },
+          {
+            "elo": 1700,
+            "openingClusters": 200,
+            "games": 400
+          },
+          {
+            "elo": 1800,
+            "openingClusters": 100,
+            "games": 200
+          }
+        ]
+      },
+      {
+        "level": "hard",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorAllocation": [
+          {
+            "elo": 1800,
+            "openingClusters": 100,
+            "games": 200
+          },
+          {
+            "elo": 1900,
+            "openingClusters": 200,
+            "games": 400
+          },
+          {
+            "elo": 2000,
+            "openingClusters": 100,
+            "games": 200
+          }
+        ]
+      },
+      {
+        "level": "expert",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorAllocation": [
+          {
+            "elo": 2000,
+            "openingClusters": 100,
+            "games": 200
+          },
+          {
+            "elo": 2100,
+            "openingClusters": 200,
+            "games": 400
+          },
+          {
+            "elo": 2200,
+            "openingClusters": 100,
+            "games": 200
+          }
+        ]
+      },
+      {
+        "level": "master",
+        "openingClusters": 800,
+        "games": 1600,
+        "colorsPerOpening": 2,
+        "anchorAllocation": [
+          {
+            "elo": 2200,
+            "openingClusters": 200,
+            "games": 400
+          },
+          {
+            "elo": 2300,
+            "openingClusters": 400,
+            "games": 800
+          },
+          {
+            "elo": 2400,
+            "openingClusters": 200,
+            "games": 400
+          }
+        ]
+      }
+    ],
+    "adjacent": [
+      {
+        "pair": "easy-medium",
+        "weaker": "easy",
+        "stronger": "medium",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorToken": "direct"
+      },
+      {
+        "pair": "medium-hard",
+        "weaker": "medium",
+        "stronger": "hard",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorToken": "direct"
+      },
+      {
+        "pair": "hard-expert",
+        "weaker": "hard",
+        "stronger": "expert",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorToken": "direct"
+      },
+      {
+        "pair": "expert-master",
+        "weaker": "expert",
+        "stronger": "master",
+        "openingClusters": 400,
+        "games": 800,
+        "colorsPerOpening": 2,
+        "anchorToken": "direct"
+      }
+    ],
+    "runOrder": [
+      "master",
+      "easy",
+      "medium",
+      "hard",
+      "expert",
+      "adjacent"
+    ]
+  },
+  "resultIdentity": {
+    "template": "r69-cal-v1/{explore|cert|adjacent}/{level-or-pair}/{anchor}/{opening-id}/{seed}/{chessy-color}",
+    "prefix": "r69-cal-v1",
+    "colors": [
+      "white",
+      "black"
+    ],
+    "seedSegment": "manifest-derived 64-lowercase-hex",
+    "rerunPolicy": "new-linked-id",
+    "originalRecordPolicy": "retain"
+  },
+  "adjudication": {
+    "normalRuleTerminals": [
+      "checkmate",
+      "stalemate",
+      "repetition",
+      "fifty-move",
+      "insufficient-material"
+    ],
+    "drawAtPlies": 180,
+    "disabled": [
+      "evaluation-resignation",
+      "evaluation-draw",
+      "tablebase"
+    ],
+    "failingSideLosesOn": [
+      "illegal-move",
+      "crash",
+      "product-watchdog-timeout",
+      "lost-move"
+    ],
+    "hostOutage": {
+      "result": "void",
+      "rerunWithNewLinkedId": true
+    },
+    "maximumVoidFraction": 0.01,
+    "invalidateWholeRunAboveMaximum": true
+  },
+  "estimation": {
+    "model": "Davidson/Bradley-Terry logistic-Elo",
+    "contract": {
+      "path": "eval/e4/stats-v1.json",
+      "sha256": "4decc7bdc4facade1a05c867cec475f6299d8866df1a7c8d9e55e4daacbb6e5b"
+    },
+    "observations": "win-draw-loss",
+    "anchorRatingsFixed": true,
+    "explicitDraws": true,
+    "colorTerm": true,
+    "bootstrap": {
+      "replicates": 10000,
+      "rngSeed": 20260730,
+      "clusterUnit": "opening",
+      "pairedColors": true,
+      "stratifiedBy": "schedule-kind/level-or-pair/anchor"
+    },
+    "lowerLevelGate": "two-sided 90% interval wholly inside the target plus-or-minus 100 Elo band",
+    "masterGate": "one-sided 95% rating lower bound at least 2300",
+    "adjacentGate": "stronger level one-sided 95% opening-cluster score lower bound greater than 50%",
+    "holmFamily": {
+      "claims": 8,
+      "members": [
+        "easy-band",
+        "medium-band",
+        "hard-band",
+        "expert-band",
+        "easy-medium",
+        "medium-hard",
+        "hard-expert",
+        "expert-master"
+      ]
+    }
+  },
+  "executionGuards": {
+    "manifestRunOrder": "randomized-from-published-manifest-seed",
+    "prohibited": [
+      "optional-stopping",
+      "silent-rerun",
+      "anchor-substitution",
+      "opening-removal",
+      "score-based-shard-retry"
+    ],
+    "requiredReportFields": [
+      "win-draw-loss",
+      "product-and-harness-failures",
+      "games-and-opening-clusters",
+      "hashes-and-settings",
+      "device-os-browser-backend-fallback",
+      "color-effect",
+      "rating-point-estimate",
+      "two-sided-interval",
+      "one-sided-lower-bound"
+    ],
+    "separateReports": [
+      "reference-device",
+      "javascript-fallback"
+    ]
+  },
+  "gates": {
+    "beforeExploration": [
+      "adapter-committed-and-hashed",
+      "exploration-manifest-frozen-and-hashed"
+    ],
+    "beforeCertification": [
+      "issue-84-physical-device-offline-watchdog-memory-battery-thermal-baseline-complete",
+      "certification-manifest-frozen-and-hashed",
+      "stockfish-executable-and-embedded-nnue-hashes-recorded"
+    ],
+    "certificationFirst": "master",
+    "postResultProtocolChange": "E4-v2-and-new-holdout"
+  },
+  "masterDecision": {
+    "pass": {
+      "condition": "one-sided-95-percent-rating-lower-bound-gte-2300",
+      "classification": "11...Bd4 is a known master-level mistake; master strength is not perfect Stockfish play"
+    },
+    "fail": {
+      "action": "stop-the-2300-plus-claim",
+      "prohibited": [
+        "post-hoc-budget-retuning",
+        "post-hoc-heldout-position-retuning"
+      ],
+      "representationNext": "NNUE #105"
+    }
+  },
+  "lockedHeldoutEvidence": {
+    "fen": "r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - - 0 11",
+    "expectedMoveUci": "e5e4",
+    "historicalMoveUci": "c5d4",
+    "nodeGate": 9187327,
+    "trainingUse": false,
+    "mirrorsInTraining": false,
+    "requireFixDefault": false,
+    "requireFixMayGateOnlyAfter": [
+      "stable-e5e4-across-nearby-budgets",
+      "parity",
+      "physical-device",
+      "scorecard",
+      "strength"
+    ]
+  },
+  "scopeExclusions": [
+    "rejected-131",
+    "rejected-132",
+    "rejected-133",
+    "nnue-105-from-r69-certification"
+  ]
+}

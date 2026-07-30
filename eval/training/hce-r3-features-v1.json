@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "id": "chessy-hce-r3-features-v1",
+  "state": "frozen-experimental-contract",
+  "issue": 137,
+  "runtimeIntegration": false,
+  "fitSolverImplemented": true,
+  "matrixPackerImplemented": true,
+  "completeLinearExtractorImplemented": true,
+  "baselineCenterAndScalesGeneratorImplemented": true,
+  "baseline": {
+    "reusableParameterCount": 753,
+    "firstNewParameterId": 753,
+    "baselineDefinition": "Round-2 identifiable HCE vector: 736 reachable tapered PST entries plus 17 auxiliary parameters."
+  },
+  "parameterCounts": {
+    "baseline": 753,
+    "new": 212,
+    "total": 965,
+    "lastNewParameterId": 964
+  },
+  "defaults": {
+    "newWeight": 0,
+    "regularizationCenter": 0,
+    "candidateMayChangeRuntime": false
+  },
+  "input": {
+    "kind": "board-only",
+    "squareNumbering": "Chessy a8=0, h1=63",
+    "ignoredState": [
+      "side-to-move",
+      "castling-rights",
+      "en-passant",
+      "halfmove-clock",
+      "fullmove-number",
+      "move-history"
+    ],
+    "pieceAttacks": "geometric pseudo-attacks; pins and king-safety legality do not change feature identity",
+    "requiredValidity": [
+      "exactly-one-white-king",
+      "exactly-one-black-king",
+      "no-pawn-on-first-or-eighth-rank"
+    ]
+  },
+  "scoreContract": {
+    "orientation": "white-pov",
+    "whiteContributionSign": 1,
+    "blackContributionSign": -1,
+    "phaseMax": 24,
+    "phaseWeights": {
+      "pawn": 0,
+      "knight": 1,
+      "bishop": 1,
+      "rook": 2,
+      "queen": 4,
+      "king": 0
+    },
+    "coefficientEncoding": {
+      "mg": "signed raw feature count multiplied by min(materialPhase, 24)",
+      "eg": "signed raw feature count multiplied by 24 - min(materialPhase, 24)",
+      "scoreContribution": "sum(coefficient_i * fittedIntegerWeight_i) / 24"
+    },
+    "linearInWeights": true
+  },
+  "parameterOrder": {
+    "encoding": "UTF-8 lines of {zeroBasedIndex}:{parameterName} with a final newline",
+    "baselineAuxiliary": "17 Round-2 auxiliary terms in the declared AUX order",
+    "baselinePst": "MG then EG; P,N,B,R,Q,K; Chessy-relative squares ascending, with pawn squares limited to 8..55",
+    "newFeatures": "r3.{expanded feature name}, ascending feature ID",
+    "sha256": "f2835e40169d76ec501dea3308f9c96038d390d47649a9ed29af509819dd2251"
+  },
+  "identifiabilityPins": {
+    "existing753Parameters": "not redefined by this contract",
+    "kingBucketReference": "center king files d/e emit no king-bucketed pawn-PST delta",
+    "kingBuckets": {
+      "q": "own king on files a-c",
+      "center": "own king on files d-e; omitted reference",
+      "k": "own king on files f-h"
+    },
+    "pawnPstSquareAxis": "Only the 48 legally reachable relative pawn squares on ranks 2..7 exist; relative ranks 1 and 8 are omitted rather than padded with unidentifiable parameters.",
+    "phase": "fixed from board material and never fitted",
+    "allNewWeights": "initialized and L2-regularized toward zero"
+  },
+  "symmetry": {
+    "colorRankSwap": "swap colors and vertically reflect ranks; every coefficient negates",
+    "fileMirror": "direct attacks, safe mobility and cramp coefficients are invariant; king bucket q/k and relative pawn files are mirrored",
+    "augmentation": "not implied or performed by this feature contract"
+  },
+  "families": [
+    {
+      "id": "pawn-attacks-enemy-piece",
+      "startId": 753,
+      "count": 6,
+      "classOrder": [
+        "minor",
+        "rook",
+        "queen"
+      ],
+      "stageOrder": [
+        "mg",
+        "eg"
+      ],
+      "nameTemplate": "pawn_attack_enemy_{class}.{stage}",
+      "definition": "Signed count of pawn-to-occupied-square attack edges where the enemy occupant is N/B, R, or Q. Two pawns attacking one piece contribute two edges."
+    },
+    {
+      "id": "safe-mobility",
+      "startId": 759,
+      "count": 8,
+      "pieceOrder": [
+        "knight",
+        "bishop",
+        "rook",
+        "queen"
+      ],
+      "stageOrder": [
+        "mg",
+        "eg"
+      ],
+      "nameTemplate": "safe_mobility.{piece}.{stage}",
+      "role": "supporting-evidence",
+      "definition": "Signed pseudo-legal mobility-edge count excluding destinations attacked by any enemy pawn. Friendly-occupied destinations are excluded; enemy-occupied destinations are included; sliders stop at the first occupant.",
+      "selectionPolicy": "Never treat this family alone as evidence that the locked e4 incident is fixed."
+    },
+    {
+      "id": "advanced-pawn-cramp",
+      "startId": 767,
+      "count": 6,
+      "relativeRankOrder": [
+        4,
+        5,
+        6
+      ],
+      "stageOrder": [
+        "mg",
+        "eg"
+      ],
+      "nameTemplate": "advanced_pawn_cramp.r{relativeRank}.{stage}",
+      "definition": "Signed count, from the advanced pawn side, of enemy N/B/R/Q pseudo-mobility edges whose destination is attacked by a pawn on relative rank 4, 5, or 6. Each enemy-piece/destination edge is counted once; if multiple advanced ranks attack it, the most advanced rank receives the edge."
+    },
+    {
+      "id": "king-bucketed-pawn-pst",
+      "startId": 773,
+      "count": 192,
+      "bucketOrder": [
+        "q",
+        "k"
+      ],
+      "stageOrder": [
+        "mg",
+        "eg"
+      ],
+      "squareOrder": "Chessy-relative indices 8..55 ascending: a7,b7,...,h2",
+      "nameTemplate": "king_bucket_pawn_pst.{bucket}.{stage}.{relativeSquare}",
+      "definition": "Signed one-hot pawn-square deltas selected by the current file bucket of that pawn's own king. White uses the native Chessy square; Black swaps color and maps square xor 56. Center is the omitted reference bucket."
+    }
+  ],
+  "expandedFeatureNameDigest": "bd73d747a82f2978847867977af57a4d160768ad118bde37253525c3230d75e7"
+}

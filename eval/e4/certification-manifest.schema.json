@@ -1,0 +1,663 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/den-run-ai/chessy/eval/e4/certification-manifest.schema.json",
+  "title": "Chessy E4-v1 certification manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema",
+    "manifestId",
+    "protocolId",
+    "kind",
+    "status",
+    "protocol",
+    "adapter",
+    "productBaseline",
+    "source",
+    "anchorRuntime",
+    "schedulePolicy",
+    "externalSchedules",
+    "adjacentSchedules",
+    "openingClusters",
+    "assignments",
+    "freeze"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./certification-manifest.schema.json"
+    },
+    "schema": {
+      "const": "chessy.e4.certification-manifest.v1"
+    },
+    "manifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "protocolId": {
+      "const": "E4-v1"
+    },
+    "kind": {
+      "const": "certification"
+    },
+    "status": {
+      "enum": [
+        "awaiting-opening-freeze",
+        "frozen"
+      ]
+    },
+    "protocol": {
+      "$ref": "#/$defs/filePin"
+    },
+    "adapter": {
+      "$ref": "#/$defs/filePin"
+    },
+    "productBaseline": {
+      "$ref": "#/$defs/productBaseline"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "anchorRuntime": {
+      "$ref": "#/$defs/anchorRuntime"
+    },
+    "schedulePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "colorsPerOpening",
+        "externalAllocation",
+        "manifestSeedUse",
+        "engineSeedOverride",
+        "masterFirst",
+        "postResultRemoval"
+      ],
+      "properties": {
+        "colorsPerOpening": {
+          "const": 2
+        },
+        "externalAllocation": {
+          "const": "25-50-25-percent-by-opening"
+        },
+        "manifestSeedUse": {
+          "const": "schedule-result-bootstrap-only"
+        },
+        "engineSeedOverride": {
+          "const": false
+        },
+        "masterFirst": {
+          "const": true
+        },
+        "postResultRemoval": {
+          "const": false
+        }
+      }
+    },
+    "externalSchedules": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/externalSchedule"
+      }
+    },
+    "adjacentSchedules": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/adjacentSchedule"
+      }
+    },
+    "openingClusters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/openingCluster"
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/certificationAssignment"
+      }
+    },
+    "freeze": {
+      "$ref": "#/$defs/freeze"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "awaiting-opening-freeze"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "openingClusters": {
+            "maxItems": 0
+          },
+          "assignments": {
+            "maxItems": 0
+          },
+          "freeze": {
+            "properties": {
+              "immutable": {
+                "const": false
+              },
+              "freezeBaseCommit": {
+                "type": "null"
+              },
+              "contentSha256": {
+                "type": "null"
+              },
+              "openingSetSha256": {
+                "type": "null"
+              },
+              "assignmentSha256": {
+                "type": "null"
+              },
+              "sourceArchiveSha256": {
+                "type": "null"
+              },
+              "selectionCodeSha256": {
+                "type": "null"
+              },
+              "stockfishExecutableSha256": {
+                "type": "null"
+              },
+              "stockfishNetworkSha256s": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "openingClusters": {
+            "minItems": 1
+          },
+          "assignments": {
+            "minItems": 1
+          },
+          "freeze": {
+            "properties": {
+              "immutable": {
+                "const": true
+              },
+              "freezeBaseCommit": {
+                "$ref": "#/$defs/gitSha"
+              },
+              "contentSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "openingSetSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "assignmentSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "sourceArchiveSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "selectionCodeSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "stockfishExecutableSha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "stockfishNetworkSha256s": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "$ref": "#/$defs/sha256"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "filePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "productBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release",
+        "gitCommit",
+        "wasmAsset",
+        "wasmSha256"
+      ],
+      "properties": {
+        "release": {
+          "const": "r69"
+        },
+        "gitCommit": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "wasmAsset": {
+          "const": "assets/chessy-ai-fast.wasm"
+        },
+        "wasmSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "release",
+        "url",
+        "license",
+        "selectionPolicy",
+        "strata",
+        "clusterTogether",
+        "untouchedAfterFreeze"
+      ],
+      "properties": {
+        "name": {
+          "const": "Lichess database"
+        },
+        "release": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "license": {
+          "const": "CC0-1.0"
+        },
+        "selectionPolicy": {
+          "const": "mechanical-holdout"
+        },
+        "strata": {
+          "const": [
+            "ECO",
+            "opening-family",
+            "initial-balance"
+          ]
+        },
+        "clusterTogether": {
+          "const": [
+            "mirrors",
+            "transpositions",
+            "positions-from-the-same-source-game"
+          ]
+        },
+        "untouchedAfterFreeze": {
+          "const": true
+        }
+      }
+    },
+    "anchorRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "releaseTag",
+        "sourceCommit",
+        "archiveName",
+        "archiveSha256"
+      ],
+      "properties": {
+        "engine": {
+          "const": "Stockfish 18"
+        },
+        "releaseTag": {
+          "const": "sf_18"
+        },
+        "sourceCommit": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "archiveName": {
+          "const": "stockfish-ubuntu-x86-64-avx2.tar"
+        },
+        "archiveSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "anchorAllocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters",
+        "games"
+      ],
+      "properties": {
+        "elo": {
+          "type": "integer"
+        },
+        "openingClusters": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "games": {
+          "type": "integer",
+          "minimum": 2
+        }
+      }
+    },
+    "externalSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "openingClusters",
+        "games",
+        "colorsPerOpening",
+        "anchorAllocation",
+        "gate"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "easy",
+            "medium",
+            "hard",
+            "expert",
+            "master"
+          ]
+        },
+        "openingClusters": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "games": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "colorsPerOpening": {
+          "const": 2
+        },
+        "anchorAllocation": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/anchorAllocation"
+          }
+        },
+        "gate": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "adjacentSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pair",
+        "weaker",
+        "stronger",
+        "openingClusters",
+        "games",
+        "colorsPerOpening",
+        "anchor",
+        "gate"
+      ],
+      "properties": {
+        "pair": {
+          "enum": [
+            "easy-medium",
+            "medium-hard",
+            "hard-expert",
+            "expert-master"
+          ]
+        },
+        "weaker": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stronger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openingClusters": {
+          "const": 400
+        },
+        "games": {
+          "const": 800
+        },
+        "colorsPerOpening": {
+          "const": 2
+        },
+        "anchor": {
+          "const": "direct"
+        },
+        "gate": {
+          "const": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+        }
+      }
+    },
+    "openingCluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clusterId",
+        "openingId",
+        "fen",
+        "eco",
+        "openingFamily",
+        "initialBalanceCp",
+        "sourceRecordIds",
+        "clusterMembers"
+      ],
+      "properties": {
+        "clusterId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fen": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eco": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openingFamily": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initialBalanceCp": {
+          "type": "number"
+        },
+        "sourceRecordIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "clusterMembers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "certificationAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheduleKind",
+        "levelOrPair",
+        "anchor",
+        "openingClusterId",
+        "openingId",
+        "colors",
+        "games"
+      ],
+      "properties": {
+        "scheduleKind": {
+          "enum": [
+            "cert",
+            "adjacent"
+          ]
+        },
+        "levelOrPair": {
+          "type": "string",
+          "minLength": 1
+        },
+        "anchor": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "const": "direct"
+            }
+          ]
+        },
+        "openingClusterId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "colors": {
+          "const": [
+            "white",
+            "black"
+          ]
+        },
+        "games": {
+          "const": 2
+        }
+      }
+    },
+    "freeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "immutable",
+        "freezeBaseCommit",
+        "contentSha256",
+        "openingSetSha256",
+        "assignmentSha256",
+        "sourceArchiveSha256",
+        "selectionCodeSha256",
+        "stockfishExecutableSha256",
+        "stockfishNetworkSha256s"
+      ],
+      "properties": {
+        "immutable": {
+          "type": "boolean"
+        },
+        "freezeBaseCommit": {
+          "description": "Commit containing the pinned selector/input contracts from which this generated manifest was built; never the self-referential commit that contains this manifest.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contentSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "openingSetSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "assignmentSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceArchiveSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selectionCodeSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stockfishExecutableSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stockfishNetworkSha256s": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/sha256"
+              },
+              "uniqueItems": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "$schema": "./certification-manifest.schema.json",
+  "schema": "chessy.e4.certification-manifest.v1",
+  "manifestId": "r69-cal-v1/cert/awaiting-opening-freeze",
+  "protocolId": "E4-v1",
+  "kind": "certification",
+  "status": "awaiting-opening-freeze",
+  "protocol": {
+    "path": "eval/e4/protocol-v1.json",
+    "sha256": "45c4220dba563ad3562ebfbd74d7254853e9797c21a72db9455976b4abf20299"
+  },
+  "adapter": {
+    "path": "eval/e4/adapter-v1.json",
+    "sha256": "e936608c9d0064789be14c585d2711743b2f4152d9603d44eb0357f5b3a4ff0b"
+  },
+  "productBaseline": {
+    "release": "r69",
+    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "wasmAsset": "assets/chessy-ai-fast.wasm",
+    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db"
+  },
+  "source": {
+    "name": "Lichess database",
+    "release": null,
+    "url": null,
+    "license": "CC0-1.0",
+    "selectionPolicy": "mechanical-holdout",
+    "strata": [
+      "ECO",
+      "opening-family",
+      "initial-balance"
+    ],
+    "clusterTogether": [
+      "mirrors",
+      "transpositions",
+      "positions-from-the-same-source-game"
+    ],
+    "untouchedAfterFreeze": true
+  },
+  "anchorRuntime": {
+    "engine": "Stockfish 18",
+    "releaseTag": "sf_18",
+    "sourceCommit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+    "archiveName": "stockfish-ubuntu-x86-64-avx2.tar",
+    "archiveSha256": "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964"
+  },
+  "schedulePolicy": {
+    "colorsPerOpening": 2,
+    "externalAllocation": "25-50-25-percent-by-opening",
+    "manifestSeedUse": "schedule-result-bootstrap-only",
+    "engineSeedOverride": false,
+    "masterFirst": true,
+    "postResultRemoval": false
+  },
+  "externalSchedules": [
+    {
+      "level": "easy",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 1400,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 1500,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 1600,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-1400-1600"
+    },
+    {
+      "level": "medium",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 1600,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 1700,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 1800,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-1600-1800"
+    },
+    {
+      "level": "hard",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 1800,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 1900,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 2000,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-1800-2000"
+    },
+    {
+      "level": "expert",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 2000,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 2100,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 2200,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-2000-2200"
+    },
+    {
+      "level": "master",
+      "openingClusters": 800,
+      "games": 1600,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 2200,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 2300,
+          "openingClusters": 400,
+          "games": 800
+        },
+        {
+          "elo": 2400,
+          "openingClusters": 200,
+          "games": 400
+        }
+      ],
+      "gate": "one-sided-95-percent-rating-lower-bound-gte-2300"
+    }
+  ],
+  "adjacentSchedules": [
+    {
+      "pair": "easy-medium",
+      "weaker": "easy",
+      "stronger": "medium",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    },
+    {
+      "pair": "medium-hard",
+      "weaker": "medium",
+      "stronger": "hard",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    },
+    {
+      "pair": "hard-expert",
+      "weaker": "hard",
+      "stronger": "expert",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    },
+    {
+      "pair": "expert-master",
+      "weaker": "expert",
+      "stronger": "master",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    }
+  ],
+  "openingClusters": [],
+  "assignments": [],
+  "freeze": {
+    "immutable": false,
+    "freezeBaseCommit": null,
+    "contentSha256": null,
+    "openingSetSha256": null,
+    "assignmentSha256": null,
+    "sourceArchiveSha256": null,
+    "selectionCodeSha256": null,
+    "stockfishExecutableSha256": null,
+    "stockfishNetworkSha256s": null
+  }
+}

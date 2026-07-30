@@ -1,0 +1,114 @@
+{
+  "$schema": "./exploration-manifest.schema.json",
+  "schema": "chessy.e4.exploration-manifest.v1",
+  "manifestId": "r69-cal-v1/explore/awaiting-opening-freeze",
+  "protocolId": "E4-v1",
+  "kind": "exploration",
+  "status": "awaiting-opening-freeze",
+  "protocol": {
+    "path": "eval/e4/protocol-v1.json",
+    "sha256": "45c4220dba563ad3562ebfbd74d7254853e9797c21a72db9455976b4abf20299"
+  },
+  "adapter": {
+    "path": "eval/e4/adapter-v1.json",
+    "sha256": "e936608c9d0064789be14c585d2711743b2f4152d9603d44eb0357f5b3a4ff0b"
+  },
+  "productBaseline": {
+    "release": "r69",
+    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "wasmAsset": "assets/chessy-ai-fast.wasm",
+    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db"
+  },
+  "source": {
+    "name": null,
+    "release": null,
+    "url": null,
+    "license": "CC0-1.0",
+    "selectionPolicy": "separate-from-certification"
+  },
+  "anchorRuntime": {
+    "engine": "Stockfish 18",
+    "releaseTag": "sf_18",
+    "sourceCommit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+    "archiveName": "stockfish-ubuntu-x86-64-avx2.tar",
+    "archiveSha256": "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964"
+  },
+  "schedulePolicy": {
+    "countSpecifiedByProtocol": false,
+    "countMustBeFrozenBeforeRun": true,
+    "colorsPerOpening": 2,
+    "anchorSelection": "nearest-only",
+    "manifestSeedUse": "schedule-result-bootstrap-only",
+    "engineSeedOverride": false
+  },
+  "schedules": [
+    {
+      "level": "easy",
+      "allowedAnchors": [
+        1400,
+        1500,
+        1600
+      ],
+      "openingClusters": null,
+      "games": null,
+      "anchorAllocation": []
+    },
+    {
+      "level": "medium",
+      "allowedAnchors": [
+        1600,
+        1700,
+        1800
+      ],
+      "openingClusters": null,
+      "games": null,
+      "anchorAllocation": []
+    },
+    {
+      "level": "hard",
+      "allowedAnchors": [
+        1800,
+        1900,
+        2000
+      ],
+      "openingClusters": null,
+      "games": null,
+      "anchorAllocation": []
+    },
+    {
+      "level": "expert",
+      "allowedAnchors": [
+        2000,
+        2100,
+        2200
+      ],
+      "openingClusters": null,
+      "games": null,
+      "anchorAllocation": []
+    },
+    {
+      "level": "master",
+      "allowedAnchors": [
+        2200,
+        2300,
+        2400
+      ],
+      "openingClusters": null,
+      "games": null,
+      "anchorAllocation": []
+    }
+  ],
+  "openingClusters": [],
+  "assignments": [],
+  "freeze": {
+    "immutable": false,
+    "freezeBaseCommit": null,
+    "contentSha256": null,
+    "openingSetSha256": null,
+    "assignmentSha256": null,
+    "sourceArchiveSha256": null,
+    "selectionCodeSha256": null,
+    "stockfishExecutableSha256": null,
+    "stockfishNetworkSha256s": null
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "master-e4-20260729",
+  "policy": "locked-post-fit-evidence-only",
+  "sourceFixture": "test/fixtures/master-e4-regression-20260729.json",
+  "sourceFixtureSha256": "d9f31040e24fe9b21d9ad0baa45b39aa6a6cfe493622d1b44ac8d2d99ee3c494",
+  "incident": {
+    "release": "r69",
+    "commit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
+    "fen": "r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - - 0 11",
+    "fen4": "r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - -",
+    "playedUci": "c5d4",
+    "requiredCandidateUci": "e5e4",
+    "exactNodeGate": 9187327,
+    "requireFixDefault": false
+  },
+  "symmetryPolicy": {
+    "transforms": [
+      "identity",
+      "file-mirror",
+      "color-rank",
+      "color-rank-file-mirror"
+    ],
+    "canonicalFen4": "1kr1q1r1/pppbbp1Q/2n1p1p1/8/2BP1B2/5N2/PPP2PPP/1KR4R w - -",
+    "canonicalModelBoard": "1kr1q1r1/pppbbp1Q/2n1p1p1/8/2BP1B2/5N2/PPP2PPP/1KR4R",
+    "clusterSha256": "b1a9f0cedb01ed3f999124a1a7ce5b5f5efc8f59b85ce1f1d236aeb96fed1aab",
+    "positionFamilySha256": "51b05335bcf0e669874d48a66b0b8aef553b599e64d8815c293883b4e8f7fda6",
+    "fens4": [
+      "r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - -",
+      "1kr4r/ppp2ppp/5n2/2bp1b2/8/2N1P1P1/PPPBBP1q/1KR1Q1R1 b - -",
+      "1r1q1rk1/Q1pbbppp/1p1p1n2/8/2B1PB2/2N5/PPP2PPP/R4RK1 w - -",
+      "1kr1q1r1/pppbbp1Q/2n1p1p1/8/2BP1B2/5N2/PPP2PPP/1KR4R w - -"
+    ]
+  },
+  "exclusion": {
+    "applyBefore": [
+      "augmentation",
+      "deduplication",
+      "split-assignment",
+      "exploration-label-use",
+      "teacher-relabel",
+      "training"
+    ],
+    "excludeSameSourceGameLineage": true,
+    "excludeNearbyBudgetProbes": true,
+    "allowInTrainingMetrics": false,
+    "allowInValidationMetrics": false,
+    "allowInTestLoss": false
+  },
+  "postFitGate": {
+    "exactBudgetUci": "e5e4",
+    "nearbyBudgetStabilityRequired": true,
+    "parityRequired": true,
+    "deviceGateRequired": true,
+    "scorecardRequired": true,
+    "strengthGateRequired": true
+  }
+}

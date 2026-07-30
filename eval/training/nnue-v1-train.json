@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "architectureManifest": "nnue-v1-architecture.json",
+  "dependency": {
+    "python": ">=3.11",
+    "torch": "2.7.1",
+    "torchLicense": "BSD-3-Clause",
+    "trainerLicense": "MIT",
+    "forbiddenTrainer": "GPL nnue-pytorch code is not vendored or imported."
+  },
+  "data": {
+    "schema": "chessy.teacher-position.v1",
+    "trainRole": "shared-train",
+    "validationRole": "nnue-validation",
+    "testRole": "nnue-test",
+    "target": "teacher.targetWhite converted to side-to-move expected score; BCEWithLogits trains an uncalibrated logit",
+    "source": "pinned Stockfish labels only",
+    "upstreamMixedLabelsAllowed": false,
+    "trustBoundary": {
+      "sidecarSuffix": ".manifest.json",
+      "sidecarState": "pinned-teacher-labels",
+      "teacherId": "sf18-100kn-v1",
+      "teacherNodes": 100000,
+      "teacherManifest": "eval/training/teacher-sf18-100kn-v1.json",
+      "teacherManifestSha256": "72bb9fd86921e0f2f7e7d092c5ab8b7704a3b69a6d4e27f1c381785026ccf34b",
+      "heldoutManifest": "eval/training/heldout-v1.json",
+      "heldoutManifestSha256": "230619b2fa1e8c90aac9be3278d6da656428dfdc07164975e354aead4186bb79",
+      "corpusContract": "test/training/corpus.js",
+      "corpusContractSha256": "c76c912eff2a4882a5da251b725227aedcf30cfc8f8240b761dd8c21c3737405",
+      "requirements": [
+        "adjacent sidecar hash and row count match each labelled shard",
+        "all sidecars bind one frozen-certification selection manifest, one selection contract SHA-256, and the frozen teacher manifest",
+        "teacher executable, both embedded networks, UCI options, watchdog, and node limit match",
+        "every shard has one exact allowed role; wrong-role rows are fatal",
+        "record IDs are strictly sorted per shard and unique across all inputs",
+        "id, canonicalFen, cluster, positionFamily, and role are recomputed",
+        "locked incident cluster and position family are rejected",
+        "targetWhite agrees with the required WDL; scoreNodes identifies the exact score snapshot and terminal reportedNodes meets the search budget"
+      ]
+    }
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "learningRate": 0.001,
+    "weightDecay": 0.00001,
+    "batchSize": 4096,
+    "epochs": 8,
+    "shuffleBufferRecords": 65536,
+    "gradientClipNorm": 5
+  },
+  "determinism": {
+    "seeds": [
+      10501,
+      10502,
+      10503
+    ],
+    "torchDeterministicAlgorithms": true,
+    "cudnnBenchmark": false,
+    "workerCountAffectsRecordOrder": false
+  },
+  "artifacts": {
+    "checkpointFormat": "PyTorch state_dict; research only",
+    "modelCardRequired": true,
+    "recordInputManifestHashes": true,
+    "runtimeOrQuantizedArtifactProduced": false
+  }
+}
