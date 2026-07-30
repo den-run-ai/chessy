@@ -337,6 +337,9 @@
       }
       if (!Array.isArray(state.history)) state.history = [];
       for (var i = 0; i < ply; i++) {
+        // An archive cannot supply provenance beyond a terminal position.
+        // This includes repetition draws that are invisible in FEN alone.
+        if (Chess.gameStatus(state).over) return null;
         var legal = Chess.legalMoves(state);
         var move = legal.find(function (candidate) {
           return Chess.toSan(state, candidate, legal) === game.sans[i];
@@ -344,6 +347,7 @@
         if (!move) return null;
         state = Chess.playMove(state, move);
       }
+      if (Chess.gameStatus(state).over) return null;
       return { state: state, fen: Chess.toFen(state) };
     } catch (e) {
       return null;
@@ -1203,6 +1207,48 @@
             source.state, source.state.positions);
         if (r.equivalence.positionFingerprint !== expectedFingerprint) {
           return prefix + ' has equivalence evidence from a different repetition history';
+        }
+      }
+      // Train v2 E3 (#76): new reflections carry a versioned, legal
+      // Calculation record. Legacy reflection objects remain readable, but
+      // once a schema marker is present the complete structure is a trust
+      // boundary inherited by Train and backup restore.
+      if (r.reflection !== undefined) {
+        if (!r.reflection || typeof r.reflection !== 'object' ||
+            Array.isArray(r.reflection)) {
+          return prefix + ' has a non-object reflection';
+        }
+        if (Object.prototype.hasOwnProperty.call(r.reflection, 'schema')) {
+          if (typeof global.ChessyCalculation === 'undefined' ||
+              typeof global.ChessyCalculation.validate !== 'function') {
+            return prefix + ' cannot validate its structured reflection';
+          }
+          if (!sourceGame || sourceGame.id !== r.gameId ||
+              !Array.isArray(sourceGame.sans) ||
+              r.ply >= sourceGame.sans.length) {
+            return prefix + ' has a structured reflection without its source game and ply';
+          }
+          if (typeof r.playedSan !== 'string' ||
+              r.playedSan !== sourceGame.sans[r.ply]) {
+            return prefix + ' has a structured reflection for a different played move';
+          }
+          var reflectionSource = replayGameToPly(sourceGame, r.ply);
+          if (!reflectionSource || reflectionSource.fen !== r.fenBefore) {
+            return prefix + ' has a structured reflection from a different source position';
+          }
+          var sourceLegal = Chess.legalMoves(reflectionSource.state);
+          var sourcePlayed = sourceLegal.some(function (move) {
+            return Chess.toSan(reflectionSource.state, move, sourceLegal) ===
+              r.playedSan;
+          });
+          if (!sourcePlayed) {
+            return prefix + ' has an illegal structured-reflection source move';
+          }
+          var reflectionError = global.ChessyCalculation.validate(
+            r.reflection, reflectionSource.state);
+          if (reflectionError) {
+            return prefix + ' has ' + reflectionError;
+          }
         }
       }
     } catch (e) {

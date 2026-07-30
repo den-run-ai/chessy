@@ -5,20 +5,45 @@ require('./helper').run('train', async function (t) {
   const page = t.page, check = t.check, idx = t.idx;
   const tsq = function (name) { return page.locator('#trainBoard .square').nth(idx(name)); };
 
-  // Seed two valid due cards plus three unusable rows directly (the reflection
+  // Seed two valid due cards plus four unusable rows directly (the reflection
   // flow is covered by its own suite): a mate-in-one, an underpromotion, a
-  // terminal position, an illegal saved move, and a corrupt FEN. Every bad
+  // terminal position, an illegal saved move, a corrupt FEN, and damaged
+  // structured Calculation evidence. Every bad
   // row must be quarantined without hiding either valid card.
   await page.evaluate(function () {
     const now = Date.now();
-    return CoachStore.addCard({
+    let state = Chess.newGameState();
+    ['f3', 'e5', 'g4'].forEach(function (san) {
+      const legal = Chess.legalMoves(state);
+      const move = legal.find(function (candidate) {
+        return Chess.toSan(state, candidate, legal) === san;
+      });
+      state = Chess.playMove(state, move);
+    });
+    const structured = ChessyCalculation.build(state, {
+      threatKind: 'none',
+      candidateStatus: 'listed',
+      candidates: 'Qh4#',
+      calculationStatus: 'line',
+      line: 'Qh4#',
+      evaluation: 'winning'
+    }).value;
+    const structuredFen = Chess.toFen(state);
+    const badStructured = JSON.parse(JSON.stringify(structured));
+    badStructured.calculation.line[0].san += '!';
+    return CoachStore.putGame({
+      id: 'g1', sans: ['f3', 'e5', 'g4', 'Qh4#'],
+      playerColor: 'b', setupFen: null
+    }).then(function () {
+      return CoachStore.addCard({
       gameId: 'g1', ply: 3,
-      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+      fenBefore: structuredFen,
       playedSan: 'Qh4#', bestSan: 'Qh4#',
       bestMove: { from: 3, to: 39, promotion: null }, // d8 → h4
       bestScore: -999999, depth: 3, kind: 'match', cause: 'match',
-      lesson: 'Look for forcing mates first', reflection: {},
+      lesson: 'Look for forcing mates first', reflection: structured,
       createdAt: now - 1000, due: now - 1000, step: -1, attempts: []
+      });
     }).then(function () {
       return CoachStore.addCard({
         gameId: 'g2', ply: 0,
@@ -55,22 +80,34 @@ require('./helper').run('train', async function (t) {
         kind: 'quarantined', cause: 'calculation', lesson: 'damaged row',
         createdAt: now + 1, due: now - 500, step: -1, attempts: []
       });
+    }).then(function () {
+      return CoachStore.addCard({
+        gameId: 'g1', ply: 3,
+        fenBefore: structuredFen,
+        playedSan: 'Qh4#', bestSan: 'Qh4#',
+        bestMove: { from: 3, to: 39, promotion: null },
+        bestScore: -999999, depth: 3, kind: 'bad-e3', cause: 'match',
+        lesson: 'damaged structured row', reflection: badStructured,
+        createdAt: now + 3, due: now - 4000, step: -1, attempts: []
+      });
     });
   });
 
   await page.click('#tabTrain');
   await page.waitForSelector('#trainCardBox:not([hidden])');
   check((await page.textContent('#trainCount')).includes('2 due'), 'both cards due');
-  check((await page.textContent('#trainSkipped')).includes('Skipped 3 malformed due cards'),
+  check((await page.textContent('#trainSkipped')).includes('Skipped 4 malformed due cards'),
     'Train reports every unusable due card while loading valid cards');
   check(await page.evaluate(function () {
     return CoachStore.listCards().then(function (cards) {
       const damaged = cards.find(function (card) { return card.kind === 'quarantined'; });
       const terminal = cards.find(function (card) { return card.kind === 'terminal'; });
       const illegal = cards.find(function (card) { return card.kind === 'illegal-best'; });
-      return cards.length === 5 && damaged && damaged.fenBefore === 'not a fen' &&
+      const badE3 = cards.find(function (card) { return card.kind === 'bad-e3'; });
+      return cards.length === 6 && damaged && damaged.fenBefore === 'not a fen' &&
         terminal && terminal.bestSan === 'e4' &&
-        illegal && illegal.bestMove.from === 52;
+        illegal && illegal.bestMove.from === 52 &&
+        badE3 && badE3.reflection.calculation.line[0].san.endsWith('!');
     });
   }), 'Train quarantine does not delete or rewrite unusable stored cards');
   check((await page.textContent('#trainPrompt')).includes('Black to move') &&
