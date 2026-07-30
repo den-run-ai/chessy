@@ -20,14 +20,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r69">
+  <link rel="stylesheet" href="assets/style.css?r=r70">
 </head>
 <body>
   <div class="app">
     <header class="topbar">
       <div class="brand-lockup">
         <h1 class="brand">♞ Chessy</h1>
-        <span class="app-version" id="appVersion">Version r69</span>
+        <span class="app-version" id="appVersion">Version r70</span>
       </div>
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
@@ -174,20 +174,53 @@
             <!-- Engine output stays hidden until the player has answered. -->
             <form id="reflectForm" class="coach-form" hidden>
               <h3>Before the engine speaks…</h3>
-              <label>What is the opponent threatening?
-                <input type="text" id="reflectThreat" autocomplete="off" required></label>
-              <label>Which candidate moves did you consider?
+              <label>What kind of threat did you see?
+                <select id="reflectThreatKind" required>
+                  <option value="" selected disabled>Choose…</option>
+                  <option value="none">No concrete threat</option>
+                  <option value="move">A move if I ignore it</option>
+                  <option value="in-check">I am already in check</option>
+                  <option value="unclear">I could not identify it</option>
+                </select></label>
+              <label id="reflectThreatMoveLabel" hidden>Your estimate of the opponent’s
+                move if you could pass (not Chessy’s analysis):
+                <input type="text" id="reflectThreat" autocomplete="off"
+                       placeholder="SAN or UCI, e.g. Qh4 or d8h4"></label>
+              <label>How did you generate candidate moves?
+                <select id="reflectCandidatesKind" required>
+                  <option value="" selected disabled>Choose…</option>
+                  <option value="listed">I considered specific moves</option>
+                  <option value="none">I did not consciously compare moves</option>
+                  <option value="unclear">I do not remember</option>
+                </select></label>
+              <label id="reflectCandidatesLabel" hidden>Which moves? (SAN or UCI,
+                comma-separated)
                 <input type="text" id="reflectCandidates" autocomplete="off" required
                        placeholder="e.g. Nf3, d4, O-O"></label>
-              <label>Your evaluation here:
+              <label>How far did you calculate?
+                <select id="reflectLineKind" required>
+                  <option value="" selected disabled>Choose…</option>
+                  <option value="line">I calculated a reply and line</option>
+                  <option value="none">I did not calculate a reply</option>
+                  <option value="unclear">I do not remember</option>
+                </select></label>
+              <label id="reflectLineLabel" hidden>What line? (your candidate first,
+                opponent’s strongest reply second)
+                <input type="text" id="reflectLine" autocomplete="off" required
+                       placeholder="e.g. Nf3 d5 exd5 Nxd5"></label>
+              <label>Your final evaluation of the position or chosen line
+                (from the root side-to-move’s point of view):
                 <select id="reflectEval" required>
                   <option value="" selected disabled>Choose…</option>
-                  <option value="winning">I'm winning</option>
-                  <option value="better">I'm better</option>
-                  <option value="equal">Equal</option>
-                  <option value="worse">I'm worse</option>
-                  <option value="lost">I'm lost</option>
+                  <option value="winning">Side to move is winning</option>
+                  <option value="better">Side to move is better</option>
+                  <option value="equal">The position is equal</option>
+                  <option value="worse">Side to move is worse</option>
+                  <option value="lost">Side to move is lost</option>
+                  <option value="unclear">I could not evaluate it</option>
                 </select></label>
+              <p class="coach-note input-error" id="reflectInputError"
+                 role="alert" hidden></p>
               <button type="submit" id="reflectVerify" class="btn primary">Ask Chessy (one probe)</button>
             </form>
 
@@ -423,34 +456,35 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r69';</script>
-  <script src="assets/engine.js?r=r69"></script>
-  <script src="assets/ai.js?r=r69"></script>
-  <script src="assets/level-presets.js?r=r69"></script>
+  <script>window.CHESSY_RELEASE = 'r70';</script>
+  <script src="assets/engine.js?r=r70"></script>
+  <script src="assets/ai.js?r=r70"></script>
+  <script src="assets/level-presets.js?r=r70"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/store.js?r=r69"></script>
-  <script src="assets/storage-health.js?r=r69"></script>
-  <script src="assets/archive.js?r=r69"></script>
-  <script src="assets/runtime-update.js?r=r69"></script>
-  <script src="assets/app.js?r=r69"></script>
-  <script src="assets/mini-board.js?r=r69"></script>
-  <script src="assets/review.js?r=r69"></script>
-  <script src="assets/analysis-core.js?r=r69"></script>
-  <script src="assets/analysis-service.js?r=r69"></script>
-  <script src="assets/analysis-result.js?r=r69"></script>
-  <script src="assets/equivalence.js?r=r69"></script>
-  <script src="assets/moment-selector.js?r=r69"></script>
-  <script src="assets/moment-scan.js?r=r69"></script>
-  <script src="assets/pgn.js?r=r69"></script>
-  <script src="assets/import.js?r=r69"></script>
-  <script src="assets/data-controls.js?r=r69"></script>
-  <script src="assets/reflection.js?r=r69"></script>
-  <script src="assets/train.js?r=r69"></script>
-  <script src="assets/progress.js?r=r69"></script>
+  <script src="assets/calculation.js?r=r70"></script>
+  <script src="assets/store.js?r=r70"></script>
+  <script src="assets/storage-health.js?r=r70"></script>
+  <script src="assets/archive.js?r=r70"></script>
+  <script src="assets/runtime-update.js?r=r70"></script>
+  <script src="assets/app.js?r=r70"></script>
+  <script src="assets/mini-board.js?r=r70"></script>
+  <script src="assets/review.js?r=r70"></script>
+  <script src="assets/analysis-core.js?r=r70"></script>
+  <script src="assets/analysis-service.js?r=r70"></script>
+  <script src="assets/analysis-result.js?r=r70"></script>
+  <script src="assets/equivalence.js?r=r70"></script>
+  <script src="assets/moment-selector.js?r=r70"></script>
+  <script src="assets/moment-scan.js?r=r70"></script>
+  <script src="assets/pgn.js?r=r70"></script>
+  <script src="assets/import.js?r=r70"></script>
+  <script src="assets/data-controls.js?r=r70"></script>
+  <script src="assets/reflection.js?r=r70"></script>
+  <script src="assets/train.js?r=r70"></script>
+  <script src="assets/progress.js?r=r70"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

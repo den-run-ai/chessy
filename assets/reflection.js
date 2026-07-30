@@ -27,6 +27,7 @@
       typeof ChessyAnalysisService === 'undefined' ||
       typeof ChessyAnalysisCore === 'undefined' ||
       typeof ChessyAnalysisResult === 'undefined' ||
+      typeof ChessyCalculation === 'undefined' ||
       typeof Chess === 'undefined') return;
 
   const $ = function (id) { return document.getElementById(id); };
@@ -141,6 +142,57 @@
   // cancelled, so the next Verify bypasses the (evicted) cache and re-runs the
   // worker rather than racing a best-effort deletion.
   let retryFresh = null;
+
+  function clearReflectionError() {
+    const fields = [
+      $('reflectThreatKind'), $('reflectThreat'),
+      $('reflectCandidatesKind'), $('reflectCandidates'),
+      $('reflectLineKind'), $('reflectLine'), $('reflectEval')
+    ];
+    fields.forEach(function (field) {
+      if (field) field.setCustomValidity('');
+    });
+    $('reflectInputError').hidden = true;
+    $('reflectInputError').textContent = '';
+  }
+
+  function syncStructuredInputs() {
+    const asksForMove = $('reflectThreatKind').value === 'move';
+    $('reflectThreatMoveLabel').hidden = !asksForMove;
+    $('reflectThreat').required = asksForMove;
+    if (!asksForMove) $('reflectThreat').value = '';
+
+    const listsCandidates = $('reflectCandidatesKind').value === 'listed';
+    $('reflectCandidatesLabel').hidden = !listsCandidates;
+    $('reflectCandidates').required = listsCandidates;
+    if (!listsCandidates) $('reflectCandidates').value = '';
+
+    const hasLine = $('reflectLineKind').value === 'line';
+    $('reflectLineLabel').hidden = !hasLine;
+    $('reflectLine').required = hasLine;
+    if (!hasLine) $('reflectLine').value = '';
+  }
+
+  $('reflectThreatKind').addEventListener('change', function () {
+    clearReflectionError();
+    syncStructuredInputs();
+    if (!$('reflectThreatMoveLabel').hidden) $('reflectThreat').focus();
+  });
+  $('reflectCandidatesKind').addEventListener('change', function () {
+    clearReflectionError();
+    syncStructuredInputs();
+    if (!$('reflectCandidatesLabel').hidden) $('reflectCandidates').focus();
+  });
+  $('reflectLineKind').addEventListener('change', function () {
+    clearReflectionError();
+    syncStructuredInputs();
+    if (!$('reflectLineLabel').hidden) $('reflectLine').focus();
+  });
+  ['reflectThreat', 'reflectCandidates', 'reflectLine', 'reflectEval']
+    .forEach(function (id) {
+      $(id).addEventListener('input', clearReflectionError);
+      $(id).addEventListener('change', clearReflectionError);
+    });
 
   function monotonicNow() {
     return window.performance && typeof window.performance.now === 'function'
@@ -315,8 +367,14 @@
     // Fresh moment, fresh answers: reflection AND card fields reset, so a stale
     // cause/lesson from the previous moment can never carry over.
     $('reflectThreat').value = '';
+    $('reflectThreatKind').value = '';
+    $('reflectCandidatesKind').value = '';
     $('reflectCandidates').value = '';
+    $('reflectLineKind').value = '';
+    $('reflectLine').value = '';
     $('reflectEval').value = '';
+    clearReflectionError();
+    syncStructuredInputs();
     $('cardCause').value = '';
     $('cardLesson').value = '';
     $('reflectForm').hidden = false;
@@ -326,7 +384,7 @@
     document.dispatchEvent(new CustomEvent('chessy:reflectionchange', {
       detail: { active: true }
     }));
-    $('reflectThreat').focus();
+    $('reflectThreatKind').focus();
     return true;
   }
 
@@ -427,19 +485,44 @@
     // Whitespace is not reflection: native `required` accepts spaces, so trim
     // first and re-run validation — a spaces-only answer is rejected with the
     // browser's own "fill in this field" prompt.
-    $('reflectThreat').value = $('reflectThreat').value.trim();
     $('reflectCandidates').value = $('reflectCandidates').value.trim();
+    $('reflectThreat').value = $('reflectThreat').value.trim();
+    $('reflectLine').value = $('reflectLine').value.trim();
+    clearReflectionError();
     if (!$('reflectForm').reportValidity()) return;
     const r = CoachReview.current();
     if (!sameMoment(r)) return;
-    // Snapshot the reflection NOW: these are the answers that passed the
-    // reflect-first gate. The fields stay editable while the engine runs, so
-    // the card must never reread the DOM at save time.
-    const reflection = {
-      threat: $('reflectThreat').value,
+    // Canonicalise every move through the rules engine before Gate 0 opens.
+    // Text is an input convenience only; the snapshot persisted on a card is
+    // versioned legal SAN/UCI evidence. The fields stay editable while the
+    // engine runs, so Save must never reread the DOM.
+    const built = ChessyCalculation.build(r.states[r.ply], {
+      threatKind: $('reflectThreatKind').value,
+      threatMove: $('reflectThreat').value,
+      candidateStatus: $('reflectCandidatesKind').value,
       candidates: $('reflectCandidates').value,
+      calculationStatus: $('reflectLineKind').value,
+      line: $('reflectLine').value,
       evaluation: $('reflectEval').value
-    };
+    });
+    if (!built.ok) {
+      const fieldIds = {
+        threatKind: 'reflectThreatKind',
+        threatMove: 'reflectThreat',
+        candidateStatus: 'reflectCandidatesKind',
+        candidates: 'reflectCandidates',
+        calculationStatus: 'reflectLineKind',
+        line: 'reflectLine',
+        evaluation: 'reflectEval'
+      };
+      const field = $(fieldIds[built.field] || 'reflectCandidatesKind');
+      field.setCustomValidity(built.message);
+      $('reflectInputError').textContent = built.message;
+      $('reflectInputError').hidden = false;
+      field.reportValidity();
+      return;
+    }
+    const reflection = JSON.parse(JSON.stringify(built.value));
     const token = ++verifySeq;
     saveSeq++; // this verdict owns the card controls now
     const ply = r.ply;

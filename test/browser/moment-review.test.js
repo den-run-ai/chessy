@@ -181,8 +181,12 @@ require('./helper').run('moment-review', async function (t) {
   // answers, pause batch ownership, and reveal no engine output.
   await page.evaluate(function () { CoachReview.goToPly(2); });
   await page.click('#flagMoment');
+  await page.selectOption('#reflectThreatKind', 'move');
   await page.fill('#reflectThreat', 'stale answer');
+  await page.selectOption('#reflectCandidatesKind', 'listed');
   await page.fill('#reflectCandidates', 'stale candidates');
+  await page.selectOption('#reflectLineKind', 'line');
+  await page.fill('#reflectLine', 'stale line');
   await page.selectOption('#reflectEval', 'winning');
   check(await page.locator('#scanStart').isDisabled() &&
         await page.locator('input[name="scanColor"][value="w"]').isDisabled() &&
@@ -198,9 +202,14 @@ require('./helper').run('moment-review', async function (t) {
       ply: CoachReview.current().ply,
       formVisible: !document.getElementById('reflectForm').hidden,
       verifyHidden: document.getElementById('verifyBox').hidden,
+      threatKind: document.getElementById('reflectThreatKind').value,
       threat: document.getElementById('reflectThreat').value,
+      candidatesKind: document.getElementById('reflectCandidatesKind').value,
       candidates: document.getElementById('reflectCandidates').value,
+      lineKind: document.getElementById('reflectLineKind').value,
+      line: document.getElementById('reflectLine').value,
       evaluation: document.getElementById('reflectEval').value,
+      inputErrorHidden: document.getElementById('reflectInputError').hidden,
       focus: document.activeElement.id,
       pauses: window.__scanPauseCalls,
       scanDisabled: document.getElementById('scanStart').disabled &&
@@ -210,8 +219,11 @@ require('./helper').run('moment-review', async function (t) {
   });
   check(opened.ply === 0 && opened.formVisible && opened.verifyHidden,
     'a suggestion navigates to its ply and opens the existing reflect-first form');
-  check(opened.threat === '' && opened.candidates === '' &&
-        opened.evaluation === '' && opened.focus === 'reflectThreat',
+  check(opened.threatKind === '' && opened.threat === '' &&
+        opened.candidatesKind === '' && opened.candidates === '' &&
+        opened.lineKind === '' && opened.line === '' &&
+        opened.evaluation === '' && opened.inputErrorHidden &&
+        opened.focus === 'reflectThreatKind',
     'suggestion reflection is fresh and blank, with focus on the first prompt');
   check(opened.pauses >= 3 && opened.scanDisabled && opened.cards === 0,
     'suggestion reflection pauses ownership, locks scan controls, and creates no card');

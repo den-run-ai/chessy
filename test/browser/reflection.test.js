@@ -13,6 +13,32 @@ require('./helper').run('reflection', async function (t) {
       return el.textContent && el.textContent.indexOf('Analysing') === -1;
     }, null, { timeout: 60000 });
   }
+  async function fillValidReflection(evaluation) {
+    const values = await page.evaluate(function () {
+      const review = CoachReview.current();
+      const state = review.states[review.ply];
+      const entry = review.gs.history[review.ply];
+      const legal = Chess.legalMoves(state);
+      const move = legal.find(function (candidate) {
+        return candidate.from === entry.move.from &&
+          candidate.to === entry.move.to &&
+          (candidate.promotion || null) === (entry.move.promotion || null);
+      });
+      const firstSan = Chess.toSan(state, move, legal);
+      const after = Chess.playMove(state, move);
+      const replyLegal = Chess.gameStatus(after).over ? [] : Chess.legalMoves(after);
+      const line = [firstSan];
+      if (replyLegal.length) line.push(Chess.toSan(after, replyLegal[0], replyLegal));
+      return { candidate: firstSan, line: line.join(' ') };
+    });
+    await page.selectOption('#reflectThreatKind', 'none');
+    await page.selectOption('#reflectCandidatesKind', 'listed');
+    await page.fill('#reflectCandidates', values.candidate);
+    await page.selectOption('#reflectLineKind', 'line');
+    await page.fill('#reflectLine', values.line);
+    await page.selectOption('#reflectEval', evaluation || 'equal');
+    return values;
+  }
 
   // Small, exact-contract fixture for the partial-result UI cases below. It
   // derives provenance from the full Review state and the request's complete
@@ -101,12 +127,22 @@ require('./helper').run('reflection', async function (t) {
   await page.click('#reflectVerify'); // EMPTY reflection: required fields block
   check(await page.locator('#verifyBox').isHidden(),
     'empty reflection cannot summon the engine (fields are required)');
-  await page.fill('#reflectThreat', '   ');
+  await page.selectOption('#reflectThreatKind', 'none');
+  await page.selectOption('#reflectCandidatesKind', 'listed');
   await page.fill('#reflectCandidates', '  ');
+  await page.selectOption('#reflectLineKind', 'line');
+  await page.fill('#reflectLine', '  ');
   await page.selectOption('#reflectEval', 'winning');
   await page.click('#reflectVerify');
   check(await page.locator('#verifyBox').isHidden(),
     'whitespace-only reflection is rejected (trimmed before validation)');
+  await page.fill('#reflectCandidates', 'a1a8');
+  await page.fill('#reflectLine', 'Qh4#');
+  await page.click('#reflectVerify');
+  check(await page.locator('#verifyBox').isHidden() &&
+        await page.locator('#reflectInputError').isVisible() &&
+        (await page.textContent('#reflectInputError')).includes('not legal'),
+    'an illegal structured candidate is rejected before analysis or Gate 0 output');
 
   // Cancel Verify integration uses the REAL service with a controlled worker.
   // This proves the visible clock advances, the button sends the reflection
@@ -153,8 +189,7 @@ require('./helper').run('reflection', async function (t) {
       return fake;
     };
   });
-  await page.fill('#reflectThreat', 'cancelled threat');
-  await page.fill('#reflectCandidates', 'Qh4');
+  await fillValidReflection('winning');
   await page.click('#reflectVerify');
   await page.waitForFunction(function () {
     return window.__cancelWorkers.length === 1 &&
@@ -418,8 +453,7 @@ require('./helper').run('reflection', async function (t) {
   });
 
   // One probe; the played mate IS Chessy's move.
-  await page.fill('#reflectThreat', 'mate on h4');
-  await page.fill('#reflectCandidates', 'Qh4');
+  const firstReflection = await fillValidReflection('winning');
   await page.click('#reflectVerify');
   check(await page.locator('#reflectVerify').isDisabled(), 'one probe at a time');
   await verifyDone();
@@ -473,7 +507,8 @@ require('./helper').run('reflection', async function (t) {
   await page.waitForSelector('#cardSaved:not([hidden])');
   check((await page.textContent('#cardSaved')).includes('lesson'),
     'saving requires a one-sentence lesson');
-  await page.fill('#reflectThreat', 'rewritten after seeing the verdict');
+  await page.fill('#reflectCandidates', 'a6');
+  await page.selectOption('#reflectEval', 'lost');
   await page.fill('#cardLesson', 'Look for forcing mates first');
   await page.evaluate(function () {
     document.getElementById('saveCard').click();
@@ -486,8 +521,15 @@ require('./helper').run('reflection', async function (t) {
   check(saved.length === 1, 'double-clicking Save creates exactly one card');
   check(saved[0].kind === 'match' && saved[0].cause === 'match' &&
         saved[0].step === -1 && saved[0].due <= Date.now() &&
-        saved[0].reflection.threat === 'mate on h4' && !!saved[0].bestMove,
-    'card stores the PRE-verdict reflection snapshot, verdict and immediate due');
+        saved[0].reflection.schema.id === 'chessy-calculation-reflection' &&
+        saved[0].reflection.threat.kind === 'none' &&
+        saved[0].reflection.candidates.moves[0].san === firstReflection.candidate &&
+        saved[0].reflection.calculation.line[0].san === firstReflection.candidate &&
+        saved[0].reflection.calculation.strongestReply === null &&
+        saved[0].reflection.calculation.evaluation === 'winning' &&
+        saved[0].fenBefore.split(' ')[1] === 'b' &&
+        !!saved[0].bestMove,
+    'card stores the PRE-verdict black-POV Calculation snapshot, verdict and immediate due');
 
   // Train v2 E2 (#76): the card carries attempt-independent equivalence
   // evidence — versioned criterion, provider provenance, coverage, and the
@@ -562,6 +604,29 @@ require('./helper').run('reflection', async function (t) {
             copy.equivalence = null;
             return CoachStore.validateCardRecord(copy, null, game);
           })(),
+          legacyReflection: (function () {
+            const copy = JSON.parse(JSON.stringify(cs[0]));
+            copy.equivalence = null;
+            copy.reflection = {};
+            return CoachStore.validateCardRecord(copy, null, game);
+          })(),
+          badReflectionSan: (function () {
+            const copy = JSON.parse(JSON.stringify(cs[0]));
+            copy.equivalence = null;
+            copy.reflection.calculation.line[0].san += '!';
+            return CoachStore.validateCardRecord(copy, null, game);
+          })(),
+          futureReflection: (function () {
+            const copy = JSON.parse(JSON.stringify(cs[0]));
+            copy.equivalence = null;
+            copy.reflection.schema.version += 1;
+            return CoachStore.validateCardRecord(copy, null, game);
+          })(),
+          structuredNoSource: (function () {
+            const copy = JSON.parse(JSON.stringify(cs[0]));
+            copy.equivalence = null;
+            return CoachStore.validateCardRecord(copy, null, null);
+          })(),
           illegalAccepted: mutate(function (eq) { eq.accepted[0].uci = 'a1a8'; }),
           bestMismatch: mutate(function (eq) { eq.best.uci = 'e2e4'; }),
           missingBest: mutate(function (eq) {
@@ -602,6 +667,11 @@ require('./helper').run('reflection', async function (t) {
   });
   check(eqRejections.legacyNull === null,
     'a null equivalence field remains the valid legacy shape');
+  check(eqRejections.legacyReflection === null &&
+        !!eqRejections.badReflectionSan &&
+        !!eqRejections.futureReflection &&
+        !!eqRejections.structuredNoSource,
+    'legacy reflections remain valid while malformed, future or source-less E3 evidence quarantines');
   check(!!eqRejections.illegalAccepted && !!eqRejections.bestMismatch &&
         !!eqRejections.missingBest && !!eqRejections.rejectedAccepted &&
         !!eqRejections.nonCanonicalSan && !!eqRejections.invalidEval &&
@@ -609,6 +679,91 @@ require('./helper').run('reflection', async function (t) {
         !!eqRejections.partial && !!eqRejections.badCriterion &&
         !!eqRejections.badStability && !!eqRejections.transplantedHistory,
     'forged accepted moves, SAN/eval contradictions, malformed coverage and unsupported criteria all quarantine');
+
+  // FEN alone cannot validate a Calculation line: the same start board has
+  // repetition count 2 after one knight cycle. A line that is legal from a
+  // fabricated count-1 FEN continues past threefold from the exact archive
+  // history and must be rejected. Legacy reflections remain readable.
+  const reflectionHistoryGate = await page.evaluate(function () {
+    const sourceGame = {
+      id: 'e3-history',
+      sans: ['Nf3', 'Nf6', 'Ng1', 'Ng8', 'Nf3'],
+      setupFen: null
+    };
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4 3';
+    const fenOnly = Chess.parseFen(fen);
+    fenOnly.history = [];
+    fenOnly.positions = {};
+    fenOnly.positions[Chess.positionKey(fenOnly)] = 1;
+    const built = ChessyCalculation.build(fenOnly, {
+      threatKind: 'none',
+      candidateStatus: 'listed',
+      candidates: 'Nf3',
+      calculationStatus: 'line',
+      line: 'Nf3 Nf6 Ng1 Ng8 e4',
+      evaluation: 'equal'
+    });
+    const card = {
+      gameId: sourceGame.id, ply: 4, fenBefore: fen,
+      playedSan: 'Nf3', bestSan: 'Nf3',
+      bestMove: { from: 62, to: 45, promotion: null },
+      kind: 'match', cause: 'match', lesson: 'history witness',
+      reflection: built.value, due: Date.now(), step: -1, attempts: []
+    };
+    const legacy = JSON.parse(JSON.stringify(card));
+    legacy.reflection = {};
+    const playedMismatch = JSON.parse(JSON.stringify(card));
+    playedMismatch.playedSan = 'd4';
+
+    // Two complete knight cycles make this exact root a threefold draw, even
+    // though its FEN is a normal-looking initial board. A forged archive then
+    // appends e4 after game over; neither that source nor its no-line
+    // reflection may validate.
+    const terminalSource = {
+      id: 'e3-terminal-history',
+      sans: ['Nf3', 'Nf6', 'Ng1', 'Ng8', 'Nf3', 'Nf6', 'Ng1', 'Ng8', 'e4'],
+      setupFen: null
+    };
+    const terminalFen =
+      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 8 5';
+    const terminalFenOnly = Chess.parseFen(terminalFen);
+    terminalFenOnly.history = [];
+    terminalFenOnly.positions = {};
+    terminalFenOnly.positions[Chess.positionKey(terminalFenOnly)] = 1;
+    const terminalReflection = ChessyCalculation.build(terminalFenOnly, {
+      threatKind: 'none',
+      candidateStatus: 'none',
+      calculationStatus: 'none',
+      evaluation: 'equal'
+    });
+    const terminalCard = {
+      gameId: terminalSource.id, ply: 8, fenBefore: terminalFen,
+      playedSan: 'e4', bestSan: 'e4',
+      bestMove: { from: 52, to: 36, promotion: null },
+      kind: 'match', cause: 'match', lesson: 'terminal history witness',
+      reflection: terminalReflection.value,
+      due: Date.now(), step: -1, attempts: []
+    };
+    return {
+      builtFromFen: built.ok,
+      exactHistory: CoachStore.validateCardRecord(card, null, sourceGame),
+      missingSource: CoachStore.validateCardRecord(card, null, null),
+      legacy: CoachStore.validateCardRecord(legacy, null, sourceGame),
+      playedMismatch:
+        CoachStore.validateCardRecord(playedMismatch, null, sourceGame),
+      terminalBuiltFromFen: terminalReflection.ok,
+      terminalHistory:
+        CoachStore.validateCardRecord(terminalCard, null, terminalSource)
+    };
+  });
+  check(reflectionHistoryGate.builtFromFen &&
+        !!reflectionHistoryGate.exactHistory &&
+        !!reflectionHistoryGate.missingSource &&
+        reflectionHistoryGate.legacy === null &&
+        !!reflectionHistoryGate.playedMismatch &&
+        reflectionHistoryGate.terminalBuiltFromFen &&
+        !!reflectionHistoryGate.terminalHistory,
+    'structured reflection binds the exact source move/history and rejects terminal roots while legacy cards remain readable');
 
   // The same boundary guards restore: a backup carrying forged evidence is
   // rejected outright, while the genuine card round-trips.
@@ -646,18 +801,19 @@ require('./helper').run('reflection', async function (t) {
             eq.accepted.push({ uci: uci, san: Chess.toSan(state, move, legal),
               scoreCpWhite: 0, scoreCpPlayer: 0, mate: null });
             eq.coveredRootCount = Math.max(eq.coveredRootCount, eq.accepted.length);
+          })),
+          badReflection: CoachStore.validateBackup(envelope(function (eq, card) {
+            card.reflection.calculation.line[0].san += '!';
           }))
         };
       });
   });
   check(backupGate.genuine === null && !!backupGate.forged &&
-        !!backupGate.transplanted,
-    'restore accepts genuine evidence and rejects forged moves or transplanted repetition history');
+        !!backupGate.transplanted && !!backupGate.badReflection,
+    'restore accepts genuine evidence and rejects forged moves, Calculation lines or transplanted history');
 
   // Re-saving the SAME moment updates its one card — no duplicates.
-  await page.fill('#reflectThreat', 'mate on h4, second look');
-  await page.fill('#reflectCandidates', 'Qh4');
-  await page.selectOption('#reflectEval', 'winning');
+  const secondReflection = await fillValidReflection('winning');
   await page.click('#reflectVerify');
   await verifyDone();
   await page.fill('#cardLesson', 'Revised: forcing mates first, always');
@@ -667,7 +823,7 @@ require('./helper').run('reflection', async function (t) {
   });
   const resaved = await cards();
   check(resaved.length === 1 && resaved[0].lesson === 'Revised: forcing mates first, always' &&
-        resaved[0].reflection.threat === 'mate on h4, second look',
+        resaved[0].reflection.candidates.moves[0].san === secondReflection.candidate,
     're-saving the same moment updates its one card');
   check(!!resaved[0].equivalence,
     'the re-saved verdict recomputed its equivalence evidence');
@@ -726,9 +882,7 @@ require('./helper').run('reflection', async function (t) {
   await page.click('#flagMoment');
   check(await page.locator('#verifyBox').isHidden(),
     'a partial result is still spoiler-gated: nothing shown before the reflection');
-  await page.fill('#reflectThreat', 'testing partial');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.locator('#verifyMeta.partial').count()) >= 1,
@@ -759,11 +913,17 @@ require('./helper').run('reflection', async function (t) {
   check(await page.locator('#reflectForm').isHidden(),
     'stepping away abandons the unsaved reflection');
   await page.click('#flagMoment');
-  check(await page.evaluate(function () { return document.getElementById('reflectEval').value; }) === '',
+  check(await page.evaluate(function () {
+    return document.getElementById('reflectThreatKind').value === '' &&
+      document.getElementById('reflectCandidatesKind').value === '' &&
+      document.getElementById('reflectCandidates').value === '' &&
+      document.getElementById('reflectLineKind').value === '' &&
+      document.getElementById('reflectLine').value === '' &&
+      document.getElementById('reflectEval').value === '' &&
+      document.getElementById('reflectInputError').hidden;
+  }),
     'flagging a new moment clears the previous answers');
-  await page.fill('#reflectThreat', 'nothing concrete');
-  await page.fill('#reflectCandidates', 'e4, d4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('preferred') &&
@@ -809,9 +969,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment'); // re-flag ply 0
-  await page.fill('#reflectThreat', 'analysis returns garbage');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse'),
@@ -840,9 +998,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment'); // re-flag ply 0
-  await page.fill('#reflectThreat', 'legal move, no eval');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
@@ -870,9 +1026,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'malformed mate');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
@@ -901,9 +1055,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'non-boolean complete');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
@@ -937,9 +1089,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'second candidate illegal');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
@@ -959,9 +1109,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'partial match');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('so far') &&
@@ -989,9 +1137,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'malformed mate but finite score');
-  await page.fill('#reflectCandidates', 'g4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   const cardsBeforeBadMate = (await cards()).length;
@@ -1017,9 +1163,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'partial, move not reached');
-  await page.fill('#reflectCandidates', 'x');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check(!(await page.textContent('#verifyResult')).includes('preferred') &&
@@ -1035,9 +1179,7 @@ require('./helper').run('reflection', async function (t) {
     ChessyAnalysisService.analyse = function () { return Promise.resolve(null); };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'null result');
-  await page.fill('#reflectCandidates', 'x');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not complete') &&
@@ -1066,9 +1208,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'bad provenance');
-  await page.fill('#reflectCandidates', 'x');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
@@ -1093,9 +1233,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'malformed pv');
-  await page.fill('#reflectCandidates', 'x');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check((await page.textContent('#verifyResult')).includes('could not analyse') &&
@@ -1126,9 +1264,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'null later candidate');
-  await page.fill('#reflectCandidates', 'x');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   const cardsBeforeNull = (await cards()).length;
@@ -1143,9 +1279,7 @@ require('./helper').run('reflection', async function (t) {
   // Abandoning a probe: leave the game while it runs — the verdict must
   // not land, and Save must stay disabled for the next moment.
   await page.click('#flagMoment'); // re-flag ply 0
-  await page.fill('#reflectThreat', 'x');
-  await page.fill('#reflectCandidates', 'y');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await page.click('#reviewBack'); // abandon mid-probe
   const abandonedElapsed = await page.textContent('#verifyElapsed');
@@ -1160,9 +1294,7 @@ require('./helper').run('reflection', async function (t) {
   await page.click('#flagMoment'); // fresh moment, ply 0
   check(await page.locator('#verifyBox').isHidden(),
     'an abandoned probe repaints nothing on the freshly flagged moment');
-  await page.fill('#reflectThreat', 'still nothing');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check(!(await page.locator('#saveCard').isDisabled()),
@@ -1211,9 +1343,7 @@ require('./helper').run('reflection', async function (t) {
     return document.getElementById('reviewStatus').textContent.indexOf('Position 0/') !== -1;
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'cached identity mismatch');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
 
   const d0 = await page.evaluate(function () { return ChessyAnalysisService.stats().dispatches; });
   await page.click('#reflectVerify'); // serves the corrupted cache entry
@@ -1321,9 +1451,7 @@ require('./helper').run('reflection', async function (t) {
     };
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'old source threat');
-  await page.fill('#reflectCandidates', 'old source candidate');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await page.waitForFunction(function () {
     return typeof window.__sameIdVerifyResolve === 'function';
@@ -1373,9 +1501,7 @@ require('./helper').run('reflection', async function (t) {
     return document.getElementById('reviewStatus').textContent.indexOf('Position 0/4') !== -1;
   });
   await page.click('#flagMoment');
-  await page.fill('#reflectThreat', 'revision b threat');
-  await page.fill('#reflectCandidates', 'e4');
-  await page.selectOption('#reflectEval', 'equal');
+  await fillValidReflection('equal');
   await page.click('#reflectVerify');
   await verifyDone();
   check(!(await page.locator('#saveCard').isDisabled()),
