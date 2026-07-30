@@ -1,82 +1,65 @@
 /*
- * Chessy analysis core — the provider-neutral ANALYSIS CONTRACT (roadmap
- * #23, Phase 1). Deterministic orchestration on top of two minimal ai.js
- * seams (ctx.noDelta, ChessAI.ttPackedMove); no engine internals or PV logic
- * live in ai.js, and coaching orchestration stays out of it.
+ * Chessy coaching-analysis contract. Search is supplied by the Rust/WASM ABI;
+ * this provider-neutral layer owns provenance, exact-root orchestration,
+ * canonical SAN/PV formatting, ranking, classification and progress.
  *
- *   analyse(state, opts) -> {
+ *   analyse(state, opts, wasmEngine) -> {
  *     engine: { id, version, configHash },
  *     turn, positionFingerprint, wdl: null, complete,
  *     depth, nodes, qnodes, elapsedMs,
  *     scoreCpWhite, scoreCpPlayer, mate: { forWhite, inPlies } | null,
- *     bestLines: [ line, ... ],           // TRUE final-depth MultiPV, best first
- *     playedLine: line & { rank, amongCandidates } | null,
- *     classification: 'same' | 'different-candidate'
- *                   | 'unknown-equivalence' | null,
- *     stability: { depths:[a,b], bestMoveStable } | null
+ *     bestLines: [ line, ... ], playedLine, classification, stability
  *   }
- *   line = { move:{from,to,promotion}, uci, san,
- *            scoreCpWhite, scoreCpPlayer, mate, pv:[san], pvUci:[uci] }
  *
- * WHY a separate path from play. The play search (PVS + aspiration) returns
- * window-relative BOUNDS that are not comparable move-to-move. So EVERY legal
- * root move is re-scored under a FULL window at one fixed depth — bestLines is
- * therefore real MultiPV, not a shortlist. (Quiescence is exact since delta
- * pruning was removed from the engine; the ctx.noDelta seam below is retained
- * as a defensive no-op should selective pruning ever return.) The search is
- * seeded with the game's COMPLETE repetition
- * table (and the pre-move position as a path ancestor), so deeper candidate
- * lines see threefold draws; the play POV is mirrored from the side to move.
+ * The ordinary iterative WASM search first fixes one completed analysis depth.
+ * Every legal root is then re-scored at that depth under an exact full window,
+ * making the returned shortlist true MultiPV rather than PVS bounds. A fresh
+ * WASM phase repeats the roots one ply shallower for stability. Deep PVs are
+ * copied before that reset, so a shallow TT can never overwrite them.
  *
- * Chessy never auto-labels a move a mistake: classification is only same /
- * a-known-Chessy-candidate / unknown-equivalence.
- *
- * opts.onProgress is an optional observation-only callback. It receives
- * bounded, non-result checkpoints:
- *   { phase:'initial-scan'|'root-verification',
- *     completedRoots, totalRoots, elapsedMs }
- * The synchronous initial scan reports 0/1 then 1/1; root verification reports
- * completed/legal roots.
- * Root verification remains one truthful phase because the deep and shallow
- * searches are interleaved per root. Scores and PVs are never streamed.
+ * `identity`, `configHashOf` and `positionFingerprint` are deliberately pure:
+ * the main thread can compute cache identity without loading or running WASM.
  */
 (function (global) {
   'use strict';
-  if (typeof Chess === 'undefined' || typeof ChessAI === 'undefined') return;
+  if (typeof Chess === 'undefined') return;
 
-  const ENGINE_ID = 'chessy';
-  // 1.1.0: full tapered MG/EG piece-square tables + phase-specific material +
-  // lone-king mop-up. This evaluator change alters best lines, scores and
-  // classifications, so the version bump folds into configHashOf() and
-  // invalidates cached analyses from the previous (flat-endgame) evaluator.
-  const ENGINE_VERSION = '1.1.0';
-  const MATE = ChessAI.MATE, MATE_NEAR = ChessAI.MATE_NEAR;
-  const PROMO = { 1: 'Q', 2: 'R', 3: 'B', 4: 'N' };
-  const ABORTED = {}; // sentinel: a candidate search hit the node-budget cap
+  const ENGINE_ID = 'chessy-wasm';
+  // 2.0.0 changes the coaching provider from the JavaScript search/context to
+  // Rust/WASM ABI v2. Scores, depth reached, root ordering and PVs may change,
+  // so all earlier cached analyses must be kept under a different identity.
+  const ENGINE_VERSION = '2.0.0';
+  const PROVIDER_ID = 'rust-wasm-abi-v2';
+  const MATE = 1000000;
+  const MATE_NEAR = MATE - 1000;
+  let injectedEngine = null;
 
-  function now() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
-  function uci(m) {
-    return Chess.sqName(m.from) + Chess.sqName(m.to) + (m.promotion ? m.promotion.toLowerCase() : '');
+  function now() {
+    return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
   }
+
+  function uci(move) {
+    return Chess.sqName(move.from) + Chess.sqName(move.to) +
+      (move.promotion ? move.promotion.toLowerCase() : '');
+  }
+
   function same(a, b) {
     return !!a && !!b && a.from === b.from && a.to === b.to &&
       (a.promotion || null) === (b.promotion || null);
   }
+
   // Stable string hash (djb2): provenance/fingerprints must be identical
   // across runs and machines for the same inputs.
   function hash(str) {
     let h = 5381;
-    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    }
     return (h >>> 0).toString(16);
   }
 
-  // The COMPLETE state identity that can change the analysis, not just the
-  // board: (1) positionKey omits the HALFMOVE CLOCK, but the 50-move rule
-  // makes the same board at halfmove 0 vs 99 score differently, so the clock
-  // is folded in; (2) the same FEN reached with a different history can score
-  // differently (a move completing a threefold is a draw), so every prior
-  // occurrence count folds in too. Reps are sorted so the hash is
-  // order-independent.
+  // The same board can analyse differently at another halfmove clock or with
+  // another repetition prefix, so both are part of its persistent identity.
   function positionFingerprint(state, positions) {
     const key = Chess.positionKey(state);
     let rep = '';
@@ -87,25 +70,19 @@
     return key + '|hm' + (state.halfmove || 0) + '|' + hash(rep);
   }
 
-  // The played move under evaluation, normalized for the config hash. It is an
-  // OUTPUT-affecting input: analyse() derives playedLine + classification from
-  // it, so two requests for the same position that differ only in playedMove
-  // must key DISTINCT cache entries (otherwise the second is served the first's
-  // playedLine/classification). null when no move is under evaluation.
   function playedKey(move) {
-    return move ? (move.from + '-' + move.to + '=' + (move.promotion || '')) : null;
+    return move
+      ? move.from + '-' + move.to + '=' + (move.promotion || '')
+      : null;
   }
 
-  // The config hash folds EVERY output-affecting option (including the played
-  // move under evaluation), so two runs that would differ in
-  // bestLines/scores/classification/playedLine never collide in the cache. It is
-  // pure (no search): the analysis service computes the cache identity from it
-  // BEFORE dispatching, and analyse() reuses it, so the lookup key, the stored
-  // key and the key implied by the returned result are one and the same.
+  // Fold every output-affecting option into the cache identity. Runtime-only
+  // observation/injection (`onProgress`, the WASM instance) is excluded.
   function configHashOf(opts) {
     opts = opts || {};
     return hash(JSON.stringify({
       v: opts.engineVersion || ENGINE_VERSION,
+      provider: PROVIDER_ID,
       quiesce: opts.quiesce !== false,
       scanNodes: opts.nodeLimit || 150000,
       maxDepth: opts.maxDepth || 30,
@@ -113,13 +90,10 @@
       pvLen: opts.pvLen || 6,
       nodeBudget: opts.nodeBudget || 8000000,
       played: playedKey(opts.playedMove),
-      noDelta: true }));
+      noDelta: true
+    }));
   }
 
-  // The full stored-analysis identity for a position under a configuration,
-  // WITHOUT running the search: engine id/version, the config hash, and the
-  // halfmove-and-repetition-aware position fingerprint. The service keys the
-  // cache on exactly these (plus game/ply), so a lookup can precede the worker.
   function identity(state, opts) {
     opts = opts || {};
     const positions = opts.positions || state.positions || null;
@@ -131,135 +105,135 @@
     };
   }
 
-  // Seed a shared analysis context: the game's repetition counts loaded so deep
-  // lines detect threefolds, and a safety node cap so a pathological position
-  // can't run unbounded (its use flips `complete`). ctx.noDelta is set as a
-  // retained no-op seam (delta pruning has been removed; quiescence is exact).
-  function analysisCtx(quiesce, positions, nodeBudget) {
-    const ctx = ChessAI.makeCtx(quiesce, Infinity, nodeBudget);
-    ctx.noDelta = true;
-    if (positions) {
-      for (const k of Object.keys(positions)) {
-        if (positions[k] > 0) ctx.gameCounts.set(ChessAI.repKey(Chess.parseFen(k)), positions[k]);
-      }
+  function mateOf(score) {
+    if (score > MATE_NEAR) {
+      return { forWhite: true, inPlies: MATE - score };
     }
-    return ctx;
-  }
-
-  // Exact WHITE-POV score of the position after `move`, searched at total
-  // depth `depth` under a full window with delta off. `beforeFen` is pushed as
-  // a path ancestor so a line returning to the pre-move position is the draw
-  // it is. Returns ABORTED if the shared node budget ran out.
-  function scoreMove(state, beforeFen, move, depth, quiesce, ctx) {
-    const next = Chess.applyMove(state, move);
-    try {
-      return ChessAI.search(next, depth - 1, -Infinity, Infinity, quiesce,
-        { ctx: ctx, ancestors: [beforeFen] });
-    } catch (e) { return ABORTED; }
-  }
-
-  // Mate distance in plies FROM the analysed position. sw scores the child
-  // after the candidate move, searched with ONE seeded ancestor (ply base 1),
-  // so |sw| = MATE - plyOfMate already counts the candidate ply: the distance
-  // from the analysed position is exactly MATE - |sw| (no extra +1). For a
-  // mate-in-one (…Qh4#, sw = -(MATE-1)) this is 1.
-  function mateOf(sw) {
-    if (sw > MATE_NEAR) return { forWhite: true, inPlies: MATE - sw };
-    if (sw < -MATE_NEAR) return { forWhite: false, inPlies: MATE + sw };
+    if (score < -MATE_NEAR) {
+      return { forWhite: false, inPlies: MATE + score };
+    }
     return null;
   }
 
-  // Walk the TT into a LEGAL principal variation: decode each packed best move,
-  // replay it, stop at a missing/illegal entry or a repeat (a cached cycle).
-  // All decode/legality lives here, not in ai.js.
-  function pvFromTT(state, ctx, maxLen) {
-    const pv = [], pvUci = [], seen = new Set();
-    let s = state;
-    for (let i = 0; i < maxLen; i++) {
-      const key = ChessAI.hashKey(s);
+  // Resolve the untrusted packed-move PV copied from WASM through Chess's
+  // canonical legal-move and SAN implementation. A corrupt/incompatible ABI
+  // is a worker error, never a plausible-looking cached coaching line.
+  function canonicalPv(state, moves, maxLen) {
+    if (!Array.isArray(moves) || !moves.length) {
+      throw new Error('WASM analysis returned an empty PV');
+    }
+    const pv = [];
+    const pvUci = [];
+    const seen = new Set();
+    let cursor = state;
+    const limit = Math.min(maxLen, moves.length);
+    for (let i = 0; i < limit; i++) {
+      const key = Chess.positionKey(cursor);
       if (seen.has(key)) break;
       seen.add(key);
-      const packed = ChessAI.ttPackedMove(ctx, s);
-      if (!packed) break;
-      const from = (packed >> 9) & 63, to = (packed >> 3) & 63, pi = packed & 7;
-      const promo = pi ? PROMO[pi] : null;
-      const legal = Chess.legalMoves(s);
-      const m = legal.find(function (x) {
-        return x.from === from && x.to === to && (x.promotion || null) === promo;
-      });
-      if (!m) break;
-      pv.push(Chess.toSan(s, m, legal));
-      pvUci.push(uci(m));
-      s = Chess.applyMove(s, m);
+      const candidate = moves[i];
+      const legal = Chess.legalMoves(cursor);
+      const move = legal.find(function (m) { return same(m, candidate); });
+      if (!move) throw new Error('WASM analysis PV contains an illegal move');
+      pv.push(Chess.toSan(cursor, move, legal));
+      pvUci.push(uci(move));
+      cursor = Chess.applyMove(cursor, move);
     }
     return { pv: pv, pvUci: pvUci };
   }
 
-  function lineOf(state, move, sw, ctx, pvLen, maximizing) {
+  function lineOf(state, move, rootResult, pvLen, maximizing) {
     const legal = Chess.legalMoves(state);
-    const mv = legal.find(function (m) { return same(m, move); });
-    const san = Chess.toSan(state, mv, legal);
-    const cont = pvFromTT(Chess.applyMove(state, mv), ctx, Math.max(0, pvLen - 1));
-    const mate = mateOf(sw);
+    const resolved = legal.find(function (m) { return same(m, move); });
+    if (!resolved) throw new Error('WASM analysis returned an unknown root');
+    const continuation = canonicalPv(state, rootResult.pv, pvLen);
+    if (!continuation.pvUci.length ||
+        continuation.pvUci[0] !== uci(resolved)) {
+      throw new Error('WASM analysis PV does not match its root');
+    }
+    const mate = mateOf(rootResult.score);
     return {
-      move: { from: mv.from, to: mv.to, promotion: mv.promotion || null },
-      uci: uci(mv), san: san,
-      scoreCpWhite: mate ? null : sw,
-      scoreCpPlayer: mate ? null : (maximizing ? sw : -sw),
+      move: {
+        from: resolved.from,
+        to: resolved.to,
+        promotion: resolved.promotion || null
+      },
+      uci: uci(resolved),
+      san: continuation.pv[0],
+      scoreCpWhite: mate ? null : rootResult.score,
+      scoreCpPlayer: mate ? null :
+        (maximizing ? rootResult.score : -rootResult.score),
       mate: mate,
-      pv: [san].concat(cont.pv), pvUci: [uci(mv)].concat(cont.pvUci),
-      _sort: maximizing ? sw : -sw // player-POV magnitude for ordering
+      pv: continuation.pv,
+      pvUci: continuation.pvUci,
+      _sort: maximizing ? rootResult.score : -rootResult.score
     };
   }
 
   function strip(line) {
-    const c = {};
-    for (const k in line) if (k !== '_sort') c[k] = line[k];
-    return c;
+    const copy = {};
+    for (const key in line) {
+      if (key !== '_sort') copy[key] = line[key];
+    }
+    return copy;
   }
 
-  function analyse(state, opts) {
+  function zeroCounters() {
+    return { nodes: 0, qnodes: 0 };
+  }
+
+  function analyse(state, opts, wasmEngine) {
     opts = opts || {};
     const quiesce = opts.quiesce !== false;
     const scanNodes = opts.nodeLimit || 150000;
     const maxDepth = opts.maxDepth || 30;
     const multiPV = Math.max(1, opts.multiPV || 3);
     const pvLen = opts.pvLen || 6;
-    // Safety cap for the deep-verify (all legal roots, uncapped otherwise):
-    // hitting it flips `complete` to false rather than silently dropping moves.
     const nodeBudget = opts.nodeBudget || 8000000;
-    // A full game state carries its own repetition table; fall back to it (as
-    // ChessAI.think does) so analyse(state) on a completed threefold is
-    // terminal and deep lines see draws — the fingerprint, terminal check,
-    // scan and verification all use this same resolved table.
     const positions = opts.positions || state.positions || null;
     const played = opts.playedMove || null;
     const version = opts.engineVersion || ENGINE_VERSION;
-    const turn = state.turn, maximizing = turn === 'w';
+    const turn = state.turn;
+    const maximizing = turn === 'w';
 
-    // Hash EVERY output-affecting option (via the shared, pure helper so the
-    // service's pre-dispatch cache key matches the returned result exactly).
     const configHash = configHashOf(opts);
     const out = {
       engine: { id: ENGINE_ID, version: version, configHash: configHash },
-      turn: turn, positionFingerprint: positionFingerprint(state, positions),
-      wdl: null, complete: true,
-      depth: 0, nodes: 0, qnodes: 0, elapsedMs: 0,
-      scoreCpWhite: null, scoreCpPlayer: null, mate: null,
-      bestLines: [], playedLine: null, classification: null, stability: null
+      turn: turn,
+      positionFingerprint: positionFingerprint(state, positions),
+      wdl: null,
+      complete: true,
+      depth: 0,
+      nodes: 0,
+      qnodes: 0,
+      elapsedMs: 0,
+      scoreCpWhite: null,
+      scoreCpPlayer: null,
+      mate: null,
+      bestLines: [],
+      playedLine: null,
+      classification: null,
+      stability: null
     };
-    const status = Chess.gameStatus(Object.assign({}, state, { positions: positions || {} }));
-    if (status.over) return out; // terminal: no move to analyse
+    const status = Chess.gameStatus(
+      Object.assign({}, state, { positions: positions || {} })
+    );
+    if (status.over) return out;
+
+    wasmEngine = wasmEngine || injectedEngine;
+    if (!wasmEngine ||
+        typeof wasmEngine.search !== 'function' ||
+        typeof wasmEngine.beginAnalysis !== 'function' ||
+        typeof wasmEngine.searchRoot !== 'function') {
+      throw new Error('Rust/WASM analysis engine is required');
+    }
 
     const t0 = now();
-    const beforeFen = Chess.toFen(state);
+    const fen = Chess.toFen(state);
     const legal = Chess.legalMoves(state);
     let progressElapsed = 0;
     function progress(phase, completedRoots, totalRoots) {
       if (typeof opts.onProgress !== 'function') return;
-      // Date.now() is not monotonic on every host. Clamp at the last observed
-      // value so the public progress contract remains monotonic even if the
-      // wall clock moves backwards.
       const rawElapsed = now() - t0;
       progressElapsed = Math.max(progressElapsed,
         Number.isFinite(rawElapsed) ? Math.max(0, rawElapsed) : 0);
@@ -270,55 +244,91 @@
           totalRoots: totalRoots,
           elapsedMs: progressElapsed
         });
-      } catch (e) {
-        // Progress is observation-only: a consumer failure cannot change the
-        // deterministic analysis result or stop the bounded search.
+      } catch (error) {
+        // Progress is observation-only.
       }
     }
 
-    // 1) Scan (repetition-aware, deterministic) to fix the analysis depth.
+    // 1) Repetition-aware deterministic scan: choose the deepest fully
+    // completed iterative draft under the scan budget.
     progress('initial-scan', 0, 1);
-    const scan = ChessAI.think(state, { maxDepth: maxDepth, nodeLimit: scanNodes,
-      quiesce: quiesce, positions: positions, randomize: false });
+    const scan = wasmEngine.search(fen, {
+      maxDepth: maxDepth,
+      nodeLimit: scanNodes,
+      timeMs: 0,
+      quiesce: quiesce,
+      positions: positions
+    });
     const depth = Math.max(1, scan.depth);
-    out.depth = depth; out.nodes = scan.nodes; out.qnodes = scan.qnodes;
+    out.depth = depth;
     progress('initial-scan', 1, 1);
 
-    // 2) Deep-verify EVERY legal root move at the completed depth (scoring all
-    //    roots, not a shortlist, makes bestLines true MultiPV) and, one depth
-    //    shallower, on a SEPARATE context so the stability pass never overwrites
-    //    the deep transposition table before the PV is read from it. The PV for
-    //    each move is captured from the deep TT immediately after its own deep
-    //    search, so it always matches the score it is shown with.
+    // 2) Exact deep phase. One beginAnalysis call gives every legal root a
+    // shared TT/heuristics and one cumulative safety budget. Each returned PV
+    // is copied into ordinary JS objects before the shallow phase resets WASM.
     progress('root-verification', 0, legal.length);
-    const deep = analysisCtx(quiesce, positions, nodeBudget);
-    const shallow = analysisCtx(quiesce, positions, nodeBudget);
-    const scored = [];
-    let bestPrev = null, bestPrevScore = null;
-    // Stability needs a genuinely SHALLOWER pass; at depth 1 there is none, so
-    // it is left unmeasured rather than reusing the deep score (which would
-    // fabricate depths:[1,1], bestMoveStable:true).
+    wasmEngine.beginAnalysis(fen, {
+      nodeLimit: nodeBudget,
+      quiesce: quiesce,
+      positions: positions
+    });
+    let deepCounters = zeroCounters();
+    const deepLines = [];
     const stabilityDepth = depth > 1 ? depth - 1 : 0;
-    for (const m of legal) {
-      const swD = scoreMove(state, beforeFen, m, depth, quiesce, deep);
-      if (swD === ABORTED) { out.complete = false; break; }
-      scored.push(lineOf(state, m, swD, deep, pvLen, maximizing)); // PV from the deep TT
-      if (stabilityDepth) {
-        const swPrev = scoreMove(state, beforeFen, m, stabilityDepth, quiesce, shallow);
-        if (swPrev === ABORTED) { out.complete = false; break; }
-        const prevSort = maximizing ? swPrev : -swPrev;
-        if (bestPrev === null || prevSort > bestPrevScore) { bestPrevScore = prevSort; bestPrev = m; }
+    for (let i = 0; i < legal.length; i++) {
+      const result = wasmEngine.searchRoot(legal[i], depth, pvLen);
+      deepCounters = result;
+      if (!result.complete) {
+        out.complete = false;
+        break;
       }
-      // A root is complete only after BOTH interleaved verification searches
-      // have finished. An aborted deep or shallow pass never advances it.
-      progress('root-verification', scored.length, legal.length);
+      deepLines.push(lineOf(state, legal[i], result, pvLen, maximizing));
+      if (!stabilityDepth) {
+        progress('root-verification', deepLines.length, legal.length);
+      }
+    }
+
+    // 3) Separate shallower phase. Only roots with a valid deep result need a
+    // stability score. Progress advances after both depths for that root.
+    let shallowCounters = zeroCounters();
+    let bestPrev = null;
+    let bestPrevScore = null;
+    let shallowCompleted = 0;
+    let shallowAborted = false;
+    if (stabilityDepth && deepLines.length) {
+      wasmEngine.beginAnalysis(fen, {
+        nodeLimit: nodeBudget,
+        quiesce: quiesce,
+        positions: positions
+      });
+      for (let i = 0; i < deepLines.length; i++) {
+        const result = wasmEngine.searchRoot(legal[i], stabilityDepth, 1);
+        shallowCounters = result;
+        if (!result.complete) {
+          out.complete = false;
+          shallowAborted = true;
+          break;
+        }
+        const playerScore = maximizing ? result.score : -result.score;
+        if (bestPrev === null || playerScore > bestPrevScore) {
+          bestPrev = legal[i];
+          bestPrevScore = playerScore;
+        }
+        shallowCompleted++;
+        progress('root-verification', shallowCompleted, legal.length);
+      }
+    }
+
+    // Preserve the old partial-result boundary: if the shallow search aborts,
+    // its current root has a valid deep line but did not advance progress.
+    let scored = deepLines;
+    if (shallowAborted) {
+      scored = deepLines.slice(0, Math.min(deepLines.length, shallowCompleted + 1));
     }
     scored.sort(function (a, b) { return b._sort - a._sort; });
-    // Report the FULL work: the scan plus both deep-verify passes, not just the
-    // preliminary scan (which is a fraction of the total nodes).
-    out.nodes = scan.nodes + deep.nodes + shallow.nodes;
-    out.qnodes = scan.qnodes + deep.qnodes + shallow.qnodes;
 
+    out.nodes = scan.nodes + deepCounters.nodes + shallowCounters.nodes;
+    out.qnodes = scan.qnodes + deepCounters.qnodes + shallowCounters.qnodes;
     out.bestLines = scored.slice(0, multiPV).map(strip);
     if (out.bestLines.length) {
       const top = out.bestLines[0];
@@ -327,23 +337,24 @@
       out.mate = top.mate;
     }
 
-    // 3) Stability: is the VERIFIED best move the same one depth shallower?
-    //    Only reported when a shallower pass actually ran (depth > 1).
     if (stabilityDepth && scored.length && bestPrev) {
-      out.stability = { depths: [stabilityDepth, depth],
-        bestMoveStable: same(scored[0].move, bestPrev) };
+      out.stability = {
+        depths: [stabilityDepth, depth],
+        bestMoveStable: same(scored[0].move, bestPrev)
+      };
     }
 
-    // 4) Played-move standing + classification (never an automatic "mistake").
     if (played) {
-      const playedObj = legal.find(function (m) { return same(m, played); });
+      const playedObj = legal.find(function (move) { return same(move, played); });
       if (playedObj) {
-        const rank = scored.findIndex(function (l) { return same(l.move, playedObj); });
+        const rank = scored.findIndex(function (line) {
+          return same(line.move, playedObj);
+        });
         if (rank >= 0) {
-          const pl = strip(scored[rank]);
-          pl.rank = rank + 1;
-          pl.amongCandidates = rank < out.bestLines.length;
-          out.playedLine = pl;
+          const playedLine = strip(scored[rank]);
+          playedLine.rank = rank + 1;
+          playedLine.amongCandidates = rank < out.bestLines.length;
+          out.playedLine = playedLine;
         }
         if (out.bestLines.length && same(out.bestLines[0].move, playedObj)) {
           out.classification = 'same';
@@ -361,10 +372,15 @@
 
   global.ChessyAnalysisCore = {
     analyse: analyse,
+    // Node scorecards run synchronously and share one local WASM instance.
+    // Browser production passes its worker-owned instance directly to analyse.
+    setEngineForTests: function (engine) { injectedEngine = engine || null; },
     positionFingerprint: positionFingerprint,
     configHashOf: configHashOf,
     identity: identity,
     ENGINE_ID: ENGINE_ID,
-    ENGINE_VERSION: ENGINE_VERSION
+    ENGINE_VERSION: ENGINE_VERSION,
+    PROVIDER_ID: PROVIDER_ID,
+    MATE_NEAR: MATE_NEAR
   };
 })(typeof window !== 'undefined' ? window : globalThis);

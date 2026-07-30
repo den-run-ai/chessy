@@ -59,8 +59,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 require('../../assets/engine.js');
-require('../../assets/ai.js');
 require('../../assets/analysis-core.js');
+const WasmTest = require('../wasm-test-engine.js');
+WasmTest.installAnalysisEngine();
 // The SHIPPED trust boundary. The strict axes delegate whole-object validation
 // to it rather than restating any part of it, so this gate can never be laxer
 // than the coaching path consuming the same output — if the app tightens the
@@ -72,7 +73,7 @@ const AC = globalThis.ChessyAnalysisCore;
 const AR = globalThis.ChessyAnalysisResult;
 const Equivalence = globalThis.ChessyEquivalence;
 // Used to derive the depth-(d-1) best move INDEPENDENTLY for pvStability.
-const ChessAI = globalThis.ChessAI;
+const SearchEngine = WasmTest;
 
 const CORPUS_DIR = path.join(__dirname, '..', '..', 'eval', 'corpus');
 
@@ -403,22 +404,24 @@ function auxUsable(res, state, opts) {
 }
 
 // QUALITY: is the best move the same one ply shallower? MEASURED HERE — the
-// shallower best move is derived by an independent fixed-depth search at d-1,
+// shallower best move is derived by an independent iterative search capped at
+// d-1,
 // never read off `analyse()`'s own `stability.bestMoveStable` flag. Echoing
 // the flag would grade the engine on its own say-so: a regression that simply
 // asserted the flag true would sail through the ratchet as an *improvement*,
 // since the ratchet only fails on a falling number — and `validate()` cannot
-// help, because it checks the flag's type, not its truth. (A fixed-depth
-// think() at d-1 is not the same computation as `analyse()`'s internal shallow
-// pass and legitimately disagrees on a couple of positions: the number is the
-// scorecard's measurement, not the subject's claim about itself.)
+// help, because it checks the flag's type, not its truth. (An independent
+// iterative WASM search at d-1 is not the same computation as `analyse()`'s
+// internal exact-root shallow pass and may legitimately disagree on some
+// positions: the number is the scorecard's measurement, not the subject's
+// claim about itself.)
 function checkPvStability(state, ref) {
   if (!ref.stability) return null; // unmeasured (depth 1): omit, don't fabricate
   const shallowDepth = ref.depth - 1;
   if (shallowDepth < 1) return null;
-  const shallow = ChessAI.think(state, {
+  const shallow = SearchEngine.searchState(state, {
     maxDepth: shallowDepth, nodeLimit: E3_OPTS.ref.nodeBudget,
-    quiesce: E3_OPTS.ref.quiesce, positions: state.positions, randomize: false
+    quiesce: E3_OPTS.ref.quiesce, positions: state.positions
   });
   const shallowBest = shallow.move ? uciOf(shallow.move) : null;
   const deepBest = ref.bestLines[0].uci;
@@ -558,6 +561,11 @@ function scoreVector(mode, records, result, manifest) {
     ndjson_sha256: manifest.ndjson_sha256,
     scorecard: 'analysis-v1',
     mode: mode,
+    analysis_engine: {
+      id: AC.ENGINE_ID,
+      version: AC.ENGINE_VERSION,
+      provider: AC.PROVIDER_ID
+    },
     // The grading fixture is meaningful only under this exact criterion.
     // A version/parameter edit is baseline-incompatible by design.
     criterion: Equivalence.CRITERION,
@@ -686,8 +694,11 @@ function compareBaseline(baseline, sv, log) {
   const optsEq = JSON.stringify(baseline.e3_opts) === JSON.stringify(sv.e3_opts);
   const criterionEq =
     JSON.stringify(baseline.criterion) === JSON.stringify(sv.criterion);
+  const engineEq =
+    JSON.stringify(baseline.analysis_engine) ===
+    JSON.stringify(sv.analysis_engine);
   if (baseline.corpus !== sv.corpus || baseline.mode !== sv.mode || !optsEq ||
-      !criterionEq || baseline.scorecard !== sv.scorecard ||
+      !criterionEq || !engineEq || baseline.scorecard !== sv.scorecard ||
       baseline.generator_version !== sv.generator_version ||
       baseline.ndjson_sha256 !== sv.ndjson_sha256) {
     log('  INCOMPATIBLE baseline: ' + baseline.corpus + '/' + baseline.generator_version + '/' + baseline.mode +
@@ -696,7 +707,10 @@ function compareBaseline(baseline, sv, log) {
       ' digest=' + String(sv.ndjson_sha256).slice(0, 12) +
       (criterionEq ? '' : ' criterion=' +
         JSON.stringify(baseline.criterion) + '→' +
-        JSON.stringify(sv.criterion)) + '  ← REGRESSION');
+        JSON.stringify(sv.criterion)) +
+      (engineEq ? '' : ' analysis_engine=' +
+        JSON.stringify(baseline.analysis_engine) + '→' +
+        JSON.stringify(sv.analysis_engine)) + '  ← REGRESSION');
     return false;
   }
   let regressed = false;
@@ -895,6 +909,16 @@ function main() {
       diag('\nself-test (criterion-identity, compatibility): ' +
         (detected ? 'correctly went RED ✓'
                   : 'ESCAPED ✗ — criterion drift compared as compatible'));
+    }
+    {
+      const changedEngine = JSON.parse(JSON.stringify(cleanSv));
+      changedEngine.analysis_engine.provider = 'different-provider';
+      const detected =
+        !compareBaseline(cleanSv, changedEngine, quiet);
+      allDetected = allDetected && detected;
+      diag('\nself-test (analysis-engine-identity, compatibility): ' +
+        (detected ? 'correctly went RED ✓'
+                  : 'ESCAPED ✗ — analysis provider drift compared as compatible'));
     }
     if (!allDetected) process.exit(3);
   }

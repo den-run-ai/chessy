@@ -13,6 +13,12 @@
  * to keep the frozen 100x4x2 manifest and shard geometry; statistics still use
  * the 100 openings as the independent clusters, never the 400 pairs.
  *
+ * This formal gate intentionally compares the current ABI-v2 candidate with
+ * the frozen ABI-v1 reference. Both are loaded through the developer-only
+ * ordinary-search harness, which accepts exactly those two reviewed,
+ * layout-compatible 64-byte result ABIs. The production loader remains
+ * ABI-v2-only.
+ *
  * Usage (one formal shard):
  *   node test/wasm-efficiency-match.js \
  *     --candidate-wasm /path/to/candidate.wasm \
@@ -31,7 +37,7 @@ const fs = require('fs');
 const path = require('path');
 require('../assets/engine.js');
 const Chess = globalThis.Chess;
-const WasmEngine = require('../assets/wasm-engine.js');
+const WasmBench = require('../experiments/wasm/bench.js');
 const MatchProtocol = require('./ai-match-protocol');
 const OPENINGS = require('./ai-match-openings');
 const { clusterStats } = require('./match-stats');
@@ -240,12 +246,32 @@ function assertBounded(engine, label) {
   }
 }
 
+function assertFormalAbiPair(candidate, reference) {
+  if (!candidate || candidate.abiVersion !== 2) {
+    throw new Error('formal candidate must expose ordinary result ABI v2 ' +
+      '(got ' + JSON.stringify(candidate && candidate.abiVersion) + ')');
+  }
+  if (!reference || reference.abiVersion !== 1) {
+    throw new Error('formal frozen reference must expose ordinary result ABI v1 ' +
+      '(got ' + JSON.stringify(reference && reference.abiVersion) + ')');
+  }
+}
+
 function scoreForWhite(status) {
   return status.result === '1-0' ? 1 : status.result === '0-1' ? 0 : 0.5;
 }
 
 function resolveMove(state, result) {
   const legal = Chess.legalMoves(state);
+  if (typeof result.move === 'string') {
+    const uci = result.move;
+    if (!/^[a-h][1-8][a-h][1-8][QRBN]?$/.test(uci)) return null;
+    return legal.find(function (move) {
+      return Chess.sqName(move.from) === uci.slice(0, 2) &&
+        Chess.sqName(move.to) === uci.slice(2, 4) &&
+        (move.promotion || '') === uci.slice(4);
+    });
+  }
   return result.move && legal.find(function (move) {
     return move.from === result.move.from &&
       move.to === result.move.to &&
@@ -308,11 +334,14 @@ async function runMatch(config, environment) {
   const candidateDigest = sha256(candidateBytes);
   const referenceDigest = sha256(referenceBytes);
   const loaded = await Promise.all([
-    WasmEngine.load(candidateBytes),
-    WasmEngine.load(referenceBytes)
+    WasmBench.loadOrdinaryWasmBytes(
+      candidateBytes, 'candidate WASM', config.candidateWasm),
+    WasmBench.loadOrdinaryWasmBytes(
+      referenceBytes, 'reference WASM', config.referenceWasm)
   ]);
   const candidate = loaded[0];
   const reference = loaded[1];
+  assertFormalAbiPair(candidate, reference);
   assertBounded(candidate, 'candidate WASM');
   assertBounded(reference, 'reference WASM');
 
@@ -370,6 +399,8 @@ async function runMatch(config, environment) {
   console.log('harness-sha: ' + config.harnessSha);
   console.log('candidate-wasm-sha256: ' + candidateDigest);
   console.log('base-wasm-sha256: ' + referenceDigest);
+  console.log('candidate-result-abi: ' + candidate.abiVersion);
+  console.log('base-result-abi: ' + reference.abiVersion);
   console.log('budget-mode: ' + PROTOCOL.budgetMode);
   console.log('budget-value: ' + PROTOCOL.budgetValue);
   console.log('max-plies: ' + PROTOCOL.maxPlies);
@@ -400,6 +431,8 @@ async function runMatch(config, environment) {
   return {
     candidateDigest,
     referenceDigest,
+    candidateAbiVersion: candidate.abiVersion,
+    referenceAbiVersion: reference.abiVersion,
     records,
     stats,
     telemetry
@@ -441,6 +474,7 @@ module.exports = {
   parseArgs,
   openingState,
   validateOpenings,
+  assertFormalAbiPair,
   assertFixedNodeResult,
   resolveMove,
   playGame,

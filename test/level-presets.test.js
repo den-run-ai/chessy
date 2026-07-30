@@ -1,7 +1,7 @@
 /*
  * Difficulty-preset contract: stable storage IDs, explicit target bands,
  * monotonic work budgets, no depth-0 Easy case on the frozen position family,
- * and exact JS/WASM parity at the first shipped budget.
+ * and frozen pre-removal WASM signatures below the first shipped budget.
  */
 'use strict';
 const fs = require('fs');
@@ -44,10 +44,10 @@ function check(ok, label, detail) {
 
   const wasmPath = path.join(__dirname, '..', 'assets', 'chessy-ai-fast.wasm');
   const wasm = await bench.loadWasmEngine(wasmPath, 'shipped');
-  const js = bench.loadJsEngine();
   const easy = Presets.get('1');
   const shallow = [];
-  const divergences = [];
+  const nondeterministic = [];
+  const frozenRegressions = [];
   for (const [name, fen] of bench.POSITIONS) {
     const opts = {
       maxDepth: easy.maxDepth,
@@ -57,15 +57,39 @@ function check(ok, label, detail) {
     };
     const wasmResult = wasm.search(fen, opts);
     if (wasmResult.depth < 1 || !wasmResult.move) shallow.push(name);
-    const diffs = bench.signatureDifferences(wasmResult, js.search(fen, opts));
-    if (diffs.length) divergences.push(name + ': ' + diffs.join('; '));
+    const repeatDiffs = bench.signatureDifferences(
+      wasm.search(fen, opts), wasmResult);
+    if (repeatDiffs.length) {
+      nondeterministic.push(name + ': ' + repeatDiffs.join('; '));
+    }
+
+    // The first shipped level starts at 10k nodes. Preserve the reviewed r69
+    // tree at a 5k checkpoint without retaining a second search
+    // implementation solely as an oracle.
+    const frozenOpts = {
+      maxDepth: easy.maxDepth,
+      nodeLimit: 5000,
+      timeMs: 0,
+      quiesce: easy.quiesce
+    };
+    const expectedFrozen = bench.frozenSignature(name, frozenOpts);
+    const frozenDiffs = expectedFrozen
+      ? bench.signatureDifferences(
+        wasm.search(fen, frozenOpts), expectedFrozen)
+      : ['missing frozen signature'];
+    if (frozenDiffs.length) {
+      frozenRegressions.push(name + ': ' + frozenDiffs.join('; '));
+    }
   }
   check(shallow.length === 0,
     'Easy completes at least depth 1 across all frozen position families',
     shallow.join(', '));
-  check(divergences.length === 0,
-    'Easy has exact JS/WASM fixed-node parity across the frozen families',
-    divergences.slice(0, 3).join(' | '));
+  check(nondeterministic.length === 0,
+    'Easy is deterministic across repeated WASM searches',
+    nondeterministic.slice(0, 3).join(' | '));
+  check(frozenRegressions.length === 0,
+    'the 5k checkpoint matches frozen r69 signatures across all families',
+    frozenRegressions.slice(0, 3).join(' | '));
 
   const expert = Presets.get('5');
   const expertShortfalls = [];

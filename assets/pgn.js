@@ -608,11 +608,11 @@
         const rawAi = Array.isArray(record.ai) ? record.ai[i] : null;
         let ai = null;
         if (rawAi !== null && rawAi !== undefined) {
-          if (typeof ChessAI === 'undefined' ||
-              typeof ChessAI.sanitizeTelemetry !== 'function') {
+          if (typeof ChessyAiTelemetry === 'undefined' ||
+              typeof ChessyAiTelemetry.sanitizeTelemetry !== 'function') {
             throw new Error('archive AI telemetry sanitizer is unavailable');
           }
-          ai = ChessAI.sanitizeTelemetry(rawAi);
+          ai = ChessyAiTelemetry.sanitizeTelemetry(rawAi);
           if (!ai) throw new Error('archive record has invalid AI telemetry');
         }
         const clock = Array.isArray(record.clocks) ? record.clocks[i] : null;

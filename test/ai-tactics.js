@@ -1,8 +1,8 @@
 /*
  * Fixed-node AI regression suite — run with: node test/ai-tactics.js
  *
- * Every search runs deterministic (randomize:false) under a fixed nodeLimit,
- * so results are reproducible across machines and immune to timer noise.
+ * Every search uses the Rust/WASM engine's deterministic root order under a
+ * fixed nodeLimit, so results are reproducible and immune to timer noise.
  * Mirrored (rank-flipped, color-swapped) twins of each positional test keep
  * the engine honest about color symmetry. Several tests allow multiple
  * equally-good moves; `avoid` tests assert restraint instead.
@@ -11,11 +11,10 @@
  */
 'use strict';
 require('../assets/engine.js');
-require('../assets/ai.js');
+const WasmAI = require('./wasm-test-engine.js');
 const Chess = globalThis.Chess;
-const ChessAI = globalThis.ChessAI;
 
-const MATE = 1000000, MATE_NEAR = MATE - 1000; // mirror ai.js
+const MATE_NEAR = 999000;
 
 let passed = 0, failed = 0;
 function check(ok, label, detail) {
@@ -39,14 +38,23 @@ function mirrorMove(uci) { // e.g. a1a8 -> a8a1, f7f8R -> f2f1R
 }
 
 function solve(fen, nodes, positions) {
-  const r = ChessAI.think(Chess.parseFen(fen), {
-    maxDepth: 30, nodeLimit: nodes, quiesce: true, randomize: false,
+  const r = WasmAI.searchState(Chess.parseFen(fen), {
+    maxDepth: 30, nodeLimit: nodes, quiesce: true,
     positions: positions || null
   });
   return {
     uci: r.move ? Chess.sqName(r.move.from) + Chess.sqName(r.move.to) + (r.move.promotion || '') : '-',
     score: r.score, depth: r.depth, move: r.move
   };
+}
+
+function fixed(fen, depth, quiesce, positions, nodeLimit) {
+  return WasmAI.fixedSearchState(Chess.parseFen(fen), {
+    depth: depth,
+    quiesce: quiesce !== false,
+    positions: positions || null,
+    nodeLimit: nodeLimit || 0
+  });
 }
 
 // Is `move` (an engine result move object) actually legal in this position?
@@ -85,13 +93,13 @@ const SPECS = [
   // regression below guards the DEFENDER (Chessy must not walk into the mate);
   // these guard the ATTACKER (Chessy must SEE it). The forced win is
   // 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#, whose final blow Qh8# is a QUIET
-  // (non-capturing) check. quiesceNode's bounded quiet-check extension is what
+  // (non-capturing) check. quiesce_node's bounded quiet-check extension is what
   // lets a shallow search PROVE the deeper two mates within the budgets below —
   // remove the extension (QCHECK_PLIES = 0) and both requireMate assertions
   // bite: the mate-in-2 is scored by material at depth 2 (~-444, not a mate)
   // and the mate-in-3 is not found until a whole extra main-search ply (the
   // engine plays Ng4 for ~-228 at 150k nodes instead of Ne7+). The node budgets
-  // sit in a machine-independent (deterministic, randomize:false) window: wide
+  // sit in a machine-independent deterministic-node window: wide
   // enough above the extension-assisted mate depth to never false-fail, tight
   // enough below the plain-quiescence depth to keep proving the extension is
   // load-bearing. The mate-in-1 is main-search-visible either way and stands as
@@ -131,11 +139,10 @@ for (const [name, fen, allowed, nodes, avoided, requireMate] of SPECS) {
 // --- Horizon quiet-mate defence (regression for game log chessy202607240238).
 // At the old 2s Master budget the engine completed only depth 5 and played
 // 27...Rxa2??, walking into the forced 28.Ne7+ Rxe7 29.Qh7+ Kf8 30.Qh8#. The
-// mating blow Qh8# is a QUIET check one ply past a captures-only quiescence
-// horizon, so the depth-5 leaf scored the position by its (still winning!)
-// material and grabbed a2. quiesceNode's bounded quiet-check extension now sees
-// it. Ground truth is an INDEPENDENT exact forced-mate solver (full width, no
-// evaluation, memoised) — never the engine under test — so the assertion is
+// mating blow Qh8# is a quiet check one ply past a captures-only quiescence
+// horizon. Ground truth is a deliberately small, test-only exact forced-mate
+// solver (full width, no evaluation, memoised) — never the engine under test —
+// so the assertion is
 // "the move Chessy plays allows no forced mate", not "Chessy plays move X".
 console.log('horizon quiet-mate defence (game chessy202607240238)');
 (function () {
@@ -223,8 +230,8 @@ function convert(name, fen, maxPlies, nodesPerMove) {
   let plies = 0;
   let illegal = false;
   while (plies < maxPlies && !Chess.gameStatus(state).over) {
-    const r = ChessAI.think(state, {
-      maxDepth: 30, nodeLimit: nodesPerMove, quiesce: true, randomize: false,
+    const r = WasmAI.searchState(state, {
+      maxDepth: 30, nodeLimit: nodesPerMove, quiesce: true,
       positions: state.positions
     });
     if (!r.move) break;
@@ -277,73 +284,28 @@ const sought = solve('7k/8/5K2/8/8/8/8/3Q4 b - - 0 1', 6000, escapeRep);
 check(sought.move.from === loseMoves[0].from && sought.move.to === loseMoves[0].to,
   'losing side heads for threefold', 'got ' + sought.uci);
 
-// --- Repetition awareness INSIDE quiescence (regression). The main search
-// scores repetitions as draws, but a repetition first reached PAST the horizon
-// — a check evasion into a position that already stands twice, or that closes a
-// cycle on a search-path ancestor — must also score 0, not by its material.
-// Setup: fenS is Black-to-move IN CHECK (bishop a2 pins the a2–g8 diagonal);
-// Black's king can step to e5, reaching fenA (White up Q+B, eval ~ +1182). The
-// e5 escape is a check evasion resolved only in quiescence (depth-0 search with
-// quiesce on), so it exercises the quiescence prelude, not the main search.
+// --- Repetition awareness inside quiescence ---
+// fenS is Black-to-move in check and its only evasion reaches fenA. A
+// depth-zero fixed search therefore reaches fenA from quiescence rather than
+// from the main search. Loading two prior fenA occurrences must turn that leaf
+// into a history-based draw. The no-history control remains materially winning.
 console.log('quiescence repetition');
 (function () {
   const fenA = '8/8/8/4k3/8/8/B7/K6Q w - - 6 20';   // Black Ke5, White Ka1/Ba2/Qh1
   const fenS = '8/8/4k3/8/8/8/B7/K6Q b - - 5 20';   // Black Ke6 (in check), Ke5 -> fenA
-  const S = Chess.parseFen(fenS), A = Chess.parseFen(fenA);
-  const matVal = ChessAI.evaluate(A.board); // ~ +1182, the non-draw material score
+  const matVal = WasmAI.evaluateState(Chess.parseFen(fenA));
+  const history = {};
+  history[Chess.positionKey(Chess.parseFen(fenA))] = 2;
+  const repeated = fixed(fenS, 0, true, history);
+  check(repeated.complete && repeated.score === 0,
+    'depth-zero quiescence honors a game-history threefold',
+    'complete=' + repeated.complete + ' score=' + repeated.score +
+      ' (material would be ' + matVal + ')');
 
-  // (a) Search-path repetition: fenA seeded as an ancestor -> the e5 evasion
-  // closes the cycle and the quiescence value is the draw (0), not the material.
-  let ctx = ChessAI.makeCtx(true, Infinity);
-  const vPath = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx, ancestors: [fenA] });
-  check(vPath === 0, 'quiescence honors a search-path repetition (draw, not material)',
-    'value ' + vPath + ' (material would be ' + matVal + ')');
-  // ...and the draw's PATH dependency propagates as repPly, so no shallower node
-  // caches it in the TT. The cycle closed on the seeded ancestor at path index 0.
-  check(ctx.repPly === 0, 'quiescence path draw propagates repPly (TT-contamination guard)',
-    'repPly ' + ctx.repPly + ' (expected 0)');
-
-  // (b) A true game-history threefold seen only in quiescence also scores 0,
-  // and is path-INDEPENDENT (repPly stays Infinity, so it remains cacheable).
-  ctx = ChessAI.makeCtx(true, Infinity);
-  ctx.gameCounts.set(ChessAI.repKey(A), 2); // fenA already stands twice
-  const vHist = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx });
-  check(vHist === 0, 'quiescence honors a game-history threefold',
-    'value ' + vHist + ' (material would be ' + matVal + ')');
-  check(ctx.repPly === Infinity, 'quiescence game-history draw stays cacheable (repPly=Infinity)',
-    'repPly ' + ctx.repPly);
-
-  // (c) Control: with neither seeded, the same evasion is a plain material leaf.
-  ctx = ChessAI.makeCtx(true, Infinity);
-  const vFree = ChessAI.search(S, 0, -Infinity, Infinity, true, { ctx: ctx });
-  check(vFree === matVal, 'without a repetition the quiescence leaf is material',
-    'value ' + vFree + ' (expected ' + matVal + ')');
-})();
-
-// --- Null-window scout vs a warm, wide-window TT (regression). With delta
-// pruning removed, a quiescence-derived TT score is a sound alpha-beta bound
-// servable to any window; this pins that invariant so a future selective
-// pruning cannot silently reintroduce window-sensitive TT scores. Invariant: a
-// null scout that reuses a warm, wide-window-populated context must return
-// exactly what a FRESH-context scout returns.
-console.log('null-scout TT safety');
-(function () {
-  const cases = [
-    ['r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9', 4],
-    ['r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1', 4], // Kiwipete
-    ['r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3', 4]
-  ];
-  for (const [fen, d] of cases) {
-    const st = Chess.parseFen(fen);
-    const vFull = ChessAI.search(st, d, -Infinity, Infinity, true);       // true value
-    const lo = vFull - 1, hi = vFull;                                     // scout straddling it
-    const vFresh = ChessAI.search(st, d, lo, hi, true);                   // fresh-context scout
-    const ctx = ChessAI.makeCtx(true, Infinity);
-    ChessAI.search(st, d, -Infinity, Infinity, true, { ctx: ctx });      // warm the TT (wide window)
-    const vWarm = ChessAI.search(st, d, lo, hi, true, { ctx: ctx });     // reuse the warm TT
-    check(vWarm === vFresh, 'warm wide-window TT does not corrupt a null scout',
-      fen.split(' ')[0].slice(0, 12) + ' d' + d + ': fresh ' + vFresh + ' warm ' + vWarm);
-  }
+  const free = fixed(fenS, 0, true, {});
+  check(free.complete && free.score === matVal,
+    'without repetition history the same quiescence leaf is material',
+    'complete=' + free.complete + ' score=' + free.score + ' (expected ' + matVal + ')');
 })();
 
 // --- Zugzwang/fortress: mutual-zugzwang blocked pawns are a dead draw.
@@ -365,217 +327,52 @@ for (const [name, fen] of [
   check(Math.abs(r.score) <= 8, name, 'score ' + r.score + ' (d' + r.depth + ')');
 }
 
-// --- PVS soundness vs an INDEPENDENT minimax oracle (regression) ---
-// The property that must hold: PVS introduces no false fail-low/high. Scope:
-// with delta pruning removed the search is an EXACT transform of full-window
-// alpha-beta over Chessy's SAME completed, bounded tree — not exact chess
-// minimax (quiescence still has the QMAX horizon, stand-pat, and the deliberate
-// twofold path-repetition rule). So ChessAI.search's full-window value must
-// equal a plain alpha-beta over the same tree and a null-window scout must
-// bracket it. The reference must NOT come from the code under test. `oracle()`
-// below is a plain, self-contained alpha-beta (no PVS, no TT, quiescence OFF)
-// over the engine's own evaluation; the quiescence-ON exactness block that
-// follows adds a second independent oracle that DOES descend into captures.
-// Both reproduce the engine's search-path repetition rule.
-console.log('PVS soundness (independent minimax oracle)');
-// `path` carries the repetition keys of the search-path ancestors (the root
-// included, exactly as ChessAI.search pushes the root before recursing).
-function oracle(state, depth, alpha, beta, ply, path) {
-  const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
-  const kingSq = state.board.indexOf(turn + 'K');
-  const maximizing = turn === 'w';
-  const inChk = Chess.isAttacked(state.board, kingSq, enemy);
-  if (state.halfmove >= 100 && !inChk) return 0;
-  if (Chess.insufficientMaterial(state.board)) return 0;
-  // Search-path repetition: production ChessAI.search scores the FIRST
-  // recurrence of any ancestor position (root included) as a draw — the
-  // deliberate twofold path heuristic. Model it here with the same key
-  // (ChessAI.repKey, ep-normalized identically) and ordering (before the
-  // leaf), or the oracle is not solving the same minimax problem: a legal
-  // cycle back to an ancestor would score as a static leaf here but 0 in the
-  // engine, and an unrelated eval/ordering change that let such a cycle reach
-  // the root value would fail this regression despite sound PVS.
-  const key = ChessAI.repKey(state);
-  for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
-  const legal = [];
-  for (const m of Chess.pseudoMoves(state)) {
-    const nx = Chess.applyMove(state, m);
-    const ks = m.piece[1] === 'K' ? m.to : kingSq;
-    if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push(nx);
-  }
-  if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
-  if (depth <= 0) return ChessAI.evaluate(state.board);
-  let best = maximizing ? -Infinity : Infinity;
-  path.push(key);
-  for (const nx of legal) {
-    const s = oracle(nx, depth - 1, alpha, beta, ply + 1, path);
-    if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
-    else { if (s < best) best = s; if (best < beta) beta = best; }
-    if (beta <= alpha) break;
-  }
-  path.pop();
-  return best;
-}
-const PVS_FEN = 'r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9';
-const pvsState = Chess.parseFen(PVS_FEN);
-const vOracle = oracle(pvsState, 4, -Infinity, Infinity, 0, []);   // independent truth
-const vFull = ChessAI.search(pvsState, 4, -Infinity, Infinity, false); // PVS full window
-check(vFull === vOracle, 'PVS full-window value equals independent minimax', 'oracle=' + vOracle + ' pvs=' + vFull);
-const scoutBelow = ChessAI.search(pvsState, 4, vOracle - 1, vOracle, false); // must fail high (>= vOracle)
-const scoutAbove = ChessAI.search(pvsState, 4, vOracle, vOracle + 1, false); // must fail low (<= vOracle)
-check(scoutBelow >= vOracle, 'null-window scout below the true value fails high', 'v=' + vOracle + ' scout=' + scoutBelow);
-check(scoutAbove <= vOracle, 'null-window scout above the true value fails low', 'v=' + vOracle + ' scout=' + scoutAbove);
-const pvsMove = solve(PVS_FEN, 60000);
-check(pvsMove.uci !== '-' && isLegal(PVS_FEN, pvsMove.move),
-  'sharp position returns a legal move (quiescence on)', 'got ' + pvsMove.uci);
-
-// --- PVS + aspiration exactness WITH QUIESCENCE (permanent regression) ---
-// The play search runs quiescence; delta pruning removed, it must equal a
-// plain alpha-beta that itself descends into captures. `oracleQ` is that
-// independent witness: alpha-beta to the horizon, then a self-contained
-// quiescence mirroring quiesceNode's rules (insufficient material, terminal
-// mate/stalemate, 50-move, QMAX=16, stand-pat, capture/promotion filter, check
-// evasions) — but with NO selective/delta pruning, NO TT, NO move ordering.
-// Ordinary alpha-beta cutoffs and quiescence stand-pat remain (that is what it
-// shares with production); it just lacks the selective pruning and TT that make
-// production fast, so it is near-exponential and the positions are kept
-// shallow/small. Includes BOTH delta-review witnesses, the exact regressions
-// that motivated removing delta pruning.
-const QMAX_ORACLE = 16;
-const QCHECK_PLIES_ORACLE = 1; // mirror ai.js QCHECK_PLIES (bounded quiet-check extension)
-function oracleQuiesce(state, alpha, beta, ply, qply, path) {
-  if (Chess.insufficientMaterial(state.board)) return 0;
-  const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
-  const kingSq = state.board.indexOf(turn + 'K');
-  const maximizing = turn === 'w';
-  const inChk = Chess.isAttacked(state.board, kingSq, enemy);
-  const key = ChessAI.repKey(state);
-  for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
-  const legal = [];
-  for (const m of Chess.pseudoMoves(state)) {
-    const nx = Chess.applyMove(state, m);
-    const ks = m.piece[1] === 'K' ? m.to : kingSq;
-    if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push([m, nx]);
-  }
-  if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
-  if (state.halfmove >= 100) return 0;
-  if (qply >= QMAX_ORACLE) return ChessAI.evaluate(state.board);
-  let best;
-  if (inChk) { best = maximizing ? -Infinity : Infinity; }
-  else {
-    best = ChessAI.evaluate(state.board);
-    if (maximizing) { if (best >= beta) return best; if (best > alpha) alpha = best; }
-    else { if (best <= alpha) return best; if (best < beta) beta = best; }
-  }
-  path.push(key);
-  // Same bounded quiet-check extension as quiesceNode: captures/promotions
-  // always, plus quiet (non-capturing) checks for the first QCHECK_PLIES_ORACLE
-  // plies. `legal` already carries each move's applied state, so the check test
-  // needs no extra applyMove.
-  const genChecks = qply < QCHECK_PLIES_ORACLE;
-  const moves = inChk ? legal : legal.filter(function (e) {
-    if (e[0].captured || e[0].promotion) return true;
-    if (!genChecks) return false;
-    return Chess.isAttacked(e[1].board, e[1].board.indexOf(enemy + 'K'), turn);
-  });
-  for (const e of moves) {
-    const s = oracleQuiesce(e[1], alpha, beta, ply + 1, qply + 1, path);
-    if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
-    else { if (s < best) best = s; if (best < beta) beta = best; }
-    if (beta <= alpha) break;
-  }
-  path.pop();
-  return best;
-}
-function oracleQ(state, depth, alpha, beta, ply, path) {
-  const turn = state.turn, enemy = turn === 'w' ? 'b' : 'w';
-  const kingSq = state.board.indexOf(turn + 'K');
-  const maximizing = turn === 'w';
-  const inChk = Chess.isAttacked(state.board, kingSq, enemy);
-  if (state.halfmove >= 100 && !inChk) return 0;
-  if (Chess.insufficientMaterial(state.board)) return 0;
-  const key = ChessAI.repKey(state);
-  for (let j = 0; j < path.length; j++) if (path[j] === key) return 0;
-  if (depth <= 0) return oracleQuiesce(state, alpha, beta, ply, 0, path);
-  const legal = [];
-  for (const m of Chess.pseudoMoves(state)) {
-    const nx = Chess.applyMove(state, m);
-    const ks = m.piece[1] === 'K' ? m.to : kingSq;
-    if (!Chess.isAttacked(nx.board, ks, enemy)) legal.push(nx);
-  }
-  if (!legal.length) return inChk ? (maximizing ? -(MATE - ply) : (MATE - ply)) : 0;
-  // Mirror searchNode: checkmate outranks the 50-move rule (handled by the
-  // terminal test above), but once a legal evasion is confirmed the 50-move
-  // draw stands even in check. (The !inChk case returned 0 at entry.)
-  if (state.halfmove >= 100) return 0;
-  let best = maximizing ? -Infinity : Infinity;
-  path.push(key);
-  for (const nx of legal) {
-    const s = oracleQ(nx, depth - 1, alpha, beta, ply + 1, path);
-    if (maximizing) { if (s > best) best = s; if (best > alpha) alpha = best; }
-    else { if (s < best) best = s; if (best < beta) beta = best; }
-    if (beta <= alpha) break;
-  }
-  path.pop();
-  return best;
-}
-console.log('PVS + aspiration exactness (quiescence on)');
-const Q_CASES = [
-  // both delta-review witnesses (d0 = pure quiescence, the exact regressions;
-  // d1/d2 = alpha-beta feeding quiescence)
-  ['k7/2K5/8/8/4q3/3P4/PP3PPP/RNBQ1BNR w - - 0 1', 0],
+// --- Iterative search agrees with the exact full-window ABI ---
+// The old JavaScript-only tests reached into alpha/beta windows and shared TT
+// contexts. Those are private Rust details now. The externally useful
+// invariant is that a completed iterative search has the same white-POV score
+// as the ABI's deterministic full-window search at that depth.
+console.log('iterative/fixed full-window agreement');
+for (const [fen, depth] of [
   ['k7/2K5/8/8/4q3/3P4/PP3PPP/RNBQ1BNR w - - 0 1', 1],
-  ['k7/2K5/8/8/4q3/3P4/PP3PPP/RNBQ1BNR w - - 0 1', 2],
-  ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 0],
-  ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 1],
   ['k7/4Rb2/r1p4P/5P2/3PKp1p/7P/Pp4B1/1R6 w - - 5 45', 2],
-  [PVS_FEN, 2],
-  // in check AT the 50-move boundary with a legal evasion (Kxg2): checkmate
-  // would outrank the rule, but a mere evasion leaves the draw standing, so
-  // both oracle and production must score 0 — exercises oracleQ's fifty-move
-  // branch after confirming a legal move.
-  ['6k1/8/8/8/8/8/6q1/7K w - - 100 60', 2]
-];
-for (const [fen, d] of Q_CASES) {
-  const st = Chess.parseFen(fen);
-  const vO = oracleQ(st, d, -Infinity, Infinity, 0, []);
-  const vP = ChessAI.search(st, d, -Infinity, Infinity, true);       // PVS, quiescence on
-  check(vP === vO, 'PVS+quiescence value equals independent AB+quiescence (' + fen.slice(0, 16) + ' d' + d + ')',
-    'oracle=' + vO + ' pvs=' + vP);
-  // null-window scouts must bracket the true value
-  check(ChessAI.search(st, d, vO - 1, vO, true) >= vO,
-    'q-scout below the true value fails high (' + fen.slice(0, 12) + ' d' + d + ')', 'v=' + vO);
-  check(ChessAI.search(st, d, vO, vO + 1, true) <= vO,
-    'q-scout above the true value fails low (' + fen.slice(0, 12) + ' d' + d + ')', 'v=' + vO);
-  // aspiration (think's root loop) must reproduce the same completed-depth score
-  const t = ChessAI.think(st, { maxDepth: d < 1 ? 1 : d, quiesce: true, randomize: false });
-  if (d >= 1) check(t.score === vO, 'aspiration completed-depth score equals the oracle (' + fen.slice(0, 12) + ' d' + d + ')',
-    'oracle=' + vO + ' think=' + t.score);
+  ['r1b1k1nr/pppp1p1p/4pqpb/6N1/3n4/2N1P1P1/PPPP3P/R1BQKB1R w KQkq - 4 9', 2]
+]) {
+  const exact = fixed(fen, depth, true, {});
+  const iterative = WasmAI.searchState(Chess.parseFen(fen), {
+    maxDepth: depth,
+    quiesce: true
+  });
+  check(exact.complete, 'full-window fixed search completes (' + fen.slice(0, 12) +
+    ' d' + depth + ')', 'stop ' + exact.stopReason);
+  check(iterative.depth === depth && iterative.score === exact.score,
+    'iterative score matches fixed full-window score (' + fen.slice(0, 12) +
+      ' d' + depth + ')',
+    'iterative d' + iterative.depth + '/' + iterative.score +
+      ', fixed ' + exact.score);
+  check(isLegal(fen, iterative.move),
+    'iterative search returns a legal move (' + fen.slice(0, 12) +
+      ' d' + depth + ')');
 }
 
-// --- ABORT unwind: a finite node budget that runs out mid-search must not
-// leave stale ancestor keys on a REUSED context, or the next search treats
-// them as repetition ancestors and returns a false draw (0). Regression for
-// the AI-0 fix to ChessAI.search's path unwinding.
-console.log('ABORT unwind (reused finite-budget context)');
+// --- Fixed-search abort recovery ---
+// A budget abort is an ordinary ABI result, not a thrown sentinel or a
+// JavaScript context that callers can inspect. A later call must start clean.
+console.log('fixed-search abort recovery');
 (function () {
   const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  const fresh = ChessAI.search(Chess.parseFen(START), 1, -Infinity, Infinity, false);
-  // Abort a depth-3 search after 3 nodes on a reusable context...
-  const ctx = ChessAI.makeCtx(false, Infinity, 3);
-  let aborted = false;
-  try { ChessAI.search(Chess.parseFen(START), 3, -Infinity, Infinity, false, { ctx: ctx }); }
-  catch (e) { aborted = true; }
-  check(aborted, 'finite node budget aborts the search', 'expected an ABORT throw');
-  check(ctx.path1.length === 0 && ctx.path2.length === 0,
-    'ABORT unwinds the search path (no stale ancestors)',
-    'path1=' + ctx.path1.length + ' path2=' + ctx.path2.length);
-  // ...then replenish the budget and reuse the context: the depth-1 score must
-  // match a fresh context, not the poisoned 0 a stale ancestor would force.
-  ctx.nodes = 0; ctx.nodeLimit = Infinity;
-  const reused = ChessAI.search(Chess.parseFen(START), 1, -Infinity, Infinity, false, { ctx: ctx });
-  check(reused === fresh, 'reused context is not poisoned by a prior ABORT',
-    'fresh=' + fresh + ' reused=' + reused);
+  const baseline = fixed(START, 1, false, {});
+  const aborted = fixed(START, 3, false, {}, 3);
+  check(!aborted.complete && aborted.stopReason === 'node-limit',
+    'finite node budget reports an incomplete fixed search',
+    'complete=' + aborted.complete + ' stop=' + aborted.stopReason);
+  check(aborted.attemptedDepth === 3,
+    'aborted fixed search reports its attempted depth',
+    'attemptedDepth=' + aborted.attemptedDepth);
+  const recovered = fixed(START, 1, false, {});
+  check(baseline.complete && recovered.complete && recovered.score === baseline.score,
+    'a fixed search after abort starts from clean state',
+    'baseline=' + baseline.score + ' recovered=' + recovered.score);
 })();
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

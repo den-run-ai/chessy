@@ -3,6 +3,9 @@
 # revision: applying the exact gate label to an eligible candidate pull
 # request launches one predeclared
 # 10,000-node, 100-opening x 4-seed x both-colours (800-game) experiment.
+# The trusted ordinary-search harness binds an ABI-v2 candidate to the frozen
+# ABI-v1 reference; the production ABI-v2 loader is not used by the
+# cross-revision match.
 # Merely adding this workflow to the shared harness does not launch the match.
 #
 # Never rerun a valid statistical miss or selected shards. Change the candidate
@@ -150,7 +153,8 @@ jobs:
             test/ai-match-openings.js \
             test/match-stats.js \
             assets/engine.js \
-            assets/wasm-engine.js; do
+            experiments/wasm/bench.js \
+            test/fixtures/wasm-r69-signatures.json; do
             if [ ! -f "$HARNESS_DIR/$file" ]; then
               echo "::error::Trusted harness is missing $file"
               exit 2

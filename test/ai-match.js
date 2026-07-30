@@ -22,9 +22,10 @@
  *   cap. Other fixed-node configurations have a distinct diagnostic protocol
  *   identity. Draft equal-time diagnostic: the same openings x 1 seed x both
  *   colors = 200 games at the production 5000ms budget.
- *   Both engines get an identically seeded Math.random per game. Fixed-node
- *   results are exactly reproducible; equal-time runs preserve root variety
- *   but naturally retain scheduler/JIT timing noise. Equal-time records do not
+ *   Rust/WASM root ordering is deterministic. Fixed-node results are exactly
+ *   reproducible; equal-time runs naturally retain scheduler/runtime timing
+ *   noise. Seed slots remain frozen protocol and shard coordinates, but the
+ *   WASM search ABI does not accept a JavaScript random seed. Equal-time records do not
  *   yet contain per-move timing evidence, so they are not independently
  *   auditable and cannot replace the formal fixed-node merge gate.
  *
@@ -50,12 +51,11 @@
  *                    aggregation may pass or fail the strict-strength gate.
  */
 'use strict';
-const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const cp = require('child_process');
 require('../assets/engine.js'); // arbiter rules (host realm)
 const Chess = globalThis.Chess;
+const WasmHarness = require('./wasm-harness-engine');
 const { clusterStats } = require('./match-stats'); // opening-cluster verdict
 const MatchProtocol = require('./ai-match-protocol');
 const OPENINGS = require('./ai-match-openings');
@@ -81,7 +81,8 @@ if (!BASE) {
 // Positive SAFE integer: budget/ply/seed/pair counts index integer loops, so a
 // decimal (`--plies 1.1` -> 2 plies) or non-numeric value silently runs a
 // different experiment than requested. A non-numeric --nodes would become
-// NaN, and `ctx.nodes >= NaN` is always false — turning that budget OFF and
+// NaN, and a native node-limit comparison against NaN would turn that budget
+// OFF and
 // letting the search run toward depth 30 unbounded. Number.isSafeInteger (not
 // just isInteger) also rejects magnitudes past 2^53, where integer loops can
 // stop advancing (float rounding) and spin forever.
@@ -182,28 +183,8 @@ const OPEN_BASE = (function () {
 })();
 const OPEN_COUNT = args.includes('--opencount') ? posInt('opencount', 0) : Infinity;
 
-const MK_RAND = 'function __mkRand(seed) {\n' +
-  '  return function () {\n' +
-  '    seed = (seed + 0x6D2B79F5) | 0;\n' +
-  '    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);\n' +
-  '    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;\n' +
-  '    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;\n' +
-  '  };\n' +
-  '}';
-
 function loadEngine(ref) {
-  const read = function (file) {
-    if (!ref) return fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-    // execFileSync (argv array, no shell) so a ref with shell metacharacters
-    // can't be interpolated into a command line.
-    return cp.execFileSync('git', ['show', ref + ':' + file],
-      { encoding: 'utf8', maxBuffer: 1 << 24, cwd: path.join(__dirname, '..') });
-  };
-  const ctx = vm.createContext({ console: console });
-  vm.runInContext(MK_RAND, ctx);
-  vm.runInContext(read('assets/engine.js'), ctx, { filename: 'engine.js' });
-  vm.runInContext(read('assets/ai.js'), ctx, { filename: 'ai.js' });
-  return ctx;
+  return WasmHarness.loadRevision(ref);
 }
 
 // Match an opening SAN token to its move. Trailing check/mate marks are
@@ -232,10 +213,10 @@ function openingState(sans) {
 // last COMPLETED iteration reached depth >= 5.
 let candMoves = 0, candDepthGe5 = 0;
 const candDepths = {}; // completed-depth histogram: depth -> count
+let cand = null;
 
 // One game: engines[0] plays White. Returns 1 / 0.5 / 0 from White's view.
-function playGame(engines, sans, seed) {
-  for (const ctx of engines) vm.runInContext('Math.random = __mkRand(' + seed + ')', ctx);
+function playGame(engines, sans) {
   let state = openingState(sans);
   let plies = 0;
   while (plies < MAX_PLIES) {
@@ -243,16 +224,15 @@ function playGame(engines, sans, seed) {
     if (status.over) {
       return status.result === '1-0' ? 1 : status.result === '0-1' ? 0 : 0.5;
     }
-    const ctx = engines[state.turn === 'w' ? 0 : 1];
+    const engine = engines[state.turn === 'w' ? 0 : 1];
     const searchOpts = {
       maxDepth: 30, quiesce: true, positions: state.positions
     };
     if (TIME_MS == null) searchOpts.nodeLimit = NODES;
     else searchOpts.timeMs = TIME_MS;
-    const r = ctx.ChessAI.think(
-      ctx.Chess.parseFen(Chess.toFen(state)), searchOpts);
+    const r = engine.search(Chess.toFen(state), searchOpts);
     // `cand` is the working-tree engine (assigned below, before any game runs).
-    if (ctx === cand) {
+    if (engine === cand) {
       candMoves++;
       const dp = r.depth || 0;
       candDepths[dp] = (candDepths[dp] || 0) + 1;
@@ -281,9 +261,9 @@ function playGame(engines, sans, seed) {
 // node budget, it doesn't support the per-move budget and the match would be
 // unfair — refuse loudly.
 const PROBE_NODES = 3000;
-function assertBounded(ctx, label) {
-  const probe = ctx.ChessAI.think(ctx.Chess.parseFen(Chess.START_FEN),
-    { maxDepth: 30, nodeLimit: PROBE_NODES, timeMs: 5000, quiesce: true, randomize: false });
+function assertBounded(engine, label) {
+  const probe = engine.search(Chess.START_FEN,
+    { maxDepth: 30, nodeLimit: PROBE_NODES, timeMs: 5000, quiesce: true });
   // A compliant engine evaluates AT MOST the requested budget (the node-budget
   // fix makes it exactly nodeLimit). Allow only a 1-node slack for an older
   // ref's documented off-by-one; anything beyond that means the ref enforces
@@ -299,42 +279,22 @@ function assertBounded(ctx, label) {
   }
 }
 
-// Equal-time fairness has the symmetric compatibility requirement: both refs
-// must actually stop on timeMs. A per-VM fake clock makes the probe independent
-// of host speed: call 1 starts at 1000, every later call is the exact deadline.
-// maxDepth stays finite so a ref that ignores time returns and is rejected.
-// Legacy main honors the deadline but predates stopReason telemetry, so an
-// early abort is authoritative and a missing reason is accepted.
+// Equal-time fairness has the symmetric compatibility requirement: both WASM
+// revisions must actually stop on timeMs and report that stop reason.
 const PROBE_TIME_MS = 5;
-const PROBE_TIME_DEPTH = 2;
+const PROBE_TIME_DEPTH = 30;
 const PROBE_TIME_FEN =
   'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1';
-function assertTimed(ctx, label) {
-  vm.runInContext(
-    'globalThis.__matchRealNow = Date.now;' +
-    'globalThis.__matchClockCalls = 0;' +
-    'Date.now = function () {' +
-    ' return globalThis.__matchClockCalls++ === 0 ? 1000 : 1005;' +
-    '};', ctx);
-  let probe;
-  try {
-    probe = ctx.ChessAI.think(ctx.Chess.parseFen(PROBE_TIME_FEN),
-      { maxDepth: PROBE_TIME_DEPTH, timeMs: PROBE_TIME_MS,
-        quiesce: true, randomize: false });
-  } finally {
-    vm.runInContext(
-      'Date.now = globalThis.__matchRealNow;' +
-      'delete globalThis.__matchRealNow;' +
-      'delete globalThis.__matchClockCalls;', ctx);
-  }
-  const reasonKnown = probe && probe.stopReason != null;
+function assertTimed(engine, label) {
+  const probe = engine.search(PROBE_TIME_FEN,
+    { maxDepth: PROBE_TIME_DEPTH, timeMs: PROBE_TIME_MS, quiesce: true });
   if (!probe || !Number.isInteger(probe.depth) ||
       probe.depth >= PROBE_TIME_DEPTH ||
-      (reasonKnown && probe.stopReason !== 'time-limit')) {
+      probe.stopReason !== 'time-limit') {
     console.error('engine "' + label + '" does not honor/report timeMs (returned d' +
       (probe && probe.depth) + ', stopReason ' +
       JSON.stringify(probe && probe.stopReason) +
-      ' for a deterministic ' + PROBE_TIME_MS + 'ms probe).');
+      ' for a ' + PROBE_TIME_MS + 'ms probe).');
     process.exit(3);
   }
 }
@@ -387,102 +347,109 @@ if (PROTOCOL.formal && CANDIDATE_SHA === BASE_SHA) {
   console.error('formal fixed-node gate requires distinct candidate and base commits');
   process.exit(2);
 }
-const cand = loadEngine(null);
-const base = loadEngine(BASE);
-if (TIME_MS == null) {
-  assertBounded(cand, 'candidate (working tree)');
-  assertBounded(base, BASE);
-} else {
-  assertTimed(cand, 'candidate (working tree)');
-  assertTimed(base, BASE);
-}
+async function main() {
+  cand = await loadEngine(null);
+  const base = await loadEngine(BASE);
+  if (TIME_MS == null) {
+    assertBounded(cand, 'candidate (working tree)');
+    assertBounded(base, BASE);
+  } else {
+    assertTimed(cand, 'candidate (working tree)');
+    assertTimed(base, BASE);
+  }
 
-let w = 0, d = 0, l = 0, games = 0;
-const pairScores = []; // candidate score per (opening, seed) pair, in [0, 1]
-const records = [];    // structured per-pair records for clustering/aggregation
-const t0 = Date.now();
-outer:
-for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
-  for (let o = OPEN_LO; o < OPEN_HI; o++) {
-    if (pairScores.length >= PAIRS_LIMIT) break outer;
-    const seed = MatchProtocol.deriveGameSeed(o, s);
-    let pair = 0;
-    // candidate as White, then colors swapped — same opening, same seed.
-    const asWhite = playGame([cand, base], OPENINGS[o][1], seed);
-    const asBlack = 1 - playGame([base, cand], OPENINGS[o][1], seed);
-    for (const sc of [asWhite, asBlack]) {
-      games++;
-      if (sc === 1) w++; else if (sc === 0) l++; else d++;
-      pair += sc;
+  let w = 0, d = 0, l = 0, games = 0;
+  const pairScores = []; // candidate score per (opening, seed) pair, in [0, 1]
+  const records = [];    // structured per-pair records for clustering/aggregation
+  const t0 = Date.now();
+  outer:
+  for (let s = SEED_BASE; s < SEED_BASE + SEEDS; s++) {
+    for (let o = OPEN_LO; o < OPEN_HI; o++) {
+      if (pairScores.length >= PAIRS_LIMIT) break outer;
+      const seed = MatchProtocol.deriveGameSeed(o, s);
+      let pair = 0;
+      // Candidate as White, then colors swapped from the same opening.
+      const asWhite = playGame([cand, base], OPENINGS[o][1]);
+      const asBlack = 1 - playGame([base, cand], OPENINGS[o][1]);
+      for (const sc of [asWhite, asBlack]) {
+        games++;
+        if (sc === 1) w++; else if (sc === 0) l++; else d++;
+        pair += sc;
+      }
+      pairScores.push(pair / 2);
+      // `op` is the frozen opening index — the cluster unit. `seed` is the seed
+      // slot (shard coordinate); `gseed` the derived game seed. Both game scores
+      // are kept from the candidate's view so any verdict can be recomputed.
+      records.push({ op: o, name: OPENINGS[o][0], seed: s, gseed: seed,
+        white: asWhite, black: asBlack, pair: pair / 2 });
+      process.stderr.write('\r' + games + ' games (' + OPENINGS[o][0] + ', seed ' + s + ')  ' +
+        'W' + w + ' D' + d + ' L' + l + '  ' + Math.round((Date.now() - t0) / 1000) + 's   ');
     }
-    pairScores.push(pair / 2);
-    // `op` is the frozen opening index — the cluster unit. `seed` is the seed
-    // slot (shard coordinate); `gseed` the derived game seed. Both game scores
-    // are kept from the candidate's view so any verdict can be recomputed.
-    records.push({ op: o, name: OPENINGS[o][0], seed: s, gseed: seed,
-      white: asWhite, black: asBlack, pair: pair / 2 });
-    process.stderr.write('\r' + games + ' games (' + OPENINGS[o][0] + ', seed ' + s + ')  ' +
-      'W' + w + ' D' + d + ' L' + l + '  ' + Math.round((Date.now() - t0) / 1000) + 's   ');
+  }
+  process.stderr.write('\n');
+
+  const cs = clusterStats(records);
+  function printVerdict(stats) {
+    if (PROTOCOL.formal) {
+      console.log('FORMAL SHARD: no verdict — strict-strength verdict is reserved ' +
+        'for the complete 800-game aggregation');
+      return;
+    }
+    console.log('RESULT: ' + stats.verdict);
+  }
+
+  // Completed-depth histogram and the fraction of candidate moves returned from a
+  // depth >= 5 search — search-depth telemetry for calibrating the chosen budget.
+  const ge5Pct = candMoves ? (100 * candDepthGe5 / candMoves) : 0;
+
+  // Canonical artifact metadata. A dirty local tree remains the caller's
+  // responsibility; workflow checkouts are clean and therefore identified by
+  // CANDIDATE_SHA exactly.
+  console.log('protocol-id: ' + PROTOCOL_ID);
+  console.log('acceptance-class: ' + PROTOCOL.acceptanceClass);
+  console.log('lower-bound-threshold: ' + PROTOCOL.lowerBoundThreshold);
+  console.log('candidate-sha: ' + CANDIDATE_SHA);
+  console.log('base-sha: ' + BASE_SHA);
+  console.log('budget-mode: ' + BUDGET_MODE);
+  console.log('budget-value: ' + BUDGET_VALUE);
+  console.log('max-plies: ' + MAX_PLIES);
+  console.log('openings-manifest-version: ' +
+    MatchProtocol.OPENINGS_MANIFEST_VERSION);
+  console.log('openings-manifest-sha256: ' +
+    MatchProtocol.OPENINGS_MANIFEST_SHA256);
+  console.log('node-runtime: ' + process.version);
+  if (WORKFLOW_RUN) console.log('workflow-run: ' + WORKFLOW_RUN);
+  console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
+  console.log('records: ' + JSON.stringify(records));        // structured, for the cluster aggregator
+  console.log('openings-total: ' + OPENINGS.length);         // opening-list size (aggregator cross-check)
+  console.log('shard: openings [' + OPEN_LO + ',' + OPEN_HI + ') seeds [' +
+    SEED_BASE + ',' + (SEED_BASE + SEEDS) + ')');
+  console.log('depth-dist: ' + JSON.stringify(candDepths));  // completed-depth histogram (candidate moves)
+  console.log('completed-depth: ' + candDepthGe5 + '/' + candMoves +
+    ' candidate moves reached depth >= 5 (' + ge5Pct.toFixed(1) + '%)');
+  console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + BUDGET_LABEL);
+  // The verdict is the opening-CLUSTER one-sided non-inferiority bound (mean and
+  // 95% lower bound over the per-opening means, NOT the raw pairs — see
+  // test/match-stats.js). A single --seeds 1 shard has one pair per opening, so
+  // its cluster bound equals the pair bound. The authoritative formal result is
+  // the aggregate of all 800 fixed-node games. Equal-time aggregation remains
+  // diagnostic. Both are computed from all protocol shards' `records:` with
+  // test/ai-match-agg.js.
+  if (cs.nClusters < 2) {
+    console.log('W ' + w + ' / D ' + d + ' / L ' + l +
+      (cs.nClusters ? '  score ' + (cs.mean * 100).toFixed(1) + '%' : '') +
+      '  (' + cs.nClusters + ' opening' + (cs.nClusters === 1 ? '' : 's') + ')');
+    printVerdict(cs);
+  } else {
+    console.log('W ' + w + ' / D ' + d + ' / L ' + l +
+      '  score ' + (cs.mean * 100).toFixed(2) + '%' +
+      '  one-sided 95% lower bound ' + (cs.lo95 * 100).toFixed(2) + '%' +
+      '  over ' + cs.nClusters + ' openings (' + cs.nPairs + ' pairs)');
+    printVerdict(cs);
   }
 }
-process.stderr.write('\n');
 
-const cs = clusterStats(records);
-function printVerdict(stats) {
-  if (PROTOCOL.formal) {
-    console.log('FORMAL SHARD: no verdict — strict-strength verdict is reserved ' +
-      'for the complete 800-game aggregation');
-    return;
-  }
-  console.log('RESULT: ' + stats.verdict);
-}
-
-// Completed-depth histogram and the fraction of candidate moves returned from a
-// depth >= 5 search — search-depth telemetry for calibrating the chosen budget.
-const ge5Pct = candMoves ? (100 * candDepthGe5 / candMoves) : 0;
-
-// Canonical artifact metadata. A dirty local tree remains the caller's
-// responsibility; workflow checkouts are clean and therefore identified by
-// CANDIDATE_SHA exactly.
-console.log('protocol-id: ' + PROTOCOL_ID);
-console.log('acceptance-class: ' + PROTOCOL.acceptanceClass);
-console.log('lower-bound-threshold: ' + PROTOCOL.lowerBoundThreshold);
-console.log('candidate-sha: ' + CANDIDATE_SHA);
-console.log('base-sha: ' + BASE_SHA);
-console.log('budget-mode: ' + BUDGET_MODE);
-console.log('budget-value: ' + BUDGET_VALUE);
-console.log('max-plies: ' + MAX_PLIES);
-console.log('openings-manifest-version: ' +
-  MatchProtocol.OPENINGS_MANIFEST_VERSION);
-console.log('openings-manifest-sha256: ' +
-  MatchProtocol.OPENINGS_MANIFEST_SHA256);
-console.log('node-runtime: ' + process.version);
-if (WORKFLOW_RUN) console.log('workflow-run: ' + WORKFLOW_RUN);
-console.log('pair-scores: ' + JSON.stringify(pairScores)); // for aggregating sharded runs
-console.log('records: ' + JSON.stringify(records));        // structured, for the cluster aggregator
-console.log('openings-total: ' + OPENINGS.length);         // opening-list size (aggregator cross-check)
-console.log('shard: openings [' + OPEN_LO + ',' + OPEN_HI + ') seeds [' +
-  SEED_BASE + ',' + (SEED_BASE + SEEDS) + ')');
-console.log('depth-dist: ' + JSON.stringify(candDepths));  // completed-depth histogram (candidate moves)
-console.log('completed-depth: ' + candDepthGe5 + '/' + candMoves + ' candidate moves reached depth >= 5 (' +
-  ge5Pct.toFixed(1) + '%)');
-console.log('candidate vs ' + BASE + ': ' + games + ' games, ' + BUDGET_LABEL);
-// The verdict is the opening-CLUSTER one-sided non-inferiority bound (mean and
-// 95% lower bound over the per-opening means, NOT the raw pairs — see
-// test/match-stats.js). A single --seeds 1 shard has one pair per opening, so
-// its cluster bound equals the pair bound. The authoritative formal result is
-// the aggregate of all 800 fixed-node games. Equal-time aggregation remains
-// diagnostic. Both are computed from all protocol shards' `records:` with
-// test/ai-match-agg.js.
-if (cs.nClusters < 2) {
-  console.log('W ' + w + ' / D ' + d + ' / L ' + l +
-    (cs.nClusters ? '  score ' + (cs.mean * 100).toFixed(1) + '%' : '') +
-    '  (' + cs.nClusters + ' opening' + (cs.nClusters === 1 ? '' : 's') + ')');
-  printVerdict(cs);
-} else {
-  console.log('W ' + w + ' / D ' + d + ' / L ' + l +
-    '  score ' + (cs.mean * 100).toFixed(2) + '%' +
-    '  one-sided 95% lower bound ' + (cs.lo95 * 100).toFixed(2) + '%' +
-    '  over ' + cs.nClusters + ' openings (' + cs.nPairs + ' pairs)');
-  printVerdict(cs);
-}
+main().catch(function (error) {
+  console.error('FAIL: ' + (error && error.stack || error));
+  process.exitCode = 1;
+});

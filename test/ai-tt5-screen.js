@@ -8,7 +8,7 @@
  * never as a changed tree at equal depth.
  *
  * Method: candidate and base engines live in separate persistent Node
- * processes (own V8 heap/JIT, see ai-tt5-worker.js). Per position both
+ * processes (own WASM instance and linear memory, see ai-tt5-worker.js). Per position both
  * engines get a symmetric warm-up think, then --pairs order-balanced AB/BA
  * rounds of one timed think each; the balanced order cancels slow host
  * drift. Timed runs keep scheduler/JIT noise, so completed-depth pair tallies
@@ -148,7 +148,7 @@ function startWorker(ref) {
   });
   return {
     ready: ready,
-    think: async function (fen, timeMs, seed) {
+    think: async function (fen, timeMs) {
       await ready;
       if (terminalError) throw terminalError;
       return new Promise(function (resolve, reject) {
@@ -161,7 +161,7 @@ function startWorker(ref) {
         }, WORKER_TIMEOUT_MS);
         pending.set(id, { resolve: resolve, reject: reject, timer: timer });
         try {
-          child.send({ type: 'think', id: id, fen: fen, timeMs: timeMs, seed: seed },
+          child.send({ type: 'think', id: id, fen: fen, timeMs: timeMs },
             function (error) {
               if (!error) return;
               const request = pending.get(id);
@@ -214,28 +214,26 @@ async function main() {
   let logNpsSum = 0, candDepthSum = 0, baseDepthSum = 0;
   const rows = [];
   const overshoots = { cand: [], base: [] };
-  const seedBase = 0xC0FFEE;
   try {
     await Promise.all([cand.ready, base.ready]);
     for (let positionIndex = 0; positionIndex < POSITIONS.length; positionIndex++) {
       const [name, fen] = POSITIONS[positionIndex];
       if (positionIndex % 2 === 0) {
-        await cand.think(fen, WARM_MS, seedBase);
-        await base.think(fen, WARM_MS, seedBase);
+        await cand.think(fen, WARM_MS);
+        await base.think(fen, WARM_MS);
       } else {
-        await base.think(fen, WARM_MS, seedBase);
-        await cand.think(fen, WARM_MS, seedBase);
+        await base.think(fen, WARM_MS);
+        await cand.think(fen, WARM_MS);
       }
       for (let round = 0; round < PAIRS; round++) {
-        const seed = seedBase + round;
         const candFirst = (positionIndex + round) % 2 === 0;
         let c, b;
         if (candFirst) {
-          c = await cand.think(fen, TIME_MS, seed);
-          b = await base.think(fen, TIME_MS, seed);
+          c = await cand.think(fen, TIME_MS);
+          b = await base.think(fen, TIME_MS);
         } else {
-          b = await base.think(fen, TIME_MS, seed);
-          c = await cand.think(fen, TIME_MS, seed);
+          b = await base.think(fen, TIME_MS);
+          c = await cand.think(fen, TIME_MS);
         }
         if (c.depth > b.depth) deeper++;
         else if (c.depth === b.depth) tied++;

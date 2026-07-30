@@ -1,0 +1,2647 @@
+{
+  "schema": 1,
+  "source": "r69 shipped Rust/WASM search contract",
+  "sourceCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+  "sourceWasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
+  "fields": [
+    "move",
+    "score",
+    "depth",
+    "attemptedDepth",
+    "nodes",
+    "qnodes",
+    "cutoffs",
+    "researches",
+    "stopReason"
+  ],
+  "cases": [
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6e4",
+        "score": -131,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b5",
+        "score": 123,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 146,
+        "qnodes": 0,
+        "cutoffs": 60,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6e4",
+        "score": -153,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1101,
+        "qnodes": 0,
+        "cutoffs": 191,
+        "researches": 5,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b5",
+        "score": 61,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1781,
+        "researches": 14,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f8c5",
+        "score": -42,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 111,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b5",
+        "score": -106,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1064,
+        "qnodes": 794,
+        "cutoffs": 56,
+        "researches": 11,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b5",
+        "score": -106,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2786,
+        "qnodes": 1644,
+        "cutoffs": 108,
+        "researches": 11,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b5",
+        "score": -106,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 3247,
+        "cutoffs": 378,
+        "researches": 13,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3e5",
+        "score": 131,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b4",
+        "score": -123,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 146,
+        "qnodes": 0,
+        "cutoffs": 60,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3e5",
+        "score": 153,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1101,
+        "qnodes": 0,
+        "cutoffs": 191,
+        "researches": 5,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b4",
+        "score": -61,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1844,
+        "researches": 11,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f1c4",
+        "score": 42,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 111,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b4",
+        "score": 106,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1176,
+        "qnodes": 917,
+        "cutoffs": 56,
+        "researches": 10,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b4",
+        "score": 106,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2910,
+        "qnodes": 1781,
+        "cutoffs": 108,
+        "researches": 10,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b4",
+        "score": 106,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 3327,
+        "cutoffs": 346,
+        "researches": 11,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4c6",
+        "score": 435,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 46,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4c6",
+        "score": 27,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 220,
+        "qnodes": 0,
+        "cutoffs": 91,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4b5",
+        "score": 139,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2460,
+        "qnodes": 0,
+        "cutoffs": 257,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4b5",
+        "score": 139,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1632,
+        "researches": 4,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1e1",
+        "score": 57,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 606,
+        "qnodes": 556,
+        "cutoffs": 0,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1d1",
+        "score": 29,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 3292,
+        "qnodes": 2973,
+        "cutoffs": 44,
+        "researches": 12,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1d1",
+        "score": 41,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 11922,
+        "qnodes": 9135,
+        "cutoffs": 187,
+        "researches": 14,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1d1",
+        "score": 29,
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4455,
+        "cutoffs": 95,
+        "researches": 14,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5c3",
+        "score": -435,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 46,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5c3",
+        "score": -27,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 220,
+        "qnodes": 0,
+        "cutoffs": 91,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5b4",
+        "score": -139,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2435,
+        "qnodes": 0,
+        "cutoffs": 257,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5b4",
+        "score": -139,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1646,
+        "researches": 4,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8e8",
+        "score": -57,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 271,
+        "qnodes": 222,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8d8",
+        "score": -29,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1943,
+        "qnodes": 1635,
+        "cutoffs": 44,
+        "researches": 10,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8d8",
+        "score": -41,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 7917,
+        "qnodes": 5373,
+        "cutoffs": 139,
+        "researches": 13,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8d8",
+        "score": -29,
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 3757,
+        "cutoffs": 110,
+        "researches": 13,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3e5",
+        "score": 265,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 35,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3g5",
+        "score": -41,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 178,
+        "qnodes": 0,
+        "cutoffs": 70,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1g5",
+        "score": 335,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1923,
+        "qnodes": 0,
+        "cutoffs": 385,
+        "researches": 12,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1g5",
+        "score": 335,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1900,
+        "researches": 13,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1e3",
+        "score": 190,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 165,
+        "qnodes": 126,
+        "cutoffs": 0,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1e3",
+        "score": 156,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 843,
+        "qnodes": 640,
+        "cutoffs": 34,
+        "researches": 7,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f3g5",
+        "score": 189,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 5857,
+        "qnodes": 4044,
+        "cutoffs": 170,
+        "researches": 16,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1e3",
+        "score": 156,
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 3625,
+        "cutoffs": 157,
+        "researches": 16,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6e4",
+        "score": -265,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 35,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6g4",
+        "score": 41,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 178,
+        "qnodes": 0,
+        "cutoffs": 70,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8g4",
+        "score": -335,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2084,
+        "qnodes": 0,
+        "cutoffs": 386,
+        "researches": 18,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8g4",
+        "score": -335,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1831,
+        "researches": 19,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8e6",
+        "score": -190,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 124,
+        "qnodes": 86,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8e6",
+        "score": -156,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 907,
+        "qnodes": 689,
+        "cutoffs": 34,
+        "researches": 9,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f6g4",
+        "score": -189,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 6072,
+        "qnodes": 4108,
+        "cutoffs": 181,
+        "researches": 17,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8e6",
+        "score": -156,
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 3582,
+        "cutoffs": 165,
+        "researches": 17,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3f6",
+        "score": 484,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 49,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 231,
+        "qnodes": 0,
+        "cutoffs": 96,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 469,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2655,
+        "qnodes": 0,
+        "cutoffs": 229,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 469,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1508,
+        "researches": 4,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 8428,
+        "qnodes": 8380,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 18861,
+        "qnodes": 18680,
+        "cutoffs": 47,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 8,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 39650,
+        "qnodes": 36715,
+        "cutoffs": 183,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "depth": 0,
+        "attemptedDepth": 1,
+        "nodes": 5000,
+        "qnodes": 4996,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6f3",
+        "score": -484,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 49,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 231,
+        "qnodes": 0,
+        "cutoffs": 96,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -469,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2702,
+        "qnodes": 0,
+        "cutoffs": 267,
+        "researches": 5,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -469,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1522,
+        "researches": 5,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 9050,
+        "qnodes": 9002,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 19969,
+        "qnodes": 19786,
+        "cutoffs": 47,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -8,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 41170,
+        "qnodes": 38179,
+        "cutoffs": 183,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "depth": 0,
+        "attemptedDepth": 1,
+        "nodes": 5000,
+        "qnodes": 4996,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 361,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 16,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 354,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 61,
+        "qnodes": 0,
+        "cutoffs": 13,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 357,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 316,
+        "qnodes": 0,
+        "cutoffs": 42,
+        "researches": 7,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1d1",
+        "score": 350,
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 2026,
+        "researches": 17,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 361,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 43,
+        "qnodes": 27,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 357,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 191,
+        "qnodes": 130,
+        "cutoffs": 13,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1d1",
+        "score": 357,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 794,
+        "qnodes": 455,
+        "cutoffs": 44,
+        "researches": 9,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1d1",
+        "score": 361,
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 5000,
+        "qnodes": 2595,
+        "cutoffs": 495,
+        "researches": 13,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -360,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 16,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -354,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 59,
+        "qnodes": 0,
+        "cutoffs": 13,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -357,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 329,
+        "qnodes": 0,
+        "cutoffs": 46,
+        "researches": 5,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8d8",
+        "score": -361,
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1774,
+        "researches": 15,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -360,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 47,
+        "qnodes": 31,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -357,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 215,
+        "qnodes": 154,
+        "cutoffs": 13,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8d8",
+        "score": -357,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 913,
+        "qnodes": 538,
+        "cutoffs": 49,
+        "researches": 9,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8d8",
+        "score": -361,
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 5000,
+        "qnodes": 2724,
+        "cutoffs": 474,
+        "researches": 12,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 259,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 17,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 257,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 61,
+        "qnodes": 0,
+        "cutoffs": 16,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 265,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 425,
+        "qnodes": 0,
+        "cutoffs": 42,
+        "researches": 7,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 255,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 697,
+        "researches": 18,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 259,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 34,
+        "qnodes": 17,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 257,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 176,
+        "qnodes": 112,
+        "cutoffs": 16,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 265,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 867,
+        "qnodes": 445,
+        "cutoffs": 39,
+        "researches": 7,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 256,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 2664,
+        "cutoffs": 633,
+        "researches": 22,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -259,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 17,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -257,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 58,
+        "qnodes": 0,
+        "cutoffs": 16,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -265,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 407,
+        "qnodes": 0,
+        "cutoffs": 39,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -254,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 736,
+        "researches": 10,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -259,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 34,
+        "qnodes": 17,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -257,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 134,
+        "qnodes": 76,
+        "cutoffs": 16,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -265,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 793,
+        "qnodes": 386,
+        "cutoffs": 39,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -256,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 2369,
+        "cutoffs": 550,
+        "researches": 13,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 624,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 0,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 57,
+        "qnodes": 0,
+        "cutoffs": 23,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 965,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 237,
+        "qnodes": 0,
+        "cutoffs": 55,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 1018,
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1464,
+        "researches": 11,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 624,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 18,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 965,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 227,
+        "qnodes": 149,
+        "cutoffs": 34,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 965,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 560,
+        "qnodes": 316,
+        "cutoffs": 53,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 980,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 3209,
+        "cutoffs": 441,
+        "researches": 8,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -624,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": 0,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 57,
+        "qnodes": 0,
+        "cutoffs": 23,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -965,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 237,
+        "qnodes": 0,
+        "cutoffs": 55,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -1018,
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1521,
+        "researches": 15,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -624,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 18,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -965,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 218,
+        "qnodes": 140,
+        "cutoffs": 34,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -965,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 542,
+        "qnodes": 298,
+        "cutoffs": 53,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -980,
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 3096,
+        "cutoffs": 383,
+        "researches": 9,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": -2,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 7,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 26,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 2,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 81,
+        "qnodes": 0,
+        "cutoffs": 12,
+        "researches": 5,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "depth": 7,
+        "attemptedDepth": 8,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 2022,
+        "researches": 28,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": -2,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 14,
+        "qnodes": 7,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 47,
+        "qnodes": 21,
+        "cutoffs": 4,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 2,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 62,
+        "cutoffs": 12,
+        "researches": 5,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 1565,
+        "cutoffs": 1290,
+        "researches": 21,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 2,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 6,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 20,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": -2,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 81,
+        "qnodes": 0,
+        "cutoffs": 12,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "depth": 7,
+        "attemptedDepth": 8,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1909,
+        "researches": 33,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 2,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 6,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 35,
+        "qnodes": 15,
+        "cutoffs": 4,
+        "researches": 1,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": -2,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 62,
+        "cutoffs": 12,
+        "researches": 4,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 1607,
+        "cutoffs": 1232,
+        "researches": 27,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -245,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 41,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -56,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 263,
+        "qnodes": 0,
+        "cutoffs": 122,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6f4",
+        "score": -495,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2117,
+        "qnodes": 0,
+        "cutoffs": 378,
+        "researches": 9,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6f4",
+        "score": -495,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1812,
+        "researches": 11,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -245,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 128,
+        "qnodes": 87,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -235,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1385,
+        "qnodes": 1122,
+        "cutoffs": 40,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -234,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 7833,
+        "qnodes": 5768,
+        "cutoffs": 126,
+        "researches": 10,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -235,
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4340,
+        "cutoffs": 88,
+        "researches": 10,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 245,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 41,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 56,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 263,
+        "qnodes": 0,
+        "cutoffs": 122,
+        "researches": 3,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3f5",
+        "score": 495,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2143,
+        "qnodes": 0,
+        "cutoffs": 392,
+        "researches": 9,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3f5",
+        "score": 495,
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1830,
+        "researches": 11,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 245,
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 128,
+        "qnodes": 87,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 235,
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1474,
+        "qnodes": 1190,
+        "cutoffs": 40,
+        "researches": 6,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 234,
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 7827,
+        "qnodes": 5746,
+        "cutoffs": 126,
+        "researches": 13,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 235,
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4350,
+        "cutoffs": 87,
+        "researches": 13,
+        "stopReason": "node-limit"
+      }
+    }
+  ]
+}

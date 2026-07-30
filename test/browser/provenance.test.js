@@ -8,12 +8,7 @@ const fs = require('fs');
 require('./helper').run('provenance', async function (t) {
   const page = t.page, check = t.check;
 
-  // Keep this provenance round-trip on the explicit standard-engine opt-out:
-  // unlike the raw WASM ABI, JavaScript carries PV/root-order evidence. Easy's
-  // 10k-node budget keeps the integration test quick.
-  await page.evaluate(function () {
-    localStorage.setItem('chessy-wasm-engine-v1', 'off');
-  });
+  // Easy's 10k-node budget keeps the WASM-only integration test quick.
   await t.newGame({ mode: 'ai-w', difficulty: '1' });
   await page.waitForFunction(function () {
     const raw = localStorage.getItem('chessy-game-v1');
@@ -24,16 +19,11 @@ require('./helper').run('provenance', async function (t) {
 
   const live = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    const legalRoot = Chess.legalMoves(Chess.newGameState()).map(function (m) {
-      return Chess.sqName(m.from) + Chess.sqName(m.to) +
-        (m.promotion ? m.promotion.toLowerCase() : '');
-    }).sort();
     return {
       release: window.CHESSY_RELEASE,
       startedRelease: saved.startedRelease,
       entry: saved.history[0],
-      ai: saved.history[0].ai,
-      legalRoot: legalRoot
+      ai: saved.history[0].ai
     };
   });
   const ai = live.ai;
@@ -48,20 +38,17 @@ require('./helper').run('provenance', async function (t) {
     'live telemetry records node counts and an explicit score POV');
   check(ai.timeMs === 5000 && ai.nodeLimit === 10000 &&
       ai.nodes === ai.nodeLimit && ai.quiesce === true &&
-      ai.seed === null && ai.randomize === true,
+      ai.seed === null && ai.randomize === null &&
+      ai.engine === 'wasm' && ai.engineFallback === null,
     'live telemetry records the effective Play search config');
   check(Number.isFinite(ai.elapsedMs) && Number.isFinite(ai.searchMs) &&
       ai.elapsedMs >= ai.searchMs && ai.source === 'worker' &&
       ai.fallbackReason === null,
     'live telemetry separates end-to-end and engine search elapsed time');
-  check(Array.isArray(ai.pvUci) && ai.pvUci.length >= 1 &&
-      ai.pvSource === 'final-tt-best-effort',
-    'live telemetry carries a clearly labelled best-effort PV');
-  check(Array.isArray(ai.rootOrderUci) &&
-      new Set(ai.rootOrderUci).size === ai.rootOrderUci.length &&
-      JSON.stringify(ai.rootOrderUci.slice().sort()) ===
-        JSON.stringify(live.legalRoot),
-    'live telemetry captures a complete, unique legal-root permutation');
+  check(Array.isArray(ai.pvUci) && ai.pvUci.length === 0 &&
+      ai.pvSource === null &&
+      !Object.prototype.hasOwnProperty.call(ai, 'rootOrderUci'),
+    'Play telemetry does not invent evidence absent from the raw WASM result');
 
   // Loading a save used to collapse AI evidence back to depth/quiesce/ms.
   // Reload this in-progress game and require every forensic field to survive.
@@ -101,9 +88,10 @@ require('./helper').run('provenance', async function (t) {
     'archive record keeps release and per-ply AI evidence');
   check(archived.ai[0].nodes === ai.nodes &&
       archived.ai[0].attemptedDepth === ai.attemptedDepth &&
-      archived.ai[0].pvUci.join(' ') === ai.pvUci.join(' ') &&
-      archived.ai[0].rootOrderUci.join(' ') === ai.rootOrderUci.join(' '),
-    'archive record keeps counters, attempted draft, PV and root order');
+      archived.ai[0].engine === 'wasm' &&
+      archived.ai[0].pvUci.length === 0 &&
+      !Object.prototype.hasOwnProperty.call(archived.ai[0], 'rootOrderUci'),
+    'archive record keeps counters, attempted draft and honest WASM provenance');
 
   // Reload returns to Play, where the data controls are intentionally hidden.
   // Exercise the user-visible Review path before requesting the backup.
@@ -147,8 +135,7 @@ require('./helper').run('provenance', async function (t) {
     const wrongRootRow = wrongRoot.stores.games.find(function (g) {
       return g.id === 'telemetry-roundtrip';
     });
-    wrongRootRow.ai[0].rootOrderUci =
-      wrongRootRow.ai[0].rootOrderUci.slice(1);
+    wrongRootRow.ai[0].rootOrderUci = [];
     return {
       legacy: CoachStore.validateBackup(legacy),
       malformed: CoachStore.validateBackup(malformed),
@@ -203,8 +190,8 @@ require('./helper').run('provenance', async function (t) {
     nodes: reviewPgn.includes(ai.nodes + ' nodes'),
     stop: reviewPgn.includes('stop ' + ai.stopReason),
     release: reviewPgn.includes('release ' + ai.release),
-    roots: reviewPgn.includes('root-order ' + ai.rootOrderUci.join('/')),
-    pv: reviewPgn.includes('PV ' + ai.pvUci.join(' '))
+    engine: reviewPgn.includes('engine wasm'),
+    source: reviewPgn.includes('source worker')
   };
   check(Object.keys(reviewEvidence).every(function (key) {
     return reviewEvidence[key];

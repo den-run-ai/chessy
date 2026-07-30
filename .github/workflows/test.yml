@@ -117,7 +117,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # ai-match-cli.test.js checks the exact legacy-main time contract.
+          # ai-match-cli.test.js compares ABI-v2 against the frozen ABI-v1
+          # WASM baseline from the merge base.
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -130,8 +131,10 @@ jobs:
         run: node test/master-e4-regression.test.js
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
-      - name: Verify the shipped WASM engine asset (digest + exact JS parity)
+      - name: Verify the shipped WASM ABI and production asset
         run: node test/wasm-asset.test.js
+      - name: Verify frozen pre-removal WASM behavior
+        run: node test/wasm-signatures.test.js
       - name: Verify recalibrated difficulty presets
         run: node test/level-presets.test.js
       - name: Run fixed-node AI tactics tests
