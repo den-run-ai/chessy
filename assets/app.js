@@ -15,7 +15,6 @@
     bK: '♚' + TXT, bQ: '♛' + TXT, bR: '♜' + TXT, bB: '♝' + TXT, bN: '♞' + TXT, bP: '♟' + TXT
   };
   const STORAGE_KEY = 'chessy-game-v1';
-  const AI_DELAY_MS = 250;
   const PIECE_NAMES = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king' };
 
   const AI_LEVELS = ChessyLevelPresets.LEVELS;
@@ -50,6 +49,8 @@
   const replayBackEl = document.getElementById('replayBack');
   const replayFwdEl = document.getElementById('replayFwd');
   const replayLiveEl = document.getElementById('replayLive');
+  const aiErrorEl = document.getElementById('aiError');
+  const aiRetryEl = document.getElementById('aiRetry');
 
   let state = Chess.newGameState();
   let selected = null;        // selected square index
@@ -194,74 +195,88 @@
     render();
   }
 
-  // AI runs in a Web Worker so deep searches never freeze the board;
-  // falls back to a synchronous call where workers are unavailable.
-
-  // Rust/WASM is the default Play backend after the hosted parity matrix and
-  // first physical-iPhone session passed (#126–#129 / #113). The preference
-  // remains page-level and outside the saved-game schema, and every load or
-  // search failure is still answered by the standard JavaScript engine with
-  // explicit provenance. Existing opt-in value "on" remains compatible;
-  // unchecked is stored explicitly because absence now means the default ON.
-  const WASM_ENGINE_PREF = 'chessy-wasm-engine-v1';
-  function wasmEngineEnabled() {
-    try { return localStorage.getItem(WASM_ENGINE_PREF) !== 'off'; }
-    catch (e) { return true; }
-  }
+  // Play search is Rust/WASM-only and worker-only. A failed worker is
+  // terminated and the exact unchanged position is tried once in a fresh
+  // worker. A second failure stops visibly; it never substitutes a JavaScript
+  // move or blocks the UI with a main-thread search.
+  const MAX_AI_ATTEMPTS = 2;
   let aiRequestId = 0;        // stale replies (after new game/undo/mode change) are dropped
   let aiPending = null;       // config/provenance for the in-flight search
   let aiWatchdog = null;      // guards against an alive-but-SILENT worker (see maybeAiMove)
+  let aiFailure = null;       // final recoverable failure; board is unchanged
+  let aiFailurePausedClock = false;
 
   function createAiWorker() {
     if (typeof Worker === 'undefined') return null;
     try {
-      // The worker joins the page's release unit (#37): its URL carries the
+      // The worker joins the page's release unit: its URL carries the
       // page's release token, and it forwards the token to importScripts, so
       // a page never runs a worker (or engine) from another release.
       const w = new Worker('assets/ai-worker.js' +
         (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : ''));
       w.onmessage = function (e) {
-        if (e.data.id !== aiRequestId || !aiThinking) return;
+        const data = e.data;
+        if (aiWorker !== w || !aiPending || !data ||
+            data.id !== aiPending.id || !aiThinking) return;
+        if (data.error) {
+          recoverAiSearch(w, data.error);
+          return;
+        }
         applyAiMove(e.data.move, e.data);
       };
-      w.onerror = function () {
-        // Broken worker: fall back to the synchronous path so the app is
-        // never stuck on "thinking" — then replace the worker so future
-        // moves leave the main thread again.
-        //
-        // Only a worker that FAILED WHILE SEARCHING earns a replacement.
-        // A persistently unloadable worker script fires onerror on every
-        // fresh instance without ever receiving a message; replacing those
-        // too would spawn workers in a loop, and each replacement's error
-        // would restart (and so forever postpone) the pending synchronous
-        // fallback. An idle startup failure instead drops to synchronous
-        // mode for the session — the pre-watchdog behavior.
-        const wasSearching = !!w.searching;
-        if (aiWorker === w) aiWorker = null;
-        if (!wasSearching) return;
-        if (aiThinking) {
-          const originalStartedAt = aiPending && aiPending.started;
-          aiThinking = false;
-          maybeAiMove(originalStartedAt, 'worker-error');
+      w.onerror = function (event) {
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        if (aiWorker === w && aiThinking) recoverAiSearch(w, 'worker-error');
+        else if (aiWorker === w) {
+          try { w.terminate(); } catch (e) { /* already dead */ }
+          aiWorker = null;
         }
-        aiWorker = createAiWorker();
       };
       return w;
     } catch (e) { return null; }
   }
-  let aiWorker = createAiWorker();
+  let aiWorker = null;
 
   function cancelAi() {
     // Actually stop an abandoned search — a terminated slow search would
     // otherwise keep burning CPU and delay the next request.
     if (aiThinking && aiWorker) {
-      aiWorker.terminate();
-      aiWorker = createAiWorker();
+      try { aiWorker.terminate(); } catch (e) { /* already dead */ }
+      aiWorker = null;
     }
     clearTimeout(aiWatchdog);
     aiRequestId++;
     aiThinking = false;
     aiPending = null;
+  }
+
+  function setAiFailure(reason) {
+    aiFailure = reason || 'worker-error';
+    // Do not let an infrastructure error silently consume the rest of a
+    // timed game's clock while the user decides between Retry and New game.
+    if (clocks.wMs !== null && turnStartedAt !== null &&
+        !timeForfeit && !Chess.gameStatus(state).over) {
+      const color = state.turn;
+      const remaining = liveRemaining(color);
+      if (remaining > 0) {
+        clocks[color + 'Ms'] = remaining;
+        turnStartedAt = null;
+        if (clockTicker) { clearInterval(clockTicker); clockTicker = null; }
+        aiFailurePausedClock = true;
+      }
+    }
+    aiErrorEl.hidden = false;
+  }
+
+  function clearAiFailure(resumeClock) {
+    aiFailure = null;
+    aiErrorEl.hidden = true;
+    if (aiFailurePausedClock && resumeClock && clocks.wMs !== null &&
+        !timeForfeit && !Chess.gameStatus(state).over) {
+      turnStartedAt = Date.now();
+      if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+    }
+    aiFailurePausedClock = false;
   }
 
   // ---- Setup board DOM (8 rows × 8 cells, order = board index a8..h1) ----
@@ -484,6 +499,9 @@
       const side = state.turn === 'w' ? 'White' : 'Black';
       let text = side + ' to move';
       if (aiThinking) text = 'Computer is thinking…';
+      else if (aiFailure && state.turn === aiColor()) {
+        text = 'Computer engine unavailable — position unchanged';
+      }
       else if (status.check) text = side + ' is in check!';
       statusEl.textContent = text;
     }
@@ -616,106 +634,141 @@
     maybeAiMove();
   }
 
-  // Every level now uses the same quiescent iterative engine. Easy through
-  // Expert stop on a deterministic node budget; their five-second clock is
-  // only a safety ceiling for a slow/fallback backend. Master spends the full
-  // five-second product budget. This makes the ladder about searched work
-  // instead of treating a faster runtime as mere latency savings.
+  // Every level uses the same quiescent Rust/WASM engine. Easy through Expert
+  // stop on a deterministic node budget; their five-second clock is a safety
+  // ceiling for a slow device. Master spends the full product time budget.
   function aiConfig() {
     return AI_LEVELS[settings.difficulty] || AI_LEVELS[2];
   }
 
-  function maybeAiMove(startedAt, fallbackReason) {
+  function maybeAiMove() {
     if (checkpointAttempt || state.turn !== aiColor() || fullStatus().over) return;
+    clearAiFailure(true);
     aiThinking = true;
-    render();
     const cfg = aiConfig();
-    const id = ++aiRequestId;
-    const retrying = Number.isFinite(startedAt);
     aiPending = {
+      id: ++aiRequestId,
+      fen: Chess.toFen(state),
+      attempts: 0,
       depth: cfg.maxDepth,
       quiesce: cfg.quiesce,
       timeMs: cfg.timeMs,
       nodeLimit: cfg.nodeLimit,
-      // Casual Play still uses its historical unseeded shuffle. Record that
-      // fact explicitly rather than inventing a seed after the move.
+      // The raw WASM ABI owns a fixed deterministic root order; it accepts no
+      // page-provided seed/randomize controls.
       seed: null,
-      randomize: true,
+      randomize: null,
       release: currentRelease(),
-      source: aiWorker ? 'worker' : (retrying ? 'sync-fallback' : 'sync'),
-      fallbackReason: retrying &&
-        (fallbackReason === 'worker-error' || fallbackReason === 'watchdog')
-        ? fallbackReason : null,
-      // A worker-failure retry is still the same move attempt. Keep its
-      // original start so the debug PGN reports the worker wait as well as
-      // the synchronous fallback search.
-      started: retrying ? startedAt : Date.now()
+      started: Date.now()
     };
-    if (aiWorker) {
-      // Watchdog for an alive-but-silent worker: onerror only covers
-      // workers that break LOUDLY — one that simply never replies would
-      // leave the game on "Computer is thinking…" forever. After the
-      // search budget plus margin, replace it and let the synchronous
-      // fallback answer.
-      clearTimeout(aiWatchdog);
-      aiWatchdog = setTimeout(function () {
-        if (id !== aiRequestId || !aiThinking) return;
-        if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
-        const originalStartedAt = aiPending && aiPending.started;
-        aiThinking = false;
-        // THIS move falls back synchronously (aiWorker is null while
-        // maybeAiMove picks its path); a fresh worker then serves later
-        // moves — without it, one transient hang would put every future
-        // AI turn on the main thread for the full search budget.
-        maybeAiMove(originalStartedAt, 'watchdog');
-        aiWorker = createAiWorker();
-      }, cfg.timeMs + 3000);
-      aiWorker.searching = true; // this worker did real work (see onerror)
-      aiWorker.postMessage({
-        id: id, fen: Chess.toFen(state), maxDepth: cfg.maxDepth,
-        timeMs: cfg.timeMs, nodeLimit: cfg.nodeLimit,
-        quiesce: cfg.quiesce, positions: state.positions,
-        seed: aiPending.seed, randomize: aiPending.randomize,
-        // The selected engine travels per request; the wasm URL joins the
-        // page's release unit like every other executable asset.
-        engine: wasmEngineEnabled() ? 'wasm' : 'js',
+    render();
+    dispatchAiAttempt();
+  }
+
+  function dispatchAiAttempt() {
+    const pending = aiPending;
+    if (!pending || !aiThinking || pending.id !== aiRequestId) return;
+    if (pending.attempts >= MAX_AI_ATTEMPTS) {
+      finishAiFailure('worker-error');
+      return;
+    }
+    pending.attempts++;
+
+    // Reuse a healthy worker after a successful move. Every failed attempt is
+    // terminated by recoverAiSearch(), so attempt two is necessarily fresh.
+    if (!aiWorker) aiWorker = createAiWorker();
+    const worker = aiWorker;
+    if (!worker) {
+      // Constructor/Worker support failures use the same bounded policy.
+      setTimeout(function () {
+        if (aiPending !== pending || pending.id !== aiRequestId || !aiThinking) return;
+        recoverAiSearch(null, 'worker-error');
+      }, 0);
+      return;
+    }
+
+    clearTimeout(aiWatchdog);
+    aiWatchdog = setTimeout(function () {
+      if (aiWorker !== worker || aiPending !== pending || !aiThinking) return;
+      recoverAiSearch(worker, 'watchdog');
+    }, pending.timeMs + 3000);
+
+    try {
+      worker.postMessage({
+        id: pending.id,
+        fen: pending.fen,
+        maxDepth: pending.depth,
+        timeMs: pending.timeMs,
+        nodeLimit: pending.nodeLimit,
+        quiesce: pending.quiesce,
+        positions: state.positions,
         wasmUrl: 'chessy-ai-fast.wasm' +
           (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : '')
       });
-    } else {
-      // Fallback: yield so the "thinking" status paints before the search.
-      setTimeout(function () {
-        if (id !== aiRequestId || !aiThinking) return;
-        const result = ChessAI.think(state, {
-          maxDepth: cfg.maxDepth, timeMs: cfg.timeMs,
-          nodeLimit: cfg.nodeLimit, quiesce: cfg.quiesce,
-          positions: state.positions, seed: aiPending && aiPending.seed,
-          randomize: aiPending ? aiPending.randomize : true
-        });
-        applyAiMove(result.move, result);
-      }, AI_DELAY_MS);
+    } catch (e) {
+      recoverAiSearch(worker, 'worker-error');
     }
   }
 
-  function applyAiMove(move, result) {
+  function recoverAiSearch(worker, reason) {
+    if (!aiPending || !aiThinking) return;
+    if (worker && aiWorker !== worker) return;
     clearTimeout(aiWatchdog);
+    if (aiWorker) {
+      try { aiWorker.terminate(); } catch (e) { /* already dead */ }
+      aiWorker = null;
+    }
+    if (aiPending.attempts < MAX_AI_ATTEMPTS) {
+      // Yield so a loud failure cannot recurse through two constructors in one
+      // stack and so the thinking/error status remains paintable.
+      const pending = aiPending;
+      setTimeout(function () {
+        if (aiPending !== pending || pending.id !== aiRequestId || !aiThinking) return;
+        dispatchAiAttempt();
+      }, 0);
+      return;
+    }
+    finishAiFailure(reason);
+  }
+
+  function finishAiFailure(reason) {
+    clearTimeout(aiWatchdog);
+    if (aiWorker) {
+      try { aiWorker.terminate(); } catch (e) { /* already dead */ }
+      aiWorker = null;
+    }
+    aiRequestId++;
     aiThinking = false;
-    viewPly = null;
+    aiPending = null;
+    setAiFailure(reason);
+    render();
+  }
+
+  function applyAiMove(move, result) {
+    if (!aiPending || !aiThinking || !result || result.engine !== 'wasm') {
+      recoverAiSearch(aiWorker, 'wasm-search-error');
+      return;
+    }
     // Re-resolve against this state's legal moves (the worker's move object
     // came from a FEN round-trip; also guards against any state drift).
     const local = move && Chess.legalMoves(state).find(function (m) {
       return m.from === move.from && m.to === move.to && m.promotion === move.promotion;
     });
-    if (!local) { render(); return; }
+    if (!local || Chess.toFen(state) !== aiPending.fen) {
+      recoverAiSearch(aiWorker, 'wasm-search-error');
+      return;
+    }
+    clearTimeout(aiWatchdog);
+    aiThinking = false;
+    viewPly = null;
     state = Chess.playMove(state, local);
     punchClock();
     if (aiPending) {
-      result = result || {};
       const totalMs = Date.now() - aiPending.started;
       // Record enough evidence to reproduce or explain a Master incident.
-      // The worker and page share one release unit; fallback searches record
-      // their execution path and retain the original attempt's elapsed time.
-      state.history[state.history.length - 1].ai = ChessAI.sanitizeTelemetry({
+      // Total elapsed time includes a failed first worker when the fresh-worker
+      // retry produced the accepted move.
+      state.history[state.history.length - 1].ai = ChessyAiTelemetry.sanitizeTelemetry({
         release: aiPending.release,
         // `depth` is the deepest COMPLETED iteration. Zero is meaningful.
         depth: result.depth != null ? result.depth : 0,
@@ -734,20 +787,17 @@
         cutoffs: result.cutoffs,
         researches: result.researches,
         score: result.score,
-        // ChessAI's raw scalar is always from White's point of view (mate is
-        // encoded in that same score); record the contract at the caller too.
+        // The WASM ABI score is always from White's point of view (mate is
+        // encoded in that same scalar); record the contract at the caller too.
         scorePov: 'white',
         pvUci: result.pvUci,
         rootOrderUci: result.rootOrderUci,
         pvSource: result.pvSource,
         stopReason: result.stopReason,
-        source: aiPending.source,
-        fallbackReason: aiPending.fallbackReason,
-        // The engine that actually produced the move: the worker labels its
-        // replies ('wasm' or 'js', with engineFallback when a wasm request
-        // was answered by JavaScript); synchronous paths are always JS.
-        engine: result.engine,
-        engineFallback: result.engineFallback
+        source: 'worker',
+        fallbackReason: null,
+        engine: 'wasm',
+        engineFallback: null
       });
       aiPending = null;
     }
@@ -891,6 +941,7 @@
     startedRelease = currentRelease();
     gameEndedAt = null;
     cancelAi();
+    clearAiFailure(false);
     state = Chess.newGameState();
     selected = null;
     viewPly = null;
@@ -1112,20 +1163,14 @@
     setChoice('mode', settings.mode);
     setChoice('difficulty', settings.difficulty);
     setChoice('timeControl', settings.timeControl);
-    engineWasmEl.checked = wasmEngineEnabled();
     resetNewGamePrompt();
     newGameDialog.showModal();
   });
 
-  // The engine checkbox persists IMMEDIATELY (independent of
-  // Start/Cancel): it is a page-level preference, not part of the game
-  // settings snapshot, and applies from the computer's next move.
-  const engineWasmEl = document.getElementById('engineWasm');
-  engineWasmEl.addEventListener('change', function () {
-    try {
-      if (engineWasmEl.checked) localStorage.removeItem(WASM_ENGINE_PREF);
-      else localStorage.setItem(WASM_ENGINE_PREF, 'off');
-    } catch (e) { /* private mode: default WASM still has labelled JS fallback */ }
+  aiRetryEl.addEventListener('click', function () {
+    if (!aiFailure || aiThinking) return;
+    clearAiFailure(true);
+    maybeAiMove();
   });
 
   newGameStartEl.addEventListener('click', function () {
@@ -1161,6 +1206,7 @@
     // Editing the game voids any queued Review-game handoff: the ending
     // it would open is being taken back (see movedOnSeq).
     movedOnSeq++;
+    clearAiFailure(false);
     // Undo while the AI is thinking cancels the search and takes back the
     // human move that triggered it (it used to silently do nothing).
     if (aiThinking) cancelAi();
@@ -1435,7 +1481,7 @@
         if (entry.ai && typeof entry.ai === 'object') {
           // New releases retain full forensic evidence; legacy
           // {depth,quiesce,ms} entries normalize with the added fields null.
-          const ai = ChessAI.sanitizeTelemetry(entry.ai);
+          const ai = ChessyAiTelemetry.sanitizeTelemetry(entry.ai);
           if (ai) s.history[s.history.length - 1].ai = ai;
         }
         if (entry.clock && typeof entry.clock === 'object') {

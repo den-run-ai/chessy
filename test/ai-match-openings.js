@@ -1,5 +1,5 @@
 /*
- * Frozen opening manifest shared by the JavaScript and Rust/WASM match
+ * Frozen opening manifest shared by the Rust/WASM match and efficiency
  * runners. The order is the opening ID used by shard records and clustered
  * statistics; changing any entry requires a new manifest version and digest.
  */

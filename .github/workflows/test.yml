@@ -23,6 +23,54 @@ jobs:
             exit 1
           fi
 
+  wasm-reproducibility:
+    name: Rust tests + pinned WASM asset
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUST_VERSION: '1.97.1'
+      RUST_COMMIT: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+      RUST_MANIFEST_URL: https://static.rust-lang.org/dist/2026-07-16/channel-rust-1.97.1.toml
+      RUST_MANIFEST_SHA256: 03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf
+      BINARYEN_URL: https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz
+      BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Rust and Binaryen toolchains
+        run: |
+          export RUSTUP_HOME="$RUNNER_TEMP/rustup-home"
+          export CARGO_HOME="$RUNNER_TEMP/cargo-home"
+          curl -sSL -o rust-manifest.toml "$RUST_MANIFEST_URL"
+          echo "$RUST_MANIFEST_SHA256  rust-manifest.toml" | sha256sum -c -
+          rustup toolchain install "$RUST_VERSION" --profile minimal \
+            --target wasm32-unknown-unknown
+          rustup run "$RUST_VERSION" rustc --version --verbose | tee rustc-version.txt
+          grep -Fx "release: $RUST_VERSION" rustc-version.txt
+          grep -Fx "commit-hash: $RUST_COMMIT" rustc-version.txt
+          grep -Fx "LLVM version: 22.1.6" rustc-version.txt
+          curl -sSL -o binaryen.tar.gz "$BINARYEN_URL"
+          echo "$BINARYEN_SHA256  binaryen.tar.gz" | sha256sum -c -
+          tar xzf binaryen.tar.gz
+      - name: Test Rust and build the production module
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          (cd experiments/wasm && cargo test --locked --offline)
+          CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/rust-target" \
+            CHESSY_CARGO_BIN="$(command -v cargo)" \
+            CHESSY_RUSTC_BIN="$(command -v rustc)" \
+            CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+            sh experiments/wasm/build.sh
+          sha256sum experiments/wasm/dist/*.wasm
+      - name: Verify the committed production asset
+        run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wasm-dist
+          path: experiments/wasm/dist/
+
   release-gate:
     # Versioned cache entries are immutable: if executable content changes
     # without a release-token bump, controlled clients keep serving the old
@@ -69,7 +117,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # ai-match-cli.test.js checks the exact legacy-main time contract.
+          # ai-match-cli.test.js compares ABI-v2 against the frozen ABI-v1
+          # WASM baseline from the merge base.
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -82,8 +131,10 @@ jobs:
         run: node test/master-e4-regression.test.js
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
-      - name: Verify the shipped WASM engine asset (digest + exact JS parity)
+      - name: Verify the shipped WASM ABI and production asset
         run: node test/wasm-asset.test.js
+      - name: Verify frozen pre-removal WASM behavior
+        run: node test/wasm-signatures.test.js
       - name: Verify recalibrated difficulty presets
         run: node test/level-presets.test.js
       - name: Run fixed-node AI tactics tests

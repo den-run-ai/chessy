@@ -28,8 +28,8 @@
  */
 'use strict';
 require('../assets/engine.js');
-require('../assets/ai.js');
 require('../assets/analysis-core.js');
+require('./wasm-test-engine.js').installAnalysisEngine();
 require('../assets/analysis-service.js');
 // The E3b progress tranche drives the REAL moment-scan controller over the
 // real service (both loaded here, before any document shim exists, so the

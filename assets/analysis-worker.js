@@ -17,17 +17,33 @@
  * contains no score or PV. Checkpoints are validated and time-throttled here;
  * phase transitions and a phase's truthful completion are always delivered.
  *
- * The worker URL carries the page's release token (#37); forward it so
- * engine/ai/analysis-core all come from the SAME release (the service worker
- * caches each release's assets under distinct keys).
+ * The worker URL carries the page's release token; forward it so the
+ * rules, loader, WASM binary and analysis contract all come from the SAME
+ * release (the service worker caches each release's assets under distinct
+ * keys). The Rust module is fetched and instantiated once per worker.
  */
 importScripts(
   'engine.js' + self.location.search,
-  'ai.js' + self.location.search,
+  'wasm-engine.js' + self.location.search,
   'analysis-core.js' + self.location.search);
 
 var PROTOCOL = 2;
 var PROGRESS_THROTTLE_MS = 100;
+var wasmLoad = null;
+
+function loadWasmEngine() {
+  if (!wasmLoad) {
+    wasmLoad = fetch('chessy-ai-fast.wasm' + self.location.search)
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('wasm fetch failed: ' + response.status);
+        }
+        return response.arrayBuffer();
+      })
+      .then(function (bytes) { return WasmEngine.load(bytes); });
+  }
+  return wasmLoad;
+}
 
 function finiteNonNegative(n) {
   return typeof n === 'number' && Number.isFinite(n) && n >= 0;
@@ -97,7 +113,7 @@ self.onmessage = function (e) {
     self.postMessage({ v: PROTOCOL, jobId: jobId, error: 'job-identity' });
     return;
   }
-  try {
+  loadWasmEngine().then(function (engine) {
     var state = Chess.parseFen(msg.fen);
     // The repetition table travels explicitly in opts.positions; analyse()
     // resolves opts.positions || state.positions, so a completed threefold is
@@ -105,9 +121,9 @@ self.onmessage = function (e) {
     var opts = Object.assign({}, msg.opts || {});
     if (msg.positions) opts = Object.assign({}, opts, { positions: msg.positions });
     opts.onProgress = progressReporter(jobId, msg.elapsedOffsetMs);
-    var result = ChessyAnalysisCore.analyse(state, opts);
+    var result = ChessyAnalysisCore.analyse(state, opts, engine);
     self.postMessage({ v: PROTOCOL, jobId: jobId, result: result });
-  } catch (err) {
+  }).catch(function (err) {
     self.postMessage({ v: PROTOCOL, jobId: jobId, error: String(err && err.message || err) });
-  }
+  });
 };

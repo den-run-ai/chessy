@@ -20,14 +20,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r70">
+  <link rel="stylesheet" href="assets/style.css?r=r71">
 </head>
 <body>
   <div class="app">
     <header class="topbar">
       <div class="brand-lockup">
         <h1 class="brand">♞ Chessy</h1>
-        <span class="app-version" id="appVersion">Version r70</span>
+        <span class="app-version" id="appVersion">Version r71</span>
       </div>
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
@@ -67,6 +67,11 @@
       <aside class="panel">
         <div class="controls">
           <div class="setup-summary" id="setupSummary" aria-live="polite"></div>
+          <div id="aiError" class="offline-note" role="alert" hidden>
+            <p>The Rust/WASM engine could not complete this move. Your position
+              is unchanged.</p>
+            <button type="button" id="aiRetry" class="btn">Retry computer move</button>
+          </div>
           <div class="buttons">
             <button id="newGame" class="btn primary">New game</button>
             <button id="undo" class="btn">Undo</button>
@@ -342,8 +347,8 @@
         <label><input type="radio" name="difficulty" value="5"><span>Expert · target 2100</span></label>
         <label><input type="radio" name="difficulty" value="master"><span>Master · target 2300+</span></label>
       </div>
-      <p class="coach-note">Provisional engine-rating targets for the default
-        Rust/WASM backend; slow devices or JavaScript fallback may stop early.
+      <p class="coach-note">Provisional engine-rating targets for the
+        Rust/WASM backend; slow devices may stop early.
         Not FIDE, Chess.com, or Lichess ratings. External calibration is still
         in progress.</p>
     </fieldset>
@@ -355,16 +360,6 @@
         <label><input type="radio" name="timeControl" value="900+10"><span>15+10</span></label>
         <label><input type="radio" name="timeControl" value="1800+20"><span>30+20</span></label>
       </div>
-    </fieldset>
-    <fieldset class="choice">
-      <legend>Engine</legend>
-      <div class="choice-options">
-        <label><input type="checkbox" id="engineWasm" checked><span>Faster Rust/WASM search</span></label>
-      </div>
-      <p class="coach-note">On by default. If it cannot start, the standard
-        engine answers instead. While it is on, the computer's move choice is
-        deterministic and repetition awareness is limited to the current
-        search.</p>
     </fieldset>
     <p id="newGameStatus" class="coach-note" role="status" aria-live="polite"></p>
     <div class="buttons setup-actions">
@@ -448,7 +443,7 @@
     </div>
   </dialog>
 
-  <!-- Release-unit loading (#37): every executable asset carries this
+  <!-- Release-unit loading: every executable asset carries this
        release token in its URL, and the service worker caches each release's
        assets under distinct keys. HTML therefore always executes with the
        scripts of ITS OWN release — online they come from the network, offline
@@ -456,35 +451,35 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r70';</script>
-  <script src="assets/engine.js?r=r70"></script>
-  <script src="assets/ai.js?r=r70"></script>
-  <script src="assets/level-presets.js?r=r70"></script>
+  <script>window.CHESSY_RELEASE = 'r71';</script>
+  <script src="assets/engine.js?r=r71"></script>
+  <script src="assets/ai-telemetry.js?r=r71"></script>
+  <script src="assets/level-presets.js?r=r71"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/calculation.js?r=r70"></script>
-  <script src="assets/store.js?r=r70"></script>
-  <script src="assets/storage-health.js?r=r70"></script>
-  <script src="assets/archive.js?r=r70"></script>
-  <script src="assets/runtime-update.js?r=r70"></script>
-  <script src="assets/app.js?r=r70"></script>
-  <script src="assets/mini-board.js?r=r70"></script>
-  <script src="assets/review.js?r=r70"></script>
-  <script src="assets/analysis-core.js?r=r70"></script>
-  <script src="assets/analysis-service.js?r=r70"></script>
-  <script src="assets/analysis-result.js?r=r70"></script>
-  <script src="assets/equivalence.js?r=r70"></script>
-  <script src="assets/moment-selector.js?r=r70"></script>
-  <script src="assets/moment-scan.js?r=r70"></script>
-  <script src="assets/pgn.js?r=r70"></script>
-  <script src="assets/import.js?r=r70"></script>
-  <script src="assets/data-controls.js?r=r70"></script>
-  <script src="assets/reflection.js?r=r70"></script>
-  <script src="assets/train.js?r=r70"></script>
-  <script src="assets/progress.js?r=r70"></script>
+  <script src="assets/calculation.js?r=r71"></script>
+  <script src="assets/store.js?r=r71"></script>
+  <script src="assets/storage-health.js?r=r71"></script>
+  <script src="assets/archive.js?r=r71"></script>
+  <script src="assets/runtime-update.js?r=r71"></script>
+  <script src="assets/app.js?r=r71"></script>
+  <script src="assets/mini-board.js?r=r71"></script>
+  <script src="assets/review.js?r=r71"></script>
+  <script src="assets/analysis-core.js?r=r71"></script>
+  <script src="assets/analysis-service.js?r=r71"></script>
+  <script src="assets/analysis-result.js?r=r71"></script>
+  <script src="assets/equivalence.js?r=r71"></script>
+  <script src="assets/moment-selector.js?r=r71"></script>
+  <script src="assets/moment-scan.js?r=r71"></script>
+  <script src="assets/pgn.js?r=r71"></script>
+  <script src="assets/import.js?r=r71"></script>
+  <script src="assets/data-controls.js?r=r71"></script>
+  <script src="assets/reflection.js?r=r71"></script>
+  <script src="assets/train.js?r=r71"></script>
+  <script src="assets/progress.js?r=r71"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

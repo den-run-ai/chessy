@@ -1,7 +1,7 @@
 /* Chessy service worker.
  *
  * Update strategy (reliable updates, still fully offline):
- * - RELEASE UNITS (#37): index.html references every executable asset with
+ * - RELEASE UNITS: index.html references every executable asset with
  *   this release's ?r= token, and those versioned URLs are cached as
  *   distinct, IMMUTABLE entries (cache-first, never revalidated — GitHub
  *   Pages ignores the query string, so revalidating ?r=rN after a later
@@ -26,7 +26,7 @@
  *   game/Rematch explicitly run an update check before replacing that save,
  *   so a long-open foreground tab cannot begin another game on stale code.
  */
-const RELEASE = 'r70';
+const RELEASE = 'r71';
 const CACHE = 'chessy-' + RELEASE;
 const UPDATE_MARKER = './__chessy-update__';
 const ASSETS = [
@@ -34,7 +34,7 @@ const ASSETS = [
   './index.html',
   './assets/style.css?r=' + RELEASE,
   './assets/engine.js?r=' + RELEASE,
-  './assets/ai.js?r=' + RELEASE,
+  './assets/ai-telemetry.js?r=' + RELEASE,
   './assets/level-presets.js?r=' + RELEASE,
   './assets/ai-worker.js?r=' + RELEASE,
   './assets/wasm-engine.js?r=' + RELEASE,
@@ -176,10 +176,9 @@ self.addEventListener('fetch', (event) => {
   //     token miss (evicted entry) cannot trust the network — a newer
   //     deployment may already be live, and the host ignores the token,
   //     so the fetch could return newer bytes under this release's URL.
-  //     Either refill would hand a page mixed code — the exact thing
-  //     this design exists to prevent. The app degrades (e.g. its AI
-  //     worker falls back to the synchronous path) until the page next
-  //     navigates into a coherent release.
+  //     Either refill would hand a page mixed code — the exact thing this
+  //     design exists to prevent. The app surfaces a recoverable engine error
+  //     until the page next navigates into a coherent release.
   if (reqUrl.searchParams.has('r')) {
     const reqNum = Number((/^r(\d+)$/.exec(reqUrl.searchParams.get('r')) || [])[1]);
     const ownNum = Number((/^r(\d+)$/.exec(RELEASE) || [])[1]);

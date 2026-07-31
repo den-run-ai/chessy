@@ -1,21 +1,10 @@
-/* AI Web Worker: runs the search off the main thread so the UI never
- * freezes while the computer thinks. The worker URL carries the page's
- * release token (#37); forward it so engine/ai come from the SAME release
- * (the service worker caches each release's assets under distinct keys). */
-importScripts('engine.js' + self.location.search,
-  'ai.js' + self.location.search,
-  'wasm-engine.js' + self.location.search);
+/* Rust/WASM-only Play worker. Search never runs on the main thread and this
+ * worker deliberately does not load the retired JavaScript search algorithm.
+ * Its URL carries the page's release token; forward it so the loader and
+ * binary always come from the same immutable release unit. */
+importScripts('wasm-engine.js' + self.location.search);
 
-/* Rust/WASM Play engine (#84/#113): the page selects it per message. The
- * module is fetched and instantiated once per worker, only on the first WASM
- * request, so explicit standard-engine opt-outs pay no memory or startup cost.
- * EVERY wasm failure — load or search — answers with the JavaScript engine
- * instead and labels the reply, so a Play move can never be lost. A worker
- * whose module failed to
- * load stays on JavaScript for its lifetime (the page-level watchdog and
- * new-game paths create fresh workers). */
 let wasmLoad = null;      // Promise for the singleton engine instance
-let wasmLoadFailed = false;
 
 function loadWasmEngine(wasmUrl) {
   if (!wasmLoad) {
@@ -25,40 +14,19 @@ function loadWasmEngine(wasmUrl) {
     }).then(function (bytes) {
       return WasmEngine.load(bytes);
     });
-    wasmLoad.catch(function () { wasmLoadFailed = true; });
   }
   return wasmLoad;
 }
 
-function jsThink(data) {
-  const state = Chess.parseFen(data.fen);
-  const result = ChessAI.think(state, {
-    maxDepth: data.maxDepth,
-    timeMs: data.timeMs,
-    // A node budget (analysis/Verify) makes a probe reproducible where a
-    // wall-clock timeMs (Play) cannot; forward both so each caller's chosen
-    // budget reaches the search.
-    nodeLimit: data.nodeLimit,
-    quiesce: data.quiesce,
-    positions: data.positions,
-    // Forward the determinism controls so an analysis/Verify probe searches
-    // reproducibly (a fixed seed or randomize:false) instead of falling back
-    // to Math.random and possibly preferring a different move each run.
-    seed: data.seed,
-    randomize: data.randomize,
-    rootOrderUci: data.rootOrderUci
-  });
-  return Object.assign({ engine: 'js' }, result);
-}
-
 async function think(data) {
-  if (data.engine !== 'wasm' || !data.wasmUrl) return jsThink(data);
+  if (!data || typeof data.wasmUrl !== 'string' || !data.wasmUrl) {
+    throw { kind: 'wasm-load-error' };
+  }
   let engine;
   try {
-    if (wasmLoadFailed) throw new Error('wasm module previously failed to load');
     engine = await loadWasmEngine(data.wasmUrl);
   } catch (e) {
-    return Object.assign({ engineFallback: 'wasm-load-error' }, jsThink(data));
+    throw { kind: 'wasm-load-error' };
   }
   try {
     const started = Date.now();
@@ -66,13 +34,14 @@ async function think(data) {
       maxDepth: data.maxDepth,
       timeMs: data.timeMs,
       nodeLimit: data.nodeLimit,
-      quiesce: data.quiesce
+      quiesce: data.quiesce,
+      positions: data.positions
     });
     result.elapsedMs = Date.now() - started;
     result.engine = 'wasm';
     return result;
   } catch (e) {
-    return Object.assign({ engineFallback: 'wasm-search-error' }, jsThink(data));
+    throw { kind: 'wasm-search-error' };
   }
 }
 
@@ -81,13 +50,20 @@ async function think(data) {
 let queue = Promise.resolve();
 
 self.onmessage = function (e) {
+  const data = e.data;
   queue = queue.then(function () {
-    return think(e.data);
+    return think(data);
   }).then(function (result) {
-    // Return the complete, JSON-safe search evidence. Play records it
-    // alongside the move so an archived incident can be attributed to a
-    // release, engine, budget and completed draft instead of being
-    // reconstructed from SAN alone.
-    self.postMessage(Object.assign({ id: e.data.id }, result));
+    self.postMessage(Object.assign({ id: data && data.id }, result));
+  }, function (error) {
+    // A structured failure lets the page terminate this worker and retry the
+    // exact unchanged position once in a fresh worker. Never answer with a
+    // move from another engine.
+    self.postMessage({
+      id: data && data.id,
+      error: error && (error.kind === 'wasm-load-error' ||
+        error.kind === 'wasm-search-error')
+        ? error.kind : 'worker-error'
+    });
   });
 };

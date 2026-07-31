@@ -1,7 +1,10 @@
 /*
  * Exact-tree contract for the isolated Rust/WASM feasibility experiment.
+ * Shallow and fixed-node expectations come from the frozen r69 WASM artifact;
+ * deeper runs optionally compare two explicit WASM modules. No JavaScript
+ * search implementation is loaded as a reference.
  *
- * Run after building experiments/wasm/dist/chessy-ai-fast.wasm:
+ * By default this verifies the shipped production asset:
  *   node test/ai-wasm-parity.js
  *   node test/ai-wasm-parity.js --wasm /path/to/chessy-ai.wasm --depth 5
  */
@@ -19,7 +22,7 @@ function option(name, fallback) {
 const depth = Number(option('depth', 5));
 const wasmPath = path.resolve(option(
   'wasm',
-  path.join(__dirname, '..', 'experiments', 'wasm', 'dist', 'chessy-ai-fast.wasm')
+  path.join(__dirname, '..', 'assets', 'chessy-ai-fast.wasm')
 ));
 const referenceWasmOption = option('reference-wasm', null);
 const referenceWasmPath = referenceWasmOption
@@ -94,7 +97,6 @@ console.log('packed WASM result decoder');
 
 async function main() {
   const wasm = await WasmBench.loadWasmEngine(wasmPath);
-  const js = WasmBench.loadJsEngine();
   const searchOptions = {
     maxDepth: depth,
     nodeLimit: 0,
@@ -121,28 +123,49 @@ async function main() {
       }));
     });
 
-  console.log('fixed-depth exact parity');
-  for (const position of WasmBench.POSITIONS) {
-    const baseline = js.search(position[1], searchOptions);
-    const candidate = wasm.search(position[1], searchOptions);
-    const differences = WasmBench.signatureDifferences(candidate, baseline);
-    check(differences.length === 0, position[0],
-      differences.length ? differences.join('; ') : null);
+  console.log('frozen r69 exact signatures, depths 1..3');
+  for (const quiesce of [false, true]) {
+    for (let frozenDepth = 1; frozenDepth <= 3; frozenDepth++) {
+      for (const position of WasmBench.POSITIONS) {
+        const options = {
+          maxDepth: frozenDepth,
+          nodeLimit: 0,
+          timeMs: 0,
+          quiesce: quiesce
+        };
+        const expected = WasmBench.frozenSignature(position[0], options);
+        const differences = expected
+          ? WasmBench.signatureDifferences(
+            wasm.search(position[1], options), expected)
+          : ['missing frozen signature'];
+        check(differences.length === 0,
+          position[0] + ' d' + frozenDepth +
+            ' q=' + (quiesce ? 'on' : 'off'),
+          differences.length ? differences.join('; ') : null);
+      }
+    }
   }
 
-  console.log('fixed-node abort parity');
-  const nodeLimitedOptions = {
-    maxDepth: 30,
-    nodeLimit: 5000,
-    timeMs: 0,
-    quiesce: true
-  };
-  for (const position of WasmBench.POSITIONS) {
-    const baseline = js.search(position[1], nodeLimitedOptions);
-    const candidate = wasm.search(position[1], nodeLimitedOptions);
-    const differences = WasmBench.signatureDifferences(candidate, baseline);
-    check(differences.length === 0, position[0] + ' at 5,000 nodes',
-      differences.length ? differences.join('; ') : null);
+  console.log('frozen r69 fixed-node signatures');
+  for (const quiesce of [false, true]) {
+    const nodeLimitedOptions = {
+      maxDepth: 30,
+      nodeLimit: 5000,
+      timeMs: 0,
+      quiesce: quiesce
+    };
+    for (const position of WasmBench.POSITIONS) {
+      const expected = WasmBench.frozenSignature(
+        position[0], nodeLimitedOptions);
+      const differences = expected
+        ? WasmBench.signatureDifferences(
+          wasm.search(position[1], nodeLimitedOptions), expected)
+        : ['missing frozen signature'];
+      check(differences.length === 0,
+        position[0] + ' at 5,000 nodes q=' +
+          (quiesce ? 'on' : 'off'),
+        differences.length ? differences.join('; ') : null);
+    }
   }
 
   // load_position() must also reset all per-search state, including the TT,
@@ -187,17 +210,12 @@ async function main() {
     ];
     for (let index = 0; index < edgeFens.length; index++) {
       const fen = edgeFens[index];
-      const jsResult = js.search(fen, searchOptions);
-      for (const engine of [
-        ['candidate', wasm],
-        ['reference', reference]
-      ]) {
-        const actual = engine[1].search(fen, searchOptions);
-        const differences = WasmBench.signatureDifferences(actual, jsResult);
-        check(differences.length === 0,
-          'edge position ' + (index + 1) + ' (' + engine[0] + ')',
-          differences.length ? differences.join('; ') : null);
-      }
+      const baseline = reference.search(fen, searchOptions);
+      const candidate = wasm.search(fen, searchOptions);
+      const differences = WasmBench.signatureDifferences(candidate, baseline);
+      check(differences.length === 0,
+        'edge position ' + (index + 1) + ' candidate/reference',
+        differences.length ? differences.join('; ') : null);
     }
   }
 

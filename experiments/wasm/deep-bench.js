@@ -4,6 +4,8 @@
  * This harness deliberately compares two WASM modules without requiring an
  * exact tree. It is for separately gated search experiments such as LMR, SEE,
  * and verified null move; it does not authorize a production engine change.
+ * Its ordinary-search boundary accepts only the reviewed, layout-compatible
+ * ABI-v1 and ABI-v2 result contracts so cutover revisions remain comparable.
  *
  * Usage:
  *   node experiments/wasm/deep-bench.js \
@@ -1050,8 +1052,10 @@ function timeMarkdown(title, screen) {
 
 function renderMarkdown(report) {
   let output = '# Rust/WASM deep-search experiment\n\n';
-  output += '- Candidate: `' + report.config.candidateLabel + '`\n';
-  output += '- Reference: `' + report.config.referenceLabel + '`\n';
+  output += '- Candidate: `' + report.config.candidateLabel + '` (result ABI ' +
+    report.modules.candidate.resultAbiVersion + ')\n';
+  output += '- Reference: `' + report.config.referenceLabel + '` (result ABI ' +
+    report.modules.reference.resultAbiVersion + ')\n';
   output += '- Protocol: fixed d' + report.config.depth + ', ' +
     report.config.fixedPairs + ' AB/BA pairs; ' + report.config.timeMs +
     ' ms, ' + report.config.timePairs + ' AB/BA pairs\n';
@@ -1122,9 +1126,9 @@ async function main(argv) {
     canonical[0].fen);
 
   console.log('candidate: ' + config.candidateLabel + ' (' +
-    config.candidatePath + ')');
+    config.candidatePath + ', result ABI ' + candidate.abiVersion + ')');
   console.log('reference: ' + config.referenceLabel + ' (' +
-    config.referencePath + ')');
+    config.referencePath + ', result ABI ' + reference.abiVersion + ')');
   const report = {
     schemaVersion: 1,
     startedAt: new Date().toISOString(),
@@ -1144,12 +1148,14 @@ async function main(argv) {
     },
     modules: {
       candidate: {
+        resultAbiVersion: candidate.abiVersion,
         bytes: candidate.binaryBytes,
         brotliBytes: candidate.brotliBytes,
         instantiationMs: candidate.initMs,
         initialMemoryBytes: candidate.initialMemoryBytes
       },
       reference: {
+        resultAbiVersion: reference.abiVersion,
         bytes: reference.binaryBytes,
         brotliBytes: reference.brotliBytes,
         instantiationMs: reference.initMs,

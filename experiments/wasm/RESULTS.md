@@ -2,6 +2,10 @@
 
 Run date: 2026-07-28
 
+> Historical feasibility record. The production cutover described in
+> [`README.md`](./README.md) happened later; statements below about what still
+> needed approval describe the state on this run date.
+
 ## Verdict
 
 **RUST PORT PASS — advance the unchanged worker/mobile protocol.**

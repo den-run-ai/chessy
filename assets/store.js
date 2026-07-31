@@ -834,11 +834,10 @@
       if (v.source !== undefined && !sources[v.source]) return false;
       if (v.fallbackReason !== undefined && v.fallbackReason !== null &&
           !fallbacks[v.fallbackReason]) return false;
-      // A missing engine is pre-WASM telemetry (JavaScript by construction);
-      // once present it must name a known engine and fallback provenance.
-      // A non-null fallback label must pair with the JavaScript engine: the
-      // worker contract is that any wasm fallback means JavaScript answered,
-      // so "engine wasm" + a fallback label is contradictory evidence.
+      // A missing engine is pre-WASM telemetry (JavaScript by construction).
+      // Retired JavaScript/fallback values remain valid archive evidence, but
+      // current runtime writes are WASM/worker only. A non-null engine fallback
+      // therefore pairs only with the historical JavaScript engine.
       if (v.engine !== undefined && v.engine !== null &&
           !engines[v.engine]) return false;
       if (v.engineFallback !== undefined && v.engineFallback !== null &&

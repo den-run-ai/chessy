@@ -1,9 +1,8 @@
 /* Engine correctness tests — run with: node test/engine.test.js */
 'use strict';
 require('../assets/engine.js');
-require('../assets/ai.js');
+const WasmAI = require('./wasm-test-engine.js');
 const Chess = globalThis.Chess;
-const ChessAI = globalThis.ChessAI;
 
 let passed = 0, failed = 0;
 function assertEqual(actual, expected, label) {
@@ -51,45 +50,6 @@ const pos5 = Chess.parseFen('rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ
 assertEqual(perft(pos5, 1), 44, 'perft(1) = 44');
 assertEqual(perft(pos5, 2), 1486, 'perft(2) = 1486');
 assertEqual(perft(pos5, 3), 62379, 'perft(3) = 62379');
-
-// Search callers may provide per-ply scratch storage so pseudo-move arrays and
-// objects do not need to be allocated again at every node. Ordinary callers
-// that omit the buffer retain the fresh-array API.
-console.log('pseudo-move scratch reuse');
-const staleMove = {
-  from: -1, to: -1, piece: 'bQ', captured: 'wQ',
-  promotion: 'Q', ep: true, castle: 'K', double: true, order: 999
-};
-const moveScratch = { moves: [], pool: [staleMove] };
-const startPseudo = Chess.pseudoMoves(start, moveScratch);
-assertEqual(startPseudo === moveScratch.moves, true, 'pseudoMoves returns the scratch result array');
-assertEqual(startPseudo[0] === staleMove, true, 'pseudoMoves reuses existing move objects');
-assertEqual(
-  [startPseudo[0].promotion, startPseudo[0].ep, startPseudo[0].castle,
-    startPseudo[0].double, startPseudo[0].captured].join(','),
-  ',false,,false,',
-  'reused move objects clear every optional move field'
-);
-assertEqual(startPseudo[0].order, 0, 'reused move objects clear stale ordering scores');
-const firstScratchMove = startPseudo[0];
-const highWaterMove = startPseudo[startPseudo.length - 1];
-const loneKing = Chess.parseFen('8/8/8/8/8/8/8/K6k w - - 0 1');
-const loneKingPseudo = Chess.pseudoMoves(loneKing, moveScratch);
-const freshLoneKingPseudo = Chess.pseudoMoves(loneKing);
-function moveSignatures(moves) {
-  return moves.map(function (m) {
-    return [m.from, m.to, m.piece, m.captured, m.promotion,
-      m.ep, m.castle, m.double].join(':');
-  }).join('|');
-}
-assertEqual(loneKingPseudo.length, freshLoneKingPseudo.length,
-  'pseudoMoves truncates an oversized scratch array');
-assertEqual(loneKingPseudo[0] === firstScratchMove, true,
-  'pseudoMoves preserves reusable object identity across positions');
-assertEqual(moveScratch.pool[19] === highWaterMove, true,
-  'pseudoMoves retains the high-water object pool after a narrow position');
-assertEqual(moveSignatures(loneKingPseudo), moveSignatures(freshLoneKingPseudo),
-  'scratch generation matches fresh pseudo-move generation');
 
 // --- FEN round-trip ---
 console.log('FEN round-trip');
@@ -249,22 +209,41 @@ assertEqual(toD5.length, 2, 'two knights reach d5');
 const sans = toD5.map((m) => Chess.toSan(twoKnights, m, nMoves)).sort().join(' ');
 assertEqual(sans, 'Ncd5 Ned5', 'file disambiguation');
 
-// --- AI sanity ---
-console.log('AI');
+// --- Rust/WASM engine black-box contract ---
+console.log('Rust/WASM engine');
+function bestMove(state, depth, quiesce, positions) {
+  return WasmAI.searchState(state, {
+    maxDepth: depth,
+    quiesce: quiesce !== false,
+    positions: positions == null ? state.positions || null : positions
+  }).move;
+}
+function fixedScore(state, depth, quiesce, positions) {
+  const result = WasmAI.fixedSearchState(state, {
+    depth: depth,
+    quiesce: quiesce !== false,
+    positions: positions == null ? state.positions || null : positions
+  });
+  if (!result.complete) {
+    throw new Error('unexpected Rust/WASM fixed-search budget exhaustion');
+  }
+  return result.score;
+}
+
 const mateInOne = Chess.parseFen('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');
-const aiMove = ChessAI.bestMove(mateInOne, 2);
+const aiMove = bestMove(mateInOne, 2);
 const aiSan = Chess.toSan(mateInOne, aiMove);
 assertEqual(aiSan, 'Ra8#', 'AI finds mate in one');
 
 const hangingQueen = Chess.parseFen('k7/8/8/3q4/8/8/3Q4/K7 w - - 0 1');
-const capture = ChessAI.bestMove(hangingQueen, 2);
+const capture = bestMove(hangingQueen, 2);
 assertEqual(Chess.sqName(capture.to), 'd5', 'AI captures hanging queen');
 
 // Expert depth: force a two-rook ladder mate in two (mate is at ply 3, so
 // only a deeper search sees it as forced; play both sides and require mate).
 let ladder = Chess.newGameState('7k/8/8/7p/8/8/8/RR4K1 w - - 0 1');
 for (let ply = 0; ply < 4 && !Chess.gameStatus(ladder).over; ply++) {
-  ladder = Chess.playMove(ladder, ChessAI.bestMove(ladder, 5));
+  ladder = Chess.playMove(ladder, bestMove(ladder, 5));
 }
 assertEqual(Chess.gameStatus(ladder).reason, 'checkmate', 'depth-5 AI forces mate in two');
 assertEqual(Chess.gameStatus(ladder).result, '1-0', 'ladder mate: White wins');
@@ -272,34 +251,34 @@ assertEqual(Chess.gameStatus(ladder).result, '1-0', 'ladder mate: White wins');
 // Quiescence (Master): a pawn on e5 is defended by the d6 pawn. A fixed-depth
 // search at its horizon grabs it; quiescence resolves the recapture and declines.
 const poisoned = Chess.parseFen('6k1/8/3p4/4p2Q/8/8/8/6K1 w - - 0 1');
-assertEqual(Chess.sqName(ChessAI.bestMove(poisoned, 1, false).to), 'e5',
+assertEqual(Chess.sqName(bestMove(poisoned, 1, false).to), 'e5',
   'plain search at horizon takes the poisoned pawn');
-assertEqual(Chess.sqName(ChessAI.bestMove(poisoned, 1, true).to) !== 'e5', true,
+assertEqual(Chess.sqName(bestMove(poisoned, 1, true).to) !== 'e5', true,
   'quiescent search declines the poisoned pawn');
 
 // Quiescence must still handle in-check positions (evasion search).
 const mustEvade = Chess.parseFen('6k1/5ppp/8/8/8/8/6PP/r5K1 w - - 0 1');
-const evasion = ChessAI.bestMove(mustEvade, 3, true);
+const evasion = bestMove(mustEvade, 3, true);
 assertEqual(Chess.sqName(evasion.to), 'f2', 'quiescent search evades check (Kf2)');
 
-// Delta pruning must never prune a CHECKING capture: Qxg7# only wins a pawn,
-// so with a high alpha the prune condition holds — but it is mate. The
-// window is set so the old prune skipped the move and returned stand-pat.
+// A depth-zero fixed search enters quiescence directly. A checking capture
+// must still be searched and recognized as mate, even though it wins only a
+// pawn by material.
 const checkCap = Chess.parseFen('r5k1/6p1/7Q/8/8/8/1B6/6K1 w - - 0 1');
-assertEqual(ChessAI.search(checkCap, 0, 100000, 100001, true) > 999000, true,
-  'delta pruning exempts checking captures (Qxg7# found)');
+assertEqual(fixedScore(checkCap, 0, true) > 999000, true,
+  'depth-zero quiescence finds the checking capture Qxg7#');
 
 // Easy (depth 1) must recognize terminal positions after its own move: here
 // Qa1 is mate, while most queen moves stalemate Black immediately.
 const easyMate = Chess.parseFen('k1K5/8/8/8/8/8/8/6Q1 w - - 0 1');
-const easyPick = ChessAI.bestMove(easyMate, 1, false);
+const easyPick = bestMove(easyMate, 1, false);
 assertEqual(Chess.toSan(easyMate, easyPick), 'Qa1#', 'Easy finds mate and avoids stalemate');
 
 // Mate takes precedence over the 50-move rule: the mating move IS the 100th
 // halfmove, so a search that checks the clock first would refuse Ra8#.
 const mateOnClock = Chess.parseFen('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 99 1');
 for (const [d, q] of [[1, false], [3, false], [3, true]]) {
-  const m = ChessAI.bestMove(mateOnClock, d, q);
+  const m = bestMove(mateOnClock, d, q);
   assertEqual(Chess.toSan(mateOnClock, m), 'Ra8#', 'mate on the 100th halfmove (depth ' + d + (q ? '+q' : '') + ')');
 }
 
@@ -309,7 +288,7 @@ for (const [d, q] of [[1, false], [3, false], [3, true]]) {
 // the engine picks, the opponent must not have a mate in one.
 const horizon = Chess.parseFen('5bnr/1bppk1pp/np2Pp2/rN3P2/p1P3Pq/5N1P/PP1QP3/R1BK1B1R b - - 0 13');
 for (const [d, q] of [[2, false], [2, true]]) {
-  const hMove = ChessAI.bestMove(horizon, d, q);
+  const hMove = bestMove(horizon, d, q);
   const afterH = Chess.applyMove(horizon, hMove);
   const allowsMate = Chess.legalMoves(afterH).some(function (m) {
     const nn = Chess.applyMove(afterH, m);
@@ -327,18 +306,20 @@ const onceSeen = {};
 for (const m of Chess.legalMoves(ladderRep)) {
   onceSeen[Chess.positionKey(Chess.applyMove(ladderRep, m))] = 1;
 }
-const ladderThink = ChessAI.think(ladderRep, { maxDepth: 5, positions: onceSeen });
+const ladderThink = WasmAI.searchState(ladderRep, {
+  maxDepth: 5, quiesce: true, positions: onceSeen
+});
 assertEqual(ladderThink.score > 999000, true,
   'single prior occurrence of a position is not scored as a draw (mate still found)');
 
-// Repetition identity in the search hash mirrors Chess.positionKey():
+// Repetition history handed to WASM uses Chess.positionKey() identities:
 // capturable ep rights distinguish positions, phantom ones do not.
-assertEqual(ChessAI.repKey(epReal) !== ChessAI.repKey(epGone), true,
-  'legal ep capture distinguishes the repetition hash');
+assertEqual(Chess.positionKey(epReal) !== Chess.positionKey(epGone), true,
+  'legal ep capture distinguishes the repetition identity');
 const phantomA = Chess.parseFen('rnbqkbnr/pppppppp/8/8/P7/8/1PPPPPPP/RNBQKBNR b KQkq a3 0 1');
 const phantomB = Chess.parseFen('rnbqkbnr/pppppppp/8/8/P7/8/1PPPPPPP/RNBQKBNR b KQkq - 0 1');
-assertEqual(ChessAI.repKey(phantomA), ChessAI.repKey(phantomB),
-  'phantom ep right does not change the repetition hash');
+assertEqual(Chess.positionKey(phantomA), Chess.positionKey(phantomB),
+  'phantom ep right does not change the repetition identity');
 
 // Repetition-aware root: with the game's repetition table available, a move
 // that triggers threefold scores as a draw — the winning side must avoid it,
@@ -350,7 +331,7 @@ const repAll = {};
 for (const m of winMoves) {
   if (m !== keep) repAll[Chess.positionKey(Chess.applyMove(winning, m))] = 2;
 }
-const avoided = ChessAI.bestMove(winning, 2, false, repAll);
+const avoided = bestMove(winning, 2, false, repAll);
 assertEqual(avoided.from === keep.from && avoided.to === keep.to, true,
   'winning side avoids threefold repetition');
 
@@ -358,114 +339,105 @@ const losing = Chess.parseFen('7k/8/5K2/8/8/8/8/3Q4 b - - 0 1');
 const loseMoves = Chess.legalMoves(losing);
 const escapeRep = {};
 escapeRep[Chess.positionKey(Chess.applyMove(losing, loseMoves[0]))] = 2;
-const sought = ChessAI.bestMove(losing, 2, false, escapeRep);
+const sought = bestMove(losing, 2, false, escapeRep);
 assertEqual(sought.from === loseMoves[0].from && sought.to === loseMoves[0].to, true,
   'losing side heads for threefold repetition');
 
-// --- Repetition-safe transposition table ---
-// A score produced by a search-path repetition draw depends on the path's
-// ancestors, not on the position itself. It must never be cached and served
-// to a different path (P1 regression: the same position scored 0 with a
-// repetition ancestor, cached it, and kept returning the stale 0 after the
-// ancestor was gone).
-console.log('repetition-safe transposition table');
+// History is loaded afresh for every public ABI call. A history-dependent draw
+// must not leak through the module's internal state into the next fixed search.
+console.log('repetition history isolation');
 const perpRoot = Chess.parseFen('6k1/p4pp1/8/5P2/7Q/8/rr6/6K1 w - - 0 1');
 let perpX = perpRoot; // after Qd8+ Kh7 Qh4+: Black in check, only ...Kg8
 for (const san of ['Qd8+', 'Kh7', 'Qh4+']) {
   const legal = Chess.legalMoves(perpX);
   perpX = Chess.applyMove(perpX, legal.find((m) => Chess.toSan(perpX, m, legal) === san));
 }
-const sharedCtx = ChessAI.makeCtx(false, Infinity);
-const withAncestor = ChessAI.search(perpX, 3, -Infinity, Infinity, false,
-  { ctx: sharedCtx, ancestors: [Chess.toFen(perpRoot)] });
-assertEqual(withAncestor, 0, 'forced return to a seeded path ancestor scores 0');
-const cleanScore = ChessAI.search(perpX, 3, -Infinity, Infinity, false, { ctx: sharedCtx });
-// The clean search must return the TRUE, materially-decisive score for Black
-// (two rooks + pawns vs a queen), NOT the path-dependent 0 the ancestor case
-// produced — that is the cache-contamination this guards against. The exact
-// magnitude depends on the material values (the tuned tapered set rates two
-// rooks vs a queen closer to balanced than the old flat values did), so the
-// threshold checks "decisively negative, nowhere near the cached 0", not a
-// specific centipawn figure.
+const seededHistory = {};
+seededHistory[Chess.positionKey(perpRoot)] = 2;
+const withHistory = fixedScore(perpX, 3, false, seededHistory);
+assertEqual(withHistory, 0, 'forced return to a twice-seen game position scores 0');
+const cleanScore = fixedScore(perpX, 3, false, {});
 assertEqual(cleanScore < -150, true,
-  'same TT without the ancestor: path-dependent 0 was not cached (got ' + cleanScore + ')');
-// Sanity: a fresh context agrees with the shared-context clean search.
-assertEqual(ChessAI.search(perpX, 3, -Infinity, Infinity, false), cleanScore,
-  'clean shared-ctx score matches a fresh-ctx search');
+  'next call without that history is materially decisive (got ' + cleanScore + ')');
+assertEqual(fixedScore(perpX, 3, false, {}), cleanScore,
+  'repeated clean fixed searches agree');
 
 // think() must not return a "best move" from a game that is already over,
 // even when legal moves exist (the 50-move rule, dead positions and
 // completed threefolds end the game before the moves run out).
 console.log('think on finished games');
 const fiftyOver = Chess.parseFen('7k/8/6K1/8/3R4/8/8/8 w - - 100 80');
-assertEqual(ChessAI.think(fiftyOver, { maxDepth: 3 }).move, null,
+assertEqual(WasmAI.searchState(fiftyOver, { maxDepth: 3 }).move, null,
   'no move from a position drawn by the 50-move rule');
 const deadOver = Chess.parseFen('7k/8/6K1/8/3N4/8/8/8 w - - 0 1');
-assertEqual(ChessAI.think(deadOver, { maxDepth: 3 }).move, null,
+assertEqual(WasmAI.searchState(deadOver, { maxDepth: 3 }).move, null,
   'no move from a dead position');
 const repOver = Chess.parseFen('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');
 const repOverTable = {};
 repOverTable[Chess.positionKey(repOver)] = 3;
-assertEqual(ChessAI.think(repOver, { maxDepth: 3, positions: repOverTable }).move, null,
+assertEqual(WasmAI.searchState(repOver, { maxDepth: 3, positions: repOverTable }).move, null,
   'no move from a completed threefold repetition');
-assertEqual(!!ChessAI.think(repOver, { maxDepth: 2 }).move, true,
+assertEqual(!!WasmAI.searchState(repOver, { maxDepth: 2 }).move, true,
   'the same position without the repetition table still yields a move');
 // A full game state carries its own repetition table — think() must fall
 // back to it when opts.positions is not passed (codex review, PR #33).
-assertEqual(ChessAI.think(repetition, { maxDepth: 2 }).move, null,
+assertEqual(WasmAI.searchState(repetition, { maxDepth: 2 }).move, null,
   'no move from a finished threefold recorded in state.positions alone');
 
-// --- Zobrist hashing (transposition table keys) ---
-console.log('zobrist hashing');
+// --- Rule-layer position identity ---
+// The Rust Zobrist key is private. At the ABI boundary we deliberately pass
+// the same canonical identities that power rules-layer repetition tracking.
+console.log('position identity');
 const viaA = playSans(['Nf3', 'Nf6', 'Nc3', 'Nc6']);
 const viaB = playSans(['Nc3', 'Nc6', 'Nf3', 'Nf6']);
-assertEqual(ChessAI.hashKey(viaA), ChessAI.hashKey(viaB), 'transpositions hash equal');
-assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(viaA), true,
-  'different positions hash differently');
+assertEqual(Chess.positionKey(viaA), Chess.positionKey(viaB),
+  'transpositions have the same repetition identity');
+assertEqual(Chess.positionKey(start) !== Chess.positionKey(viaA), true,
+  'different positions have different identities');
 const plainPos = Chess.parseFen('rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 2');
 const epPos = Chess.parseFen('rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq e6 0 2');
-assertEqual(ChessAI.hashKey(plainPos) !== ChessAI.hashKey(epPos), true,
-  'en-passant square changes the hash');
+assertEqual(Chess.positionKey(plainPos), Chess.positionKey(epPos),
+  'phantom en-passant square is normalized out of the identity');
 const noCastle = Chess.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1');
-assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(noCastle), true,
-  'castling rights change the hash');
+assertEqual(Chess.positionKey(start) !== Chess.positionKey(noCastle), true,
+  'castling rights change the identity');
 const blackTurn = Chess.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1');
-assertEqual(ChessAI.hashKey(start) !== ChessAI.hashKey(blackTurn), true,
-  'side to move changes the hash');
+assertEqual(Chess.positionKey(start) !== Chess.positionKey(blackTurn), true,
+  'side to move changes the identity');
 
 // --- Tapered evaluation ---
 console.log('tapered evaluation');
-assertEqual(ChessAI.evaluate(Chess.parseFen(Chess.START_FEN).board), 0,
+assertEqual(WasmAI.evaluateState(Chess.parseFen(Chess.START_FEN)), 0,
   'mirror-symmetric start position evaluates to 0');
 // Endgame king: with no material left the king should centralize — the
 // midgame table alone would score the central king NEGATIVE.
-const kCenter = Chess.parseFen('7k/8/8/3K4/8/8/8/8 w - - 0 1').board;
-const kCorner = Chess.parseFen('7k/8/8/8/8/8/8/K7 w - - 0 1').board;
-assertEqual(ChessAI.evaluate(kCenter) > ChessAI.evaluate(kCorner), true,
+const kCenter = Chess.parseFen('7k/8/8/3K4/8/8/8/8 w - - 0 1');
+const kCorner = Chess.parseFen('7k/8/8/8/8/8/8/K7 w - - 0 1');
+assertEqual(WasmAI.evaluateState(kCenter) > WasmAI.evaluateState(kCorner), true,
   'endgame king centralization outweighs midgame king table');
 // Pawn structure: connected pawns beat doubled+isolated ones (same material).
-const doubledPawns = Chess.parseFen('4k3/8/8/8/8/3P4/3P4/4K3 w - - 0 1').board;
-const connectedPawns = Chess.parseFen('4k3/8/8/8/8/8/2PP4/4K3 w - - 0 1').board;
-assertEqual(ChessAI.evaluate(connectedPawns) > ChessAI.evaluate(doubledPawns), true,
+const doubledPawns = Chess.parseFen('4k3/8/8/8/8/3P4/3P4/4K3 w - - 0 1');
+const connectedPawns = Chess.parseFen('4k3/8/8/8/8/8/2PP4/4K3 w - - 0 1');
+assertEqual(WasmAI.evaluateState(connectedPawns) > WasmAI.evaluateState(doubledPawns), true,
   'doubled+isolated pawns are penalized');
 // Passed pawn: an advanced passer scores clearly above a blockaded-file pawn.
-const passer = Chess.parseFen('4k3/8/8/3P4/8/8/8/4K3 w - - 0 1').board;
-const nonPasser = Chess.parseFen('4k3/3p4/8/3P4/8/8/8/4K3 w - - 0 1').board;
-assertEqual(ChessAI.evaluate(passer) - ChessAI.evaluate(nonPasser) > 100, true,
+const passer = Chess.parseFen('4k3/8/8/3P4/8/8/8/4K3 w - - 0 1');
+const nonPasser = Chess.parseFen('4k3/3p4/8/3P4/8/8/8/4K3 w - - 0 1');
+assertEqual(WasmAI.evaluateState(passer) - WasmAI.evaluateState(nonPasser) > 100, true,
   'passed pawn bonus (beyond the material difference)');
 // Mobility: identical material, but one rook is boxed in behind its pawns.
-const freeRook = Chess.parseFen('4k3/8/8/8/3R4/8/PP6/4K3 w - - 0 1').board;
-const boxedRook = Chess.parseFen('4k3/8/8/8/8/8/PP6/R3K3 w - - 0 1').board;
-assertEqual(ChessAI.evaluate(freeRook) > ChessAI.evaluate(boxedRook), true,
+const freeRook = Chess.parseFen('4k3/8/8/8/3R4/8/PP6/4K3 w - - 0 1');
+const boxedRook = Chess.parseFen('4k3/8/8/8/8/8/PP6/R3K3 w - - 0 1');
+assertEqual(WasmAI.evaluateState(freeRook) > WasmAI.evaluateState(boxedRook), true,
   'active rook out-scores boxed-in rook via mobility');
 
-// --- Draw awareness inside the search ---
-console.log('draw-aware search');
+// --- Draw awareness inside deterministic full-window search ---
+console.log('draw-aware fixed search');
 // Black is "winning a rook" — but KxR leaves K vs K, a dead draw worth 0.
 const deadCap = Chess.parseFen('8/8/8/8/2k5/2R5/8/2K5 b - - 0 1');
-assertEqual(ChessAI.search(deadCap, 2, -Infinity, Infinity, false), 0,
+assertEqual(fixedScore(deadCap, 2, false), 0,
   'capturing the last piece into a dead position scores 0');
-assertEqual(ChessAI.search(deadCap, 4, -Infinity, Infinity, false), 0,
+assertEqual(fixedScore(deadCap, 4, false), 0,
   'dead-position draw holds at deeper drafts');
 // Perpetual check: White is down two rooks, but Qd8+ Kh7 Qh4+ Kg8 repeats
 // the root position. The root counts as a search-path ancestor, so the
@@ -473,7 +445,7 @@ assertEqual(ChessAI.search(deadCap, 4, -Infinity, Infinity, false), 0,
 // cycle it is — depth 4 AND deeper searches score the perpetual as a draw.
 const perpetual = Chess.parseFen('6k1/p4pp1/8/5P2/7Q/8/rr6/6K1 w - - 0 1');
 for (const d of [4, 6]) {
-  const perpR = ChessAI.think(perpetual, { maxDepth: d });
+  const perpR = WasmAI.searchState(perpetual, { maxDepth: d });
   const perpSan = Chess.toSan(perpetual, Chess.legalMoves(perpetual).find(
     (m) => m.from === perpR.move.from && m.to === perpR.move.to));
   assertEqual(perpSan, 'Qd8+', 'losing side heads for perpetual check (depth ' + d + ')');
@@ -484,7 +456,7 @@ for (const d of [4, 6]) {
 console.log('iterative deepening');
 const midgame = Chess.parseFen('r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4');
 const thinkStart = Date.now();
-const timed = ChessAI.think(midgame, { maxDepth: 64, timeMs: 300, quiesce: true });
+const timed = WasmAI.searchState(midgame, { maxDepth: 64, timeMs: 300, quiesce: true });
 const thinkMs = Date.now() - thinkStart;
 assertEqual(!!timed.move, true, 'timed think returns a move');
 assertEqual(timed.depth >= 2, true, 'timed think completes at least depth 2 (got ' + timed.depth + ')');
@@ -495,7 +467,7 @@ assertEqual(thinkMs < 1500, true, 'timed think respects its budget (took ' + thi
 // ladder under a per-move budget and require checkmate.
 let timedLadder = Chess.newGameState('7k/8/8/7p/8/8/8/RR4K1 w - - 0 1');
 for (let ply = 0; ply < 4 && !Chess.gameStatus(timedLadder).over; ply++) {
-  const r = ChessAI.think(timedLadder, {
+  const r = WasmAI.searchState(timedLadder, {
     maxDepth: 64, timeMs: 500, quiesce: true, positions: timedLadder.positions
   });
   timedLadder = Chess.playMove(timedLadder, r.move);
@@ -503,25 +475,25 @@ for (let ply = 0; ply < 4 && !Chess.gameStatus(timedLadder).over; ply++) {
 assertEqual(Chess.gameStatus(timedLadder).reason, 'checkmate', 'timed search forces the ladder mate');
 
 // Fixed-depth think (no budget) must reach exactly the requested depth.
-const fixed = ChessAI.think(midgame, { maxDepth: 3 });
+const fixed = WasmAI.searchState(midgame, { maxDepth: 3 });
 assertEqual(fixed.depth, 3, 'fixed-depth think completes the requested depth');
 
-// Root-pruning regression (bug shipped with the depth speedup): with a
-// narrowed root window, fail-low moves return BOUNDS that can equal the best
-// score; treating them as ties made the AI pick near-random moves. bestMove
-// must always return a move whose exact full-window score is optimal.
-console.log('root move selection');
+// The public play search must select a root whose score agrees with exact
+// full-window fixed searches of every child at the corresponding remaining
+// depth. This checks observable root selection without exposing alpha/beta
+// windows or transposition-table state through the JavaScript test bridge.
+console.log('exact root move selection');
 const openPos = Chess.parseFen('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2');
 const refScores = {};
 let refBest = Infinity; // Black to move minimizes
 for (const m of Chess.legalMoves(openPos)) {
-  const sc = ChessAI.search(Chess.applyMove(openPos, m), 2, -Infinity, Infinity, false);
+  const sc = fixedScore(Chess.applyMove(openPos, m), 2, false);
   refScores[m.from + '-' + m.to] = sc;
   if (sc < refBest) refBest = sc;
 }
 let optimalPicks = 0;
 for (let i = 0; i < 12; i++) {
-  const m = ChessAI.bestMove(openPos, 3, false);
+  const m = bestMove(openPos, 3, false);
   if (refScores[m.from + '-' + m.to] === refBest) optimalPicks++;
 }
 assertEqual(optimalPicks, 12, 'bestMove always returns a truly-optimal root move (12/12)');

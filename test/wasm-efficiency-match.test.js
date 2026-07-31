@@ -12,6 +12,8 @@ const Chess = globalThis.Chess;
 const MatchProtocol = require('./ai-match-protocol');
 const match = require('./wasm-efficiency-match');
 const accounting = require('./wasm-node-accounting-contract');
+const WasmBench = require('../experiments/wasm/bench.js');
+const ProductionWasmEngine = require('../assets/wasm-engine.js');
 
 const ROOT = path.join(__dirname, '..');
 const SCRIPT = path.join(__dirname, 'wasm-efficiency-match.js');
@@ -80,6 +82,40 @@ check(protocol === match.PROTOCOL &&
     protocol.engineKind === 'wasm' &&
     protocol.formal === true,
   'protocol predeclares 10000x4x100x180 and a strict >49% lower bound');
+
+console.log('cross-ABI ordinary-search boundary');
+{
+  const memory = { buffer: new ArrayBuffer(128) };
+  const view = new DataView(memory.buffer, 32, WasmBench.RESULT_BYTES);
+  view.setUint32(4, WasmBench.RESULT_BYTES, true);
+  view.setUint32(8, WasmBench.NONE_U32, true);
+  for (const version of [1, 2]) {
+    view.setUint32(0, version, true);
+    const result = WasmBench.decodeResult(memory, 32);
+    check(result.abiVersion === version && result.move === '-',
+      'developer harness accepts reviewed ordinary result ABI v' + version);
+  }
+  view.setUint32(0, 3, true);
+  throws(function () {
+    WasmBench.decodeResult(memory, 32);
+  }, /ABI version 3.*expected 1 or 2/,
+  'developer harness rejects unreviewed result ABI versions');
+  view.setUint32(0, 1, true);
+  throws(function () {
+    ProductionWasmEngine.decodeResult(memory, 32);
+  }, /ABI version 1/,
+  'production loader remains strict ABI-v2');
+  match.assertFormalAbiPair({ abiVersion: 2 }, { abiVersion: 1 });
+  check(true, 'formal match binds an ABI-v2 candidate to the ABI-v1 reference');
+  throws(function () {
+    match.assertFormalAbiPair({ abiVersion: 1 }, { abiVersion: 1 });
+  }, /formal candidate.*ABI v2/,
+  'formal match rejects a candidate that is not ABI-v2');
+  throws(function () {
+    match.assertFormalAbiPair({ abiVersion: 2 }, { abiVersion: 2 });
+  }, /formal frozen reference.*ABI v1/,
+  'formal match rejects a reference that is not ABI-v1');
+}
 
 console.log('formal shard CLI');
 const parsed = match.parseArgs([
@@ -554,7 +590,7 @@ throws(function () {
       '        nodes: search_result.nodes / 10,'),
     search: trustedAccounting.search
   });
-}, /changed trusted WASM node accounting: search function/,
+}, /changed trusted WASM node accounting: node counter declarations, writes, and result fields/,
 'rejects clamping the ABI-reported node count');
 throws(function () {
   accounting.validateSources(trustedAccounting, {
@@ -778,6 +814,10 @@ check(workflow.includes(
     workflow.includes(
       'node "$HARNESS_DIR/test/wasm-node-accounting-contract.js"') &&
     workflow.includes(
+      'experiments/wasm/bench.js') &&
+    workflow.includes(
+      'test/fixtures/wasm-r69-signatures.json') &&
+    workflow.includes(
       '"$HARNESS_DIR/experiments/wasm/src"') &&
     workflow.includes(
       '"$CANDIDATE_DIR/experiments/wasm/src"') &&
@@ -822,32 +862,32 @@ check(deepWorkflow.includes(
     deepWorkflow.includes(
       'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02') &&
     deepWorkflow.includes(
-      'TRUSTED_DEEP_HARNESS_SHA: f44ce76dd6cc68a5ad4033b391aee0adea517086') &&
+      'TRUSTED_BUILD_DRIVER_REVISION: f44ce76dd6cc68a5ad4033b391aee0adea517086') &&
     deepWorkflow.includes(
       'TRUSTED_BUILD_DRIVER_SHA256: 68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489') &&
     deepWorkflow.includes(
-      'Candidate is not descended from the trusted deep harness') &&
+      'Candidate is not descended from the pinned build driver revision') &&
     deepWorkflow.includes(
       'echo "$TRUSTED_BUILD_DRIVER_SHA256  $TRUSTED_DRIVER" |') &&
+    deepWorkflow.includes(
+      'TRUSTED_DRIVER="$DRIVER_DIR/experiments/wasm/build.sh"') &&
     deepWorkflow.includes(
       'cp "$TRUSTED_DRIVER" "$BASE_DIR/experiments/wasm/build.sh"') &&
     deepWorkflow.includes(
       'cp "$TRUSTED_DRIVER" \\\n' +
       '            experiments/wasm/build.sh') &&
     deepWorkflow.includes(
-      'node "$TRUSTED_DIR/experiments/wasm/deep-bench.test.js"') &&
-    deepWorkflow.includes(
-      'node "$TRUSTED_DIR/experiments/wasm/deep-bench.js"') &&
-    deepWorkflow.includes(
-      'node "$TRUSTED_DIR/test/wasm-node-accounting-contract.js"') &&
-    deepWorkflow.includes(
-      '"$TRUSTED_DIR/experiments/wasm/src"') &&
-    deepWorkflow.includes(
-      '"$GITHUB_WORKSPACE/experiments/wasm/src"') &&
-    !deepWorkflow.includes(
       'node experiments/wasm/deep-bench.test.js') &&
-    !deepWorkflow.includes(
+    deepWorkflow.includes(
       'node experiments/wasm/deep-bench.js') &&
+    (deepWorkflow.match(
+      /node test\/wasm-node-accounting-contract\.js/g) || []).length === 2 &&
+    deepWorkflow.includes(
+      '"$BASE_DIR/experiments/wasm/src" \\\n' +
+      '            "$BASE_DIR/experiments/wasm/src"') &&
+    deepWorkflow.includes(
+      '"$GITHUB_WORKSPACE/experiments/wasm/src" \\\n' +
+      '            "$GITHUB_WORKSPACE/experiments/wasm/src"') &&
     !deepWorkflow.includes(
       'cp experiments/wasm/build.sh \\\n' +
       '            "$BASE_DIR/experiments/wasm/build.sh"') &&
@@ -855,11 +895,15 @@ check(deepWorkflow.includes(
       'cp "$BASE_DIR/experiments/wasm/build.sh" \\\n' +
       '            experiments/wasm/build.sh') &&
     !/uses: actions\/[^@\n]+@v[0-9]/.test(deepWorkflow),
-  'deep-search evidence uses pinned trusted code and immutable action revisions');
+  'deep-search uses one pinned build driver, cross-ABI candidate harness code, and immutable action revisions');
 check(deepWorkflow.includes('TRUST SCOPE — diagnostic only') &&
     deepWorkflow.includes('never merge-authoritative') &&
-    deepWorkflow.includes('Diagnostic evidence only'),
-  'deep-search declares its candidate-controlled diagnostic trust scope');
+    deepWorkflow.includes('Diagnostic evidence only') &&
+    deepWorkflow.includes(
+      'the ABI-neutral benchmark code') &&
+    deepWorkflow.includes(
+      'This is not a trust boundary'),
+  'deep-search honestly declares its candidate-controlled cross-ABI diagnostic trust scope');
 check(deepWorkflow.includes('Freeze diagnostic build inputs') &&
     deepWorkflow.includes(
       'for input in Cargo.toml Cargo.lock rust-toolchain.toml; do') &&
