@@ -386,6 +386,22 @@ complementary subsets is rejected because it could silently omit a role from a
 physical mixed-role shard. The report records complete per-role physical
 counts plus each stream's selected count.
 
+Validation hashes and fully checks records from one retained file descriptor,
+so replacing a shard pathname cannot substitute different bytes between those
+steps. A training run additionally copies each shard, with bounded memory, to
+an unlinked temporary snapshot in the checkpoint directory. Every epoch
+rewinds and rehashes those same authenticated bytes; it never reopens an input
+pathname. Allow one teacher-corpus-sized block of temporary space on the
+checkpoint filesystem. Snapshots are closed and removed on success or failure.
+`--validate-inputs` avoids that corpus-sized copy, retains the authenticated
+descriptors only through report generation, and then closes them.
+
+The trainer also captures the configuration, architecture, trainer source,
+teacher, held-out, and corpus-contract hashes before fitting. The model card
+uses those captured hashes, and the files, all input sidecars, selection
+manifests/shards, and immutable teacher snapshots are checked again under the
+output lock immediately before atomic checkpoint/model-card publication.
+
 The G1 head is an expected-score logit, not a falsely labelled centipawn score.
 G2 must fit and freeze its logit-to-centipawn scale on `nnue-validation` before
 quantization or search integration.

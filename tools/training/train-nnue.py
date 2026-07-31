@@ -20,7 +20,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, BinaryIO, Iterable, Iterator
 
 from _artifact_publication import (
     acquire_output_prefix_lock,
@@ -144,6 +144,7 @@ class ParsedPosition:
 @dataclass(frozen=True)
 class InputContracts:
     config_path: Path
+    config_sha256: str
     config: dict[str, Any]
     teacher_path: Path
     teacher_sha256: str
@@ -180,6 +181,8 @@ class SelectionBinding:
 class Shard:
     path: Path
     sha256: str
+    authenticated_stream: BinaryIO = field(repr=False)
+    immutable_snapshot: bool
     rows: int
     sidecar_path: Path
     sidecar_sha256: str
@@ -188,6 +191,7 @@ class Shard:
     selection_shard: SelectionShard
     observed_rows: int = 0
     role_rows: dict[str, int] = field(default_factory=dict)
+    fully_validated: bool = False
 
 
 @dataclass(frozen=True)
@@ -198,6 +202,21 @@ class ValidatedInputs:
     selection_contract_sha256: str
     source_snapshot_sha256: str
     sample_only: bool
+
+    def close(self) -> None:
+        seen: set[int] = set()
+        for shard in self.train + self.validation:
+            identity = id(shard.authenticated_stream)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            shard.authenticated_stream.close()
+
+    def __enter__(self) -> ValidatedInputs:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
 
 def sha256_text(value: str) -> str:
@@ -443,6 +462,42 @@ def sha256_file(filename: Path) -> str:
     return digest.hexdigest()
 
 
+def capture_teacher_bytes(
+    filename: Path,
+    *,
+    immutable_snapshot: bool,
+    snapshot_directory: Path | None,
+) -> tuple[BinaryIO, str]:
+    source = filename.open("rb")
+    captured: BinaryIO = source
+    if immutable_snapshot:
+        try:
+            captured = tempfile.TemporaryFile(
+                mode="w+b",
+                prefix=".chessy-nnue-shard-",
+                dir=snapshot_directory,
+            )
+        except BaseException:
+            source.close()
+            raise
+    digest = hashlib.sha256()
+    try:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+            if immutable_snapshot:
+                captured.write(chunk)
+        if immutable_snapshot:
+            captured.flush()
+            source.close()
+        captured.seek(0)
+        return captured, digest.hexdigest()
+    except BaseException:
+        captured.close()
+        if captured is not source:
+            source.close()
+        raise
+
+
 def load_json_buffer(
     filename: Path, label: str
 ) -> tuple[dict[str, Any], str]:
@@ -482,7 +537,7 @@ def require_nonnegative_int(value: Any, label: str) -> int:
 def load_contracts(root: Path | None = None) -> InputContracts:
     repository = root or Path(__file__).resolve().parents[2]
     config_path = repository / "eval/training/nnue-v1-train.json"
-    config = load_json(config_path)
+    config, config_sha256 = load_json_buffer(config_path, str(config_path))
     contract = require_object(
         config.get("data", {}).get("trustBoundary"), "trustBoundary"
     )
@@ -507,12 +562,12 @@ def load_contracts(root: Path | None = None) -> InputContracts:
         filename = (repository / relative).resolve()
         if not filename.is_file():
             raise ValueError(f"pinned contract file is missing: {filename}")
-        actual_sha = sha256_file(filename)
+        value, actual_sha = load_json_buffer(filename, str(filename))
         if actual_sha != expected_sha:
             raise ValueError(
                 f"{path_key} SHA-256 drifted: expected {expected_sha}, got {actual_sha}"
             )
-        return filename, actual_sha, load_json(filename)
+        return filename, actual_sha, value
 
     teacher_path, teacher_sha, teacher = pinned_file(
         "teacherManifest", "teacherManifestSha256"
@@ -566,6 +621,7 @@ def load_contracts(root: Path | None = None) -> InputContracts:
         raise ValueError("held-out incident keys drifted")
     return InputContracts(
         config_path=config_path,
+        config_sha256=config_sha256,
         config=config,
         teacher_path=teacher_path,
         teacher_sha256=teacher_sha,
@@ -820,6 +876,8 @@ def validate_sidecar(
     *,
     sample_only: bool = False,
     selection_cache: dict[Path, SelectionBinding] | None = None,
+    immutable_snapshot: bool = False,
+    snapshot_directory: Path | None = None,
 ) -> Shard:
     suffix = contracts.config["data"]["trustBoundary"]["sidecarSuffix"]
     sidecar_path = Path(str(filename) + suffix)
@@ -859,10 +917,6 @@ def validate_sidecar(
     recorded_sha = require_sha256(output.get("sha256"), f"{label}.output.sha256")
     if Path(str(output.get("path", ""))).name != filename.name:
         raise ValueError(f"{label}: output.path does not identify {filename.name}")
-    actual_sha = sha256_file(filename)
-    if recorded_sha != actual_sha:
-        raise ValueError(f"{filename}: SHA-256 does not match its sidecar")
-
     side_teacher = require_object(manifest.get("teacher"), f"{label}.teacher")
     teacher_manifest = require_object(
         side_teacher.get("manifest"), f"{label}.teacher.manifest"
@@ -980,9 +1034,19 @@ def validate_sidecar(
         side_teacher.get("transcript"), f"{label}.teacher.transcript"
     )
     require_sha256(transcript.get("sha256"), f"{label}.teacher.transcript.sha256")
+    authenticated_stream, actual_sha = capture_teacher_bytes(
+        filename,
+        immutable_snapshot=immutable_snapshot,
+        snapshot_directory=snapshot_directory,
+    )
+    if recorded_sha != actual_sha:
+        authenticated_stream.close()
+        raise ValueError(f"{filename}: SHA-256 does not match its sidecar")
     return Shard(
         path=filename,
         sha256=actual_sha,
+        authenticated_stream=authenticated_stream,
+        immutable_snapshot=immutable_snapshot,
         rows=rows,
         sidecar_path=sidecar_path,
         sidecar_sha256=sidecar_sha,
@@ -1149,41 +1213,64 @@ def validate_record(
     return record
 
 
+def iter_authenticated_lines(shard: Shard) -> Iterator[tuple[int, str]]:
+    stream = shard.authenticated_stream
+    if stream.closed:
+        raise RuntimeError(f"authenticated shard snapshot is closed: {shard.path}")
+    stream.seek(0)
+    digest = hashlib.sha256()
+    for line_number, raw_line in enumerate(stream, 1):
+        digest.update(raw_line)
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(
+                f"{shard.path}:{line_number}: teacher shard is not UTF-8"
+            ) from error
+        yield line_number, line
+    actual_sha256 = digest.hexdigest()
+    if actual_sha256 != shard.sha256:
+        raise RuntimeError(
+            f"authenticated shard bytes changed: {shard.path}; "
+            f"expected={shard.sha256}; actual={actual_sha256}"
+        )
+
+
 def iter_validated_shard(
     shard: Shard, contracts: InputContracts
 ) -> Iterator[tuple[str, dict[str, Any], Shard]]:
     previous_id: str | None = None
     rows = 0
     role_rows = {role: 0 for role in CORPUS_ROLES}
-    with shard.path.open("r", encoding="utf-8") as stream:
-        for line_number, line in enumerate(stream, 1):
-            if not line.strip():
-                raise ValueError(
-                    f"{shard.path}:{line_number}: blank rows are forbidden"
-                )
-            try:
-                parsed = json.loads(line)
-            except json.JSONDecodeError as error:
-                raise ValueError(
-                    f"{shard.path}:{line_number}: invalid JSON: {error.msg}"
-                ) from error
-            record = validate_record(parsed, shard, line_number, contracts)
-            record_id = record["id"]
-            if previous_id is not None and record_id <= previous_id:
-                reason = "duplicate" if record_id == previous_id else "unsorted"
-                raise ValueError(
-                    f"{shard.path}:{line_number}: {reason} record ID {record_id}"
-                )
-            previous_id = record_id
-            rows += 1
-            role_rows[record["role"]] += 1
-            yield record_id, record, shard
+    for line_number, line in iter_authenticated_lines(shard):
+        if not line.strip():
+            raise ValueError(
+                f"{shard.path}:{line_number}: blank rows are forbidden"
+            )
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"{shard.path}:{line_number}: invalid JSON: {error.msg}"
+            ) from error
+        record = validate_record(parsed, shard, line_number, contracts)
+        record_id = record["id"]
+        if previous_id is not None and record_id <= previous_id:
+            reason = "duplicate" if record_id == previous_id else "unsorted"
+            raise ValueError(
+                f"{shard.path}:{line_number}: {reason} record ID {record_id}"
+            )
+        previous_id = record_id
+        rows += 1
+        role_rows[record["role"]] += 1
+        yield record_id, record, shard
     shard.observed_rows = rows
     shard.role_rows = role_rows
     if rows != shard.rows:
         raise ValueError(
             f"{shard.path}: sidecar rows={shard.rows}, observed rows={rows}"
         )
+    shard.fully_validated = True
 
 
 def resolve_input_files(values: Iterable[str], label: str) -> list[Path]:
@@ -1261,14 +1348,16 @@ def require_complete_selection_inventory(
         )
 
 
-def validate_inputs(
+def _validate_inputs_retained(
     train_values: Iterable[str],
     validation_values: Iterable[str],
-    root: Path | None = None,
+    contracts: InputContracts,
+    opened_shards: list[Shard],
     *,
     sample_only: bool = False,
+    immutable_snapshots: bool = False,
+    snapshot_directory: Path | None = None,
 ) -> ValidatedInputs:
-    contracts = load_contracts(root)
     train_paths = resolve_input_files(train_values, "--train")
     validation_paths = resolve_input_files(validation_values, "--validation")
     # Teacher shards preserve the ID order of their selected input shards, so
@@ -1280,15 +1369,18 @@ def validate_inputs(
         set(train_paths).union(validation_paths), key=lambda item: str(item)
     )
     selection_cache: dict[Path, SelectionBinding] = {}
-    by_path = {
-        filename: validate_sidecar(
+    by_path: dict[Path, Shard] = {}
+    for filename in all_paths:
+        shard = validate_sidecar(
             filename,
             contracts,
             sample_only=sample_only,
             selection_cache=selection_cache,
+            immutable_snapshot=immutable_snapshots,
+            snapshot_directory=snapshot_directory,
         )
-        for filename in all_paths
-    }
+        opened_shards.append(shard)
+        by_path[filename] = shard
     train = [by_path[filename] for filename in train_paths]
     validation = [by_path[filename] for filename in validation_paths]
     all_shards = [by_path[filename] for filename in all_paths]
@@ -1373,6 +1465,34 @@ def validate_inputs(
     )
 
 
+def validate_inputs(
+    train_values: Iterable[str],
+    validation_values: Iterable[str],
+    root: Path | None = None,
+    *,
+    sample_only: bool = False,
+    contracts: InputContracts | None = None,
+    immutable_snapshots: bool = False,
+    snapshot_directory: Path | None = None,
+) -> ValidatedInputs:
+    captured_contracts = contracts or load_contracts(root)
+    opened_shards: list[Shard] = []
+    try:
+        return _validate_inputs_retained(
+            train_values,
+            validation_values,
+            captured_contracts,
+            opened_shards,
+            sample_only=sample_only,
+            immutable_snapshots=immutable_snapshots,
+            snapshot_directory=snapshot_directory,
+        )
+    except BaseException:
+        for shard in opened_shards:
+            shard.authenticated_stream.close()
+        raise
+
+
 def validation_report(
     validated: ValidatedInputs, contracts: InputContracts
 ) -> dict[str, Any]:
@@ -1427,6 +1547,30 @@ def validation_report(
 
 
 def assert_inputs_unchanged(validated: ValidatedInputs) -> None:
+    unique = {
+        shard.path: shard
+        for shard in validated.train + validated.validation
+    }
+    for shard in unique.values():
+        if shard.authenticated_stream.closed:
+            raise RuntimeError(
+                f"authenticated shard snapshot closed during training: {shard.path}"
+            )
+        shard.authenticated_stream.seek(0)
+        digest = hashlib.sha256()
+        for chunk in iter(
+            lambda: shard.authenticated_stream.read(1024 * 1024), b""
+        ):
+            digest.update(chunk)
+        shard.authenticated_stream.seek(0)
+        if digest.hexdigest() != shard.sha256:
+            raise RuntimeError(
+                f"authenticated shard bytes changed during training: {shard.path}"
+            )
+        if not shard.fully_validated:
+            raise RuntimeError(
+                f"authenticated shard lost full-validation state: {shard.path}"
+            )
     assert_shards_unchanged(
         validated.train + validated.validation,
         RuntimeError,
@@ -1434,41 +1578,79 @@ def assert_inputs_unchanged(validated: ValidatedInputs) -> None:
     )
 
 
-def iter_records(filenames: list[Path], expected_role: str) -> Iterator[dict]:
+def assert_captured_files_unchanged(
+    files: Iterable[tuple[Path, str, str]],
+) -> None:
+    for filename, expected_sha256, label in files:
+        actual_sha256 = sha256_file(filename)
+        if actual_sha256 != expected_sha256:
+            raise RuntimeError(
+                f"{label} changed during training: {filename}; "
+                f"expected={expected_sha256}; actual={actual_sha256}"
+            )
+
+
+def assert_training_provenance_unchanged(
+    validated: ValidatedInputs,
+    contracts: InputContracts,
+    architecture_path: Path,
+    architecture_sha256: str,
+    trainer_path: Path,
+    trainer_sha256: str,
+) -> None:
+    assert_inputs_unchanged(validated)
+    assert_captured_files_unchanged(
+        (
+            (contracts.config_path, contracts.config_sha256, "training config"),
+            (architecture_path, architecture_sha256, "architecture contract"),
+            (trainer_path, trainer_sha256, "trainer source"),
+            (
+                contracts.teacher_path,
+                contracts.teacher_sha256,
+                "teacher manifest",
+            ),
+            (
+                contracts.heldout_path,
+                contracts.heldout_sha256,
+                "held-out manifest",
+            ),
+            (
+                contracts.corpus_path,
+                contracts.corpus_sha256,
+                "corpus contract",
+            ),
+        )
+    )
+
+
+def iter_records(shards: Iterable[Shard], expected_role: str) -> Iterator[dict]:
     if expected_role not in ALLOWED_ROLES:
         raise ValueError(f"trainer is not allowed to read role {expected_role}")
-    for filename in filenames:
-        with filename.open("r", encoding="utf-8") as stream:
-            for number, line in enumerate(stream, 1):
-                if not line.strip():
-                    raise ValueError(f"{filename}:{number}: blank rows are forbidden")
-                record = json.loads(line)
-                if record.get("schema") != "chessy.teacher-position.v1":
-                    raise ValueError(f"{filename}:{number}: wrong schema")
-                role = record.get("role")
-                if role not in CORPUS_ROLES:
-                    raise ValueError(
-                        f"{filename}:{number}: unknown corpus role {role!r}"
-                    )
-                if role != expected_role:
-                    continue
-                teacher = record.get("teacher")
-                target = (
-                    teacher.get("targetWhite")
-                    if isinstance(teacher, dict)
-                    else None
+    for shard in shards:
+        if not shard.fully_validated:
+            raise RuntimeError(
+                f"trainer received a shard without full validation: {shard.path}"
+            )
+        rows = 0
+        for number, line in iter_authenticated_lines(shard):
+            rows += 1
+            if not line.strip():
+                raise ValueError(
+                    f"{shard.path}:{number}: blank rows are forbidden"
                 )
-                if (
-                    isinstance(target, bool)
-                    or not isinstance(target, (int, float))
-                    or not math.isfinite(float(target))
-                    or float(target) < 0.0
-                    or float(target) > 1.0
-                ):
-                    raise ValueError(
-                        f"{filename}:{number}: pinned teacher target must be in [0,1]"
-                    )
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"{shard.path}:{number}: invalid JSON: {error.msg}"
+                ) from error
+            role = record.get("role")
+            if role == expected_role:
                 yield record
+        if rows != shard.rows or rows != shard.observed_rows:
+            raise RuntimeError(
+                f"authenticated shard row count changed: {shard.path}"
+            )
 
 
 def shuffled(
@@ -1693,7 +1875,8 @@ def self_test() -> None:
     )
     rejects(
         ValueError,
-        "--validation teacher inputs do not cover the complete selection shard inventory",
+        "--validation teacher inputs do not cover the complete "
+        "selection shard inventory",
         lambda: require_complete_selection_inventory(
             [Path("selection-001.ndjson")],
             inventory,
@@ -1980,6 +2163,7 @@ def self_test() -> None:
             ),
             encoding="utf-8",
         )
+        original_teacher_bytes = teacher_file.read_bytes()
         selection = write_selection_fixture(
             directory,
             teacher_file,
@@ -1989,9 +2173,23 @@ def self_test() -> None:
         )
         write_sidecar(teacher_file, 2, selection)
         validated = validate_inputs(
-            [str(teacher_file)], [str(teacher_file)], root
+            [str(teacher_file)],
+            [str(teacher_file)],
+            root,
+            contracts=contracts,
+            immutable_snapshots=True,
+            snapshot_directory=directory,
         )
         report = validation_report(validated, contracts)
+        check(
+            validated.train[0].immutable_snapshot,
+            "training fixture uses an immutable disk snapshot",
+        )
+        equal(
+            contracts.config_sha256,
+            sha256_file(contracts.config_path),
+            "captured training-config digest",
+        )
         equal(
             report["status"],
             "validated-pinned-teacher-inputs",
@@ -2019,10 +2217,89 @@ def self_test() -> None:
         )
         equal(
             [record["id"] for record in iter_records(
-                [teacher_file], "shared-train"
+                validated.train, "shared-train"
             )],
             [train_record["id"]],
             "mixed-shard streaming role filter",
+        )
+        equal(
+            [record["id"] for record in iter_records(
+                validated.validation, "nnue-validation"
+            )],
+            [validation_record["id"]],
+            "shared snapshot rewinds for validation stream",
+        )
+        substitute_file = directory / "teacher-substitute.ndjson"
+        substitute_file.write_text('{"transient":"replacement"}\n', encoding="utf-8")
+        os.replace(substitute_file, teacher_file)
+        equal(
+            [record["id"] for record in iter_records(
+                validated.train, "shared-train"
+            )],
+            [train_record["id"]],
+            "atomic pathname replacement cannot alter authenticated iteration",
+        )
+        teacher_file.write_bytes(original_teacher_bytes)
+        snapshot_stream = validated.train[0].authenticated_stream
+        snapshot_stream.seek(0)
+        changed_snapshot_bytes = original_teacher_bytes.replace(
+            b'"targetWhite": 0.5', b'"targetWhite": 0.4', 1
+        )
+        check(
+            changed_snapshot_bytes != original_teacher_bytes,
+            "snapshot mutation fixture changed bytes",
+        )
+        snapshot_stream.write(changed_snapshot_bytes)
+        snapshot_stream.truncate()
+        snapshot_stream.flush()
+        rejects(
+            RuntimeError,
+            "authenticated shard bytes changed",
+            lambda: list(iter_records(validated.train, "shared-train")),
+            "in-place authenticated snapshot mutation",
+        )
+        rejects(
+            RuntimeError,
+            "authenticated shard bytes changed during training",
+            lambda: assert_inputs_unchanged(validated),
+            "snapshot mutation blocks the pre-publication gate",
+        )
+        snapshot_stream.seek(0)
+        snapshot_stream.write(original_teacher_bytes)
+        snapshot_stream.truncate()
+        snapshot_stream.flush()
+        architecture_path = root / "eval/training/nnue-v1-architecture.json"
+        _, architecture_sha256 = load_json_buffer(
+            architecture_path, str(architecture_path)
+        )
+        trainer_path = Path(__file__).resolve()
+        trainer_sha256 = sha256_file(trainer_path)
+        assert_training_provenance_unchanged(
+            validated,
+            contracts,
+            architecture_path,
+            architecture_sha256,
+            trainer_path,
+            trainer_sha256,
+        )
+        checks += 1
+        provenance_fixture = directory / "captured-contract.json"
+        provenance_fixture.write_text('{"version":1}\n', encoding="utf-8")
+        provenance_fixture_sha256 = sha256_file(provenance_fixture)
+        provenance_fixture.write_text('{"version":2}\n', encoding="utf-8")
+        rejects(
+            RuntimeError,
+            "fixture contract changed during training",
+            lambda: assert_captured_files_unchanged(
+                (
+                    (
+                        provenance_fixture,
+                        provenance_fixture_sha256,
+                        "fixture contract",
+                    ),
+                )
+            ),
+            "captured contract mutation blocks publication",
         )
         sample_file = directory / "teacher-sample-000.ndjson"
         sample_records = sorted(
@@ -2089,6 +2366,10 @@ def self_test() -> None:
             sample_only=True,
         )
         sample_report = validation_report(sample_validated, contracts)
+        check(
+            not sample_validated.train[0].immutable_snapshot,
+            "validation-only fixture avoids a disk snapshot copy",
+        )
         equal(
             sample_report["status"],
             "validated-sample-only-pinned-teacher-inputs",
@@ -2099,6 +2380,9 @@ def self_test() -> None:
             False,
             "sample-only validation cannot authorize fitting",
         )
+        sample_stream = sample_validated.train[0].authenticated_stream
+        sample_validated.close()
+        check(sample_stream.closed, "sample validation closes captured input")
         escaped_file = directory / "teacher-sample-escape-000.ndjson"
         escaped_file.write_bytes(sample_file.read_bytes())
         escaped_sidecar = write_sidecar(
@@ -2168,9 +2452,12 @@ def self_test() -> None:
         rejects(
             ValueError,
             "trainer is not allowed to read role nnue-test",
-            lambda: list(iter_records([teacher_file], "nnue-test")),
+            lambda: list(iter_records(validated.train, "nnue-test")),
             "test-role refusal",
         )
+        validated_stream = validated.train[0].authenticated_stream
+        validated.close()
+        check(validated_stream.closed, "training snapshot closes explicitly")
 
     with tempfile.TemporaryDirectory(
         prefix="chessy-nnue-publication-self-test-"
@@ -2185,15 +2472,19 @@ def self_test() -> None:
     print(f"{checks} PyTorch-free NNUE trainer self-test checks passed")
 
 
-def train(args: argparse.Namespace) -> None:
-    if getattr(args, "sample_only", False):
-        raise SystemExit("sample-only inputs are validation-only and cannot train")
-    root = Path(__file__).resolve().parents[2]
-    validated = validate_inputs(args.train, args.validation, root)
-    contracts = load_contracts(root)
+def _train_validated(
+    args: argparse.Namespace,
+    validated: ValidatedInputs,
+    contracts: InputContracts,
+    architecture_path: Path,
+    architecture: dict[str, Any],
+    architecture_sha256: str,
+    trainer_path: Path,
+    trainer_sha256: str,
+    output: Path,
+    card_path: Path,
+) -> None:
     report = validation_report(validated, contracts)
-    train_files = [shard.path for shard in validated.train]
-    validation_files = [shard.path for shard in validated.validation]
 
     try:
         import torch
@@ -2204,10 +2495,7 @@ def train(args: argparse.Namespace) -> None:
             "development dependency from nnue-v1-train.json"
         ) from error
 
-    architecture_path = root / "eval/training/nnue-v1-architecture.json"
-    architecture = load_json(architecture_path)
     config = contracts.config
-    config_path = contracts.config_path
     torch_version = torch.__version__.split("+", 1)[0]
     if torch_version != "2.7.1":
         raise SystemExit(
@@ -2222,12 +2510,6 @@ def train(args: argparse.Namespace) -> None:
     candidate = candidates[args.architecture]
     if args.seed not in architecture["trainingSeeds"]:
         raise SystemExit("seed is not one of the three preregistered seeds")
-    output = Path(args.output).resolve()
-    card_path = output.with_suffix(output.suffix + ".model-card.json")
-    if output.exists() or card_path.exists():
-        raise SystemExit("refusing to overwrite checkpoint or model card")
-    output.parent.mkdir(parents=True, exist_ok=True)
-
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
@@ -2282,7 +2564,7 @@ def train(args: argparse.Namespace) -> None:
         model.train()
         total_loss = 0.0
         total_rows = 0
-        source = iter_records(train_files, "shared-train")
+        source = iter_records(validated.train, "shared-train")
         source = shuffled(source, args.seed * 1000 + epoch, shuffle_capacity)
         for batch in batches(source, batch_size):
             stm, nstm, target = tensors(batch)
@@ -2301,7 +2583,9 @@ def train(args: argparse.Namespace) -> None:
         validation_loss = 0.0
         validation_rows = 0
         with torch.no_grad():
-            validation_source = iter_records(validation_files, "nnue-validation")
+            validation_source = iter_records(
+                validated.validation, "nnue-validation"
+            )
             for batch in batches(validation_source, batch_size):
                 stm, nstm, target = tensors(batch)
                 loss = loss_function(model(stm, nstm), target)
@@ -2319,7 +2603,6 @@ def train(args: argparse.Namespace) -> None:
         history.append(epoch_result)
         print(json.dumps(epoch_result, sort_keys=True), flush=True)
 
-    assert_inputs_unchanged(validated)
     checkpoint = {
         "schema": "chessy-nnue-research-checkpoint-v1",
         "architecture": args.architecture,
@@ -2345,8 +2628,9 @@ def train(args: argparse.Namespace) -> None:
             },
             "inputs": report,
             "contracts": {
-                "architectureSha256": sha256_file(architecture_path),
-                "trainingConfigSha256": sha256_file(config_path),
+                "architectureSha256": architecture_sha256,
+                "trainingConfigSha256": contracts.config_sha256,
+                "trainerSha256": trainer_sha256,
                 "teacherManifestSha256": contracts.teacher_sha256,
                 "heldoutManifestSha256": contracts.heldout_sha256,
                 "corpusContractSha256": contracts.corpus_sha256,
@@ -2367,6 +2651,14 @@ def train(args: argparse.Namespace) -> None:
         except FileExistsError as error:
             raise SystemExit(str(error)) from error
         try:
+            assert_training_provenance_unchanged(
+                validated,
+                contracts,
+                architecture_path,
+                architecture_sha256,
+                trainer_path,
+                trainer_sha256,
+            )
             refuse_existing_pair(
                 (output, card_path), "checkpoint or model card"
             )
@@ -2381,6 +2673,48 @@ def train(args: argparse.Namespace) -> None:
             raise SystemExit(str(error)) from error
         finally:
             release_output_prefix_lock(lock_descriptor, lock_path)
+
+
+def train(args: argparse.Namespace) -> None:
+    if getattr(args, "sample_only", False):
+        raise SystemExit("sample-only inputs are validation-only and cannot train")
+    root = Path(__file__).resolve().parents[2]
+    output = Path(args.output).resolve()
+    card_path = output.with_suffix(output.suffix + ".model-card.json")
+    if output.exists() or card_path.exists():
+        raise SystemExit("refusing to overwrite checkpoint or model card")
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    contracts = load_contracts(root)
+    architecture_path = root / "eval/training/nnue-v1-architecture.json"
+    architecture, architecture_sha256 = load_json_buffer(
+        architecture_path, str(architecture_path)
+    )
+    trainer_path = Path(__file__).resolve()
+    trainer_sha256 = sha256_file(trainer_path)
+    validated = validate_inputs(
+        args.train,
+        args.validation,
+        root,
+        contracts=contracts,
+        immutable_snapshots=True,
+        snapshot_directory=output.parent,
+    )
+    try:
+        _train_validated(
+            args,
+            validated,
+            contracts,
+            architecture_path,
+            architecture,
+            architecture_sha256,
+            trainer_path,
+            trainer_sha256,
+            output,
+            card_path,
+        )
+    finally:
+        validated.close()
 
 
 def main() -> None:
@@ -2427,18 +2761,24 @@ def main() -> None:
     if args.validate_inputs:
         if not args.train or not args.validation:
             parser.error("--validate-inputs requires --train and --validation")
+        validated: ValidatedInputs | None = None
         try:
             root = Path(__file__).resolve().parents[2]
+            contracts = load_contracts(root)
             validated = validate_inputs(
                 args.train,
                 args.validation,
                 root,
                 sample_only=args.sample_only,
+                contracts=contracts,
             )
-            contracts = load_contracts(root)
-        except (OSError, ValueError, KeyError, TypeError) as error:
+            report = validation_report(validated, contracts)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as error:
             parser.error(str(error))
-        print(json.dumps(validation_report(validated, contracts), sort_keys=True))
+        finally:
+            if validated is not None:
+                validated.close()
+        print(json.dumps(report, sort_keys=True))
         return
     required = {
         "--train": args.train,
