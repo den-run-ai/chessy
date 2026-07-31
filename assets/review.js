@@ -219,6 +219,12 @@
       const games = [];
       let skipped = 0;
       for (const game of storedGames) {
+        if (typeof ChessyArchive !== 'undefined' &&
+            typeof ChessyArchive.suppressesEnding === 'function' &&
+            ChessyArchive.suppressesEnding(
+              game.id, game.sans, game.result, game.reason)) {
+          continue;
+        }
         if (reviewState(game).error) skipped++;
         else games.push(game);
       }
@@ -1008,6 +1014,12 @@
       return Promise.resolve();
     }
     return CoachStore.getGame(gameId).then(function (game) {
+      if (game && typeof ChessyArchive !== 'undefined' &&
+          typeof ChessyArchive.suppressesEnding === 'function' &&
+          ChessyArchive.suppressesEnding(
+            game.id, game.sans, game.result, game.reason)) {
+        return renderGameList().then(function () { $('tabReview').focus(); });
+      }
       if (game && openReview(game)) return; // openReview moves focus into the flow
       else $('tabReview').focus();
     }).catch(function () { $('tabReview').focus(); });

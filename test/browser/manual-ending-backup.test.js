@@ -5,7 +5,7 @@ const fs = require('fs');
 require('./helper').run('manual ending backup', async function (t) {
   const page = t.page, check = t.check;
 
-  async function putManualSave(id, manualEnding) {
+  async function putManualSave(id, manualEnding, fenMode) {
     return page.evaluate(function (args) {
       let s = Chess.newGameState();
       const legal = Chess.legalMoves(s);
@@ -14,7 +14,7 @@ require('./helper').run('manual ending backup', async function (t) {
           Chess.sqName(move.to) === 'e4';
       });
       s = Chess.playMove(s, e4);
-      const blob = JSON.stringify({
+      const saved = {
         fen: Chess.toFen(s),
         history: s.history,
         mode: 'pvp',
@@ -26,11 +26,16 @@ require('./helper').run('manual ending backup', async function (t) {
         flipped: false,
         gameId: args.id,
         endedAt: 84
-      });
+      };
+      if (args.fenMode === 'missing') delete saved.fen;
+      if (args.fenMode === 'mismatch') {
+        saved.fen = Chess.toFen(Chess.newGameState());
+      }
+      const blob = JSON.stringify(saved);
       localStorage.setItem('chessy-game-v1', blob);
       localStorage.removeItem('chessy-pending-archive-v1');
       return blob;
-    }, { id: id, manualEnding: manualEnding });
+    }, { id: id, manualEnding: manualEnding, fenMode: fenMode });
   }
 
   async function backup() {
@@ -64,6 +69,22 @@ require('./helper').run('manual ending backup', async function (t) {
   check(!malformedBackup.stores.games.some(function (game) {
     return game.id === 'malformed-manual';
   }), 'a malformed manual ending cannot fabricate a completed backup row');
+
+  await putManualSave('manual-missing-fen', {
+    kind: 'resignation', color: 'w'
+  }, 'missing');
+  const missingFenBackup = await backup();
+  check(!missingFenBackup.stores.games.some(function (game) {
+    return game.id === 'manual-missing-fen';
+  }), 'a manual ending without a saved FEN cannot fabricate a backup row');
+
+  await putManualSave('manual-mismatched-fen', {
+    kind: 'draw-agreement'
+  }, 'mismatch');
+  const mismatchedFenBackup = await backup();
+  check(!mismatchedFenBackup.stores.games.some(function (game) {
+    return game.id === 'manual-mismatched-fen';
+  }), 'a manual ending whose saved FEN disagrees with replay is excluded');
 
   // Delete-all uses the same reconstruction path to fence a finished save that
   // differs from the app closure's current live game.

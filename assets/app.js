@@ -52,6 +52,7 @@
   const endGameConfirmEl = document.getElementById('endGameConfirm');
   const endGameCancelEl = document.getElementById('endGameCancel');
   const gameOverDialog = document.getElementById('gameOverDialog');
+  const undoEl = document.getElementById('undo');
   const replayStartEl = document.getElementById('replayStart');
   const replayBackEl = document.getElementById('replayBack');
   const replayFwdEl = document.getElementById('replayFwd');
@@ -68,6 +69,7 @@
   // reason while Chess.gameStatus() remains a rules-only boundary.
   let manualEnding = null;    // {kind:'resignation',color:'w|b'} | {kind:'draw-agreement'}
   let endAttempt = null;      // owns a paused resign/draw confirmation
+  let archiveRetractionActive = false;
   // Owns the frozen live game while a New Game request is release-gated,
   // committing its incomplete checkpoint, or awaiting a failure decision.
   // Object identity, not just gameId, prevents a stale attempt from resuming
@@ -423,10 +425,12 @@
     replayBackEl.disabled = shown === 0;
     replayFwdEl.disabled = shown >= n;
     replayLiveEl.disabled = !viewing;
+    undoEl.disabled = archiveRetractionActive;
     // Ending a historical position would be ambiguous: these controls always
     // apply to the live game. They remain available while Chessy is thinking
     // so a player can resign or propose a draw without waiting for the worker.
-    const endingDisabled = status.over || viewing || !!checkpointAttempt || !!endAttempt;
+    const endingDisabled = status.over || viewing || !!checkpointAttempt ||
+      !!endAttempt || archiveRetractionActive;
     offerDrawEl.disabled = endingDisabled;
     resignEl.disabled = endingDisabled;
 
@@ -438,7 +442,7 @@
     renderClocks();
     renderMoves();
     renderCaptured();
-    save();
+    return save();
   }
 
   function fmtClock(ms) {
@@ -615,7 +619,7 @@
     setFocusSquare(i); // keep the roving tab stop on the last-touched square
     // While reviewing, a board tap returns to the live position.
     if (isViewing()) { setViewPly(null); return; }
-    if (aiThinking || fullStatus().over) return;
+    if (archiveRetractionActive || aiThinking || fullStatus().over) return;
     if (!humanColors().includes(state.turn)) return;
 
     const p = state.board[i];
@@ -677,7 +681,8 @@
   }
 
   function maybeAiMove() {
-    if (checkpointAttempt || state.turn !== aiColor() || fullStatus().over) return;
+    if (archiveRetractionActive || checkpointAttempt ||
+        state.turn !== aiColor() || fullStatus().over) return;
     clearAiFailure(true);
     aiThinking = true;
     const cfg = aiConfig();
@@ -882,6 +887,13 @@
     if (el === archiveBootNoteEl) bootNoteOwner = ownerId || '*';
     el.hidden = false;
     el.textContent = 'This game could not be archived (storage unavailable).';
+  }
+
+  function showArchiveRetractionFailure(ownerId) {
+    bootNoteOwner = ownerId || '*';
+    archiveBootNoteEl.hidden = false;
+    archiveBootNoteEl.textContent =
+      "This game's withdrawn result could not be removed (storage unavailable).";
   }
 
   function clearArchiveFailure(ownerId) {
@@ -1252,6 +1264,17 @@
   }
 
   function beginNewGameStart(next, discard) {
+    if (archiveRetractionActive) {
+      const waitSeq = freshStartSeq;
+      newGameStatusEl.textContent = 'Finishing Undo before replacing this game…';
+      newGameStartEl.disabled = true;
+      newGameCancelEl.disabled = false;
+      archiveAttempt.then(function () {
+        if (waitSeq !== freshStartSeq || !newGameDialog.open) return;
+        beginNewGameStart(next, discard);
+      });
+      return;
+    }
     const status = fullStatus();
     const attempt = {
       gameId: gameId,
@@ -1359,7 +1382,8 @@
     resumeCheckpointGame(attempt);
   });
 
-  document.getElementById('undo').addEventListener('click', function () {
+  undoEl.addEventListener('click', function () {
+    if (archiveRetractionActive) return;
     // Editing the game voids any queued Review-game handoff: the ending
     // it would open is being taken back (see movedOnSeq).
     movedOnSeq++;
@@ -1371,15 +1395,66 @@
     // A manual adjudication is itself the latest reversible action. Reopen
     // the exact position instead of unexpectedly taking a board move too.
     if (manualEnding) {
+      const withdrawn = fullStatus();
+      const idAtUndo = gameId;
+      const sansAtUndo = state.history.map(function (h) { return h.san; });
+      // Invalidate both the live write's late callbacks and a captured boot
+      // re-offer before staging the durable retraction. The archive module
+      // removes only this exact ending, including any parked/in-flight copy.
+      const seqAtUndo = ++archiveSeq;
+      archiveAttempts.set(idAtUndo, seqAtUndo);
+      archiveRetractionActive = true;
+      let retract;
+      if (!window.ChessyArchive ||
+          typeof ChessyArchive.retractEnding !== 'function') {
+        retract = Promise.reject(new Error('archive retraction is unavailable'));
+      } else {
+        try {
+          retract = ChessyArchive.retractEnding(
+            idAtUndo, sansAtUndo, withdrawn.result, withdrawn.reason);
+        } catch (e) {
+          retract = Promise.reject(e);
+        }
+      }
+      // A Review flow for this result may already be open behind Play. Rebuild
+      // it immediately; Review filters the active tombstone even while the
+      // conditional IndexedDB delete is still settling.
+      if (window.CoachReview &&
+          typeof CoachReview.resetToList === 'function') {
+        CoachReview.resetToList().catch(function () {});
+      }
+      function resumeAfterRetraction() {
+        archiveRetractionActive = false;
+        if (gameId === idAtUndo && !manualEnding && !fullStatus().over &&
+            clocks.wMs !== null && turnStartedAt === null) {
+          turnStartedAt = Date.now();
+          if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+        }
+        render();
+        maybeAiMove();
+      }
+      archiveAttempt = Promise.resolve(retract).then(function () {
+        if (archiveAttempts.get(idAtUndo) === seqAtUndo) {
+          clearArchiveFailure(idAtUndo);
+        }
+        resumeAfterRetraction();
+        return null;
+      }, function () {
+        if (archiveAttempts.get(idAtUndo) === seqAtUndo) {
+          showArchiveRetractionFailure(idAtUndo);
+        }
+        resumeAfterRetraction();
+        return null;
+      });
       manualEnding = null;
       gameEndedAt = null;
-      if (clocks.wMs !== null && turnStartedAt === null) {
-        turnStartedAt = Date.now();
-        if (!clockTicker) clockTicker = setInterval(tickClock, 200);
-      }
       selected = null;
-      render();
-      maybeAiMove();
+      const reopenedSaved = render();
+      if (!reopenedSaved && window.ChessyArchive &&
+          typeof ChessyArchive.retainRetraction === 'function') {
+        ChessyArchive.retainRetraction(
+          idAtUndo, sansAtUndo, withdrawn.result, withdrawn.reason);
+      }
       return;
     }
     // Against the AI, undo the AI reply too so it's the human's turn again.
@@ -1582,7 +1657,7 @@
       const st = fullStatus();
       if (st.over && suppressedEndings.has(localEndingKey(
           gameId, state.history.map(function (h) { return h.san; }), st.result, st.reason))) {
-        return;
+        return true;
       }
     }
     try {
@@ -1606,7 +1681,12 @@
         startedRelease: startedRelease,
         endedAt: gameEndedAt
       }));
-    } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
+      return true;
+    } catch (e) {
+      // Storage unavailable (private mode, quota, etc.) — play can continue,
+      // but callers performing durability-sensitive transitions need to know.
+      return false;
+    }
   }
 
   // Restore a saved game by REPLAYING it through the engine rather than
@@ -1775,6 +1855,31 @@
       })
       .then(function () {
         if (!bootStatus.over || bootRecoveryInvalidated) return;
+        const bootSans = bootState.history.map(function (h) { return h.san; });
+        const bootSuppressed = typeof ChessyArchive.suppressesEnding === 'function' &&
+          ChessyArchive.suppressesEnding(
+            bootId, bootSans, bootStatus.result, bootStatus.reason);
+        if (bootSuppressed) {
+          // Undo may have crashed (or failed to save) after parking its durable
+          // retraction but before replacing the finished live save. Complete
+          // the user-visible half now and never re-offer that stale snapshot.
+          if (gameId === bootId && state === bootState && manualEnding) {
+            manualEnding = null;
+            gameEndedAt = null;
+            if (clocks.wMs !== null && turnStartedAt === null) {
+              turnStartedAt = Date.now();
+              if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+            }
+            const reopenedSaved = render();
+            if (!reopenedSaved &&
+                typeof ChessyArchive.retainRetraction === 'function') {
+              ChessyArchive.retainRetraction(
+                bootId, bootSans, bootStatus.result, bootStatus.reason);
+            }
+            maybeAiMove();
+          }
+          return;
+        }
         // A LIVE attempt for the restored game (undo → revised finish
         // completed while the drain was slow) supersedes the boot
         // snapshot: recording the snapshot now would overwrite the newer

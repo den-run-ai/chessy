@@ -163,9 +163,35 @@ require('./helper').run('game endings', async function (t) {
   await page.click('#undo');
   const reopened = await liveSave();
   check(reopened.history.length === 1 && reopened.manualEnding === null &&
-        (await page.textContent('#status')).includes('Black to move') &&
-        (await page.getAttribute('#clockBlack', 'class')).includes('active'),
-    'Undo reopens the exact adjudicated position and restarts its clock');
+        (await page.textContent('#status')).includes('Black to move'),
+    'Undo reopens the exact adjudicated position');
+  await page.waitForFunction(function (id) {
+    return CoachStore.getGame(id).then(function (game) {
+      const map = JSON.parse(
+        localStorage.getItem('chessy-pending-archive-v1') || 'null');
+      return !game && !(map && map[id]);
+    });
+  }, resignedId);
+  check(await page.evaluate(function (id) {
+    return CoachStore.getGame(id).then(function (game) { return !game; });
+  }, resignedId), 'Undo retracts the committed resignation from Review storage');
+  check((await page.getAttribute('#clockBlack', 'class')).includes('active'),
+    'the clock restarts after the archive retraction settles');
+  await page.click('#tabReview');
+  const afterUndoBackup = JSON.parse(await download('#backupBtn'));
+  check(!afterUndoBackup.stores.games.some(function (game) {
+    return game.id === resignedId;
+  }), 'Backup excludes a manual result that the user undid');
+  await page.click('#tabPlay');
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  check(await page.evaluate(function (id) {
+    const map = JSON.parse(
+      localStorage.getItem('chessy-pending-archive-v1') || 'null');
+    return CoachStore.getGame(id).then(function (game) {
+      return !game && !(map && map[id]);
+    });
+  }, resignedId), 'an undone manual result stays retracted after reload');
 
   // Draw by agreement is distinct from abandonment and round-trips through
   // both Play and Review.
@@ -206,6 +232,186 @@ require('./helper').run('game endings', async function (t) {
         reviewDrawPgn.includes('{draw agreement} 1/2-1/2') &&
         reviewDrawDebugPgn.includes('[Termination "normal"]'),
     'both Review PGNs faithfully preserve the agreed draw');
+
+  // Undo also wins against a write that started when the result was confirmed
+  // but has not reached IndexedDB yet. The archive queue should become a
+  // durable retraction immediately, then the late commit must be deleted.
+  await page.click('#tabPlay');
+  await t.newGame({ mode: 'pvp', timeControl: 'none' });
+  await mv('e2', 'e4');
+  const heldEndingId = (await liveSave()).gameId;
+  await page.evaluate(function (id) {
+    const real = CoachStore.archiveGame;
+    CoachStore.__realHeldManualArchive = real;
+    CoachStore.archiveGame = function (rec) {
+      if (rec.id !== id) return real(rec);
+      return new Promise(function (resolve, reject) {
+        window.__releaseHeldManualArchive = function () {
+          real(rec).then(function (stored) {
+            window.__heldManualArchiveCommitted = true;
+            resolve(stored);
+          }, reject);
+        };
+      });
+    };
+  }, heldEndingId);
+  await page.click('#resign');
+  await page.click('#endGameConfirm');
+  await page.waitForSelector('#gameOverDialog[open]');
+  check(await page.evaluate(function (id) {
+    const map = JSON.parse(localStorage.getItem(
+      'chessy-pending-archive-v1') || 'null');
+    return !!(map && map[id] && map[id].rec &&
+      map[id].rec.reason === 'resignation');
+  }, heldEndingId), 'an in-flight manual result is parked for recovery');
+  await page.click('#gameOverClose');
+  await page.click('#undo');
+  check(await page.evaluate(function (id) {
+    const map = JSON.parse(localStorage.getItem(
+      'chessy-pending-archive-v1') || 'null');
+    return !!(map && map[id] && map[id].op === 'retract' &&
+      !map[id].rec);
+  }, heldEndingId), 'Undo immediately supersedes the parked result with a retraction');
+  check(await page.evaluate(function () {
+    return document.getElementById('undo').disabled &&
+      document.getElementById('resign').disabled &&
+      document.getElementById('offerDraw').disabled;
+  }), 'game-changing controls stay frozen until the old write is retracted');
+  await page.click('#tabReview');
+  const pendingRetractionBackup = JSON.parse(await download('#backupBtn'));
+  check(!pendingRetractionBackup.stores.games.some(function (game) {
+    return game.id === heldEndingId;
+  }), 'Backup honours a retraction while the old archive write is still pending');
+  await page.click('#tabPlay');
+  await page.evaluate(function () { window.__releaseHeldManualArchive(); });
+  await page.waitForFunction(function (id) {
+    if (!window.__heldManualArchiveCommitted) return false;
+    return CoachStore.getGame(id).then(function (game) {
+      const map = JSON.parse(localStorage.getItem(
+        'chessy-pending-archive-v1') || 'null');
+      return !game && !(map && map[id]);
+    });
+  }, heldEndingId);
+  check(true, 'a late archive commit is removed after the adjudication is undone');
+  await page.evaluate(function () {
+    CoachStore.archiveGame = CoachStore.__realHeldManualArchive;
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  check(await page.evaluate(function (id) {
+    return CoachStore.getGame(id).then(function (game) { return !game; });
+  }, heldEndingId), 'the late committed result stays absent after boot recovery');
+
+  // The same guarantee applies while boot recovery itself is held. Undo must
+  // invalidate the already-captured finished-game snapshot, not merely replace
+  // the pending entry that the drain has yet to read.
+  await page.addInitScript(function () {
+    let archive;
+    Object.defineProperty(window, 'ChessyArchive', {
+      configurable: true,
+      get: function () { return archive; },
+      set: function (value) {
+        const real = value.reconcilePending;
+        value.reconcilePending = function () {
+          if (localStorage.getItem('test-hold-manual-drain') === null) {
+            return real.apply(value, arguments);
+          }
+          return new Promise(function (resolve, reject) {
+            window.__releaseManualDrain = function () {
+              real.call(value).then(resolve, reject);
+            };
+          });
+        };
+        archive = value;
+      }
+    });
+  });
+  await page.evaluate(function (id) {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.manualEnding = { kind: 'resignation', color: 'b' };
+    saved.endedAt = 123456;
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+    localStorage.setItem('test-hold-manual-drain', '1');
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      [id]: {
+        w: 'w-held-boot',
+        rec: {
+          id: id, source: 'play', tags: {}, sans: ['e4'],
+          playerColor: 'both', clocks: [null], ai: [null],
+          result: '1-0', reason: 'resignation', mode: 'pvp',
+          difficulty: '2', timeControl: 'none', plies: 1,
+          createdAt: 123456
+        }
+      }
+    }));
+  }, heldEndingId);
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  check((await page.textContent('#status')).includes('1-0'),
+    'the held boot starts from the saved manual result');
+  await page.click('#undo');
+  await page.evaluate(function () { window.__releaseManualDrain(); });
+  await page.waitForFunction(function (id) {
+    return CoachStore.getGame(id).then(function (game) {
+      const map = JSON.parse(localStorage.getItem(
+        'chessy-pending-archive-v1') || 'null');
+      return !game && !(map && map[id]);
+    });
+  }, heldEndingId);
+  await page.evaluate(function () {
+    localStorage.removeItem('test-hold-manual-drain');
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  check(await page.evaluate(function (id) {
+    return CoachStore.getGame(id).then(function (game) { return !game; });
+  }, heldEndingId), 'a captured boot snapshot cannot resurrect an undone result');
+
+  // A tab can also die after the retraction is parked but before the reopened
+  // live save is persisted. On the next boot, the tombstone must suppress the
+  // stale finished save as well as remove its committed archive row.
+  await page.evaluate(function (id) {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.manualEnding = { kind: 'resignation', color: 'b' };
+    saved.endedAt = 123457;
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+    const rec = {
+      id: id, source: 'play', tags: {}, sans: ['e4'],
+      playerColor: 'both', clocks: [null], ai: [null],
+      result: '1-0', reason: 'resignation', mode: 'pvp',
+      difficulty: '2', timeControl: 'none', plies: 1,
+      createdAt: 123457
+    };
+    return CoachStore.archiveGame(rec).then(function () {
+      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+        [id]: {
+          w: 'w-crashed-undo',
+          op: 'retract',
+          ending: {
+            id: id, sans: ['e4'], result: '1-0', reason: 'resignation'
+          }
+        }
+      }));
+    });
+  }, heldEndingId);
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.waitForFunction(function (id) {
+    return CoachStore.getGame(id).then(function (game) {
+      const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+      const map = JSON.parse(localStorage.getItem(
+        'chessy-pending-archive-v1') || 'null');
+      return !game && !(map && map[id]) && saved &&
+        saved.manualEnding === null && saved.endedAt === null;
+    });
+  }, heldEndingId);
+  check((await page.textContent('#status')).includes('Black to move'),
+    'boot completes a crashed Undo without re-offering its stale result');
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  check(await page.evaluate(function (id) {
+    return CoachStore.getGame(id).then(function (game) { return !game; });
+  }, heldEndingId), 'the crashed-Undo result remains absent on a later boot');
 
   // White resigns while Black's computer search is in flight. The human side,
   // not state.turn, must lose; cancellation terminates the worker and fences
