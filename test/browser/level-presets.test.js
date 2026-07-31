@@ -1,6 +1,6 @@
 /*
  * Product difficulty contract: stable persisted IDs select the recalibrated
- * node/time budgets, the default Rust/WASM backend executes them, and the
+ * node/time budgets, the Rust/WASM-only backend executes them, and the
  * setup copy labels numeric bands as targets rather than certified ratings.
  */
 'use strict';
@@ -57,7 +57,7 @@ require('./helper').run('level-presets', async function (t) {
 
   const setupCopy = (await page.textContent('#newGameDialog'))
     .replace(/\s+/g, ' ').trim();
-  check(setupCopy.includes('default Rust/WASM backend') &&
+  check(setupCopy.includes('Rust/WASM backend') &&
       setupCopy.includes('may stop early') &&
       setupCopy.includes('Not FIDE, Chess.com, or Lichess ratings'),
     'setup qualifies target bands by backend, device, and rating scale');

@@ -349,8 +349,9 @@
       // Normalize here as a second trust boundary before either a direct
       // checkpoint commit or a finished-game durability-queue copy.
       ai: state.history.map(function (h) {
-        return h.ai && typeof ChessAI !== 'undefined' && ChessAI.sanitizeTelemetry
-          ? ChessAI.sanitizeTelemetry(h.ai) : null;
+        return h.ai && typeof ChessyAiTelemetry !== 'undefined' &&
+          ChessyAiTelemetry.sanitizeTelemetry
+          ? ChessyAiTelemetry.sanitizeTelemetry(h.ai) : null;
       }),
       // Release at game creation. Per-AI-move entries carry their own release
       // too, so a game resumed after an update remains attributable.

@@ -1,8 +1,8 @@
 /*
  * CLI/budget smoke tests for test/ai-match.js. Invalid budgets are exercised
  * with --check-openings so failures happen before either engine is loaded; the
- * final one-ply pairs traverse the real equal-time path against both current
- * and exact legacy main.
+ * final one-ply pairs traverse the real equal-time Rust/WASM path against
+ * both current and the exact shipped ABI-v1 baseline.
  */
 'use strict';
 const cp = require('child_process');
@@ -16,7 +16,7 @@ const FORMAL_WORKFLOW =
 const TIME_WORKFLOW =
   path.join(__dirname, '..', '.github', 'workflows',
     'ai-match-time-diagnostic.yml');
-const LEGACY_MAIN = '1e7cbaec589d3a83ab748046f9580d306d940db0';
+const ABI_V1_BASE = 'ca8f375667cb178af8656202a39f80495d4fa822';
 let passed = 0, failed = 0;
 
 function run(args) {
@@ -123,16 +123,16 @@ check(smoke.status === 0 &&
   'one-ply pair uses the equal-time budget and canonical local metadata',
   'exit ' + smoke.status + ': ' + smoke.output.trim());
 
-const legacy = run([
-  '--base', LEGACY_MAIN, '--time', '5', '--seeds', '1', '--pairs', '1',
+const abiV1 = run([
+  '--base', ABI_V1_BASE, '--time', '5', '--seeds', '1', '--pairs', '1',
   '--plies', '1', '--openbase', '0', '--opencount', '1'
 ]);
-check(legacy.status === 0 &&
-    legacy.output.includes('base-sha: ' + LEGACY_MAIN) &&
-    legacy.output.includes('candidate vs ' + LEGACY_MAIN +
+check(abiV1.status === 0 &&
+    abiV1.output.includes('base-sha: ' + ABI_V1_BASE) &&
+    abiV1.output.includes('candidate vs ' + ABI_V1_BASE +
       ': 2 games, 5 ms/move'),
-  'deterministic deadline probe accepts exact legacy main without stopReason',
-  'exit ' + legacy.status + ': ' + legacy.output.trim());
+  'equal-time path compares the candidate with the exact ABI-v1 WASM baseline',
+  'exit ' + abiV1.status + ': ' + abiV1.output.trim());
 
 console.log('workflow protocol separation');
 const formalWorkflow = fs.readFileSync(FORMAL_WORKFLOW, 'utf8');

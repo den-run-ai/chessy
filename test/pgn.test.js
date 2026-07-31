@@ -7,7 +7,7 @@
  */
 'use strict';
 require('../assets/engine.js');
-require('../assets/ai.js');
+globalThis.ChessyAiTelemetry = require('../assets/ai-telemetry.js');
 require('../assets/pgn.js');
 const Chess = globalThis.Chess;
 const PGN = globalThis.ChessyPGN;

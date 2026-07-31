@@ -2,8 +2,10 @@
 
 This directory prepares one license-clean teacher corpus for the final HCE
 attempt in #137 and NNUE G0-G2 in #105. It does not change Chessy's evaluator,
-search, level budgets, Rust/WASM asset, or release token. The shipped r69
-evaluator remains the baseline and `--require-fix` remains opt-in.
+search, level budgets, Rust/WASM asset, or release token. The historical r69
+evaluator remains the held-out incident evidence source; the
+behavior-equivalent shipped r71 evaluator is the current E4/training baseline,
+and `--require-fix` remains opt-in.
 
 The current work stops before any production fit, candidate weight, model
 artifact, or runtime integration. CI exercises a tiny real-Stockfish sample,
@@ -26,9 +28,9 @@ intentionally not stored in Git.
    gate. It must choose `e5e4` at exactly 9,187,327 nodes and stably at the
    preregistered nearby budgets, then pass parity, scorecard, device, and
    strength gates.
-6. If r69 certifies at Master strength, retain `11...Bd4` as a known
+6. If r71 certifies at Master strength, retain `11...Bd4` as a known
    master-level mistake. Master strength is not perfect Stockfish play.
-7. If r69 fails certification, stop the 2300+ claim. If HCE R3 fails untouched
+7. If r71 fails certification, stop the 2300+ claim. If HCE R3 fails untouched
    transfer or the locked post-fit gate, stop HCE without post-hoc feature,
    lambda, budget, FEN, or weight changes and continue NNUE #105.
 
@@ -260,8 +262,11 @@ candidate, and distinct-weight oracle must agree exactly before fitting.
 Baseline is always a candidate; lambda zero is excluded; no runtime file is
 edited by the fitter.
 
-Generate the exact r69 Round-2 center plus zero-valued R3 centers and the
-frozen regularization scales into a new external directory:
+Generate the exact r71 baseline Round-2 center plus zero-valued R3 centers and
+the frozen regularization scales into a new external directory. The generator
+strictly parses the typed integer declarations in
+`experiments/wasm/src/eval.rs`; it does not restore or execute a JavaScript
+runtime evaluator:
 
 ```sh
 node test/training/hce-r3-baseline.js \
@@ -273,14 +278,22 @@ checks the complete 965-column digest, `/24` taper contract, teacher, literal
 selection-manifest, selection-contract, and source-snapshot hashes,
 center/scales value hashes, the exact `authenticated-production-input`
 disposition, sorted row IDs, and disjoint row/cluster/position-family sets.
+The packed sidecar also binds the affine extractor, baseline extractor, Rust
+evaluator source, and shipped WASM bytes by SHA-256; the fitter rehashes each
+before candidate publication.
 That disposition authenticates a production-mode input; it does not assert
 that every later fit or release gate has passed. Each packed sidecar enumerates
 exactly the provided teacher shards and their adjacent sidecars plus the
 selected input shards they bind; it does not overclaim full-corpus coverage.
 Immediately before publishing a float candidate, the fitter rehashes both
-validated NPZ files and both adjacent sidecars against the digests retained
-when they were authenticated, and refuses any replacement. Matrix packing is
-frozen to NumPy 2.3.5 and the convex fitter to NumPy 2.3.5 plus SciPy 1.17.0.
+validated NPZ files, both adjacent sidecars, center/scales files, and every
+fitter, packer, extractor, evaluator, and contract input against the digests
+retained when they were authenticated, and refuses any replacement. The
+candidate is first serialized and fsynced to a same-directory temporary file,
+then published with a no-replace hard link after that final rehash. Failed
+serialization, writing, or rehashing leaves no final candidate path. Matrix
+packing is frozen to NumPy 2.3.5 and the convex fitter to NumPy 2.3.5 plus
+SciPy 1.17.0.
 R3.0 fixes safe mobility at zero. R3.1 is eligible only if zeroing safe
 mobility still beats baseline and retains at least half of the candidate's
 validation gain.
@@ -298,10 +311,11 @@ python3 tools/training/pack-hce.py \
   --output /data/hce/shared-train.npz
 ```
 
-`hce-r3-linear.test.js` reconstructs the shipped evaluator exactly over a
-legal-position trajectory before the packer is admitted. The exact integer
-round/polish, untouched-test opener, and runtime candidate/apply path remain
-deliberately separate, so a float fit still cannot be treated as shippable.
+`hce-r3-linear.test.js` reconstructs the shipped Rust/WASM evaluator exactly
+over a legal-position trajectory before the packer is admitted. The exact
+integer round/polish, untouched-test opener, and runtime candidate/apply path
+remain deliberately separate, so a float fit still cannot be treated as
+shippable.
 
 Run the preregistered R3.0/R3.1 convex screen:
 

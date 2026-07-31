@@ -1,160 +1,151 @@
-# Chessy Rust/WASM feasibility experiment
+# Chessy Rust/WASM engine
 
-This directory ports Chessy's complete hot search loop to dependency-free Rust
-and `wasm32-unknown-unknown`. It tests whether the production-preferred language
-can preserve the exact search proven by the Zig spike while retaining its
-compact whole-search WebAssembly boundary.
+This directory contains Chessy's production search engine. Rust owns position
+state, move generation, make/unmake, attack detection, tapered evaluation,
+quiescence, the fixed transposition table, move ordering, PVS, aspiration,
+iterative deepening, repetition-aware Play search, and exact-root coaching
+analysis.
 
-It is an isolated experiment. It does not change `assets/ai-worker.js`, the PWA
-cache, Play behavior, or the JavaScript fallback.
+JavaScript is limited to ABI transport, canonical SAN/PV formatting, UI, and
+worker lifecycle. There is no JavaScript search fallback.
 
-## Scope
+## Reproducible build
 
-The module owns position state, move generation, make/unmake, attack detection,
-evaluation, quiescence, the transposition table, move ordering, PVS, aspiration,
-and iterative deepening. JavaScript crosses the boundary once to load a FEN and
-once to start a search. The only callback inside the tree is the existing
-coarse deadline poll through `env.now_ms`.
+The build pins:
 
-The experiment deliberately excludes:
+- Rust 1.97.1, rustc commit
+  `8bab26f4f68e0e26f0bb7960be334d5b520ea452`;
+- target `wasm32-unknown-unknown`;
+- Binaryen 131.
 
-- SIMD, threads, WASI, libc, a garbage collector, an allocator, and per-node
-  allocation;
-- `wasm-bindgen` or any binding/runtime dependency;
-- SEE, LMR, null-move pruning, NNUE, or any other algorithmic change;
-- repetition-history transfer (the benchmark loads bare FENs, as
-  `test/ai-bench.js` does);
-- production worker, service-worker, UI, or release integration.
-
-The root move shuffle resets to Mulberry32 seed `0xC0FFEE` for every search,
-matching `test/ai-bench.js`. The seed remains frozen inside the experiment
-rather than expanding the ABI.
-
-## Language decision
-
-Draft PRs #124 and #125 established the Zig feasibility result and the reusable
-single-Web-Worker/mobile-target probe. This port leaves those branches intact
-as historical evidence and changes only the implementation language behind the
-same ABI and differential contract.
-
-Rust is the long-lived candidate because it supplies a stable toolchain,
-stronger compiler checks, testing/profiling support, and a larger maintainer
-ecosystem. The current experiment still uses substantial `unsafe` global state
-to match the fixed-memory Zig layout. It is explicitly single-worker and
-non-reentrant; the ABI rejects an attempted nested search. The port is
-justified only if Rust's maintenance benefits do not cost the measured search:
-
-- exact JavaScript parity remains mandatory;
-- deeper Rust/Zig differentials must remain exact;
-- the fast Rust binary must stay in the same compact size class;
-- the stacked worker/mobile matrix must be rerun against Rust rather than
-  inheriting Zig's measurements by assumption.
-
-The recorded host comparison clears those conditions. `RESULTS.md` contains the
-numbers and explains why the fast build, not the absolute smallest build, is
-the deployment candidate.
-
-## Reproducible builds
-
-The experiment pins Rust 1.97.1 (rustc commit
-`8bab26f4f68e0e26f0bb7960be334d5b520ea452`), target
-`wasm32-unknown-unknown`, and Binaryen 131. `Cargo.lock` contains no
-third-party packages. The build rejects ambient Rust flags and asserts the
-tool versions before compiling. Set `CHESSY_CARGO_BIN`,
-`CHESSY_RUSTC_BIN`, and `CHESSY_WASM_OPT_BIN` when the tools are not on
-`PATH`; `CHESSY_CARGO_TARGET_DIR` optionally relocates Cargo output.
+`Cargo.lock` contains no third-party packages. The production CI job runs Rust
+tests, builds with those exact tools, and byte-compares the result with
+`assets/chessy-ai-fast.wasm`.
 
 ```sh
 ./experiments/wasm/build.sh
 ```
 
-The script builds two variants:
+The script emits:
 
-- `dist/chessy-ai-fast.wasm`: Cargo `release` (`opt-level=3`, fat LTO), then
+- `dist/chessy-ai-fast.wasm`: Cargo `release` plus
   `wasm-opt -O3 --converge`;
-- `dist/chessy-ai-small.wasm`: Cargo `small` (`opt-level=z`, fat LTO), then
+- `dist/chessy-ai-small.wasm`: Cargo `small` plus
   `wasm-opt -Oz --converge`.
 
 Both use `panic=abort`, one codegen unit, stripped symbols, a one-MiB stack, and
-an exact 405-page initial/maximum memory ceiling. Linking fails if a layout
-change exceeds the recorded 26,542,080-byte budget. Binaryen enables only the
-six default WebAssembly features permitted by the pinned Rust target; it does
-not authorize SIMD, threads, GC, or all proposals. The stacked workflow also
-checks the SHA-256 of the official Binaryen archive before building.
+an exact 405-page initial/maximum memory ceiling (26,542,080 bytes). Linking
+fails if fixed storage exceeds that limit. No SIMD, threads, WASI, libc,
+allocator, garbage collector, `wasm-bindgen`, or per-node allocation is used.
 
-The fast build decides runtime feasibility. The small build records the
-download floor. Generated `.wasm` files remain ignored.
-
-## Tests and benchmarks
+## Tests
 
 ```sh
 (cd experiments/wasm && cargo test --locked --offline)
-node test/ai-wasm-parity.js --depth 5
-node experiments/wasm/bench.js --depth 5 --reps 2 --min-ms 100 --require-go
-node experiments/wasm/deep-bench.test.js
+node test/wasm-asset.test.js
+node test/wasm-signatures.test.js
+node test/analysis-core.test.js
+node test/ai-tactics.js
 ```
 
-The Rust tests retain the Zig spike's perft, move-order, make/unmake, and
-evaluator-reference checks. The JavaScript differential compares move, score,
-completed/attempted depth, nodes, qnodes, cutoffs, re-searches, and stop reason
-on all 18 positions, plus fixed-node aborts and reset determinism.
+The frozen `test/fixtures/wasm-r69-signatures.json` records the last accepted
+ABI-v1 production behavior before the JavaScript engine was removed. It keeps
+move, score, completed/attempted depth, nodes, quiescence nodes, cutoffs,
+re-searches, and stop reason pinned across the 18-position mirrored corpus.
+Rust unit tests cover internal search invariants, repetition, exact roots,
+shared budgets, PV export, and malformed ABI input.
 
-If a build lives elsewhere, pass it explicitly:
+Developer performance and match tools use the isolated ordinary-search loader
+in `bench.js`. It accepts only result ABI v1 or v2 because those versions share
+the same `input_ptr` / `load_position` / four-argument `search` surface and
+64-byte result record. That narrow compatibility window lets the formal
+efficiency gate and diagnostic deep-search workflow compare the frozen ABI-v1
+reference with an ABI-v2 candidate. It does not expose history or analysis
+operations, and it does not relax the production loader, which remains
+strictly ABI-v2.
 
-```sh
-node test/ai-wasm-parity.js --wasm /path/to/chessy-ai.wasm --depth 5
-node experiments/wasm/bench.js --wasm /path/to/chessy-ai.wasm
-```
+## Raw ABI, version 2
 
-To reproduce the deeper differential and direct language comparison, first
-build PR #124's pinned Zig source, then supply its fast module as the reference:
-
-```sh
-node test/ai-wasm-parity.js \
-  --reference-wasm /path/to/zig/chessy-ai-fast.wasm
-node experiments/wasm/bench.js \
-  --baseline-wasm /path/to/zig/chessy-ai-fast.wasm \
-  --depth 5 --reps 2 --min-ms 100
-```
-
-## Raw ABI, version 1
-
-The module has exactly one import:
+The module has one import:
 
 ```text
 env.now_ms() -> f64
 ```
 
-Fixed-depth searches pass `timeMs=0` and do not poll the host clock. Timed
-searches may call `env.now_ms`, but that callback must not mutate the module;
-nested search/load calls are rejected. Required exports are:
+Required exports:
 
 ```text
 memory
 input_ptr() -> u32
+history_ptr() -> u32
 result_ptr() -> u32
-load_position(fenLength: u32)
+pv_ptr() -> u32
+pv_len() -> u32
+
+load_position(fenLength: u32) -> i32
+load_history(historyLength: u32) -> i32
+
 search(maxDepth: u32, nodeLimit: u32, timeMs: u32, quiesce: u32) -> i32
+analysis_begin(nodeLimit: u32, quiesce: u32) -> i32
+analysis_root(packedMove: u32, totalDepth: u32, pvLen: u32) -> i32
+
+evaluate_loaded() -> i32
+fixed_search(depth: u32, nodeLimit: u32, quiesce: u32) -> i32
 ```
 
-JavaScript copies UTF-8 FEN bytes to `input_ptr()` and calls
-`load_position(length)`, checking the fixed 1,024-byte capacity before the
-copy. A zero `nodeLimit` or `timeMs` means unlimited. `maxDepth` is limited to
-111 so the 128-ply fixed storage also covers the 16-ply quiescence ceiling.
-`search()` returns zero on success, 1 if no position is loaded, 2 if the fixed
-transposition table saturated (which invalidates exact-tree comparison), and 3
-for an invalid depth or rejected re-entry.
-Search results are written at `result_ptr()` as this 64-byte little-endian
-record:
+JavaScript copies UTF-8 FEN bytes to the 1,024-byte input buffer.
+`load_position()` clears stale repetition history. It then copies
+newline-delimited repetition identities to the 64-KiB history buffer, one FEN
+line per occurrence, and calls `load_history()`. The fixed table accepts up to
+768 occurrences; counts above three for one position are unnecessary. Before
+transport, the loader losslessly drops positions with a different pawn
+placement or piece count from the root. Those positions precede an irreversible
+pawn move or capture and can never recur. Every relevant position is therefore
+inside the live game's sub-100-ply halfmove window, independent of how long the
+aggregate saved-game map has grown.
+
+Normal `search()` is the only Play entry point. A root that already occurred
+three times returns `game-over`; a child whose loaded count is at least two
+scores as a path-independent draw. Search-path cycles retain the engine's
+separate path-dependent repetition treatment.
+
+Zero `nodeLimit` or `timeMs` means unlimited. `maxDepth` is limited to 111 so
+the 128-ply fixed storage also covers the 16-ply quiescence ceiling.
+
+### Exact-root analysis
+
+`analysis_begin()` starts one phase with shared TT, heuristics, counters, and
+node budget. `analysis_root()` validates and forces one legal root, evaluates
+it under a full window at `totalDepth >= 1`, and exports a legal packed-move PV
+whose first move is that root. Counters are cumulative across roots in the
+phase.
+
+Analysis status codes:
+
+| Code | Meaning |
+| ---: | --- |
+| 0 | complete exact root |
+| 1 | position/analysis not initialized |
+| 2 | fixed transposition table saturated |
+| 3 | invalid move/depth or rejected re-entry |
+| 4 | shared node budget exhausted |
+
+Status 4 preserves cumulative counters and attempted depth but exposes no PV.
+The JS analysis contract marks the overall result partial and never presents a
+budget-aborted root as exact.
+
+### Result record
+
+Every search writes this 64-byte little-endian result:
 
 | Offset | Type | Field |
 | ---: | --- | --- |
-| 0 | `u32` | ABI version, exactly `1` |
+| 0 | `u32` | ABI version, exactly `2` |
 | 4 | `u32` | struct size, exactly `64` |
 | 8 | `u32` | move: from bits 0–5, to bits 6–11, promotion bits 12–14 |
-| 12 | `i32` | score, from White's point of view |
+| 12 | `i32` | score from White's point of view |
 | 16 | `u32` | last fully completed depth |
-| 20 | `u32` | attempted depth, or `0xffffffff` for none |
+| 20 | `u32` | attempted depth, or `0xffffffff` |
 | 24 | `u64` | nodes |
 | 32 | `u64` | quiescence nodes |
 | 40 | `u64` | cutoffs |
@@ -163,133 +154,26 @@ record:
 | 60 | `u32` | reserved, zero |
 
 Move `0xffffffff` means no move. Promotion codes are 0 none, 1 queen, 2 rook,
-3 bishop, and 4 knight. Stop-reason codes are 0 unknown, 1 max-depth, 2
-time-limit, 3 node-limit, 4 mate, and 5 game-over. Counters are rejected if they
-cannot be represented exactly by a JavaScript safe integer.
+3 bishop, and 4 knight. Stop reasons are 0 unknown, 1 max-depth, 2 time-limit,
+3 node-limit, 4 mate, and 5 game-over. The JS loader rejects foreign ABI
+versions, result sizes, reserved bits, invalid promotions, invalid stop codes,
+out-of-bounds pointers, and counters outside JavaScript's safe-integer range.
 
-`bench.js` hard-fails on an ABI version or struct-size mismatch before accepting
-any benchmark result.
+## Worker and failure model
 
-## Divergent deep-search experiments
+Play and coaching analysis each own a dedicated Worker and instantiate one
+module per worker. Play retries a failed load/search once in a fresh worker
+against the exact unchanged FEN, then stops with a visible manual Retry action.
+It never substitutes another engine or performs search on the main thread.
 
-`deep-bench.js` compares a candidate WASM module with its exact, frozen
-`origin/main` merge-base build without requiring identical trees. Its default
-screen runs fixed depth 7 over the canonical 18-position/mirrored corpus,
-fixed depth 8 over four tractable endgame positions, and two order-balanced five-second
-pairs over all 18 positions. It also replays two AI-to-move witnesses from the
-2026-07-28 iPhone A14 debug game: the depth-6, 83%-quiescence position before
-`18...Nb4` and the depth-9 peak before `27...Rb8`.
+Coaching analysis uses a deterministic iterative scan to select a completed
+depth, then evaluates every legal root exactly at that depth. A separate
+one-ply-shallower phase supplies stability evidence. The JavaScript contract
+resolves every packed move through the rules engine before producing SAN or a
+persistable PV.
 
-The JSON and Markdown reports retain per-position and per-family nodes, qnodes,
-NPS, wall time, move/score/depth divergence, aggregate and tail metrics, and
-time-to-depth outcomes. A diagnostic decision never makes a rejected
-experiment fail CI; only a broken or incomplete measurement does. Tactics,
-strength, physical-device, and production gates remain separate.
-
-The workflow executes `deep-bench.js`, its imported `bench.js`, and their
-contract tests from a pinned trusted-harness commit rather than from the
-candidate checkout. Every timed candidate and reference search must also
-report coherent stop/depth metadata and finish within the requested budget
-plus a host-observed overshoot allowance of 2% or 25 ms, whichever is larger.
-Every fixed and timed result must also report safe counters, a real move, and
-a stop reason coherent with the predeclared nonterminal fixture. An overrun or
-malformed result fails the measurement before node or completed-depth evidence
-can influence the diagnostic decision.
-
-The diagnostic classifier requires activity in at least three canonical
-families and a material benefit: at least 5% lower depth-7 geomean nodes, or
-more candidate-deeper than candidate-shallower outcomes in the paired
-five-second screen. It also retains no-regression checks for geomean nodes,
-fixed-depth wall time, and the 1.25x per-position node tail.
-
-Candidate branches may optionally export:
-
-```text
-experiment_metric(index: u32) -> u64
-```
-
-The loader records exactly 16 non-negative, JavaScript-safe slots after every
-search. Implementations must return zero for unused/out-of-range slots. The
-baseline may omit the export; ABI v1 and its 64-byte result stay unchanged.
-
-## Formal efficiency non-inferiority match
-
-`test/wasm-efficiency-match.js` is the separately gated strength-safety check
-for a Rust/WASM search optimization that has already demonstrated a material
-efficiency benefit. It builds on the frozen match corpus and clustered
-statistics, but compares two exact WASM modules rather than accidentally
-replaying the unchanged `assets/ai.js` engine:
-
-- 10,000 nodes per move and a 180-ply cap;
-- 100 frozen openings, four seed slots, and both colours (800 games);
-- one-sided 95% lower confidence bound over the 100 per-opening means;
-- pass only when that lower bound is **strictly above 49%**.
-
-This is an efficiency non-inferiority gate, not the separate pure-strength
-claim whose lower bound must exceed 50%. Candidate/base source commits and
-both optimized-module SHA-256 digests are bound into every shard. The
-aggregator rejects mixed, duplicated, missing, or non-canonical evidence.
-Protocol v2 additionally binds the exact trusted-main harness commit and
-Actions run. Its shard runner validates the node count, stop reason, and
-depth metadata after every candidate and reference search, not just during a
-startup probe. A formal v2 verdict cannot run without independently generated
-trusted provenance.
-
-Both workflows execute a source-accounting verifier from the trusted harness.
-It freezes the requested-budget forwarding and reported counters at the ABI,
-the reset and budget primitive, the recursive search/quiescence entry charges,
-and the iterative-deepening result pipeline. Candidate algorithms may add
-recursive work only while retaining those trusted accounting surfaces; added
-counter writes, removed entry charges, budget bypasses, or output clamping
-fail before either candidate module is accepted as evidence.
-
-ABI v1 has no seed or game-prefix-history input. Root ordering resets to the
-same embedded `0xC0FFEE` seed for every search, so the four manifest seed slots
-are deterministic repeats for WASM. They do not inflate the analysis:
-`test/match-stats.js` still treats the opening as the independent unit
-(`n = 100`, never 400 pairs). Keeping the 20-shard `4 x 5` geometry preserves
-the frozen protocol and gives a direct completeness check; it does not claim
-four independent observations per opening.
-
-The Actions workflow is intentionally maintainer-label gated. It does not run
-when the shared harness PR or a candidate PR is opened or updated. It accepts
-only a same-repository pull request targeting `main` whose diff is confined to
-Rust sources and experiment notes. After reviewing that exact candidate head
-and allowed-file diff, a maintainer launches one complete experiment by
-applying the `run-wasm-efficiency-v2` label. Ordinary pushes do not launch the
-800-game matrix, and a second run for the same candidate SHA is rejected. A
-later push makes the recorded candidate SHA stale: remove the label, review
-the new exact head, and reapply it only for a genuinely new complete
-experiment. Re-running a completed attempt is inadmissible. Replacing an
-infrastructure-invalid run also requires a fresh reviewed commit and therefore
-a new candidate SHA.
-
-The trusted-main workflow admits only candidate Rust-source and
-experiment-note changes. It compiles that source with the trusted build driver
-in an isolated job, while a separate trusted job builds the frozen
-`808a2ef3e140718facd384acfebdd8781f1db162` source with Rust 1.97.1 and
-Binaryen 131 and verifies its pinned module digest. Fresh trusted jobs
-recompute both downloaded module digests, run every shard and the aggregator
-from the exact base commit, and emit the verdict only after all 20
-first-attempt artifacts tile the full manifest. Evidence produced by protocol
-v1 did not have these trust and per-search checks and is therefore
-inadmissible for a v2 merge gate. Do not rerun selected shards or a valid
-statistical miss.
-
-## Go/no-go funnel
-
-1. Rust unit tests and byte-reproducible fast/small builds.
-2. Exact JavaScript parity through depth 5, fixed-node abort parity, and reset
-   determinism.
-3. Direct Rust/Zig depth-6 and 100,000-node differentials, plus special-move
-   witnesses.
-4. Order-balanced host screen: at least 1.35x geomean versus JavaScript and no
-   mirrored family below 1.00x.
-5. The stacked Web Worker matrix on Node, Chromium, WebKit, Android Chrome in
-   the KVM emulator, and Mobile Safari in the arm64 iOS Simulator.
-6. Physical iPhone and midrange-Android testing for ARM wall time, cold start,
-   memory pressure, thermal soak, battery, watchdog behavior, and offline load.
-
-Passing the hosted matrix selects a production-language candidate; it does not
-by itself authorize replacing JavaScript in the shipped PWA. The physical
-device and production-integration gates remain explicit.
+The earlier mobile feasibility/probe workflow was retired when the owner
+waived its Android memory/thermal acceptance gates and authorized the
+production cutover. The fixed-memory link ceiling, pinned byte-reproducible
+build, Chromium/WebKit browser suites, offline cache tests, and functional
+correctness gates remain active.

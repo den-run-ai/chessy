@@ -77,23 +77,19 @@
   // yields a deadline a healthy slow phone beats. Overridable to a tiny value so
   // a test can exercise the timeout path without a multi-second wait.
   //
-  // SLOW_NPS is empirically grounded and sized for the SLOWEST device we mean to
-  // support, not an average: a hard midgame (Kiwipete) measured ~78k nodes/s on
-  // a fast x86 CI runner under Chromium; WebKit and older phones run this
-  // hand-written JS search roughly 2-4x slower, so the slowest supported rate is
-  // ~78k / 4 ≈ 19.5k nps. The assumed rate is set at 18k (below that, for
-  // margin) so a healthy-but-slow phone that legitimately needs the full node
-  // budget completes before the deadline rather than being killed mid-search,
+  // The 18k-NPS floor is deliberately far below the hosted Rust/WASM
+  // measurements and retained as a conservative slow-device allowance, not a
+  // performance claim. A healthy device that legitimately needs the full node
+  // budget should finish before the deadline rather than being killed,
   // retried, and finally failing. Erring long here only delays detection of a
-  // truly wedged worker (a background coaching probe, not a live move), which is
-  // the safe direction to err.
+  // truly wedged background coaching worker, which is the safe direction.
   function watchdogMs(opts) {
     var override = global.CHESSY_ANALYSIS_WATCHDOG_MS;
     if (typeof override === 'number' && override > 0) return override;
     var scanNodes = (opts && opts.nodeLimit) || 150000;
     var nodeBudget = (opts && opts.nodeBudget) || 8000000;
     var workNodes = scanNodes + 2 * nodeBudget; // scan + deep-verify + shallow-verify
-    var SLOW_NPS = 18000;                         // ≤ slowest supported rate (78k ÷ 4 ≈ 19.5k), with margin
+    var SLOW_NPS = 18000;                         // conservative Rust/WASM floor
     var ms = Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
     return Math.min(Math.max(ms, DEFAULT_WATCHDOG_MS), 300000);
   }

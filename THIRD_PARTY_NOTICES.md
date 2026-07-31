@@ -6,7 +6,8 @@ third-party source code. This file records attribution for third-party
 
 ## PeSTO evaluation coefficients
 
-`assets/ai.js` uses the **PeSTO** tapered evaluation coefficients — the
+`experiments/wasm/src/eval.rs` uses the **PeSTO** tapered evaluation
+coefficients — the
 middlegame/endgame material values (`VALUES_MG` / `VALUES_EG`) and the twelve
 middlegame/endgame piece-square tables (`PST` / `PST_EG`).
 

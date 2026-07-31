@@ -1,8 +1,7 @@
 /*
- * Rust/WASM Play backend (#84/#113): default ON, explicit standard-engine
- * opt-out, per-move engine provenance in the live save, page-level preference
- * persistence across reloads, and in-worker fallback to JavaScript when the
- * module cannot be used.
+ * Rust/WASM-only Play backend: successful moves come only from the worker,
+ * JavaScript selection/fallback UI is absent, and legacy JavaScript telemetry
+ * remains readable after the runtime migration.
  */
 'use strict';
 require('./helper').run('wasm-engine', async function (t) {
@@ -16,41 +15,38 @@ require('./helper').run('wasm-engine', async function (t) {
       return saved.history && saved.history[0] && saved.history[0].ai;
     }, null, { timeout: 10000 });
   }
-  function firstAi() {
-    return page.evaluate(function () {
-      return {
-        release: window.CHESSY_RELEASE,
-        ai: JSON.parse(localStorage.getItem('chessy-game-v1')).history[0].ai
-      };
-    });
-  }
 
-  // ---- Default ON: the WASM engine answers, labelled as such ----
+  // A stale opt-out from r70 is inert; there is no longer an engine choice.
+  await page.evaluate(function () {
+    localStorage.setItem('chessy-wasm-engine-v1', 'off');
+  });
   await t.newGame({ mode: 'ai-w', difficulty: '1' });
   await waitForFirstAiMove();
-  const defaultRun = await firstAi();
-  check(defaultRun.ai.engine === 'wasm' && defaultRun.ai.engineFallback === null &&
-      defaultRun.ai.source === 'worker' && defaultRun.ai.fallbackReason === null,
-    'default games use the Rust/WASM engine and record it');
-  check(defaultRun.ai.release === defaultRun.release &&
-      defaultRun.ai.maxDepth === 30 && defaultRun.ai.nodeLimit === 10000 &&
-      defaultRun.ai.timeMs === 5000 && defaultRun.ai.quiesce === true &&
-      defaultRun.ai.nodes === defaultRun.ai.nodeLimit &&
-      defaultRun.ai.stopReason === 'node-limit' &&
-      defaultRun.ai.depth >= 1 &&
-      defaultRun.ai.attemptedDepth === defaultRun.ai.depth + 1 &&
-      defaultRun.ai.scorePov === 'white',
-    'WASM telemetry carries the recalibrated Easy budget and counters');
-  check(Array.isArray(defaultRun.ai.pvUci) && defaultRun.ai.pvUci.length === 0 &&
-      !Object.prototype.hasOwnProperty.call(defaultRun.ai, 'rootOrderUci'),
-    'WASM raw-ABI evidence honestly omits PV and captured root order');
-  const defaultChecked = await page.evaluate(function () {
-    document.getElementById('newGame').click();
-    const checked = document.getElementById('engineWasm').checked;
-    document.getElementById('newGameCancel').click();
-    return checked;
+  const run = await page.evaluate(function () {
+    return {
+      release: window.CHESSY_RELEASE,
+      ai: JSON.parse(localStorage.getItem('chessy-game-v1')).history[0].ai,
+      hasChoice: !!document.getElementById('engineWasm'),
+      hasAlgorithm: typeof ChessAI !== 'undefined'
+    };
   });
-  check(defaultChecked, 'the faster-engine checkbox starts checked');
+  check(run.ai.engine === 'wasm' && run.ai.engineFallback === null &&
+      run.ai.source === 'worker' && run.ai.fallbackReason === null,
+    'Play records only a worker-produced Rust/WASM move');
+  check(run.ai.release === run.release &&
+      run.ai.maxDepth === 30 && run.ai.nodeLimit === 10000 &&
+      run.ai.timeMs === 5000 && run.ai.quiesce === true &&
+      run.ai.nodes === run.ai.nodeLimit &&
+      run.ai.stopReason === 'node-limit' &&
+      run.ai.depth >= 1 &&
+      run.ai.attemptedDepth === run.ai.depth + 1 &&
+      run.ai.scorePov === 'white',
+    'WASM telemetry carries the Easy budget and counters');
+  check(Array.isArray(run.ai.pvUci) && run.ai.pvUci.length === 0 &&
+      !Object.prototype.hasOwnProperty.call(run.ai, 'rootOrderUci'),
+    'the v2 Play result honestly omits PV and captured root order');
+  check(!run.hasChoice && !run.hasAlgorithm,
+    'the engine opt-out and production JavaScript search global are absent');
 
   const debugPgn = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
@@ -67,61 +63,71 @@ require('./helper').run('wasm-engine', async function (t) {
   });
   check(debugPgn.includes('engine wasm') &&
       !debugPgn.includes('engine-fallback'),
-    'the debug PGN log names the default WASM engine');
+    'the debug PGN log names only the WASM engine');
 
-  // ---- Opt out through the dialog: the standard engine answers ----
-  await page.click('#newGame');
-  await page.click('#engineWasm + span');
-  await t.pick('mode', 'ai-w');
-  await t.pick('difficulty', '1');
-  await page.click('#newGameStart');
-  await page.waitForFunction(function () {
-    return !document.getElementById('newGameDialog').open;
-  });
-  await waitForFirstAiMove();
-  const jsRun = await firstAi();
-  check(jsRun.ai.engine === 'js' && jsRun.ai.engineFallback === null &&
-      jsRun.ai.source === 'worker',
-    'opted-out games use the standard engine and record it');
-
-  // ---- The preference is page-level and survives a reload ----
-  await page.reload();
-  await page.waitForSelector('#board .square');
-  const persisted = await page.evaluate(function () {
-    document.getElementById('newGame').click();
-    const checked = document.getElementById('engineWasm').checked;
-    document.getElementById('newGameCancel').click();
-    return !checked;
-  });
-  check(persisted, 'the standard-engine opt-out survives a reload');
-
-  // ---- In-worker fallback: an unusable module answers with JavaScript ----
-  // ai.js fetches with HTTP 200 but is not WebAssembly, so instantiation
-  // fails and the worker must answer with the JS engine, labelled.
-  const fallback = await page.evaluate(function () {
+  const workerFailures = await page.evaluate(function () {
     const release = window.CHESSY_RELEASE || '';
-    return new Promise(function (resolve, reject) {
-      const w = new Worker('assets/ai-worker.js' + (release ? '?r=' + release : ''));
-      const timer = setTimeout(function () {
-        w.terminate();
-        reject(new Error('worker did not answer'));
-      }, 15000);
-      w.onmessage = function (e) {
-        clearTimeout(timer);
-        w.terminate();
-        resolve(e.data);
-      };
-      w.postMessage({
-        id: 1,
-        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-        maxDepth: 1, timeMs: 10000, quiesce: false, randomize: true,
-        engine: 'wasm',
-        wasmUrl: 'ai.js' + (release ? '?r=' + release : '')
+    function ask(fen, wasmAsset) {
+      return new Promise(function (resolve, reject) {
+        const worker = new Worker('assets/ai-worker.js' +
+          (release ? '?r=' + release : ''));
+        const timer = setTimeout(function () {
+          worker.terminate();
+          reject(new Error('worker failure probe timed out'));
+        }, 10000);
+        worker.onmessage = function (event) {
+          clearTimeout(timer);
+          worker.terminate();
+          resolve(event.data);
+        };
+        worker.postMessage({
+          id: 7, fen: fen, maxDepth: 1, timeMs: 1000,
+          nodeLimit: 1000, quiesce: false, positions: {},
+          wasmUrl: wasmAsset + (release ? '?r=' + release : '')
+        });
       });
-    });
+    }
+    return Promise.all([
+      ask(Chess.START_FEN, 'ai-telemetry.js'),
+      ask('not a fen', 'chessy-ai-fast.wasm')
+    ]);
   });
-  check(fallback.engine === 'js' &&
-      fallback.engineFallback === 'wasm-load-error' &&
-      !!fallback.move && fallback.depth === 1,
-    'an unusable module falls back to the JavaScript engine, labelled');
+  check(workerFailures[0].error === 'wasm-load-error' &&
+      !workerFailures[0].move && !workerFailures[0].engine,
+    'a WASM load failure returns no substitute move');
+  check(workerFailures[1].error === 'wasm-search-error' &&
+      !workerFailures[1].move && !workerFailures[1].engine,
+    'a WASM search failure returns no substitute move');
+
+  // A pre-r71 live save may legitimately contain the retired paths. Restoring
+  // it must preserve—not relabel—its forensic provenance.
+  await t.inject(function () {
+    localStorage.setItem('chessy-game-v1', JSON.stringify({
+      fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+      history: [{
+        move: { from: 52, to: 36, promotion: null },
+        san: 'e4',
+        ai: {
+          release: 'r70', depth: 3, attemptedDepth: 4, maxDepth: 30,
+          quiesce: true, timeMs: 5000, nodeLimit: 10000,
+          ms: 812, elapsedMs: 812, searchMs: 123,
+          nodes: 10000, qnodes: 5000, cutoffs: 10, researches: 1,
+          score: 20, scorePov: 'white', pvUci: [],
+          stopReason: 'node-limit', source: 'sync-fallback',
+          fallbackReason: 'watchdog', engine: 'js',
+          engineFallback: 'wasm-load-error'
+        }
+      }],
+      positions: {},
+      mode: 'pvp', difficulty: '1', timeControl: 'none'
+    }));
+  });
+  const legacy = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).history[0].ai;
+  });
+  check(legacy.engine === 'js' &&
+      legacy.engineFallback === 'wasm-load-error' &&
+      legacy.source === 'sync-fallback' &&
+      legacy.fallbackReason === 'watchdog',
+    'legacy JS/fallback telemetry remains accepted without changing provenance');
 });

@@ -1,23 +1,23 @@
 {
   "$schema": "./certification-manifest.schema.json",
   "schema": "chessy.e4.certification-manifest.v1",
-  "manifestId": "r69-cal-v1/cert/awaiting-opening-freeze",
+  "manifestId": "r71-cal-v1/cert/awaiting-opening-freeze",
   "protocolId": "E4-v1",
   "kind": "certification",
   "status": "awaiting-opening-freeze",
   "protocol": {
     "path": "eval/e4/protocol-v1.json",
-    "sha256": "45c4220dba563ad3562ebfbd74d7254853e9797c21a72db9455976b4abf20299"
+    "sha256": "b99204164fd3098a13fe5155f2c82985f4c438d48c8aa6324b036b8516ff7a0b"
   },
   "adapter": {
     "path": "eval/e4/adapter-v1.json",
-    "sha256": "e936608c9d0064789be14c585d2711743b2f4152d9603d44eb0357f5b3a4ff0b"
+    "sha256": "dc3a6ac3188ae8a44e10f1dd3ccd06d6a1f4fbf12bcef43fddd31be1190a2381"
   },
   "productBaseline": {
-    "release": "r69",
-    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "release": "r71",
+    "gitCommit": "885e6941bf7fa4478370d759e7034567bf463169",
     "wasmAsset": "assets/chessy-ai-fast.wasm",
-    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db"
+    "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
   },
   "source": {
     "name": "Lichess database",

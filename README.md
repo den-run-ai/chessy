@@ -1,7 +1,8 @@
 # ♞ Chessy — Offline Chess PWA
 
-A completely offline, installable chess web app. Zero dependencies, zero
-network requests, zero build step — plain HTML, CSS, and vanilla JavaScript.
+A completely offline, installable chess web app. The shipped PWA has no runtime
+dependencies or network requests: plain HTML/CSS/JavaScript around a
+dependency-free Rust/WebAssembly chess engine.
 
 **▶ Play it: <https://den-run-ai.github.io/chessy/>** (works offline and is
 installable once loaded — deployed automatically from `main` by GitHub Actions.)
@@ -16,7 +17,8 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   threefold and 50-move draws are applied automatically instead of FIDE's
   claim-based procedure (automatic would be five-fold/75 moves).
 - **Play modes** — local two-player (hot-seat), or vs. the built-in computer
-  as either color. Iterative-deepening minimax with alpha-beta pruning, a
+  as either color. The Rust/WASM engine uses iterative-deepening minimax with
+  alpha-beta pruning, a
   Zobrist-keyed transposition table, and hash/killer/history move ordering,
   running in a Web Worker so the UI never blocks. The evaluation is tapered
   between midgame and endgame (the king hides, then centralizes) and scores
@@ -25,12 +27,14 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own
   mating material. All five difficulty levels use quiescent iterative
-  deepening. On the default Rust/WASM backend, Easy/Medium/Hard/Expert target
+  deepening. Easy/Medium/Hard/Expert target
   reproducible 10k/36k/230k/1.44M-node caps; each also has a five-second
-  safety ceiling, so slower devices or the JavaScript fallback can stop
-  earlier. **Master** thinks for five seconds and deepens as far as the device
-  allows. Rust/WASM is on by default with an explicit JavaScript fallback and
-  opt-out. The displayed 1500/1700/1900/2100/2300+ bands are provisional
+  safety ceiling, so slower devices can stop earlier. **Master** thinks for
+  five seconds and deepens as far as the device allows. Search is WASM-only
+  and Worker-only: a failed worker is retried once against the exact unchanged
+  position, then Play stops visibly with a manual Retry action rather than
+  substituting another engine. The displayed 1500/1700/1900/2100/2300+ bands
+  are provisional
   calibration targets on an external engine-rating scale—not certified FIDE,
   Chess.com, or Lichess ratings; absolute and adjacent-level certification
   remains tracked in #87/#113.
@@ -67,11 +71,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   hidden or closed, so reloading never refunds thinking time.
 - **Persistence** — the game is saved to `localStorage` and survives reloads
   and app restarts. Each computer move retains its release, effective search
-  config, actual initial root order, completed/attempted depth, counters,
-  White-POV score (including mate-distance encoding), stop/fallback reason and
-  best-effort PV for incident diagnosis. The captured root order can be supplied
-  back to the engine for an exact fixed-node replay even when casual Play used
-  an unseeded shuffle. Restores are validated by replaying every recorded move
+  config, completed/attempted depth, counters, White-POV score (including
+  mate-distance encoding), stop reason, and engine identity for incident
+  diagnosis. Historical JavaScript/fallback provenance remains
+  readable and exportable but is never an executable path. Restores are
+  validated by replaying every recorded move
   through the rules engine and checking the final position — a corrupted or
   tampered save falls back to a fresh game instead of undefined behavior.
 - **Offline status and version** — the persistent header shows the running
@@ -82,8 +86,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   saved games and training data were not changed.
 - **PGN export** — save the game in standard PGN, plain or with an embedded
   debug log (effective engine config, total/search time, counters and explicit
-  White-POV score, release/execution/fallback path, stop reason, captured root
-  order, best-effort PV, and the FEN before every move) for troubleshooting.
+  White-POV score, release/execution/engine provenance, stop reason,
+  any historical PV evidence, and the FEN before every move) for
+  troubleshooting.
 - **Game archive (coaching foundation)** — finished games and non-empty games
   displaced by New Game are recorded to IndexedDB, keyed on a per-game UUID
   (idempotent re-archive; per-move clock/think and computer-search evidence,
@@ -179,7 +184,8 @@ node test/ai-tactics.js     # fixed-node, deterministic AI regression suite
 node test/master-incident.test.js  # exact 2026-07-24 screenshot-game replay
 node test/master-e4-regression.test.js  # exact r69 11...Bd4 miss; add --require-fix to gate a candidate
 node test/ai-telemetry.test.js      # behavior-neutral search provenance
-node test/level-presets.test.js     # target bands, budgets, JS/WASM parity
+node test/wasm-signatures.test.js   # frozen pre-removal WASM behavior
+node test/level-presets.test.js     # target bands and WASM budgets
 node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
 ```
@@ -191,10 +197,9 @@ fixture but intentionally skips the exact r69 search signature; check out the
 recorded commit to reproduce that historical result. Its pinned Stockfish Lite
 comparison covers four forced root moves only, not every legal move.
 
-The AI measurement tools are manual (too slow for PR CI). `node
-test/ai-bench.js --base origin/main` measures search nodes over 16 benchmark
-positions against a git ref. `test/ai-match.js` supports one formal paired
-protocol plus diagnostic modes. Only `--formal --nodes 10000 --plies 180`
+The engine measurement tools are manual (too slow for PR CI).
+`test/ai-match.js` supports one formal paired-WASM protocol plus diagnostic
+modes. Only `--formal --nodes 10000 --plies 180`
 aggregated over 100 openings x 4 seeds x both colors (800 games), against a
 distinct base commit, is the formal gate for a pure evaluation/strength
 change, and it passes only when the opening-clustered one-sided 95% lower
@@ -227,9 +232,10 @@ new experiment, because post-selection invalidates the predeclared result.
 Rust/WASM search optimizations use a separate formal efficiency
 non-inferiority protocol after first demonstrating a material efficiency
 benefit. `test/wasm-efficiency-match.js` compares exact candidate and frozen
-base modules at the same 10,000-node, 100-opening x 4-seed x both-colours,
-180-ply contract; it passes only when the opening-clustered one-sided 95%
-lower bound is strictly above 49%. The maintainer-label-gated
+base modules across the reviewed ABI-v2/v1 ordinary-search boundary at the
+same 10,000-node, 100-opening x 4-seed x both-colours, 180-ply contract; it
+passes only when the opening-clustered one-sided 95% lower bound is strictly
+above 49%. The production loader remains ABI-v2-only. The maintainer-label-gated
 `WASM fixed-node efficiency gate` workflow is documented in
 `experiments/wasm/README.md`; adding the shared harness alone does not launch
 the 800-game run.
@@ -259,9 +265,11 @@ gated on the engine *and* browser suites.
 | --- | --- |
 | `index.html` | App shell |
 | `assets/engine.js` | Chess rules engine (move generation, status, SAN, FEN) |
-| `assets/ai.js` | Computer opponent: iterative deepening, alpha-beta, transposition table, quiescence |
+| `assets/chessy-ai-fast.wasm` | Rust search/evaluation engine used by Play and coaching analysis |
+| `assets/wasm-engine.js` | Strict ABI-v2 loader for search, history, exact-root analysis, evaluation, and PVs |
+| `assets/ai-telemetry.js` | Search-provenance sanitizer, including read-only legacy JS/fallback compatibility |
 | `assets/level-presets.js` | Stable difficulty IDs, provisional rating targets, and search budgets |
-| `assets/ai-worker.js` | Web Worker wrapper so the search runs off the main thread |
+| `assets/ai-worker.js` | WASM-only Play worker |
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
 | `assets/store.js` | IndexedDB coaching store (games, lesson cards, bounded LRU analysis cache, resumable scan jobs) |
@@ -269,8 +277,8 @@ gated on the engine *and* browser suites.
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
-| `assets/analysis-core.js` | Deterministic, provider-neutral analysis contract (MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
-| `assets/analysis-worker.js` | Dedicated coaching-analysis Web Worker running the contract and throttling non-terminal progress off the main thread |
+| `assets/analysis-core.js` | Deterministic Rust/WASM analysis contract (exact MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
+| `assets/analysis-worker.js` | Dedicated WASM coaching-analysis worker with throttled non-terminal progress |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, owner-scoped progress/cancellation, watchdog + retry, validated IndexedDB result cache |
 | `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |
 | `assets/moment-selector.js` | Pure, deterministic critical-moment evidence, collapse suppression, clustering and deep-admission policy |

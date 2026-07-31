@@ -2,6 +2,7 @@
 'use strict';
 require('./helper').run('setup', async function (t) {
   const page = t.page, check = t.check, mv = t.mv;
+  const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
   check((await page.textContent('#setupSummary')).includes('White vs computer'), 'summary shows default mode');
   check((await page.textContent('#setupSummary')).includes('Medium'), 'summary shows default difficulty');
@@ -225,91 +226,306 @@ require('./helper').run('setup', async function (t) {
     return document.getElementById('installNote').textContent.includes('Ready offline');
   }, null, { timeout: 15000 });
   check(true, 'offline note reaches "Ready offline" after SW install');
-  // Worker failures retry the SAME AI move synchronously, so their recorded
-  // timing must include time already spent waiting for the worker. This
-  // controllable stub first fails loudly, then stays alive but silent; it
-  // affects every later navigation, so these tests must stay LAST.
+  // Play is worker/WASM-only. A failed attempt gets exactly one fresh worker;
+  // the second failure leaves the exact position unchanged and exposes a
+  // Retry control. This stub affects every later navigation, so keep it last.
   await page.addInitScript(function () {
     window.__chessyTestWorkerCount = 0;
+    window.__chessyTestWorkerPostCount = 0;
+    window.__chessyHeldZeroTimers = [];
+    window.__chessyHoldNextZeroTimer = false;
+    const realSetTimeout = window.setTimeout.bind(window);
+    window.setTimeout = function (fn, delay) {
+      // A constructor failure and a loud-worker retry both yield through a
+      // zero-delay timer. Tests can hold exactly the next such product timer
+      // so a replacement request is installed before the stale callback runs.
+      if (window.__chessyHoldNextZeroTimer && delay === 0) {
+        window.__chessyHoldNextZeroTimer = false;
+        const args = Array.prototype.slice.call(arguments, 2);
+        window.__chessyHeldZeroTimers.push(function () {
+          fn.apply(window, args);
+        });
+        return 0;
+      }
+      // Product watchdog = timeMs (5000) + margin (3000). Compress it only
+      // during the explicit silent-worker phase.
+      if (window.__chessyFastWatchdog && delay === 8000) delay = 50;
+      return realSetTimeout(fn, delay);
+    };
+    window.__chessyFlushHeldZeroTimers = function () {
+      const held = window.__chessyHeldZeroTimers.splice(0);
+      held.forEach(function (fn) { fn(); });
+      return held.length;
+    };
     window.Worker = function () {
       const worker = this;
-      window.__chessyTestWorkerCount++;
-      // 'birth-error' workers fail on LOAD, before any message — the
-      // persistently-unloadable-script case.
-      if (window.__chessyTestWorkerMode === 'birth-error') {
-        setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 50);
+      const number = ++window.__chessyTestWorkerCount;
+      if (window.__chessyTestWorkerMode === 'constructor-error') {
+        window.__chessyHoldNextZeroTimer = true;
+        throw new Error('synthetic Worker constructor failure');
       }
-      this.postMessage = function () {
+      this.postMessage = function (request) {
+        window.__chessyTestWorkerPostCount++;
         if (window.__chessyTestWorkerMode === 'error') {
-          setTimeout(function () { if (worker.onerror) worker.onerror({}); }, 750);
+          setTimeout(function () {
+            if (worker.onerror) worker.onerror({ preventDefault: function () {} });
+          }, 20);
+        } else if (window.__chessyTestWorkerMode === 'success') {
+          setTimeout(function () {
+            if (worker.onmessage) worker.onmessage({ data: {
+              id: request.id,
+              move: { from: 52, to: 36, promotion: null },
+              engine: 'wasm',
+              depth: 3, attemptedDepth: 4, nodes: 10000, qnodes: 5000,
+              cutoffs: 10, researches: 1, score: 20, scorePov: 'white',
+              stopReason: 'node-limit', elapsedMs: 3
+            } });
+          }, 20);
+        } else if (window.__chessyTestWorkerMode === 'illegal') {
+          setTimeout(function () {
+            if (worker.onmessage) worker.onmessage({ data: {
+              id: request.id,
+              move: { from: 0, to: 0, promotion: null },
+              engine: 'wasm',
+              depth: 1, attemptedDepth: 2, nodes: 1, qnodes: 0,
+              cutoffs: 0, researches: 0, score: 0, scorePov: 'white',
+              stopReason: 'node-limit', elapsedMs: 1
+            } });
+          }, 20);
+        } else if (window.__chessyTestWorkerMode === 'first-error') {
+          setTimeout(function () {
+            if (number === 1) {
+              if (worker.onerror) worker.onerror({ preventDefault: function () {} });
+            } else if (worker.onmessage) {
+              worker.onmessage({ data: {
+                id: request.id,
+                move: { from: 52, to: 36, promotion: null },
+                engine: 'wasm',
+                depth: 3, attemptedDepth: 4, nodes: 10000, qnodes: 5000,
+                cutoffs: 10, researches: 1, score: 20, scorePov: 'white',
+                stopReason: 'node-limit', elapsedMs: 3
+              } });
+            }
+          }, 20);
+        } else if (window.__chessyTestWorkerMode === 'hold-error-retry') {
+          setTimeout(function () {
+            window.__chessyHoldNextZeroTimer = true;
+            if (worker.onerror) worker.onerror({ preventDefault: function () {} });
+          }, 20);
+        } else if (window.__chessyTestWorkerMode === 'manual-success') {
+          window.__chessyManualWorkerReply = function () {
+            if (worker.onmessage) worker.onmessage({ data: {
+              id: request.id,
+              move: { from: 52, to: 36, promotion: null },
+              engine: 'wasm',
+              depth: 3, attemptedDepth: 4, nodes: 10000, qnodes: 5000,
+              cutoffs: 10, researches: 1, score: 20, scorePov: 'white',
+              stopReason: 'node-limit', elapsedMs: 3
+            } });
+          };
         }
       };
       this.terminate = function () {};
     };
-    // Survives reloads so a phase can exercise the boot-time worker.
-    window.__chessyTestWorkerMode = sessionStorage.getItem('chessy-test-worker-mode') || 'error';
+    window.__chessyTestWorkerMode = 'first-error';
   });
   await t.inject(function () { localStorage.removeItem('chessy-game-v1'); });
 
   await t.newGame({ mode: 'ai-w', difficulty: '1' });
   await page.waitForFunction(function () {
-    return document.querySelectorAll('#moveList .ply').length >= 1;
-  }, null, { timeout: 5000 });
-  const failedAi = await page.evaluate(function () {
+    return document.querySelectorAll('#moveList .ply').length === 1;
+  }, null, { timeout: 3000 });
+  const automatic = await page.evaluate(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    return saved.history[0].ai;
+    return {
+      workers: window.__chessyTestWorkerCount,
+      ai: saved.history[0].ai
+    };
   });
-  check(failedAi.ms >= 700,
-    'failed worker: AI timing includes the pre-error wait (' + failedAi.ms + 'ms)');
-  check(failedAi.source === 'sync-fallback' &&
-      failedAi.fallbackReason === 'worker-error',
-    'failed worker telemetry identifies the loud-error fallback');
-  check(Number.isFinite(failedAi.searchMs) && failedAi.ms >= failedAi.searchMs &&
-      Number.isInteger(failedAi.nodes) && failedAi.nodes > 0,
-    'failed worker fallback retains search time and counters');
+  check(automatic.workers === 2 &&
+      automatic.ai.engine === 'wasm' &&
+      automatic.ai.source === 'worker' &&
+      automatic.ai.engineFallback === null,
+    'one loud failure automatically retries in a fresh worker and accepts WASM');
 
-  await page.evaluate(function () { window.__chessyTestWorkerMode = 'silent'; });
-  await t.newGame({ mode: 'ai-w', difficulty: 'master' }); // AI is White: moves first
-  // The silent-worker fallback waits the full watchdog (Master timeMs + 3000 =
-  // 8s) and THEN runs a synchronous think for the same budget, so allow well
-  // beyond that combined wait.
-  await page.waitForFunction(function () {
-    return document.querySelectorAll('#moveList .ply').length >= 1;
-  }, null, { timeout: 30000 });
-  check(true, 'silent worker: the watchdog falls back and the computer still moves');
-  check(!(await page.textContent('#status')).includes('thinking'),
-    'status leaves "thinking" after the fallback move');
-  const stalledAi = await page.evaluate(function () {
-    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    return saved.history[0].ai;
-  });
-  check(stalledAi.ms >= 4900,
-    'silent worker: AI timing includes the watchdog wait (' + stalledAi.ms + 'ms)');
-  check(stalledAi.source === 'sync-fallback' &&
-      stalledAi.fallbackReason === 'watchdog',
-    'silent worker telemetry identifies the watchdog fallback');
-  check(Number.isFinite(stalledAi.searchMs) && stalledAi.ms >= stalledAi.searchMs &&
-      Number.isInteger(stalledAi.nodes) && stalledAi.nodes > 0,
-    'watchdog fallback retains search time and counters');
-
-  // A PERSISTENTLY unloadable worker script fires onerror on every fresh
-  // instance before any message. The app must drop to synchronous mode —
-  // not spawn replacements in a loop whose startup errors keep restarting
-  // (and so forever postponing) the pending synchronous fallback.
   await page.evaluate(function () {
-    sessionStorage.setItem('chessy-test-worker-mode', 'birth-error');
-    localStorage.removeItem('chessy-game-v1');
+    window.__chessyTestWorkerMode = 'error';
   });
-  await page.reload();
-  await page.waitForSelector('#board .square');
-  await page.waitForTimeout(300); // let the boot worker's startup error land
   await t.newGame({ mode: 'ai-w', difficulty: '1' });
   await page.waitForFunction(function () {
+    return !document.getElementById('aiError').hidden;
+  }, null, { timeout: 3000 });
+  const failed = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      workers: window.__chessyTestWorkerCount,
+      plies: saved.history.length,
+      fen: saved.fen,
+      status: document.getElementById('status').textContent
+    };
+  });
+  check(failed.workers === 3 && failed.plies === 0,
+    'two loud failures use one initial and one fresh worker, with no move');
+  check(failed.fen === startFen &&
+      failed.status.includes('position unchanged'),
+    'final worker failure visibly preserves the exact board position');
+
+  await page.evaluate(function () {
+    window.__chessyTestWorkerMode = 'success';
+    document.getElementById('aiRetry').click();
+  });
+  await page.waitForFunction(function () {
     return document.querySelectorAll('#moveList .ply').length >= 1;
-  }, null, { timeout: 20000 });
-  check(!(await page.textContent('#status')).includes('thinking'),
-    'unloadable worker: the computer still moves via the synchronous path');
-  const spawned = await page.evaluate(function () { return window.__chessyTestWorkerCount; });
-  check(spawned <= 2,
-    'unloadable worker is not respawned in a loop (' + spawned + ' constructed)');
+  }, null, { timeout: 3000 });
+  const recovered = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      workers: window.__chessyTestWorkerCount,
+      ai: saved.history[0].ai,
+      errorHidden: document.getElementById('aiError').hidden
+    };
+  });
+  check(recovered.workers === 4 && recovered.errorHidden &&
+      recovered.ai.engine === 'wasm' && recovered.ai.source === 'worker' &&
+      recovered.ai.engineFallback === null &&
+      recovered.ai.fallbackReason === null,
+    'Retry starts a new worker and accepts only its WASM result');
+
+  // Alive-but-silent workers follow the same bounded policy. Compress the two
+  // watchdogs in this controlled phase; production still uses 8 seconds each.
+  await page.evaluate(function () {
+    window.__chessyTestWorkerMode = 'silent';
+    window.__chessyFastWatchdog = true;
+  });
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return !document.getElementById('aiError').hidden;
+  }, null, { timeout: 3000 });
+  const silent = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      plies: saved.history.length,
+      fen: saved.fen,
+      workers: window.__chessyTestWorkerCount
+    };
+  });
+  check(silent.plies === 0 && silent.fen === startFen &&
+      silent.workers === 5,
+    'two watchdogs stop after one fresh-worker retry and preserve the board');
+
+  await page.evaluate(function () {
+    window.__chessyFastWatchdog = false;
+    window.__chessyTestWorkerMode = 'illegal';
+    document.getElementById('aiRetry').click();
+  });
+  await page.waitForFunction(function () {
+    return window.__chessyTestWorkerCount === 7 &&
+      !document.getElementById('aiError').hidden;
+  }, null, { timeout: 3000 });
+  const illegal = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return { plies: saved.history.length, fen: saved.fen };
+  });
+  check(illegal.plies === 0 && illegal.fen === startFen,
+    'an illegal worker reply is rejected twice and never reaches the board');
+
+  await t.newGame({ mode: 'pvp' });
+  check(await page.locator('#aiError[hidden]').count() === 1 &&
+      await page.locator('#moveList .ply').count() === 0,
+    'New game recovers from an engine error without accepting a move');
+
+  // Hold both zero-delay recovery shapes from superseded requests. The first
+  // request cannot construct a Worker; the second constructs one, fails
+  // loudly, and queues its fresh-worker retry. A third New game installs a
+  // live successor before either old callback is released.
+  const raceBase = await page.evaluate(function () {
+    return {
+      workers: window.__chessyTestWorkerCount,
+      posts: window.__chessyTestWorkerPostCount
+    };
+  });
+  await page.evaluate(function () {
+    window.__chessyTestWorkerMode = 'constructor-error';
+  });
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return window.__chessyHeldZeroTimers.length === 1;
+  });
+
+  await page.evaluate(function () {
+    window.__chessyTestWorkerMode = 'hold-error-retry';
+  });
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  await page.waitForFunction(function () {
+    return window.__chessyHeldZeroTimers.length === 2;
+  }, null, { timeout: 3000 });
+
+  await page.evaluate(function () {
+    window.__chessyTestWorkerMode = 'manual-success';
+  });
+  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  const successorBeforeFlush = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      workers: window.__chessyTestWorkerCount,
+      posts: window.__chessyTestWorkerPostCount,
+      plies: saved.history.length,
+      fen: saved.fen,
+      errorHidden: document.getElementById('aiError').hidden,
+      status: document.getElementById('status').textContent
+    };
+  });
+  check(successorBeforeFlush.workers === raceBase.workers + 3 &&
+      successorBeforeFlush.posts === raceBase.posts + 2 &&
+      successorBeforeFlush.plies === 0 &&
+      successorBeforeFlush.fen === startFen &&
+      successorBeforeFlush.errorHidden &&
+      successorBeforeFlush.status.includes('Computer is thinking'),
+    'successor owns one worker request before stale zero-delay callbacks run');
+
+  const flushed = await page.evaluate(function () {
+    return window.__chessyFlushHeldZeroTimers();
+  });
+  await page.waitForTimeout(30);
+  const successorAfterFlush = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      workers: window.__chessyTestWorkerCount,
+      posts: window.__chessyTestWorkerPostCount,
+      plies: saved.history.length,
+      fen: saved.fen,
+      errorHidden: document.getElementById('aiError').hidden,
+      status: document.getElementById('status').textContent
+    };
+  });
+  check(flushed === 2 &&
+      successorAfterFlush.workers === successorBeforeFlush.workers &&
+      successorAfterFlush.posts === successorBeforeFlush.posts &&
+      successorAfterFlush.plies === 0 &&
+      successorAfterFlush.fen === startFen &&
+      successorAfterFlush.errorHidden &&
+      successorAfterFlush.status.includes('Computer is thinking'),
+    'superseded constructor recovery and retry dispatch cannot act on successor');
+
+  await page.evaluate(function () {
+    window.__chessyManualWorkerReply();
+  });
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#moveList .ply').length === 1;
+  }, null, { timeout: 3000 });
+  const raceRecovered = await page.evaluate(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return {
+      workers: window.__chessyTestWorkerCount,
+      posts: window.__chessyTestWorkerPostCount,
+      ai: saved.history[0].ai,
+      errorHidden: document.getElementById('aiError').hidden
+    };
+  });
+  check(raceRecovered.workers === successorBeforeFlush.workers &&
+      raceRecovered.posts === successorBeforeFlush.posts &&
+      raceRecovered.errorHidden &&
+      raceRecovered.ai.engine === 'wasm' &&
+      raceRecovered.ai.source === 'worker',
+    'successor still completes through its original WASM worker');
 });

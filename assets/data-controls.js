@@ -68,8 +68,9 @@
       if (!m) return null; // corrupt save — don't fabricate a record
       sans.push(Chess.toSan(s, m, legal));
       clocks.push(entry.clock || null);
-      ai.push(entry.ai && typeof ChessAI !== 'undefined' && ChessAI.sanitizeTelemetry
-        ? ChessAI.sanitizeTelemetry(entry.ai) : null);
+      ai.push(entry.ai && typeof ChessyAiTelemetry !== 'undefined' &&
+        ChessyAiTelemetry.sanitizeTelemetry
+        ? ChessyAiTelemetry.sanitizeTelemetry(entry.ai) : null);
       s = Chess.playMove(s, m);
     }
     let status;

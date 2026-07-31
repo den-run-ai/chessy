@@ -107,6 +107,12 @@ const OPAQUE_RECORD_ID =
 const MAX_CANDIDATE_ROWS = 25000;
 const HELDOUT_MANIFEST = path.join(
   ROOT, 'eval', 'training', 'heldout-v1.json');
+const HISTORICAL_R69_INCIDENT = Object.freeze({
+  release: 'r69',
+  commit: '8b887c4a69f8b06bb50ad8d77be896f26938ed42',
+  wasmSha256:
+    'dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db'
+});
 
 function fail(message) {
   throw new Error(message);
@@ -169,9 +175,9 @@ function validateHeldoutIdentity(manifest, fixtureBytes) {
     E4.sha256(fixtureBytes) === manifest.sourceFixtureSha256,
   'held-out source fixture bytes do not match their SHA-256 pin');
   assert(isObject(manifest.incident) &&
-    manifest.incident.release === E4.EXPECTED.release &&
-    manifest.incident.commit === E4.EXPECTED.commit &&
-    manifest.incident.wasmSha256 === E4.EXPECTED.wasmSha256 &&
+    manifest.incident.release === HISTORICAL_R69_INCIDENT.release &&
+    manifest.incident.commit === HISTORICAL_R69_INCIDENT.commit &&
+    manifest.incident.wasmSha256 === HISTORICAL_R69_INCIDENT.wasmSha256 &&
     manifest.incident.requireFixDefault === false &&
     manifest.incident.exactNodeGate === 9187327 &&
     manifest.incident.playedUci === 'c5d4' &&
@@ -851,7 +857,7 @@ function finalizeManifest(manifest, kind) {
     E4.canonicalSha256(manifest.openingClusters);
   manifest.freeze.assignmentSha256 =
     E4.canonicalSha256(manifest.assignments);
-  manifest.manifestId = 'r69-cal-v1/' +
+  manifest.manifestId = 'r71-cal-v1/' +
     (kind === 'certification' ? 'cert/' : 'explore/') +
     manifest.freeze.openingSetSha256;
   manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);

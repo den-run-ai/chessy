@@ -8,8 +8,8 @@
  */
 'use strict';
 require('../assets/engine.js');
-require('../assets/ai.js');
 require('../assets/analysis-core.js');
+require('./wasm-test-engine.js').installAnalysisEngine();
 const Chess = globalThis.Chess;
 const Core = globalThis.ChessyAnalysisCore;
 
@@ -81,7 +81,7 @@ check(a.bestLines[0].pv.length >= 1 && a.bestLines[0].pv[0] === a.bestLines[0].s
   'the PV begins with the candidate move itself');
 
 // --- Provenance + wdl ---
-check(a.engine.id === 'chessy' && typeof a.engine.version === 'string' &&
+check(a.engine.id === 'chessy-wasm' && typeof a.engine.version === 'string' &&
   typeof a.engine.configHash === 'string', 'engine provenance present');
 check(a.wdl === null, 'built-in Chessy reports wdl: null');
 const diffCfg = Core.analyse(start, Object.assign({}, FAST, { multiPV: 2 }));

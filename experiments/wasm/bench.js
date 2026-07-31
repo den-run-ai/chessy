@@ -1,28 +1,37 @@
 /*
  * Chessy Rust/WASM feasibility benchmark.
  *
- * This is intentionally isolated from the shipped worker. It compares the
- * experimental module with the current JavaScript engine over the same
- * 18-position (nine mirrored families) corpus as test/ai-bench.js.
+ * This is intentionally isolated from the shipped worker. It measures one
+ * module or performs a paired candidate/reference-WASM comparison over the
+ * 18-position (nine mirrored families) corpus. The removed JavaScript search
+ * is not loaded; shallow exactness is checked against the frozen r69 WASM
+ * signatures in test/fixtures/wasm-r69-signatures.json.
  *
  * Usage:
  *   node experiments/wasm/bench.js
  *   node experiments/wasm/bench.js --wasm /path/to/chessy-ai.wasm
  *   node experiments/wasm/bench.js --baseline-wasm /path/to/reference.wasm
  *   node experiments/wasm/bench.js --depth 5 --reps 4 --min-ms 250
- *   node experiments/wasm/bench.js --require-go
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const zlib = require('zlib');
 const performance = require('perf_hooks').performance;
 
 const ROOT = path.join(__dirname, '..', '..');
 const DEFAULT_WASM = path.join(__dirname, 'dist', 'chessy-ai-fast.wasm');
-const ABI_VERSION = 1;
+const FROZEN_SIGNATURE_PATH = path.join(
+  ROOT, 'test', 'fixtures', 'wasm-r69-signatures.json');
+// The production loader deliberately accepts only the current ABI. Developer
+// comparison harnesses also need to measure the frozen r69 ABI-v1 module
+// against ABI-v2 candidates. Versions 1 and 2 share this exact ordinary-search
+// surface: input/result pointers, load_position(len), search(d,nodes,ms,q), and
+// the 64-byte result layout below. Do not add a future version here unless that
+// whole surface has been reviewed as byte- and call-compatible.
+const ABI_VERSION = 2;
+const ORDINARY_ABI_VERSIONS = Object.freeze([1, 2]);
 const RESULT_BYTES = 64;
 const INPUT_BYTES = 1024;
 const MAX_SEARCH_DEPTH = 111;
@@ -94,9 +103,9 @@ function safeCounter(view, offset, label) {
 }
 
 /*
- * Decode the experiment's native packed result. This deliberately does not
- * guess at layout changes: the two header fields make an ABI mismatch a hard
- * failure before any benchmark number can be trusted.
+ * Decode the experiment's native packed ordinary-search result. This
+ * deliberately accepts only the two reviewed, layout-compatible ABIs and does
+ * not guess at future layout changes.
  */
 function decodeResult(memory, resultPointer) {
   if (!memory || !(memory.buffer instanceof ArrayBuffer)) {
@@ -110,9 +119,9 @@ function decodeResult(memory, resultPointer) {
   const view = new DataView(memory.buffer, pointer, RESULT_BYTES);
   const version = view.getUint32(0, true);
   const bytes = view.getUint32(4, true);
-  if (version !== ABI_VERSION) {
+  if (!ORDINARY_ABI_VERSIONS.includes(version)) {
     throw new Error('WASM result ABI version ' + version +
-      ' does not match harness version ' + ABI_VERSION);
+      ' is not supported by the ordinary-search harness (expected 1 or 2)');
   }
   if (bytes !== RESULT_BYTES) {
     throw new Error('WASM result struct is ' + bytes +
@@ -142,6 +151,7 @@ function decodeResult(memory, resultPointer) {
     throw new Error('WASM result has invalid stop-reason code ' + stopCode);
   }
   return {
+    abiVersion: version,
     move: move,
     score: view.getInt32(12, true),
     depth: view.getUint32(16, true),
@@ -154,9 +164,13 @@ function decodeResult(memory, resultPointer) {
   };
 }
 
-function requiredFunction(exports, name) {
+function requiredFunction(exports, name, arity) {
   if (typeof exports[name] !== 'function') {
     throw new Error('WASM module is missing required function export "' + name + '"');
+  }
+  if (Number.isInteger(arity) && exports[name].length !== arity) {
+    throw new Error('WASM export "' + name + '" has arity ' +
+      exports[name].length + '; ordinary-search harness requires ' + arity);
   }
   return exports[name];
 }
@@ -178,9 +192,12 @@ function brotliSize(bytes) {
   }).byteLength;
 }
 
-async function loadWasmEngine(wasmPath, label) {
-  const resolved = path.resolve(wasmPath || DEFAULT_WASM);
-  const bytes = fs.readFileSync(resolved);
+async function loadOrdinaryWasmBytes(wasmBytes, label, source) {
+  if (!ArrayBuffer.isView(wasmBytes) || wasmBytes.byteLength === 0) {
+    throw new TypeError('ordinary WASM bytes must be a non-empty typed array');
+  }
+  const bytes = wasmBytes;
+  const resolved = source || '<in-memory WASM>';
   const started = performance.now();
   const loaded = await WebAssembly.instantiate(bytes, {
     env: {
@@ -193,17 +210,19 @@ async function loadWasmEngine(wasmPath, label) {
   if (!(exports.memory instanceof WebAssembly.Memory)) {
     throw new Error('WASM module is missing required memory export "memory"');
   }
-  const inputPointer = requiredFunction(exports, 'input_ptr');
-  const resultPointer = requiredFunction(exports, 'result_ptr');
-  const loadPosition = requiredFunction(exports, 'load_position');
-  const search = requiredFunction(exports, 'search');
+  const inputPointer = requiredFunction(exports, 'input_ptr', 0);
+  const resultPointer = requiredFunction(exports, 'result_ptr', 0);
+  const loadPosition = requiredFunction(exports, 'load_position', 1);
+  const search = requiredFunction(exports, 'search', 4);
   const experimentMetric = typeof exports.experiment_metric === 'function'
     ? exports.experiment_metric
     : null;
   const encoder = new TextEncoder();
   const initialMemoryBytes = exports.memory.buffer.byteLength;
+  const initialResult = decodeResult(exports.memory, resultPointer());
 
   return {
+    abiVersion: initialResult.abiVersion,
     label: label || 'WASM',
     path: resolved,
     binaryBytes: bytes.byteLength,
@@ -266,65 +285,10 @@ async function loadWasmEngine(wasmPath, label) {
   };
 }
 
-const MAKE_RANDOM = [
-  'function __wasmBenchRandom(seed) {',
-  '  return function () {',
-  '    seed = (seed + 0x6D2B79F5) | 0;',
-  '    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);',
-  '    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;',
-  '    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;',
-  '  };',
-  '}'
-].join('\n');
-
-function loadJsEngine() {
-  const context = vm.createContext({ console: console });
-  vm.runInContext(MAKE_RANDOM, context);
-  vm.runInContext(
-    fs.readFileSync(path.join(ROOT, 'assets', 'engine.js'), 'utf8'),
-    context,
-    { filename: 'assets/engine.js' }
-  );
-  vm.runInContext(
-    fs.readFileSync(path.join(ROOT, 'assets', 'ai.js'), 'utf8'),
-    context,
-    { filename: 'assets/ai.js' }
-  );
-
-  return {
-    label: 'JavaScript',
-    search: function (fen, options) {
-      // This is the current ai-bench.js contract: the root shuffle is reset
-      // to the same seed before every search. The experimental WASM engine
-      // embeds the same seed until a seed/history ABI is deliberately added.
-      vm.runInContext('Math.random = __wasmBenchRandom(' + SEED + ')', context);
-      const state = context.Chess.parseFen(fen);
-      const startedSearch = process.hrtime.bigint();
-      const result = context.ChessAI.think(state, {
-        maxDepth: options.maxDepth,
-        nodeLimit: options.nodeLimit || undefined,
-        timeMs: options.timeMs || undefined,
-        quiesce: options.quiesce
-      });
-      const elapsedMs = Number(process.hrtime.bigint() - startedSearch) / 1e6;
-      return {
-        move: result.move
-          ? context.Chess.sqName(result.move.from) +
-            context.Chess.sqName(result.move.to) +
-            (result.move.promotion || '')
-          : '-',
-        score: result.score,
-        depth: result.depth,
-        attemptedDepth: result.attemptedDepth,
-        nodes: result.nodes,
-        qnodes: result.qnodes || 0,
-        cutoffs: result.cutoffs || 0,
-        researches: result.researches || 0,
-        stopReason: result.stopReason,
-        ms: elapsedMs
-      };
-    }
-  };
+async function loadWasmEngine(wasmPath, label) {
+  const resolved = path.resolve(wasmPath || DEFAULT_WASM);
+  return loadOrdinaryWasmBytes(
+    fs.readFileSync(resolved), label, resolved);
 }
 
 const SIGNATURE_FIELDS = Object.freeze([
@@ -338,6 +302,52 @@ const SIGNATURE_FIELDS = Object.freeze([
   'researches',
   'stopReason'
 ]);
+
+function signatureKey(name, options) {
+  return [
+    name,
+    options.maxDepth,
+    options.nodeLimit || 0,
+    options.timeMs || 0,
+    options.quiesce ? 1 : 0
+  ].join('\u0000');
+}
+
+function loadFrozenSignatures() {
+  const fixture = JSON.parse(fs.readFileSync(FROZEN_SIGNATURE_PATH, 'utf8'));
+  if (fixture.schema !== 1 ||
+      JSON.stringify(fixture.fields) !== JSON.stringify(SIGNATURE_FIELDS) ||
+      !Array.isArray(fixture.cases)) {
+    throw new Error('invalid frozen WASM signature fixture');
+  }
+  const byKey = new Map();
+  for (const item of fixture.cases) {
+    if (!item || typeof item.name !== 'string' ||
+        !item.config || !item.result) {
+      throw new Error('malformed frozen WASM signature case');
+    }
+    const key = signatureKey(item.name, item.config);
+    if (byKey.has(key)) {
+      throw new Error('duplicate frozen WASM signature case: ' + item.name);
+    }
+    byKey.set(key, Object.freeze(Object.assign({}, item.result)));
+  }
+  return Object.freeze({
+    schema: fixture.schema,
+    source: fixture.source,
+    sourceCommit: fixture.sourceCommit,
+    sourceWasmSha256: fixture.sourceWasmSha256,
+    fields: SIGNATURE_FIELDS,
+    cases: Object.freeze(fixture.cases.slice()),
+    byKey: byKey
+  });
+}
+
+const FROZEN_SIGNATURES = loadFrozenSignatures();
+
+function frozenSignature(name, options) {
+  return FROZEN_SIGNATURES.byKey.get(signatureKey(name, options)) || null;
+}
 
 function signatureDifferences(candidate, baseline) {
   return SIGNATURE_FIELDS.filter(function (field) {
@@ -396,33 +406,36 @@ function runBatch(engine, fen, options, batch) {
   return result;
 }
 
-function orderedPair(wasm, js, fen, options, wasmFirst, batch) {
-  if (wasmFirst) {
-    const candidate = runBatch(wasm, fen, options, batch);
-    return [candidate, runBatch(js, fen, options, batch)];
+function orderedPair(candidateEngine, referenceEngine, fen, options,
+  candidateFirst, batch) {
+  if (candidateFirst) {
+    const candidate = runBatch(candidateEngine, fen, options, batch);
+    return [candidate, runBatch(referenceEngine, fen, options, batch)];
   }
-  const baseline = runBatch(js, fen, options, batch);
-  return [runBatch(wasm, fen, options, batch), baseline];
+  const reference = runBatch(referenceEngine, fen, options, batch);
+  return [runBatch(candidateEngine, fen, options, batch), reference];
 }
 
-function benchmarkPosition(wasm, js, fen, index, options, reps, minimumMs) {
-  const warm = orderedPair(wasm, js, fen, options, index % 2 === 0, 1);
+function benchmarkPair(candidateEngine, referenceEngine, fen, index, options,
+  reps, minimumMs) {
+  const warm = orderedPair(
+    candidateEngine, referenceEngine, fen, options, index % 2 === 0, 1);
   const batch = Math.max(1, Math.ceil(
     minimumMs / Math.min(warm[0].ms, warm[1].ms)));
-  const wasmSamples = [];
-  const jsSamples = [];
+  const candidateSamples = [];
+  const referenceSamples = [];
   const ratioLogs = [];
   for (let repetition = 0; repetition < reps; repetition++) {
     const pair = orderedPair(
-      wasm,
-      js,
+      candidateEngine,
+      referenceEngine,
       fen,
       options,
       (index + repetition) % 2 === 0,
       batch
     );
-    wasmSamples.push(pair[0]);
-    jsSamples.push(pair[1]);
+    candidateSamples.push(pair[0]);
+    referenceSamples.push(pair[1]);
     ratioLogs.push(Math.log(
       (pair[0].nodes / pair[0].ms) /
       (pair[1].nodes / pair[1].ms)
@@ -430,14 +443,28 @@ function benchmarkPosition(wasm, js, fen, index, options, reps, minimumMs) {
   }
   const medianLog = median(ratioLogs);
   return {
-    wasm: summarize(wasmSamples, wasm.label),
-    js: summarize(jsSamples, js.label),
+    candidate: summarize(candidateSamples, candidateEngine.label),
+    reference: summarize(referenceSamples, referenceEngine.label),
     speedRatio: Math.exp(medianLog),
     speedMadLog: median(ratioLogs.map(function (value) {
       return Math.abs(value - medianLog);
     })),
     batch: batch,
-    firstWasmMs: warm[0].ms
+    firstCandidateMs: warm[0].ms
+  };
+}
+
+function benchmarkSingle(engine, fen, options, reps, minimumMs) {
+  const warm = runBatch(engine, fen, options, 1);
+  const batch = Math.max(1, Math.ceil(minimumMs / warm.ms));
+  const samples = [];
+  for (let repetition = 0; repetition < reps; repetition++) {
+    samples.push(runBatch(engine, fen, options, batch));
+  }
+  return {
+    result: summarize(samples, engine.label),
+    batch: batch,
+    firstMs: warm.ms
   };
 }
 
@@ -459,13 +486,16 @@ function parseOptions(argv) {
   if (!Number.isFinite(minimumMs) || minimumMs <= 0) {
     throw new Error('--min-ms must be positive');
   }
+  if (argv.includes('--require-go')) {
+    throw new Error('--require-go was retired with the JavaScript speed baseline; ' +
+      'use --baseline-wasm for an explicit paired comparison');
+  }
   return {
     depth: depth,
     reps: reps,
     minimumMs: minimumMs,
     wasmPath: option(argv, 'wasm', DEFAULT_WASM),
-    baselineWasmPath: option(argv, 'baseline-wasm', null),
-    requireGo: argv.includes('--require-go')
+    baselineWasmPath: option(argv, 'baseline-wasm', null)
   };
 }
 
@@ -488,7 +518,8 @@ function gateOutcome(geomeanRatio, familyRatios) {
   if (slowFamilies.length) {
     return {
       code: 'NO-GO',
-      reason: slowFamilies.length + ' mirrored family/families are slower than JavaScript'
+      reason: slowFamilies.length +
+        ' mirrored family/families are slower than the reference'
     };
   }
   return {
@@ -499,13 +530,10 @@ function gateOutcome(geomeanRatio, familyRatios) {
 
 async function main(argv) {
   const config = parseOptions(argv || process.argv.slice(2));
-  const wasm = await loadWasmEngine(config.wasmPath, 'Candidate WASM');
-  const js = config.baselineWasmPath
+  const candidate = await loadWasmEngine(config.wasmPath, 'Candidate WASM');
+  const reference = config.baselineWasmPath
     ? await loadWasmEngine(config.baselineWasmPath, 'Reference WASM')
-    : loadJsEngine();
-  if (config.requireGo && config.baselineWasmPath) {
-    throw new Error('--require-go is only valid against the JavaScript baseline');
-  }
+    : null;
   const options = {
     maxDepth: config.depth,
     nodeLimit: 0,
@@ -513,12 +541,16 @@ async function main(argv) {
     quiesce: true
   };
   const positionRatios = [];
+  const positionNps = [];
   let firstSearchMs = null;
+  let frozenChecked = 0;
 
-  console.log('Chessy WASM feasibility screen');
-  console.log('candidate: ' + wasm.path);
-  if (config.baselineWasmPath) {
-    console.log('reference: ' + js.path);
+  console.log('Chessy WASM benchmark');
+  console.log('candidate: ' + candidate.path +
+    ' (ordinary result ABI ' + candidate.abiVersion + ')');
+  if (reference) {
+    console.log('reference: ' + reference.path +
+      ' (ordinary result ABI ' + reference.abiVersion + ')');
   }
   console.log('depth ' + config.depth + ', seed 0x' + SEED.toString(16) +
     ', quiescence on, no history');
@@ -529,79 +561,114 @@ async function main(argv) {
 
   for (let index = 0; index < POSITIONS.length; index++) {
     const name = POSITIONS[index][0];
-    const pair = benchmarkPosition(
-      wasm,
-      js,
-      POSITIONS[index][1],
-      index,
-      options,
-      config.reps,
-      config.minimumMs
-    );
-    if (firstSearchMs === null) firstSearchMs = pair.firstWasmMs;
-    const differences = signatureDifferences(pair.wasm, pair.js);
-    if (differences.length) {
-      throw new Error('exact-search mismatch at ' + name + ': ' +
-        differences.join('; '));
+    const fen = POSITIONS[index][1];
+    let result;
+    let detail;
+    if (reference) {
+      const pair = benchmarkPair(
+        candidate,
+        reference,
+        fen,
+        index,
+        options,
+        config.reps,
+        config.minimumMs
+      );
+      if (firstSearchMs === null) firstSearchMs = pair.firstCandidateMs;
+      const differences = signatureDifferences(
+        pair.candidate, pair.reference);
+      if (differences.length) {
+        throw new Error('candidate/reference mismatch at ' + name + ': ' +
+          differences.join('; '));
+      }
+      result = pair.candidate;
+      positionRatios.push(pair.speedRatio);
+      detail =
+        candidate.label + ' ' +
+        pair.candidate.ms.toFixed(2).padStart(8) + ' ms' +
+        '  ' + reference.label + ' ' +
+        pair.reference.ms.toFixed(2).padStart(8) + ' ms' +
+        '  NPS ' + pair.speedRatio.toFixed(3) + 'x' +
+        (pair.batch > 1 ? '  batch ' + pair.batch : '');
+    } else {
+      const single = benchmarkSingle(
+        candidate, fen, options, config.reps, config.minimumMs);
+      if (firstSearchMs === null) firstSearchMs = single.firstMs;
+      result = single.result;
+      const nps = result.nodes / result.ms * 1000;
+      positionNps.push(nps);
+      detail =
+        candidate.label + ' ' +
+        result.ms.toFixed(2).padStart(8) + ' ms' +
+        '  ' + Math.round(nps).toLocaleString('en-US').padStart(12) + ' nps' +
+        (single.batch > 1 ? '  batch ' + single.batch : '');
     }
-    positionRatios.push(pair.speedRatio);
+
+    const frozen = frozenSignature(name, options);
+    if (frozen) {
+      const differences = signatureDifferences(result, frozen);
+      if (differences.length) {
+        throw new Error('frozen r69 signature mismatch at ' + name + ': ' +
+          differences.join('; '));
+      }
+      frozenChecked++;
+    }
     console.log(
       name.padEnd(42) +
-      String(pair.wasm.nodes).padStart(9) + ' n  d' + pair.wasm.depth +
-      '  ' + pair.wasm.move.padEnd(6) +
-      '  ' + wasm.label + ' ' +
-      pair.wasm.ms.toFixed(2).padStart(8) + ' ms' +
-      '  ' + js.label + ' ' +
-      pair.js.ms.toFixed(2).padStart(8) + ' ms' +
-      '  NPS ' + pair.speedRatio.toFixed(3) + 'x' +
-      (pair.batch > 1 ? '  batch ' + pair.batch : '')
+      String(result.nodes).padStart(9) + ' n  d' + result.depth +
+      '  ' + result.move.padEnd(6) + '  ' + detail
     );
   }
 
-  const familyRatios = FAMILIES.map(function (family, index) {
-    return {
-      name: family[0],
-      ratio: Math.sqrt(
-        positionRatios[index * 2] * positionRatios[index * 2 + 1])
-    };
-  });
-  const sortedFamilies = familyRatios.slice().sort(function (a, b) {
-    return a.ratio - b.ratio;
-  });
-  const p10Index = Math.max(0, Math.ceil(0.1 * sortedFamilies.length) - 1);
-  const geomeanRatio = geometricMean(positionRatios);
-  const outcome = config.baselineWasmPath
-    ? {
-        code: 'COMPARISON-ONLY',
-        reason: 'candidate/reference ratio; JavaScript device gate not evaluated'
-      }
-    : gateOutcome(geomeanRatio, familyRatios);
+  const outcome = {
+    code: reference ? 'COMPARISON-ONLY' : 'MEASURE-ONLY',
+    reason: reference
+      ? 'explicit candidate/reference-WASM comparison'
+      : 'absolute candidate timing; no implicit search implementation baseline'
+  };
 
   console.log('');
-  console.log('exact-search parity: PASS (18/18)');
-  console.log('geomean paired NPS ratio: ' + geomeanRatio.toFixed(4) + 'x');
-  console.log('worst-family NPS ratio:   ' +
-    sortedFamilies[0].ratio.toFixed(4) + 'x (' +
-    sortedFamilies[0].name + ')');
-  console.log('p10-family NPS ratio:     ' +
-    sortedFamilies[p10Index].ratio.toFixed(4) + 'x (' +
-    sortedFamilies[p10Index].name + ')');
-  console.log('binary: ' + wasm.binaryBytes + ' bytes raw, ' +
-    wasm.brotliBytes + ' bytes Brotli');
-  console.log('instantiation: ' + wasm.initMs.toFixed(2) +
-    ' ms; first search: ' + firstSearchMs.toFixed(2) + ' ms');
-  console.log('linear memory: ' + wasm.initialMemoryBytes + ' bytes initial, ' +
-    wasm.memoryBytes() + ' bytes final/peak-observed');
-  console.log('decision: ' + outcome.code + ' — ' + outcome.reason);
-
-  if (config.requireGo && outcome.code !== 'GO-TO-DEVICES') {
-    process.exitCode = 2;
+  if (reference) {
+    const familyRatios = FAMILIES.map(function (family, index) {
+      return {
+        name: family[0],
+        ratio: Math.sqrt(
+          positionRatios[index * 2] * positionRatios[index * 2 + 1])
+      };
+    });
+    const sortedFamilies = familyRatios.slice().sort(function (a, b) {
+      return a.ratio - b.ratio;
+    });
+    const p10Index = Math.max(0, Math.ceil(0.1 * sortedFamilies.length) - 1);
+    console.log('candidate/reference exact parity: PASS (18/18)');
+    console.log('geomean paired NPS ratio: ' +
+      geometricMean(positionRatios).toFixed(4) + 'x');
+    console.log('worst-family NPS ratio:   ' +
+      sortedFamilies[0].ratio.toFixed(4) + 'x (' +
+      sortedFamilies[0].name + ')');
+    console.log('p10-family NPS ratio:     ' +
+      sortedFamilies[p10Index].ratio.toFixed(4) + 'x (' +
+      sortedFamilies[p10Index].name + ')');
+  } else {
+    console.log('geomean absolute NPS: ' +
+      Math.round(geometricMean(positionNps)).toLocaleString('en-US'));
   }
+  console.log('frozen r69 signatures: ' +
+    (frozenChecked ? 'PASS (' + frozenChecked + '/18)' :
+      'not available for depth ' + config.depth));
+  console.log('binary: ' + candidate.binaryBytes + ' bytes raw, ' +
+    candidate.brotliBytes + ' bytes Brotli');
+  console.log('instantiation: ' + candidate.initMs.toFixed(2) +
+    ' ms; first search: ' + firstSearchMs.toFixed(2) + ' ms');
+  console.log('linear memory: ' + candidate.initialMemoryBytes +
+    ' bytes initial, ' + candidate.memoryBytes() + ' bytes final/peak-observed');
+  console.log('decision: ' + outcome.code + ' — ' + outcome.reason);
   return outcome;
 }
 
 module.exports = Object.freeze({
   ABI_VERSION: ABI_VERSION,
+  ORDINARY_ABI_VERSIONS: ORDINARY_ABI_VERSIONS,
   RESULT_BYTES: RESULT_BYTES,
   EXPERIMENT_METRIC_SLOTS: EXPERIMENT_METRIC_SLOTS,
   NONE_U32: NONE_U32,
@@ -610,8 +677,10 @@ module.exports = Object.freeze({
   FAMILIES: FAMILIES,
   POSITIONS: POSITIONS,
   decodeResult: decodeResult,
+  loadOrdinaryWasmBytes: loadOrdinaryWasmBytes,
   loadWasmEngine: loadWasmEngine,
-  loadJsEngine: loadJsEngine,
+  FROZEN_SIGNATURES: FROZEN_SIGNATURES,
+  frozenSignature: frozenSignature,
   signatureDifferences: signatureDifferences,
   gateOutcome: gateOutcome,
   main: main

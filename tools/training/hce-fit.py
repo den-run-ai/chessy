@@ -64,6 +64,36 @@ def assert_artifacts_unchanged(expected: dict[Path, str]) -> None:
             )
 
 
+def publish_json_no_replace(
+    filename: Path,
+    payload: Any,
+    expected_inputs: dict[Path, str],
+) -> None:
+    encoded = (
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    )
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=f".{filename.name}.",
+            suffix=".tmp",
+            dir=filename.parent,
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        assert_artifacts_unchanged(expected_inputs)
+        os.link(temporary, filename)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def scalar_string(archive: Any, name: str, filename: Path) -> str:
     value = archive[name]
     if value.shape != () or value.dtype.kind not in ("U", "S"):
@@ -292,6 +322,15 @@ def validate_matrix_sidecar(
         ),
         "linearExtractorSha256": sha256_file(
             root / "test/training/hce-r3-linear.js"
+        ),
+        "baselineExtractorSha256": sha256_file(
+            root / "test/training/hce-r3-baseline.js"
+        ),
+        "rustEvaluatorSourceSha256": sha256_file(
+            root / "experiments/wasm/src/eval.rs"
+        ),
+        "shippedWasmSha256": sha256_file(
+            root / "assets/chessy-ai-fast.wasm"
         ),
         "featureManifestSha256": sha256_file(feature_path),
         "fitContractSha256": sha256_file(fit_path),
@@ -679,6 +718,65 @@ def self_test() -> None:
                 ) from error
         else:
             raise AssertionError("fitter accepted a replaced validated input")
+        blocked_output = Path(temp) / "blocked-candidate.json"
+        try:
+            publish_json_no_replace(
+                blocked_output,
+                {"status": "must-not-publish"},
+                guarded_artifacts,
+            )
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("changed input did not block publication")
+        if blocked_output.exists():
+            raise AssertionError("failed rehash left a final output artifact")
+
+        invalid_output = Path(temp) / "invalid-candidate.json"
+        try:
+            publish_json_no_replace(
+                invalid_output,
+                {"nonFinite": math.nan},
+                {},
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("non-finite candidate serialized")
+        if invalid_output.exists():
+            raise AssertionError(
+                "failed serialization left a final output artifact"
+            )
+
+        stable_input = Path(temp) / "stable-input.bin"
+        stable_input.write_bytes(b"stable authenticated input")
+        stable_inputs = {stable_input: sha256_file(stable_input)}
+        published = Path(temp) / "published-candidate.json"
+        publish_json_no_replace(
+            published,
+            {"status": "float-research-candidate-not-applied"},
+            stable_inputs,
+        )
+        if json.loads(published.read_text(encoding="utf-8")) != {
+            "status": "float-research-candidate-not-applied"
+        }:
+            raise AssertionError("exclusive candidate publication differs")
+        preserved = published.read_bytes()
+        try:
+            publish_json_no_replace(
+                published,
+                {"status": "replacement"},
+                stable_inputs,
+            )
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError("candidate publication replaced an output")
+        if published.read_bytes() != preserved:
+            raise AssertionError("no-replace failure changed the output")
+        leftovers = list(Path(temp).glob(".*.tmp"))
+        if leftovers:
+            raise AssertionError("candidate publication left temporary files")
     print("HCE convex self-test passed")
 
 
@@ -702,6 +800,22 @@ def main() -> None:
     root = Path(__file__).resolve().parents[2]
     feature_path = root / "eval/training/hce-r3-features-v1.json"
     fit_path = root / "eval/training/hce-r3-fit-v1.json"
+    teacher_path = root / "eval/training/teacher-sf18-100kn-v1.json"
+    implementation_paths = (
+        Path(__file__).resolve(),
+        root / "tools/training/pack-hce.py",
+        root / "test/training/hce-r3-pack-stream.js",
+        root / "test/training/hce-r3-linear.js",
+        root / "test/training/hce-r3-baseline.js",
+        root / "experiments/wasm/src/eval.rs",
+        root / "assets/chessy-ai-fast.wasm",
+        feature_path,
+        fit_path,
+        teacher_path,
+    )
+    implementation_hashes = {
+        filename: sha256_file(filename) for filename in implementation_paths
+    }
     features = json.loads(feature_path.read_text(encoding="utf-8"))
     fit_contract = json.loads(fit_path.read_text(encoding="utf-8"))
     contract_disposition = fit_contract["matrix"].get(
@@ -717,12 +831,16 @@ def main() -> None:
     parameters = int(features["parameterCounts"]["total"])
     center_path = Path(args.center).resolve()
     scales_path = Path(args.scales).resolve()
+    center_file_sha256 = sha256_file(center_path)
+    scales_file_sha256 = sha256_file(scales_path)
     center = load_integer_vector(center_path, parameters, "center")
     scales = load_integer_vector(scales_path, parameters, "scales")
     center_digest = integer_vector_digest(center)
     scales_digest = integer_vector_digest(scales)
     if center_digest != fit_contract["objective"]["centerValueSha256"]:
-        raise SystemExit("center does not match the frozen r69 Round-2 + zero-R3 vector")
+        raise SystemExit(
+            "center does not match the frozen r71 baseline Round-2 + zero-R3 vector"
+        )
     if scales_digest != fit_contract["objective"]["scalesValueSha256"]:
         raise SystemExit("scales do not match the frozen regularization vector")
     baseline_parameters = int(features["parameterCounts"]["baseline"])
@@ -730,12 +848,11 @@ def main() -> None:
         raise SystemExit("every new R3 regularization center must be zero")
     if np.any(scales <= 0):
         raise SystemExit("regularization scales must be positive")
-    teacher_path = root / "eval/training/teacher-sf18-100kn-v1.json"
     expected_metadata = {
         "matrix_schema": fit_contract["matrix"]["format"],
         "feature_order_sha256": features["parameterOrder"]["sha256"],
-        "feature_manifest_sha256": sha256_file(feature_path),
-        "teacher_manifest_sha256": sha256_file(teacher_path),
+        "feature_manifest_sha256": implementation_hashes[feature_path],
+        "teacher_manifest_sha256": implementation_hashes[teacher_path],
         "input_disposition": contract_disposition,
         "center_value_sha256": center_digest,
         "scales_value_sha256": scales_digest,
@@ -830,8 +947,8 @@ def main() -> None:
     payload = {
         "schemaVersion": 1,
         "status": "float-research-candidate-not-applied",
-        "featureManifestSha256": sha256_file(feature_path),
-        "fitContractSha256": sha256_file(fit_path),
+        "featureManifestSha256": implementation_hashes[feature_path],
+        "fitContractSha256": implementation_hashes[fit_path],
         "inputs": {
             "train": {
                 "path": str(train_path),
@@ -845,8 +962,8 @@ def main() -> None:
                 "rows": validation.rows,
                 "sidecarSha256": validation_sidecar_sha256,
             },
-            "centerFileSha256": sha256_file(center_path),
-            "scalesFileSha256": sha256_file(scales_path),
+            "centerFileSha256": center_file_sha256,
+            "scalesFileSha256": scales_file_sha256,
             "centerValueSha256": center_digest,
             "scalesValueSha256": scales_digest,
             "selectionContractSha256": train.metadata[
@@ -879,24 +996,28 @@ def main() -> None:
         "testOpened": False,
         "runtimeFilesChanged": False,
         "solver": {
-            "implementationSha256": sha256_file(Path(__file__).resolve()),
+            "implementationSha256": implementation_hashes[
+                Path(__file__).resolve()
+            ],
             "numpy": np.__version__,
             "scipy": scipy.__version__,
             "maxIterations": max_iterations,
             "threads": 1,
         },
     }
-    assert_artifacts_unchanged({
+    publication_inputs = {
+        **implementation_hashes,
+        center_path: center_file_sha256,
+        scales_path: scales_file_sha256,
         train_path: train.source_sha256,
         validation_path: validation.source_sha256,
         train_sidecar_path: train_sidecar_sha256,
         validation_sidecar_path: validation_sidecar_sha256,
-    })
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
-        encoding="utf-8",
-    )
+    }
+    try:
+        publish_json_no_replace(output, payload, publication_inputs)
+    except FileExistsError as error:
+        raise SystemExit("refusing to overwrite --output") from error
 
 
 if __name__ == "__main__":

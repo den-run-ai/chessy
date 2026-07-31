@@ -23,17 +23,21 @@ const QMAX: usize = 16;
 const QCHECK_PLIES: usize = 1;
 const MAX_PLY: usize = 128;
 pub const MAX_SEARCH_DEPTH: u32 = (MAX_PLY - QMAX - 1) as u32;
+pub const MAX_PV_LEN: usize = MAX_PLY;
 const REP_INFINITY: u16 = 0xffff;
 
 const TT_CAPACITY: usize = 1 << 20;
 const TT_MASK: usize = TT_CAPACITY - 1;
+const HISTORY_TABLE_CAPACITY: usize = 1 << 10;
+const HISTORY_TABLE_MASK: usize = HISTORY_TABLE_CAPACITY - 1;
+const MAX_HISTORY_OCCURRENCES: usize = HISTORY_TABLE_CAPACITY * 3 / 4;
 
 const EXACT: u8 = 0;
 const LOWER: u8 = 1;
 const UPPER: u8 = 2;
 
 #[repr(u32)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StopReason {
     Unknown = 0,
     MaxDepth = 1,
@@ -91,6 +95,31 @@ impl TTEntry {
 const _: [(); 24] = [(); core::mem::size_of::<TTEntry>()];
 
 #[derive(Clone, Copy)]
+struct HistoryEntry {
+    r1: u32,
+    r2: u32,
+    count: u16,
+    occupied: bool,
+}
+
+impl HistoryEntry {
+    const ZERO: Self = Self {
+        r1: 0,
+        r2: 0,
+        count: 0,
+        occupied: false,
+    };
+}
+
+const _: [(); 12] = [(); core::mem::size_of::<HistoryEntry>()];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistoryError {
+    Capacity,
+    InvalidFen,
+}
+
+#[derive(Clone, Copy)]
 struct RootItem {
     mv: Move,
     score: i32,
@@ -127,6 +156,7 @@ struct Context {
     move_scores: [[i32; MAX_MOVES]; MAX_PLY],
     tt_count: usize,
     tt_saturated: bool,
+    direct_root: bool,
 }
 
 impl Context {
@@ -151,6 +181,7 @@ impl Context {
         move_scores: [[0; MAX_MOVES]; MAX_PLY],
         tt_count: 0,
         tt_saturated: false,
+        direct_root: false,
     };
 }
 
@@ -158,6 +189,11 @@ static mut CONTEXT: Context = Context::ZERO;
 static mut TT: [TTEntry; TT_CAPACITY] = [TTEntry::ZERO; TT_CAPACITY];
 static mut TT_GENERATION: u16 = 1;
 static mut ROOT_ITEMS: [RootItem; MAX_MOVES] = [RootItem::ZERO; MAX_MOVES];
+static mut GAME_HISTORY: [HistoryEntry; HISTORY_TABLE_CAPACITY] =
+    [HistoryEntry::ZERO; HISTORY_TABLE_CAPACITY];
+static mut GAME_HISTORY_OCCURRENCES: usize = 0;
+static mut PV: [u32; MAX_PV_LEN] = [0; MAX_PV_LEN];
+static mut PV_LENGTH: usize = 0;
 
 const Z_TURN: usize = 768;
 const Z_CASTLE: usize = 769;
@@ -181,6 +217,33 @@ unsafe fn tt_entry(index: usize) -> *mut TTEntry {
     core::ptr::addr_of_mut!(TT).cast::<TTEntry>().add(index)
 }
 
+#[inline]
+unsafe fn history_entry(index: usize) -> *mut HistoryEntry {
+    core::ptr::addr_of_mut!(GAME_HISTORY)
+        .cast::<HistoryEntry>()
+        .add(index)
+}
+
+#[inline]
+unsafe fn pv_entry(index: usize) -> *mut u32 {
+    core::ptr::addr_of_mut!(PV).cast::<u32>().add(index)
+}
+
+/// The history transport reuses the first 64 KiB of the search move arena.
+/// Loading finishes before a search begins, and move generation overwrites
+/// every consumed lane, so this keeps ABI v2 inside the fixed 25.31 MiB memory.
+pub fn history_input_ptr() -> *mut u8 {
+    unsafe { core::ptr::addr_of_mut!(CONTEXT.moves).cast::<u8>() }
+}
+
+pub fn pv_ptr() -> u32 {
+    core::ptr::addr_of_mut!(PV).cast::<u32>() as usize as u32
+}
+
+pub unsafe fn pv_len() -> u32 {
+    PV_LENGTH as u32
+}
+
 const fn mulberry_next(seed: &mut u32) -> u32 {
     *seed = seed.wrapping_add(0x6D2B79F5);
     let mut value = (*seed ^ (*seed >> 15)).wrapping_mul(1 | *seed);
@@ -202,7 +265,7 @@ const fn make_zobrist(initial_seed: u32) -> [u32; Z_SIZE] {
 const Z1: [u32; Z_SIZE] = make_zobrist(0x9E3779B9);
 const Z2: [u32; Z_SIZE] = make_zobrist(0x85EBCA6B);
 
-unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
+unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32, direct_root: bool) {
     let ctx = context();
     ctx.quiesce = quiesce;
     ctx.has_deadline = time_ms != 0;
@@ -225,6 +288,7 @@ unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
     ctx.path_len = 0;
     ctx.tt_count = 0;
     ctx.tt_saturated = false;
+    ctx.direct_root = direct_root;
     ctx.killers.fill([0, 0]);
     ctx.hist_white.fill(0);
     ctx.hist_black.fill(0);
@@ -238,6 +302,7 @@ unsafe fn reset_context(quiesce: bool, node_limit: u32, time_ms: u32) {
         }
         TT_GENERATION = 1;
     }
+    PV_LENGTH = 0;
 }
 
 fn piece_hash_index(piece: Piece) -> usize {
@@ -295,6 +360,112 @@ unsafe fn hash_position(position: &mut Position) -> Hash {
     }
 }
 
+#[inline]
+fn history_start_index(r1: u32, r2: u32) -> usize {
+    r1.wrapping_mul(0x9E3779B1)
+        .wrapping_add(r2.rotate_left(16).wrapping_mul(0x85EBCA77)) as usize
+        & HISTORY_TABLE_MASK
+}
+
+pub unsafe fn clear_game_history() {
+    let mut index = 0;
+    while index < HISTORY_TABLE_CAPACITY {
+        *history_entry(index) = HistoryEntry::ZERO;
+        index += 1;
+    }
+    GAME_HISTORY_OCCURRENCES = 0;
+}
+
+unsafe fn add_history_hash(r1: u32, r2: u32) -> Result<(), HistoryError> {
+    if GAME_HISTORY_OCCURRENCES >= MAX_HISTORY_OCCURRENCES {
+        return Err(HistoryError::Capacity);
+    }
+    let mut index = history_start_index(r1, r2);
+    let mut probes = 0;
+    while probes < HISTORY_TABLE_CAPACITY {
+        let entry = history_entry(index);
+        if !(*entry).occupied {
+            *entry = HistoryEntry {
+                r1,
+                r2,
+                count: 1,
+                occupied: true,
+            };
+            GAME_HISTORY_OCCURRENCES += 1;
+            return Ok(());
+        }
+        if (*entry).r1 == r1 && (*entry).r2 == r2 {
+            (*entry).count = (*entry).count.saturating_add(1);
+            GAME_HISTORY_OCCURRENCES += 1;
+            return Ok(());
+        }
+        index = (index + 1) & HISTORY_TABLE_MASK;
+        probes += 1;
+    }
+    Err(HistoryError::Capacity)
+}
+
+unsafe fn game_history_count(r1: u32, r2: u32) -> u16 {
+    let mut index = history_start_index(r1, r2);
+    let mut probes = 0;
+    while probes < HISTORY_TABLE_CAPACITY {
+        let entry = history_entry(index);
+        if !(*entry).occupied {
+            return 0;
+        }
+        if (*entry).r1 == r1 && (*entry).r2 == r2 {
+            return (*entry).count;
+        }
+        index = (index + 1) & HISTORY_TABLE_MASK;
+        probes += 1;
+    }
+    0
+}
+
+/// Loads newline-delimited FEN repetition identities. Each line represents one
+/// occurrence; callers may repeat a line up to three times because the search
+/// only distinguishes zero, one, two, and completed-threefold counts.
+pub unsafe fn load_game_history(input: &[u8]) -> Result<(), HistoryError> {
+    clear_game_history();
+    if input.is_empty() {
+        return Ok(());
+    }
+
+    let mut offset = 0;
+    while offset < input.len() {
+        let start = offset;
+        while offset < input.len() && input[offset] != b'\n' {
+            offset += 1;
+        }
+        let mut end = offset;
+        if end > start && input[end - 1] == b'\r' {
+            end -= 1;
+        }
+        if end == start {
+            clear_game_history();
+            return Err(HistoryError::InvalidFen);
+        }
+        let Some(mut position) = engine::parse_fen(&input[start..end]) else {
+            clear_game_history();
+            return Err(HistoryError::InvalidFen);
+        };
+        let hash = hash_position(&mut position);
+        if let Err(error) = add_history_hash(hash.r1, hash.r2) {
+            clear_game_history();
+            return Err(error);
+        }
+        if offset < input.len() {
+            offset += 1;
+        }
+    }
+    Ok(())
+}
+
+unsafe fn root_completed_threefold(position: &mut Position) -> bool {
+    let hash = hash_position(position);
+    game_history_count(hash.r1, hash.r2) >= 3
+}
+
 unsafe fn check_repetition(r1: u32, r2: u32) -> Option<u16> {
     let mut index = context().path_len;
     while index > 0 {
@@ -303,7 +474,27 @@ unsafe fn check_repetition(r1: u32, r2: u32) -> Option<u16> {
             return Some(index as u16);
         }
     }
+    if game_history_count(r1, r2) >= 2 {
+        return Some(REP_INFINITY);
+    }
     None
+}
+
+unsafe fn check_node_repetition(r1: u32, r2: u32, ply: usize) -> Option<u16> {
+    if context().direct_root && ply == 0 {
+        let mut index = context().path_len;
+        while index > 0 {
+            index -= 1;
+            if context().path1[index] == r1 && context().path2[index] == r2 {
+                return Some(index as u16);
+            }
+        }
+        if game_history_count(r1, r2) >= 3 {
+            return Some(REP_INFINITY);
+        }
+        return None;
+    }
+    check_repetition(r1, r2)
 }
 
 unsafe fn push_path(r1: u32, r2: u32) {
@@ -564,7 +755,7 @@ unsafe fn quiesce_node(
     let track_repetition = position.halfmove >= 4;
     if track_repetition {
         hash = hash_position(position);
-        if let Some(ancestor) = check_repetition(hash.r1, hash.r2) {
+        if let Some(ancestor) = check_node_repetition(hash.r1, hash.r2, ply) {
             context().rep_ply = ancestor;
             return 0;
         }
@@ -713,7 +904,7 @@ unsafe fn search_node(
     }
 
     let hash = hash_position(position);
-    if let Some(ancestor) = check_repetition(hash.r1, hash.r2) {
+    if let Some(ancestor) = check_node_repetition(hash.r1, hash.r2, ply) {
         context().rep_ply = ancestor;
         return 0;
     }
@@ -975,6 +1166,235 @@ fn abs_score(score: i32) -> i32 {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnalysisStatus {
+    Complete,
+    Invalid,
+    TtSaturated,
+    Budget,
+}
+
+pub struct AnalysisOutcome {
+    pub status: AnalysisStatus,
+    pub result: SearchResult,
+}
+
+unsafe fn context_result(
+    mv: Option<Move>,
+    score: i32,
+    depth: u32,
+    attempted_depth: Option<u32>,
+    stop_reason: StopReason,
+) -> SearchResult {
+    SearchResult {
+        mv,
+        score,
+        depth,
+        attempted_depth,
+        nodes: context().nodes,
+        qnodes: context().qnodes,
+        cutoffs: context().cutoffs,
+        researches: context().researches,
+        stop_reason,
+        tt_saturated: context().tt_saturated,
+    }
+}
+
+pub unsafe fn begin_analysis(node_limit: u32, quiesce: bool) {
+    reset_context(quiesce, node_limit, 0, false);
+}
+
+fn valid_abi_move_shape(packed: u32) -> bool {
+    (packed >> 15) == 0 && ((packed >> 12) & 7) <= 4
+}
+
+unsafe fn legal_move_from_abi(position: &mut Position, packed: u32) -> Option<Move> {
+    if !valid_abi_move_shape(packed) {
+        return None;
+    }
+    let mut moves = [0_u32; MAX_MOVES];
+    let count = engine::generate_legal(position, &mut moves);
+    let mut index = 0;
+    while index < count {
+        if abi_move(moves[index]) == packed {
+            return Some(moves[index]);
+        }
+        index += 1;
+    }
+    None
+}
+
+unsafe fn copy_pv(root_move: Move, child: &Position, requested_len: u32) {
+    PV_LENGTH = 0;
+    let capacity = core::cmp::min(requested_len as usize, MAX_PV_LEN);
+    if capacity == 0 {
+        return;
+    }
+    *pv_entry(0) = abi_move(root_move);
+    PV_LENGTH = 1;
+
+    let mut position = *child;
+    let mut seen_h1 = [0_u32; MAX_PV_LEN];
+    let mut seen_h2 = [0_u32; MAX_PV_LEN];
+    let mut seen_len = 0;
+    while PV_LENGTH < capacity {
+        let hash = hash_position(&mut position);
+        let mut repeated = false;
+        let mut seen_index = 0;
+        while seen_index < seen_len {
+            if seen_h1[seen_index] == hash.h1 && seen_h2[seen_index] == hash.h2 {
+                repeated = true;
+                break;
+            }
+            seen_index += 1;
+        }
+        if repeated {
+            break;
+        }
+        seen_h1[seen_len] = hash.h1;
+        seen_h2[seen_len] = hash.h2;
+        seen_len += 1;
+
+        let entry = tt_lookup(hash.h1);
+        if entry.is_null() || (*entry).h2 != hash.h2 || (*entry).mv == 0 {
+            break;
+        }
+        let packed_tt_move = (*entry).mv;
+        let mut moves = [0_u32; MAX_MOVES];
+        let count = engine::generate_legal(&mut position, &mut moves);
+        let mut selected = None;
+        let mut index = 0;
+        while index < count {
+            if tt_pack_move(moves[index]) == packed_tt_move {
+                selected = Some(moves[index]);
+                break;
+            }
+            index += 1;
+        }
+        let Some(mv) = selected else {
+            break;
+        };
+        *pv_entry(PV_LENGTH) = abi_move(mv);
+        PV_LENGTH += 1;
+        engine::make_move(&mut position, mv);
+    }
+}
+
+/// Scores one forced legal root under a full window. A preceding
+/// `begin_analysis` call owns the shared node budget, TT, and counters across
+/// every root in that verification phase.
+pub unsafe fn analyse_root(
+    position: &mut Position,
+    packed_move: u32,
+    total_depth: u32,
+    requested_pv_len: u32,
+) -> AnalysisOutcome {
+    PV_LENGTH = 0;
+    if total_depth == 0 || total_depth > MAX_SEARCH_DEPTH {
+        return AnalysisOutcome {
+            status: AnalysisStatus::Invalid,
+            result: context_result(
+                None,
+                0,
+                0,
+                None,
+                StopReason::Unknown,
+            ),
+        };
+    }
+    let Some(root_move) = legal_move_from_abi(position, packed_move) else {
+        return AnalysisOutcome {
+            status: AnalysisStatus::Invalid,
+            result: context_result(
+                None,
+                0,
+                0,
+                None,
+                StopReason::Unknown,
+            ),
+        };
+    };
+
+    let root_hash = hash_position(position);
+    push_path(root_hash.r1, root_hash.r2);
+    let mut child = *position;
+    engine::make_move(&mut child, root_move);
+    let score = search_node(
+        &mut child,
+        total_depth as i32 - 1,
+        -SCORE_INF,
+        SCORE_INF,
+        1,
+    );
+    pop_path();
+
+    if score == ABORT_SCORE {
+        let status = if context().tt_saturated {
+            AnalysisStatus::TtSaturated
+        } else {
+            AnalysisStatus::Budget
+        };
+        let stop_reason = if status == AnalysisStatus::Budget {
+            if context().abort_reason == StopReason::Unknown {
+                StopReason::NodeLimit
+            } else {
+                context().abort_reason
+            }
+        } else {
+            StopReason::Unknown
+        };
+        return AnalysisOutcome {
+            status,
+            result: context_result(
+                Some(root_move),
+                0,
+                0,
+                Some(total_depth),
+                stop_reason,
+            ),
+        };
+    }
+
+    copy_pv(root_move, &child, requested_pv_len);
+    AnalysisOutcome {
+        status: AnalysisStatus::Complete,
+        result: context_result(
+            Some(root_move),
+            score,
+            total_depth,
+            None,
+            StopReason::MaxDepth,
+        ),
+    }
+}
+
+pub unsafe fn run_fixed(
+    position: &mut Position,
+    depth: u32,
+    node_limit: u32,
+    quiesce: bool,
+) -> SearchResult {
+    reset_context(quiesce, node_limit, 0, true);
+    if root_completed_threefold(position) {
+        return context_result(None, 0, 0, None, StopReason::GameOver);
+    }
+    let score = search_node(position, depth as i32, -SCORE_INF, SCORE_INF, 0);
+    if score == ABORT_SCORE {
+        return context_result(
+            None,
+            0,
+            0,
+            Some(depth),
+            if context().abort_reason == StopReason::Unknown {
+                StopReason::NodeLimit
+            } else {
+                context().abort_reason
+            },
+        );
+    }
+    context_result(None, score, depth, None, StopReason::MaxDepth)
+}
+
 pub unsafe fn run(
     position: &mut Position,
     max_depth_input: u32,
@@ -982,7 +1402,7 @@ pub unsafe fn run(
     time_ms: u32,
     quiesce: bool,
 ) -> SearchResult {
-    reset_context(quiesce, node_limit, time_ms);
+    reset_context(quiesce, node_limit, time_ms, false);
     let max_depth = core::cmp::max(1, max_depth_input);
 
     let mut root_moves = [0_u32; MAX_MOVES];
@@ -990,6 +1410,7 @@ pub unsafe fn run(
     if root_count == 0
         || position.halfmove >= 100
         || engine::position_insufficient_material(position)
+        || root_completed_threefold(position)
     {
         return SearchResult {
             mv: None,
@@ -1184,11 +1605,77 @@ pub fn abi_move(mv: Move) -> u32 {
 }
 
 #[cfg(test)]
-mod tt_saturation_tests {
+mod tests {
+    use super::*;
+
     #[test]
     fn full_table_short_circuits_before_an_unknown_probe() {
         assert!(!super::tt_unavailable(super::TT_CAPACITY - 1, false));
         assert!(super::tt_unavailable(super::TT_CAPACITY, false));
         assert!(super::tt_unavailable(0, true));
+    }
+
+    #[test]
+    fn abi_v2_history_exact_roots_budget_and_pv() {
+        let _guard = crate::TEST_LOCK.lock().unwrap();
+        unsafe {
+            const FEN: &str = "k7/8/8/8/8/8/4R3/4K3 w - - 4 1";
+            let mut root = engine::parse_fen(FEN.as_bytes()).unwrap();
+
+            let history = [FEN, FEN, FEN].join("\n");
+            assert!(load_game_history(history.as_bytes()).is_ok());
+            let terminal = run(&mut root, 1, 0, 0, false);
+            assert_eq!(terminal.stop_reason, StopReason::GameOver);
+            assert!(terminal.mv.is_none());
+            assert_eq!(terminal.nodes, 0);
+
+            clear_game_history();
+            let root_hash = hash_position(&mut root);
+            add_history_hash(root_hash.r1, root_hash.r2).unwrap();
+            add_history_hash(root_hash.r1, root_hash.r2).unwrap();
+            let direct = run_fixed(&mut root, 0, 0, false);
+            assert_eq!(direct.stop_reason, StopReason::MaxDepth);
+            assert_eq!(direct.score, eval::evaluate(&root));
+            assert_ne!(direct.score, 0);
+
+            clear_game_history();
+            let mut root_moves = [0_u32; MAX_MOVES];
+            let root_count = engine::generate_legal(&mut root, &mut root_moves);
+            assert!(root_count > 1);
+            let repeated_move = root_moves[0];
+            let mut repeated_child = root;
+            engine::make_move(&mut repeated_child, repeated_move);
+            let repeated_hash = hash_position(&mut repeated_child);
+            add_history_hash(repeated_hash.r1, repeated_hash.r2).unwrap();
+            add_history_hash(repeated_hash.r1, repeated_hash.r2).unwrap();
+
+            begin_analysis(0, false);
+            let repeated =
+                analyse_root(&mut root, abi_move(repeated_move), 1, 4);
+            assert_eq!(repeated.status, AnalysisStatus::Complete);
+            assert_eq!(repeated.result.score, 0);
+            assert_eq!(repeated.result.nodes, 1);
+            assert_eq!(pv_len(), 1);
+            assert_eq!(*pv_entry(0), abi_move(repeated_move));
+
+            let exact = analyse_root(&mut root, abi_move(root_moves[1]), 3, 4);
+            assert_eq!(exact.status, AnalysisStatus::Complete);
+            assert!(exact.result.nodes > repeated.result.nodes);
+            assert_eq!(exact.result.depth, 3);
+            assert!((2..=4).contains(&pv_len()));
+            assert_eq!(*pv_entry(0), abi_move(root_moves[1]));
+
+            begin_analysis(1, false);
+            let aborted = analyse_root(&mut root, abi_move(root_moves[1]), 3, 4);
+            assert_eq!(aborted.status, AnalysisStatus::Budget);
+            assert_eq!(aborted.result.nodes, 1);
+            assert_eq!(aborted.result.stop_reason, StopReason::NodeLimit);
+            assert_eq!(pv_len(), 0);
+
+            assert_eq!(
+                load_game_history(b"not a fen"),
+                Err(HistoryError::InvalidFen)
+            );
+        }
     }
 }

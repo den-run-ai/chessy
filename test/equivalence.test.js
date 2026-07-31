@@ -12,8 +12,8 @@
 'use strict';
 
 require('../assets/engine.js');
-require('../assets/ai.js');
 require('../assets/analysis-core.js');
+require('./wasm-test-engine.js').installAnalysisEngine();
 const AnalysisResult = require('../assets/analysis-result.js');
 const Equivalence = require('../assets/equivalence.js');
 require('../assets/store.js');
@@ -142,7 +142,7 @@ check(JSON.stringify(Equivalence.CRITERION) === JSON.stringify({
   JSON.stringify(Equivalence.CRITERION));
 check(Object.isFrozen(Equivalence.CRITERION) &&
   Object.isFrozen(Equivalence.CRITERION.params), 'CRITERION is deeply frozen');
-check(AnalysisResult.MAX_CP_ABS === globalThis.ChessAI.MATE_NEAR,
+check(AnalysisResult.MAX_CP_ABS === globalThis.ChessyAnalysisCore.MATE_NEAR,
   'analysis CP trust band stays aligned with the engine mate boundary');
 
 // ---------------------------------------------------------------------------

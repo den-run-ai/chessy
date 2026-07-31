@@ -2,25 +2,21 @@
 'use strict';
 
 const assert = require('assert');
-const path = require('path');
 const H = require('./hce-r3-features');
 const Baseline = require('./hce-r3-baseline');
 const Linear = require('./hce-r3-linear');
+const WasmAI = require('../wasm-test-engine.js');
 
-require(path.join(__dirname, '..', '..', 'assets', 'engine.js'));
-require(path.join(__dirname, '..', '..', 'assets', 'ai.js'));
 const Chess = globalThis.Chess;
-const ChessAI = globalThis.ChessAI;
 const center = Baseline.baselineCenter();
 let checks = 0;
 
 function checkPosition(fen, label) {
   const compiled = Linear.compile(fen);
-  const state = Chess.parseFen(fen);
   const reconstructed = Linear.runtimeRoundedScore(compiled, center);
-  const shipped = ChessAI.evaluate(state.board);
+  const shipped = WasmAI.engine.evaluate(fen);
   assert.strictEqual(reconstructed, shipped,
-    label + ': affine reconstruction differs from shipped r69 evaluator');
+    label + ': affine reconstruction differs from shipped Rust/WASM evaluator');
   assert.strictEqual(compiled.dense.length, 965);
   assert.strictEqual(compiled.scoreDenominator, 24);
   assert.ok(Number.isFinite(Linear.smoothScore(compiled, center)));

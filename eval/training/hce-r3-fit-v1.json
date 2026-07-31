@@ -19,8 +19,10 @@
     "packer": "tools/training/pack-hce.py",
     "authenticatedFeatureStreamer": "test/training/hce-r3-pack-stream.js",
     "completeLinearExtractor": "test/training/hce-r3-linear.js",
+    "implementationProvenance": "Every packed sidecar binds the complete linear extractor, baseline extractor, Rust evaluator source, and shipped WASM by SHA-256; the fitter rehashes all four before candidate publication.",
     "requiredInputDisposition": "authenticated-production-input",
-    "publicationInputRehash": "both NPZ matrices and both adjacent sidecars must retain their initially authenticated SHA-256 immediately before candidate publication",
+    "publicationInputRehash": "both NPZ matrices, both adjacent sidecars, center/scales files, and every fitter/packer/extractor/evaluator/contract input must retain its initially authenticated SHA-256 immediately before candidate publication",
+    "candidatePublication": "serialize and fsync a same-directory temporary file, perform the final input rehash, then hard-link to the final path without replacement; failed serialization, writing, or rehashing must not create the final path",
     "featureUnits": "centipawns contributed by one integer weight unit; every tapered numerator is divided by exactly 24 by the packer",
     "fixedCp": "all untuned score terms, White POV",
     "requiredArrays": [
@@ -142,8 +144,8 @@
     "failureAction": "Stop HCE. Do not retune features, weights, lambda, budgets, or this FEN."
   },
   "laterGates": [
-    "JS evaluator and extractor fidelity",
-    "JS/Rust exact parity",
+    "Rust evaluator-source extraction and development affine-extractor fidelity",
+    "affine reconstruction against the shipped Rust/WASM evaluator",
     "tactics and scorecards",
     "leaf-cost benchmark",
     "issue-84 physical-device baseline",

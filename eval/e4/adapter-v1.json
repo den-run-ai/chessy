@@ -4,11 +4,11 @@
   "status": "frozen",
   "claimScale": "pinned Stockfish 18 UCI-Elo scale",
   "productBaseline": {
-    "release": "r69",
-    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "release": "r71",
+    "gitCommit": "885e6941bf7fa4478370d759e7034567bf463169",
     "wasmAsset": "assets/chessy-ai-fast.wasm",
-    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
-    "wasmGitBlob": "070f623012137ca65471f32997fd647e5561ffa3"
+    "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+    "wasmGitBlob": "97bf60097f5739d101635f143facedb363ce5c8d"
   },
   "searchContract": {
     "maxDepth": 30,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Extract the frozen Round-2 center and R3 regularization scales directly
- * from the shipped r69 JavaScript evaluator. Development/training only.
+ * from the shipped r71 Rust evaluator source. Development/training only.
  */
 'use strict';
 
@@ -11,32 +11,208 @@ const path = require('path');
 const H = require('./hce-r3-features');
 
 const ROOT = path.join(__dirname, '..', '..');
-const AI_PATH = path.join(ROOT, 'assets', 'ai.js');
+const EVAL_RS_PATH = path.join(ROOT, 'experiments', 'wasm', 'src', 'eval.rs');
+const PIECE_TYPES = Object.freeze(['P', 'N', 'B', 'R', 'Q', 'K']);
+const INTEGER_RANGES = Object.freeze({
+  i16: Object.freeze([-32768, 32767]),
+  i32: Object.freeze([-2147483648, 2147483647])
+});
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function declaration(source, name, expectedType) {
+  if (typeof source !== 'string') {
+    throw new Error('Rust evaluator source must be a string');
+  }
+  const pattern = new RegExp(
+    '^[ \\t]*const\\s+' + escapeRegExp(name) +
+      '\\s*:\\s*([^=\\n]+?)\\s*=\\s*([\\s\\S]*?);[ \\t]*$',
+    'gm'
+  );
+  const matches = Array.from(source.matchAll(pattern));
+  if (matches.length !== 1) {
+    throw new Error(
+      'Rust evaluator must declare ' + name + ' exactly once; found ' +
+        matches.length
+    );
+  }
+  const observedType = matches[0][1].replace(/\s+/g, '');
+  const requiredType = expectedType.replace(/\s+/g, '');
+  if (observedType !== requiredType) {
+    throw new Error(
+      'Rust evaluator ' + name + ' type must be exactly ' + expectedType +
+        '; found ' + matches[0][1].trim()
+    );
+  }
+  return matches[0][2].trim();
+}
+
+function parseIntegerLiteral(text, rustType, label) {
+  if (!Object.prototype.hasOwnProperty.call(INTEGER_RANGES, rustType) ||
+      typeof text !== 'string' ||
+      !/^-?[0-9](?:_?[0-9])*$/.test(text)) {
+    throw new Error(label + ' must be one signed decimal ' + rustType);
+  }
+  const value = Number(text.replace(/_/g, ''));
+  const range = INTEGER_RANGES[rustType];
+  if (!Number.isSafeInteger(value) || value < range[0] || value > range[1]) {
+    throw new Error(label + ' is outside the ' + rustType + ' range');
+  }
+  return value;
+}
+
+function parseArrayLiteral(text, rustType, label) {
+  let offset = 0;
+
+  function skipWhitespace() {
+    while (offset < text.length && /\s/.test(text[offset])) offset++;
+  }
+
+  function parseValue(location) {
+    skipWhitespace();
+    if (text[offset] === '[') {
+      offset++;
+      const values = [];
+      skipWhitespace();
+      if (text[offset] === ']') {
+        offset++;
+        return values;
+      }
+      while (true) {
+        values.push(parseValue(location + '[' + values.length + ']'));
+        skipWhitespace();
+        if (text[offset] === ']') {
+          offset++;
+          return values;
+        }
+        if (text[offset] !== ',') {
+          throw new Error(location + ': expected a comma or closing bracket');
+        }
+        offset++;
+        skipWhitespace();
+        if (text[offset] === ']') {
+          offset++;
+          return values;
+        }
+      }
+    }
+
+    const rest = text.slice(offset);
+    const match = rest.match(/^-?[0-9](?:_?[0-9])*/);
+    if (!match) {
+      throw new Error(location + ': expected a signed decimal integer');
+    }
+    offset += match[0].length;
+    return parseIntegerLiteral(match[0], rustType, location);
+  }
+
+  const value = parseValue(label);
+  skipWhitespace();
+  if (offset !== text.length) {
+    throw new Error(label + ': unexpected Rust token at byte ' + offset);
+  }
+  return value;
+}
+
+function requireShape(value, dimensions, label, depth) {
+  const level = depth || 0;
+  if (level === dimensions.length) {
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(label + ': array leaf is not an integer');
+    }
+    return;
+  }
+  if (!Array.isArray(value) || value.length !== dimensions[level]) {
+    throw new Error(
+      label + ': expected dimension ' + dimensions[level] +
+        ' at depth ' + level
+    );
+  }
+  value.forEach(function (entry) {
+    requireShape(entry, dimensions, label, level + 1);
+  });
+}
+
+function parseArrayDeclaration(source, name, rustType, dimensions) {
+  let expectedType = rustType;
+  for (let index = dimensions.length - 1; index >= 0; index--) {
+    expectedType = '[' + expectedType + '; ' + dimensions[index] + ']';
+  }
+  const value = parseArrayLiteral(
+    declaration(source, name, expectedType),
+    rustType,
+    name
+  );
+  requireShape(value, dimensions, name);
+  return value;
+}
+
+function pieceMap(values, label) {
+  if (!Array.isArray(values) || values.length !== PIECE_TYPES.length) {
+    throw new Error(label + ': expected one entry per frozen piece type');
+  }
+  return Object.freeze(Object.fromEntries(PIECE_TYPES.map(function (type, index) {
+    return [type, values[index]];
+  })));
+}
+
+function parseRustEvaluator(source) {
+  const pstMg = parseArrayDeclaration(source, 'PST_MG', 'i16', [6, 64]);
+  const pstEg = parseArrayDeclaration(source, 'PST_EG', 'i16', [6, 64]);
+  return Object.freeze({
+    VALUES_MG: pieceMap(
+      parseArrayDeclaration(source, 'VALUES_MG', 'i32', [6]),
+      'VALUES_MG'
+    ),
+    VALUES_EG: pieceMap(
+      parseArrayDeclaration(source, 'VALUES_EG', 'i32', [6]),
+      'VALUES_EG'
+    ),
+    PST: pieceMap(pstMg, 'PST_MG'),
+    PST_MG: pieceMap(pstMg, 'PST_MG'),
+    PST_EG: pieceMap(pstEg, 'PST_EG'),
+    PHASE: pieceMap(
+      parseArrayDeclaration(source, 'PHASE', 'i32', [6]),
+      'PHASE'
+    ),
+    PHASE_MAX: parseIntegerLiteral(
+      declaration(source, 'PHASE_MAX', 'i32'),
+      'i32',
+      'PHASE_MAX'
+    ),
+    MOBILITY: pieceMap(
+      parseArrayDeclaration(source, 'MOBILITY', 'i32', [6]),
+      'MOBILITY'
+    ),
+    DOUBLED: parseIntegerLiteral(
+      declaration(source, 'DOUBLED', 'i32'),
+      'i32',
+      'DOUBLED'
+    ),
+    ISOLATED: parseIntegerLiteral(
+      declaration(source, 'ISOLATED', 'i32'),
+      'i32',
+      'ISOLATED'
+    ),
+    SHIELD: parseIntegerLiteral(
+      declaration(source, 'SHIELD', 'i32'),
+      'i32',
+      'SHIELD'
+    ),
+    PASSED_MG: Object.freeze(
+      parseArrayDeclaration(source, 'PASSED_MG', 'i32', [7])
+    ),
+    PASSED_EG: Object.freeze(
+      parseArrayDeclaration(source, 'PASSED_EG', 'i32', [7])
+    )
+  });
+}
 
 function extractShipped(filename) {
-  const source = fs.readFileSync(filename || AI_PATH, 'utf8');
-  const declarations = [
-    /const VALUES_MG = \{[^}]*\};/,
-    /const VALUES_EG = \{[^}]*\};/,
-    /const PST = \{[\s\S]*?\n  \};/,
-    /const PST_EG = \{[\s\S]*?\n  \};/,
-    /const PHASE = \{[^}]*\};/,
-    /const PHASE_MAX = \d+;/,
-    /const MOBILITY = \{[^}]*\};/,
-    /const DOUBLED = \d+, ISOLATED = \d+, SHIELD = \d+;/,
-    /const PASSED_MG = \[[^\]]*\];/,
-    /const PASSED_EG = \[[^\]]*\];/
-  ].map(function (pattern) {
-    const match = source.match(pattern);
-    if (!match) {
-      throw new Error('could not extract r69 evaluator declaration ' + pattern);
-    }
-    return match[0];
-  }).join('\n');
-  return new Function(declarations +
-    '\nreturn {VALUES_MG,VALUES_EG,PST,PST_EG,PHASE,PHASE_MAX,' +
-    'MOBILITY,DOUBLED,ISOLATED,SHIELD,' +
-    'PASSED_MG,PASSED_EG};')();
+  const source = fs.readFileSync(filename || EVAL_RS_PATH, 'utf8');
+  return parseRustEvaluator(source);
 }
 
 function baselineCenter(shipped) {
@@ -110,7 +286,7 @@ function main() {
   writeJsonExclusive(path.join(output, 'scales.json'), scales);
   writeJsonExclusive(path.join(output, 'manifest.json'), {
     schema: 'chessy.hce-r3-baseline.v1',
-    source: path.relative(ROOT, AI_PATH),
+    source: path.relative(ROOT, EVAL_RS_PATH),
     parameterOrderSha256:
       'f2835e40169d76ec501dea3308f9c96038d390d47649a9ed29af509819dd2251',
     centerValueSha256: valueDigest(center),
@@ -128,7 +304,8 @@ if (require.main === module) {
 }
 
 module.exports = {
-  AI_PATH,
+  EVAL_RS_PATH,
+  parseRustEvaluator,
   extractShipped,
   baselineCenter,
   regularizationScales,

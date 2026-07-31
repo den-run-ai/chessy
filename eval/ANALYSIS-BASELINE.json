@@ -4,6 +4,11 @@
   "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
   "scorecard": "analysis-v1",
   "mode": "shard",
+  "analysis_engine": {
+    "id": "chessy-wasm",
+    "version": "2.0.0",
+    "provider": "rust-wasm-abi-v2"
+  },
   "criterion": {
     "id": "chessy-equivalence",
     "version": 1,
@@ -65,9 +70,9 @@
       "fail": 2
     },
     "pvStability": {
-      "checked": 27,
-      "pass": 18,
-      "fail": 9
+      "checked": 26,
+      "pass": 16,
+      "fail": 10
     },
     "budgetStability": {
       "checked": 34,
@@ -79,8 +84,8 @@
       "counts": {
         "best": 9,
         "equivalent": 2,
-        "not-equivalent": 1,
-        "unknown": 0,
+        "not-equivalent": 0,
+        "unknown": 1,
         "invalid": 0
       },
       "cases": [
@@ -207,12 +212,12 @@
         },
         {
           "id": "puzzle-0018S",
-          "verdict": "not-equivalent",
-          "reason": "cp-gap",
-          "rank": 5,
+          "verdict": "unknown",
+          "reason": "unstable-best",
+          "rank": 22,
           "rankBasis": "provider-reported",
           "rankLowerBound": 4,
-          "gapCp": 96,
+          "gapCp": 233,
           "coverage": "candidates",
           "coveredRootCount": 4
         }
@@ -226,9 +231,9 @@
     "catastrophic": 0
   },
   "totals": {
-    "checks": 131,
-    "pass": 109,
-    "fail": 22,
+    "checks": 130,
+    "pass": 107,
+    "fail": 23,
     "strictFail": 0
   },
   "gate": "PASS"

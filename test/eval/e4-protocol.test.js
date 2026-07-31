@@ -172,7 +172,7 @@ function rehash(manifest) {
   manifest.freeze.assignmentSha256 =
     E4.canonicalSha256(manifest.assignments);
   manifest.freeze.contentSha256 = null;
-  manifest.manifestId = 'r69-cal-v1/' +
+  manifest.manifestId = 'r71-cal-v1/' +
     (manifest.kind === 'certification' ? 'cert/' : 'explore/') +
       manifest.freeze.openingSetSha256;
   manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
@@ -181,7 +181,7 @@ function rehash(manifest) {
 
 function frozenExploration(template) {
   const manifest = clone(template);
-  manifest.manifestId = 'r69-cal-v1/explore/synthetic-frozen';
+  manifest.manifestId = 'r71-cal-v1/explore/synthetic-frozen';
   setFrozenMetadata(manifest);
   manifest.schedules.forEach(function (schedule, index) {
     const level = E4.LEVELS[index];
@@ -209,7 +209,7 @@ function frozenExploration(template) {
 
 function frozenCertification(template) {
   const manifest = clone(template);
-  manifest.manifestId = 'r69-cal-v1/cert/synthetic-frozen';
+  manifest.manifestId = 'r71-cal-v1/cert/synthetic-frozen';
   setFrozenMetadata(manifest);
 
   [
@@ -263,10 +263,10 @@ function main() {
   try {
     E4.validateRepository(path.join(__dirname, '..', '..'));
     check(true,
-      'checked-in adapter, protocol, statistics, templates, and r69 WASM pins validate');
+      'checked-in adapter, protocol, statistics, templates, and r71 WASM pins validate');
   } catch (error) {
     check(false,
-      'checked-in adapter, protocol, statistics, templates, and r69 WASM pins validate',
+      'checked-in adapter, protocol, statistics, templates, and r71 WASM pins validate',
       String(error && error.message || error));
   }
 
@@ -293,7 +293,7 @@ function main() {
     adapter.searchContract.engineRootSeed.configurable === false &&
     adapter.searchContract.engineRootSeed.acceptedAsSearchInput === false &&
     protocol.seedContracts.manifestDerived.searchUse === false,
-  'r69 keeps its embedded fixed engine seed; manifest seeds never enter search');
+  'r71 keeps its embedded fixed engine seed; manifest seeds never enter search');
 
   const seed = E4.deriveScheduleSeed('a'.repeat(64), 'opening-1');
   check(seed ===
@@ -315,9 +315,9 @@ function main() {
     seed: seed,
     chessyColor: 'black'
   });
-  check(whiteId === 'r69-cal-v1/cert/master/2300/opening-1/' +
+  check(whiteId === 'r71-cal-v1/cert/master/2300/opening-1/' +
     seed + '/white' &&
-    blackId === 'r69-cal-v1/cert/master/2300/opening-1/' +
+    blackId === 'r71-cal-v1/cert/master/2300/opening-1/' +
       seed + '/black',
   'both colors share one schedule seed and receive immutable result IDs');
 
@@ -351,14 +351,14 @@ function main() {
       E4.validateCertificationManifest(manifest);
     });
 
-  expectThrow('r69 commit drift is rejected',
-    /r69 commit drifted/, function () {
+  expectThrow('r71 commit drift is rejected',
+    /r71 commit drifted/, function () {
       const manifest = clone(templates.exploration);
       manifest.productBaseline.gitCommit = 'b'.repeat(40);
       E4.validateExplorationManifest(manifest);
     });
 
-  expectThrow('r69 WASM hash drift is rejected',
+  expectThrow('r71 WASM hash drift is rejected',
     /WASM SHA-256 drifted/, function () {
       const manifest = clone(templates.certification);
       manifest.productBaseline.wasmSha256 = 'b'.repeat(64);
@@ -432,7 +432,7 @@ function main() {
   expectThrow('frozen manifest IDs derive from the opening-set hash',
     /manifest ID must derive from its frozen opening-set hash/, function () {
       const manifest = clone(validExploration);
-      manifest.manifestId = 'r69-cal-v1/explore/arbitrary';
+      manifest.manifestId = 'r71-cal-v1/explore/arbitrary';
       manifest.freeze.contentSha256 = null;
       manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
       E4.validateExplorationManifest(manifest);
@@ -445,7 +445,7 @@ function main() {
       manifest.openingClusters.reverse();
       manifest.freeze.openingSetSha256 =
         E4.canonicalSha256(manifest.openingClusters);
-      manifest.manifestId = 'r69-cal-v1/explore/' +
+      manifest.manifestId = 'r71-cal-v1/explore/' +
         manifest.freeze.openingSetSha256;
       manifest.freeze.contentSha256 = null;
       manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);

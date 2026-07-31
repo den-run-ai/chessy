@@ -1,10 +1,10 @@
 /*
  * Coaching-analysis service (Phase 3a) in a real browser: a dedicated Web
  * Worker runs the contract off the main thread, and validated results round-trip
- * through the IndexedDB analyses store. Verifies parity with a direct core call,
- * a real cache hit that skips dispatch, a SetUp/FEN (non-standard) position,
- * preservation of complete:false, and that the heavy search never runs on the
- * page's main thread.
+ * through the IndexedDB analyses store. Verifies deterministic fresh-worker
+ * results, a real cache hit that skips dispatch, a SetUp/FEN (non-standard)
+ * position, preservation of complete:false, and that the heavy search never
+ * runs on the page's main thread.
  */
 'use strict';
 require('./helper').run('analysis-service', async function (t) {
@@ -12,17 +12,28 @@ require('./helper').run('analysis-service', async function (t) {
 
   const FAST = { maxDepth: 3, nodeLimit: 8000, multiPV: 3, nodeBudget: 200000 };
 
-  // --- Worker result parity: identical to a direct analysis-core call ---
-  const parity = await page.evaluate(async function (opts) {
+  // --- Fresh-worker determinism: forcing two dispatches for the same request
+  //     yields the same contract without loading WASM on the main thread. ---
+  const deterministic = await page.evaluate(async function (opts) {
     const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
-    const viaWorker = await ChessyAnalysisService.analyse(
-      { gameId: 'parity', ply: 1, gameRev: 1, fen: fen, opts: opts });
-    const direct = ChessyAnalysisCore.analyse(Chess.parseFen(fen), opts);
+    const req = {
+      gameId: 'determinism', ply: 1, gameRev: 1, fen: fen,
+      opts: opts, fresh: true
+    };
+    const before = ChessyAnalysisService.stats().dispatches;
+    const first = await ChessyAnalysisService.analyse(req);
+    const mid = ChessyAnalysisService.stats().dispatches;
+    const second = await ChessyAnalysisService.analyse(req);
+    const after = ChessyAnalysisService.stats().dispatches;
     const norm = function (r) { const c = JSON.parse(JSON.stringify(r)); c.elapsedMs = 0; return JSON.stringify(c); };
-    return { equal: !!viaWorker && norm(viaWorker) === norm(direct), lines: viaWorker ? viaWorker.bestLines.length : -1 };
+    return {
+      equal: !!first && !!second && norm(first) === norm(second),
+      lines: second ? second.bestLines.length : -1,
+      dispatched: mid === before + 1 && after === mid + 1
+    };
   }, FAST);
-  check(parity.equal && parity.lines > 0,
-    'the worker result is byte-identical to a direct analysis-core call (excluding elapsed)');
+  check(deterministic.equal && deterministic.lines > 0 && deterministic.dispatched,
+    'two forced fresh-worker runs are byte-identical (excluding elapsed)');
 
   // --- Real IndexedDB cache: a repeat request is a hit that dispatches nothing ---
   const cache = await page.evaluate(async function (opts) {

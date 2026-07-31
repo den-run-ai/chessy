@@ -10,7 +10,12 @@ freeze:
 2. `test/eval/freeze-e4-manifests.js` authenticates those two artifacts and
    turns them into new literal exploration and certification manifests.
 
-Neither stage downloads data, runs games, alters r69, or enables
+E4-v1 targets the current shipped r71 ABI-v2 baseline at product commit
+`885e6941bf7fa4478370d759e7034567bf463169`. Its WASM SHA-256 is
+`57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f`;
+its Git blob is `97bf60097f5739d101635f143facedb363ce5c8d`. The artifact
+is behavior-equivalent to the historical r69 search contract.
+Neither stage downloads data, runs games, alters that r71 baseline, or enables
 `--require-fix`. Both refuse to overwrite output.
 
 ## Preregistered source and candidate preparation

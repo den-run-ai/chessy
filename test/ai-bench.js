@@ -1,9 +1,10 @@
 /*
  * AI search benchmark — measures nodes/time over 18 positions (9 families,
  * each also mirrored/color-swapped) and optionally compares the working
- * tree against a git ref loaded in an isolated vm context. Multi-repetition
+ * tree against a git ref loaded from that revision's shipped WASM assets.
+ * Multi-repetition
  * timing uses separate persistent Node processes, so each engine has its own
- * V8 isolate and garbage-collected heap.
+ * WASM instance and linear memory.
  *
  * Beyond the geometric-mean node ratio it reports WORST-CASE and p90 node
  * ratios and the total re-search count. The geometric mean alone hid the
@@ -20,15 +21,13 @@
  *   node test/ai-bench.js --exact          # fail if the fixed search diverges
  *   node test/ai-bench.js --base main --reps 4  # isolated, paired median NPS
  *
- * Both engines get an identical seeded Math.random (re-seeded per position),
- * so the root shuffle — and therefore the whole search — is reproducible
- * even for engine versions without a deterministic mode.
+ * The Rust engine uses deterministic embedded root ordering, so identical
+ * fixed-depth searches are reproducible without a JavaScript PRNG shim.
  */
 'use strict';
-const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const cp = require('child_process');
+const WasmHarness = require('./wasm-harness-engine');
 
 const args = process.argv.slice(2);
 function opt(name, dflt) {
@@ -89,41 +88,13 @@ for (const [name, fen] of FAMILIES) {
   POSITIONS.push([name + ' (mirrored)', mirrorFen(fen)]);
 }
 
-// Seedable PRNG installed INSIDE each vm context (realm globals are not
-// reachable as properties of the sandbox object from the host side).
-const MK_RAND = 'function __mkRand(seed) {\n' +
-  '  return function () {\n' +
-  '    seed = (seed + 0x6D2B79F5) | 0;\n' +
-  '    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);\n' +
-  '    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;\n' +
-  '    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;\n' +
-  '  };\n' +
-  '}';
-
-// Load engine.js + ai.js into a fresh vm context, from the working tree or
-// from a git ref ("git show ref:file").
 function loadEngine(ref) {
-  const read = function (file) {
-    if (!ref) return fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-    // execFileSync (argv array, no shell) so a ref string can't be interpolated
-    // into a shell command line.
-    return cp.execFileSync('git', ['show', ref + ':' + file],
-      { encoding: 'utf8', maxBuffer: 1 << 24, cwd: path.join(__dirname, '..') });
-  };
-  const ctx = vm.createContext({ console: console });
-  vm.runInContext(MK_RAND, ctx);
-  vm.runInContext(read('assets/engine.js'), ctx, { filename: 'engine.js' });
-  vm.runInContext(read('assets/ai.js'), ctx, { filename: 'ai.js' });
-  return ctx;
+  return WasmHarness.loadRevision(ref);
 }
 
-function bench(ctx, fen, depth) {
-  // Identical shuffle for every engine version: seed the sandbox's
-  // Math.random deterministically per position.
-  vm.runInContext('Math.random = __mkRand(0xC0FFEE)', ctx);
-  const state = ctx.Chess.parseFen(fen);
+function bench(engine, fen, depth) {
   const t0 = process.hrtime.bigint();
-  const r = ctx.ChessAI.think(state, { maxDepth: depth || DEPTH, quiesce: true });
+  const r = engine.search(fen, { maxDepth: depth || DEPTH, quiesce: true });
   return {
     ms: Number(process.hrtime.bigint() - t0) / 1e6,
     nodes: r.nodes,
@@ -132,7 +103,7 @@ function bench(ctx, fen, depth) {
     researches: r.researches || 0,
     depth: r.depth,
     score: r.score,
-    move: r.move ? ctx.Chess.sqName(r.move.from) + ctx.Chess.sqName(r.move.to) + (r.move.promotion || '') : '-'
+    move: WasmHarness.moveName(r.move)
   };
 }
 
@@ -325,8 +296,8 @@ async function benchCandidate(ctx, fen, worker) {
 }
 
 async function main() {
-  const cand = REPS === 1 ? loadEngine(null) : null;
-  const base = REPS === 1 && BASE ? loadEngine(BASE) : null;
+  const cand = REPS === 1 ? await loadEngine(null) : null;
+  const base = REPS === 1 && BASE ? await loadEngine(BASE) : null;
 
   // Multi-repetition summarization checks every authoritative search counter.
   // Retain the explicit self-check for the single-sample mode.
@@ -336,7 +307,7 @@ async function main() {
     if (a.nodes !== b.nodes || a.qnodes !== b.qnodes ||
         a.cutoffs !== b.cutoffs || a.researches !== b.researches ||
         a.depth !== b.depth || a.move !== b.move || a.score !== b.score) {
-      throw new Error('candidate search is not deterministic under a fixed seed');
+      throw new Error('candidate fixed-depth WASM search is not deterministic');
     }
   }
 
@@ -351,7 +322,7 @@ async function main() {
   const speedRatios = []; // candidate/base NPS per position, for worst-case / p10
   console.log('depth ' + DEPTH + (BASE ? ', base ' + BASE : ''));
   console.log(REPS > 1
-    ? 'timing: separate process heaps; full-depth warm-up; ' + REPS +
+    ? 'timing: separate WASM instances; full-depth warm-up; ' + REPS +
       ' paired AB/BA repetitions; median paired ratios; short samples batched to >= ' +
       MIN_TIMED_MS + ' ms'
     : 'timing: one sample per engine (use --reps 4 or more for a speed gate)');

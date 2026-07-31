@@ -21,7 +21,8 @@
 
   const UCI_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
   const PROMOTIONS = ['Q', 'R', 'B', 'N'];
-  // analysis-core converts scores outside ChessAI.MATE_NEAR into mate objects.
+  // analysis-core converts scores outside the Rust engine's MATE_NEAR into
+  // mate objects.
   // Keeping CP inside that safe-integer band prevents hostile finite Numbers
   // from colliding with mate ordering or overflowing persisted gap arithmetic.
   const MAX_CP_ABS = 999000;

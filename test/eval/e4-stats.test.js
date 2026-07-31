@@ -115,7 +115,7 @@ function rehashManifest(manifest) {
   manifest.freeze.assignmentSha256 =
     E4.canonicalSha256(manifest.assignments);
   manifest.freeze.contentSha256 = null;
-  manifest.manifestId = 'r69-cal-v1/cert/' +
+  manifest.manifestId = 'r71-cal-v1/cert/' +
     manifest.freeze.openingSetSha256;
   manifest.freeze.contentSha256 = E4.manifestContentSha256(manifest);
   return manifest;
@@ -123,7 +123,7 @@ function rehashManifest(manifest) {
 
 function frozenCertification() {
   const manifest = E4.readJson(E4.PATHS.certification);
-  manifest.manifestId = 'r69-cal-v1/cert/synthetic-stats';
+  manifest.manifestId = 'r71-cal-v1/cert/synthetic-stats';
   manifest.status = 'frozen';
   manifest.source.release = E4.EXPECTED.openingSourceRelease;
   manifest.source.url = E4.EXPECTED.openingSourceUrl;

@@ -1,7 +1,8 @@
 //! Allocation-free chess rule core.
 //!
 //! Square 0 is a8 and square 63 is h1. Generation order intentionally
-//! matches the shipped JavaScript engine and the Zig feasibility core.
+//! preserves the frozen ABI-v1 behavior formerly shared with the retired
+//! JavaScript engine and the Zig feasibility core.
 
 pub const BOARD_SQUARES: usize = 64;
 pub const MAX_MOVES: usize = 256;

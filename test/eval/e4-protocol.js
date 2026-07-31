@@ -31,14 +31,14 @@ const PATHS = Object.freeze({
 });
 
 const EXPECTED = Object.freeze({
-  adapterSha256: 'e936608c9d0064789be14c585d2711743b2f4152d9603d44eb0357f5b3a4ff0b',
-  protocolSha256: '45c4220dba563ad3562ebfbd74d7254853e9797c21a72db9455976b4abf20299',
+  adapterSha256: 'dc3a6ac3188ae8a44e10f1dd3ccd06d6a1f4fbf12bcef43fddd31be1190a2381',
+  protocolSha256: 'b99204164fd3098a13fe5155f2c82985f4c438d48c8aa6324b036b8516ff7a0b',
   statsSha256: '4decc7bdc4facade1a05c867cec475f6299d8866df1a7c8d9e55e4daacbb6e5b',
-  release: 'r69',
-  commit: '8b887c4a69f8b06bb50ad8d77be896f26938ed42',
+  release: 'r71',
+  commit: '885e6941bf7fa4478370d759e7034567bf463169',
   wasmAsset: 'assets/chessy-ai-fast.wasm',
-  wasmSha256: 'dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db',
-  wasmGitBlob: '070f623012137ca65471f32997fd647e5561ffa3',
+  wasmSha256: '57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f',
+  wasmGitBlob: '97bf60097f5739d101635f143facedb363ce5c8d',
   rootSeedHex: '0x00C0FFEE',
   rootSeedInteger: 12648430,
   anchorCommit: 'cb3d4ee9b47d0c5aae855b12379378ea1439675c',
@@ -244,7 +244,7 @@ function resultId(options) {
     assert(/^\d+$/.test(anchor), 'external result IDs must use a numeric anchor');
   }
   return [
-    'r69-cal-v1',
+    'r71-cal-v1',
     options.phase,
     options.levelOrPair,
     anchor,
@@ -271,13 +271,13 @@ function assertGitSha(value, label) {
 
 function assertBaseline(baseline, label) {
   assert(isObject(baseline), label + ' is missing');
-  assert(baseline.release === EXPECTED.release, label + ' release must remain r69');
+  assert(baseline.release === EXPECTED.release, label + ' release must remain r71');
   assert(baseline.gitCommit === EXPECTED.commit,
-    label + ' r69 commit drifted');
+    label + ' r71 commit drifted');
   assert(baseline.wasmAsset === EXPECTED.wasmAsset,
     label + ' WASM asset path drifted');
   assert(baseline.wasmSha256 === EXPECTED.wasmSha256,
-    label + ' r69 WASM SHA-256 drifted');
+    label + ' r71 WASM SHA-256 drifted');
 }
 
 function expectedAdapterLevels() {
@@ -319,7 +319,7 @@ function validateAdapter(adapter) {
     'adapter claim scale drifted');
   assertBaseline(adapter.productBaseline, 'adapter product baseline');
   assert(adapter.productBaseline.wasmGitBlob === EXPECTED.wasmGitBlob,
-    'adapter r69 WASM Git blob drifted');
+    'adapter r71 WASM Git blob drifted');
   const search = adapter.searchContract;
   assert(search.maxDepth === 30 && search.iterativeDeepening === true &&
     search.quiesce === true, 'adapter search contract drifted');
@@ -398,7 +398,7 @@ function validateProtocol(protocol) {
   assertBaseline(protocol.productBaseline, 'protocol product baseline');
   assert(protocol.productBaseline.wasmGitBlob === EXPECTED.wasmGitBlob &&
     protocol.productBaseline.mutationPolicy === 'unchanged',
-  'protocol must preserve the unchanged r69 WASM baseline');
+  'protocol must preserve the unchanged r71 WASM baseline');
 
   assertEqual(protocol.seedContracts.engineRoot, {
     kind: 'embedded-fixed',
@@ -406,7 +406,7 @@ function validateProtocol(protocol) {
     integer: EXPECTED.rootSeedInteger,
     configurable: false,
     acceptedAsSearchInput: false,
-    note: 'The r69 Rust/WASM ABI has no seed input. Every search uses the embedded root-order seed.'
+    note: 'The r71 Rust/WASM ABI-v2 has no seed input. Every search uses the embedded root-order seed.'
   }, 'protocol engine root seed');
   const derived = protocol.seedContracts.manifestDerived;
   assert(derived.algorithm === 'SHA-256' &&
@@ -480,8 +480,8 @@ function validateProtocol(protocol) {
     'Master certification must run first');
 
   assert(protocol.resultIdentity.template ===
-    'r69-cal-v1/{explore|cert|adjacent}/{level-or-pair}/{anchor}/{opening-id}/{seed}/{chessy-color}' &&
-    protocol.resultIdentity.prefix === 'r69-cal-v1' &&
+    'r71-cal-v1/{explore|cert|adjacent}/{level-or-pair}/{anchor}/{opening-id}/{seed}/{chessy-color}' &&
+    protocol.resultIdentity.prefix === 'r71-cal-v1' &&
     protocol.resultIdentity.rerunPolicy === 'new-linked-id',
   'immutable result identity contract drifted');
   assert(protocol.adjudication.drawAtPlies === 180 &&
@@ -522,7 +522,7 @@ function walkForForbiddenEngineSeed(value, label) {
   if (!isObject(value)) return;
   Object.keys(value).forEach(function (key) {
     assert(key !== 'engineSeed',
-      label + '.' + key + ' is forbidden: r69 has no configurable engine seed');
+      label + '.' + key + ' is forbidden: r71 has no configurable engine seed');
     walkForForbiddenEngineSeed(value[key], label + '.' + key);
   });
 }
@@ -534,9 +534,9 @@ function assertManifestCommon(manifest, kind) {
   assert(manifest.status === 'awaiting-opening-freeze' ||
     manifest.status === 'frozen', kind + ' manifest status is invalid');
   assert(typeof manifest.manifestId === 'string' &&
-    manifest.manifestId.startsWith('r69-cal-v1/' +
+    manifest.manifestId.startsWith('r71-cal-v1/' +
       (kind === 'exploration' ? 'explore/' : 'cert/')),
-  kind + ' manifest ID must stay in the r69-cal-v1 namespace');
+  kind + ' manifest ID must stay in the r71-cal-v1 namespace');
   assertEqual(manifest.protocol, {
     path: 'eval/e4/protocol-v1.json',
     sha256: EXPECTED.protocolSha256
@@ -740,7 +740,7 @@ function validateFrozenHashes(manifest, kind) {
   assert(manifest.freeze.openingSetSha256 ===
     canonicalSha256(manifest.openingClusters),
   kind + ' opening-set hash drifted');
-  assert(manifest.manifestId === 'r69-cal-v1/' +
+  assert(manifest.manifestId === 'r71-cal-v1/' +
     (kind === 'certification' ? 'cert/' : 'explore/') +
       manifest.freeze.openingSetSha256,
   kind + ' manifest ID must derive from its frozen opening-set hash');
@@ -1066,7 +1066,7 @@ function validateRepository(root) {
   assert(sha256(fs.readFileSync(files.statistics)) === EXPECTED.statsSha256,
     'frozen E4-v1 statistics contract SHA-256 drifted');
   assert(sha256(fs.readFileSync(files.wasm)) === EXPECTED.wasmSha256,
-    'checked-in r69 WASM bytes drifted');
+    'checked-in r71 WASM bytes drifted');
   const adapter = JSON.parse(adapterBytes.toString('utf8'));
   const protocol = JSON.parse(protocolBytes.toString('utf8'));
   const exploration = readJson(files.exploration);

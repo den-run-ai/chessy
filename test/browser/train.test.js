@@ -561,7 +561,7 @@ require('./helper').run('train', async function (t) {
       function evidence(coverage) {
         return {
           criterion: JSON.parse(JSON.stringify(criterion)),
-          provider: { engineId: 'chessy-js', version: 'seeded', configHash: 'seeded' },
+          provider: { engineId: 'chessy-wasm', version: 'seeded', configHash: 'seeded' },
           positionFingerprint:
             ChessyAnalysisCore.positionFingerprint(state, state.positions),
           turn: 'w', depth: 9, complete: true,
@@ -579,7 +579,7 @@ require('./helper').run('train', async function (t) {
         scoreCpPlayer: 455, mate: null };
       const evidenceC = {
         criterion: JSON.parse(JSON.stringify(criterion)),
-        provider: { engineId: 'chessy-js', version: 'seeded', configHash: 'seeded' },
+        provider: { engineId: 'chessy-wasm', version: 'seeded', configHash: 'seeded' },
         positionFingerprint:
           ChessyAnalysisCore.positionFingerprint(stateC, stateC.positions),
         turn: 'w', depth: 9, complete: true,
@@ -653,7 +653,7 @@ require('./helper').run('train', async function (t) {
         a.verdict === 'equivalent' && a.equivalent === true &&
         a.evidenceSource === 'card-evidence' &&
         !!a.criterion && a.criterion.version >= 1 &&
-        !!a.provider && a.provider.engineId === 'chessy-js' &&
+        !!a.provider && a.provider.engineId === 'chessy-wasm' &&
         a.recommendedGrade === 'good' && a.grade === 'good' &&
         Number.isFinite(a.presentedDue) && a.priorStep === -1 &&
         c.step === 0 &&

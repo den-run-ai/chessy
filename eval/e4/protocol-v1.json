@@ -9,18 +9,18 @@
   "claimScale": "pinned Stockfish 18 UCI-Elo scale",
   "adapter": {
     "path": "eval/e4/adapter-v1.json",
-    "sha256": "e936608c9d0064789be14c585d2711743b2f4152d9603d44eb0357f5b3a4ff0b"
+    "sha256": "dc3a6ac3188ae8a44e10f1dd3ccd06d6a1f4fbf12bcef43fddd31be1190a2381"
   },
   "statistics": {
     "path": "eval/e4/stats-v1.json",
     "sha256": "4decc7bdc4facade1a05c867cec475f6299d8866df1a7c8d9e55e4daacbb6e5b"
   },
   "productBaseline": {
-    "release": "r69",
-    "gitCommit": "8b887c4a69f8b06bb50ad8d77be896f26938ed42",
+    "release": "r71",
+    "gitCommit": "885e6941bf7fa4478370d759e7034567bf463169",
     "wasmAsset": "assets/chessy-ai-fast.wasm",
-    "wasmSha256": "dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db",
-    "wasmGitBlob": "070f623012137ca65471f32997fd647e5561ffa3",
+    "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+    "wasmGitBlob": "97bf60097f5739d101635f143facedb363ce5c8d",
     "mutationPolicy": "unchanged"
   },
   "seedContracts": {
@@ -30,7 +30,7 @@
       "integer": 12648430,
       "configurable": false,
       "acceptedAsSearchInput": false,
-      "note": "The r69 Rust/WASM ABI has no seed input. Every search uses the embedded root-order seed."
+      "note": "The r71 Rust/WASM ABI-v2 has no seed input. Every search uses the embedded root-order seed."
     },
     "manifestDerived": {
       "algorithm": "SHA-256",
@@ -294,8 +294,8 @@
     ]
   },
   "resultIdentity": {
-    "template": "r69-cal-v1/{explore|cert|adjacent}/{level-or-pair}/{anchor}/{opening-id}/{seed}/{chessy-color}",
-    "prefix": "r69-cal-v1",
+    "template": "r71-cal-v1/{explore|cert|adjacent}/{level-or-pair}/{anchor}/{opening-id}/{seed}/{chessy-color}",
+    "prefix": "r71-cal-v1",
     "colors": [
       "white",
       "black"
@@ -437,6 +437,6 @@
     "rejected-131",
     "rejected-132",
     "rejected-133",
-    "nnue-105-from-r69-certification"
+    "nnue-105-from-r71-certification"
   ]
 }

@@ -36,6 +36,12 @@ function expectThrow(label, pattern, callback) {
   }
 }
 
+function replaceOnce(source, before, after) {
+  const changed = source.replace(before, after);
+  if (changed === source) throw new Error('test mutation marker is missing');
+  return changed;
+}
+
 function digestNames() {
   const text = H.FEATURES.map(function (feature) {
     return feature.id + ':' + feature.name;
@@ -186,7 +192,54 @@ check(Baseline.valueDigest(baselineCenter) ===
     Baseline.valueDigest(regularizationScales) ===
       '831736b11974f53849afcde65731d29633d2aee1b7d4d203d81520a7518c8eb4' &&
     baselineCenter.slice(753).every(value => value === 0),
-  'r69 Round-2 center, zero-new centers, and regularization scales are frozen');
+  'r71 baseline Round-2 center, zero-new centers, and regularization scales are frozen');
+
+const rustSource = fs.readFileSync(Baseline.EVAL_RS_PATH, 'utf8');
+const rustEvaluator = Baseline.parseRustEvaluator(rustSource);
+check(rustEvaluator.PHASE_MAX === 24 &&
+    rustEvaluator.VALUES_MG.P === 82 &&
+    rustEvaluator.PST.P.length === 64 &&
+    rustEvaluator.PST_EG.K.length === 64,
+  'strict Rust evaluator parser recovers the frozen typed coefficient layout');
+
+expectThrow('duplicate Rust evaluator declaration is rejected',
+  /exactly once/, function () {
+    Baseline.parseRustEvaluator(
+      rustSource + '\nconst PHASE_MAX: i32 = 24;\n'
+    );
+  });
+expectThrow('wrong Rust evaluator declaration type is rejected',
+  /type must be exactly/, function () {
+    Baseline.parseRustEvaluator(replaceOnce(
+      rustSource,
+      'const MOBILITY: [i32; 6]',
+      'const MOBILITY: [i16; 6]'
+    ));
+  });
+expectThrow('wrong Rust evaluator array dimension is rejected',
+  /expected dimension 6/, function () {
+    Baseline.parseRustEvaluator(replaceOnce(
+      rustSource,
+      'const VALUES_MG: [i32; 6] = [82, 337, 365, 477, 1025, 0];',
+      'const VALUES_MG: [i32; 6] = [82, 337, 365, 477, 1025];'
+    ));
+  });
+expectThrow('non-integer Rust evaluator literal is rejected',
+  /signed decimal i32/, function () {
+    Baseline.parseRustEvaluator(replaceOnce(
+      rustSource,
+      'const DOUBLED: i32 = 12;',
+      'const DOUBLED: i32 = 12.5;'
+    ));
+  });
+expectThrow('out-of-range Rust evaluator integer is rejected',
+  /outside the i16 range/, function () {
+    Baseline.parseRustEvaluator(replaceOnce(
+      rustSource,
+      'const PST_MG: [[i16; 64]; 6] = [\n    [\n        0,',
+      'const PST_MG: [[i16; 64]; 6] = [\n    [\n        40000,'
+    ));
+  });
 
 check(manifest.families.find(family => family.id === 'safe-mobility').role ===
     'supporting-evidence' &&

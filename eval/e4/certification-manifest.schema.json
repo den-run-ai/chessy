@@ -289,7 +289,7 @@
       ],
       "properties": {
         "release": {
-          "const": "r69"
+          "const": "r71"
         },
         "gitCommit": {
           "$ref": "#/$defs/gitSha"

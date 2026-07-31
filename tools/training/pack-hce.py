@@ -260,7 +260,7 @@ def main() -> None:
     if center_digest != fit["objective"]["centerValueSha256"] or np.any(
         center[753:] != 0
     ):
-        raise SystemExit("center is not the frozen r69 + zero-R3 vector")
+        raise SystemExit("center is not the frozen r71 baseline + zero-R3 vector")
     if scales_digest != fit["objective"]["scalesValueSha256"] or np.any(
         scales <= 0
     ):
@@ -580,6 +580,15 @@ def main() -> None:
                 ),
                 "linearExtractorSha256": sha256_file(
                     root / "test/training/hce-r3-linear.js"
+                ),
+                "baselineExtractorSha256": sha256_file(
+                    root / "test/training/hce-r3-baseline.js"
+                ),
+                "rustEvaluatorSourceSha256": sha256_file(
+                    root / "experiments/wasm/src/eval.rs"
+                ),
+                "shippedWasmSha256": sha256_file(
+                    root / "assets/chessy-ai-fast.wasm"
                 ),
                 "featureManifestSha256": sha256_file(feature_path),
                 "fitContractSha256": sha256_file(fit_path),

@@ -2,11 +2,12 @@
  * Shipped Rust/WASM engine asset contract (#84/#113 flagged rollout).
  *
  * The committed assets/chessy-ai-fast.wasm must be byte-identical to the
- * canonical pinned-toolchain build validated by PRs #126/#127 (Rust 1.97.1
+ * canonical pinned-toolchain ABI-v2 build validated by PR #147 (Rust 1.97.1
  * commit 8bab26f4f, Binaryen 131), and the production loader
- * (assets/wasm-engine.js) must return exact JavaScript-parity results for
- * quiescent shipped Play and the legacy quiescence-off configuration retained
- * as a compatibility witness.
+ * (assets/wasm-engine.js) must preserve the frozen r69 Rust/WASM signatures
+ * for quiescent shipped Play and the legacy quiescence-off configuration
+ * retained as a compatibility witness. No duplicate JavaScript search oracle
+ * is loaded by this gate.
  *
  * Hermetic: runs against committed bytes, no toolchain required.
  *   node test/wasm-asset.test.js
@@ -23,11 +24,11 @@ const WasmEngine = require('../assets/wasm-engine.js');
 const ROOT = path.join(__dirname, '..');
 const WASM_PATH = path.join(ROOT, 'assets', 'chessy-ai-fast.wasm');
 
-// The optimized fast-build digest recorded by #126 and independently
-// reproduced by #127's clean-rebuild byte comparison. A drifted binary must
-// never ship under this release's provenance.
+// The optimized ABI-v2 fast-build digest produced by the pinned,
+// byte-reproducible CI builder. A drifted binary must never ship under this
+// release's provenance.
 const CANONICAL_SHA256 =
-  'dab3d6025d507b2c93218616f3871cb7c13d7542e848ea741a750485b5cef6db';
+  '57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f';
 
 let passed = 0;
 let failed = 0;
@@ -59,7 +60,7 @@ async function main() {
   const bytes = fs.readFileSync(WASM_PATH);
   const digest = crypto.createHash('sha256').update(bytes).digest('hex');
   check(digest === CANONICAL_SHA256,
-    'assets/chessy-ai-fast.wasm matches the canonical #126/#127 build digest',
+    'assets/chessy-ai-fast.wasm matches the canonical ABI-v2 build digest',
     digest);
 
   // ---- Production loader contract (assets/wasm-engine.js) ----
@@ -79,7 +80,24 @@ async function main() {
   }), 'loader returns a {from, to, promotion} move resolvable against Chess.legalMoves');
   check(startResult.depth === 1 && startResult.stopReason === 'max-depth' &&
       startResult.scorePov === 'white',
-    'loader normalizes depth, stop reason and score POV to the think() shape');
+    'loader normalizes depth, stop reason and score POV to the Play result contract');
+
+  // A saved game's aggregate position map can be much longer than the live
+  // halfmove window. These valid but now-irrelevant positions all have a
+  // different pawn placement/piece count; sending them would exceed the raw
+  // 768-occurrence table, while lossless irreversible-history pruning keeps
+  // the current search identical.
+  const staleHistory = {};
+  for (let i = 0; i < 769; i++) {
+    staleHistory['7k/8/8/8/P7/8/8/K7 w - - ' + i + ' 1'] = 1;
+  }
+  const prunedHistoryResult = engine.search(
+    'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    { maxDepth: 1, quiesce: false, positions: staleHistory });
+  check(prunedHistoryResult.move.from === startResult.move.from &&
+      prunedHistoryResult.move.to === startResult.move.to &&
+      prunedHistoryResult.score === startResult.score,
+    'irreversible stale history is pruned losslessly before the fixed transport');
 
   // Promotion decode: e7e8=Q in Chessy numbering (a8 = 0) is
   // from 12 | to 4 << 6 | promotion 1 << 12.
@@ -119,17 +137,16 @@ async function main() {
         { maxDepth: 0, quiesce: true });
     });
   expectThrow('an oversized FEN is rejected before the memory write',
-    /input capacity/, function () {
+    /WASM capacity/, function () {
       engine.search('8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1 ' + 'x'.repeat(1024),
         { maxDepth: 1, quiesce: true });
     });
 
-  // ---- Exact parity for shipped and legacy Play configurations ----
-  // The bench harness pins the JS root shuffle to the module's embedded
-  // seed, exactly like the #126/#127 evidence. All current levels use
+  // ---- Frozen exact signatures for shipped and legacy configurations ----
+  // These results were recorded from the reviewed r69 WASM artifact before
+  // the duplicate JavaScript search was removed. All current levels use
   // quiesce:true; false remains a useful pre-r69 compatibility witness.
   const wasm = await bench.loadWasmEngine(WASM_PATH, 'shipped');
-  const js = bench.loadJsEngine();
   for (const quiesce of [true, false]) {
     let checked = 0;
     let diverged = 0;
@@ -137,8 +154,10 @@ async function main() {
     for (let depth = 1; depth <= 3; depth++) {
       for (const [name, fen] of bench.POSITIONS) {
         const opts = { maxDepth: depth, quiesce: quiesce };
-        const diffs = bench.signatureDifferences(
-          wasm.search(fen, opts), js.search(fen, opts));
+        const expected = bench.frozenSignature(name, opts);
+        const diffs = expected
+          ? bench.signatureDifferences(wasm.search(fen, opts), expected)
+          : ['missing frozen signature'];
         checked++;
         if (diffs.length) {
           diverged++;
@@ -149,18 +168,21 @@ async function main() {
       }
     }
     check(diverged === 0,
-      'exact parity, depths 1..3, quiesce ' + (quiesce ? 'on' : 'off') +
+      'frozen exact signatures, depths 1..3, quiesce ' +
+      (quiesce ? 'on' : 'off') +
       ' (' + checked + ' searches)', details.join(' | '));
   }
   for (const quiesce of [true, false]) {
     let aborted = 0;
-    for (const [, fen] of bench.POSITIONS) {
+    for (const [name, fen] of bench.POSITIONS) {
       const opts = { maxDepth: 30, quiesce: quiesce, nodeLimit: 5000 };
-      if (bench.signatureDifferences(
-        wasm.search(fen, opts), js.search(fen, opts)).length) aborted++;
+      const expected = bench.frozenSignature(name, opts);
+      if (!expected || bench.signatureDifferences(
+        wasm.search(fen, opts), expected).length) aborted++;
     }
     check(aborted === 0,
-      'fixed-node (5000) abort parity, quiesce ' + (quiesce ? 'on' : 'off') +
+      'frozen fixed-node (5000) signatures, quiesce ' +
+      (quiesce ? 'on' : 'off') +
       ' (' + bench.POSITIONS.length + ' positions)');
   }
 
