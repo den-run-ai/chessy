@@ -15,7 +15,6 @@ require('./helper').run('migration', async function (t) {
   // the EXACT old schema (wipe-all + games + cards[due,gameId]) and seed a
   // game and a lesson card — the data a shipped v5 user would hold. Runs on
   // the app-less blank origin so the app's store.js (v6) can't open first.
-  await page.goto(url + 'blank');
   await page.evaluate(function () {
     return new Promise(function (resolve, reject) {
       const del = indexedDB.deleteDatabase('chessy-coach');
@@ -353,4 +352,4 @@ require('./helper').run('migration', async function (t) {
   });
   check(cancelOrder[0] === 'scan' && cancelOrder[1] === 'analysis',
     'destructive operations invalidate scan ownership before cancelling analysis');
-});
+}, { startOnBlank: true });
