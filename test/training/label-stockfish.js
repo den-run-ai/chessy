@@ -42,6 +42,9 @@ const SELECTION_RECORD_FIELDS = Object.freeze([
   'positionFamily', 'strata', 'explorationLabel', 'source'
 ]);
 const VERIFIED_EXECUTABLE_PREFIX = 'chessy-stockfish-executable-';
+const VERIFIED_EXECUTABLE_HANDLE = Symbol('verified Stockfish executable');
+const CLOSED_VERIFIED_EXECUTABLES = new WeakSet();
+const VERIFIED_EXECUTABLE_CHILD_FD = 3;
 
 function hasExactKeys(value, expected) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -61,6 +64,14 @@ function hasIdentity(stat, identity) {
 
 function cleanupVerifiedExecutable(staged) {
   if (!staged) return;
+  if (Number.isInteger(staged.fd) &&
+      !CLOSED_VERIFIED_EXECUTABLES.has(staged)) {
+    try {
+      fs.closeSync(staged.fd);
+    } finally {
+      CLOSED_VERIFIED_EXECUTABLES.add(staged);
+    }
+  }
   let executableStat = null;
   try {
     executableStat = fs.lstatSync(staged.path);
@@ -97,6 +108,7 @@ function stageVerifiedExecutable(filename, expectedSha256) {
   }
   const sourceFd = fs.openSync(filename, 'r');
   let destinationFd = null;
+  let executionFd = null;
   let staged = null;
   try {
     const sourceStat = fs.fstatSync(sourceFd);
@@ -135,22 +147,49 @@ function stageVerifiedExecutable(filename, expectedSha256) {
     fs.fchmodSync(destinationFd, 0o500);
     staged.executableIdentity =
       fileIdentity(fs.fstatSync(destinationFd));
+    executionFd = fs.openSync(staged.path, 'r');
+    const executionStat = fs.fstatSync(executionFd);
+    if (!executionStat.isFile() ||
+        !hasIdentity(executionStat, staged.executableIdentity) ||
+        executionStat.size !== bytes) {
+      throw new Error(
+        'verified Stockfish executable changed while retaining its inode'
+      );
+    }
     fs.closeSync(destinationFd);
     destinationFd = null;
-    const sha256 = hash.digest('hex');
-    if (sha256 !== expectedSha256) {
+    const copiedSha256 = hash.digest('hex');
+    const retainedHash = crypto.createHash('sha256');
+    let position = 0;
+    for (;;) {
+      const read = fs.readSync(
+        executionFd, buffer, 0, buffer.length, position
+      );
+      if (read === 0) break;
+      retainedHash.update(buffer.subarray(0, read));
+      position += read;
+    }
+    const sha256 = retainedHash.digest('hex');
+    if (sha256 !== copiedSha256 || sha256 !== expectedSha256) {
       throw new Error(
         'Stockfish executable does not match the checked-in teacher manifest'
       );
     }
-    return Object.freeze({
+    // From here through engine shutdown, only the retained read-only descriptor
+    // names the verified inode. Recreating this pathname cannot affect exec.
+    fs.unlinkSync(staged.path);
+    const retained = Object.freeze({
       path: staged.path,
       directory: staged.directory,
       directoryIdentity: staged.directoryIdentity,
       executableIdentity: staged.executableIdentity,
+      fd: executionFd,
+      [VERIFIED_EXECUTABLE_HANDLE]: true,
       sha256,
       bytes
     });
+    executionFd = null;
+    return retained;
   } catch (error) {
     if (destinationFd !== null) {
       try {
@@ -160,6 +199,9 @@ function stageVerifiedExecutable(filename, expectedSha256) {
         }
       } catch (_) {}
       try { fs.closeSync(destinationFd); } catch (_) {}
+    }
+    if (executionFd !== null) {
+      try { fs.closeSync(executionFd); } catch (_) {}
     }
     if (staged) {
       try {
@@ -172,6 +214,36 @@ function stageVerifiedExecutable(filename, expectedSha256) {
   } finally {
     fs.closeSync(sourceFd);
   }
+}
+
+function verifiedExecutableInvocation(staged) {
+  if (!staged || staged[VERIFIED_EXECUTABLE_HANDLE] !== true ||
+      !Number.isInteger(staged.fd) ||
+      CLOSED_VERIFIED_EXECUTABLES.has(staged)) {
+    throw new Error('Stockfish requires a live verified executable handle');
+  }
+  const stat = fs.fstatSync(staged.fd);
+  if (!stat.isFile() || !hasIdentity(stat, staged.executableIdentity)) {
+    throw new Error('verified Stockfish executable handle changed before spawn');
+  }
+  let descriptorDirectory;
+  if (process.platform === 'linux' && fs.existsSync('/proc/self/fd')) {
+    descriptorDirectory = '/proc/self/fd';
+  } else if (fs.existsSync('/dev/fd')) {
+    descriptorDirectory = '/dev/fd';
+  } else {
+    throw new Error(
+      'fd-backed Stockfish execution is unavailable on this platform'
+    );
+  }
+  // The child-local descriptor resolves the retained inode directly. The
+  // staged pathname is deliberately absent from the exec boundary.
+  return {
+    executable: descriptorDirectory + '/' + VERIFIED_EXECUTABLE_CHILD_FD,
+    stdio: [
+      'pipe', 'pipe', 'inherit', staged.fd
+    ]
+  };
 }
 
 function parseArgs(argv) {
@@ -812,19 +884,20 @@ function validateSelectionRecord(record, context) {
 }
 
 class UciEngine {
-  constructor(executable, transcript, watchdog, workingDirectory) {
+  constructor(stagedExecutable, transcript, watchdog, workingDirectory) {
     this.watchdog = watchdog;
     this.exited = false;
     this.exit = null;
     this.stdinError = null;
-    const spawnOptions = { stdio: ['pipe', 'pipe', 'inherit'] };
+    const invocation = verifiedExecutableInvocation(stagedExecutable);
+    const spawnOptions = { stdio: invocation.stdio };
     if (workingDirectory !== undefined) {
       if (typeof workingDirectory !== 'string' || !workingDirectory) {
         throw new Error('Stockfish working directory must be a non-empty path');
       }
       spawnOptions.cwd = workingDirectory;
     }
-    this.child = spawn(executable, [], spawnOptions);
+    this.child = spawn(invocation.executable, [], spawnOptions);
     this.lines = readline.createInterface({ input: this.child.stdout, crlfDelay: Infinity });
     this.iterator = this.lines[Symbol.asyncIterator]();
     this.transcript = transcript || { append: function () {} };
@@ -1510,7 +1583,7 @@ async function labelShard(options, runOptions) {
       exclusionWriter = new LineArtifact(temporary.exclusions);
       transcriptWriter = new LineArtifact(temporary.transcript);
       engine = new UciEngine(
-        stagedExecutable.path,
+        stagedExecutable,
         transcriptWriter,
         contracts.teacher.watchdog
       );
@@ -1537,9 +1610,8 @@ async function labelShard(options, runOptions) {
           labelledRecord(record, result, assessment, contracts)
         );
       }
-      const quitting = engine;
+      await engine.quit();
       engine = null;
-      await quitting.quit();
 
       const outputSummary = outputWriter.finish();
       const exclusionSummary = exclusionWriter.finish();

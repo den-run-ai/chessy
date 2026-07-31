@@ -12,10 +12,13 @@ import hashlib
 import json
 import math
 import os
+import re
+import struct
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO, Iterator
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -29,6 +32,27 @@ from scipy import optimize, sparse
 
 
 PRODUCTION_INPUT_DISPOSITION = "authenticated-production-input"
+STREAMER_CLOSURE_SCHEMA = "chessy.hce-streamer-closure.v1"
+SNAPSHOT_PACKAGE_PATH = "package.json"
+SNAPSHOT_PACKAGE_BYTES = b'{"private":true,"type":"commonjs"}\n'
+STREAMER_CLOSURE_STATIC_PATHS = (
+    "test/training/hce-r3-pack-stream.js",
+    "test/training/corpus.js",
+    "test/training/prepare-lichess-evals.js",
+    "test/training/label-stockfish.js",
+    "test/training/hce-r3-linear.js",
+    "test/training/hce-r3-features.js",
+    "test/training/hce-r3-baseline.js",
+    "test/eval/e4-protocol.js",
+    "experiments/wasm/src/eval.rs",
+    "assets/chessy-ai-fast.wasm",
+    "eval/training/hce-r3-features-v1.json",
+    "eval/training/hce-r3-fit-v1.json",
+    "eval/training/heldout-v1.json",
+    "eval/training/source-manifest.json",
+    "eval/training/teacher-sf18-100kn-v1.json",
+)
+STREAMER_CLOSURE_DYNAMIC_DIRECTORIES = ("eval/e4",)
 
 
 @dataclass
@@ -41,7 +65,7 @@ class Dataset:
     row_ids: np.ndarray | None = None
     cluster_ids: np.ndarray | None = None
     position_family_ids: np.ndarray | None = None
-    metadata: dict[str, str] | None = None
+    metadata: dict[str, str | int] | None = None
 
     @property
     def rows(self) -> int:
@@ -54,6 +78,88 @@ def sha256_file(filename: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def sha256_stream(stream: BinaryIO) -> str:
+    position = stream.tell()
+    digest = hashlib.sha256()
+    try:
+        stream.seek(0)
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    finally:
+        stream.seek(position)
+    return digest.hexdigest()
+
+
+@contextmanager
+def authenticated_npz(
+    filename: Path,
+) -> Iterator[tuple[Any, str]]:
+    with filename.open("rb") as source:
+        source_sha256 = sha256_stream(source)
+        source.seek(0)
+        with np.load(source, allow_pickle=False) as archive:
+            yield archive, source_sha256
+
+
+def streamer_closure_paths(root: Path) -> tuple[Path, ...]:
+    root = root.resolve()
+    paths = [root / relative for relative in STREAMER_CLOSURE_STATIC_PATHS]
+    for relative in STREAMER_CLOSURE_DYNAMIC_DIRECTORIES:
+        directory = root / relative
+        if not directory.is_dir():
+            raise RuntimeError(
+                f"HCE streamer closure directory is missing: {directory}"
+            )
+        for filename in directory.rglob("*"):
+            if filename.is_symlink():
+                raise RuntimeError(
+                    f"HCE streamer closure cannot contain a symlink: {filename}"
+                )
+            if filename.is_file():
+                paths.append(filename)
+    if any(filename.is_symlink() for filename in paths):
+        raise RuntimeError("HCE streamer closure cannot contain a symlink")
+    missing = [filename for filename in paths if not filename.is_file()]
+    if missing:
+        raise RuntimeError(
+            "HCE streamer closure file is missing: " + str(missing[0])
+        )
+    unique = {filename.resolve() for filename in paths}
+    if len(unique) != len(paths):
+        raise RuntimeError("HCE streamer closure contains duplicate files")
+    return tuple(
+        sorted(unique, key=lambda filename: filename.relative_to(root).as_posix())
+    )
+
+
+def capture_streamer_closure(
+    root: Path,
+) -> tuple[dict[Path, bytes], str]:
+    root = root.resolve()
+    captured = {
+        filename: filename.read_bytes()
+        for filename in streamer_closure_paths(root)
+    }
+    entries = [
+        (filename.relative_to(root).as_posix(), data)
+        for filename, data in captured.items()
+    ]
+    entries.append((SNAPSHOT_PACKAGE_PATH, SNAPSHOT_PACKAGE_BYTES))
+    entries.sort(key=lambda item: item[0])
+    if len({relative for relative, _ in entries}) != len(entries):
+        raise RuntimeError("captured HCE streamer closure contains duplicates")
+    digest = hashlib.sha256()
+    digest.update(STREAMER_CLOSURE_SCHEMA.encode("utf-8") + b"\0")
+    digest.update(struct.pack(">Q", len(entries)))
+    for relative, data in entries:
+        encoded_path = relative.encode("utf-8")
+        digest.update(struct.pack(">I", len(encoded_path)))
+        digest.update(encoded_path)
+        digest.update(struct.pack(">Q", len(data)))
+        digest.update(data)
+    return captured, digest.hexdigest()
 
 
 def assert_artifacts_unchanged(expected: dict[Path, str]) -> None:
@@ -116,14 +222,19 @@ def require_sha256(value: str, label: str) -> None:
         raise ValueError(f"{label} must be lowercase SHA-256 hex")
 
 
+def require_node_version(value: str, label: str) -> None:
+    if not re.fullmatch(
+        r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", value
+    ):
+        raise ValueError(f"{label} must be an exact Node version")
+
+
 def load_dataset(
     filename: Path,
     expected_role: str,
     parameters: int,
-    expected: dict[str, str],
+    expected: dict[str, str | int],
 ) -> Dataset:
-    initial_sha256 = sha256_file(filename)
-    archive = np.load(filename, allow_pickle=False)
     required = {
         "indptr",
         "indices",
@@ -143,16 +254,30 @@ def load_dataset(
         "selection_contract_sha256",
         "source_snapshot_sha256",
         "input_disposition",
+        "streamer_closure_sha256",
+        "node_executable_sha256",
+        "node_executable_bytes",
+        "node_version",
         "center_value_sha256",
         "scales_value_sha256",
         "score_denominator",
     }
-    missing = sorted(required.difference(archive.files))
-    if missing:
-        raise ValueError(f"{filename}: missing arrays {', '.join(missing)}")
-    if set(archive.files) != required:
-        extra = sorted(set(archive.files).difference(required))
-        raise ValueError(f"{filename}: undeclared arrays {', '.join(extra)}")
+    with authenticated_npz(filename) as (source_archive, initial_sha256):
+        archive_files = tuple(source_archive.files)
+        if len(set(archive_files)) != len(archive_files):
+            raise ValueError(f"{filename}: duplicate NPZ array names")
+        missing = sorted(required.difference(archive_files))
+        if missing:
+            raise ValueError(f"{filename}: missing arrays {', '.join(missing)}")
+        if set(archive_files) != required:
+            extra = sorted(set(archive_files).difference(required))
+            raise ValueError(
+                f"{filename}: undeclared arrays {', '.join(extra)}"
+            )
+        archive = {
+            name: source_archive[name]
+            for name in archive_files
+        }
     if archive["shape"].dtype != np.dtype("int64") or archive["shape"].shape != (2,):
         raise ValueError(f"{filename}: shape must be int64[2]")
     shape = tuple(int(value) for value in archive["shape"].tolist())
@@ -226,13 +351,29 @@ def load_dataset(
             "selection_contract_sha256",
             "source_snapshot_sha256",
             "input_disposition",
+            "streamer_closure_sha256",
+            "node_executable_sha256",
+            "node_version",
             "center_value_sha256",
             "scales_value_sha256",
         )
     }
+    node_bytes = archive["node_executable_bytes"]
+    if (
+        node_bytes.shape != ()
+        or node_bytes.dtype != np.dtype("int64")
+        or int(node_bytes.item()) <= 0
+    ):
+        raise ValueError(
+            f"{filename}: node_executable_bytes must be a positive int64 scalar"
+        )
+    metadata["node_executable_bytes"] = int(node_bytes.item())
+    require_node_version(
+        str(metadata["node_version"]), f"{filename}: node_version"
+    )
     for name, value in metadata.items():
-        if name not in ("matrix_schema", "input_disposition"):
-            require_sha256(value, f"{filename}: {name}")
+        if name.endswith("_sha256"):
+            require_sha256(str(value), f"{filename}: {name}")
     for name, wanted in expected.items():
         if metadata.get(name) != wanted:
             raise ValueError(
@@ -242,7 +383,6 @@ def load_dataset(
     if denominator.shape != () or denominator.dtype != np.dtype("int64") or \
             int(denominator.item()) != 24:
         raise ValueError(f"{filename}: score_denominator must be int64 scalar 24")
-    archive.close()
     assert_artifacts_unchanged({filename: initial_sha256})
     return Dataset(
         matrix,
@@ -269,6 +409,10 @@ def assert_disjoint(train: Dataset, validation: Dataset) -> None:
         "selection_contract_sha256",
         "source_snapshot_sha256",
         "input_disposition",
+        "streamer_closure_sha256",
+        "node_executable_sha256",
+        "node_executable_bytes",
+        "node_version",
         "center_value_sha256",
         "scales_value_sha256",
     ):
@@ -294,6 +438,7 @@ def validate_matrix_sidecar(
     root: Path,
     feature_path: Path,
     fit_path: Path,
+    streamer_closure_sha256: str,
 ) -> tuple[dict[str, Any], str]:
     sidecar_path = filename.with_suffix(filename.suffix + ".manifest.json")
     sidecar_bytes = sidecar_path.read_bytes()
@@ -315,6 +460,15 @@ def validate_matrix_sidecar(
     contracts = sidecar.get("contracts")
     if not isinstance(contracts, dict) or dataset.metadata is None:
         raise ValueError(f"{sidecar_path}: contract block is missing")
+    if (
+        not isinstance(contracts.get("nodeExecutableSha256"), str)
+        or type(contracts.get("nodeExecutableBytes")) is not int
+        or contracts["nodeExecutableBytes"] <= 0
+        or not isinstance(contracts.get("nodeVersion"), str)
+    ):
+        raise ValueError(
+            f"{sidecar_path}: Node runtime provenance is malformed"
+        )
     current = {
         "packerSha256": sha256_file(root / "tools/training/pack-hce.py"),
         "streamerSha256": sha256_file(
@@ -347,6 +501,14 @@ def validate_matrix_sidecar(
             "source_snapshot_sha256"
         ],
         "inputDisposition": dataset.metadata["input_disposition"],
+        "streamerClosureSha256": streamer_closure_sha256,
+        "nodeExecutableSha256": dataset.metadata[
+            "node_executable_sha256"
+        ],
+        "nodeExecutableBytes": dataset.metadata[
+            "node_executable_bytes"
+        ],
+        "nodeVersion": dataset.metadata["node_version"],
         "parameterOrderSha256": dataset.metadata[
             "feature_order_sha256"
         ],
@@ -665,6 +827,10 @@ def self_test() -> None:
             "selection_contract_sha256": "5" * 64,
             "source_snapshot_sha256": "6" * 64,
             "input_disposition": PRODUCTION_INPUT_DISPOSITION,
+            "streamer_closure_sha256": "9" * 64,
+            "node_executable_sha256": "c" * 64,
+            "node_executable_bytes": 123456,
+            "node_version": "v99.0.0",
             "center_value_sha256": "7" * 64,
             "scales_value_sha256": "8" * 64,
         }
@@ -702,9 +868,76 @@ def self_test() -> None:
         )
         if loaded.rows != rows or loaded.metadata != metadata:
             raise AssertionError("strict CSR-v2 round trip failed")
+
+        replacement_filename = Path(temp) / "replacement-matrix.npz"
+        with np.load(filename, allow_pickle=False) as fixture_archive:
+            replacement_arrays = {
+                name: fixture_archive[name]
+                for name in fixture_archive.files
+            }
+        authenticated_target = replacement_arrays["target"].copy()
+        replacement_target = np.zeros_like(
+            replacement_arrays["target"]
+        )
+        if np.array_equal(
+            replacement_target, replacement_arrays["target"]
+        ):
+            replacement_target = np.ones_like(
+                replacement_arrays["target"]
+            )
+        replacement_arrays["target"] = replacement_target
+        np.savez(replacement_filename, **replacement_arrays)
+        original_filename = Path(temp) / "authenticated-matrix-A.npz"
+        authenticated_sha256 = sha256_file(filename)
+        blocked_transient_output = (
+            Path(temp) / "blocked-transient-candidate.json"
+        )
+        with authenticated_npz(
+            filename
+        ) as (retained_archive, retained_sha256):
+            filename.replace(original_filename)
+            replacement_filename.replace(filename)
+            try:
+                retained_target = retained_archive["target"].copy()
+                if np.array_equal(retained_target, replacement_target):
+                    raise AssertionError(
+                        "retained NPZ descriptor exposed replacement rows"
+                    )
+                try:
+                    publish_json_no_replace(
+                        blocked_transient_output,
+                        {"status": "must-not-publish-from-replacement-B"},
+                        {filename: retained_sha256},
+                    )
+                except RuntimeError:
+                    pass
+                else:
+                    raise AssertionError(
+                        "replacement NPZ admitted a candidate publication"
+                    )
+            finally:
+                filename.unlink(missing_ok=True)
+                original_filename.replace(filename)
+        if (
+            retained_sha256 != authenticated_sha256
+            or not np.array_equal(
+                retained_target, authenticated_target
+            )
+            or blocked_transient_output.exists()
+            or sha256_file(filename) != authenticated_sha256
+        ):
+            raise AssertionError(
+                "atomic NPZ replace/restore changed authenticated arrays "
+                "or exposed a candidate"
+            )
+
         for field, replacement in (
             ("selection_manifest_sha256", "9" * 64),
             ("source_snapshot_sha256", "a" * 64),
+            ("streamer_closure_sha256", "b" * 64),
+            ("node_executable_sha256", "d" * 64),
+            ("node_executable_bytes", 123457),
+            ("node_version", "v99.0.1"),
             ("input_disposition", "sample-only-not-fit-eligible"),
         ):
             mismatched_metadata = dict(metadata)
@@ -842,23 +1075,22 @@ def main() -> None:
     feature_path = root / "eval/training/hce-r3-features-v1.json"
     fit_path = root / "eval/training/hce-r3-fit-v1.json"
     teacher_path = root / "eval/training/teacher-sf18-100kn-v1.json"
+    streamer_closure, streamer_closure_sha256 = capture_streamer_closure(root)
     implementation_paths = (
         Path(__file__).resolve(),
         root / "tools/training/pack-hce.py",
-        root / "test/training/hce-r3-pack-stream.js",
-        root / "test/training/hce-r3-linear.js",
-        root / "test/training/hce-r3-baseline.js",
-        root / "experiments/wasm/src/eval.rs",
-        root / "assets/chessy-ai-fast.wasm",
-        feature_path,
-        fit_path,
-        teacher_path,
     )
     implementation_hashes = {
         filename: sha256_file(filename) for filename in implementation_paths
     }
-    features = json.loads(feature_path.read_text(encoding="utf-8"))
-    fit_contract = json.loads(fit_path.read_text(encoding="utf-8"))
+    implementation_hashes.update(
+        {
+            filename: hashlib.sha256(data).hexdigest()
+            for filename, data in streamer_closure.items()
+        }
+    )
+    features = json.loads(streamer_closure[feature_path].decode("utf-8"))
+    fit_contract = json.loads(streamer_closure[fit_path].decode("utf-8"))
     contract_disposition = fit_contract["matrix"].get(
         "requiredInputDisposition"
     )
@@ -895,6 +1127,7 @@ def main() -> None:
         "feature_manifest_sha256": implementation_hashes[feature_path],
         "teacher_manifest_sha256": implementation_hashes[teacher_path],
         "input_disposition": contract_disposition,
+        "streamer_closure_sha256": streamer_closure_sha256,
         "center_value_sha256": center_digest,
         "scales_value_sha256": scales_digest,
     }
@@ -913,7 +1146,13 @@ def main() -> None:
         validation_path, "hce-validation", parameters, expected_metadata
     )
     _, train_sidecar_sha256 = validate_matrix_sidecar(
-        train_path, train, "shared-train", root, feature_path, fit_path
+        train_path,
+        train,
+        "shared-train",
+        root,
+        feature_path,
+        fit_path,
+        streamer_closure_sha256,
     )
     _, validation_sidecar_sha256 = validate_matrix_sidecar(
         validation_path,
@@ -922,6 +1161,7 @@ def main() -> None:
         root,
         feature_path,
         fit_path,
+        streamer_closure_sha256,
     )
     assert_disjoint(train, validation)
     k_fit = fit_baseline_k(train, center, fit_contract["calibration"])
@@ -1017,6 +1257,16 @@ def main() -> None:
                 "source_snapshot_sha256"
             ],
             "inputDisposition": train.metadata["input_disposition"],
+            "streamerClosureSha256": train.metadata[
+                "streamer_closure_sha256"
+            ],
+            "nodeExecutableSha256": train.metadata[
+                "node_executable_sha256"
+            ],
+            "nodeExecutableBytes": train.metadata[
+                "node_executable_bytes"
+            ],
+            "nodeVersion": train.metadata["node_version"],
             "teacherManifestSha256": train.metadata[
                 "teacher_manifest_sha256"
             ],

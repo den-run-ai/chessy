@@ -363,7 +363,7 @@ async function runSmoke(options, dependencies) {
     let transcriptSummary = null;
     try {
       engine = new Engine(
-        stagedExecutable.path,
+        stagedExecutable,
         transcript,
         contracts.teacher.watchdog,
         networkDirectory

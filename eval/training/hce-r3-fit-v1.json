@@ -19,7 +19,7 @@
     "packer": "tools/training/pack-hce.py",
     "authenticatedFeatureStreamer": "test/training/hce-r3-pack-stream.js",
     "completeLinearExtractor": "test/training/hce-r3-linear.js",
-    "implementationProvenance": "Every packed sidecar binds the complete linear extractor, baseline extractor, Rust evaluator source, and shipped WASM by SHA-256; the fitter rehashes all four before candidate publication.",
+    "implementationProvenance": "The packer executes an authenticated private snapshot of the complete Node streamer code/data closure with a retained Node executable descriptor and an empty environment. It binds the deterministic closure SHA-256 plus the exact Node executable SHA-256, byte count, and version in both the NPZ and sidecar; the fitter reconstructs the closure, requires identical train/validation runtime provenance, and rehashes every closure member before candidate publication.",
     "requiredInputDisposition": "authenticated-production-input",
     "publicationInputRehash": "both NPZ matrices, both adjacent sidecars, center/scales files, and every fitter/packer/extractor/evaluator/contract input must retain its initially authenticated SHA-256 immediately before candidate publication",
     "candidatePublication": "serialize and fsync a same-directory temporary file, perform the final input rehash, then hard-link to the final path without replacement; failed serialization, writing, or rehashing must not create the final path",
@@ -44,6 +44,10 @@
       "selection_contract_sha256:utf8 scalar",
       "source_snapshot_sha256:utf8 scalar",
       "input_disposition:utf8 scalar",
+      "streamer_closure_sha256:utf8 scalar",
+      "node_executable_sha256:utf8 scalar",
+      "node_executable_bytes:int64 scalar",
+      "node_version:utf8 scalar",
       "center_value_sha256:utf8 scalar",
       "scales_value_sha256:utf8 scalar",
       "score_denominator:int64 scalar"
@@ -57,6 +61,8 @@
       "position-family IDs disjoint",
       "exact selection-manifest SHA-256 match",
       "exact source-snapshot SHA-256 match",
+      "exact streamer-closure SHA-256 match",
+      "exact Node executable SHA-256, byte count, and version match",
       "exact authenticated production-input disposition match"
     ]
   },

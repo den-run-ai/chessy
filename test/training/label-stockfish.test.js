@@ -1013,7 +1013,7 @@ async function integration() {
     const authenticatedExecutable =
       path.join(temporary, 'authenticated-stockfish');
     const authenticatedExecutableBody = [
-      '#!/usr/bin/env node',
+      '#!/usr/bin/env -S node --preserve-symlinks-main',
       "'use strict';",
       "const readline = require('readline');",
       'const input = readline.createInterface({ input: process.stdin });',
@@ -1040,19 +1040,41 @@ async function integration() {
       Corpus.sha256(authenticatedExecutableBody)
     );
     ok(stagedExecutable.path !== authenticatedExecutable,
-      'the verified teacher executes from a private snapshot path');
+      'the verified teacher owns a private snapshot name');
     if (process.platform !== 'win32') {
-      equal(fs.statSync(stagedExecutable.path).mode & 0o777, 0o500,
-        'the private executable snapshot is read/execute-only');
+      equal(fs.fstatSync(stagedExecutable.fd).mode & 0o777, 0o500,
+        'the retained executable inode is read/execute-only');
     }
+    equal(fs.existsSync(stagedExecutable.path), false,
+      'the verified executable inode has no mutable staging pathname');
+    throws(
+      () => new Label.UciEngine(
+        stagedExecutable.path,
+        { append: function () {} },
+        contracts.teacher.watchdog
+      ),
+      /live verified executable handle/,
+      'the engine refuses a verified pathname without its retained inode'
+    );
     const attackerExecutable = authenticatedExecutable + '.replacement';
-    fs.writeFileSync(attackerExecutable, authenticatedExecutableBody.replace(
+    const attackerExecutableBody = authenticatedExecutableBody.replace(
       'authenticated executable', 'replacement attacker'
-    ), { mode: 0o755 });
+    );
+    fs.writeFileSync(
+      attackerExecutable, attackerExecutableBody, { mode: 0o755 }
+    );
     fs.renameSync(attackerExecutable, authenticatedExecutable);
+    fs.writeFileSync(
+      stagedExecutable.path, attackerExecutableBody, { mode: 0o755 }
+    );
+    equal(
+      fs.readFileSync(stagedExecutable.path, 'utf8'),
+      attackerExecutableBody,
+      'the adversary replaces the verified staged pathname before spawn'
+    );
     const stagedTranscript = [];
     const stagedEngine = new Label.UciEngine(
-      stagedExecutable.path,
+      stagedExecutable,
       { append: line => stagedTranscript.push(line) },
       contracts.teacher.watchdog
     );
@@ -1064,9 +1086,15 @@ async function integration() {
     );
     ok(
       !stagedTranscript.includes('< id name replacement attacker'),
-      'the replacement executable is never spawned'
+      'the replacement staged pathname is never spawned'
     );
+    fs.unlinkSync(stagedExecutable.path);
     Label.cleanupVerifiedExecutable(stagedExecutable);
+    throws(
+      () => fs.fstatSync(stagedExecutable.fd),
+      /EBADF|bad file descriptor/,
+      'the verified executable descriptor closes after engine lifetime'
+    );
     equal(fs.existsSync(stagedExecutable.directory), false,
       'the private executable snapshot is narrowly removed after use');
     const dummyStockfish = path.join(temporary, 'not-stockfish');
@@ -1093,6 +1121,130 @@ async function integration() {
     );
     equal(fs.existsSync(mechanismLabelOutput + '.lock'), false,
       'both refused label attempts release the output-prefix lock');
+
+    const failingQuitExecutable =
+      path.join(temporary, 'failing-quit-stockfish');
+    const failingQuitExecutableBody = [
+      '#!/usr/bin/env -S node --preserve-symlinks-main',
+      "'use strict';",
+      "const readline = require('readline');",
+      'const input = readline.createInterface({ input: process.stdin });',
+      "input.on('line', function (line) {",
+      "  if (line === 'uci') {",
+      "    console.log('id name failing quit fixture');",
+      "    console.log('uciok');",
+      "  } else if (line === 'isready') {",
+      "    console.log('readyok');",
+      "  } else if (line === 'go nodes 100000') {",
+      "    console.log('info depth 16 seldepth 22 score cp 23 " +
+        "wdl 310 620 70 nodes 100000 pv e2e4 e7e5');",
+      "    console.log('bestmove e2e4 ponder e7e5');",
+      '  }',
+      '});',
+      ''
+    ].join('\n');
+    fs.writeFileSync(
+      failingQuitExecutable,
+      failingQuitExecutableBody,
+      { mode: 0o755 }
+    );
+    const failingQuitOutput =
+      path.join(temporary, 'failing-quit-teacher.ndjson');
+    const failingQuitArtifacts = [
+      failingQuitOutput,
+      failingQuitOutput + '.exclusions.ndjson',
+      failingQuitOutput + '.uci.log',
+      failingQuitOutput + '.manifest.json'
+    ];
+    const teacherManifestPath = path.join(
+      ROOT, 'eval', 'training', 'teacher-sf18-100kn-v1.json'
+    );
+    const originalReadFileSync = fs.readFileSync;
+    const originalOpenSync = fs.openSync;
+    const originalQuit = Label.UciEngine.prototype.quit;
+    const originalAbort = Label.UciEngine.prototype.abort;
+    let retainedExecutableFd = null;
+    let failedQuitEngine = null;
+    let abortCalls = 0;
+    fs.readFileSync = function (filename, options) {
+      const value = originalReadFileSync.call(fs, filename, options);
+      if (typeof filename !== 'string' ||
+          path.resolve(filename) !== teacherManifestPath) {
+        return value;
+      }
+      const teacher = JSON.parse(
+        typeof value === 'string' ? value : value.toString('utf8')
+      );
+      teacher.engine.executable.sha256 =
+        Corpus.sha256(failingQuitExecutableBody);
+      return Prepare.stableJson(teacher) + '\n';
+    };
+    fs.openSync = function (filename, flags, mode) {
+      const fd = originalOpenSync.call(fs, filename, flags, mode);
+      if (typeof filename === 'string' && flags === 'r' &&
+          path.basename(filename) === 'stockfish' &&
+          path.basename(path.dirname(filename))
+            .startsWith('chessy-stockfish-executable-')) {
+        retainedExecutableFd = fd;
+      }
+      return fd;
+    };
+    Label.UciEngine.prototype.quit = async function () {
+      failedQuitEngine = this;
+      throw new Error('adversarial quit failure before shutdown');
+    };
+    Label.UciEngine.prototype.abort = async function () {
+      abortCalls++;
+      return originalAbort.call(this);
+    };
+    try {
+      await rejects(
+        () => Label.labelShard({
+          input: mechanismShardPath,
+          'selection-manifest': mechanismManifestPath,
+          output: failingQuitOutput,
+          stockfish: failingQuitExecutable
+        }, { sampleOnly: true }),
+        /adversarial quit failure before shutdown/,
+        'a quit failure aborts the label run before publication'
+      );
+    } finally {
+      fs.readFileSync = originalReadFileSync;
+      fs.openSync = originalOpenSync;
+      Label.UciEngine.prototype.quit = originalQuit;
+      Label.UciEngine.prototype.abort = originalAbort;
+      if (failedQuitEngine && !failedQuitEngine.exited) {
+        failedQuitEngine.forceKill();
+        await failedQuitEngine.closed;
+      }
+    }
+    equal(abortCalls, 1,
+      'the retained engine is aborted after quit throws');
+    equal(failedQuitEngine.exited, true,
+      'the failing-quit child is fully reaped');
+    throws(
+      () => process.kill(failedQuitEngine.child.pid, 0),
+      /ESRCH|no such process/,
+      'no failing-quit Stockfish child remains alive'
+    );
+    throws(
+      () => fs.fstatSync(retainedExecutableFd),
+      /EBADF|bad file descriptor/,
+      'failing quit closes the retained executable descriptor'
+    );
+    equal(
+      failingQuitArtifacts.filter(filename => fs.existsSync(filename)),
+      [],
+      'failing quit publishes no completed label artifacts'
+    );
+    equal(fs.existsSync(failingQuitOutput + '.lock'), false,
+      'failing quit releases the output-prefix lock');
+    equal(
+      fs.readdirSync(temporary).filter(name =>
+        name.startsWith(path.basename(failingQuitOutput) + '.tmp-')),
+      [],
+      'failing quit removes every partial label artifact'
+    );
 
     const overstatedControlPath =
       path.join(temporary, 'overstated-control-manifest.json');

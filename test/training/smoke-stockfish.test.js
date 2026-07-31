@@ -30,7 +30,7 @@ async function rejects(callback, pattern, message) {
 
 function fakeEngineSource(bigBody, smallBody) {
   return [
-    '#!/usr/bin/env node',
+    '#!/usr/bin/env -S node --preserve-symlinks-main',
     "'use strict';",
     "const fs = require('fs');",
     "const readline = require('readline');",
@@ -335,55 +335,48 @@ async function main() {
     );
     let observedExecutablePath = null;
     let observedExecutableBody = null;
-    class ReplacingEngine {
-      constructor(filename, transcript, watchdog, workingDirectory) {
-        observedExecutablePath = filename;
-        const replacement = attackExecutable + '.replacement';
+    let observedStagedExecutable = null;
+    let replacementPath = null;
+    function removeStagedReplacement() {
+      if (!replacementPath) return;
+      try {
+        fs.unlinkSync(replacementPath);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
+    class ReplacingEngine extends Label.UciEngine {
+      constructor(staged, transcript, watchdog, workingDirectory) {
+        observedStagedExecutable = staged;
+        observedExecutablePath = staged.path;
         fs.writeFileSync(
-          replacement,
+          staged.path,
           authenticatedExecutableBody.replace(
             'Hermetic Stockfish 18 fixture',
             'replacement attacker'
           ),
           { mode: 0o755 }
         );
-        fs.renameSync(replacement, attackExecutable);
-        observedExecutableBody = fs.readFileSync(filename, 'utf8');
-        this.transcript = transcript;
-        this.workingDirectory = workingDirectory;
+        replacementPath = staged.path;
+        observedExecutableBody = fs.readFileSync(staged.path, 'utf8');
+        super(staged, transcript, watchdog, workingDirectory);
       }
 
-      async initialize() {
-        this.transcript.append('< id name authenticated smoke executable');
+      async quit() {
+        try {
+          return await super.quit();
+        } finally {
+          removeStagedReplacement();
+        }
       }
 
-      async exportNetworks() {
-        fs.writeFileSync(
-          path.join(this.workingDirectory, 'big.nnue'), bigBody
-        );
-        fs.writeFileSync(
-          path.join(this.workingDirectory, 'small.nnue'), smallBody
-        );
-        return ['big.nnue', 'small.nnue'];
+      async abort() {
+        try {
+          return await super.abort();
+        } finally {
+          removeStagedReplacement();
+        }
       }
-
-      async label() {
-        return {
-          info: {
-            depth: 16,
-            seldepth: 22,
-            cpSideToMove: 23,
-            wdlSideToMove: [310, 620, 70],
-            nodes: 100000,
-            pvUci: ['e2e4', 'e7e5']
-          },
-          terminalInfo: { nodes: 100000 },
-          bestMove: 'e2e4'
-        };
-      }
-
-      async quit() {}
-      async abort() {}
     }
     const attackOutput = path.join(
       temporary, 'replace-after-verification', 'sf18-100kn'
@@ -399,16 +392,23 @@ async function main() {
     equal(attackProvenance.state, 'passed',
       'the authenticated executable snapshot completes the smoke');
     ok(observedExecutablePath !== attackExecutable,
-      'smoke passes the engine a private verified executable path');
-    equal(
-      observedExecutableBody,
-      authenticatedExecutableBody,
-      'atomic pathname replacement cannot change the executable bytes'
+      'smoke passes the engine a private verified executable handle');
+    ok(
+      observedExecutableBody.includes('replacement attacker'),
+      'the adversary replaced the staged pathname after verification'
+    );
+    const attackTranscript = fs.readFileSync(
+      Smoke.artifactPaths(attackOutput).transcript, 'utf8'
     );
     ok(
-      fs.readFileSync(attackExecutable, 'utf8')
-        .includes('replacement attacker'),
-      'the adversarial test confirms the public pathname was replaced'
+      attackTranscript.includes('< id name Hermetic Stockfish 18 fixture') &&
+        !attackTranscript.includes('replacement attacker'),
+      'smoke executes the verified fd-backed inode, not the replacement path'
+    );
+    throws(
+      () => fs.fstatSync(observedStagedExecutable.fd),
+      /EBADF|bad file descriptor/,
+      'smoke closes the verified descriptor after engine lifetime'
     );
     equal(
       fs.existsSync(path.dirname(observedExecutablePath)),

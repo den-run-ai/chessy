@@ -8,11 +8,16 @@ import hashlib
 import json
 import math
 import os
+import re
+import shutil
+import stat
 import struct
 import subprocess
 import tempfile
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Iterable, Iterator
 
 import numpy as np
 
@@ -29,6 +34,67 @@ PARAMETERS = 965
 MATRIX_SCHEMA = "chessy.hce-csr.v2"
 PRODUCTION_INPUT_DISPOSITION = "authenticated-production-input"
 ALLOWED_ROLES = {"shared-train", "hce-validation", "hce-test"}
+STREAMER_CLOSURE_SCHEMA = "chessy.hce-streamer-closure.v1"
+STREAMER_ENTRYPOINT = "test/training/hce-r3-pack-stream.js"
+SNAPSHOT_PACKAGE_PATH = "package.json"
+SNAPSHOT_PACKAGE_BYTES = b'{"private":true,"type":"commonjs"}\n'
+STREAMER_CLOSURE_STATIC_PATHS = (
+    STREAMER_ENTRYPOINT,
+    "test/training/corpus.js",
+    "test/training/prepare-lichess-evals.js",
+    "test/training/label-stockfish.js",
+    "test/training/hce-r3-linear.js",
+    "test/training/hce-r3-features.js",
+    "test/training/hce-r3-baseline.js",
+    "test/eval/e4-protocol.js",
+    "experiments/wasm/src/eval.rs",
+    "assets/chessy-ai-fast.wasm",
+    "eval/training/hce-r3-features-v1.json",
+    "eval/training/hce-r3-fit-v1.json",
+    "eval/training/heldout-v1.json",
+    "eval/training/source-manifest.json",
+    "eval/training/teacher-sf18-100kn-v1.json",
+)
+STREAMER_CLOSURE_DYNAMIC_DIRECTORIES = ("eval/e4",)
+STREAMER_CLOSURE_LABELS = {
+    STREAMER_ENTRYPOINT: "HCE feature streamer",
+    "test/training/hce-r3-linear.js": "HCE linear extractor",
+    "test/training/hce-r3-baseline.js": "HCE baseline extractor",
+    "experiments/wasm/src/eval.rs": "Rust evaluator source",
+    "assets/chessy-ai-fast.wasm": "shipped Rust/WASM evaluator",
+    "eval/training/hce-r3-features-v1.json": "HCE feature manifest",
+    "eval/training/hce-r3-fit-v1.json": "HCE fit contract",
+    "eval/training/teacher-sf18-100kn-v1.json": "Stockfish teacher manifest",
+}
+
+
+@dataclass(frozen=True)
+class CapturedFile:
+    path: Path
+    label: str
+    data: bytes
+    sha256: str
+
+
+@dataclass(frozen=True)
+class CapturedExecutable:
+    path: Path
+    descriptor: int
+    device: int
+    inode: int
+    bytes: int
+    sha256: str
+    version: str
+
+    @property
+    def execution_path(self) -> str:
+        for directory in ("/proc/self/fd", "/dev/fd"):
+            candidate = f"{directory}/{self.descriptor}"
+            if os.path.exists(candidate):
+                return candidate
+        raise RuntimeError(
+            "retained Node execution requires /proc/self/fd or /dev/fd"
+        )
 
 
 def sha256_file(filename: Path) -> str:
@@ -37,6 +103,299 @@ def sha256_file(filename: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def sha256_descriptor(descriptor: int) -> tuple[str, int]:
+    position = os.lseek(descriptor, 0, os.SEEK_CUR)
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            total += len(chunk)
+    finally:
+        os.lseek(descriptor, position, os.SEEK_SET)
+    return digest.hexdigest(), total
+
+
+def resolve_node_executable(search_path: str | None = None) -> Path:
+    selected = shutil.which("node", path=search_path)
+    if selected is None:
+        raise RuntimeError("Node executable is unavailable on PATH")
+    resolved = Path(selected).resolve(strict=True)
+    if resolved.is_symlink() or not resolved.is_file():
+        raise RuntimeError(f"Node executable is not a regular file: {resolved}")
+    return resolved
+
+
+def capture_node_executable(filename: Path) -> CapturedExecutable:
+    resolved = filename.resolve(strict=True)
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(resolved, flags)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or not before.st_mode & 0o111:
+            raise RuntimeError(
+                f"Node executable is not an executable regular file: {resolved}"
+            )
+        sha256, byte_count = sha256_descriptor(descriptor)
+        after = os.fstat(descriptor)
+        if (
+            (before.st_dev, before.st_ino, before.st_size)
+            != (after.st_dev, after.st_ino, after.st_size)
+            or byte_count != after.st_size
+        ):
+            raise RuntimeError("Node executable changed while being captured")
+        provisional = CapturedExecutable(
+            path=resolved,
+            descriptor=descriptor,
+            device=after.st_dev,
+            inode=after.st_ino,
+            bytes=byte_count,
+            sha256=sha256,
+            version="",
+        )
+        completed = subprocess.run(
+            [provisional.execution_path, "--version"],
+            pass_fds=(descriptor,),
+            env={},
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        version = completed.stdout.strip()
+        if (
+            completed.stderr
+            or not re.fullmatch(
+                r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?",
+                version,
+            )
+        ):
+            raise RuntimeError("Node executable emitted an invalid version")
+        return CapturedExecutable(
+            path=resolved,
+            descriptor=descriptor,
+            device=after.st_dev,
+            inode=after.st_ino,
+            bytes=byte_count,
+            sha256=sha256,
+            version=version,
+        )
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+@contextmanager
+def retained_node_executable(
+    filename: Path | None = None,
+) -> Iterator[CapturedExecutable]:
+    captured = capture_node_executable(
+        filename if filename is not None else resolve_node_executable()
+    )
+    try:
+        yield captured
+    finally:
+        os.close(captured.descriptor)
+
+
+def assert_captured_executable_unchanged(
+    captured: CapturedExecutable,
+) -> None:
+    retained = os.fstat(captured.descriptor)
+    retained_sha256, retained_bytes = sha256_descriptor(
+        captured.descriptor
+    )
+    if (
+        (retained.st_dev, retained.st_ino)
+        != (captured.device, captured.inode)
+        or retained_bytes != captured.bytes
+        or retained_sha256 != captured.sha256
+    ):
+        raise RuntimeError(
+            "retained Node executable changed during HCE packing"
+        )
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        current_descriptor = os.open(captured.path, flags)
+    except OSError as error:
+        raise RuntimeError(
+            f"selected Node executable became unreadable: {captured.path}"
+        ) from error
+    try:
+        current = os.fstat(current_descriptor)
+        current_sha256, current_bytes = sha256_descriptor(
+            current_descriptor
+        )
+    finally:
+        os.close(current_descriptor)
+    if (
+        (current.st_dev, current.st_ino)
+        != (captured.device, captured.inode)
+        or current_bytes != captured.bytes
+        or current_sha256 != captured.sha256
+    ):
+        raise RuntimeError(
+            f"selected Node executable changed during HCE packing: "
+            f"{captured.path}"
+        )
+
+
+def capture_files(
+    files: Iterable[tuple[Path, str]],
+) -> tuple[CapturedFile, ...]:
+    captured = []
+    for filename, label in files:
+        resolved = filename.resolve()
+        data = resolved.read_bytes()
+        captured.append(
+            CapturedFile(
+                path=resolved,
+                label=label,
+                data=data,
+                sha256=hashlib.sha256(data).hexdigest(),
+            )
+        )
+    return tuple(captured)
+
+
+def streamer_closure_paths(root: Path) -> tuple[Path, ...]:
+    root = root.resolve()
+    paths = [root / relative for relative in STREAMER_CLOSURE_STATIC_PATHS]
+    for relative in STREAMER_CLOSURE_DYNAMIC_DIRECTORIES:
+        directory = root / relative
+        if not directory.is_dir():
+            raise RuntimeError(
+                f"HCE streamer closure directory is missing: {directory}"
+            )
+        for filename in directory.rglob("*"):
+            if filename.is_symlink():
+                raise RuntimeError(
+                    f"HCE streamer closure cannot contain a symlink: {filename}"
+                )
+            if filename.is_file():
+                paths.append(filename)
+    if any(filename.is_symlink() for filename in paths):
+        raise RuntimeError("HCE streamer closure cannot contain a symlink")
+    missing = [filename for filename in paths if not filename.is_file()]
+    if missing:
+        raise RuntimeError(
+            "HCE streamer closure file is missing: " + str(missing[0])
+        )
+    unique = {filename.resolve() for filename in paths}
+    if len(unique) != len(paths):
+        raise RuntimeError("HCE streamer closure contains duplicate files")
+    return tuple(
+        sorted(unique, key=lambda filename: filename.relative_to(root).as_posix())
+    )
+
+
+def capture_streamer_closure(root: Path) -> tuple[CapturedFile, ...]:
+    root = root.resolve()
+    return capture_files(
+        (
+            (
+                filename,
+                STREAMER_CLOSURE_LABELS.get(
+                    filename.relative_to(root).as_posix(),
+                    "HCE streamer closure file "
+                    + filename.relative_to(root).as_posix(),
+                ),
+            )
+            for filename in streamer_closure_paths(root)
+        )
+    )
+
+
+def captured_closure_sha256(
+    root: Path, captured: Iterable[CapturedFile]
+) -> str:
+    root = root.resolve()
+    entries = []
+    for captured_file in captured:
+        try:
+            relative = captured_file.path.relative_to(root).as_posix()
+        except ValueError as error:
+            raise RuntimeError(
+                "captured HCE streamer closure file is outside the repository: "
+                + str(captured_file.path)
+            ) from error
+        entries.append((relative, captured_file.data))
+    entries.append((SNAPSHOT_PACKAGE_PATH, SNAPSHOT_PACKAGE_BYTES))
+    entries.sort(key=lambda item: item[0])
+    if len({relative for relative, _ in entries}) != len(entries):
+        raise RuntimeError("captured HCE streamer closure contains duplicates")
+    digest = hashlib.sha256()
+    digest.update(STREAMER_CLOSURE_SCHEMA.encode("utf-8") + b"\0")
+    digest.update(struct.pack(">Q", len(entries)))
+    for relative, data in entries:
+        encoded_path = relative.encode("utf-8")
+        digest.update(struct.pack(">I", len(encoded_path)))
+        digest.update(encoded_path)
+        digest.update(struct.pack(">Q", len(data)))
+        digest.update(data)
+    return digest.hexdigest()
+
+
+def materialize_captured_tree(
+    root: Path,
+    captured: Iterable[CapturedFile],
+    destination: Path,
+) -> Path:
+    root = root.resolve()
+    destination.mkdir(mode=0o700)
+    destination.chmod(0o700)
+    package_path = destination / SNAPSHOT_PACKAGE_PATH
+    with package_path.open("xb") as stream:
+        stream.write(SNAPSHOT_PACKAGE_BYTES)
+    package_path.chmod(0o400)
+    for captured_file in captured:
+        try:
+            relative = captured_file.path.relative_to(root)
+        except ValueError as error:
+            raise RuntimeError(
+                "cannot materialize an HCE streamer closure file outside "
+                f"the repository: {captured_file.path}"
+            ) from error
+        target = destination / relative
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target.parent.chmod(0o700)
+        with target.open("xb") as stream:
+            stream.write(captured_file.data)
+        target.chmod(0o400)
+    entrypoint = destination / STREAMER_ENTRYPOINT
+    if not entrypoint.is_file():
+        raise RuntimeError("captured HCE streamer entrypoint is missing")
+    return entrypoint
+
+
+def assert_captured_files_unchanged(
+    captured: Iterable[CapturedFile],
+) -> None:
+    for captured_file in captured:
+        try:
+            current = captured_file.path.read_bytes()
+        except OSError as error:
+            raise RuntimeError(
+                f"{captured_file.label} became unreadable during HCE packing: "
+                f"{captured_file.path}"
+            ) from error
+        if current != captured_file.data:
+            actual_sha256 = hashlib.sha256(current).hexdigest()
+            raise RuntimeError(
+                f"{captured_file.label} changed during HCE packing: "
+                f"{captured_file.path}; expected={captured_file.sha256}; "
+                f"actual={actual_sha256}"
+            )
 
 
 def integer_vector(filename: Path, length: int, label: str) -> tuple[np.ndarray, str]:
@@ -352,6 +711,320 @@ def self_test() -> None:
             "packer accepted an incomplete or mismatched selection inventory"
         )
     with tempfile.TemporaryDirectory(
+        prefix="chessy-hce-implementation-self-test-"
+    ) as temporary:
+        directory = Path(temporary)
+        fixture_paths = (
+            directory / "pack-hce.py",
+            directory / "hce-r3-pack-stream.js",
+            directory / "hce-r3-linear.js",
+            directory / "hce-r3-baseline.js",
+            directory / "eval.rs",
+            directory / "chessy-ai-fast.wasm",
+            directory / "hce-r3-features-v1.json",
+            directory / "hce-r3-fit-v1.json",
+            directory / "teacher-sf18-100kn-v1.json",
+        )
+        fixture_labels = (
+            "fixture packer",
+            "fixture streamer",
+            "fixture linear extractor",
+            "fixture baseline extractor",
+            "fixture Rust evaluator",
+            "fixture shipped WASM",
+            "fixture feature manifest",
+            "fixture fit contract",
+            "fixture teacher manifest",
+        )
+        for index, filename in enumerate(fixture_paths):
+            filename.write_text(
+                f"'use strict'; // fixture {index}\n", encoding="utf-8"
+            )
+        captured = capture_files(
+            zip(fixture_paths, fixture_labels)
+        )
+        for captured_file in captured:
+            captured_file.path.write_bytes(
+                captured_file.data + b"// mutation during packing\n"
+            )
+            try:
+                assert_captured_files_unchanged(captured)
+            except RuntimeError as error:
+                if captured_file.label not in str(error):
+                    raise AssertionError(
+                        "captured-file mutation named the wrong source"
+                    ) from error
+            else:
+                raise AssertionError(
+                    "captured-file mutation during packing was accepted"
+                )
+            captured_file.path.write_bytes(captured_file.data)
+            assert_captured_files_unchanged(captured)
+
+        selected_bin = directory / "selected-bin"
+        replacement_bin = directory / "replacement-bin"
+        selected_bin.mkdir()
+        replacement_bin.mkdir()
+        selected_node = selected_bin / "node"
+        replacement_node = replacement_bin / "node"
+        selected_path_replacement = directory / "selected-path-node"
+        selected_node.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo v99.0.0\n"
+            "else\n"
+            "  echo retained-node-A\n"
+            "fi\n",
+            encoding="utf-8",
+        )
+        replacement_node.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"--version\" ]; then\n"
+            "  echo v99.0.1\n"
+            "else\n"
+            "  echo replacement-node-B\n"
+            "fi\n",
+            encoding="utf-8",
+        )
+        selected_path_replacement.write_bytes(replacement_node.read_bytes())
+        selected_node.chmod(0o700)
+        replacement_node.chmod(0o700)
+        selected_path_replacement.chmod(0o700)
+        resolved_node = resolve_node_executable(str(selected_bin))
+        with retained_node_executable(resolved_node) as retained_node:
+            original_node = directory / "original-node"
+            selected_node.replace(original_node)
+            selected_path_replacement.replace(selected_node)
+            original_path = os.environ.get("PATH")
+            os.environ["PATH"] = str(replacement_bin)
+            try:
+                completed = subprocess.run(
+                    [retained_node.execution_path, "--fixture"],
+                    pass_fds=(retained_node.descriptor,),
+                    env={},
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                )
+                try:
+                    assert_captured_executable_unchanged(retained_node)
+                except RuntimeError:
+                    pass
+                else:
+                    raise AssertionError(
+                        "replaced Node source path passed final revalidation"
+                    )
+            finally:
+                if original_path is None:
+                    os.environ.pop("PATH", None)
+                else:
+                    os.environ["PATH"] = original_path
+                selected_node.unlink(missing_ok=True)
+                original_node.replace(selected_node)
+            if (
+                completed.stdout.strip() != "retained-node-A"
+                or retained_node.version != "v99.0.0"
+            ):
+                raise AssertionError(
+                    "PATH replacement changed the retained Node executable"
+                )
+            assert_captured_executable_unchanged(retained_node)
+
+        live_root = directory / "live-repository"
+        live_training = live_root / "test/training"
+        live_training.mkdir(parents=True)
+        live_streamer = live_training / "hce-r3-pack-stream.js"
+        live_dependency = live_training / "snapshot-dependency.js"
+        live_streamer.write_text(
+            "'use strict';\n"
+            "const path = require('path');\n"
+            "const dependency = require('./snapshot-dependency');\n"
+            "process.stdout.write(JSON.stringify({\n"
+            "  row: dependency.row,\n"
+            "  input: path.resolve(process.argv[2])\n"
+            "}) + '\\n');\n",
+            encoding="utf-8",
+        )
+        live_dependency.write_text(
+            "'use strict'; module.exports = { row: 'captured-A' };\n",
+            encoding="utf-8",
+        )
+        snapshot_capture = capture_files(
+            (
+                (live_streamer, "snapshot-test streamer"),
+                (live_dependency, "snapshot-test dependency"),
+            )
+        )
+        captured_digest = captured_closure_sha256(
+            live_root, snapshot_capture
+        )
+        teacher_input = directory / "original-teacher-input.ndjson"
+        teacher_input.write_text('{"fixture":true}\n', encoding="utf-8")
+        preload_marker = directory / "node-options-preload-ran"
+        preload = directory / "node-options-preload.js"
+        preload.write_text(
+            "'use strict'; require('fs').writeFileSync("
+            + json.dumps(str(preload_marker))
+            + ", 'preloaded');\n",
+            encoding="utf-8",
+        )
+        snapshot_temporary_path: Path | None = None
+        with (
+            retained_node_executable() as retained_node,
+            tempfile.TemporaryDirectory(
+                prefix="private-streamer-snapshot-", dir=directory
+            ) as snapshot_temporary,
+        ):
+            snapshot_temporary_path = Path(snapshot_temporary)
+            snapshot_streamer = materialize_captured_tree(
+                live_root,
+                snapshot_capture,
+                snapshot_temporary_path / "repository",
+            )
+            replacement_streamer = directory / "replacement-streamer.js"
+            replacement_dependency = directory / "replacement-dependency.js"
+            replacement_streamer.write_text(
+                "'use strict'; process.stdout.write("
+                "JSON.stringify({row:'replacement-B',input:'replacement'})"
+                " + '\\n');\n",
+                encoding="utf-8",
+            )
+            replacement_dependency.write_text(
+                "'use strict'; module.exports = { row: 'replacement-B' };\n",
+                encoding="utf-8",
+            )
+            original_streamer = directory / "original-streamer.js"
+            original_dependency = directory / "original-dependency.js"
+            live_streamer.replace(original_streamer)
+            live_dependency.replace(original_dependency)
+            replacement_streamer.replace(live_streamer)
+            replacement_dependency.replace(live_dependency)
+            original_node_options = os.environ.get("NODE_OPTIONS")
+            os.environ["NODE_OPTIONS"] = "--require=" + str(preload)
+            try:
+                replacement_capture = capture_files(
+                    (
+                        (live_streamer, "replacement streamer"),
+                        (live_dependency, "replacement dependency"),
+                    )
+                )
+                if (
+                    captured_closure_sha256(
+                        live_root, replacement_capture
+                    )
+                    == captured_digest
+                ):
+                    raise AssertionError(
+                        "replacement closure retained captured provenance"
+                    )
+                completed = subprocess.run(
+                    [
+                        retained_node.execution_path,
+                        str(snapshot_streamer),
+                        str(teacher_input.resolve()),
+                    ],
+                    pass_fds=(retained_node.descriptor,),
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    cwd=snapshot_temporary_path / "repository",
+                    env={},
+                )
+            finally:
+                if original_node_options is None:
+                    os.environ.pop("NODE_OPTIONS", None)
+                else:
+                    os.environ["NODE_OPTIONS"] = original_node_options
+                live_streamer.unlink(missing_ok=True)
+                live_dependency.unlink(missing_ok=True)
+                original_streamer.replace(live_streamer)
+                original_dependency.replace(live_dependency)
+            emitted = json.loads(completed.stdout)
+            if emitted != {
+                "row": "captured-A",
+                "input": str(teacher_input.resolve()),
+            }:
+                raise AssertionError(
+                    "private streamer snapshot emitted replacement bytes "
+                    "or changed the absolute teacher input path"
+                )
+            if captured_closure_sha256(
+                live_root, snapshot_capture
+            ) != captured_digest:
+                raise AssertionError(
+                    "captured streamer provenance changed after live-tree "
+                    "replace/restore"
+                )
+            assert_captured_files_unchanged(snapshot_capture)
+            assert_captured_executable_unchanged(retained_node)
+            if preload_marker.exists():
+                raise AssertionError(
+                    "NODE_OPTIONS injected code into the private streamer"
+                )
+        if (
+            snapshot_temporary_path is None
+            or snapshot_temporary_path.exists()
+        ):
+            raise AssertionError(
+                "private streamer snapshot leaked after execution"
+            )
+
+        staged_output = directory / "staged-matrix.npz"
+        staged_sidecar = directory / "staged-matrix.npz.manifest.json"
+        staged_output.write_bytes(b"staged matrix\n")
+        staged_sidecar.write_text(
+            json.dumps(
+                {
+                    captured_file.label: captured_file.sha256
+                    for captured_file in captured
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        published_output = directory / "matrix.npz"
+        published_sidecar = directory / "matrix.npz.manifest.json"
+        lock_path = directory / "matrix.npz.lock"
+        descriptor = acquire_output_prefix_lock(
+            lock_path, "HCE implementation mutation self-test"
+        )
+        try:
+            refuse_existing_pair(
+                (published_output, published_sidecar), "output or sidecar"
+            )
+            captured[-1].path.write_bytes(
+                captured[-1].data + b"// mutation under publication lock\n"
+            )
+            try:
+                assert_captured_files_unchanged(captured)
+            except RuntimeError:
+                pass
+            else:
+                publish_pair_no_replace(
+                    staged_output,
+                    staged_sidecar,
+                    published_output,
+                    published_sidecar,
+                    "output or sidecar",
+                )
+                raise AssertionError(
+                    "publication admitted changed implementation bytes"
+                )
+        finally:
+            captured[-1].path.write_bytes(captured[-1].data)
+            release_output_prefix_lock(descriptor, lock_path)
+        if published_output.exists() or published_sidecar.exists():
+            raise AssertionError(
+                "implementation mutation exposed an HCE artifact pair"
+            )
+        if lock_path.exists():
+            raise AssertionError(
+                "implementation mutation left the publication lock behind"
+            )
+    with tempfile.TemporaryDirectory(
         prefix="chessy-hce-publication-self-test-"
     ) as temporary:
         self_test_pair_publication(
@@ -394,11 +1067,43 @@ def main() -> None:
         parser.error("missing " + ", ".join(missing))
 
     root = Path(__file__).resolve().parents[2]
-    feature_path = root / "eval/training/hce-r3-features-v1.json"
-    fit_path = root / "eval/training/hce-r3-fit-v1.json"
-    teacher_path = root / "eval/training/teacher-sf18-100kn-v1.json"
-    feature = json.loads(feature_path.read_text(encoding="utf-8"))
-    fit = json.loads(fit_path.read_text(encoding="utf-8"))
+    packer_path = Path(__file__).resolve()
+    (packer_capture,) = capture_files(
+        ((packer_path, "HCE packer source"),)
+    )
+    streamer_closure = capture_streamer_closure(root)
+    closure_by_relative = {
+        captured_file.path.relative_to(root).as_posix(): captured_file
+        for captured_file in streamer_closure
+    }
+    streamer_capture = closure_by_relative[STREAMER_ENTRYPOINT]
+    linear_extractor_capture = closure_by_relative[
+        "test/training/hce-r3-linear.js"
+    ]
+    baseline_extractor_capture = closure_by_relative[
+        "test/training/hce-r3-baseline.js"
+    ]
+    rust_evaluator_capture = closure_by_relative[
+        "experiments/wasm/src/eval.rs"
+    ]
+    shipped_wasm_capture = closure_by_relative[
+        "assets/chessy-ai-fast.wasm"
+    ]
+    feature_capture = closure_by_relative[
+        "eval/training/hce-r3-features-v1.json"
+    ]
+    fit_capture = closure_by_relative[
+        "eval/training/hce-r3-fit-v1.json"
+    ]
+    teacher_capture = closure_by_relative[
+        "eval/training/teacher-sf18-100kn-v1.json"
+    ]
+    streamer_closure_digest = captured_closure_sha256(
+        root, streamer_closure
+    )
+    captured_provenance_files = (packer_capture, *streamer_closure)
+    feature = json.loads(feature_capture.data.decode("utf-8"))
+    fit = json.loads(fit_capture.data.decode("utf-8"))
     if (
         fit.get("matrix", {}).get("requiredInputDisposition")
         != PRODUCTION_INPUT_DISPOSITION
@@ -430,19 +1135,24 @@ def main() -> None:
         raise SystemExit("refusing to overwrite output or sidecar")
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    command = [
-        "node",
-        str(root / "test/training/hce-r3-pack-stream.js"),
-        "--role",
-        args.role,
-    ]
-    for filename in inputs:
-        command.extend(("--input", str(filename)))
-
-    with tempfile.TemporaryDirectory(
-        prefix=".chessy-hce-pack-", dir=output.parent
-    ) as temporary:
+    with (
+        retained_node_executable() as node_executable,
+        tempfile.TemporaryDirectory(
+            prefix=".chessy-hce-pack-", dir=output.parent
+        ) as temporary,
+    ):
         temp = Path(temporary)
+        snapshot_streamer = materialize_captured_tree(
+            root, streamer_closure, temp / "streamer-snapshot"
+        )
+        command = [
+            node_executable.execution_path,
+            str(snapshot_streamer),
+            "--role",
+            args.role,
+        ]
+        for filename in inputs:
+            command.extend(("--input", str(filename)))
         files = {
             name: (temp / f"{name}.bin").open("wb")
             for name in (
@@ -464,6 +1174,9 @@ def main() -> None:
             text=True,
             encoding="utf-8",
             bufsize=1,
+            cwd=temp / "streamer-snapshot",
+            env={},
+            pass_fds=(node_executable.descriptor,),
         )
         assert process.stdout is not None
         rows = 0
@@ -633,8 +1346,11 @@ def main() -> None:
             )
         except (TypeError, ValueError) as error:
             raise SystemExit(f"invalid feature-stream provenance: {error}") from error
-        if teacher_sha != sha256_file(teacher_path):
-            raise SystemExit("feature-stream teacher manifest hash is not current")
+        if teacher_sha != teacher_capture.sha256:
+            raise SystemExit(
+                "feature-stream teacher manifest hash differs from the "
+                "pre-spawn capture"
+            )
         for index, filename in enumerate(inputs):
             if sha256_file(filename) != input_hashes[index]:
                 raise SystemExit(f"{filename}: input changed while packing")
@@ -685,7 +1401,7 @@ def main() -> None:
                 feature_order_sha256=np.asarray(
                     feature["parameterOrder"]["sha256"]
                 ),
-                feature_manifest_sha256=np.asarray(sha256_file(feature_path)),
+                feature_manifest_sha256=np.asarray(feature_capture.sha256),
                 teacher_manifest_sha256=np.asarray(
                     teacher_sha
                 ),
@@ -697,6 +1413,16 @@ def main() -> None:
                 ),
                 source_snapshot_sha256=np.asarray(source_snapshot_sha),
                 input_disposition=np.asarray(input_disposition),
+                streamer_closure_sha256=np.asarray(
+                    streamer_closure_digest
+                ),
+                node_executable_sha256=np.asarray(
+                    node_executable.sha256
+                ),
+                node_executable_bytes=np.asarray(
+                    node_executable.bytes, dtype=np.int64
+                ),
+                node_version=np.asarray(node_executable.version),
                 center_value_sha256=np.asarray(center_digest),
                 scales_value_sha256=np.asarray(scales_digest),
                 score_denominator=np.asarray(24, dtype=np.int64),
@@ -731,29 +1457,23 @@ def main() -> None:
                 for index, filename in enumerate(inputs)
             ],
             "contracts": {
-                "packerSha256": sha256_file(Path(__file__).resolve()),
-                "streamerSha256": sha256_file(
-                    root / "test/training/hce-r3-pack-stream.js"
-                ),
-                "linearExtractorSha256": sha256_file(
-                    root / "test/training/hce-r3-linear.js"
-                ),
-                "baselineExtractorSha256": sha256_file(
-                    root / "test/training/hce-r3-baseline.js"
-                ),
-                "rustEvaluatorSourceSha256": sha256_file(
-                    root / "experiments/wasm/src/eval.rs"
-                ),
-                "shippedWasmSha256": sha256_file(
-                    root / "assets/chessy-ai-fast.wasm"
-                ),
-                "featureManifestSha256": sha256_file(feature_path),
-                "fitContractSha256": sha256_file(fit_path),
-                "teacherManifestSha256": teacher_sha,
+                "packerSha256": packer_capture.sha256,
+                "streamerSha256": streamer_capture.sha256,
+                "linearExtractorSha256": linear_extractor_capture.sha256,
+                "baselineExtractorSha256": baseline_extractor_capture.sha256,
+                "rustEvaluatorSourceSha256": rust_evaluator_capture.sha256,
+                "shippedWasmSha256": shipped_wasm_capture.sha256,
+                "featureManifestSha256": feature_capture.sha256,
+                "fitContractSha256": fit_capture.sha256,
+                "teacherManifestSha256": teacher_capture.sha256,
                 "selectionManifestSha256": selection_manifest_sha,
                 "selectionContractSha256": selection_contract_sha,
                 "sourceSnapshotSha256": source_snapshot_sha,
                 "inputDisposition": input_disposition,
+                "streamerClosureSha256": streamer_closure_digest,
+                "nodeExecutableSha256": node_executable.sha256,
+                "nodeExecutableBytes": node_executable.bytes,
+                "nodeVersion": node_executable.version,
                 "parameterOrderSha256": feature["parameterOrder"]["sha256"],
                 "centerValueSha256": center_digest,
                 "scalesValueSha256": scales_digest,
@@ -774,6 +1494,8 @@ def main() -> None:
             raise SystemExit(str(error)) from error
         try:
             refuse_existing_pair((output, sidecar), "output or sidecar")
+            assert_captured_files_unchanged(captured_provenance_files)
+            assert_captured_executable_unchanged(node_executable)
             publish_pair_no_replace(
                 temporary_npz,
                 temporary_sidecar,
