@@ -285,6 +285,30 @@ const malformedFlag = PGN.serializeRecord({
 check(malformedFlag.includes('[Result "0-1"]') &&
   malformedFlag.includes('{checkmate} 0-1'),
   'an unfinished marker cannot masquerade as a completed clock adjudication');
+const resigned = PGN.serializeRecord({
+  source: 'play', tags: {}, sans: ['e4'],
+  result: '0-1', reason: 'resignation'
+}, { Termination: 'normal' });
+check(resigned.includes('[Result "0-1"]') &&
+  resigned.includes('[Termination "normal"]') &&
+  resigned.includes('1. e4 {resignation} 0-1'),
+  'a nonterminal resignation keeps its score, standard termination and reason');
+const agreedDraw = PGN.serializeRecord({
+  source: 'play', tags: {}, sans: ['d4', 'd5'],
+  result: '1/2-1/2', reason: 'draw agreement'
+}, { Termination: 'normal' });
+check(agreedDraw.includes('[Result "1/2-1/2"]') &&
+  agreedDraw.includes('[Termination "normal"]') &&
+  agreedDraw.includes('1. d4 d5 {draw agreement} 1/2-1/2'),
+  'a nonterminal agreed draw keeps its score, standard termination and reason');
+const manualRoundTrip = PGN.toRecord(PGN.parseGame(
+  '[Result "1-0"]\n[Termination "normal"]\n\n1. e4 e5 1-0'
+), { playerColor: 'w' });
+const manualRoundTripPgn = PGN.serializeRecord(manualRoundTrip);
+check(manualRoundTripPgn.includes('[Result "1-0"]') &&
+  manualRoundTripPgn.includes('[Termination "normal"]') &&
+  manualRoundTripPgn.trim().endsWith('1-0'),
+  'parse → record → export preserves a declared nonterminal result and termination');
 const inheritedResult = PGN.serializeRecord({
   source: 'import', tags: {}, sans: ['e4'], result: 'constructor', reason: 'imported'
 });

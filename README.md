@@ -46,6 +46,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   the archived record in the coaching Review view (falling back to the
   on-board replay if Review is unavailable) and "Rematch" starts over. Undo
   during an AI search cancels the search and takes back the triggering move.
+  Resign and Offer draw controls use a confirmation that immediately freezes
+  the clock and any computer search; resignation records the correct losing
+  side, while the draw confirmation records an agreed result.
 - **Accessibility** — the board is an ARIA grid (rows/gridcells) with a single
   roving tab stop: Tab enters the board once, arrow keys move square to square
   (directions follow the visual board, also when flipped), Home/End jump to
@@ -88,13 +91,16 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   debug log (effective engine config, total/search time, counters and explicit
   White-POV score, release/execution/engine provenance, stop reason,
   any historical PV evidence, and the FEN before every move) for
-  troubleshooting.
+  troubleshooting. Resignations and draws by agreement retain their exact
+  result and use the standard `Termination "normal"` tag in both Play and
+  Review exports.
 - **Game archive (coaching foundation)** — finished games and non-empty games
   displaced by New Game are recorded to IndexedDB, keyed on a per-game UUID
   (idempotent re-archive; per-move clock/think and computer-search evidence,
   game-start release, and the side you played are retained). Displaced games
   use PGN `Result "*"` and `Termination "abandoned"` rather than inventing a
-  loss. A failed finish write is reported in the game-over dialog (or on a
+  loss; resignation and agreed-draw records remain scored terminal games.
+  A failed finish write is reported in the game-over dialog (or on a
   page-level note once it has closed); a failed incomplete checkpoint keeps the
   live game and reports inside New Game.
 - **Review (read-only)** — a Play/Review/Train/Progress tab bar; Review lists

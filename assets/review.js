@@ -128,6 +128,11 @@
       tags.Termination = 'time forfeit';
     } else if (game.result === '*' && game.reason === 'abandoned') {
       tags.Termination = 'abandoned';
+    } else if (game.reason === 'resignation' ||
+               game.reason === 'draw agreement') {
+      // PGN uses the broad standard value "normal"; the archive reason and
+      // ending comment preserve which ordinary chess ending occurred.
+      tags.Termination = 'normal';
     }
     return tags;
   }

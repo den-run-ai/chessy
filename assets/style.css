@@ -244,6 +244,16 @@ body {
 .btn.primary { background: var(--accent-dark); color: #fff; }
 .btn.primary:hover { background: #4a6330; }
 
+.game-ending-controls .btn {
+  flex: 1;
+  min-height: 44px;
+}
+.game-ending-controls .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.game-ending-controls .btn:disabled:hover { background: #3d3936; }
+
 .captured {
   min-height: 1.4rem;
   font-size: 1.1rem;

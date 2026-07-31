@@ -24,10 +24,10 @@
   // save) as an archive record, or null if there is no valid finished save.
   // Mirrors what app.js would archive: replay the saved moves (rejecting a
   // corrupt save rather than fabricating a record), derive result/reason —
-  // honouring a saved time forfeit, which the rules engine knows nothing about
-  // — and carry the game's id and completion time so a later restore keeps its
-  // chronology. Only a FINISHED game is returned (an in-progress save is not
-  // archived until it ends).
+  // honouring saved clock and player-agreed endings, which the rules engine
+  // knows nothing about — and carry the game's id and completion time so a
+  // later restore keeps its chronology. Only a FINISHED game is returned (an
+  // in-progress save is not archived until it ends).
   const GAME_SAVE_KEY = 'chessy-game-v1';
   const PENDING_KEY = 'chessy-pending-archive-v1';
   const LEGACY_FENCE_KEY = 'chessy-archive-fenced-v1';
@@ -37,6 +37,22 @@
     return typeof value === 'string' && value.length <= 32 &&
       value.trim() === value && /^r\d+$/.test(value)
       ? value : null;
+  }
+  function manualEndingStatus(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const keys = Object.keys(value).sort().join(',');
+    if (value.kind === 'resignation' && keys === 'color,kind' &&
+        (value.color === 'w' || value.color === 'b')) {
+      return {
+        over: true,
+        result: value.color === 'w' ? '0-1' : '1-0',
+        reason: 'resignation'
+      };
+    }
+    if (value.kind === 'draw-agreement' && keys === 'kind') {
+      return { over: true, result: '1/2-1/2', reason: 'draw agreement' };
+    }
+    return null;
   }
   // A destructive operation (restore / Delete-all) holds this mutex while it
   // runs, so the two can never overlap: a second confirm is refused rather than
@@ -73,13 +89,25 @@
         ? ChessyAiTelemetry.sanitizeTelemetry(entry.ai) : null);
       s = Chess.playMove(s, m);
     }
+    const boardStatus = Chess.gameStatus(s);
+    const hasManualEnding = data.manualEnding !== undefined &&
+      data.manualEnding !== null;
+    const manualStatus = manualEndingStatus(data.manualEnding);
+    const hasTimeForfeit = data.timeForfeit &&
+      (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b');
+    // A malformed or contradictory adjudication is not a recoverable result:
+    // exclude it instead of fabricating a decisive backup row.
+    if ((hasManualEnding && !manualStatus) ||
+        (manualStatus && (hasTimeForfeit || boardStatus.over))) return null;
     let status;
-    if (data.timeForfeit && (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b')) {
+    if (manualStatus) {
+      status = manualStatus;
+    } else if (hasTimeForfeit) {
       status = { over: true,
         result: data.timeForfeit.draw ? '1/2-1/2' : (data.timeForfeit.color === 'w' ? '0-1' : '1-0'),
         reason: data.timeForfeit.draw ? 'time forfeit (no mating material)' : 'time forfeit' };
     } else {
-      status = Chess.gameStatus(s);
+      status = boardStatus;
     }
     if (!status.over) return null; // in-progress — not archived until it finishes
     return {
