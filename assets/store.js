@@ -155,7 +155,8 @@
   // boot reconcile) — as opposed to a REVISED completion of the instance
   // (close dialog → undo → different finish).
   function sameEnding(a, b) {
-    return a.sans.length === b.sans.length &&
+    return !!a && !!b && Array.isArray(a.sans) && Array.isArray(b.sans) &&
+      a.sans.length === b.sans.length &&
       a.sans.every(function (san, i) { return san === b.sans[i]; }) &&
       a.result === b.result && a.reason === b.reason;
   }
@@ -235,7 +236,10 @@
                 return ply !== null && ply >= 0 && ply < p;
               });
             }
-            ['candidates', 'shortlist', 'moments', 'unresolved'].forEach(pruneList);
+            [
+              'candidates', 'shortlist', 'moments', 'unresolved',
+              'moveSummaries', 'reflected'
+            ].forEach(pruneList);
 
             job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
               ? Math.min(job.cursorPly, p) : p;
@@ -280,6 +284,59 @@
     });
   }
   function getGame(id) { return tx('games', 'readonly', function (s) { return s.get(id); }); }
+
+  // Withdraw one exact archived ending after the user undoes a manual
+  // adjudication. This is deliberately conditional on the complete ending
+  // signature, not just the game UUID: a newer finish of the same game may
+  // already have replaced the old one while this asynchronous cleanup was
+  // waiting for IndexedDB. Only the matching revision and all data derived
+  // from it are removed, atomically.
+  function retractGameEnding(expected) {
+    if (!expected || typeof expected.id !== 'string' || !expected.id ||
+        !Array.isArray(expected.sans)) {
+      return Promise.reject(new Error('invalid ending retraction'));
+    }
+    return openForWrite().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        const t = db.transaction(
+          ['games', 'cards', 'analyses', 'analysisJobs'], 'readwrite');
+        const games = t.objectStore('games');
+        const getReq = games.get(expected.id);
+        let matched = false;
+
+        getReq.onsuccess = function () {
+          if (!sameEnding(getReq.result, expected)) return;
+          matched = true;
+          games.delete(expected.id);
+
+          const cards = t.objectStore('cards').index('gameId')
+            .openCursor(IDBKeyRange.only(expected.id));
+          cards.onsuccess = function () {
+            const cursor = cards.result;
+            if (!cursor) return;
+            cursor.delete();
+            cursor.continue();
+          };
+
+          const analyses = t.objectStore('analyses').index('gameId')
+            .openCursor(IDBKeyRange.only(expected.id));
+          analyses.onsuccess = function () {
+            const cursor = analyses.result;
+            if (!cursor) return;
+            cursor.delete();
+            cursor.continue();
+          };
+
+          t.objectStore('analysisJobs').delete(expected.id);
+        };
+        t.oncomplete = function () { resolve(matched); };
+        t.onerror = function () { reject(getReq.error || t.error); };
+        t.onabort = function () {
+          reject(getReq.error || t.error || new Error('retraction aborted'));
+        };
+      });
+    });
+  }
 
   // Import a validated PGN record (see ChessyPGN.toRecord). DEDUPED by its id
   // (external id or content hash): the lookup and the write share ONE
@@ -1605,6 +1662,7 @@
   global.CoachStore = {
     putGame: putGame,
     archiveGame: archiveGame,
+    retractGameEnding: retractGameEnding,
     importGame: importGame,
     getGame: getGame,
     listGames: listGames,

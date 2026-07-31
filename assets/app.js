@@ -44,7 +44,15 @@
   const capturedByBlackEl = document.getElementById('capturedByBlack');
   const promotionDialog = document.getElementById('promotionDialog');
   const promotionChoices = document.getElementById('promotionChoices');
+  const offerDrawEl = document.getElementById('offerDraw');
+  const resignEl = document.getElementById('resign');
+  const endGameDialog = document.getElementById('endGameDialog');
+  const endGameTitleEl = document.getElementById('endGameTitle');
+  const endGameDetailEl = document.getElementById('endGameDetail');
+  const endGameConfirmEl = document.getElementById('endGameConfirm');
+  const endGameCancelEl = document.getElementById('endGameCancel');
   const gameOverDialog = document.getElementById('gameOverDialog');
+  const undoEl = document.getElementById('undo');
   const replayStartEl = document.getElementById('replayStart');
   const replayBackEl = document.getElementById('replayBack');
   const replayFwdEl = document.getElementById('replayFwd');
@@ -56,6 +64,12 @@
   let selected = null;        // selected square index
   let flipped = false;
   let aiThinking = false;
+  // Rules-independent endings are semantic and validated, never an arbitrary
+  // persisted result string. fullStatus() derives their score and archive
+  // reason while Chess.gameStatus() remains a rules-only boundary.
+  let manualEnding = null;    // {kind:'resignation',color:'w|b'} | {kind:'draw-agreement'}
+  let endAttempt = null;      // owns a paused resign/draw confirmation
+  let archiveRetractionActive = false;
   // Owns the frozen live game while a New Game request is release-gated,
   // committing its incomplete checkpoint, or awaiting a failure decision.
   // Object identity, not just gameId, prevents a stale attempt from resuming
@@ -155,7 +169,7 @@
 
   function tickClock() {
     if (clocks.wMs === null || turnStartedAt === null ||
-        timeForfeit || Chess.gameStatus(state).over) return;
+        fullStatus().over) return;
     const remaining = liveRemaining(state.turn);
     if (remaining <= 0) flag(state.turn);
     else renderClocks();
@@ -164,13 +178,29 @@
   function liveRemaining(color) {
     const stored = color === 'w' ? clocks.wMs : clocks.bMs;
     if (stored === null) return null;
-    if (turnStartedAt === null || timeForfeit ||
-        Chess.gameStatus(state).over || color !== state.turn) return stored;
+    if (turnStartedAt === null || fullStatus().over || color !== state.turn) return stored;
     return stored - Math.max(0, Date.now() - turnStartedAt);
   }
 
+  function manualEndingStatus(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const keys = Object.keys(value).sort().join(',');
+    if (value.kind === 'resignation' &&
+        keys === 'color,kind' && (value.color === 'w' || value.color === 'b')) {
+      return {
+        over: true,
+        result: value.color === 'w' ? '0-1' : '1-0',
+        reason: 'resignation'
+      };
+    }
+    if (value.kind === 'draw-agreement' && keys === 'kind') {
+      return { over: true, result: '1/2-1/2', reason: 'draw agreement' };
+    }
+    return null;
+  }
+
   // Game status including app-level time forfeit (the rules engine itself
-  // knows nothing about clocks).
+  // knows nothing about clocks or player-agreed endings).
   function fullStatus() {
     if (timeForfeit) {
       return {
@@ -179,6 +209,8 @@
         reason: timeForfeit.draw ? 'time forfeit (no mating material)' : 'time forfeit'
       };
     }
+    const manual = manualEndingStatus(manualEnding);
+    if (manual) return manual;
     return Chess.gameStatus(state);
   }
 
@@ -254,8 +286,7 @@
     aiFailure = reason || 'worker-error';
     // Do not let an infrastructure error silently consume the rest of a
     // timed game's clock while the user decides between Retry and New game.
-    if (clocks.wMs !== null && turnStartedAt !== null &&
-        !timeForfeit && !Chess.gameStatus(state).over) {
+    if (clocks.wMs !== null && turnStartedAt !== null && !fullStatus().over) {
       const color = state.turn;
       const remaining = liveRemaining(color);
       if (remaining > 0) {
@@ -272,7 +303,7 @@
     aiFailure = null;
     aiErrorEl.hidden = true;
     if (aiFailurePausedClock && resumeClock && clocks.wMs !== null &&
-        !timeForfeit && !Chess.gameStatus(state).over) {
+        !fullStatus().over) {
       turnStartedAt = Date.now();
       if (!clockTicker) clockTicker = setInterval(tickClock, 200);
     }
@@ -394,6 +425,14 @@
     replayBackEl.disabled = shown === 0;
     replayFwdEl.disabled = shown >= n;
     replayLiveEl.disabled = !viewing;
+    undoEl.disabled = archiveRetractionActive;
+    // Ending a historical position would be ambiguous: these controls always
+    // apply to the live game. They remain available while Chessy is thinking
+    // so a player can resign or propose a draw without waiting for the worker.
+    const endingDisabled = status.over || viewing || !!checkpointAttempt ||
+      !!endAttempt || archiveRetractionActive;
+    offerDrawEl.disabled = endingDisabled;
+    resignEl.disabled = endingDisabled;
 
     setupSummaryEl.textContent = MODE_LABELS[settings.mode] +
       (aiColor() ? ' · ' + DIFF_LABELS[settings.difficulty] : '') +
@@ -403,7 +442,7 @@
     renderClocks();
     renderMoves();
     renderCaptured();
-    save();
+    return save();
   }
 
   function fmtClock(ms) {
@@ -421,7 +460,7 @@
   function updateLiveNote() {
     const inPlay = !document.body.dataset.view || document.body.dataset.view === 'play';
     const running = clocks.wMs !== null && turnStartedAt !== null &&
-      !timeForfeit && !Chess.gameStatus(state).over;
+      !fullStatus().over;
     liveNoteEl.dataset.active = running ? 'true' : 'false';
     if (inPlay || !running) {
       liveNoteEl.hidden = true;
@@ -474,7 +513,7 @@
       b = liveRemaining('b');
     }
     const running = !isViewing() && turnStartedAt !== null &&
-      !timeForfeit && !Chess.gameStatus(state).over;
+      !fullStatus().over;
     clockWhiteEl.querySelector('b').textContent = fmtClock(w);
     clockBlackEl.querySelector('b').textContent = fmtClock(b);
     clockWhiteEl.classList.toggle('active', running && state.turn === 'w');
@@ -580,7 +619,7 @@
     setFocusSquare(i); // keep the roving tab stop on the last-touched square
     // While reviewing, a board tap returns to the live position.
     if (isViewing()) { setViewPly(null); return; }
-    if (aiThinking || fullStatus().over) return;
+    if (archiveRetractionActive || aiThinking || fullStatus().over) return;
     if (!humanColors().includes(state.turn)) return;
 
     const p = state.board[i];
@@ -642,7 +681,8 @@
   }
 
   function maybeAiMove() {
-    if (checkpointAttempt || state.turn !== aiColor() || fullStatus().over) return;
+    if (archiveRetractionActive || checkpointAttempt ||
+        state.turn !== aiColor() || fullStatus().over) return;
     clearAiFailure(true);
     aiThinking = true;
     const cfg = aiConfig();
@@ -849,6 +889,13 @@
     el.textContent = 'This game could not be archived (storage unavailable).';
   }
 
+  function showArchiveRetractionFailure(ownerId) {
+    bootNoteOwner = ownerId || '*';
+    archiveBootNoteEl.hidden = false;
+    archiveBootNoteEl.textContent =
+      "This game's withdrawn result could not be removed (storage unavailable).";
+  }
+
   function clearArchiveFailure(ownerId) {
     if (bootNoteOwner !== ownerId) return;
     bootNoteOwner = null;
@@ -935,8 +982,116 @@
       : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   }
 
+  // In a computer game only the fixed human side can invoke these controls,
+  // including while the worker is searching for the other side. In hot-seat
+  // play, the side whose turn it is owns the action.
+  function actionColor() {
+    return aiColor() ? humanColors()[0] : state.turn;
+  }
+
+  function freezeEndClock() {
+    const running = clocks.wMs !== null && turnStartedAt !== null &&
+      !fullStatus().over;
+    if (!running) return { ok: true, running: false };
+    const color = state.turn;
+    const remaining = liveRemaining(color);
+    // A draw/resignation control cannot rescue a side whose flag has already
+    // fallen between visible clock ticks.
+    if (remaining <= 0) return { ok: false, running: true };
+    clocks[color + 'Ms'] = remaining;
+    turnStartedAt = null;
+    if (clockTicker) { clearInterval(clockTicker); clockTicker = null; }
+    return { ok: true, running: true };
+  }
+
+  function resumeEndAttempt(attempt) {
+    if (!attempt || endAttempt !== attempt) return;
+    endAttempt = null;
+    if (gameId !== attempt.gameId || state !== attempt.state ||
+        fullStatus().over) return;
+    if (attempt.clockWasRunning && clocks.wMs !== null &&
+        turnStartedAt === null) {
+      turnStartedAt = Date.now();
+      if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+    }
+    if (attempt.restartAi) maybeAiMove();
+    else render();
+  }
+
+  function cancelEndPrompt() {
+    const attempt = endAttempt;
+    if (!attempt) return;
+    endGameDialog.close();
+    resumeEndAttempt(attempt);
+  }
+
+  function openEndPrompt(kind) {
+    if (endAttempt || fullStatus().over || isViewing()) return;
+    const frozen = freezeEndClock();
+    if (!frozen.ok) {
+      flag(state.turn);
+      return;
+    }
+    const actor = actionColor();
+    const restartAi = aiThinking;
+    cancelAi();
+    endAttempt = {
+      kind: kind,
+      color: actor,
+      gameId: gameId,
+      state: state,
+      clockWasRunning: frozen.running,
+      restartAi: restartAi
+    };
+    selected = null;
+    render(); // persists the exact frozen clock before the modal becomes usable
+
+    const actorName = actor === 'w' ? 'White' : 'Black';
+    const otherName = actor === 'w' ? 'Black' : 'White';
+    if (kind === 'resignation') {
+      const result = actor === 'w' ? '0-1' : '1-0';
+      endGameTitleEl.textContent = 'Resign game?';
+      endGameDetailEl.textContent =
+        'Resign as ' + actorName + '? ' + otherName + ' will win (' + result + ').';
+      endGameConfirmEl.textContent = 'Resign';
+      endGameConfirmEl.classList.add('danger');
+      endGameConfirmEl.classList.remove('primary');
+    } else {
+      endGameTitleEl.textContent = 'Offer a draw?';
+      endGameDetailEl.textContent = aiColor()
+        ? 'End this offline game as a draw by agreement?'
+        : actorName + ' offers a draw. Record it only if ' + otherName + ' accepts.';
+      endGameConfirmEl.textContent = 'Record agreed draw';
+      endGameConfirmEl.classList.remove('danger');
+      endGameConfirmEl.classList.add('primary');
+    }
+    endGameDialog.showModal();
+    // The safe action gets initial focus so opening the dialog cannot make a
+    // stray Enter key resign or score a draw.
+    endGameCancelEl.focus();
+  }
+
+  function confirmEndPrompt() {
+    const attempt = endAttempt;
+    if (!attempt || gameId !== attempt.gameId || state !== attempt.state ||
+        fullStatus().over) return;
+    endAttempt = null;
+    endGameDialog.close();
+    manualEnding = attempt.kind === 'resignation'
+      ? { kind: 'resignation', color: attempt.color }
+      : { kind: 'draw-agreement' };
+    clearAiFailure(false);
+    selected = null;
+    viewPly = null;
+    render();
+    showGameOver(fullStatus());
+  }
+
   function startNewGame() {
     checkpointAttempt = null;
+    endAttempt = null;
+    manualEnding = null;
+    if (endGameDialog.open) endGameDialog.close();
     gameId = newGameId();
     startedRelease = currentRelease();
     gameEndedAt = null;
@@ -1021,7 +1176,7 @@
   // object; a failed save stays frozen until Retry, Discard, or Cancel.
   // gameId alone is insufficient when a dialog is reopened.
   function pauseCheckpointClock() {
-    if (clocks.wMs === null || timeForfeit || Chess.gameStatus(state).over) return true;
+    if (clocks.wMs === null || fullStatus().over) return true;
     const color = state.turn;
     const remaining = liveRemaining(color);
     if (remaining <= 0) return false;
@@ -1037,8 +1192,7 @@
     if (!attempt || checkpointAttempt !== attempt) return;
     checkpointAttempt = null;
     if (gameId !== attempt.gameId) return;
-    if (clocks.wMs !== null && !timeForfeit && !Chess.gameStatus(state).over &&
-        turnStartedAt === null) {
+    if (clocks.wMs !== null && !fullStatus().over && turnStartedAt === null) {
       turnStartedAt = Date.now();
       if (!clockTicker) clockTicker = setInterval(tickClock, 200);
       renderClocks();
@@ -1110,6 +1264,17 @@
   }
 
   function beginNewGameStart(next, discard) {
+    if (archiveRetractionActive) {
+      const waitSeq = freshStartSeq;
+      newGameStatusEl.textContent = 'Finishing Undo before replacing this game…';
+      newGameStartEl.disabled = true;
+      newGameCancelEl.disabled = false;
+      archiveAttempt.then(function () {
+        if (waitSeq !== freshStartSeq || !newGameDialog.open) return;
+        beginNewGameStart(next, discard);
+      });
+      return;
+    }
     const status = fullStatus();
     const attempt = {
       gameId: gameId,
@@ -1167,6 +1332,21 @@
     newGameDialog.showModal();
   });
 
+  offerDrawEl.addEventListener('click', function () {
+    openEndPrompt('draw-agreement');
+  });
+
+  resignEl.addEventListener('click', function () {
+    openEndPrompt('resignation');
+  });
+
+  endGameConfirmEl.addEventListener('click', confirmEndPrompt);
+  endGameCancelEl.addEventListener('click', cancelEndPrompt);
+  endGameDialog.addEventListener('cancel', function (e) {
+    e.preventDefault();
+    cancelEndPrompt();
+  });
+
   aiRetryEl.addEventListener('click', function () {
     if (!aiFailure || aiThinking) return;
     clearAiFailure(true);
@@ -1202,7 +1382,8 @@
     resumeCheckpointGame(attempt);
   });
 
-  document.getElementById('undo').addEventListener('click', function () {
+  undoEl.addEventListener('click', function () {
+    if (archiveRetractionActive) return;
     // Editing the game voids any queued Review-game handoff: the ending
     // it would open is being taken back (see movedOnSeq).
     movedOnSeq++;
@@ -1211,6 +1392,71 @@
     // human move that triggered it (it used to silently do nothing).
     if (aiThinking) cancelAi();
     viewPly = null;
+    // A manual adjudication is itself the latest reversible action. Reopen
+    // the exact position instead of unexpectedly taking a board move too.
+    if (manualEnding) {
+      const withdrawn = fullStatus();
+      const idAtUndo = gameId;
+      const sansAtUndo = state.history.map(function (h) { return h.san; });
+      // Invalidate both the live write's late callbacks and a captured boot
+      // re-offer before staging the durable retraction. The archive module
+      // removes only this exact ending, including any parked/in-flight copy.
+      const seqAtUndo = ++archiveSeq;
+      archiveAttempts.set(idAtUndo, seqAtUndo);
+      archiveRetractionActive = true;
+      let retract;
+      if (!window.ChessyArchive ||
+          typeof ChessyArchive.retractEnding !== 'function') {
+        retract = Promise.reject(new Error('archive retraction is unavailable'));
+      } else {
+        try {
+          retract = ChessyArchive.retractEnding(
+            idAtUndo, sansAtUndo, withdrawn.result, withdrawn.reason);
+        } catch (e) {
+          retract = Promise.reject(e);
+        }
+      }
+      // A Review flow for this result may already be open behind Play. Rebuild
+      // it immediately; Review filters the active tombstone even while the
+      // conditional IndexedDB delete is still settling.
+      if (window.CoachReview &&
+          typeof CoachReview.resetToList === 'function') {
+        CoachReview.resetToList().catch(function () {});
+      }
+      function resumeAfterRetraction() {
+        archiveRetractionActive = false;
+        if (gameId === idAtUndo && !manualEnding && !fullStatus().over &&
+            clocks.wMs !== null && turnStartedAt === null) {
+          turnStartedAt = Date.now();
+          if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+        }
+        render();
+        maybeAiMove();
+      }
+      archiveAttempt = Promise.resolve(retract).then(function () {
+        if (archiveAttempts.get(idAtUndo) === seqAtUndo) {
+          clearArchiveFailure(idAtUndo);
+        }
+        resumeAfterRetraction();
+        return null;
+      }, function () {
+        if (archiveAttempts.get(idAtUndo) === seqAtUndo) {
+          showArchiveRetractionFailure(idAtUndo);
+        }
+        resumeAfterRetraction();
+        return null;
+      });
+      manualEnding = null;
+      gameEndedAt = null;
+      selected = null;
+      const reopenedSaved = render();
+      if (!reopenedSaved && window.ChessyArchive &&
+          typeof ChessyArchive.retainRetraction === 'function') {
+        ChessyArchive.retainRetraction(
+          idAtUndo, sansAtUndo, withdrawn.result, withdrawn.reason);
+      }
+      return;
+    }
     // Against the AI, undo the AI reply too so it's the human's turn again.
     state = Chess.undoMove(state);
     if (aiColor() && state.turn === aiColor() && state.history.length) {
@@ -1300,7 +1546,8 @@
   replayLiveEl.addEventListener('click', function () { setViewPly(null); });
 
   document.addEventListener('keydown', function (e) {
-    if (promotionDialog.open || gameOverDialog.open || newGameDialog.open) return;
+    if (promotionDialog.open || endGameDialog.open ||
+        gameOverDialog.open || newGameDialog.open) return;
     // Replay keys drive the LIVE game board — not the coach views.
     if (document.body.dataset.view && document.body.dataset.view !== 'play') return;
     const t = e.target;
@@ -1325,11 +1572,12 @@
       Date: now.getFullYear() + '.' + pad2(now.getMonth() + 1) + '.' + pad2(now.getDate()),
       TimeControl: settings.timeControl === 'none' ? '-' : settings.timeControl
     }, names);
-    // The engine's PGN result only knows board-level endings; a time
-    // forfeit lives in the app, so pass the real result (and termination).
+    // The engine's PGN result only knows board-level endings; app-level
+    // endings pass their real score and the standard PGN termination value.
     const st = fullStatus();
     if (st.over) tags.Result = st.result;
     if (timeForfeit) tags.Termination = 'time forfeit';
+    else if (manualEnding) tags.Termination = 'normal';
     const pgn = Chess.toPgn(state, tags, withLog);
 
     const a = document.createElement('a');
@@ -1409,7 +1657,7 @@
       const st = fullStatus();
       if (st.over && suppressedEndings.has(localEndingKey(
           gameId, state.history.map(function (h) { return h.san; }), st.result, st.reason))) {
-        return;
+        return true;
       }
     }
     try {
@@ -1423,6 +1671,7 @@
         clocks: clocks.wMs !== null
           ? { wMs: liveRemaining('w'), bMs: liveRemaining('b') } : null,
         timeForfeit: timeForfeit,
+        manualEnding: manualEnding,
         flipped: flipped,
         // Persisted so the archive's idempotent overwrite survives
         // reloads: a reload → undo → replayed ending is the SAME game
@@ -1432,7 +1681,12 @@
         startedRelease: startedRelease,
         endedAt: gameEndedAt
       }));
-    } catch (e) { /* storage unavailable (private mode etc.) — play on */ }
+      return true;
+    } catch (e) {
+      // Storage unavailable (private mode, quota, etc.) — play can continue,
+      // but callers performing durability-sensitive transitions need to know.
+      return false;
+    }
   }
 
   // Restore a saved game by REPLAYING it through the engine rather than
@@ -1493,7 +1747,22 @@
         }
       }
       if (Chess.toFen(s) !== data.fen) return false;
+      const hasManualEnding = data.manualEnding !== undefined &&
+        data.manualEnding !== null;
+      const restoredManualEnding = manualEndingStatus(data.manualEnding);
+      if (hasManualEnding && !restoredManualEnding) return false;
+      const restoredTimeForfeit = data.timeForfeit &&
+        (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b')
+        ? { color: data.timeForfeit.color, draw: !!data.timeForfeit.draw } : null;
+      // These are mutually exclusive app-level adjudications and neither may
+      // override a position that already ended under the board rules.
+      if (restoredManualEnding &&
+          (restoredTimeForfeit || Chess.gameStatus(s).over)) return false;
+      // Do not expose the replayed position until every newly introduced
+      // ending field has passed validation: a rejected save must still boot
+      // into a genuinely fresh game, not its otherwise-valid board snapshot.
       state = s;
+      manualEnding = restoredManualEnding ? Object.assign({}, data.manualEnding) : null;
       settings.mode = MODE_LABELS[data.mode] ? data.mode : 'ai-b';
       settings.difficulty = DIFF_LABELS[data.difficulty] ? String(data.difficulty) : '2';
       settings.timeControl = TIME_CONTROLS[data.timeControl] ? data.timeControl : 'none';
@@ -1503,14 +1772,18 @@
           ? Math.max(0, Number(data.clocks.wMs)) : tc.baseMs;
         clocks.bMs = data.clocks && isFinite(data.clocks.bMs)
           ? Math.max(0, Number(data.clocks.bMs)) : tc.baseMs;
-        timeForfeit = data.timeForfeit &&
-          (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b')
-          ? { color: data.timeForfeit.color, draw: !!data.timeForfeit.draw } : null;
-        turnStartedAt = Date.now(); // time away from the app is not charged
-        clockTicker = setInterval(tickClock, 200);
+        timeForfeit = restoredTimeForfeit;
+        if (fullStatus().over) {
+          turnStartedAt = null;
+        } else {
+          turnStartedAt = Date.now(); // time away from the app is not charged
+          clockTicker = setInterval(tickClock, 200);
+        }
       } else {
         clocks.wMs = null;
         clocks.bMs = null;
+        timeForfeit = null;
+        turnStartedAt = null;
       }
       flipped = !!data.flipped;
       gameId = typeof data.gameId === 'string' && data.gameId ? data.gameId : newGameId();
@@ -1582,6 +1855,31 @@
       })
       .then(function () {
         if (!bootStatus.over || bootRecoveryInvalidated) return;
+        const bootSans = bootState.history.map(function (h) { return h.san; });
+        const bootSuppressed = typeof ChessyArchive.suppressesEnding === 'function' &&
+          ChessyArchive.suppressesEnding(
+            bootId, bootSans, bootStatus.result, bootStatus.reason);
+        if (bootSuppressed) {
+          // Undo may have crashed (or failed to save) after parking its durable
+          // retraction but before replacing the finished live save. Complete
+          // the user-visible half now and never re-offer that stale snapshot.
+          if (gameId === bootId && state === bootState && manualEnding) {
+            manualEnding = null;
+            gameEndedAt = null;
+            if (clocks.wMs !== null && turnStartedAt === null) {
+              turnStartedAt = Date.now();
+              if (!clockTicker) clockTicker = setInterval(tickClock, 200);
+            }
+            const reopenedSaved = render();
+            if (!reopenedSaved &&
+                typeof ChessyArchive.retainRetraction === 'function') {
+              ChessyArchive.retainRetraction(
+                bootId, bootSans, bootStatus.result, bootStatus.reason);
+            }
+            maybeAiMove();
+          }
+          return;
+        }
         // A LIVE attempt for the restored game (undo → revised finish
         // completed while the drain was slow) supersedes the boot
         // snapshot: recording the snapshot now would overwrite the newer

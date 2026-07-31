@@ -33,6 +33,7 @@ jobs:
           node test/analysis-service.test.js
           node test/analysis-result.test.js
           node test/moment-selector.test.js
+          node test/analysis-notation.test.js
           node test/moment-scan.test.js
       - name: Install Playwright (pinned)
         run: npm install --no-save playwright@1.61.1

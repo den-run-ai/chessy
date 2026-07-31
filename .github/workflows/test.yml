@@ -194,6 +194,8 @@ jobs:
         run: node test/calculation.test.js
       - name: Run critical-moment selector tests
         run: node test/moment-selector.test.js
+      - name: Run score and move-annotation policy tests
+        run: node test/analysis-notation.test.js
       - name: Run resumable moment-scan tests
         run: node test/moment-scan.test.js
 

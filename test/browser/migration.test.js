@@ -172,6 +172,8 @@ require('./helper').run('migration', async function (t) {
             shortlist: [{ ply: 1 }, { ply: 3 }],
             moments: [{ ply: 1 }, { ply: 3 }],
             unresolved: [1, { ply: 3 }],
+            moveSummaries: [{ ply: 1 }, { ply: 3 }],
+            reflected: [{ ply: 1 }, { ply: 3 }],
             retry: { attempt: 1 }, error: 'temporary'
           }),
           CoachStore.upsertCardByMoment({ gameId: 'rev', ply: 3, lesson: 'drop' },
@@ -202,6 +204,8 @@ require('./helper').run('migration', async function (t) {
           jobCursor: jb.cursorPly,
           candidates: plies('candidates'), shortlist: plies('shortlist'),
           moments: plies('moments'), unresolved: plies('unresolved'),
+          moveSummaries: plies('moveSummaries'),
+          reflected: plies('reflected'),
           jobState: jb.state, pass: jb.pass, verifyIndex: jb.verifyIndex,
           checked: jb.checked,
           sourceInvalid: jb.sourceRev === null && jb.analysisRev === null,
@@ -215,7 +219,8 @@ require('./helper').run('migration', async function (t) {
     'a revised ending drops analyses at/after the divergence, keeps the shared prefix');
   check(pruned.jobCursor === 2 && pruned.candidates === '1' &&
         pruned.shortlist === '1' && pruned.moments === '1' &&
-        pruned.unresolved === '1',
+        pruned.unresolved === '1' && pruned.moveSummaries === '1' &&
+        pruned.reflected === '1',
     'the scan job rewinds and prunes every ply-bearing list at the divergence');
   check(pruned.jobState === 'paused' && pruned.pass === 1 &&
         pruned.verifyIndex === 0 &&
@@ -272,6 +277,7 @@ require('./helper').run('migration', async function (t) {
           gameId: 'malformed-job', sourceRev: 'old', state: 'done',
           cursorPly: 'not-a-ply', verifyIndex: 9,
           candidates: {}, shortlist: 'bad', moments: { ply: 2 }, unresolved: false,
+          moveSummaries: 'bad', reflected: { ply: 2 },
           retry: true, error: 'stale'
         });
       })
@@ -289,7 +295,10 @@ require('./helper').run('migration', async function (t) {
         const job = r[1];
         return {
           gameSans: r[0].sans.join(','),
-          arraysEmpty: ['candidates', 'shortlist', 'moments', 'unresolved']
+          arraysEmpty: [
+            'candidates', 'shortlist', 'moments', 'unresolved',
+            'moveSummaries', 'reflected'
+          ]
             .every(function (name) {
               return Array.isArray(job[name]) && job[name].length === 0;
             }),

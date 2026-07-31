@@ -6,14 +6,18 @@
  * ChessyMomentSelector owns the deterministic selection policy. The
  * controller contributes the parts that are easy to get subtly wrong:
  *
- *   - one sequential request at a time over the player's non-terminal moves;
+ *   - one sequential quick request at a time over every non-terminal move,
+ *     while critical-moment nomination remains limited to the chosen side;
  *   - a shallow pass followed by at most two exact reflection-profile checks;
  *   - a durable checkpoint after every completed decision and verification;
  *   - reload-safe pause/resume with the cursor meaning "next ply";
  *   - generation ownership, so a late callback after Restore/Delete all,
  *     navigation, or an explicit pause can never write or repaint;
  *   - sanitized events: pre-reflection UI sees only progress and
- *     { ply, playedSan } suggestions, never scores, labels or better moves.
+ *     { ply, playedSan } suggestions, never scores, labels or better moves;
+ *   - compact move summaries remain private until the matching structured
+ *     reflection receipt crosses Gate 0. A full ledger unlocks only after all
+ *     suggested moments have been reflected on.
  *
  * Nothing starts automatically. The Review UI must call start()/resume() in
  * response to an explicit player action.
@@ -24,10 +28,11 @@
       typeof ChessyAnalysisCore === 'undefined' ||
       typeof ChessyAnalysisService === 'undefined' ||
       typeof ChessyAnalysisResult === 'undefined' ||
-      typeof ChessyMomentSelector === 'undefined') return;
+      typeof ChessyMomentSelector === 'undefined' ||
+      typeof ChessyAnalysisNotation === 'undefined') return;
 
-  var JOB_SCHEMA = 1;
-  var ALGORITHM = 'critical-moments-v1';
+  var JOB_SCHEMA = 2;
+  var ALGORITHM = 'critical-moments-v2';
   var QUICK = {
     maxDepth: 5, nodeLimit: 5000, nodeBudget: 150000, multiPV: 1, pvLen: 3
   };
@@ -44,6 +49,10 @@
   var current = null;
   var currentSource = null;
   var running = false;
+  // A valid reflection may happen before the first scan (or while a scan is
+  // being prepared). Keep only its exact game-revision/ply receipt in memory
+  // and merge it into the first compatible durable job. No answers are kept.
+  var pendingReflections = [];
   var OWNER = 'moment-scan';
 
   function now() {
@@ -106,20 +115,36 @@
     catch (e) { return true; }
   }
 
-  function eligible(review, ply, scanColor) {
+  function scannable(review, ply) {
     if (!review || !review.gs || !Array.isArray(review.gs.history) ||
         ply < 0 || ply >= review.gs.history.length) return false;
     var state = review.states && review.states[ply];
-    if (!state || stateTerminal(state)) return false;
-    return scanColor === 'both' || state.turn === scanColor;
+    return !!state && !stateTerminal(state);
   }
 
-  function countEligible(review, scanColor) {
+  function eligible(review, ply, scanColor) {
+    if (!scannable(review, ply)) return false;
+    return scanColor === 'both' || review.states[ply].turn === scanColor;
+  }
+
+  function countScannable(review) {
     var n = review && review.gs && Array.isArray(review.gs.history)
       ? review.gs.history.length : 0;
     var total = 0;
     for (var ply = 0; ply < n; ply++) {
-      if (eligible(review, ply, scanColor)) total++;
+      if (scannable(review, ply)) total++;
+    }
+    return total;
+  }
+
+  function countScannableBefore(review, cursor) {
+    var end = Math.min(
+      Number.isInteger(cursor) ? cursor : 0,
+      review && review.gs && Array.isArray(review.gs.history)
+        ? review.gs.history.length : 0);
+    var total = 0;
+    for (var ply = 0; ply < end; ply++) {
+      if (scannable(review, ply)) total++;
     }
     return total;
   }
@@ -154,12 +179,79 @@
     job.shortlist = Array.isArray(job.shortlist) ? job.shortlist : [];
     job.moments = Array.isArray(job.moments) ? job.moments : [];
     job.unresolved = Array.isArray(job.unresolved) ? job.unresolved : [];
+    job.moveSummaries = Array.isArray(job.moveSummaries)
+      ? job.moveSummaries : [];
+    job.reflected = Array.isArray(job.reflected) ? job.reflected : [];
     return job;
+  }
+
+  function summaryAt(job, ply) {
+    return job.moveSummaries.find(function (summary) {
+      return summary.ply === ply;
+    }) || null;
+  }
+
+  function replaceSummary(job, summary) {
+    if (!summary) return;
+    var existing = summaryAt(job, summary.ply);
+    // A later shallow pass must never downgrade a manually verified deep row.
+    if (existing && existing.profile === 'deep' &&
+        summary.profile !== 'deep') return;
+    job.moveSummaries = job.moveSummaries.filter(function (old) {
+      return old.ply !== summary.ply;
+    });
+    job.moveSummaries.push(summary);
+    job.moveSummaries.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function mergePendingReflections(job, review) {
+    var remaining = [];
+    pendingReflections.forEach(function (item) {
+      var matches = item.gameId === job.gameId &&
+        item.analysisRev === job.analysisRev &&
+        item.ply < review.gs.history.length &&
+        review.gs.history[item.ply].san === item.playedSan &&
+        scannable(review, item.ply);
+      if (!matches) {
+        remaining.push(item);
+        return;
+      }
+      if (!job.reflected.some(function (old) { return old.ply === item.ply; })) {
+        job.reflected.push({ ply: item.ply, playedSan: item.playedSan });
+      }
+    });
+    pendingReflections = remaining;
+    job.reflected.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function reflectionGate(job) {
+    var reflected = Object.create(null);
+    job.reflected.forEach(function (item) { reflected[item.ply] = true; });
+    var required = job.moments.map(function (moment) { return moment.ply; });
+    var completed;
+    var unlocked;
+    if (required.length) {
+      completed = required.filter(function (ply) { return reflected[ply]; }).length;
+      unlocked = completed === required.length;
+    } else {
+      completed = job.moveSummaries.some(function (summary) {
+        return reflected[summary.ply];
+      }) ? 1 : 0;
+      required = job.moveSummaries.length ? [null] : [];
+      unlocked = required.length === 1 && completed === 1;
+    }
+    return {
+      reflected: reflected,
+      required: required.length,
+      completed: completed,
+      unlocked: job.state === 'done' && unlocked
+    };
   }
 
   function publicState(job) {
     if (!job) return null;
-    return {
+    var gate = reflectionGate(job);
+    var state = {
       gameId: job.gameId,
       state: job.state,
       pass: job.pass,
@@ -171,9 +263,22 @@
       moments: (Array.isArray(job.moments) ? job.moments : []).map(function (m) {
         return { ply: m.ply, playedSan: m.playedSan };
       }),
+      reflectionRequired: gate.required,
+      reflectionCompleted: gate.completed,
+      reportUnlocked: gate.unlocked,
       unresolvedCount: Array.isArray(job.unresolved) ? job.unresolved.length : 0,
       error: typeof job.error === 'string' ? job.error : null
     };
+    // Gate 0 is enforced at the public-state boundary, not only in the DOM.
+    // Before a reflection there is no score-bearing property to inspect via a
+    // stray event listener, accessibility attribute or developer console.
+    var visible = job.moveSummaries.filter(function (summary) {
+      return gate.unlocked || gate.reflected[summary.ply];
+    });
+    if (job.state === 'done' && visible.length) {
+      state.report = visible.map(ChessyAnalysisNotation.publicEntry);
+    }
+    return state;
   }
 
   function emit(job) {
@@ -315,7 +420,13 @@
       if (!owns(token, job)) return { stopped: true };
       if (res === null) return { paused: true };
       var checked = validate(res, state, firstReq, 2);
-      if (checked.ok) return { result: res, validation: checked };
+      if (checked.ok) {
+        return {
+          result: res,
+          validation: checked,
+          profile: 'quick'
+        };
+      }
 
       // Exactly one stronger retry. The profile changes the cache key and fresh
       // also prevents a malformed served value from being handed back.
@@ -327,22 +438,26 @@
         if (!retryChecked.ok) {
           return { unusable: true, reason: retryChecked.reason || checked.reason };
         }
-        return { result: retry, validation: retryChecked };
+        return {
+          result: retry,
+          validation: retryChecked,
+          profile: 'quick-fallback'
+        };
       });
     });
   }
 
-  function nextEligible(review, cursor, scanColor) {
+  function nextScannable(review, cursor) {
     var end = review.gs.history.length;
     for (var ply = cursor; ply < end; ply++) {
-      if (eligible(review, ply, scanColor)) return ply;
+      if (scannable(review, ply)) return ply;
     }
     return end;
   }
 
   function runPassOne(review, job, token) {
     if (!owns(token, job)) return Promise.resolve(job);
-    var ply = nextEligible(review, job.cursorPly, job.scanColor);
+    var ply = nextScannable(review, job.cursorPly);
     if (ply >= review.gs.history.length) {
       job.shortlist = ChessyMomentSelector.shortlist(job.candidates, 2);
       job.pass = 2;
@@ -354,9 +469,9 @@
       });
     }
 
-    // Skipped opponent/terminal plies are represented by the absolute cursor.
-    // The analysed ply is not advanced until a usable or terminally unusable
-    // result has been checkpointed.
+    // Terminal plies are represented by the absolute cursor. The analysed ply
+    // is not advanced until a usable or terminally unusable result has been
+    // checkpointed.
     job.cursorPly = ply;
     return analyseQuick(review, job, ply, token).then(function (out) {
       if (!owns(token, job) || out.stopped) return job;
@@ -365,7 +480,7 @@
         unresolved(job, ply, 'quick', out.reason);
       } else {
         var entry = review.gs.history[ply];
-        var candidate = ChessyMomentSelector.quickCandidate(out.result, {
+        var meta = {
           ply: ply,
           playedSan: entry.san,
           turn: review.states[ply].turn,
@@ -373,8 +488,17 @@
           typicalThinkMs:
             job.typicalThinkMsBySide[review.states[ply].turn],
           validated: true
-        });
-        if (candidate) job.candidates.push(candidate);
+        };
+        var quickSummary = ChessyAnalysisNotation.summarize(
+          out.result, Object.assign({}, meta, { profile: out.profile }));
+        if (!quickSummary) {
+          unresolved(job, ply, 'quick', 'summary-invalid');
+        } else {
+          replaceSummary(job, quickSummary);
+          var candidate = eligible(review, ply, job.scanColor)
+            ? ChessyMomentSelector.quickCandidate(out.result, meta) : null;
+          if (candidate) job.candidates.push(candidate);
+        }
       }
       job.cursorPly = ply + 1; // cursor always denotes the NEXT absolute ply
       job.checked++;
@@ -412,15 +536,26 @@
       if (!checked.ok) {
         unresolved(job, ply, 'deep', checked.reason);
       } else {
-        var accepted = ChessyMomentSelector.acceptDeep(quick, res, {
+        var meta = {
           ply: ply,
           playedSan: review.gs.history[ply].san,
           turn: state.turn,
           thinkMs: exactThinkMs(review.game, ply),
           typicalThinkMs: job.typicalThinkMsBySide[state.turn],
           validated: true
-        });
-        if (accepted) {
+        };
+        var accepted = ChessyMomentSelector.acceptDeep(quick, res, meta);
+        var summary = ChessyAnalysisNotation.summarize(
+          res, Object.assign({}, meta, {
+            profile: 'deep',
+            accepted: !!accepted
+          }));
+        if (!summary) {
+          unresolved(job, ply, 'deep', 'summary-invalid');
+        } else {
+          replaceSummary(job, summary);
+        }
+        if (accepted && summary && summary.accepted === true) {
           // Enforce the spoiler boundary even if a future selector regresses.
           job.moments.push({ ply: accepted.ply, playedSan: accepted.playedSan });
         }
@@ -452,41 +587,123 @@
       return !!item && typeof item === 'object' &&
         Number.isInteger(item.ply) && item.ply >= 0 &&
         item.ply < review.gs.history.length &&
-        eligible(review, item.ply, scanColor) &&
+        scannable(review, item.ply) &&
         typeof item.playedSan === 'string' &&
         item.playedSan === review.gs.history[item.ply].san;
+    }
+    function validEligibleRef(item) {
+      return validRef(item) && eligible(review, item.ply, scanColor);
     }
     // The job store is cache state, not a trust boundary. A malformed/relic
     // entry must neither throw during pass 2 nor surface an invented link.
     job.shortlist = job.shortlist.filter(function (item) {
-      return validRef(item) && item.turn === review.states[item.ply].turn;
+      return validEligibleRef(item) &&
+        item.turn === review.states[item.ply].turn;
     }).slice(0, 2);
     var seenMoments = Object.create(null);
     job.moments = job.moments.filter(function (m) {
-      if (!validRef(m) || seenMoments[m.ply]) return false;
+      if (!validEligibleRef(m) || seenMoments[m.ply]) return false;
       seenMoments[m.ply] = true;
       return true;
     }).slice(0, 2);
     job.unresolved = job.unresolved.filter(function (item) {
       return !!item && typeof item === 'object' &&
         Number.isInteger(item.ply) && item.ply >= 0 &&
-        item.ply < review.gs.history.length;
+        item.ply < review.gs.history.length &&
+        (item.phase === 'quick' || item.phase === 'deep') &&
+        typeof item.reason === 'string' && item.reason.length > 0;
+    });
+    function profileOf(name) {
+      return name === 'deep' ? DEEP :
+        (name === 'quick-fallback' ? QUICK_FALLBACK : QUICK);
+    }
+    var normalizedTypicalThinkMs = typicalThinkMsBySide(review, scanColor);
+    var seenSummaries = Object.create(null);
+    job.moveSummaries = job.moveSummaries.filter(function (summary) {
+      if (!summary || seenSummaries[summary.ply] ||
+          !validRef(summary) ||
+          summary.turn !== review.states[summary.ply].turn) return false;
+      var req = moveRequest(
+        review, job, summary.ply, profileOf(summary.profile), false);
+      var identity = expectedFor(
+        review.states[summary.ply], req, true,
+        summary.profile === 'deep' ? 3 : 2).identity;
+      var ok = ChessyAnalysisNotation.validate(summary, {
+        ply: summary.ply,
+        playedSan: review.gs.history[summary.ply].san,
+        turn: review.states[summary.ply].turn,
+        thinkMs: exactThinkMs(review.game, summary.ply),
+        typicalThinkMs:
+          normalizedTypicalThinkMs[review.states[summary.ply].turn],
+        identity: identity
+      });
+      if (ok) seenSummaries[summary.ply] = true;
+      return ok;
+    }).sort(function (a, b) { return a.ply - b.ply; });
+    // Selector admission is represented redundantly on purpose: the summary
+    // controls punctuation, while moments controls coaching links and Gate 0.
+    // They must agree exactly, and every admitted moment must have originated
+    // from the durable pass-two shortlist. Coordinated cache corruption must
+    // restart recomputable work rather than mint a Chessy annotation.
+    if (job.moments.some(function (moment) {
+      return !job.shortlist.some(function (quick) {
+        return quick.ply === moment.ply &&
+          quick.playedSan === moment.playedSan &&
+          quick.turn === review.states[moment.ply].turn;
+      });
+    })) return null;
+    var admitted = Object.create(null);
+    job.moments.forEach(function (moment) { admitted[moment.ply] = true; });
+    if (job.moveSummaries.some(function (summary) {
+      return summary.accepted !== !!admitted[summary.ply];
+    })) return null;
+    // A required suggestion without its exact trusted deep summary can never
+    // receive a reveal receipt. Restart this recomputable job instead of
+    // persisting a permanently locked or partially migrated report.
+    if (job.moments.some(function (moment) {
+      var summary = summaryAt(job, moment.ply);
+      return !summary || summary.profile !== 'deep' ||
+        summary.accepted !== true ||
+        !summary.stability ||
+        summary.stability.bestMoveStable !== true;
+    })) return null;
+    var seenReflections = Object.create(null);
+    job.reflected = job.reflected.filter(function (item) {
+      if (!validRef(item) || seenReflections[item.ply]) return false;
+      seenReflections[item.ply] = true;
+      return true;
+    }).map(function (item) {
+      return { ply: item.ply, playedSan: item.playedSan };
     });
     job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
       ? Math.min(job.cursorPly, review.gs.history.length) : 0;
-    job.total = countEligible(review, scanColor);
-    job.checked = Number.isInteger(job.checked) && job.checked >= 0
-      ? Math.min(job.checked, job.total) : 0;
-    job.typicalThinkMsBySide = typicalThinkMsBySide(review, scanColor);
+    job.total = countScannable(review);
+    if (!Number.isInteger(job.checked) || job.checked < 0 ||
+        job.checked !== countScannableBefore(review, job.cursorPly)) return null;
+    job.typicalThinkMsBySide = normalizedTypicalThinkMs;
     delete job.typicalThinkMs;
     job.pass = job.pass === 2 ? 2 : 1;
     job.verifyIndex = Number.isInteger(job.verifyIndex) && job.verifyIndex >= 0
       ? Math.min(job.verifyIndex, job.shortlist.length) : 0;
     if (job.state === 'running') job.state = 'paused'; // stale process ownership
-    if (job.state !== 'done' && job.state !== 'paused') job.state = 'paused';
+    if (job.state !== 'done' && job.state !== 'paused' &&
+        job.state !== 'idle') job.state = 'paused';
     if (job.state === 'done' &&
         (job.pass !== 2 || job.verifyIndex < job.shortlist.length)) {
       job.state = 'paused';
+    }
+    if (job.pass === 2 &&
+        (job.cursorPly !== review.gs.history.length ||
+         job.checked !== job.total)) return null;
+    if (job.pass === 2) {
+      var quickUnresolved = Object.create(null);
+      job.unresolved.forEach(function (item) {
+        if (item.phase === 'quick') quickUnresolved[item.ply] = true;
+      });
+      for (var ply = 0; ply < review.gs.history.length; ply++) {
+        if (scannable(review, ply) &&
+            !summaryAt(job, ply) && !quickUnresolved[ply]) return null;
+      }
     }
     return job;
   }
@@ -499,16 +716,18 @@
       sourceRev: sourceRevision(review.game, scanColor),
       analysisRev: analysisRevision(review.game),
       scanColor: scanColor,
-      state: 'paused',
+      state: 'idle',
       pass: 1,
       cursorPly: 0,
       checked: 0,
-      total: countEligible(review, scanColor),
+      total: countScannable(review),
       candidates: [],
       shortlist: [],
       verifyIndex: 0,
       moments: [],
       unresolved: [],
+      moveSummaries: [],
+      reflected: [],
       typicalThinkMsBySide: typicalThinkMsBySide(review, scanColor),
       updatedAt: now()
     };
@@ -550,6 +769,7 @@
       if (!job) job = freshJob(review, scanColor);
       currentSource = sourceSnapshot(review.game);
       current = job;
+      mergePendingReflections(job, review);
       emit(job);
       // A synchronous scanchange listener (or a microtask queued by it) may
       // pause/navigate before start() receives this prepared job. Carry the
@@ -606,6 +826,90 @@
     return checkpoint(token, job).then(function () { return publicState(current); });
   }
 
+  /*
+   * Record only that a valid structured reflection was submitted for one ply.
+   * The reflection content itself belongs to durable lesson-card
+   * evidence when the player saves a card; this recomputable job keeps only the
+   * minimum Gate-0 receipt needed to reveal score history.
+   */
+  function recordReflection(review, ply) {
+    var job = current;
+    if (!review || !review.game || !Number.isInteger(ply) ||
+        !review.gs || !Array.isArray(review.gs.history) ||
+        ply < 0 || ply >= review.gs.history.length ||
+        !scannable(review, ply)) return Promise.resolve(false);
+    if (!job || review.game.id !== job.gameId ||
+        job.sourceRev !== sourceRevision(review.game, job.scanColor) ||
+        job.analysisRev !== analysisRevision(review.game)) {
+      var pending = {
+        gameId: review.game.id,
+        analysisRev: analysisRevision(review.game),
+        ply: ply,
+        playedSan: review.gs.history[ply].san
+      };
+      if (!pendingReflections.some(function (item) {
+        return item.gameId === pending.gameId &&
+          item.analysisRev === pending.analysisRev &&
+          item.ply === pending.ply &&
+          item.playedSan === pending.playedSan;
+      })) pendingReflections.push(pending);
+      return Promise.resolve(true);
+    }
+    if (job.reflected.some(function (item) { return item.ply === ply; })) {
+      return Promise.resolve(true);
+    }
+    job.reflected.push({
+      ply: ply,
+      playedSan: review.gs.history[ply].san
+    });
+    job.reflected.sort(function (a, b) { return a.ply - b.ply; });
+    var token = generation;
+    return checkpoint(token, job);
+  }
+
+  /*
+   * A successful manual Verify uses the exact same deep profile. Revalidate it
+   * inside the controller, then promote a quick ledger row to a deep score.
+   * Only a ply admitted by the scan selector inherits accepted-moment
+   * punctuation; a manually chosen row gains depth, never an invented NAG.
+   */
+  function recordVerifiedSummary(review, ply, result) {
+    var job = current;
+    if (!job || !review || review.game.id !== job.gameId ||
+        job.sourceRev !== sourceRevision(review.game, job.scanColor) ||
+        job.analysisRev !== analysisRevision(review.game) ||
+        !Number.isInteger(ply) ||
+        !scannable(review, ply)) return Promise.resolve(false);
+    var state = review.states[ply];
+    var req = moveRequest(review, job, ply, DEEP, false);
+    var checked = validate(result, state, req, 3);
+    if (!checked.ok) return Promise.resolve(false);
+    var summary = ChessyAnalysisNotation.summarize(result, {
+      ply: ply,
+      playedSan: review.gs.history[ply].san,
+      turn: state.turn,
+      thinkMs: exactThinkMs(review.game, ply),
+      typicalThinkMs: job.typicalThinkMsBySide[state.turn],
+      profile: 'deep',
+      accepted: job.moments.some(function (moment) {
+        return moment.ply === ply;
+      }),
+      validated: true
+    });
+    var identity = expectedFor(state, req, true, 3).identity;
+    if (!summary || !ChessyAnalysisNotation.validate(summary, {
+      ply: ply,
+      playedSan: review.gs.history[ply].san,
+      turn: state.turn,
+      thinkMs: exactThinkMs(review.game, ply),
+      typicalThinkMs: job.typicalThinkMsBySide[state.turn],
+      identity: identity
+    })) return Promise.resolve(false);
+    replaceSummary(job, summary);
+    var token = generation;
+    return checkpoint(token, job);
+  }
+
   // Synchronous generation invalidation for destructive operations. It
   // intentionally performs NO write: Restore/Delete all own the database
   // transaction and clear jobs atomically.
@@ -613,6 +917,7 @@
     stopLocal();
     current = null;
     currentSource = null;
+    pendingReflections = [];
     emit(null);
   }
 
@@ -644,6 +949,8 @@
     start: start,
     resume: resume,
     pause: pause,
+    recordReflection: recordReflection,
+    recordVerifiedSummary: recordVerifiedSummary,
     invalidate: invalidate,
     load: load,
     state: state,
