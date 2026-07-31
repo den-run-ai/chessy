@@ -67,14 +67,46 @@ globalThis.ChessyAnalysisResult = {
 
 let quickMetas = [];
 globalThis.ChessyMomentSelector = {
+  constants: { lost: -300, mateUtility: 4000, deepRegret: 100 },
+  utility: function (line, turn) {
+    if (line.mate) {
+      return line.mate.forWhite === (turn === 'w') ? 4000 : -4000;
+    }
+    const mover = turn === 'w' ? line.scoreCpWhite : -line.scoreCpWhite;
+    return Math.max(-2000, Math.min(2000, mover));
+  },
+  clockFlags: function (meta) {
+    return {
+      anomaly: !!meta && Number.isFinite(meta.thinkMs) &&
+        Number.isFinite(meta.typicalThinkMs) &&
+        meta.thinkMs >= Math.max(30000, meta.typicalThinkMs * 3)
+    };
+  },
+  evidence: function (result, meta) {
+    if (!meta.validated || !Number.isFinite(result.bestUtility) ||
+        !Number.isFinite(result.playedUtility)) return null;
+    return {
+      bestUtility: result.bestUtility,
+      playedUtility: result.playedUtility,
+      loss: Math.max(0, result.bestUtility - result.playedUtility),
+      clockAnomaly: result.clockOnly === true
+    };
+  },
   quickCandidate: function (result, meta) {
     quickMetas.push(clone(meta));
     if (!meta.validated || result.nominate === false) return null;
-    return { ply: meta.ply, playedSan: meta.playedSan, loss: result.loss || 100 };
+    return {
+      ply: meta.ply,
+      playedSan: meta.playedSan,
+      turn: meta.turn,
+      loss: result.loss || 100
+    };
   },
   shortlist: function (candidates, limit) { return candidates.slice(0, limit); },
   acceptDeep: function (quick, result, meta) {
-    return meta.validated && result.stability &&
+    return meta.validated &&
+      (result.loss >= 100 || result.clockOnly === true) &&
+      result.stability &&
       result.stability.bestMoveStable === true
       ? { ply: quick.ply, playedSan: quick.playedSan } : null;
   }
@@ -83,13 +115,45 @@ globalThis.ChessyMomentSelector = {
 let replies = [];
 let requests = [];
 let activeDeferred = null;
-function defaultResult(req) {
-  return {
+function completeResult(req, supplied) {
+  supplied = supplied || {};
+  if (supplied.valid !== true || supplied.complete !== true) return supplied;
+  const state = Chess.parseFen(req.fen);
+  const loss = Number.isFinite(supplied.loss) ? supplied.loss : 120;
+  const turn = state.turn;
+  const base = {
     valid: true,
     complete: true,
-    loss: 120,
-    stability: req.opts.nodeLimit === 80000 ? { bestMoveStable: true } : null
+    loss: loss,
+    bestUtility: loss,
+    playedUtility: 0,
+    turn: turn,
+    depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+    engine: {
+      id: 'test',
+      version: '1',
+      configHash: String(req.opts.nodeLimit) + ':' + String(req.opts.multiPV)
+    },
+    positionFingerprint: Chess.positionKey(state),
+    bestLines: [{
+      san: 'best',
+      scoreCpWhite: turn === 'w' ? loss : -loss,
+      scoreCpPlayer: loss,
+      mate: null
+    }],
+    playedLine: {
+      san: 'played',
+      scoreCpWhite: 0,
+      scoreCpPlayer: 0,
+      mate: null
+    },
+    stability: req.opts.nodeLimit === 80000
+      ? { depths: [3, 4], bestMoveStable: true } : null
   };
+  return Object.assign(base, supplied);
+}
+function defaultResult(req) {
+  return completeResult(req, { valid: true, complete: true, loss: 120 });
 }
 globalThis.ChessyAnalysisService = {
   analyse: function (req) {
@@ -100,7 +164,8 @@ globalThis.ChessyAnalysisService = {
         activeDeferred = next;
         return next.promise;
       }
-      return Promise.resolve(next);
+      if (next === null) return Promise.resolve(null);
+      return Promise.resolve(completeResult(req, next));
     }
     return Promise.resolve(defaultResult(req));
   },
@@ -110,6 +175,7 @@ globalThis.ChessyAnalysisService = {
   }
 };
 
+require('../assets/analysis-notation.js');
 require('../assets/moment-scan.js');
 const Scan = globalThis.ChessyMomentScan;
 
@@ -164,6 +230,22 @@ function reset() {
   quickMetas = [];
 }
 
+function manualDeepResult(review, ply, supplied) {
+  const profile = Scan.profiles.deep;
+  return completeResult({
+    ply: ply,
+    fen: review.fens[ply],
+    opts: {
+      playedMove: review.gs.history[ply].move,
+      maxDepth: profile.maxDepth,
+      nodeLimit: profile.nodeLimit,
+      nodeBudget: profile.nodeBudget,
+      multiPV: profile.multiPV,
+      pvLen: profile.pvLen
+    }
+  }, Object.assign({ valid: true, complete: true }, supplied || {}));
+}
+
 (async function () {
   check(!!Scan, 'controller exports only after all required boundaries exist');
 
@@ -180,13 +262,13 @@ function reset() {
   const deepPlies = requests.filter(function (r) {
     return r.opts.nodeLimit === 80000;
   }).map(function (r) { return r.ply; });
-  check(quickPlies.join(',') === '0,2',
-    'only the chosen side decisions are scanned from full-state side-to-move',
+  check(quickPlies.join(',') === '0,1,2,3',
+    'the quick pass scores every nonterminal move in game order',
     quickPlies.join(','));
   check(deepPlies.join(',') === '0,2' && done.moments.length === 2,
-    'at most two shortlisted decisions receive the exact deep profile');
-  check(done.state === 'done' && done.checked === 2 && done.total === 2,
-    'a finished two-pass scan persists exact player-decision progress');
+    'only shortlisted chosen-side decisions receive the exact deep profile');
+  check(done.state === 'done' && done.checked === 4 && done.total === 4,
+    'a finished two-pass scan persists exact all-move progress');
   check(requests.filter(function (r) { return r.opts.nodeLimit === 80000; })
     .every(function (r) {
       return r.opts.maxDepth === 10 && r.opts.nodeBudget === 1200000 &&
@@ -195,8 +277,86 @@ function reset() {
   const pub = Scan.state();
   check(Object.keys(pub.moments[0]).sort().join(',') === 'playedSan,ply' &&
     pub.candidates === undefined && pub.shortlist === undefined &&
-    done.candidates === undefined && done.shortlist === undefined,
+    done.candidates === undefined && done.shortlist === undefined &&
+    pub.report === undefined &&
+    !/(scoreCpWhite|lossCp|annotation)/.test(JSON.stringify(pub)),
     'state() and start() expose no scores, labels, better moves or internal candidates');
+  const oneReceipt = await Scan.recordReflection(black, 0);
+  const oneVisible = Scan.state();
+  check(oneReceipt === true && oneVisible.reportUnlocked === false &&
+      oneVisible.reflectionCompleted === 1 &&
+      oneVisible.report.length === 1 && oneVisible.report[0].ply === 0,
+    'a structured reflection reveals only its matching move score');
+  await Scan.recordReflection(black, 2);
+  const allVisible = Scan.state();
+  check(allVisible.reportUnlocked === true &&
+      allVisible.reflectionCompleted === allVisible.reflectionRequired &&
+      allVisible.report.length === 4 &&
+      allVisible.report.filter(function (entry) {
+        return entry.ply === 0 || entry.ply === 2;
+      }).every(function (entry) {
+        return entry.estimate === false && entry.annotation === '?!';
+      }) &&
+      allVisible.report.filter(function (entry) {
+        return entry.ply === 1 || entry.ply === 3;
+      }).every(function (entry) {
+        return entry.estimate === true && entry.annotation === null;
+      }),
+    'reflecting every suggested moment unlocks deep rows plus quick estimates');
+  Scan.invalidate();
+  const reloadedReport = await Scan.load(black);
+  check(reloadedReport.reportUnlocked === true &&
+      reloadedReport.report.length === 4,
+    'reflection receipts and the unlocked report survive a same-game reload');
+
+  // A structured reflection can finish before Scan analysis starts. The exact
+  // revision/ply receipt is merged into the first compatible durable job.
+  reset();
+  const preStartReview = autoReview('pre-start-reflection', 2, 'b');
+  const queuedReceipt = await Scan.recordReflection(preStartReview, 1);
+  const preStartDone = await Scan.start(preStartReview, { restart: true });
+  check(queuedReceipt === true && preStartDone.state === 'done' &&
+      preStartDone.moments.length === 1 &&
+      preStartDone.reflectionRequired === 1 &&
+      preStartDone.reflectionCompleted === 1 &&
+      preStartDone.reportUnlocked === true &&
+      preStartDone.report.length === 2,
+    'a pre-start reflection receipt unlocks its later compatible scan');
+
+  // Review opens a known-side game by durably preparing an idle job. A
+  // reflection receipt on that real UI path must survive normalization even
+  // though the quick score row does not exist until Start.
+  reset();
+  const idleReview = autoReview('idle-reflection', 2, 'b');
+  const idle = await Scan.load(idleReview);
+  const idleReceipt = await Scan.recordReflection(idleReview, 1);
+  const idleDone = await Scan.start(idleReview);
+  check(idle.state === 'idle' && idleReceipt === true &&
+      idleDone.state === 'done' && idleDone.reportUnlocked === true &&
+      idleDone.report.length === 2,
+    'an idle-job reflection receipt survives the open → reflect → Start path');
+
+  // Choosing one side narrows suggestions, not the archived all-game score
+  // trail. A manual reflection on the other side still reveals/promotes that
+  // analyzed row without generating a coaching NAG.
+  reset();
+  const otherSideReview = autoReview('other-side-reflection', 4, 'b');
+  await Scan.start(otherSideReview, { restart: true });
+  await Scan.recordReflection(otherSideReview, 0);
+  const otherSideVisible = Scan.state();
+  const otherSideBefore = otherSideVisible.report.find(function (row) {
+    return row.ply === 0;
+  });
+  const otherSidePromoted = await Scan.recordVerifiedSummary(
+    otherSideReview, 0, manualDeepResult(otherSideReview, 0));
+  const otherSideAfter = Scan.state().report.find(function (row) {
+    return row.ply === 0;
+  });
+  check(otherSideVisible.reportUnlocked === false &&
+      otherSideBefore.estimate === true &&
+      otherSidePromoted === true && otherSideAfter.estimate === false &&
+      otherSideAfter.annotation === null,
+    'a nonselected-side manual reflection reveals and deepens only that row');
 
   reset();
   const both = autoReview('two-clocks', 4, 'both', null, [
@@ -208,22 +368,110 @@ function reset() {
       '2000,20000,2000,20000',
     'local PvP computes a separate exact think-time median for each side');
 
+  // Selector admission can be based on exact clock evidence below the 100cp
+  // punctuation floor. Keep the moment, but never invent a generated NAG.
+  reset();
+  const clockReview = autoReview('clock-only', 6, 'b', null, [
+    null, { thinkMs: 1000 }, null, { thinkMs: 1000 },
+    null, { thinkMs: 30000 }
+  ]);
+  replies = [
+    { valid: true, complete: true, loss: 20 },
+    { valid: true, complete: true, loss: 20, nominate: false },
+    { valid: true, complete: true, loss: 20 },
+    { valid: true, complete: true, loss: 20, nominate: false },
+    { valid: true, complete: true, loss: 20 },
+    { valid: true, complete: true, loss: 75, clockOnly: true },
+    { valid: true, complete: true, loss: 75, clockOnly: true }
+  ];
+  const clockDone = await Scan.start(clockReview, { restart: true });
+  const clockSummary = jobs.get('clock-only').moveSummaries.find(function (row) {
+    return row.ply === 5;
+  });
+  await Scan.recordReflection(clockReview, 5);
+  const clockVisible = Scan.state();
+  const clockRow = clockVisible.report.find(function (row) {
+    return row.ply === 5;
+  });
+  check(clockDone.moments.length === 1 &&
+      clockDone.moments[0].ply === 5 &&
+      clockSummary.accepted === true && clockSummary.clockAnomaly === true &&
+      clockRow.estimate === false && clockRow.annotation === null,
+    'a clock-only accepted moment survives without receiving a score-loss NAG');
+  Scan.invalidate();
+  const clockReloaded = await Scan.load(clockReview);
+  check(clockReloaded.state === 'done' &&
+      clockReloaded.moments.length === 1 &&
+      clockReloaded.moments[0].ply === 5 &&
+      clockReloaded.reportUnlocked === true &&
+      clockReloaded.report.find(function (row) {
+        return row.ply === 5;
+      }).annotation === null,
+    'exact clock evidence is recomputed and rebound on report reload');
+
+  // A manual Verify on a non-shortlisted chosen-side move promotes its quick
+  // ledger row to deep, without inheriting critical-moment punctuation.
+  reset();
+  const promotionReview = autoReview('manual-promotion', 6, 'b');
+  const promotionDone = await Scan.start(promotionReview, { restart: true });
+  await Scan.recordReflection(promotionReview, 5);
+  const beforePromotion = Scan.state().report.find(function (row) {
+    return row.ply === 5;
+  });
+  const promoted = await Scan.recordVerifiedSummary(
+    promotionReview, 5, manualDeepResult(promotionReview, 5));
+  const afterPromotion = Scan.state().report.find(function (row) {
+    return row.ply === 5;
+  });
+  check(promotionDone.moments.every(function (moment) {
+        return moment.ply !== 5;
+      }) &&
+      beforePromotion.estimate === true &&
+      promoted === true && afterPromotion.estimate === false &&
+      afterPromotion.annotation === null,
+    'manual deep verification promotes a quick row without inventing a NAG');
+  const promotionJob = clone(jobs.get('manual-promotion'));
+  const forgedAccepted = clone(promotionJob);
+  forgedAccepted.moveSummaries.find(function (row) {
+    return row.ply === 5;
+  }).accepted = true;
+  Scan.invalidate();
+  jobs.set('manual-promotion', forgedAccepted);
+  const rejectedAcceptedBit = await Scan.load(promotionReview);
+  check(rejectedAcceptedBit.state === 'idle' &&
+      rejectedAcceptedBit.report === undefined,
+    'reload rejects a forged accepted bit on a manually verified non-moment');
+  const forgedMoment = clone(forgedAccepted);
+  forgedMoment.moments.push({
+    ply: 5,
+    playedSan: promotionReview.gs.history[5].san
+  });
+  Scan.invalidate();
+  jobs.set('manual-promotion', forgedMoment);
+  const rejectedForgedMoment = await Scan.load(promotionReview);
+  check(rejectedForgedMoment.state === 'idle' &&
+      rejectedForgedMoment.moments.length === 0 &&
+      rejectedForgedMoment.report === undefined,
+    'reload rejects an admitted moment that did not originate in the shortlist');
+
   // A partial/malformed shallow answer retries once under the bounded fallback
   // profile, at the same cursor, before progress advances.
   reset();
   const retryReview = autoReview('retry', 2, 'b');
   replies = [
+    { valid: true, complete: true, loss: 20 },
     { valid: false, complete: false, reason: 'partial' },
     { valid: true, complete: true, loss: 150 },
-    { valid: true, complete: true, stability: { bestMoveStable: true } }
+    { valid: true, complete: true }
   ];
   const retried = await Scan.start(retryReview, { restart: true });
-  check(requests.length === 3 && requests[0].ply === 1 && requests[1].ply === 1 &&
-    requests[1].fresh === true && requests[1].opts.nodeLimit === 12000 &&
-    requests[1].opts.nodeBudget === 300000,
+  check(requests.length === 4 && requests[0].ply === 0 &&
+    requests[1].ply === 1 && requests[2].ply === 1 &&
+    requests[2].fresh === true && requests[2].opts.nodeLimit === 12000 &&
+    requests[2].opts.nodeBudget === 300000,
     'an unusable quick result gets exactly one stronger fresh retry at the same ply');
   check(retried.state === 'done' && retried.cursorPly === 2 &&
-    retried.unresolvedCount === 0,
+    retried.checked === 2 && retried.unresolvedCount === 0,
     'a successful fallback advances and checkpoints the next absolute ply');
 
   // Two unusable answers are recorded as unresolved, then the cursor advances;
@@ -231,11 +479,12 @@ function reset() {
   reset();
   const badReview = autoReview('bad', 2, 'b');
   replies = [
+    { valid: true, complete: true, loss: 20 },
     { valid: false, complete: false, reason: 'partial' },
     { valid: false, complete: true, reason: 'illegal-line' }
   ];
   const partialDone = await Scan.start(badReview, { restart: true });
-  check(requests.length === 2 && partialDone.state === 'done' &&
+  check(requests.length === 3 && partialDone.state === 'done' &&
     partialDone.unresolvedCount === 1 &&
     jobs.get('bad').unresolved[0].ply === 1 && partialDone.cursorPly === 2,
     'a twice-unusable decision is marked unresolved and does not loop forever');
@@ -246,14 +495,14 @@ function reset() {
   // resume repeats that exact ply and then completes.
   reset();
   const pausedReview = autoReview('paused', 2, 'b');
-  replies = [null];
+  replies = [{ valid: true, complete: true, loss: 20 }, null];
   const paused = await Scan.start(pausedReview, { restart: true });
   check(paused.state === 'paused' && paused.cursorPly === 1 &&
-    paused.checked === 0 && jobs.get('paused').cursorPly === 1,
-    'an interrupted analysis pauses at the unchanged next-decision cursor');
+    paused.checked === 1 && jobs.get('paused').cursorPly === 1,
+    'an interrupted analysis pauses at the unchanged all-move cursor');
   requests = [];
   const resumed = await Scan.resume(pausedReview);
-  check(requests[0].ply === 1 && resumed.state === 'done' && resumed.checked === 1,
+  check(requests[0].ply === 1 && resumed.state === 'done' && resumed.checked === 2,
     'resume restarts the exact interrupted ply and finishes from its checkpoint');
 
   // A process that dies while marked running has no live owner on reload.
@@ -261,8 +510,8 @@ function reset() {
   reset();
   const reloadReview = autoReview('reload', 2, 'b');
   const seeded = {
-    schema: 1,
-    algorithm: 'critical-moments-v1',
+    schema: 2,
+    algorithm: 'critical-moments-v2',
     gameId: 'reload',
     sourceRev: Scan.sourceRevision(reloadReview.game, 'b'),
     analysisRev: Scan.analysisRevision(reloadReview.game),
@@ -270,27 +519,84 @@ function reset() {
     state: 'running',
     pass: 1,
     cursorPly: 1,
-    checked: 0,
-    total: 1,
+    checked: 1,
+    total: 2,
     candidates: [],
     shortlist: [{
       ply: 1, playedSan: reloadReview.gs.history[1].san, turn: 'w'
     }],
     verifyIndex: 0,
-    moments: [
-      { ply: 0, playedSan: reloadReview.gs.history[0].san },
-      { ply: 1, playedSan: reloadReview.gs.history[1].san }
-    ],
-    unresolved: []
+    moments: [],
+    unresolved: [],
+    moveSummaries: [],
+    reflected: []
   };
   jobs.set('reload', clone(seeded));
   const loaded = await Scan.load(reloadReview);
   check(loaded.state === 'paused' && jobs.get('reload').state === 'paused' &&
     requests.length === 0,
     'a persisted running job reloads as an honestly paused checkpoint');
-  check(loaded.moments.length === 1 && loaded.moments[0].ply === 1 &&
-    loaded.verifyTotal === 0,
-    'reload drops opponent moments and wrong-mover shortlist entries');
+  check(loaded.total === 2 && loaded.checked === 1 &&
+      loaded.moments.length === 0 && loaded.verifyTotal === 0,
+    'reload restores all-move progress and drops wrong-mover shortlist entries');
+
+  // A persisted required suggestion without its exact valid deep row cannot
+  // ever satisfy the reveal gate. Treat that cache record as recomputable and
+  // restart it instead of restoring a permanently locked report.
+  reset();
+  const malformedReview = autoReview('malformed-required', 2, 'b');
+  await Scan.start(malformedReview, { restart: true });
+  const malformed = clone(jobs.get('malformed-required'));
+  const requiredPly = malformed.moments[0].ply;
+  malformed.moveSummaries.find(function (summary) {
+    return summary.ply === requiredPly;
+  }).stability.depths = [1, 4];
+  Scan.invalidate();
+  jobs.set('malformed-required', malformed);
+  requests = [];
+  const restartedMalformed = await Scan.load(malformedReview);
+  check(restartedMalformed.state === 'idle' &&
+      restartedMalformed.moments.length === 0 &&
+      restartedMalformed.report === undefined &&
+      jobs.get('malformed-required').state === 'idle' &&
+      requests.length === 0,
+    'a malformed required-moment summary restarts as a fresh spoiler-free job');
+
+  // Pass 2 itself proves the all-move pass claimed completion. A paused job
+  // with a silently missing quick row must restart before Resume can finish
+  // and unlock a partial ledger.
+  reset();
+  const partialPassTwoReview = autoReview('partial-pass-two', 4, 'b');
+  await Scan.start(partialPassTwoReview, { restart: true });
+  const partialPassTwo = clone(jobs.get('partial-pass-two'));
+  partialPassTwo.state = 'paused';
+  partialPassTwo.moveSummaries = partialPassTwo.moveSummaries.filter(
+    function (row) { return row.ply !== 0; });
+  Scan.invalidate();
+  jobs.set('partial-pass-two', partialPassTwo);
+  const restartedPartialPassTwo = await Scan.load(partialPassTwoReview);
+  check(restartedPartialPassTwo.state === 'idle' &&
+      restartedPartialPassTwo.report === undefined &&
+      jobs.get('partial-pass-two').moveSummaries.length === 0,
+    'a pass-two checkpoint missing an all-move score row restarts before Resume');
+
+  // The summary schema is recomputable cache state. An earlier controller
+  // version becomes a fresh, spoiler-free job instead of being half-migrated.
+  reset();
+  const legacyReview = autoReview('legacy', 2, 'b');
+  const legacy = Object.assign({}, seeded, {
+    schema: 1,
+    algorithm: 'critical-moments-v1',
+    gameId: 'legacy',
+    sourceRev: Scan.sourceRevision(legacyReview.game, 'b'),
+    analysisRev: Scan.analysisRevision(legacyReview.game),
+    state: 'done'
+  });
+  jobs.set('legacy', clone(legacy));
+  const replacedLegacy = await Scan.load(legacyReview);
+  check(replacedLegacy.state === 'idle' && replacedLegacy.report === undefined &&
+      jobs.get('legacy').schema === 2,
+    'a legacy scan checkpoint restarts without exposing stale score state');
 
   // Generation invalidation must beat an already-resolving callback. No
   // checkpoint may appear after destructive controls have taken ownership.

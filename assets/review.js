@@ -253,6 +253,7 @@
   // ---- Position browser ----
   const reviewBoard = ChessyMiniBoard.make($('reviewBoard'), null);
   let review = null; // { game, gs, fens[], states[], ply }
+  let historyRenderKey = null;
 
   // The game's OWN starting position — a custom SetUp/FEN (imported games) or
   // the standard start — as a fresh full game state each call.
@@ -305,6 +306,7 @@
       states.push(s);
     }
     review = { game: game, gs: gs, fens: fens, states: states, ply: 0 };
+    historyRenderKey = null;
     scanGameId = game.id;
     scanReview = review;
     scanAcceptEvents = false;
@@ -347,6 +349,7 @@
     $('revPrev').disabled = r.ply === 0;
     $('revNext').disabled = r.ply >= r.gs.history.length;
     $('revEnd').disabled = r.ply >= r.gs.history.length;
+    renderMoveHistory();
     // The reflection flow (assets/reflection.js) tracks the shown position.
     document.dispatchEvent(new CustomEvent('chessy:reviewrender'));
   }
@@ -364,6 +367,232 @@
         ply < 0 || ply > review.gs.history.length) return false;
     stepReview(ply);
     return true;
+  }
+
+  // ---- Full SAN history + Gate-0 score overlays -----------------------
+  // The archived SAN ledger is always safe to show: it is the player's game,
+  // not engine output. Scores and both source/generated annotations are added
+  // only when the scan controller's sanitized public state releases that ply.
+  const NAG_GLYPHS = Object.freeze({
+    '$1': '!', '$2': '?', '$3': '!!',
+    '$4': '??', '$5': '!?', '$6': '?!'
+  });
+  const NAG_WORDS = Object.freeze({
+    '!': 'good move', '?': 'mistake', '!!': 'brilliant move',
+    '??': 'blunder', '!?': 'interesting move', '?!': 'dubious move'
+  });
+
+  function reportByPly() {
+    const out = Object.create(null);
+    const report = scanState && Array.isArray(scanState.report)
+      ? scanState.report : [];
+    report.forEach(function (entry) {
+      if (entry && Number.isInteger(entry.ply) &&
+          entry.ply >= 0 && review &&
+          entry.ply < review.gs.history.length &&
+          entry.playedSan === review.gs.history[entry.ply].san) {
+        out[entry.ply] = entry;
+      }
+    });
+    return out;
+  }
+
+  function importedNags(game, ply) {
+    const move = game && Array.isArray(game.moves) ? game.moves[ply] : null;
+    if (!move || move.san !== game.sans[ply] || !Array.isArray(move.nags)) {
+      return [];
+    }
+    const seen = Object.create(null);
+    return move.nags.map(function (nag) {
+      return Object.prototype.hasOwnProperty.call(NAG_GLYPHS, nag)
+        ? NAG_GLYPHS[nag] : null;
+    })
+      .filter(function (glyph) {
+        if (!glyph || seen[glyph]) return false;
+        seen[glyph] = true;
+        return true;
+      });
+  }
+
+  function spokenScore(text) {
+    if (!text) return '';
+    return text.replace(/^−/, 'minus ').replace(/^-/, 'minus ')
+      .replace(/^\+/, 'plus ')
+      .replace('M', 'mate in ');
+  }
+
+  function addNag(button, glyph, source) {
+    const mark = document.createElement('span');
+    mark.className = 'review-nag ' + source;
+    mark.textContent = (source === 'source' ? 'PGN ' : 'Chessy ') + glyph;
+    mark.setAttribute('aria-label',
+      (source === 'source' ? 'Imported PGN annotation: ' :
+        'Chessy deep-verified annotation: ') +
+      (NAG_WORDS[glyph] || glyph));
+    button.appendChild(mark);
+  }
+
+  function historyPlyButton(ply, report, showImported) {
+    const r = review;
+    const state = r.states[ply];
+    const entry = r.gs.history[ply];
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'review-ply' + (r.ply === ply ? ' current' : '');
+    button.dataset.ply = String(ply);
+    if (r.ply === ply) button.setAttribute('aria-current', 'step');
+
+    const san = document.createElement('span');
+    san.className = 'review-san';
+    san.textContent = entry.san;
+    button.appendChild(san);
+
+    let label = 'Move ' + state.fullmove + ', ' +
+      (state.turn === 'w' ? 'White' : 'Black') + ', ' + entry.san +
+      '. Review the position before this move';
+    if (showImported) {
+      importedNags(r.game, ply).forEach(function (glyph) {
+        addNag(button, glyph, 'source');
+        label += ', imported PGN annotation ' + (NAG_WORDS[glyph] || glyph);
+      });
+    }
+    if (report && typeof ChessyAnalysisNotation !== 'undefined') {
+      const text = ChessyAnalysisNotation.formatWhite(report);
+      if (text) {
+        const score = document.createElement('span');
+        score.className = 'review-eval' + (report.estimate ? ' estimate' : '');
+        score.textContent = (report.estimate ? '≈ ' : '') + text;
+        score.title = report.estimate
+          ? 'Quick scan estimate for the played move'
+          : 'Deep analysis estimate for the played move';
+        button.appendChild(score);
+        label += ', ' + (report.estimate
+          ? 'quick estimate ' : 'deep analysis estimate ') +
+          spokenScore(text) + ' for White on the played line';
+      }
+      if (report.annotation) {
+        addNag(button, report.annotation, 'chessy');
+        label += ', Chessy annotation ' +
+          (NAG_WORDS[report.annotation] || report.annotation);
+      }
+    }
+    button.setAttribute('aria-label', label);
+    button.addEventListener('click', function () { goToPly(ply); });
+    return button;
+  }
+
+  function historyNote() {
+    const visibleReport = scanState && Array.isArray(scanState.report)
+      ? scanState.report : [];
+    const hasVisibleSource = review && visibleReport.some(function (entry) {
+      return entry && Number.isInteger(entry.ply) &&
+        importedNags(review.game, entry.ply).length > 0;
+    });
+    const provenance = hasVisibleSource
+      ? ' PGN marks are move-quality annotations from the imported game; ' +
+        'Chessy marks are generated.'
+      : '';
+    if (!scanState || scanState.state === 'idle') {
+      return 'Select a move to review the position before it. Start a scan, then ' +
+        'reflect before scores or annotations appear.';
+    }
+    if (scanState.state !== 'done') {
+      return 'Select a move to review the position before it. Scores remain hidden ' +
+        'while the spoiler-free scan is incomplete.';
+    }
+    if (scanState.reportUnlocked) {
+      let text = 'Each score is Chessy’s evaluation of the played line from ' +
+        'White’s perspective. ' +
+        '≈ marks a quick estimate; Chessy ?!, ? and ?? appear only on stable, ' +
+        'deep-confirmed moments. Moves whose analysis was unresolved have no score.';
+      return text + provenance;
+    }
+    const needed = Number(scanState.reflectionRequired) || 0;
+    const done = Number(scanState.reflectionCompleted) || 0;
+    if (!needed) {
+      return 'No usable score history was produced. You can still review and ' +
+        'flag any move manually.';
+    }
+    const revealed = Array.isArray(scanState.report)
+      ? scanState.report.length : 0;
+    if (revealed) {
+      return 'Each reflected analyzed move reveals its score. Reflect on ' +
+        (needed - done) + ' remaining suggested moment' +
+        (needed - done === 1 ? '' : 's') +
+        ' to unlock the complete score history.' + provenance;
+    }
+    return needed === 1 && (!scanState.moments || !scanState.moments.length)
+      ? 'Reflect on any scanned move to unlock the score history.'
+      : 'Reflect on the ' + needed + ' suggested moment' +
+        (needed === 1 ? '' : 's') +
+        ' before Chessy reveals scores or annotations.';
+  }
+
+  function renderMoveHistory() {
+    const list = $('reviewMoveList');
+    if (!list || !review) return;
+    const stateKey = scanState ? {
+      state: scanState.state,
+      reflectionRequired: scanState.reflectionRequired,
+      reflectionCompleted: scanState.reflectionCompleted,
+      reportUnlocked: scanState.reportUnlocked,
+      moments: Array.isArray(scanState.moments) ? scanState.moments.length : 0,
+      report: Array.isArray(scanState.report) ? scanState.report : null
+    } : null;
+    const nextKey = review.ply + '|' + JSON.stringify(stateKey);
+    if (historyRenderKey === nextKey) return;
+    const active = document.activeElement;
+    const focusedPly = active && list.contains(active) &&
+      active.classList.contains('review-ply') ? active.dataset.ply : null;
+    const previousScroll = list.scrollTop;
+    const reports = reportByPly();
+    const showAllImported = !!scanState && scanState.reportUnlocked === true;
+    list.textContent = '';
+    const rows = [];
+    for (let ply = 0; ply < review.gs.history.length; ply++) {
+      const state = review.states[ply];
+      let row = rows.length ? rows[rows.length - 1] : null;
+      if (!row || row.number !== state.fullmove) {
+        row = { number: state.fullmove, white: null, black: null };
+        rows.push(row);
+      }
+      row[state.turn === 'w' ? 'white' : 'black'] = ply;
+    }
+    rows.forEach(function (row) {
+      const li = document.createElement('li');
+      const number = document.createElement('span');
+      number.className = 'review-move-number';
+      number.textContent = row.number + (row.white === null ? '…' : '.');
+      li.appendChild(number);
+      ['white', 'black'].forEach(function (side) {
+        const ply = row[side];
+        if (ply === null) {
+          const empty = document.createElement('span');
+          empty.className = 'review-ply empty';
+          empty.setAttribute('aria-hidden', 'true');
+          li.appendChild(empty);
+          return;
+        }
+        li.appendChild(historyPlyButton(
+          ply, reports[ply] || null, showAllImported || !!reports[ply]));
+      });
+      list.appendChild(li);
+    });
+    const nextNote = historyNote();
+    if ($('reviewHistoryNote').textContent !== nextNote) {
+      $('reviewHistoryNote').textContent = nextNote;
+    }
+    historyRenderKey = nextKey;
+    list.scrollTop = previousScroll;
+    if (focusedPly !== null) {
+      const replacement = list.querySelector(
+        '.review-ply[data-ply="' + focusedPly + '"]');
+      if (replacement) {
+        try { replacement.focus({ preventScroll: true }); }
+        catch (e) { replacement.focus(); }
+        list.scrollTop = previousScroll;
+      }
+    }
   }
 
   // ---- Explicit critical-moment scan UI (Phase 5b) ---------------------
@@ -456,7 +685,7 @@
         return 'Confirming suggestions… ' + state.verifyIndex +
           ' of ' + state.verifyTotal + '.';
       }
-      return 'Checking decisions… ' + state.checked + ' of ' + state.total + '.';
+      return 'Checking moves… ' + state.checked + ' of ' + state.total + '.';
     }
     if (state.state === 'paused') {
       return (state.error ? state.error + ' ' : 'Scan paused. ') +
@@ -470,14 +699,14 @@
       if (state.unresolvedCount) text += ' Some positions could not be checked.';
       return text;
     }
-    return 'Scan ready.';
+    return 'Not scanned yet.';
   }
 
   function renderProgressMeter(state) {
     const meter = $('scanMeter');
     if (!meter) return;
-    meter.hidden = !state;
-    if (!state) return;
+    meter.hidden = !state || state.state === 'idle';
+    if (!state || state.state === 'idle') return;
     if (state.state === 'done') {
       meter.max = 1;
       meter.value = 1;
@@ -536,6 +765,7 @@
     $('scanProgress').textContent = text;
     renderProgressMeter(scanState);
     renderMoments(scanState);
+    renderMoveHistory();
     document.querySelectorAll('#scanMomentList .scan-moment').forEach(function (button) {
       button.disabled = reflecting;
     });
@@ -569,6 +799,7 @@
     scanState = null;
     scanBusy = false;
     scanNotice = null;
+    historyRenderKey = null;
     rememberScanColor(null);
     if (!$('momentScan')) return;
     $('scanMomentList').textContent = '';
@@ -589,8 +820,9 @@
     rememberScanColor(null);
     $('scanProgress').textContent = 'Loading saved scan…';
     renderScanUi();
-    // Do not call load() when no checkpoint exists: load intentionally creates
-    // a fresh paused job, which would make an untouched game look resumable.
+    // Known-side games get a lightweight idle job before analysis starts. That
+    // lets a valid manual reflection made before Start retain its Gate-0 receipt
+    // without making the untouched game look resumable or dispatching work.
     scanStopPromise.then(function () {
       if (token !== scanSeq || review !== r) return null;
       return CoachStore.getJob(r.game.id);
@@ -600,7 +832,7 @@
         (stored.scanColor === 'w' || stored.scanColor === 'b' ||
          stored.scanColor === 'both') ? stored.scanColor : null;
       rememberScanColor(storedColor);
-      if (!stored) return null;
+      if (!stored && importedUnknown(r)) return null;
       return ChessyMomentScan.load(r);
     }).then(function (state) {
       if (token !== scanSeq || review !== r) return;
@@ -643,7 +875,7 @@
     if (kind === 'resume') {
       work = ChessyMomentScan.resume(opened, opts);
     } else {
-      opts.restart = true;
+      opts.restart = !(scanState && scanState.state === 'idle');
       work = ChessyMomentScan.start(opened, opts);
     }
     Promise.resolve(work).then(function (state) {

@@ -103,20 +103,31 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   A failed finish write is reported in the game-over dialog (or on a
   page-level note once it has closed); a failed incomplete checkpoint keeps the
   live game and reports inside New Game.
-- **Review (read-only)** — a Play/Review/Train/Progress tab bar; Review lists
+- **Review (read-only game browsing)** — a Play/Review/Train/Progress tab bar; Review lists
   the archived games and browses any of them position by position on an
   accessible mini board (same ARIA grid model as the Play board,
-  inspection-only). The selected archive record can be saved as a clean PGN,
-  including imported tags, annotations, and custom SetUp/FEN positions. A
-  running timed game stays visible from the coach views via a live-clock banner
-  that returns to Play. Raw archive rows are revalidated before display;
-  malformed FENs or illegal replays are skipped with a visible count and
-  preserved unchanged for backup or recovery.
+  inspection-only). A complete, clickable SAN ledger is always shown and uses
+  the archived move number/side for custom SetUp/FEN games. The selected archive
+  record can be saved as a clean PGN, including imported tags, annotations, and
+  custom SetUp/FEN positions. A running timed game stays visible from the coach
+  views via a live-clock banner that returns to Play. Raw archive rows are
+  revalidated before display; malformed FENs or illegal replays are skipped
+  with a visible count and preserved unchanged for backup or recovery.
 - **Critical-moment suggestions** — Review can explicitly start, pause, and
-  resume a durable two-pass scan of the player's decisions. Imported games
-  with no known player side ask for White, Black, or Both first. The scan shows
-  accessible progress and at most two move-location suggestions; scores,
-  categories, and alternative moves remain hidden. Opening a suggestion
+  resume a durable two-pass scan. Its quick pass scores every non-terminal
+  played move, while coaching nominations and at most two deep checks remain
+  limited to the selected player's decisions. Imported games with no known
+  player side ask for White, Black, or Both first. The scan shows accessible
+  progress and at most two move-location suggestions; scores, categories,
+  annotations, and alternative moves remain absent from public scan state
+  until a valid structured reflection is submitted. That submission reveals
+  only the matching move first; reflecting on every suggestion unlocks the
+  scanned score trail. Scores evaluate the played root line, use a fixed
+  White-POV sign, and mark quick-pass values with `≈`.
+  Chessy adds only conservative negative `?!`, `?`, or `??` badges to stable,
+  deep-confirmed critical moments; imported move-quality PGN NAGs carry a
+  separate `PGN` badge. Unresolved moves never receive an invented score.
+  Opening a suggestion
   navigates to that position and starts a fresh blank reflection, and scanning
   is unavailable while a live timed game is running.
 - **Reflection → lesson cards** — flag one of your own positions in Review;
@@ -194,6 +205,8 @@ node test/wasm-signatures.test.js   # frozen pre-removal WASM behavior
 node test/level-presets.test.js     # target bands and WASM budgets
 node test/ai-match-cli.test.js      # match-budget validation/time smoke
 node test/runtime-update.test.js
+node test/analysis-notation.test.js # White-POV score + ?!/?/?? policy
+node test/moment-scan.test.js       # durable scan and reflection-gated report
 ```
 
 The Master e4 diagnostic treats Git commit `8b887c4` and the recorded WASM
@@ -282,13 +295,14 @@ gated on the engine *and* browser suites.
 | `assets/storage-health.js` | One-time persistent-storage request (after the first durable archive write) and the Progress storage snapshot |
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
-| `assets/review.js` | Review view: tabs, archived-game list, position browser, and spoiler-free scan controls/suggestions |
+| `assets/review.js` | Review view: tabs, archived-game list, position browser, full SAN ledger, and gated score/annotation overlays |
 | `assets/analysis-core.js` | Deterministic Rust/WASM analysis contract (exact MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
 | `assets/analysis-worker.js` | Dedicated WASM coaching-analysis worker with throttled non-terminal progress |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, owner-scoped progress/cancellation, watchdog + retry, validated IndexedDB result cache |
 | `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |
 | `assets/moment-selector.js` | Pure, deterministic critical-moment evidence, collapse suppression, clustering and deep-admission policy |
-| `assets/moment-scan.js` | Explicit, sequential two-pass scan controller with durable checkpoints, pause/resume and spoiler-safe public state |
+| `assets/analysis-notation.js` | Versioned White-POV played-score summary and conservative deep `?!`/`?`/`??` policy |
+| `assets/moment-scan.js` | Explicit, sequential two-pass scan controller with durable checkpoints, pause/resume and reflection-gated public reports |
 | `assets/reflection.js` | Manual reflection flow: flag → answer → contract analysis → lesson card |
 | `assets/train.js` | Train view: due-card queue on the fixed spaced-review ladder |
 | `assets/progress.js` | Progress view: read-only descriptive counts and storage health |
