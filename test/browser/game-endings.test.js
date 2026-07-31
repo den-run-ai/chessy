@@ -326,7 +326,7 @@ require('./helper').run('game endings', async function (t) {
       }
     });
   });
-  await page.evaluate(function (id) {
+  await t.inject(function (id) {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
     saved.manualEnding = { kind: 'resignation', color: 'b' };
     saved.endedAt = 123456;
@@ -345,8 +345,6 @@ require('./helper').run('game endings', async function (t) {
       }
     }));
   }, heldEndingId);
-  await page.reload();
-  await page.waitForSelector('#board .square');
   check((await page.textContent('#status')).includes('1-0'),
     'the held boot starts from the saved manual result');
   await page.click('#undo');
@@ -371,10 +369,6 @@ require('./helper').run('game endings', async function (t) {
   // live save is persisted. On the next boot, the tombstone must suppress the
   // stale finished save as well as remove its committed archive row.
   await page.evaluate(function (id) {
-    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
-    saved.manualEnding = { kind: 'resignation', color: 'b' };
-    saved.endedAt = 123457;
-    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
     const rec = {
       id: id, source: 'play', tags: {}, sans: ['e4'],
       playerColor: 'both', clocks: [null], ai: [null],
@@ -382,20 +376,23 @@ require('./helper').run('game endings', async function (t) {
       difficulty: '2', timeControl: 'none', plies: 1,
       createdAt: 123457
     };
-    return CoachStore.archiveGame(rec).then(function () {
-      localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
-        [id]: {
-          w: 'w-crashed-undo',
-          op: 'retract',
-          ending: {
-            id: id, sans: ['e4'], result: '1-0', reason: 'resignation'
-          }
-        }
-      }));
-    });
+    return CoachStore.archiveGame(rec);
   }, heldEndingId);
-  await page.reload();
-  await page.waitForSelector('#board .square');
+  await t.inject(function (id) {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.manualEnding = { kind: 'resignation', color: 'b' };
+    saved.endedAt = 123457;
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+    localStorage.setItem('chessy-pending-archive-v1', JSON.stringify({
+      [id]: {
+        w: 'w-crashed-undo',
+        op: 'retract',
+        ending: {
+          id: id, sans: ['e4'], result: '1-0', reason: 'resignation'
+        }
+      }
+    }));
+  }, heldEndingId);
   await page.waitForFunction(function (id) {
     return CoachStore.getGame(id).then(function (game) {
       const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
