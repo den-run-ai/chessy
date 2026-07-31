@@ -18,13 +18,71 @@ import random
 import re
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 
 PIECES = ("P", "N", "B", "R", "Q", "K")
+CORPUS_ROLES = (
+    "shared-train",
+    "hce-validation",
+    "hce-test",
+    "nnue-validation",
+    "nnue-test",
+)
 ALLOWED_ROLES = {"shared-train", "nnue-validation"}
+PRODUCTION_VALIDATION_CONTRACT = {
+    "selectionState": "exploration-selection-only",
+    "selectionFitAllowed": False,
+    "certificationStatus": "frozen",
+    "pendingCertificationAllowedForTestOnly": False,
+    "selectionSourceId": "lichess-evaluations",
+    "selectionSourceUrl": "https://database.lichess.org/",
+    "selectionSourceFields": [
+        "id",
+        "url",
+        "retrieved",
+        "compressedSha256",
+        "license",
+    ],
+    "recordSourceDataset": "lichess-evaluated-positions",
+    "recordSourceFields": [
+        "dataset",
+        "snapshotSha256",
+        "license",
+    ],
+}
+SAMPLE_ONLY_VALIDATION_CONTRACT = {
+    "sidecarState": "pinned-teacher-labels-sample-only",
+    "fitAllowed": False,
+    "selectionState": "mechanism-test-selection-only",
+    "selectionFitAllowed": False,
+    "certificationStatus": "awaiting-opening-freeze",
+    "pendingCertificationAllowedForTestOnly": True,
+    "selectionSourceId": "chessy-training-mechanism-fixture",
+    "selectionSourceUrl": None,
+    "selectionSourceFields": [
+        "id",
+        "url",
+        "retrieved",
+        "compressedSha256",
+        "license",
+        "mechanismFixture",
+    ],
+    "recordSourceDataset": "chessy-training-mechanism-fixture",
+    "recordSourceFields": [
+        "dataset",
+        "snapshotSha256",
+        "license",
+        "mechanismFixture",
+    ],
+    "mechanismFixture": {
+        "status": "sample-only-not-fit-eligible",
+        "fitAllowed": False,
+        "officialEvaluationSnapshot": False,
+    },
+}
 TRANSFORMS = (
     "identity",
     "file-mirror",
@@ -89,16 +147,39 @@ class InputContracts:
     corpus_sha256: str
 
 
+@dataclass(frozen=True)
+class SelectionShard:
+    path: Path
+    rows: int
+    sha256: str
+
+
+@dataclass(frozen=True)
+class SelectionBinding:
+    path: Path
+    sha256: str
+    certification_path: Path
+    certification_sha256: str
+    selection_contract_sha256: str
+    source_snapshot_sha256: str
+    sample_only: bool
+    shards: tuple[SelectionShard, ...]
+    certification_clusters: frozenset[str]
+    certification_families: frozenset[str]
+
+
 @dataclass
 class Shard:
     path: Path
-    role: str
     sha256: str
     rows: int
     sidecar_path: Path
     sidecar_sha256: str
     sidecar: dict[str, Any]
+    selection: SelectionBinding
+    selection_shard: SelectionShard
     observed_rows: int = 0
+    role_rows: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -108,6 +189,7 @@ class ValidatedInputs:
     selection_manifest_sha256: str
     selection_contract_sha256: str
     source_snapshot_sha256: str
+    sample_only: bool
 
 
 def sha256_text(value: str) -> str:
@@ -353,6 +435,24 @@ def sha256_file(filename: Path) -> str:
     return digest.hexdigest()
 
 
+def load_json_buffer(
+    filename: Path, label: str
+) -> tuple[dict[str, Any], str]:
+    data = filename.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"{label} is not UTF-8 JSON") from error
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{label} is invalid JSON: {error.msg}") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must contain a JSON object")
+    return value, digest
+
+
 def require_object(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{label} must be an object")
@@ -378,6 +478,16 @@ def load_contracts(root: Path | None = None) -> InputContracts:
     contract = require_object(
         config.get("data", {}).get("trustBoundary"), "trustBoundary"
     )
+    if (
+        contract.get("productionValidation")
+        != PRODUCTION_VALIDATION_CONTRACT
+    ):
+        raise ValueError("production validation contract drifted")
+    if (
+        contract.get("sampleOnlyValidation")
+        != SAMPLE_ONLY_VALIDATION_CONTRACT
+    ):
+        raise ValueError("sample-only validation contract drifted")
 
     def pinned_file(path_key: str, sha_key: str) -> tuple[Path, str, dict[str, Any]]:
         relative = contract.get(path_key)
@@ -475,22 +585,266 @@ def expected_teacher_networks(teacher: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def resolve_reference(value: Any, base: Path, label: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} must name a file")
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    resolved = candidate.resolve()
+    if not resolved.is_file():
+        raise ValueError(f"{label} is not a file: {resolved}")
+    return resolved
+
+
+def load_selection_binding(
+    selection_path: Path,
+    expected_sha256: str,
+    contracts: InputContracts,
+    *,
+    sample_only: bool,
+) -> SelectionBinding:
+    label = str(selection_path)
+    manifest, manifest_sha256 = load_json_buffer(selection_path, label)
+    if manifest_sha256 != expected_sha256:
+        raise ValueError(f"{label}: selection manifest SHA-256 does not match")
+    trust = contracts.config["data"]["trustBoundary"]
+    mode = (
+        trust["sampleOnlyValidation"]
+        if sample_only
+        else trust["productionValidation"]
+    )
+    if (
+        manifest.get("schemaVersion") != 1
+        or manifest.get("state") != mode["selectionState"]
+        or manifest.get("finalFitAllowed")
+        is not mode["selectionFitAllowed"]
+    ):
+        raise ValueError(f"{label}: selection manifest has the wrong mode/state")
+    marker = manifest.get("mechanismFixture")
+    if sample_only:
+        if marker != mode["mechanismFixture"]:
+            raise ValueError(
+                f"{label}: sample selection mechanismFixture marker is not exact"
+            )
+    elif "mechanismFixture" in manifest:
+        raise ValueError(
+            f"{label}: production selection carries a sample-only marker"
+        )
+
+    source = require_object(manifest.get("source"), f"{label}.source")
+    if (
+        set(source) != set(mode["selectionSourceFields"])
+        or source.get("id") != mode["selectionSourceId"]
+        or source.get("url") != mode["selectionSourceUrl"]
+        or source.get("license") != "CC0-1.0"
+        or not isinstance(source.get("retrieved"), str)
+        or re.fullmatch(r"\d{4}-\d{2}-\d{2}", source["retrieved"]) is None
+    ):
+        raise ValueError(f"{label}: selection source identity/license is invalid")
+    if sample_only and source.get("mechanismFixture") != mode[
+        "mechanismFixture"
+    ]:
+        raise ValueError(
+            f"{label}: sample selection source marker is not exact"
+        )
+    source_snapshot_sha256 = require_sha256(
+        source.get("compressedSha256"), f"{label}.source.compressedSha256"
+    )
+    adapter = require_object(manifest.get("adapter"), f"{label}.adapter")
+    selection_contract_sha256 = require_sha256(
+        adapter.get("selectionContractSha256"),
+        f"{label}.adapter.selectionContractSha256",
+    )
+    exclusions = require_object(
+        manifest.get("exclusions"), f"{label}.exclusions"
+    )
+    certification_status = exclusions.get("certificationStatus")
+    if (
+        certification_status != mode["certificationStatus"]
+        or exclusions.get("pendingCertificationAllowedForTestOnly")
+        is not mode["pendingCertificationAllowedForTestOnly"]
+    ):
+        raise ValueError(
+            f"{label}: selection certification mode is not allowed"
+        )
+    certification_sha256 = require_sha256(
+        exclusions.get("certificationManifestSha256"),
+        f"{label}.exclusions.certificationManifestSha256",
+    )
+    repository = contracts.config_path.parents[2]
+    certification_path = resolve_reference(
+        exclusions.get("certificationManifest"),
+        repository,
+        f"{label}.exclusions.certificationManifest",
+    )
+    certification, actual_certification_sha256 = load_json_buffer(
+        certification_path, str(certification_path)
+    )
+    if actual_certification_sha256 != certification_sha256:
+        raise ValueError(
+            f"{label}: certification manifest SHA-256 does not match"
+        )
+    if (
+        certification.get("schema")
+        != "chessy.e4.certification-manifest.v1"
+        or certification.get("protocolId") != "E4-v1"
+        or certification.get("kind") != "certification"
+        or certification.get("status") != certification_status
+    ):
+        raise ValueError(
+            f"{label}: certification manifest identity/status is invalid"
+        )
+    openings = certification.get("openingClusters")
+    if not isinstance(openings, list):
+        raise ValueError(
+            f"{label}: certification openingClusters must be an array"
+        )
+    certification_clusters: set[str] = set()
+    certification_families: set[str] = set()
+    for index, opening in enumerate(openings):
+        item = require_object(
+            opening, f"{label}.certification.openingClusters[{index}]"
+        )
+        fen = item.get("fen")
+        if not isinstance(fen, str):
+            raise ValueError(
+                f"{label}: certification opening {index} has no FEN"
+            )
+        certification_clusters.add(cluster_key(fen))
+        certification_families.add(position_family_key(fen))
+    cluster_count = require_nonnegative_int(
+        exclusions.get("certificationClusterCount"),
+        f"{label}.exclusions.certificationClusterCount",
+    )
+    family_count = require_nonnegative_int(
+        exclusions.get("certificationPositionFamilyCount"),
+        f"{label}.exclusions.certificationPositionFamilyCount",
+    )
+    if (
+        cluster_count != len(certification_clusters)
+        or family_count != len(certification_families)
+    ):
+        raise ValueError(
+            f"{label}: certification holdout counts do not match"
+        )
+    if sample_only and (
+        openings
+        or certification.get("assignments") != []
+        or cluster_count != 0
+        or family_count != 0
+    ):
+        raise ValueError(
+            f"{label}: pending sample certification must have zero holdout sets"
+        )
+
+    listed = manifest.get("shards")
+    if not isinstance(listed, list) or not listed:
+        raise ValueError(f"{label}: selection manifest has no shard inventory")
+    shard_count = require_nonnegative_int(
+        adapter.get("shardCount"), f"{label}.adapter.shardCount"
+    )
+    if shard_count != len(listed):
+        raise ValueError(f"{label}: selection shard count does not match")
+    selection_shards: list[SelectionShard] = []
+    seen_paths: set[Path] = set()
+    total_rows = 0
+    for index, value in enumerate(listed):
+        item = require_object(value, f"{label}.shards[{index}]")
+        if set(item) != {"path", "rows", "canonicalNdjsonSha256"}:
+            raise ValueError(
+                f"{label}: selection shard {index} metadata is not exact"
+            )
+        expected_name = f"selection-{index:03d}.ndjson"
+        if item.get("path") != expected_name:
+            raise ValueError(
+                f"{label}: selection shard {index} path is not canonical"
+            )
+        rows = require_nonnegative_int(
+            item.get("rows"), f"{label}.shards[{index}].rows"
+        )
+        shard_sha256 = require_sha256(
+            item.get("canonicalNdjsonSha256"),
+            f"{label}.shards[{index}].canonicalNdjsonSha256",
+        )
+        shard_path = resolve_reference(
+            item.get("path"),
+            selection_path.parent,
+            f"{label}.shards[{index}].path",
+        )
+        if shard_path in seen_paths:
+            raise ValueError(f"{label}: duplicate selection shard path")
+        seen_paths.add(shard_path)
+        if sha256_file(shard_path) != shard_sha256:
+            raise ValueError(
+                f"{label}: selection shard {index} SHA-256 does not match"
+            )
+        selection_shards.append(
+            SelectionShard(
+                path=shard_path,
+                rows=rows,
+                sha256=shard_sha256,
+            )
+        )
+        total_rows += rows
+    counts = require_object(manifest.get("counts"), f"{label}.counts")
+    if require_nonnegative_int(
+        counts.get("selected"), f"{label}.counts.selected"
+    ) != total_rows:
+        raise ValueError(f"{label}: selected rows do not match shard inventory")
+    return SelectionBinding(
+        path=selection_path,
+        sha256=manifest_sha256,
+        certification_path=certification_path,
+        certification_sha256=certification_sha256,
+        selection_contract_sha256=selection_contract_sha256,
+        source_snapshot_sha256=source_snapshot_sha256,
+        sample_only=sample_only,
+        shards=tuple(selection_shards),
+        certification_clusters=frozenset(certification_clusters),
+        certification_families=frozenset(certification_families),
+    )
+
+
 def validate_sidecar(
-    filename: Path, expected_role: str, contracts: InputContracts
+    filename: Path,
+    contracts: InputContracts,
+    *,
+    sample_only: bool = False,
+    selection_cache: dict[Path, SelectionBinding] | None = None,
 ) -> Shard:
     suffix = contracts.config["data"]["trustBoundary"]["sidecarSuffix"]
     sidecar_path = Path(str(filename) + suffix)
     if not sidecar_path.is_file():
         raise ValueError(f"{filename}: required sidecar is missing: {sidecar_path}")
-    sidecar_sha = sha256_file(sidecar_path)
-    manifest = load_json(sidecar_path)
     label = str(sidecar_path)
-    expected_state = contracts.config["data"]["trustBoundary"]["sidecarState"]
+    manifest, sidecar_sha = load_json_buffer(sidecar_path, label)
+    trust = contracts.config["data"]["trustBoundary"]
+    sample_contract = require_object(
+        trust.get("sampleOnlyValidation"),
+        "trustBoundary.sampleOnlyValidation",
+    )
+    expected_state = (
+        sample_contract.get("sidecarState")
+        if sample_only
+        else trust["sidecarState"]
+    )
     if (
         manifest.get("schemaVersion") != 1
         or manifest.get("state") != expected_state
     ):
         raise ValueError(f"{label}: wrong sidecar schema/state")
+    if sample_only:
+        if manifest.get("fitAllowed") is not False:
+            raise ValueError(f"{label}: sample-only sidecar must set fitAllowed=false")
+        if manifest.get("mechanismFixture") != sample_contract.get(
+            "mechanismFixture"
+        ):
+            raise ValueError(
+                f"{label}: sample-only mechanismFixture marker is not exact"
+            )
+    elif "mechanismFixture" in manifest or "fitAllowed" in manifest:
+        raise ValueError(f"{label}: sample-only markers are forbidden for fitting")
 
     output = require_object(manifest.get("output"), f"{label}.output")
     rows = require_nonnegative_int(output.get("rows"), f"{label}.output.rows")
@@ -533,12 +887,48 @@ def validate_sidecar(
     selection = require_object(
         source.get("selectionManifest"), f"{label}.input.selectionManifest"
     )
-    require_sha256(selection.get("sha256"), f"{label}.input.selectionManifest.sha256")
-    require_sha256(
+    declared_selection_sha256 = require_sha256(
+        selection.get("sha256"), f"{label}.input.selectionManifest.sha256"
+    )
+    declared_selection_contract_sha256 = require_sha256(
         selection.get("selectionContractSha256"),
         f"{label}.input.selectionManifest.selectionContractSha256",
     )
-    if selection.get("certificationStatus") != "frozen":
+    selection_path = resolve_reference(
+        selection.get("path"),
+        sidecar_path.parent,
+        f"{label}.input.selectionManifest.path",
+    )
+    cache = selection_cache if selection_cache is not None else {}
+    selection_binding = cache.get(selection_path)
+    if selection_binding is None:
+        selection_binding = load_selection_binding(
+            selection_path,
+            declared_selection_sha256,
+            contracts,
+            sample_only=sample_only,
+        )
+        cache[selection_path] = selection_binding
+    elif (
+        selection_binding.sha256 != declared_selection_sha256
+        or selection_binding.sample_only is not sample_only
+    ):
+        raise ValueError(f"{label}: selection manifest binding is inconsistent")
+    if (
+        declared_selection_contract_sha256
+        != selection_binding.selection_contract_sha256
+    ):
+        raise ValueError(
+            f"{label}: selection contract SHA-256 does not match its manifest"
+        )
+    certification_status = selection.get("certificationStatus")
+    if sample_only:
+        if certification_status != sample_contract.get("certificationStatus"):
+            raise ValueError(
+                f"{label}: sample-only validation requires "
+                "awaiting-opening-freeze certification"
+            )
+    elif certification_status != "frozen":
         raise ValueError(
             f"{label}: pending/test-only certification selections are forbidden"
         )
@@ -546,7 +936,31 @@ def validate_sidecar(
     input_rows = require_nonnegative_int(
         input_shard.get("rows"), f"{label}.input.shard.rows"
     )
-    require_sha256(input_shard.get("sha256"), f"{label}.input.shard.sha256")
+    input_sha256 = require_sha256(
+        input_shard.get("sha256"), f"{label}.input.shard.sha256"
+    )
+    input_path = resolve_reference(
+        input_shard.get("path"),
+        selection_path.parent,
+        f"{label}.input.shard.path",
+    )
+    matches = [
+        shard
+        for shard in selection_binding.shards
+        if shard.path == input_path
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"{label}: input shard is not uniquely listed by selection manifest"
+        )
+    selection_shard = matches[0]
+    if (
+        input_rows != selection_shard.rows
+        or input_sha256 != selection_shard.sha256
+    ):
+        raise ValueError(
+            f"{label}: input shard metadata does not match selection manifest"
+        )
     exclusions = require_object(manifest.get("exclusions"), f"{label}.exclusions")
     exclusion_rows = require_nonnegative_int(
         exclusions.get("rows"), f"{label}.exclusions.rows"
@@ -560,12 +974,13 @@ def validate_sidecar(
     require_sha256(transcript.get("sha256"), f"{label}.teacher.transcript.sha256")
     return Shard(
         path=filename,
-        role=expected_role,
         sha256=actual_sha,
         rows=rows,
         sidecar_path=sidecar_path,
         sidecar_sha256=sidecar_sha,
         sidecar=manifest,
+        selection=selection_binding,
+        selection_shard=selection_shard,
     )
 
 
@@ -592,14 +1007,30 @@ def validate_record(
     if parsed.fen4 != fen:
         raise ValueError(f"{label}: FEN is not normalized four-field form")
     source = require_object(record.get("source"), f"{label}.source")
+    trust = contracts.config["data"]["trustBoundary"]
+    mode = (
+        trust["sampleOnlyValidation"]
+        if shard.selection.sample_only
+        else trust["productionValidation"]
+    )
     if (
-        source.get("dataset") != "lichess-evaluated-positions"
+        set(source) != set(mode["recordSourceFields"])
+        or source.get("dataset") != mode["recordSourceDataset"]
         or source.get("license") != "CC0-1.0"
     ):
-        raise ValueError(f"{label}: source dataset/license is not allowed")
+        raise ValueError(f"{label}: source fields/dataset/license are not allowed")
+    if shard.selection.sample_only:
+        if source.get("mechanismFixture") != mode["mechanismFixture"]:
+            raise ValueError(
+                f"{label}: sample record mechanismFixture marker is not exact"
+            )
     snapshot_sha = require_sha256(
         source.get("snapshotSha256"), f"{label}.source.snapshotSha256"
     )
+    if snapshot_sha != shard.selection.source_snapshot_sha256:
+        raise ValueError(
+            f"{label}: source snapshot does not match selection manifest"
+        )
     cluster = cluster_key(fen)
     family = position_family_key(fen)
     recomputed = {
@@ -617,13 +1048,15 @@ def validate_record(
         or family == heldout["positionFamilySha256"]
     ):
         raise ValueError(f"{label}: held-out incident cluster/family is forbidden")
+    if (
+        cluster in shard.selection.certification_clusters
+        or family in shard.selection.certification_families
+    ):
+        raise ValueError(
+            f"{label}: certification cluster/family is forbidden"
+        )
     if record.get("role") != role_for_family(family):
         raise ValueError(f"{label}: recomputed role does not match")
-    if record["role"] != shard.role:
-        raise ValueError(
-            f"{label}: role {record['role']!r}, "
-            f"expected exact shard role {shard.role!r}"
-        )
     teacher = require_object(record.get("teacher"), f"{label}.teacher")
     if set(teacher) != TEACHER_RECORD_FIELDS:
         raise ValueError(f"{label}: teacher has undeclared or missing fields")
@@ -713,6 +1146,7 @@ def iter_validated_shard(
 ) -> Iterator[tuple[str, dict[str, Any], Shard]]:
     previous_id: str | None = None
     rows = 0
+    role_rows = {role: 0 for role in CORPUS_ROLES}
     with shard.path.open("r", encoding="utf-8") as stream:
         for line_number, line in enumerate(stream, 1):
             if not line.strip():
@@ -734,8 +1168,10 @@ def iter_validated_shard(
                 )
             previous_id = record_id
             rows += 1
+            role_rows[record["role"]] += 1
             yield record_id, record, shard
     shard.observed_rows = rows
+    shard.role_rows = role_rows
     if rows != shard.rows:
         raise ValueError(
             f"{shard.path}: sidecar rows={shard.rows}, observed rows={rows}"
@@ -754,26 +1190,80 @@ def resolve_input_files(values: Iterable[str], label: str) -> list[Path]:
     return sorted(resolved, key=lambda item: str(item))
 
 
+def assert_shards_unchanged(
+    shards: Iterable[Shard],
+    exception: type[Exception] = RuntimeError,
+    phase: str = "validation",
+) -> None:
+    unique = {shard.path: shard for shard in shards}
+    selections = {shard.selection.path: shard.selection for shard in unique.values()}
+    selection_shards = {
+        selected.path: selected
+        for binding in selections.values()
+        for selected in binding.shards
+    }
+    for shard in unique.values():
+        if sha256_file(shard.path) != shard.sha256:
+            raise exception(f"input shard changed during {phase}: {shard.path}")
+        if sha256_file(shard.sidecar_path) != shard.sidecar_sha256:
+            raise exception(
+                f"input sidecar changed during {phase}: {shard.sidecar_path}"
+            )
+    for binding in selections.values():
+        if sha256_file(binding.path) != binding.sha256:
+            raise exception(
+                f"selection manifest changed during {phase}: {binding.path}"
+            )
+        if (
+            sha256_file(binding.certification_path)
+            != binding.certification_sha256
+        ):
+            raise exception(
+                f"certification manifest changed during {phase}: "
+                f"{binding.certification_path}"
+            )
+    for selected in selection_shards.values():
+        if sha256_file(selected.path) != selected.sha256:
+            raise exception(
+                f"selection shard changed during {phase}: {selected.path}"
+            )
+
+
 def validate_inputs(
     train_values: Iterable[str],
     validation_values: Iterable[str],
     root: Path | None = None,
+    *,
+    sample_only: bool = False,
 ) -> ValidatedInputs:
     contracts = load_contracts(root)
     train_paths = resolve_input_files(train_values, "--train")
     validation_paths = resolve_input_files(validation_values, "--validation")
-    overlap = set(train_paths).intersection(validation_paths)
-    if overlap:
-        raise ValueError(f"train/validation reuse the same shard: {sorted(overlap)[0]}")
-    train = [
-        validate_sidecar(filename, "shared-train", contracts)
-        for filename in train_paths
-    ]
-    validation = [
-        validate_sidecar(filename, "nnue-validation", contracts)
-        for filename in validation_paths
-    ]
-    all_shards = train + validation
+    # Teacher shards preserve the ID order of their selected input shards, so
+    # they normally contain all five deterministic corpus roles. A physical
+    # shard may therefore back both trainer streams. Authenticate and validate
+    # each physical file exactly once, then select records by their recomputed
+    # role; sharing a file does not share a record between the streams.
+    all_paths = sorted(
+        set(train_paths).union(validation_paths), key=lambda item: str(item)
+    )
+    selection_cache: dict[Path, SelectionBinding] = {}
+    by_path = {
+        filename: validate_sidecar(
+            filename,
+            contracts,
+            sample_only=sample_only,
+            selection_cache=selection_cache,
+        )
+        for filename in all_paths
+    }
+    train = [by_path[filename] for filename in train_paths]
+    validation = [by_path[filename] for filename in validation_paths]
+    all_shards = [by_path[filename] for filename in all_paths]
+    selection_paths = {shard.selection.path for shard in all_shards}
+    if len(selection_paths) != 1:
+        raise ValueError("all shards must reference one selection manifest file")
+    selection_binding = all_shards[0].selection
     selection_hashes = {
         shard.sidecar["input"]["selectionManifest"]["sha256"]
         for shard in all_shards
@@ -786,6 +1276,28 @@ def validate_inputs(
     }
     if len(selection_contract_hashes) != 1:
         raise ValueError("all shards must bind the same selection contract SHA-256")
+    provided_selection_paths = [
+        shard.selection_shard.path
+        for shard in all_shards
+    ]
+    if len(set(provided_selection_paths)) != len(provided_selection_paths):
+        raise ValueError(
+            "multiple teacher shards bind the same selection input shard"
+        )
+    expected_selection_paths = {
+        shard.path for shard in selection_binding.shards
+    }
+    if set(provided_selection_paths) != expected_selection_paths:
+        missing = sorted(
+            str(path)
+            for path in expected_selection_paths.difference(
+                provided_selection_paths
+            )
+        )
+        raise ValueError(
+            "teacher inputs do not cover the complete selection shard "
+            f"inventory; missing={missing}"
+        )
 
     iterators = [
         iter_validated_shard(shard, contracts)
@@ -802,27 +1314,43 @@ def validate_inputs(
         source_snapshots.add(record["source"]["snapshotSha256"])
         if len(source_snapshots) > 1:
             raise ValueError("all shards must use one source snapshot SHA-256")
-    if sum(shard.observed_rows for shard in train) == 0:
+    if source_snapshots != {selection_binding.source_snapshot_sha256}:
+        raise ValueError(
+            "record source snapshot does not match authenticated selection"
+        )
+    if sum(shard.role_rows["shared-train"] for shard in train) == 0:
         raise ValueError("training role contained zero records")
-    if sum(shard.observed_rows for shard in validation) == 0:
+    if sum(shard.role_rows["nnue-validation"] for shard in validation) == 0:
         raise ValueError("validation role contained zero records")
+    assert_shards_unchanged(all_shards, ValueError)
     return ValidatedInputs(
         train=tuple(train),
         validation=tuple(validation),
         selection_manifest_sha256=next(iter(selection_hashes)),
         selection_contract_sha256=next(iter(selection_contract_hashes)),
         source_snapshot_sha256=next(iter(source_snapshots)),
+        sample_only=sample_only,
     )
 
 
 def validation_report(
     validated: ValidatedInputs, contracts: InputContracts
 ) -> dict[str, Any]:
-    def report_shard(shard: Shard) -> dict[str, Any]:
+    assert_shards_unchanged(
+        validated.train + validated.validation,
+        ValueError,
+    )
+
+    def report_shard(shard: Shard, selected_role: str) -> dict[str, Any]:
         return {
             "path": str(shard.path),
-            "role": shard.role,
+            "role": selected_role,
             "rows": shard.rows,
+            "selectedRows": shard.role_rows[selected_role],
+            "roleRows": {
+                role: shard.role_rows[role]
+                for role in CORPUS_ROLES
+            },
             "sha256": shard.sha256,
             "sidecar": {
                 "path": str(shard.sidecar_path),
@@ -830,10 +1358,20 @@ def validation_report(
             },
         }
 
-    return {
-        "status": "validated-pinned-teacher-inputs",
-        "train": [report_shard(shard) for shard in validated.train],
-        "validation": [report_shard(shard) for shard in validated.validation],
+    report = {
+        "status": (
+            "validated-sample-only-pinned-teacher-inputs"
+            if validated.sample_only
+            else "validated-pinned-teacher-inputs"
+        ),
+        "train": [
+            report_shard(shard, "shared-train")
+            for shard in validated.train
+        ],
+        "validation": [
+            report_shard(shard, "nnue-validation")
+            for shard in validated.validation
+        ],
         "selectionManifestSha256": validated.selection_manifest_sha256,
         "selectionContractSha256": validated.selection_contract_sha256,
         "sourceSnapshotSha256": validated.source_snapshot_sha256,
@@ -843,16 +1381,17 @@ def validation_report(
             "corpusContractSha256": contracts.corpus_sha256,
         },
     }
+    if validated.sample_only:
+        report["fitAllowed"] = False
+    return report
 
 
 def assert_inputs_unchanged(validated: ValidatedInputs) -> None:
-    for shard in validated.train + validated.validation:
-        if sha256_file(shard.path) != shard.sha256:
-            raise RuntimeError(f"input shard changed during training: {shard.path}")
-        if sha256_file(shard.sidecar_path) != shard.sidecar_sha256:
-            raise RuntimeError(
-                f"input sidecar changed during training: {shard.sidecar_path}"
-            )
+    assert_shards_unchanged(
+        validated.train + validated.validation,
+        RuntimeError,
+        "training",
+    )
 
 
 def iter_records(filenames: list[Path], expected_role: str) -> Iterator[dict]:
@@ -866,11 +1405,13 @@ def iter_records(filenames: list[Path], expected_role: str) -> Iterator[dict]:
                 record = json.loads(line)
                 if record.get("schema") != "chessy.teacher-position.v1":
                     raise ValueError(f"{filename}:{number}: wrong schema")
-                if record.get("role") != expected_role:
+                role = record.get("role")
+                if role not in CORPUS_ROLES:
                     raise ValueError(
-                        f"{filename}:{number}: role {record.get('role')!r}, "
-                        f"expected {expected_role!r}"
+                        f"{filename}:{number}: unknown corpus role {role!r}"
                     )
+                if role != expected_role:
+                    continue
                 teacher = record.get("teacher")
                 target = (
                     teacher.get("targetWhite")
@@ -1127,9 +1668,28 @@ def self_test() -> None:
                     return fen
         raise AssertionError(f"could not construct a {role} self-test FEN")
 
-    def teacher_record(fen: str, role: str, snapshot_sha: str) -> dict[str, Any]:
+    def teacher_record(
+        fen: str,
+        role: str,
+        snapshot_sha: str,
+        *,
+        sample_only: bool = False,
+    ) -> dict[str, Any]:
         family = position_family_key(fen)
         teacher = contracts.teacher
+        source = {
+            "dataset": (
+                "chessy-training-mechanism-fixture"
+                if sample_only
+                else "lichess-evaluated-positions"
+            ),
+            "license": "CC0-1.0",
+            "snapshotSha256": snapshot_sha,
+        }
+        if sample_only:
+            source["mechanismFixture"] = dict(
+                SAMPLE_ONLY_VALIDATION_CONTRACT["mechanismFixture"]
+            )
         return {
             "schema": contracts.config["data"]["schema"],
             "id": sha256_text(snapshot_sha + "\n" + fen),
@@ -1139,11 +1699,7 @@ def self_test() -> None:
             "role": role,
             "positionFamily": family,
             "strata": {},
-            "source": {
-                "dataset": "lichess-evaluated-positions",
-                "license": "CC0-1.0",
-                "snapshotSha256": snapshot_sha,
-            },
+            "source": source,
             "teacher": {
                 "id": teacher["id"],
                 "release": teacher["engine"]["release"],
@@ -1162,16 +1718,125 @@ def self_test() -> None:
             },
         }
 
+    def write_selection_fixture(
+        directory: Path,
+        filename: Path,
+        rows: int,
+        snapshot_sha: str,
+        selection_contract_sha: str,
+        *,
+        sample_only: bool = False,
+        certification_fens: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        mode = (
+            SAMPLE_ONLY_VALIDATION_CONTRACT
+            if sample_only
+            else PRODUCTION_VALIDATION_CONTRACT
+        )
+        selection_directory = directory / f"{filename.stem}-selection"
+        selection_directory.mkdir()
+        selection_shard = selection_directory / "selection-000.ndjson"
+        selection_shard.write_bytes(filename.read_bytes())
+        selection_shard_sha = sha256_file(selection_shard)
+
+        certification = {
+            "schema": "chessy.e4.certification-manifest.v1",
+            "protocolId": "E4-v1",
+            "kind": "certification",
+            "status": mode["certificationStatus"],
+            "openingClusters": [
+                {"fen": fen} for fen in certification_fens
+            ],
+            "assignments": [],
+        }
+        certification_path = directory / f"{filename.stem}-certification.json"
+        certification_path.write_text(
+            json.dumps(certification, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        certification_clusters = {
+            cluster_key(fen) for fen in certification_fens
+        }
+        certification_families = {
+            position_family_key(fen) for fen in certification_fens
+        }
+        selection_manifest = {
+            "schemaVersion": 1,
+            "state": mode["selectionState"],
+            "finalFitAllowed": mode["selectionFitAllowed"],
+            "source": {
+                "id": mode["selectionSourceId"],
+                "url": mode["selectionSourceUrl"],
+                "retrieved": "2026-07-31",
+                "compressedSha256": snapshot_sha,
+                "license": "CC0-1.0",
+            },
+            "adapter": {
+                "selectionContractSha256": selection_contract_sha,
+                "shardCount": 1,
+            },
+            "exclusions": {
+                "certificationManifest": str(certification_path),
+                "certificationManifestSha256": sha256_file(
+                    certification_path
+                ),
+                "certificationStatus": mode["certificationStatus"],
+                "certificationClusterCount": len(certification_clusters),
+                "certificationPositionFamilyCount": len(
+                    certification_families
+                ),
+                "pendingCertificationAllowedForTestOnly": mode[
+                    "pendingCertificationAllowedForTestOnly"
+                ],
+            },
+            "counts": {"selected": rows},
+            "shards": [
+                {
+                    "path": selection_shard.name,
+                    "rows": rows,
+                    "canonicalNdjsonSha256": selection_shard_sha,
+                }
+            ],
+        }
+        if sample_only:
+            selection_manifest["mechanismFixture"] = mode[
+                "mechanismFixture"
+            ]
+            selection_manifest["source"]["mechanismFixture"] = mode[
+                "mechanismFixture"
+            ]
+        selection_path = selection_directory / "manifest.json"
+        selection_path.write_text(
+            json.dumps(selection_manifest, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return {
+            "path": selection_path,
+            "sha256": sha256_file(selection_path),
+            "selectionContractSha256": selection_contract_sha,
+            "certificationStatus": mode["certificationStatus"],
+            "shardPath": selection_shard,
+            "shardRows": rows,
+            "shardSha256": selection_shard_sha,
+        }
+
     def write_sidecar(
         filename: Path,
         rows: int,
-        selection_sha: str,
-        selection_contract_sha: str,
+        selection: dict[str, Any],
+        *,
+        sample_only: bool = False,
     ) -> Path:
         teacher = contracts.teacher
+        trust = contracts.config["data"]["trustBoundary"]
+        sample_contract = trust["sampleOnlyValidation"]
         manifest = {
             "schemaVersion": 1,
-            "state": contracts.config["data"]["trustBoundary"]["sidecarState"],
+            "state": (
+                sample_contract["sidecarState"]
+                if sample_only
+                else trust["sidecarState"]
+            ),
             "output": {
                 "path": filename.name,
                 "rows": rows,
@@ -1179,11 +1844,20 @@ def self_test() -> None:
             },
             "input": {
                 "selectionManifest": {
-                    "sha256": selection_sha,
-                    "selectionContractSha256": selection_contract_sha,
-                    "certificationStatus": "frozen",
+                    "path": str(selection["path"]),
+                    "sha256": selection["sha256"],
+                    "selectionContractSha256": selection[
+                        "selectionContractSha256"
+                    ],
+                    "certificationStatus": selection[
+                        "certificationStatus"
+                    ],
                 },
-                "shard": {"rows": rows, "sha256": "3" * 64},
+                "shard": {
+                    "path": str(selection["shardPath"]),
+                    "rows": selection["shardRows"],
+                    "sha256": selection["shardSha256"],
+                },
             },
             "exclusions": {"rows": 0, "sha256": "4" * 64},
             "teacher": {
@@ -1203,6 +1877,9 @@ def self_test() -> None:
                 "transcript": {"sha256": "5" * 64},
             },
         }
+        if sample_only:
+            manifest["fitAllowed"] = False
+            manifest["mechanismFixture"] = sample_contract["mechanismFixture"]
         sidecar = Path(
             str(filename)
             + contracts.config["data"]["trustBoundary"]["sidecarSuffix"]
@@ -1215,10 +1892,8 @@ def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="chessy-nnue-self-test-") as temporary:
         directory = Path(temporary)
         snapshot_sha = "0" * 64
-        selection_sha = "1" * 64
         selection_contract_sha = "2" * 64
-        train_file = directory / "train.ndjson"
-        validation_file = directory / "validation.ndjson"
+        teacher_file = directory / "teacher-000.ndjson"
         train_record = teacher_record(
             find_role_fen("shared-train"), "shared-train", snapshot_sha
         )
@@ -1227,17 +1902,26 @@ def self_test() -> None:
             "nnue-validation",
             snapshot_sha,
         )
-        train_file.write_text(
-            json.dumps(train_record, sort_keys=True) + "\n", encoding="utf-8"
+        mixed_records = sorted(
+            (train_record, validation_record), key=lambda record: record["id"]
         )
-        validation_file.write_text(
-            json.dumps(validation_record, sort_keys=True) + "\n",
+        teacher_file.write_text(
+            "".join(
+                json.dumps(record, sort_keys=True) + "\n"
+                for record in mixed_records
+            ),
             encoding="utf-8",
         )
-        write_sidecar(train_file, 1, selection_sha, selection_contract_sha)
-        write_sidecar(validation_file, 1, selection_sha, selection_contract_sha)
+        selection = write_selection_fixture(
+            directory,
+            teacher_file,
+            2,
+            snapshot_sha,
+            selection_contract_sha,
+        )
+        write_sidecar(teacher_file, 2, selection)
         validated = validate_inputs(
-            [str(train_file)], [str(validation_file)], root
+            [str(teacher_file)], [str(teacher_file)], root
         )
         report = validation_report(validated, contracts)
         equal(
@@ -1247,7 +1931,7 @@ def self_test() -> None:
         )
         equal(
             report["selectionManifestSha256"],
-            selection_sha,
+            selection["sha256"],
             "selection provenance propagation",
         )
         equal(
@@ -1255,9 +1939,155 @@ def self_test() -> None:
             snapshot_sha,
             "source provenance propagation",
         )
+        equal(
+            report["train"][0]["selectedRows"],
+            1,
+            "mixed-shard training partition",
+        )
+        equal(
+            report["validation"][0]["selectedRows"],
+            1,
+            "mixed-shard validation partition",
+        )
+        equal(
+            [record["id"] for record in iter_records(
+                [teacher_file], "shared-train"
+            )],
+            [train_record["id"]],
+            "mixed-shard streaming role filter",
+        )
+        sample_file = directory / "teacher-sample-000.ndjson"
+        sample_records = sorted(
+            (
+                teacher_record(
+                    train_record["fen"],
+                    "shared-train",
+                    snapshot_sha,
+                    sample_only=True,
+                ),
+                teacher_record(
+                    validation_record["fen"],
+                    "nnue-validation",
+                    snapshot_sha,
+                    sample_only=True,
+                ),
+            ),
+            key=lambda record: record["id"],
+        )
+        sample_file.write_text(
+            "".join(
+                json.dumps(record, sort_keys=True) + "\n"
+                for record in sample_records
+            ),
+            encoding="utf-8",
+        )
+        sample_selection = write_selection_fixture(
+            directory,
+            sample_file,
+            2,
+            snapshot_sha,
+            selection_contract_sha,
+            sample_only=True,
+        )
+        write_sidecar(
+            sample_file,
+            2,
+            sample_selection,
+            sample_only=True,
+        )
+        rejects(
+            ValueError,
+            "wrong sidecar schema/state",
+            lambda: validate_inputs(
+                [str(sample_file)], [str(sample_file)], root
+            ),
+            "sample sidecar rejected by fit-eligible validation",
+        )
+        rejects(
+            ValueError,
+            "wrong sidecar schema/state",
+            lambda: validate_inputs(
+                [str(teacher_file)],
+                [str(teacher_file)],
+                root,
+                sample_only=True,
+            ),
+            "fit-eligible sidecar rejected by sample-only validation",
+        )
+        sample_validated = validate_inputs(
+            [str(sample_file)],
+            [str(sample_file)],
+            root,
+            sample_only=True,
+        )
+        sample_report = validation_report(sample_validated, contracts)
+        equal(
+            sample_report["status"],
+            "validated-sample-only-pinned-teacher-inputs",
+            "sample-only validation status",
+        )
+        equal(
+            sample_report["fitAllowed"],
+            False,
+            "sample-only validation cannot authorize fitting",
+        )
+        escaped_file = directory / "teacher-sample-escape-000.ndjson"
+        escaped_file.write_bytes(sample_file.read_bytes())
+        escaped_sidecar = write_sidecar(
+            escaped_file,
+            2,
+            sample_selection,
+            sample_only=True,
+        )
+        escaped_manifest = load_json(escaped_sidecar)
+        escaped_manifest["state"] = contracts.config["data"][
+            "trustBoundary"
+        ]["sidecarState"]
+        escaped_manifest.pop("fitAllowed")
+        escaped_manifest.pop("mechanismFixture")
+        escaped_manifest["input"]["selectionManifest"][
+            "certificationStatus"
+        ] = "frozen"
+        escaped_sidecar.write_text(
+            json.dumps(escaped_manifest, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        rejects(
+            ValueError,
+            "selection manifest has the wrong mode/state",
+            lambda: validate_inputs(
+                [str(escaped_file)], [str(escaped_file)], root
+            ),
+            "editing only the sample sidecar cannot authorize production",
+        )
+        certification_file = directory / "teacher-certification-000.ndjson"
+        certification_file.write_bytes(teacher_file.read_bytes())
+        certification_selection = write_selection_fixture(
+            directory,
+            certification_file,
+            2,
+            snapshot_sha,
+            selection_contract_sha,
+            certification_fens=(train_record["fen"],),
+        )
+        write_sidecar(
+            certification_file,
+            2,
+            certification_selection,
+        )
+        rejects(
+            ValueError,
+            "certification cluster/family is forbidden",
+            lambda: validate_inputs(
+                [str(certification_file)],
+                [str(certification_file)],
+                root,
+            ),
+            "certification opening holdout rejection",
+        )
         assert_inputs_unchanged(validated)
         checks += 1
-        train_file.write_text(
+        teacher_file.write_text(
             json.dumps(train_record, sort_keys=True) + "\n ",
             encoding="utf-8",
         )
@@ -1270,7 +2100,7 @@ def self_test() -> None:
         rejects(
             ValueError,
             "trainer is not allowed to read role nnue-test",
-            lambda: list(iter_records([validation_file], "nnue-test")),
+            lambda: list(iter_records([teacher_file], "nnue-test")),
             "test-role refusal",
         )
 
@@ -1278,6 +2108,8 @@ def self_test() -> None:
 
 
 def train(args: argparse.Namespace) -> None:
+    if getattr(args, "sample_only", False):
+        raise SystemExit("sample-only inputs are validation-only and cannot train")
     root = Path(__file__).resolve().parents[2]
     validated = validate_inputs(args.train, args.validation, root)
     contracts = load_contracts(root)
@@ -1461,6 +2293,14 @@ def main() -> None:
         action="store_true",
         help="validate shard sidecars and records without importing PyTorch",
     )
+    parser.add_argument(
+        "--sample-only",
+        action="store_true",
+        help=(
+            "validate explicitly non-fit sample sidecars; requires "
+            "--validate-inputs"
+        ),
+    )
     parser.add_argument("--train", action="extend", nargs="+", default=[])
     parser.add_argument("--validation", action="extend", nargs="+", default=[])
     parser.add_argument("--architecture")
@@ -1468,6 +2308,10 @@ def main() -> None:
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--output")
     args = parser.parse_args()
+    if args.sample_only and not args.validate_inputs:
+        parser.error(
+            "--sample-only requires --validate-inputs and cannot be used for training"
+        )
     if args.self_test:
         self_test()
         return
@@ -1481,7 +2325,12 @@ def main() -> None:
             parser.error("--validate-inputs requires --train and --validation")
         try:
             root = Path(__file__).resolve().parents[2]
-            validated = validate_inputs(args.train, args.validation, root)
+            validated = validate_inputs(
+                args.train,
+                args.validation,
+                root,
+                sample_only=args.sample_only,
+            )
             contracts = load_contracts(root)
         except (OSError, ValueError, KeyError, TypeError) as error:
             parser.error(str(error))

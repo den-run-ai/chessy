@@ -5,10 +5,11 @@ attempt in #137 and NNUE G0-G2 in #105. It does not change Chessy's evaluator,
 search, level budgets, Rust/WASM asset, or release token. The shipped r69
 evaluator remains the baseline and `--require-fix` remains opt-in.
 
-The current work stops before any fit, candidate weight, model artifact, or
-runtime integration. A real corpus freeze needs the literal Lichess snapshot
-SHA-256 and an external Stockfish run; those large artifacts are intentionally
-not stored in Git.
+The current work stops before any production fit, candidate weight, model
+artifact, or runtime integration. CI exercises a tiny real-Stockfish sample,
+but a production corpus freeze still needs the literal Lichess snapshot
+SHA-256 and an external corpus-scale Stockfish run; those large artifacts are
+intentionally not stored in Git.
 
 ## Predeclared sequence
 
@@ -101,11 +102,16 @@ node test/training/prepare-lichess-evals.js \
 The adapter verifies the entire compressed source before parsing, rejects an
 existing output directory, applies `heldout-v1.json` and the E4 certification
 quarantine before role assignment, samples once per model-equivalence cluster,
-and writes canonical NDJSON hashes/counts. The selection contract hashes the
-wrapper, shared corpus logic, source policy, E4 validator, certification
-manifest, and held-out manifest. Empty/undersized, malformed-heavy, or
-role-incomplete runs fail closed. The output deliberately states
-`finalFitAllowed: false`.
+and writes canonical NDJSON hashes/counts. An exclusive output-prefix lock
+serializes cooperating producers, and each run writes to a unique staging
+directory before the completed directory is renamed into place. A handled
+failure removes only that run's staging directory and releases its lock. An
+abrupt process termination can leave owned staging or a lock behind; inspect
+and remove those incomplete paths before retrying rather than treating them as
+a completed selection. The selection contract hashes the wrapper, shared
+corpus logic, source policy, E4 validator, certification manifest, and
+held-out manifest. Empty/undersized, malformed-heavy, or role-incomplete runs
+fail closed. The output deliberately states `finalFitAllowed: false`.
 
 ## Re-label one shard with the pinned teacher
 
@@ -140,6 +146,44 @@ explicit artifact allowlist and are removed on handled success or failure; an
 abrupt process kill therefore cannot make CI upload those network files with
 partial smoke evidence.
 
+Before corpus-scale work, exercise the selection, real-teacher, mixed-role
+validation, and HCE feature-stream boundaries with a small external fixture:
+
+```sh
+node test/training/generate-training-sample.js \
+  --stockfish /opt/stockfish-18/stockfish \
+  --output /data/chessy-training-sample
+```
+
+This creates 10 canonical records—two in each role—from checked-in CC0
+opening positions encoded in the accepted evaluation wire format. The
+selection manifest and every selection/teacher row identify the source as
+`chessy-training-mechanism-fixture`, carry the exact non-fit fixture marker,
+and use a fixture-placeholder exploration teacher; they never claim the
+official Lichess evaluation snapshot or mixed-Lichess teacher identity. The
+generator uses the checked-in `awaiting-opening-freeze` certification
+template, runs selection, labels all 10 rows with the real pinned Stockfish
+teacher, validates the resulting mixed-role shard through the NNUE input
+boundary, and extracts two `shared-train` plus two `hce-validation` HCE
+feature rows. Exact counts are enforced.
+
+Fixture state is carried in the selection manifest, teacher sidecar, NNUE
+report, and HCE stream summary as `sample-only-not-fit-eligible`. Production
+label, train, and pack entry points reject it; the explicit sample override is
+validation-only and cannot run NNUE training or HCE packing/fitting. The
+packer/NPZ/fitter provenance chain remains covered by its strict contract and
+self-tests rather than this sample.
+
+`sample-manifest.json` is written last and is the sole completion marker;
+consumers must treat a sample directory without it as incomplete. On handled
+failure the generator removes its sample directory. An abrupt termination may
+leave an incomplete directory that requires inspection and manual cleanup.
+CI uploads only the non-replayable summary—not the generated labels, features,
+transcript, or detached internal sidecars. It is a mechanism-status record,
+not standalone evidence of the teacher run whose artifacts it hashes. The
+fixture is neither an official Lichess evaluation snapshot nor a production
+opening freeze.
+
 Only after that admission succeeds, label the frozen selection:
 
 ```sh
@@ -172,7 +216,8 @@ exactly once from side-to-move to White POV.
 Mixed upstream labels are removed from fit-ready rows; their source bytes and
 selection provenance remain bound through the sidecar's input hashes.
 Frozen startup, readiness, per-position, and shutdown watchdogs kill a wedged
-teacher and remove the partial shard artifacts instead of hanging a run.
+teacher and remove that run's temporary shard artifacts on handled failure
+instead of hanging a run.
 
 Eligible records are written in ID order to the requested file. Mate scores
 and every other ineligible result go to
@@ -180,7 +225,15 @@ and every other ineligible result go to
 `teacher-000.ndjson.manifest.json` binds the selection, output, exclusion
 ledger, UCI transcript, and frozen teacher metadata by SHA-256. Output,
 exclusion, and transcript files are streamed so shard labelling does not
-accumulate them in memory.
+accumulate them in memory. An exclusive output-prefix lock serializes
+cooperating producers. Publication is no-replace per file: output, exclusion
+ledger, and transcript are committed first, and the sidecar is committed last
+as the completion marker. Consumers must require the sidecar and verify every
+bound hash; the earlier files alone are not a completed shard. An abrupt
+termination can leave some final files and/or the lock behind. Inspect that
+prefix, remove only the incomplete run's files and stale lock, then retry; the
+labeler does not automatically delete final paths because they may belong to a
+concurrent winner.
 
 ## HCE R3
 
@@ -216,12 +269,21 @@ node test/training/hce-r3-baseline.js \
 ```
 
 The solver consumes only the authenticated `chessy.hce-csr.v2` format. It
-checks the complete 965-column digest, `/24` taper contract, teacher and
-selection hashes, center/scales value hashes, sorted row IDs, and disjoint
-row/cluster/position-family sets. Matrix packing is frozen to NumPy 2.3.5 and
-the convex fitter to NumPy 2.3.5 plus SciPy 1.17.0. R3.0 fixes safe mobility at zero. R3.1 is
-eligible only if zeroing safe mobility still beats baseline and retains at
-least half of the candidate's validation gain.
+checks the complete 965-column digest, `/24` taper contract, teacher, literal
+selection-manifest, selection-contract, and source-snapshot hashes,
+center/scales value hashes, the exact `authenticated-production-input`
+disposition, sorted row IDs, and disjoint row/cluster/position-family sets.
+That disposition authenticates a production-mode input; it does not assert
+that every later fit or release gate has passed. Each packed sidecar enumerates
+exactly the provided teacher shards and their adjacent sidecars plus the
+selected input shards they bind; it does not overclaim full-corpus coverage.
+Immediately before publishing a float candidate, the fitter rehashes both
+validated NPZ files and both adjacent sidecars against the digests retained
+when they were authenticated, and refuses any replacement. Matrix packing is
+frozen to NumPy 2.3.5 and the convex fitter to NumPy 2.3.5 plus SciPy 1.17.0.
+R3.0 fixes safe mobility at zero. R3.1 is eligible only if zeroing safe
+mobility still beats baseline and retains at least half of the candidate's
+validation gain.
 
 Pack one role from all of its authenticated teacher shards. Repeat `--input`
 for each shard; the packer performs a bounded-memory global ID merge:
@@ -263,6 +325,14 @@ its adjacent `.manifest.json` sidecar. Before importing PyTorch, the trainer
 checks each shard's byte hash and row count, the frozen Stockfish manifest and
 both embedded networks, exact role membership, sorted/unique record IDs,
 recomputed corpus keys, and the locked incident quarantine.
+
+Selection shards normally contain all five roles. A physical mixed-role
+teacher shard may be supplied under both `--train` and `--validation`: it is
+authenticated and fully validated once, then only `shared-train` records enter
+the training stream and only `nnue-validation` records enter the validation
+stream. HCE and test records remain validated but are never consumed by NNUE.
+The report records complete per-role physical counts plus each stream's
+selected count.
 
 The G1 head is an expected-score logit, not a falsely labelled centipawn score.
 G2 must fit and freeze its logit-to-centipawn scale on `nnue-validation` before

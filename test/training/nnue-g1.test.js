@@ -59,7 +59,49 @@ assert.strictEqual(
 assert.strictEqual(
   training.data.trustBoundary.corpusContractSha256,
   sha256(fs.readFileSync(CORPUS_PATH)));
-checks += 10;
+assert.deepStrictEqual(
+  training.data.trustBoundary.productionValidation,
+  {
+    selectionState: 'exploration-selection-only',
+    selectionFitAllowed: false,
+    certificationStatus: 'frozen',
+    pendingCertificationAllowedForTestOnly: false,
+    selectionSourceId: 'lichess-evaluations',
+    selectionSourceUrl: 'https://database.lichess.org/',
+    selectionSourceFields: [
+      'id', 'url', 'retrieved', 'compressedSha256', 'license'
+    ],
+    recordSourceDataset: 'lichess-evaluated-positions',
+    recordSourceFields: [
+      'dataset', 'snapshotSha256', 'license'
+    ]
+  });
+assert.deepStrictEqual(
+  training.data.trustBoundary.sampleOnlyValidation,
+  {
+    sidecarState: 'pinned-teacher-labels-sample-only',
+    fitAllowed: false,
+    selectionState: 'mechanism-test-selection-only',
+    selectionFitAllowed: false,
+    certificationStatus: 'awaiting-opening-freeze',
+    pendingCertificationAllowedForTestOnly: true,
+    selectionSourceId: 'chessy-training-mechanism-fixture',
+    selectionSourceUrl: null,
+    selectionSourceFields: [
+      'id', 'url', 'retrieved', 'compressedSha256', 'license',
+      'mechanismFixture'
+    ],
+    recordSourceDataset: 'chessy-training-mechanism-fixture',
+    recordSourceFields: [
+      'dataset', 'snapshotSha256', 'license', 'mechanismFixture'
+    ],
+    mechanismFixture: {
+      status: 'sample-only-not-fit-eligible',
+      fitAllowed: false,
+      officialEvaluationSnapshot: false
+    }
+  });
+checks += 12;
 
 const witnesses = [
   '8/8/8/8/8/8/P6p/K6k w - -',
@@ -80,7 +122,6 @@ childProcess.execFileSync(PYTHON, ['-m', 'py_compile', SCRIPT]);
 checks++;
 
 const SOURCE_SHA = '1'.repeat(64);
-const SELECTION_SHA = '2'.repeat(64);
 const SELECTION_CONTRACT_SHA = '3'.repeat(64);
 const EMPTY_SHA = sha256('');
 const TRAIN_FENS = [
@@ -88,8 +129,19 @@ const TRAIN_FENS = [
   'r3k2r/pp1n1ppp/2p1p3/8/3P4/2N2N2/PP3PPP/R3K2R w KQkq -'
 ];
 const VALIDATION_FEN = '4k3/P1p5/2N2n2/8/8/8/8/4K3 w - -';
+const HCE_VALIDATION_FEN = '7k/8/8/8/8/8/2P5/K7 w - -';
+const NNUE_TEST_FEN = '7k/8/8/8/8/8/P7/K7 w - -';
 
-function labelledRecord(fen) {
+assert.strictEqual(
+  Corpus.roleForCluster(Corpus.positionFamilyKey(HCE_VALIDATION_FEN)),
+  'hce-validation');
+assert.strictEqual(
+  Corpus.roleForCluster(Corpus.positionFamilyKey(NNUE_TEST_FEN)),
+  'nnue-test');
+checks += 2;
+
+function labelledRecord(fen, options) {
+  const settings = options || {};
   const record = Corpus.adaptLichessRecord({
     fen,
     evals: [{
@@ -100,6 +152,15 @@ function labelledRecord(fen) {
   }, { sha256: SOURCE_SHA });
   assert.ok(record);
   delete record.explorationLabel;
+  if (settings.sampleOnly) {
+    record.source = {
+      dataset: 'chessy-training-mechanism-fixture',
+      snapshotSha256: SOURCE_SHA,
+      license: 'CC0-1.0',
+      mechanismFixture: clone(
+        training.data.trustBoundary.sampleOnlyValidation.mechanismFixture)
+    };
+  }
   record.teacher = {
     id: teacher.id,
     release: teacher.engine.release,
@@ -130,7 +191,7 @@ function sidecarFor(filename, body, rows) {
     input: {
       selectionManifest: {
         path: '/frozen/selection/manifest.json',
-        sha256: SELECTION_SHA,
+        sha256: '2'.repeat(64),
         selectionContractSha256: SELECTION_CONTRACT_SHA,
         certificationStatus: 'frozen'
       },
@@ -179,6 +240,15 @@ function sidecarFor(filename, body, rows) {
   };
 }
 
+function markSampleOnly(sidecar) {
+  const contract = training.data.trustBoundary.sampleOnlyValidation;
+  sidecar.state = contract.sidecarState;
+  sidecar.fitAllowed = false;
+  sidecar.mechanismFixture = clone(contract.mechanismFixture);
+  sidecar.input.selectionManifest.certificationStatus =
+    contract.certificationStatus;
+}
+
 function writeShard(directory, name, records, options) {
   const settings = options || {};
   const filename = path.join(directory, name);
@@ -194,17 +264,128 @@ function writeShard(directory, name, records, options) {
   return filename;
 }
 
-function validateCommand(train, validation) {
-  return childProcess.spawnSync(PYTHON, [
-    SCRIPT,
-    '--validate-inputs',
-    '--train', ...train,
-    '--validation', ...validation
-  ], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+function materializeSelectionBinding(train, validation, options) {
+  const settings = options || {};
+  const mode = settings.sampleOnly ?
+    training.data.trustBoundary.sampleOnlyValidation :
+    training.data.trustBoundary.productionValidation;
+  const teacherFiles = Array.from(new Set(train.concat(validation))).sort();
+  const bindingDirectory = fs.mkdtempSync(
+    path.join(temporary, 'selection-binding-'));
+  const certification = {
+    schema: 'chessy.e4.certification-manifest.v1',
+    protocolId: 'E4-v1',
+    kind: 'certification',
+    status: mode.certificationStatus,
+    openingClusters: (settings.certificationFens || []).map(fen => ({ fen })),
+    assignments: []
+  };
+  const certificationPath = path.join(
+    bindingDirectory, 'certification-manifest.json');
+  fs.writeFileSync(
+    certificationPath, JSON.stringify(certification) + '\n');
+  const certificationClusters = new Set(
+    certification.openingClusters.map(item => Corpus.clusterKey(item.fen)));
+  const certificationFamilies = new Set(
+    certification.openingClusters.map(
+      item => Corpus.positionFamilyKey(item.fen)));
+
+  const listedShards = teacherFiles.map((teacherFile, index) => {
+    const body = fs.readFileSync(teacherFile);
+    const selectionName =
+      'selection-' + String(index).padStart(3, '0') + '.ndjson';
+    const selectionPath = path.join(bindingDirectory, selectionName);
+    fs.writeFileSync(selectionPath, body);
+    const sidecarPath = teacherFile + '.manifest.json';
+    let rows = body.toString('utf8').split('\n').filter(Boolean).length;
+    if (fs.existsSync(sidecarPath)) {
+      const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+      rows = sidecar.input.shard.rows;
+    }
+    return {
+      teacherFile,
+      selectionPath,
+      manifest: {
+        path: selectionName,
+        rows,
+        canonicalNdjsonSha256: sha256(body)
+      }
+    };
+  });
+  const selection = {
+    schemaVersion: 1,
+    state: mode.selectionState,
+    finalFitAllowed: mode.selectionFitAllowed,
+    source: {
+      id: mode.selectionSourceId,
+      url: mode.selectionSourceUrl,
+      retrieved: '2026-07-31',
+      compressedSha256: SOURCE_SHA,
+      license: 'CC0-1.0'
+    },
+    adapter: {
+      selectionContractSha256: SELECTION_CONTRACT_SHA,
+      shardCount: listedShards.length
+    },
+    exclusions: {
+      certificationManifest: certificationPath,
+      certificationManifestSha256: sha256(
+        fs.readFileSync(certificationPath)),
+      certificationStatus: mode.certificationStatus,
+      certificationClusterCount: certificationClusters.size,
+      certificationPositionFamilyCount: certificationFamilies.size,
+      pendingCertificationAllowedForTestOnly:
+        mode.pendingCertificationAllowedForTestOnly
+    },
+    counts: {
+      selected: listedShards.reduce(
+        (sum, shard) => sum + shard.manifest.rows, 0)
+    },
+    shards: listedShards.map(shard => shard.manifest)
+  };
+  if (settings.sampleOnly) {
+    selection.mechanismFixture = clone(mode.mechanismFixture);
+    selection.source.mechanismFixture = clone(mode.mechanismFixture);
+  }
+  const selectionPath = path.join(bindingDirectory, 'manifest.json');
+  fs.writeFileSync(selectionPath, JSON.stringify(selection) + '\n');
+  const selectionSha = sha256(fs.readFileSync(selectionPath));
+
+  for (const listed of listedShards) {
+    const sidecarPath = listed.teacherFile + '.manifest.json';
+    if (!fs.existsSync(sidecarPath)) continue;
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+    sidecar.input.selectionManifest.path = selectionPath;
+    sidecar.input.selectionManifest.sha256 = selectionSha;
+    sidecar.input.selectionManifest.selectionContractSha256 =
+      SELECTION_CONTRACT_SHA;
+    sidecar.input.shard.path = listed.selectionPath;
+    sidecar.input.shard.sha256 =
+      listed.manifest.canonicalNdjsonSha256;
+    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar) + '\n');
+  }
 }
 
-function expectRejected(train, validation, message) {
-  const result = validateCommand(train, validation);
+function validateCommand(train, validation, options) {
+  materializeSelectionBinding(train, validation, options);
+  return spawnValidation(train, validation, options);
+}
+
+function spawnValidation(train, validation, options) {
+  const args = [SCRIPT, '--validate-inputs'];
+  if (options && options.sampleOnly) args.push('--sample-only');
+  args.push(
+    '--train', ...train,
+    '--validation', ...validation
+  );
+  return childProcess.spawnSync(PYTHON, args, {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024
+  });
+}
+
+function expectRejected(train, validation, message, options) {
+  const result = validateCommand(train, validation, options);
   assert.notStrictEqual(result.status, 0, result.stdout);
   assert.match(result.stderr, message);
   checks += 2;
@@ -230,7 +411,150 @@ try {
   assert.strictEqual(report.train.length, 2);
   assert.strictEqual(report.validation[0].role, 'nnue-validation');
   assert.strictEqual(report.selectionContractSha256, SELECTION_CONTRACT_SHA);
+  assert.strictEqual(
+    Object.prototype.hasOwnProperty.call(report, 'fitAllowed'), false);
+  checks += 6;
+  const incomplete = spawnValidation([trainA], [validation]);
+  assert.notStrictEqual(incomplete.status, 0, incomplete.stdout);
+  assert.match(
+    incomplete.stderr,
+    /teacher inputs do not cover the complete selection shard inventory/);
+  checks += 2;
+
+  const mixedDir = path.join(temporary, 'mixed-teacher-shard');
+  fs.mkdirSync(mixedDir);
+  const mixed = writeShard(mixedDir, 'teacher-000.ndjson', [
+    labelledRecord(TRAIN_FENS[0]),
+    labelledRecord(VALIDATION_FEN),
+    labelledRecord(NNUE_TEST_FEN)
+  ]);
+  const mixedGood = validateCommand([mixed], [mixed]);
+  assert.strictEqual(mixedGood.status, 0, mixedGood.stderr);
+  const mixedReport = JSON.parse(mixedGood.stdout);
+  assert.strictEqual(mixedReport.train[0].path, mixedReport.validation[0].path);
+  assert.strictEqual(mixedReport.train[0].rows, 3);
+  assert.strictEqual(mixedReport.train[0].selectedRows, 1);
+  assert.strictEqual(mixedReport.validation[0].selectedRows, 1);
+  assert.deepStrictEqual(mixedReport.train[0].roleRows, {
+    'shared-train': 1,
+    'hce-validation': 0,
+    'hce-test': 0,
+    'nnue-validation': 1,
+    'nnue-test': 1
+  });
+  checks += 6;
+
+  const sampleDir = path.join(temporary, 'sample-only-teacher-shard');
+  fs.mkdirSync(sampleDir);
+  const sample = writeShard(sampleDir, 'teacher-000.ndjson', [
+    labelledRecord(TRAIN_FENS[0], { sampleOnly: true }),
+    labelledRecord(VALIDATION_FEN, { sampleOnly: true }),
+    labelledRecord(NNUE_TEST_FEN, { sampleOnly: true })
+  ], { mutateSidecar: markSampleOnly });
+  expectRejected(
+    [sample], [sample], /wrong sidecar schema\/state/);
+  const sampleGood = validateCommand(
+    [sample], [sample], { sampleOnly: true });
+  assert.strictEqual(sampleGood.status, 0, sampleGood.stderr);
+  const sampleReport = JSON.parse(sampleGood.stdout);
+  assert.strictEqual(
+    sampleReport.status,
+    'validated-sample-only-pinned-teacher-inputs');
+  assert.strictEqual(sampleReport.fitAllowed, false);
+  assert.strictEqual(sampleReport.train[0].selectedRows, 1);
+  assert.strictEqual(sampleReport.validation[0].selectedRows, 1);
   checks += 5;
+  const escapedSidecarPath = sample + '.manifest.json';
+  const escapedSidecar = JSON.parse(
+    fs.readFileSync(escapedSidecarPath, 'utf8'));
+  escapedSidecar.state = training.data.trustBoundary.sidecarState;
+  delete escapedSidecar.fitAllowed;
+  delete escapedSidecar.mechanismFixture;
+  escapedSidecar.input.selectionManifest.certificationStatus = 'frozen';
+  fs.writeFileSync(
+    escapedSidecarPath, JSON.stringify(escapedSidecar) + '\n');
+  const escapedSample = spawnValidation([sample], [sample]);
+  assert.notStrictEqual(escapedSample.status, 0, escapedSample.stdout);
+  assert.match(
+    escapedSample.stderr,
+    /selection manifest has the wrong mode\/state/);
+  checks += 2;
+
+  expectRejected(
+    [mixed], [mixed], /wrong sidecar schema\/state/,
+    { sampleOnly: true });
+
+  const sampleFitDir = path.join(temporary, 'sample-fit-allowed');
+  fs.mkdirSync(sampleFitDir);
+  const sampleFit = writeShard(sampleFitDir, 'teacher-000.ndjson', [
+    labelledRecord(TRAIN_FENS[0], { sampleOnly: true }),
+    labelledRecord(VALIDATION_FEN, { sampleOnly: true })
+  ], {
+    mutateSidecar(sidecar) {
+      markSampleOnly(sidecar);
+      sidecar.fitAllowed = true;
+    }
+  });
+  expectRejected(
+    [sampleFit], [sampleFit], /must set fitAllowed=false/,
+    { sampleOnly: true });
+
+  const sampleMarkerDir = path.join(temporary, 'bad-sample-marker');
+  fs.mkdirSync(sampleMarkerDir);
+  const sampleMarker = writeShard(
+    sampleMarkerDir, 'teacher-000.ndjson', [
+      labelledRecord(TRAIN_FENS[0], { sampleOnly: true }),
+      labelledRecord(VALIDATION_FEN, { sampleOnly: true })
+    ], {
+      mutateSidecar(sidecar) {
+        markSampleOnly(sidecar);
+        sidecar.mechanismFixture.unexpected = true;
+      }
+    });
+  expectRejected(
+    [sampleMarker], [sampleMarker],
+    /mechanismFixture marker is not exact/,
+    { sampleOnly: true });
+
+  const sampleFrozenDir = path.join(temporary, 'sample-frozen-certification');
+  fs.mkdirSync(sampleFrozenDir);
+  const sampleFrozen = writeShard(
+    sampleFrozenDir, 'teacher-000.ndjson', [
+      labelledRecord(TRAIN_FENS[0], { sampleOnly: true }),
+      labelledRecord(VALIDATION_FEN, { sampleOnly: true })
+    ], {
+      mutateSidecar(sidecar) {
+        markSampleOnly(sidecar);
+        sidecar.input.selectionManifest.certificationStatus = 'frozen';
+      }
+    });
+  expectRejected(
+    [sampleFrozen], [sampleFrozen],
+    /requires awaiting-opening-freeze certification/,
+    { sampleOnly: true });
+
+  const sampleTraining = childProcess.spawnSync(PYTHON, [
+    SCRIPT, '--sample-only'
+  ], { encoding: 'utf8' });
+  assert.notStrictEqual(sampleTraining.status, 0);
+  assert.match(
+    sampleTraining.stderr,
+    /--sample-only requires --validate-inputs and cannot be used for training/);
+  checks += 2;
+
+  const mixedInvalidDir = path.join(temporary, 'mixed-invalid-unused-role');
+  fs.mkdirSync(mixedInvalidDir);
+  const malformedHceRecord = labelledRecord(HCE_VALIDATION_FEN);
+  malformedHceRecord.teacher.targetWhite = 1.2;
+  const mixedInvalid = writeShard(
+    mixedInvalidDir, 'teacher-000.ndjson', [
+      labelledRecord(TRAIN_FENS[0]),
+      labelledRecord(VALIDATION_FEN),
+      malformedHceRecord
+    ]);
+  expectRejected(
+    [mixedInvalid], [mixedInvalid],
+    /targetWhite must be in \[0,1\]/);
 
   const missingDir = path.join(temporary, 'missing-sidecar');
   fs.mkdirSync(missingDir);
@@ -364,6 +688,17 @@ try {
   });
   expectRejected(
     [pending], [validation], /pending\/test-only certification selections are forbidden/);
+
+  const certificationDir = path.join(temporary, 'certification-holdout');
+  fs.mkdirSync(certificationDir);
+  const certificationShard = writeShard(
+    certificationDir, 'train.ndjson', [
+      labelledRecord(TRAIN_FENS[0])
+    ]);
+  expectRejected(
+    [certificationShard], [validation],
+    /certification cluster\/family is forbidden/,
+    { certificationFens: [TRAIN_FENS[0]] });
 
   const duplicateDir = path.join(temporary, 'duplicate');
   fs.mkdirSync(duplicateDir);

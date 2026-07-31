@@ -19,6 +19,8 @@
     "packer": "tools/training/pack-hce.py",
     "authenticatedFeatureStreamer": "test/training/hce-r3-pack-stream.js",
     "completeLinearExtractor": "test/training/hce-r3-linear.js",
+    "requiredInputDisposition": "authenticated-production-input",
+    "publicationInputRehash": "both NPZ matrices and both adjacent sidecars must retain their initially authenticated SHA-256 immediately before candidate publication",
     "featureUnits": "centipawns contributed by one integer weight unit; every tapered numerator is divided by exactly 24 by the packer",
     "fixedCp": "all untuned score terms, White POV",
     "requiredArrays": [
@@ -36,7 +38,10 @@
       "feature_order_sha256:utf8 scalar",
       "feature_manifest_sha256:utf8 scalar",
       "teacher_manifest_sha256:utf8 scalar",
+      "selection_manifest_sha256:utf8 scalar",
       "selection_contract_sha256:utf8 scalar",
+      "source_snapshot_sha256:utf8 scalar",
+      "input_disposition:utf8 scalar",
       "center_value_sha256:utf8 scalar",
       "scales_value_sha256:utf8 scalar",
       "score_denominator:int64 scalar"
@@ -47,7 +52,10 @@
     "crossRoleChecks": [
       "row IDs disjoint",
       "board-equivalence cluster IDs disjoint",
-      "position-family IDs disjoint"
+      "position-family IDs disjoint",
+      "exact selection-manifest SHA-256 match",
+      "exact source-snapshot SHA-256 match",
+      "exact authenticated production-input disposition match"
     ]
   },
   "calibration": {

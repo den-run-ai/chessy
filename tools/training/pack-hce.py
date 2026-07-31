@@ -19,6 +19,7 @@ import numpy as np
 
 PARAMETERS = 965
 MATRIX_SCHEMA = "chessy.hce-csr.v2"
+PRODUCTION_INPUT_DISPOSITION = "authenticated-production-input"
 ALLOWED_ROLES = {"shared-train", "hce-validation", "hce-test"}
 
 
@@ -135,6 +136,20 @@ def append_int64(stream: BinaryIO, value: int) -> None:
     stream.write(struct.pack("<q", value))
 
 
+def require_production_disposition(summary: object) -> str:
+    if (
+        not isinstance(summary, dict)
+        or summary.get("status") != PRODUCTION_INPUT_DISPOSITION
+        or summary.get("mode") != "production"
+        or summary.get("sampleOnly") is not False
+        or "fitAllowed" in summary
+    ):
+        raise ValueError(
+            "feature stream is not an authenticated production input"
+        )
+    return PRODUCTION_INPUT_DISPOSITION
+
+
 def self_test() -> None:
     row = {
         "id": "0" * 64,
@@ -166,6 +181,32 @@ def self_test() -> None:
         except ValueError:
             continue
         raise AssertionError(f"strict_row accepted invalid {field}: {replacement!r}")
+    require_production_disposition(
+        {
+            "status": PRODUCTION_INPUT_DISPOSITION,
+            "mode": "production",
+            "sampleOnly": False,
+        }
+    )
+    for disposition in (
+        {
+            "status": "sample-only-not-fit-eligible",
+            "mode": "sample-only",
+            "sampleOnly": True,
+            "fitAllowed": False,
+        },
+        {
+            "status": PRODUCTION_INPUT_DISPOSITION,
+            "mode": "production",
+            "sampleOnly": False,
+            "fitAllowed": True,
+        },
+    ):
+        try:
+            require_production_disposition(disposition)
+        except ValueError:
+            continue
+        raise AssertionError("packer accepted a non-production disposition")
     print("HCE packer self-test passed")
 
 
@@ -177,7 +218,6 @@ def main() -> None:
     parser.add_argument("--center")
     parser.add_argument("--scales")
     parser.add_argument("--output")
-    parser.add_argument("--node", default="node")
     args = parser.parse_args()
     if np.__version__ != "2.3.5":
         raise SystemExit(
@@ -206,6 +246,13 @@ def main() -> None:
     teacher_path = root / "eval/training/teacher-sf18-100kn-v1.json"
     feature = json.loads(feature_path.read_text(encoding="utf-8"))
     fit = json.loads(fit_path.read_text(encoding="utf-8"))
+    if (
+        fit.get("matrix", {}).get("requiredInputDisposition")
+        != PRODUCTION_INPUT_DISPOSITION
+    ):
+        raise SystemExit(
+            "fit contract does not require production input disposition"
+        )
     center_path = Path(args.center).resolve()
     scales_path = Path(args.scales).resolve()
     center, center_digest = integer_vector(center_path, PARAMETERS, "center")
@@ -231,7 +278,7 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     command = [
-        args.node,
+        "node",
         str(root / "test/training/hce-r3-pack-stream.js"),
         "--role",
         args.role,
@@ -318,13 +365,22 @@ def main() -> None:
         if summary.get("rows") != rows or summary.get("role") != args.role:
             raise SystemExit("feature-stream summary row/role mismatch")
         try:
+            input_disposition = require_production_disposition(summary)
             teacher_sha = require_sha256(
                 summary.get("teacherManifestSha256"),
                 "feature-stream teacherManifestSha256",
             )
-            selection_sha = require_sha256(
+            selection_manifest_sha = require_sha256(
+                summary.get("selectionManifestSha256"),
+                "feature-stream selectionManifestSha256",
+            )
+            selection_contract_sha = require_sha256(
                 summary.get("selectionContractSha256"),
                 "feature-stream selectionContractSha256",
+            )
+            source_snapshot_sha = require_sha256(
+                summary.get("sourceSnapshotSha256"),
+                "feature-stream sourceSnapshotSha256",
             )
             input_hashes = summary.get("inputSha256")
             sidecar_hashes = summary.get("inputSidecarSha256")
@@ -345,6 +401,80 @@ def main() -> None:
                 )
                 for index, value in enumerate(sidecar_hashes)
             ]
+            inventory = summary.get("providedShardInventory")
+            if not isinstance(inventory, list) or len(inventory) != len(inputs):
+                raise ValueError(
+                    "feature-stream provided shard inventory differs"
+                )
+            inventory_fields = {
+                "index",
+                "teacherPath",
+                "teacherRows",
+                "teacherSha256",
+                "teacherSidecarPath",
+                "teacherSidecarSha256",
+                "selectionShardPath",
+                "selectionShardIndex",
+                "selectionShardRows",
+                "selectionShardSha256",
+            }
+            for index, item in enumerate(inventory):
+                if not isinstance(item, dict) or set(item) != inventory_fields:
+                    raise ValueError(
+                        f"feature-stream shard inventory[{index}] is malformed"
+                    )
+                if item["index"] != index:
+                    raise ValueError(
+                        f"feature-stream shard inventory[{index}] index differs"
+                    )
+                for name in (
+                    "teacherRows",
+                    "selectionShardIndex",
+                    "selectionShardRows",
+                ):
+                    value = item[name]
+                    if (
+                        isinstance(value, bool)
+                        or not isinstance(value, int)
+                        or value < 0
+                    ):
+                        raise ValueError(
+                            f"feature-stream shard inventory[{index}].{name} "
+                            "must be a nonnegative integer"
+                        )
+                for name in (
+                    "teacherPath",
+                    "teacherSidecarPath",
+                    "selectionShardPath",
+                ):
+                    if not isinstance(item[name], str) or not item[name]:
+                        raise ValueError(
+                            f"feature-stream shard inventory[{index}].{name} "
+                            "must be a path"
+                        )
+                for name in (
+                    "teacherSha256",
+                    "teacherSidecarSha256",
+                    "selectionShardSha256",
+                ):
+                    item[name] = require_sha256(
+                        item[name],
+                        f"feature-stream shard inventory[{index}].{name}",
+                    )
+                expected_sidecar = Path(
+                    str(inputs[index]) + ".manifest.json"
+                ).resolve()
+                if (
+                    Path(item["teacherPath"]).resolve() != inputs[index]
+                    or Path(item["teacherSidecarPath"]).resolve()
+                    != expected_sidecar
+                    or item["teacherSha256"] != input_hashes[index]
+                    or item["teacherSidecarSha256"] != sidecar_hashes[index]
+                ):
+                    raise ValueError(
+                        f"feature-stream shard inventory[{index}] "
+                        "does not match --input"
+                    )
         except (TypeError, ValueError) as error:
             raise SystemExit(f"invalid feature-stream provenance: {error}") from error
         if teacher_sha != sha256_file(teacher_path):
@@ -404,8 +534,13 @@ def main() -> None:
                     teacher_sha
                 ),
                 selection_contract_sha256=np.asarray(
-                    selection_sha
+                    selection_contract_sha
                 ),
+                selection_manifest_sha256=np.asarray(
+                    selection_manifest_sha
+                ),
+                source_snapshot_sha256=np.asarray(source_snapshot_sha),
+                input_disposition=np.asarray(input_disposition),
                 center_value_sha256=np.asarray(center_digest),
                 scales_value_sha256=np.asarray(scales_digest),
                 score_denominator=np.asarray(24, dtype=np.int64),
@@ -416,15 +551,25 @@ def main() -> None:
             "role": args.role,
             "rows": rows,
             "nonzeros": nonzeros,
+            "inputDisposition": input_disposition,
             "output": {
                 "path": output.name,
                 "sha256": sha256_file(temporary_npz),
             },
+            "inputInventoryScope": "provided-teacher-shards-only",
             "inputs": [
                 {
                     "path": str(filename),
+                    "rows": inventory[index]["teacherRows"],
                     "sha256": input_hashes[index],
+                    "sidecarPath": inventory[index]["teacherSidecarPath"],
                     "sidecarSha256": sidecar_hashes[index],
+                    "selectionShard": {
+                        "path": inventory[index]["selectionShardPath"],
+                        "index": inventory[index]["selectionShardIndex"],
+                        "rows": inventory[index]["selectionShardRows"],
+                        "sha256": inventory[index]["selectionShardSha256"],
+                    },
                 }
                 for index, filename in enumerate(inputs)
             ],
@@ -439,7 +584,10 @@ def main() -> None:
                 "featureManifestSha256": sha256_file(feature_path),
                 "fitContractSha256": sha256_file(fit_path),
                 "teacherManifestSha256": teacher_sha,
-                "selectionContractSha256": selection_sha,
+                "selectionManifestSha256": selection_manifest_sha,
+                "selectionContractSha256": selection_contract_sha,
+                "sourceSnapshotSha256": source_snapshot_sha,
+                "inputDisposition": input_disposition,
                 "parameterOrderSha256": feature["parameterOrder"]["sha256"],
                 "centerValueSha256": center_digest,
                 "scalesValueSha256": scales_digest,

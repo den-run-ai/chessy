@@ -19,6 +19,57 @@
     "trustBoundary": {
       "sidecarSuffix": ".manifest.json",
       "sidecarState": "pinned-teacher-labels",
+      "productionValidation": {
+        "selectionState": "exploration-selection-only",
+        "selectionFitAllowed": false,
+        "certificationStatus": "frozen",
+        "pendingCertificationAllowedForTestOnly": false,
+        "selectionSourceId": "lichess-evaluations",
+        "selectionSourceUrl": "https://database.lichess.org/",
+        "selectionSourceFields": [
+          "id",
+          "url",
+          "retrieved",
+          "compressedSha256",
+          "license"
+        ],
+        "recordSourceDataset": "lichess-evaluated-positions",
+        "recordSourceFields": [
+          "dataset",
+          "snapshotSha256",
+          "license"
+        ]
+      },
+      "sampleOnlyValidation": {
+        "sidecarState": "pinned-teacher-labels-sample-only",
+        "fitAllowed": false,
+        "selectionState": "mechanism-test-selection-only",
+        "selectionFitAllowed": false,
+        "certificationStatus": "awaiting-opening-freeze",
+        "pendingCertificationAllowedForTestOnly": true,
+        "selectionSourceId": "chessy-training-mechanism-fixture",
+        "selectionSourceUrl": null,
+        "selectionSourceFields": [
+          "id",
+          "url",
+          "retrieved",
+          "compressedSha256",
+          "license",
+          "mechanismFixture"
+        ],
+        "recordSourceDataset": "chessy-training-mechanism-fixture",
+        "recordSourceFields": [
+          "dataset",
+          "snapshotSha256",
+          "license",
+          "mechanismFixture"
+        ],
+        "mechanismFixture": {
+          "status": "sample-only-not-fit-eligible",
+          "fitAllowed": false,
+          "officialEvaluationSnapshot": false
+        }
+      },
       "teacherId": "sf18-100kn-v1",
       "teacherNodes": 100000,
       "teacherManifest": "eval/training/teacher-sf18-100kn-v1.json",
@@ -29,9 +80,10 @@
       "corpusContractSha256": "b21dcbbdef84996c1d308f86f652a08ea00b3d8284a040fa3958c183313b30f0",
       "requirements": [
         "adjacent sidecar hash and row count match each labelled shard",
-        "all sidecars bind one frozen-certification selection manifest, one selection contract SHA-256, and the frozen teacher manifest",
+        "each sidecar's selection-manifest bytes, certification-manifest bytes, selected input-shard bytes, source snapshot, and complete shard inventory are authenticated before records are admitted",
         "teacher executable, both embedded networks, UCI options, watchdog, and node limit match",
-        "every shard has one exact allowed role; wrong-role rows are fatal",
+        "physical teacher shards may contain all frozen corpus roles; every row's role is recomputed and only shared-train or nnue-validation records enter their disjoint streams",
+        "sample-only validation requires its distinct sidecar state, exact non-fit mechanism-fixture marker, pending certification status, and the explicit --sample-only validation flag; it can never enter training",
         "record IDs are strictly sorted per shard and unique across all inputs",
         "id, canonicalFen, cluster, positionFamily, and role are recomputed",
         "locked incident cluster and position family are rejected",

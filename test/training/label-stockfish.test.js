@@ -101,6 +101,9 @@ throws(() => Label.parseArgs(['--teacher-id', 'arbitrary']),
 throws(() => Label.parseArgs(['--nodes', '1']),
   /unknown or frozen argument/,
   'the frozen teacher node limit cannot be overridden');
+throws(() => Label.parseArgs(['--sample-only', 'true']),
+  /unknown or frozen argument/,
+  'the mechanism-fixture path is unavailable through the production CLI');
 throws(() => Label.parseArgs(['--input', 'a', '--input', 'b']),
   /duplicate argument/);
 
@@ -330,6 +333,121 @@ async function integration() {
     path.join(os.tmpdir(), 'chessy-label-contract-')
   );
   try {
+    const lockPath = path.join(temporary, 'teacher-locked.ndjson.lock');
+    const lockFd = Label.acquirePrefixLock(lockPath);
+    try {
+      throws(
+        () => Label.acquirePrefixLock(lockPath),
+        /holds the output prefix lock/,
+        'only one label process can own an output prefix'
+      );
+      equal(fs.existsSync(lockPath), true,
+        'a refused competitor cannot remove the winning process lock');
+    } finally {
+      Label.releasePrefixLock(lockFd, lockPath);
+    }
+    equal(fs.existsSync(lockPath), false,
+      'the owning process releases its output prefix lock');
+    const retryLockFd = Label.acquirePrefixLock(lockPath);
+    Label.releasePrefixLock(retryLockFd, lockPath);
+    equal(fs.existsSync(lockPath), false,
+      'a clean retry can acquire and release the prefix');
+
+    const existingFinal = path.join(temporary, 'teacher-existing.ndjson');
+    fs.writeFileSync(existingFinal, 'existing winner\n');
+    throws(
+      () => Label.refuseExistingArtifacts([existingFinal]),
+      /refusing to overwrite output artifact/,
+      'a completed artifact is rejected before labelling starts'
+    );
+    equal(fs.readFileSync(existingFinal, 'utf8'), 'existing winner\n',
+      'preflight refusal preserves the existing winner');
+
+    const concurrentFinal = {
+      output: path.join(temporary, 'teacher-concurrent.ndjson'),
+      exclusions:
+        path.join(temporary, 'teacher-concurrent.ndjson.exclusions.ndjson'),
+      transcript:
+        path.join(temporary, 'teacher-concurrent.ndjson.uci.log'),
+      sidecar:
+        path.join(temporary, 'teacher-concurrent.ndjson.manifest.json')
+    };
+    Label.refuseExistingArtifacts(Object.values(concurrentFinal));
+    const concurrentTemporary = Object.fromEntries(
+      Object.entries(concurrentFinal).map(function ([name, filename]) {
+        const temporaryName = filename + '.tmp-test-owner';
+        fs.writeFileSync(temporaryName, name + ' from losing process\n');
+        return [name, temporaryName];
+      })
+    );
+    fs.writeFileSync(concurrentFinal.output, 'concurrent winner\n');
+    throws(
+      () => Label.commitLabelArtifacts(
+        concurrentTemporary, concurrentFinal
+      ),
+      /refusing to overwrite output artifact/,
+      'no-replace publication refuses a winner created after preflight'
+    );
+    Label.cleanupTemporaryArtifacts(concurrentTemporary);
+    equal(
+      fs.readFileSync(concurrentFinal.output, 'utf8'),
+      'concurrent winner\n',
+      'failed publication cannot overwrite or delete a concurrent winner'
+    );
+    equal(fs.existsSync(concurrentFinal.exclusions), false,
+      'publication stops before exposing later data artifacts');
+    equal(fs.existsSync(concurrentFinal.transcript), false,
+      'publication stops before exposing the transcript');
+    equal(fs.existsSync(concurrentFinal.sidecar), false,
+      'the sidecar commit marker is never exposed on a failed publication');
+    ok(
+      Object.values(concurrentTemporary).every(
+        filename => !fs.existsSync(filename)
+      ),
+      'failure cleanup removes only the losing process temporary artifacts'
+    );
+
+    const partialFinal = {
+      output: path.join(temporary, 'teacher-partial.ndjson'),
+      exclusions:
+        path.join(temporary, 'teacher-partial.ndjson.exclusions.ndjson'),
+      transcript:
+        path.join(temporary, 'teacher-partial.ndjson.uci.log'),
+      sidecar:
+        path.join(temporary, 'teacher-partial.ndjson.manifest.json')
+    };
+    const partialTemporary = Object.fromEntries(
+      Object.entries(partialFinal).map(function ([name, filename]) {
+        const temporaryName = filename + '.tmp-test-owner';
+        fs.writeFileSync(temporaryName, name + ' from interrupted run\n');
+        return [name, temporaryName];
+      })
+    );
+    fs.writeFileSync(
+      partialFinal.exclusions, 'concurrent exclusion winner\n'
+    );
+    throws(
+      () => Label.commitLabelArtifacts(
+        partialTemporary, partialFinal
+      ),
+      /refusing to overwrite output artifact/,
+      'a mid-publication collision stops before the sidecar commit marker'
+    );
+    Label.cleanupTemporaryArtifacts(partialTemporary);
+    equal(
+      fs.readFileSync(partialFinal.output, 'utf8'),
+      'output from interrupted run\n',
+      'per-file publication can expose data before its completion marker'
+    );
+    equal(
+      fs.readFileSync(partialFinal.exclusions, 'utf8'),
+      'concurrent exclusion winner\n',
+      'mid-publication refusal preserves the conflicting winner'
+    );
+    equal(fs.existsSync(partialFinal.transcript), false);
+    equal(fs.existsSync(partialFinal.sidecar), false,
+      'consumers reject a partial prefix because its sidecar is absent');
+
     let forcedKills = 0;
     const stalled = Object.create(Label.UciEngine.prototype);
     stalled.iterator = {
@@ -413,6 +531,340 @@ async function integration() {
     equal(records.length, 1);
     equal(records[0].id, record.id);
 
+    const mechanismInputPath =
+      path.join(temporary, 'mechanism-input.jsonl');
+    const mechanismInputBody = Prepare.stableJson({
+      fen: record.fen,
+      evals: [{
+        depth: 20,
+        knodes: 100,
+        pvs: [{ cp: 12, line: 'e2e4 e8e7' }]
+      }]
+    }) + '\n';
+    fs.writeFileSync(mechanismInputPath, mechanismInputBody);
+    const mechanismSourceSha256 =
+      Corpus.sha256(mechanismInputBody);
+    const mechanismOutput =
+      path.join(temporary, 'mechanism-selection');
+    const mechanismPrepareLock = mechanismOutput + '.lock';
+    const mechanismPrepareLockFd =
+      Prepare.acquirePrefixLock(mechanismPrepareLock);
+    try {
+      await rejects(
+        () => Prepare.prepare({
+          input: mechanismInputPath,
+          'source-sha256': mechanismSourceSha256,
+          retrieved: '2026-07-31',
+          output: mechanismOutput,
+          modulus: '1',
+          numerator: '1',
+          shards: '1',
+          'family-cap': '64',
+          'minimum-selected': '1',
+          'max-malformed-ppm': '0',
+          'allow-missing-roles': 'true',
+          'allow-pending-certification-for-test': 'true',
+          'mechanism-fixture': 'true'
+        }),
+        /holds the output prefix lock/,
+        'only one preparation process can own an output prefix'
+      );
+      equal(fs.existsSync(mechanismPrepareLock), true,
+        'a refused preparation cannot remove the winning process lock');
+    } finally {
+      Prepare.releasePrefixLock(
+        mechanismPrepareLockFd, mechanismPrepareLock
+      );
+    }
+    const mechanismManifest = await Prepare.prepare({
+      input: mechanismInputPath,
+      'source-sha256': mechanismSourceSha256,
+      retrieved: '2026-07-31',
+      output: mechanismOutput,
+      modulus: '1',
+      numerator: '1',
+      shards: '1',
+      'family-cap': '64',
+      'minimum-selected': '1',
+      'max-malformed-ppm': '0',
+      'allow-missing-roles': 'true',
+      'allow-pending-certification-for-test': 'true',
+      'mechanism-fixture': 'true'
+    });
+    equal(fs.existsSync(mechanismPrepareLock), false,
+      'successful preparation releases its output-prefix lock');
+    equal(
+      mechanismManifest.state,
+      'mechanism-test-selection-only'
+    );
+    equal(mechanismManifest.finalFitAllowed, false);
+    equal(
+      mechanismManifest.mechanismFixture,
+      Prepare.MECHANISM_FIXTURE_MARKER,
+      'the selection explicitly marks a non-official, non-fit fixture'
+    );
+    equal(Object.keys(mechanismManifest.source).sort(), [
+      'compressedSha256', 'id', 'license', 'mechanismFixture',
+      'retrieved', 'url'
+    ]);
+    equal(
+      mechanismManifest.source.id,
+      Prepare.MECHANISM_FIXTURE_SOURCE_ID
+    );
+    equal(mechanismManifest.source.url, null);
+    equal(
+      mechanismManifest.source.mechanismFixture,
+      Prepare.MECHANISM_FIXTURE_MARKER
+    );
+    const mechanismManifestPath =
+      path.join(mechanismOutput, 'manifest.json');
+    const mechanismShardPath =
+      path.join(mechanismOutput, 'selection-000.ndjson');
+    const mechanismRecord = JSON.parse(
+      fs.readFileSync(mechanismShardPath, 'utf8').trim()
+    );
+    equal(Object.keys(mechanismRecord.source).sort(), [
+      'dataset', 'license', 'mechanismFixture', 'snapshotSha256'
+    ]);
+    equal(
+      mechanismRecord.source.dataset,
+      Prepare.MECHANISM_FIXTURE_SOURCE_ID
+    );
+    equal(
+      mechanismRecord.source.mechanismFixture,
+      Prepare.MECHANISM_FIXTURE_MARKER
+    );
+    equal(
+      mechanismRecord.explorationLabel.teacher,
+      Prepare.MECHANISM_FIXTURE_LABEL_TEACHER
+    );
+    await rejects(
+      () => Label.loadSelectionContext(
+        mechanismManifestPath,
+        mechanismShardPath,
+        contracts
+      ),
+      /wrong state or schema/,
+      'production selection validation rejects a mechanism fixture'
+    );
+    await rejects(
+      () => Label.loadSelectionContext(
+        mechanismManifestPath,
+        mechanismShardPath,
+        contracts,
+        { allowPendingCertificationForTest: true }
+      ),
+      /wrong state or schema/,
+      'the legacy pending test override cannot admit a mechanism fixture'
+    );
+    const mechanismContext = await Label.loadSelectionContext(
+      mechanismManifestPath,
+      mechanismShardPath,
+      contracts,
+      { sampleOnly: true }
+    );
+    equal(mechanismContext.sampleOnly, true);
+    equal(
+      mechanismContext.certification.status,
+      'awaiting-opening-freeze'
+    );
+    equal(
+      Label.validateSelectionRecord(
+        mechanismRecord, mechanismContext
+      ),
+      mechanismRecord
+    );
+    const missingRowMarker =
+      JSON.parse(JSON.stringify(mechanismRecord));
+    delete missingRowMarker.source.mechanismFixture;
+    throws(
+      () => Label.validateSelectionRecord(
+        missingRowMarker, mechanismContext
+      ),
+      /source provenance does not match selection manifest/,
+      'sample selection rows require their source-level fixture marker'
+    );
+    const malformedRowMarker =
+      JSON.parse(JSON.stringify(mechanismRecord));
+    malformedRowMarker.source.mechanismFixture.extra = true;
+    throws(
+      () => Label.validateSelectionRecord(
+        malformedRowMarker, mechanismContext
+      ),
+      /mechanism fixture marker is invalid/,
+      'sample selection rows require the exact fixture marker'
+    );
+
+    const malformedMechanism =
+      JSON.parse(JSON.stringify(mechanismManifest));
+    malformedMechanism.mechanismFixture.extra = true;
+    const malformedMechanismPath =
+      path.join(mechanismOutput, 'bad-mechanism-marker.json');
+    fs.writeFileSync(
+      malformedMechanismPath,
+      Prepare.stableJson(malformedMechanism) + '\n'
+    );
+    await rejects(
+      () => Label.loadSelectionContext(
+        malformedMechanismPath,
+        mechanismShardPath,
+        contracts,
+        { sampleOnly: true }
+      ),
+      /mechanism fixture marker is invalid/,
+      'sample selection requires the exact non-fit marker'
+    );
+    const malformedSourceMechanism =
+      JSON.parse(JSON.stringify(mechanismManifest));
+    malformedSourceMechanism.source.mechanismFixture.extra = true;
+    const malformedSourceMechanismPath =
+      path.join(mechanismOutput, 'bad-source-mechanism-marker.json');
+    fs.writeFileSync(
+      malformedSourceMechanismPath,
+      Prepare.stableJson(malformedSourceMechanism) + '\n'
+    );
+    await rejects(
+      () => Label.loadSelectionContext(
+        malformedSourceMechanismPath,
+        mechanismShardPath,
+        contracts,
+        { sampleOnly: true }
+      ),
+      /mechanism fixture marker is invalid/,
+      'sample manifests require the exact source-level fixture marker'
+    );
+
+    const failedOutput =
+      path.join(temporary, 'failed-mechanism-selection');
+    const foreignStaging = failedOutput + '.tmp-foreign-owner';
+    fs.mkdirSync(foreignStaging);
+    fs.writeFileSync(path.join(foreignStaging, 'sentinel'), 'foreign\n');
+    await rejects(
+      () => Prepare.prepare({
+        input: mechanismInputPath,
+        'source-sha256': mechanismSourceSha256,
+        retrieved: '2026-07-31',
+        output: failedOutput,
+        modulus: '1',
+        numerator: '1',
+        shards: '1',
+        'family-cap': '64',
+        'minimum-selected': '2',
+        'max-malformed-ppm': '0',
+        'allow-missing-roles': 'true',
+        'allow-pending-certification-for-test': 'true',
+        'mechanism-fixture': 'true'
+      }),
+      /selected only 1 positions; minimum is 2/,
+      'handled preparation failure rejects an incomplete selection'
+    );
+    equal(fs.existsSync(failedOutput), false);
+    equal(fs.existsSync(failedOutput + '.lock'), false,
+      'handled preparation failure releases its prefix lock');
+    equal(
+      fs.readFileSync(path.join(foreignStaging, 'sentinel'), 'utf8'),
+      'foreign\n',
+      'failure cleanup removes only staging owned by the failed run'
+    );
+
+    const normalOutput = path.join(temporary, 'normal-selection');
+    const normalManifest = await Prepare.prepare({
+      input: mechanismInputPath,
+      'source-sha256': mechanismSourceSha256,
+      retrieved: '2026-07-31',
+      output: normalOutput,
+      modulus: '1',
+      numerator: '1',
+      shards: '1',
+      'family-cap': '64',
+      'minimum-selected': '1',
+      'max-malformed-ppm': '0',
+      'allow-missing-roles': 'true',
+      'allow-pending-certification-for-test': 'true'
+    });
+    equal(normalManifest.state, 'exploration-selection-only',
+      'normal preparation retains the production selection state');
+    equal(normalManifest.mechanismFixture, undefined,
+      'normal preparation does not acquire a sample-only marker');
+    equal(Object.keys(normalManifest.source).sort(), [
+      'compressedSha256', 'id', 'license', 'retrieved', 'url'
+    ], 'the production selection source shape is unchanged');
+    equal(normalManifest.source.id, 'lichess-evaluations');
+    equal(
+      normalManifest.source.url,
+      contracts.sourceEntry.canonicalUrl
+    );
+    const normalRecord = JSON.parse(fs.readFileSync(
+      path.join(normalOutput, 'selection-000.ndjson'), 'utf8'
+    ).trim());
+    equal(Object.keys(normalRecord.source).sort(), [
+      'dataset', 'license', 'snapshotSha256'
+    ], 'the production selection row shape is unchanged');
+    equal(normalRecord.source.dataset, 'lichess-evaluated-positions');
+    await rejects(
+      () => Prepare.prepare({
+        input: mechanismInputPath,
+        'source-sha256': mechanismSourceSha256,
+        retrieved: '2026-07-31',
+        output: normalOutput,
+        modulus: '1',
+        numerator: '1',
+        shards: '1',
+        'family-cap': '64',
+        'minimum-selected': '1',
+        'max-malformed-ppm': '0',
+        'allow-missing-roles': 'true',
+        'allow-pending-certification-for-test': 'true'
+      }),
+      /refusing existing --output directory/,
+      'preparation never replaces a completed output directory'
+    );
+    equal(
+      fs.readFileSync(
+        path.join(normalOutput, 'manifest.json'), 'utf8'
+      ),
+      Prepare.stableJson(normalManifest) + '\n',
+      'no-replace refusal preserves the completed manifest'
+    );
+    throws(
+      () => Label.validateSelectionRecord(
+        Object.assign({}, record, {
+          source: Object.assign({}, record.source, {
+            mechanismFixture:
+              Object.assign({}, Prepare.MECHANISM_FIXTURE_MARKER)
+          })
+        }),
+        context
+      ),
+      /source provenance does not match selection manifest/,
+      'production row validation rejects a fixture marker'
+    );
+
+    const dummyStockfish = path.join(temporary, 'not-stockfish');
+    fs.writeFileSync(dummyStockfish, 'not the pinned executable\n');
+    const mechanismLabelOutput =
+      path.join(temporary, 'mechanism-teacher.ndjson');
+    const mechanismLabelOptions = {
+      input: mechanismShardPath,
+      'selection-manifest': mechanismManifestPath,
+      output: mechanismLabelOutput,
+      stockfish: dummyStockfish
+    };
+    await rejects(
+      () => Label.labelShard(mechanismLabelOptions),
+      /wrong state or schema/,
+      'normal labelShard rejects mechanism-fixture selection'
+    );
+    await rejects(
+      () => Label.labelShard(
+        mechanismLabelOptions, { sampleOnly: true }
+      ),
+      /Stockfish executable does not match/,
+      'the explicit imported sample path admits the marked selection'
+    );
+    equal(fs.existsSync(mechanismLabelOutput + '.lock'), false,
+      'both refused label attempts release the output-prefix lock');
+
     const overstatedControlPath =
       path.join(temporary, 'overstated-control-manifest.json');
     const overstatedControl =
@@ -454,6 +906,39 @@ async function integration() {
       {}
     ), /requires frozen E4 certification provenance/,
     'even the sidecar builder refuses pending certification provenance');
+    throws(() => Label.buildSidecarManifest(
+      context,
+      artifactPaths,
+      artifactSummaries,
+      contracts.teacher.engine.executable.sha256,
+      {},
+      { sampleOnly: true }
+    ), /requires a validated mechanism fixture/,
+    'sample mode cannot be applied to an ordinary selection');
+    const mechanismSidecar = Label.buildSidecarManifest(
+      mechanismContext,
+      Object.assign({}, artifactPaths, {
+        input: mechanismShardPath
+      }),
+      artifactSummaries,
+      contracts.teacher.engine.executable.sha256,
+      {},
+      { sampleOnly: true }
+    );
+    equal(
+      mechanismSidecar.state,
+      'pinned-teacher-labels-sample-only'
+    );
+    equal(mechanismSidecar.fitAllowed, false);
+    equal(
+      mechanismSidecar.mechanismFixture,
+      Prepare.MECHANISM_FIXTURE_MARKER,
+      'teacher sidecar propagates the strict sample-only marker'
+    );
+    equal(
+      mechanismSidecar.input.selectionManifest.certificationStatus,
+      'awaiting-opening-freeze'
+    );
     const frozenContext = Object.assign({}, context, {
       certification: Object.assign({}, context.certification, {
         status: 'frozen'
@@ -466,6 +951,11 @@ async function integration() {
       contracts.teacher.engine.executable.sha256,
       {}
     );
+    equal(sidecar.state, 'pinned-teacher-labels');
+    equal(sidecar.fitAllowed, undefined,
+      'production sidecar shape remains free of sample-only fields');
+    equal(sidecar.mechanismFixture, undefined,
+      'production sidecar never carries a mechanism marker');
     equal(
       sidecar.input.selectionManifest.selectionContractSha256,
       context.manifest.adapter.selectionContractSha256
@@ -583,6 +1073,21 @@ async function integration() {
     equal(labelled.teacher.manifestSha256, contracts.teacherSha256);
     equal(labelled.teacher.scoreNodes, 100000);
     equal(labelled.teacher.reportedNodes, 100000);
+    const mechanismLabelled = Label.labelledRecord(
+      mechanismRecord,
+      { info, terminalInfo: info, bestMove: 'e5e4' },
+      eligible,
+      contracts
+    );
+    equal(
+      mechanismLabelled.source.dataset,
+      Prepare.MECHANISM_FIXTURE_SOURCE_ID
+    );
+    equal(
+      mechanismLabelled.source.mechanismFixture,
+      Prepare.MECHANISM_FIXTURE_MARKER,
+      'sample teacher rows retain exact source-level fixture provenance'
+    );
 
     const crossed = Label.labelledRecord(
       record,

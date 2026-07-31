@@ -330,6 +330,8 @@ function loadFrozenContracts() {
 
 function validateCertificationBinding(manifest, contracts, validationOptions) {
   const exclusions = manifest.exclusions;
+  const sampleOnly = validationOptions &&
+    validationOptions.sampleOnly === true;
   const allowPendingForTest = validationOptions &&
     validationOptions.allowPendingCertificationForTest === true;
   if (typeof exclusions.certificationManifest !== 'string' ||
@@ -353,7 +355,15 @@ function validateCertificationBinding(manifest, contracts, validationOptions) {
   if (certification.status !== exclusions.certificationStatus) {
     throw new Error('selection certification status does not match its manifest');
   }
-  if (certification.status !== 'frozen') {
+  if (sampleOnly) {
+    if (certification.status !== 'awaiting-opening-freeze' ||
+        exclusions.pendingCertificationAllowedForTestOnly !== true) {
+      throw new Error(
+        'sample-only selection requires the awaiting-opening-freeze ' +
+        'certification and pending test override'
+      );
+    }
+  } else if (certification.status !== 'frozen') {
     if (!allowPendingForTest ||
         certification.status !== 'awaiting-opening-freeze' ||
         exclusions.pendingCertificationAllowedForTestOnly !== true) {
@@ -388,17 +398,45 @@ function validateCertificationBinding(manifest, contracts, validationOptions) {
 function validateSelectionManifest(
   manifest, manifestPath, input, contracts, validationOptions
 ) {
+  const sampleOnly = validationOptions &&
+    validationOptions.sampleOnly === true;
+  const expectedState = sampleOnly ?
+    'mechanism-test-selection-only' : 'exploration-selection-only';
   if (!manifest || manifest.schemaVersion !== 1 ||
-      manifest.state !== 'exploration-selection-only' ||
+      manifest.state !== expectedState ||
       manifest.finalFitAllowed !== false) {
     throw new Error('selection manifest has the wrong state or schema');
   }
-  if (!manifest.source || manifest.source.id !== 'lichess-evaluations' ||
-      manifest.source.url !== contracts.sourceEntry.canonicalUrl ||
+  if (sampleOnly) {
+    Prepare.validateMechanismFixtureMarker(manifest.mechanismFixture);
+  } else if (Object.prototype.hasOwnProperty.call(
+    manifest, 'mechanismFixture'
+  )) {
+    throw new Error(
+      'production selection cannot carry a mechanism fixture marker'
+    );
+  }
+  const expectedSourceKeys = sampleOnly ? [
+    'id', 'url', 'retrieved', 'compressedSha256', 'license',
+    'mechanismFixture'
+  ] : [
+    'id', 'url', 'retrieved', 'compressedSha256', 'license'
+  ];
+  if (!manifest.source ||
+      !hasExactKeys(manifest.source, expectedSourceKeys) ||
+      manifest.source.id !== (sampleOnly ?
+        Prepare.MECHANISM_FIXTURE_SOURCE_ID : 'lichess-evaluations') ||
+      manifest.source.url !== (sampleOnly ?
+        null : contracts.sourceEntry.canonicalUrl) ||
       manifest.source.license !== contracts.sourceEntry.license.spdx ||
       !/^\d{4}-\d{2}-\d{2}$/.test(manifest.source.retrieved || '') ||
       !HEX_256.test(manifest.source.compressedSha256 || '')) {
     throw new Error('selection manifest has an unpinned or unexpected source');
+  }
+  if (sampleOnly) {
+    Prepare.validateMechanismFixtureMarker(
+      manifest.source.mechanismFixture
+    );
   }
   if (!manifest.adapter || manifest.adapter.schema !== Corpus.SCHEMA ||
       manifest.adapter.wrapperSha256 !== contracts.prepareSha256 ||
@@ -449,14 +487,20 @@ function validateSelectionManifest(
   const certification = validateCertificationBinding(
     manifest, contracts, validationOptions
   );
-  const expectedSelectionContractSha256 = Corpus.sha256(Prepare.stableJson({
+  const expectedSelectionContract = {
     wrapperSha256: contracts.prepareSha256,
     corpusContractSha256: contracts.corpusSha256,
     e4ValidatorSha256: contracts.e4ValidatorSha256,
     heldoutManifestSha256: contracts.heldoutSha256,
     sourcePolicySha256: contracts.sourcePolicySha256,
     certificationManifestSha256: certification.sha256
-  }));
+  };
+  if (sampleOnly) {
+    expectedSelectionContract.mechanismFixture =
+      Object.assign({}, Prepare.MECHANISM_FIXTURE_MARKER);
+  }
+  const expectedSelectionContractSha256 =
+    Corpus.sha256(Prepare.stableJson(expectedSelectionContract));
   if (manifest.adapter.selectionContractSha256 !==
       expectedSelectionContractSha256) {
     throw new Error('selection manifest aggregate contract SHA-256 does not match');
@@ -503,7 +547,8 @@ function validateSelectionManifest(
   return Object.freeze({
     shard,
     shardIndex: manifest.shards.indexOf(shard),
-    certification
+    certification,
+    sampleOnly
   });
 }
 
@@ -532,6 +577,7 @@ async function loadSelectionContext(
     certification: validated.certification,
     sourceSha256: manifest.source.compressedSha256,
     inputSha256: actualSha256,
+    sampleOnly: validated.sampleOnly,
     contracts
   });
 }
@@ -574,18 +620,30 @@ function validateSelectionRecord(record, context) {
       context.certification.positionFamilies.has(positionFamily)) {
     throw new Error(record.id + ': E4 certification cluster/family is forbidden');
   }
-  if (!hasExactKeys(record.source, [
+  const expectedSourceFields = context.sampleOnly ? [
+    'dataset', 'snapshotSha256', 'license', 'mechanismFixture'
+  ] : [
     'dataset', 'snapshotSha256', 'license'
-  ]) ||
-      record.source.dataset !== 'lichess-evaluated-positions' ||
+  ];
+  if (!hasExactKeys(record.source, expectedSourceFields) ||
+      record.source.dataset !== (context.sampleOnly ?
+        Prepare.MECHANISM_FIXTURE_SOURCE_ID :
+        'lichess-evaluated-positions') ||
       record.source.snapshotSha256 !== context.sourceSha256 ||
       record.source.license !== context.manifest.source.license) {
     throw new Error(record.id + ': source provenance does not match selection manifest');
   }
+  if (context.sampleOnly) {
+    Prepare.validateMechanismFixtureMarker(
+      record.source.mechanismFixture
+    );
+  }
   if (!hasExactKeys(record.explorationLabel, [
     'cpWhite', 'depth', 'knodes', 'pvUci', 'teacher'
   ]) ||
-      record.explorationLabel.teacher !== 'lichess-mixed-stockfish' ||
+      record.explorationLabel.teacher !== (context.sampleOnly ?
+        Prepare.MECHANISM_FIXTURE_LABEL_TEACHER :
+        'lichess-mixed-stockfish') ||
       !Number.isSafeInteger(record.explorationLabel.cpWhite) ||
       !Number.isSafeInteger(record.explorationLabel.depth) ||
       record.explorationLabel.depth <= 0 ||
@@ -999,6 +1057,74 @@ function refuseExistingArtifacts(paths) {
   }
 }
 
+function acquirePrefixLock(filename) {
+  let fd;
+  try {
+    fd = fs.openSync(filename, 'wx', 0o600);
+  } catch (error) {
+    if (error.code === 'EEXIST') {
+      throw new Error(
+        'another Stockfish label run holds the output prefix lock: ' +
+        filename
+      );
+    }
+    throw error;
+  }
+  try {
+    const body = Prepare.stableJson({
+      pid: process.pid,
+      startedAtUtc: new Date().toISOString()
+    }) + '\n';
+    fs.writeSync(fd, body);
+    fs.fsyncSync(fd);
+    return fd;
+  } catch (error) {
+    try { fs.closeSync(fd); } catch (_) {}
+    try { fs.unlinkSync(filename); } catch (_) {}
+    throw error;
+  }
+}
+
+function releasePrefixLock(fd, filename) {
+  try {
+    const held = fs.fstatSync(fd);
+    let current = null;
+    try { current = fs.statSync(filename); } catch (_) {}
+    if (current && current.dev === held.dev && current.ino === held.ino) {
+      fs.unlinkSync(filename);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function commitNoReplace(temporaryName, filename) {
+  try {
+    fs.linkSync(temporaryName, filename);
+  } catch (error) {
+    if (error.code === 'EEXIST') {
+      throw new Error('refusing to overwrite output artifact: ' + filename);
+    }
+    throw error;
+  }
+  fs.unlinkSync(temporaryName);
+}
+
+function commitLabelArtifacts(temporary, final) {
+  commitNoReplace(temporary.output, final.output);
+  commitNoReplace(temporary.exclusions, final.exclusions);
+  commitNoReplace(temporary.transcript, final.transcript);
+  commitNoReplace(temporary.sidecar, final.sidecar);
+}
+
+function cleanupTemporaryArtifacts(temporary) {
+  for (const filename of Object.values(temporary)) {
+    try { fs.unlinkSync(filename); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+}
+
 function validateLabelOptions(options) {
   if (!options || typeof options !== 'object') {
     throw new Error('label options are required');
@@ -1015,12 +1141,54 @@ function validateLabelOptions(options) {
   }
 }
 
+function sampleOnlyMode(options, subject) {
+  if (options === undefined) return false;
+  if (!hasExactKeys(options, ['sampleOnly']) ||
+      options.sampleOnly !== true) {
+    throw new Error(
+      subject + ' accepts only the explicit { sampleOnly: true } option'
+    );
+  }
+  return true;
+}
+
 function buildSidecarManifest(
-  context, paths, summaries, actualExecutableSha, exclusionReasons
+  context, paths, summaries, actualExecutableSha, exclusionReasons,
+  buildOptions
 ) {
   const teacher = context.contracts.teacher;
-  if (context.certification.status !== 'frozen') {
-    throw new Error('teacher sidecar requires frozen E4 certification provenance');
+  const sampleOnly = sampleOnlyMode(
+    buildOptions, 'teacher sidecar builder'
+  );
+  if (sampleOnly) {
+    if (context.sampleOnly !== true ||
+        context.manifest.state !== 'mechanism-test-selection-only' ||
+        context.manifest.finalFitAllowed !== false ||
+        context.certification.status !== 'awaiting-opening-freeze' ||
+        context.manifest.exclusions
+          .pendingCertificationAllowedForTestOnly !== true) {
+      throw new Error(
+        'sample-only teacher sidecar requires a validated mechanism fixture'
+      );
+    }
+    Prepare.validateMechanismFixtureMarker(
+      context.manifest.mechanismFixture
+    );
+  } else {
+    if (context.sampleOnly === true ||
+        context.manifest.state !== 'exploration-selection-only' ||
+        Object.prototype.hasOwnProperty.call(
+          context.manifest, 'mechanismFixture'
+        )) {
+      throw new Error(
+        'production teacher sidecar requires a production selection'
+      );
+    }
+    if (context.certification.status !== 'frozen') {
+      throw new Error(
+        'teacher sidecar requires frozen E4 certification provenance'
+      );
+    }
   }
   if (actualExecutableSha !== teacher.engine.executable.sha256 ||
       !HEX_256.test(context.manifest.adapter.selectionContractSha256 || '') ||
@@ -1037,9 +1205,10 @@ function buildSidecarManifest(
         context.shard.rows) {
     throw new Error('teacher sidecar inputs do not satisfy the frozen contract');
   }
-  return {
+  const manifest = {
     schemaVersion: 1,
-    state: 'pinned-teacher-labels',
+    state: sampleOnly ?
+      'pinned-teacher-labels-sample-only' : 'pinned-teacher-labels',
     input: {
       selectionManifest: {
         path: context.manifestPath,
@@ -1092,10 +1261,17 @@ function buildSidecarManifest(
       }
     }
   };
+  if (sampleOnly) {
+    manifest.fitAllowed = false;
+    manifest.mechanismFixture =
+      Object.assign({}, Prepare.MECHANISM_FIXTURE_MARKER);
+  }
+  return manifest;
 }
 
-async function labelShard(options) {
+async function labelShard(options, runOptions) {
   validateLabelOptions(options);
+  const sampleOnly = sampleOnlyMode(runOptions, 'labelShard');
   const contracts = loadFrozenContracts();
   const input = path.resolve(options.input);
   const selectionManifest = path.resolve(options['selection-manifest']);
@@ -1108,109 +1284,122 @@ async function labelShard(options) {
   const exclusionPath = output + '.exclusions.ndjson';
   const transcriptPath = output + '.uci.log';
   const sidecarPath = output + '.manifest.json';
-  const finalPaths = [output, exclusionPath, transcriptPath, sidecarPath];
-  refuseExistingArtifacts(finalPaths);
-
-  const context = await loadSelectionContext(
-    selectionManifest, input, contracts
-  );
-  const records = await loadRecords(input, context);
-  const actualExecutableSha = await Prepare.fileSha256(executable);
-  if (actualExecutableSha !== contracts.teacher.engine.executable.sha256) {
-    throw new Error(
-      'Stockfish executable does not match the checked-in teacher manifest'
-    );
-  }
-
-  const suffix = '.tmp-' + process.pid;
-  const temporary = {
-    output: output + suffix,
-    exclusions: exclusionPath + suffix,
-    transcript: transcriptPath + suffix,
-    sidecar: sidecarPath + suffix
+  const finalArtifacts = {
+    output,
+    exclusions: exclusionPath,
+    transcript: transcriptPath,
+    sidecar: sidecarPath
   };
-  refuseExistingArtifacts(Object.values(temporary));
-  const outputWriter = new LineArtifact(temporary.output);
-  const exclusionWriter = new LineArtifact(temporary.exclusions);
-  const transcriptWriter = new LineArtifact(temporary.transcript);
-  const exclusionReasons = {};
-  let engine = null;
+  const lockPath = output + '.lock';
+  const lockFd = acquirePrefixLock(lockPath);
   try {
-    engine = new UciEngine(
-      executable, transcriptWriter, contracts.teacher.watchdog
-    );
-    await engine.initialize(contracts.teacher.uci);
-    for (const record of records) {
-      const turn = Corpus.parseFen4(record.fen).turn;
-      const result = await engine.label(
-        record.fen,
-        contracts.teacher.search.nodeLimit,
-        contracts.teacher.uci
-      );
-      const assessment = assessTeacherResult(
-        result, turn, contracts.teacher
-      );
-      if (!assessment.eligible) {
-        exclusionWriter.appendObject(
-          exclusionRecord(record, assessment, contracts)
-        );
-        exclusionReasons[assessment.reason] =
-          (exclusionReasons[assessment.reason] || 0) + 1;
-        continue;
-      }
-      outputWriter.appendObject(
-        labelledRecord(record, result, assessment, contracts)
-      );
-    }
-    const quitting = engine;
-    engine = null;
-    await quitting.quit();
+    refuseExistingArtifacts(Object.values(finalArtifacts));
 
-    const outputSummary = outputWriter.finish();
-    const exclusionSummary = exclusionWriter.finish();
-    const transcriptSummary = transcriptWriter.finish();
-    if (outputSummary.rows + exclusionSummary.rows !== records.length) {
-      throw new Error('teacher output accounting does not match input rows');
-    }
-    const manifest = buildSidecarManifest(
-      context,
-      {
-        input,
-        output,
-        exclusions: exclusionPath,
-        transcript: transcriptPath
-      },
-      {
-        output: outputSummary,
-        exclusions: exclusionSummary,
-        transcript: transcriptSummary
-      },
-      actualExecutableSha,
-      exclusionReasons
+    const context = await loadSelectionContext(
+      selectionManifest,
+      input,
+      contracts,
+      sampleOnly ? { sampleOnly: true } : undefined
     );
-    fs.writeFileSync(
-      temporary.sidecar,
-      Prepare.stableJson(manifest) + '\n',
-      { flag: 'wx' }
-    );
-    fs.renameSync(temporary.output, output);
-    fs.renameSync(temporary.exclusions, exclusionPath);
-    fs.renameSync(temporary.transcript, transcriptPath);
-    fs.renameSync(temporary.sidecar, sidecarPath);
-    return manifest;
-  } catch (error) {
-    if (engine) {
-      try { await engine.abort(); } catch (_) {}
+    const records = await loadRecords(input, context);
+    const actualExecutableSha = await Prepare.fileSha256(executable);
+    if (actualExecutableSha !== contracts.teacher.engine.executable.sha256) {
+      throw new Error(
+        'Stockfish executable does not match the checked-in teacher manifest'
+      );
     }
-    for (const writer of [outputWriter, exclusionWriter, transcriptWriter]) {
-      try { writer.abort(); } catch (_) {}
-    }
-    for (const filename of Object.values(temporary).concat(finalPaths)) {
-      try { fs.unlinkSync(filename); } catch (unlinkError) {
-        if (unlinkError.code !== 'ENOENT') throw unlinkError;
+
+    const nonce =
+      process.pid + '-' + crypto.randomBytes(8).toString('hex');
+    const temporary = {
+      output: output + '.tmp-' + nonce,
+      exclusions: exclusionPath + '.tmp-' + nonce,
+      transcript: transcriptPath + '.tmp-' + nonce,
+      sidecar: sidecarPath + '.tmp-' + nonce
+    };
+    refuseExistingArtifacts(Object.values(temporary));
+    let outputWriter = null;
+    let exclusionWriter = null;
+    let transcriptWriter = null;
+    const exclusionReasons = {};
+    let engine = null;
+    try {
+      outputWriter = new LineArtifact(temporary.output);
+      exclusionWriter = new LineArtifact(temporary.exclusions);
+      transcriptWriter = new LineArtifact(temporary.transcript);
+      engine = new UciEngine(
+        executable, transcriptWriter, contracts.teacher.watchdog
+      );
+      await engine.initialize(contracts.teacher.uci);
+      for (const record of records) {
+        const turn = Corpus.parseFen4(record.fen).turn;
+        const result = await engine.label(
+          record.fen,
+          contracts.teacher.search.nodeLimit,
+          contracts.teacher.uci
+        );
+        const assessment = assessTeacherResult(
+          result, turn, contracts.teacher
+        );
+        if (!assessment.eligible) {
+          exclusionWriter.appendObject(
+            exclusionRecord(record, assessment, contracts)
+          );
+          exclusionReasons[assessment.reason] =
+            (exclusionReasons[assessment.reason] || 0) + 1;
+          continue;
+        }
+        outputWriter.appendObject(
+          labelledRecord(record, result, assessment, contracts)
+        );
       }
+      const quitting = engine;
+      engine = null;
+      await quitting.quit();
+
+      const outputSummary = outputWriter.finish();
+      const exclusionSummary = exclusionWriter.finish();
+      const transcriptSummary = transcriptWriter.finish();
+      if (outputSummary.rows + exclusionSummary.rows !== records.length) {
+        throw new Error('teacher output accounting does not match input rows');
+      }
+      const manifest = buildSidecarManifest(
+        context,
+        {
+          input,
+          output,
+          exclusions: exclusionPath,
+          transcript: transcriptPath
+        },
+        {
+          output: outputSummary,
+          exclusions: exclusionSummary,
+          transcript: transcriptSummary
+        },
+        actualExecutableSha,
+        exclusionReasons,
+        sampleOnly ? { sampleOnly: true } : undefined
+      );
+      fs.writeFileSync(
+        temporary.sidecar,
+        Prepare.stableJson(manifest) + '\n',
+        { flag: 'wx' }
+      );
+      commitLabelArtifacts(temporary, finalArtifacts);
+      return manifest;
+    } catch (error) {
+      if (engine) {
+        try { await engine.abort(); } catch (_) {}
+      }
+      for (const writer of [outputWriter, exclusionWriter, transcriptWriter]) {
+        if (!writer) continue;
+        try { writer.abort(); } catch (_) {}
+      }
+      cleanupTemporaryArtifacts(temporary);
+      throw error;
     }
-    throw error;
+  } finally {
+    releasePrefixLock(lockFd, lockPath);
   }
 }
 
@@ -1248,7 +1437,14 @@ module.exports = {
   loadRecords,
   labelledRecord,
   exclusionRecord,
+  refuseExistingArtifacts,
+  acquirePrefixLock,
+  releasePrefixLock,
+  commitNoReplace,
+  commitLabelArtifacts,
+  cleanupTemporaryArtifacts,
   validateLabelOptions,
+  sampleOnlyMode,
   buildSidecarManifest,
   labelShard
 };

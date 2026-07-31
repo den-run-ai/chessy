@@ -64,8 +64,291 @@ assert.deepStrictEqual(
   ]),
   {
     input: ['first.ndjson', 'second.ndjson'],
-    role: 'shared-train'
+    role: 'shared-train',
+    sampleOnly: false
   }
+);
+checks++;
+
+assert.deepStrictEqual(
+  Stream.parseArgs([
+    '--sample-only', 'true',
+    '--role', 'hce-validation',
+    '--input', 'sample.ndjson'
+  ]),
+  {
+    input: ['sample.ndjson'],
+    role: 'hce-validation',
+    sampleOnly: true
+  }
+);
+checks++;
+
+assert.throws(
+  () => Stream.parseArgs([
+    '--input', 'sample.ndjson',
+    '--role', 'shared-train',
+    '--sample-only', 'false'
+  ]),
+  /must be exactly true/
+);
+checks++;
+
+assert.strictEqual(Stream.sampleOnlyOption({}), false);
+assert.strictEqual(Stream.sampleOnlyOption({ sampleOnly: true }), true);
+assert.throws(
+  () => Stream.sampleOnlyOption({ sampleOnly: 'true' }),
+  /direct option must be boolean/
+);
+checks += 3;
+
+const mechanismFixture = {
+  officialEvaluationSnapshot: false,
+  fitAllowed: false,
+  status: 'sample-only-not-fit-eligible'
+};
+assert.strictEqual(
+  Stream.exactMechanismFixture(mechanismFixture),
+  true
+);
+assert.strictEqual(
+  Stream.exactMechanismFixture(Object.assign(
+    { note: 'not exact' }, mechanismFixture)),
+  false
+);
+checks += 2;
+
+assert.deepStrictEqual(Stream.streamDisposition(false), {
+  status: 'authenticated-production-input',
+  mode: 'production',
+  sampleOnly: false
+});
+assert.deepStrictEqual(Stream.streamDisposition(true), {
+  status: 'sample-only-not-fit-eligible',
+  mode: 'sample-only',
+  sampleOnly: true,
+  fitAllowed: false,
+  officialEvaluationSnapshot: false
+});
+checks += 2;
+
+const sourceSha256 = 'a'.repeat(64);
+const sourceContext = {
+  sourceSha256,
+  manifest: { source: { license: 'CC0-1.0' } }
+};
+const productionSource = {
+  dataset: 'lichess-evaluated-positions',
+  snapshotSha256: sourceSha256,
+  license: 'CC0-1.0'
+};
+const sampleSource = {
+  dataset: 'chessy-training-mechanism-fixture',
+  snapshotSha256: sourceSha256,
+  license: 'CC0-1.0',
+  mechanismFixture
+};
+Stream.validateTeacherSource(productionSource, sourceContext);
+Stream.validateTeacherSource(
+  sampleSource,
+  Object.assign({ sampleOnly: true }, sourceContext)
+);
+assert.throws(
+  () => Stream.validateTeacherSource(
+    Object.assign({}, productionSource, { mechanismFixture }),
+    sourceContext
+  ),
+  /selection mode/
+);
+assert.throws(
+  () => Stream.validateTeacherSource(
+    {
+      dataset: sampleSource.dataset,
+      snapshotSha256: sampleSource.snapshotSha256,
+      license: sampleSource.license
+    },
+    Object.assign({ sampleOnly: true }, sourceContext)
+  ),
+  /selection mode/
+);
+assert.throws(
+  () => Stream.validateTeacherSource(
+    Object.assign({}, sampleSource, {
+      mechanismFixture: Object.assign({ extra: true }, mechanismFixture)
+    }),
+    Object.assign({ sampleOnly: true }, sourceContext)
+  ),
+  /selection mode/
+);
+checks += 5;
+
+const selectionBinding = {
+  sideSelection: {
+    sha256: '1'.repeat(64),
+    selectionContractSha256: '2'.repeat(64),
+    certificationStatus: 'frozen'
+  },
+  sideShard: {
+    sha256: '3'.repeat(64),
+    rows: 7
+  },
+  context: {
+    manifestSha256: '1'.repeat(64),
+    inputSha256: '3'.repeat(64),
+    manifest: {
+      adapter: { selectionContractSha256: '2'.repeat(64) }
+    },
+    shard: { rows: 7 },
+    certification: { status: 'frozen' }
+  }
+};
+Stream.validateSelectionBinding(
+  selectionBinding.sideSelection,
+  selectionBinding.sideShard,
+  selectionBinding.context
+);
+assert.throws(
+  () => Stream.validateSelectionBinding(
+    selectionBinding.sideSelection,
+    selectionBinding.sideShard,
+    Object.assign({}, selectionBinding.context, {
+      manifestSha256: '4'.repeat(64)
+    })
+  ),
+  /selection shard sidecar binding failed/
+);
+assert.throws(
+  () => Stream.validateSelectionBinding(
+    selectionBinding.sideSelection,
+    selectionBinding.sideShard,
+    Object.assign({}, selectionBinding.context, { certification: null })
+  ),
+  /selection shard sidecar binding failed/
+);
+checks += 3;
+
+const productionSidecar = {
+  state: 'pinned-teacher-labels',
+  input: {
+    selectionManifest: { certificationStatus: 'frozen' }
+  }
+};
+const productionContext = {
+  manifest: {
+    state: 'exploration-selection-only',
+    finalFitAllowed: false
+  },
+  certification: { status: 'frozen' }
+};
+Stream.validateSidecarMode(productionSidecar, false);
+Stream.validateSelectionMode(
+  productionSidecar, productionContext, false);
+checks += 2;
+
+const sampleSidecar = {
+  state: 'pinned-teacher-labels-sample-only',
+  fitAllowed: false,
+  mechanismFixture,
+  input: {
+    selectionManifest: {
+      certificationStatus: 'awaiting-opening-freeze'
+    }
+  }
+};
+const sampleContext = {
+  sampleOnly: true,
+  manifest: {
+    state: 'mechanism-test-selection-only',
+    finalFitAllowed: false,
+    mechanismFixture
+  },
+  certification: { status: 'awaiting-opening-freeze' }
+};
+Stream.validateSidecarMode(sampleSidecar, true);
+Stream.validateSelectionMode(sampleSidecar, sampleContext, true);
+checks += 2;
+
+assert.throws(
+  () => Stream.validateSidecarMode(sampleSidecar, false),
+  /production teacher sidecar/
+);
+assert.throws(
+  () => Stream.validateSidecarMode(
+    Object.assign({ fitAllowed: true }, productionSidecar),
+    false
+  ),
+  /production teacher sidecar/
+);
+assert.throws(
+  () => Stream.validateSidecarMode(productionSidecar, true),
+  /sample-only teacher sidecar/
+);
+assert.throws(
+  () => Stream.validateSidecarMode(Object.assign({}, sampleSidecar, {
+    mechanismFixture: Object.assign(
+      { untrusted: true }, mechanismFixture)
+  }), true),
+  /mechanism marker differs/
+);
+assert.throws(
+  () => Stream.validateSelectionMode(
+    sampleSidecar,
+    {
+      manifest: Object.assign({}, sampleContext.manifest, {
+        state: 'exploration-selection-only'
+      }),
+      certification: sampleContext.certification
+    },
+    true
+  ),
+  /sample-only selection/
+);
+assert.throws(
+  () => Stream.validateSelectionMode(
+    sampleSidecar,
+    {
+      manifest: sampleContext.manifest,
+      certification: { status: 'frozen' }
+    },
+    true
+  ),
+  /sample-only selection/
+);
+checks += 6;
+
+function provenanceEntry(overrides) {
+  return Object.assign({
+    selectionManifestSha256: '1'.repeat(64),
+    selectionContractSha256: '2'.repeat(64),
+    sourceSnapshotSha256: '3'.repeat(64)
+  }, overrides);
+}
+
+assert.deepStrictEqual(
+  Stream.sharedProvenance([provenanceEntry(), provenanceEntry()]),
+  {
+    selectionManifestSha256: '1'.repeat(64),
+    selectionContractSha256: '2'.repeat(64),
+    sourceSnapshotSha256: '3'.repeat(64)
+  }
+);
+checks++;
+
+assert.throws(
+  () => Stream.sharedProvenance([
+    provenanceEntry(),
+    provenanceEntry({ selectionManifestSha256: '4'.repeat(64) })
+  ]),
+  /one selection manifest and contract/
+);
+checks++;
+
+assert.throws(
+  () => Stream.sharedProvenance([
+    provenanceEntry(),
+    provenanceEntry({ sourceSnapshotSha256: '5'.repeat(64) })
+  ]),
+  /one source snapshot/
 );
 checks++;
 

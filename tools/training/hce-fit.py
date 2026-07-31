@@ -28,6 +28,9 @@ import scipy
 from scipy import optimize, sparse
 
 
+PRODUCTION_INPUT_DISPOSITION = "authenticated-production-input"
+
+
 @dataclass
 class Dataset:
     matrix: sparse.csr_matrix
@@ -51,6 +54,14 @@ def sha256_file(filename: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def assert_artifacts_unchanged(expected: dict[Path, str]) -> None:
+    for filename, wanted in expected.items():
+        if sha256_file(filename) != wanted:
+            raise RuntimeError(
+                f"validated fit input changed during fitting: {filename}"
+            )
 
 
 def scalar_string(archive: Any, name: str, filename: Path) -> str:
@@ -81,6 +92,7 @@ def load_dataset(
     parameters: int,
     expected: dict[str, str],
 ) -> Dataset:
+    initial_sha256 = sha256_file(filename)
     archive = np.load(filename, allow_pickle=False)
     required = {
         "indptr",
@@ -97,7 +109,10 @@ def load_dataset(
         "feature_order_sha256",
         "feature_manifest_sha256",
         "teacher_manifest_sha256",
+        "selection_manifest_sha256",
         "selection_contract_sha256",
+        "source_snapshot_sha256",
+        "input_disposition",
         "center_value_sha256",
         "scales_value_sha256",
         "score_denominator",
@@ -177,13 +192,16 @@ def load_dataset(
             "feature_order_sha256",
             "feature_manifest_sha256",
             "teacher_manifest_sha256",
+            "selection_manifest_sha256",
             "selection_contract_sha256",
+            "source_snapshot_sha256",
+            "input_disposition",
             "center_value_sha256",
             "scales_value_sha256",
         )
     }
     for name, value in metadata.items():
-        if name != "matrix_schema":
+        if name not in ("matrix_schema", "input_disposition"):
             require_sha256(value, f"{filename}: {name}")
     for name, wanted in expected.items():
         if metadata.get(name) != wanted:
@@ -194,12 +212,14 @@ def load_dataset(
     if denominator.shape != () or denominator.dtype != np.dtype("int64") or \
             int(denominator.item()) != 24:
         raise ValueError(f"{filename}: score_denominator must be int64 scalar 24")
+    archive.close()
+    assert_artifacts_unchanged({filename: initial_sha256})
     return Dataset(
         matrix,
         fixed_cp,
         target,
         role,
-        sha256_file(filename),
+        initial_sha256,
         row_ids,
         row_vectors["cluster_id"],
         row_vectors["position_family_id"],
@@ -208,6 +228,22 @@ def load_dataset(
 
 
 def assert_disjoint(train: Dataset, validation: Dataset) -> None:
+    if train.metadata is None or validation.metadata is None:
+        raise ValueError("missing matrix metadata")
+    for field in (
+        "matrix_schema",
+        "feature_order_sha256",
+        "feature_manifest_sha256",
+        "teacher_manifest_sha256",
+        "selection_manifest_sha256",
+        "selection_contract_sha256",
+        "source_snapshot_sha256",
+        "input_disposition",
+        "center_value_sha256",
+        "scales_value_sha256",
+    ):
+        if train.metadata[field] != validation.metadata[field]:
+            raise ValueError(f"train/validation metadata mismatch: {field}")
     for field in ("row_ids", "cluster_ids", "position_family_ids"):
         left = getattr(train, field)
         right = getattr(validation, field)
@@ -219,19 +255,6 @@ def assert_disjoint(train: Dataset, validation: Dataset) -> None:
             raise ValueError(
                 f"train/validation {field} overlap: {bytes(overlap).hex()}"
             )
-    if train.metadata is None or validation.metadata is None:
-        raise ValueError("missing matrix metadata")
-    for field in (
-        "matrix_schema",
-        "feature_order_sha256",
-        "feature_manifest_sha256",
-        "teacher_manifest_sha256",
-        "selection_contract_sha256",
-        "center_value_sha256",
-        "scales_value_sha256",
-    ):
-        if train.metadata[field] != validation.metadata[field]:
-            raise ValueError(f"train/validation metadata mismatch: {field}")
 
 
 def validate_matrix_sidecar(
@@ -241,14 +264,19 @@ def validate_matrix_sidecar(
     root: Path,
     feature_path: Path,
     fit_path: Path,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], str]:
     sidecar_path = filename.with_suffix(filename.suffix + ".manifest.json")
-    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
-    if sidecar.get("schemaVersion") != 1 or \
-            sidecar.get("state") != "authenticated-hce-csr-v2" or \
-            sidecar.get("role") != expected_role or \
-            sidecar.get("rows") != dataset.rows or \
-            sidecar.get("nonzeros") != int(dataset.matrix.nnz):
+    sidecar_bytes = sidecar_path.read_bytes()
+    sidecar_sha256 = hashlib.sha256(sidecar_bytes).hexdigest()
+    sidecar = json.loads(sidecar_bytes.decode("utf-8"))
+    if (
+        sidecar.get("schemaVersion") != 1
+        or sidecar.get("state") != "authenticated-hce-csr-v2"
+        or sidecar.get("role") != expected_role
+        or sidecar.get("inputDisposition") != PRODUCTION_INPUT_DISPOSITION
+        or sidecar.get("rows") != dataset.rows
+        or sidecar.get("nonzeros") != int(dataset.matrix.nnz)
+    ):
         raise ValueError(f"{sidecar_path}: matrix identity/count contract differs")
     output = sidecar.get("output")
     if not isinstance(output, dict) or output.get("path") != filename.name or \
@@ -270,9 +298,16 @@ def validate_matrix_sidecar(
         "teacherManifestSha256": dataset.metadata[
             "teacher_manifest_sha256"
         ],
+        "selectionManifestSha256": dataset.metadata[
+            "selection_manifest_sha256"
+        ],
         "selectionContractSha256": dataset.metadata[
             "selection_contract_sha256"
         ],
+        "sourceSnapshotSha256": dataset.metadata[
+            "source_snapshot_sha256"
+        ],
+        "inputDisposition": dataset.metadata["input_disposition"],
         "parameterOrderSha256": dataset.metadata[
             "feature_order_sha256"
         ],
@@ -283,17 +318,52 @@ def validate_matrix_sidecar(
     for name, value in current.items():
         if contracts.get(name) != value:
             raise ValueError(f"{sidecar_path}: {name} differs")
+    if sidecar.get("inputInventoryScope") != "provided-teacher-shards-only":
+        raise ValueError(
+            f"{sidecar_path}: input inventory scope is not explicit"
+        )
     inputs = sidecar.get("inputs")
     if not isinstance(inputs, list) or not inputs:
         raise ValueError(f"{sidecar_path}: authenticated input list is empty")
-    for item in inputs:
+    for index, item in enumerate(inputs):
         if not isinstance(item, dict):
             raise ValueError(f"{sidecar_path}: malformed input provenance")
+        if (
+            not isinstance(item.get("path"), str)
+            or not item["path"]
+            or not isinstance(item.get("sidecarPath"), str)
+            or not item["sidecarPath"]
+            or isinstance(item.get("rows"), bool)
+            or not isinstance(item.get("rows"), int)
+            or item["rows"] < 0
+        ):
+            raise ValueError(
+                f"{sidecar_path}: malformed input inventory[{index}]"
+            )
         for name in ("sha256", "sidecarSha256"):
             require_sha256(
                 str(item.get(name, "")), f"{sidecar_path}: input {name}"
             )
-    return sidecar
+        selection_shard = item.get("selectionShard")
+        if (
+            not isinstance(selection_shard, dict)
+            or not isinstance(selection_shard.get("path"), str)
+            or not selection_shard["path"]
+            or isinstance(selection_shard.get("index"), bool)
+            or not isinstance(selection_shard.get("index"), int)
+            or selection_shard["index"] < 0
+            or isinstance(selection_shard.get("rows"), bool)
+            or not isinstance(selection_shard.get("rows"), int)
+            or selection_shard["rows"] < 0
+        ):
+            raise ValueError(
+                f"{sidecar_path}: malformed selection shard inventory[{index}]"
+            )
+        require_sha256(
+            str(selection_shard.get("sha256", "")),
+            f"{sidecar_path}: selection shard sha256",
+        )
+    return sidecar, sidecar_sha256
 
 
 def sigmoid(logits: np.ndarray) -> np.ndarray:
@@ -511,9 +581,12 @@ def self_test() -> None:
             "feature_order_sha256": "1" * 64,
             "feature_manifest_sha256": "2" * 64,
             "teacher_manifest_sha256": "3" * 64,
-            "selection_contract_sha256": "4" * 64,
-            "center_value_sha256": "5" * 64,
-            "scales_value_sha256": "6" * 64,
+            "selection_manifest_sha256": "4" * 64,
+            "selection_contract_sha256": "5" * 64,
+            "source_snapshot_sha256": "6" * 64,
+            "input_disposition": PRODUCTION_INPUT_DISPOSITION,
+            "center_value_sha256": "7" * 64,
+            "scales_value_sha256": "8" * 64,
         }
         order = np.argsort(strings)
         packed = matrix[order].tocsr()
@@ -549,6 +622,63 @@ def self_test() -> None:
         )
         if loaded.rows != rows or loaded.metadata != metadata:
             raise AssertionError("strict CSR-v2 round trip failed")
+        for field, replacement in (
+            ("selection_manifest_sha256", "9" * 64),
+            ("source_snapshot_sha256", "a" * 64),
+            ("input_disposition", "sample-only-not-fit-eligible"),
+        ):
+            mismatched_metadata = dict(metadata)
+            mismatched_metadata[field] = replacement
+            validation = Dataset(
+                matrix=loaded.matrix,
+                fixed_cp=loaded.fixed_cp,
+                target=loaded.target,
+                role="hce-validation",
+                source_sha256=loaded.source_sha256,
+                row_ids=loaded.row_ids,
+                cluster_ids=loaded.cluster_ids,
+                position_family_ids=loaded.position_family_ids,
+                metadata=mismatched_metadata,
+            )
+            try:
+                assert_disjoint(loaded, validation)
+            except ValueError as error:
+                if field not in str(error):
+                    raise AssertionError(
+                        f"wrong mismatch rejection for {field}: {error}"
+                    ) from error
+            else:
+                raise AssertionError(
+                    f"train/validation accepted different {field}"
+                )
+        guarded_names = (
+            "guard-train.npz",
+            "guard-train.npz.manifest.json",
+            "guard-validation.npz",
+            "guard-validation.npz.manifest.json",
+        )
+        guarded_artifacts = {}
+        for name in guarded_names:
+            guarded = Path(temp) / name
+            guarded.write_bytes(("initial " + name).encode("utf-8"))
+            guarded_artifacts[guarded] = sha256_file(guarded)
+        assert_artifacts_unchanged(guarded_artifacts)
+        replaced = Path(temp) / "guard-validation.npz.manifest.json"
+        preserved_sha256 = guarded_artifacts[replaced]
+        replaced.write_bytes(b"replacement sidecar bytes")
+        try:
+            assert_artifacts_unchanged(guarded_artifacts)
+        except RuntimeError as error:
+            if (
+                "changed during fitting" not in str(error)
+                or str(replaced) not in str(error)
+                or guarded_artifacts[replaced] != preserved_sha256
+            ):
+                raise AssertionError(
+                    f"wrong changed-input rejection: {error}"
+                ) from error
+        else:
+            raise AssertionError("fitter accepted a replaced validated input")
     print("HCE convex self-test passed")
 
 
@@ -574,6 +704,11 @@ def main() -> None:
     fit_path = root / "eval/training/hce-r3-fit-v1.json"
     features = json.loads(feature_path.read_text(encoding="utf-8"))
     fit_contract = json.loads(fit_path.read_text(encoding="utf-8"))
+    contract_disposition = fit_contract["matrix"].get(
+        "requiredInputDisposition"
+    )
+    if contract_disposition != PRODUCTION_INPUT_DISPOSITION:
+        raise SystemExit("fit contract does not require production input disposition")
     if np.__version__ != "2.3.5" or scipy.__version__ != "1.17.0":
         raise SystemExit(
             "pinned solver requires NumPy 2.3.5 and SciPy 1.17.0; got "
@@ -601,21 +736,28 @@ def main() -> None:
         "feature_order_sha256": features["parameterOrder"]["sha256"],
         "feature_manifest_sha256": sha256_file(feature_path),
         "teacher_manifest_sha256": sha256_file(teacher_path),
+        "input_disposition": contract_disposition,
         "center_value_sha256": center_digest,
         "scales_value_sha256": scales_digest,
     }
     train_path = Path(args.train).resolve()
     validation_path = Path(args.validation).resolve()
+    train_sidecar_path = train_path.with_suffix(
+        train_path.suffix + ".manifest.json"
+    )
+    validation_sidecar_path = validation_path.with_suffix(
+        validation_path.suffix + ".manifest.json"
+    )
     train = load_dataset(
         train_path, "shared-train", parameters, expected_metadata
     )
     validation = load_dataset(
         validation_path, "hce-validation", parameters, expected_metadata
     )
-    train_sidecar = validate_matrix_sidecar(
+    _, train_sidecar_sha256 = validate_matrix_sidecar(
         train_path, train, "shared-train", root, feature_path, fit_path
     )
-    validation_sidecar = validate_matrix_sidecar(
+    _, validation_sidecar_sha256 = validate_matrix_sidecar(
         validation_path,
         validation,
         "hce-validation",
@@ -695,21 +837,13 @@ def main() -> None:
                 "path": str(train_path),
                 "sha256": train.source_sha256,
                 "rows": train.rows,
-                "sidecarSha256": sha256_file(
-                    train_path.with_suffix(
-                        train_path.suffix + ".manifest.json"
-                    )
-                ),
+                "sidecarSha256": train_sidecar_sha256,
             },
             "validation": {
                 "path": str(validation_path),
                 "sha256": validation.source_sha256,
                 "rows": validation.rows,
-                "sidecarSha256": sha256_file(
-                    validation_path.with_suffix(
-                        validation_path.suffix + ".manifest.json"
-                    )
-                ),
+                "sidecarSha256": validation_sidecar_sha256,
             },
             "centerFileSha256": sha256_file(center_path),
             "scalesFileSha256": sha256_file(scales_path),
@@ -718,6 +852,13 @@ def main() -> None:
             "selectionContractSha256": train.metadata[
                 "selection_contract_sha256"
             ],
+            "selectionManifestSha256": train.metadata[
+                "selection_manifest_sha256"
+            ],
+            "sourceSnapshotSha256": train.metadata[
+                "source_snapshot_sha256"
+            ],
+            "inputDisposition": train.metadata["input_disposition"],
             "teacherManifestSha256": train.metadata[
                 "teacher_manifest_sha256"
             ],
@@ -735,8 +876,8 @@ def main() -> None:
             "validationLoss": best["validationLoss"],
             "weights": [float(value) for value in best["weights"]],
         },
-        "testOpened": false,
-        "runtimeFilesChanged": false,
+        "testOpened": False,
+        "runtimeFilesChanged": False,
         "solver": {
             "implementationSha256": sha256_file(Path(__file__).resolve()),
             "numpy": np.__version__,
@@ -745,6 +886,12 @@ def main() -> None:
             "threads": 1,
         },
     }
+    assert_artifacts_unchanged({
+        train_path: train.source_sha256,
+        validation_path: validation.source_sha256,
+        train_sidecar_path: train_sidecar_sha256,
+        validation_sidecar_path: validation_sidecar_sha256,
+    })
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",

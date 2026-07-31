@@ -200,6 +200,7 @@ jobs:
           archive="$RUNNER_TEMP/$archive_name"
           extract="$RUNNER_TEMP/stockfish-18"
           output="$RUNNER_TEMP/stockfish-smoke/sf18-100kn"
+          sample="$RUNNER_TEMP/training-sample"
           mkdir -p "$extract" "$(dirname "$output")"
           exec > >(tee "$RUNNER_TEMP/stockfish-smoke/runner.log") 2>&1
 
@@ -215,7 +216,11 @@ jobs:
             --archive "$archive" \
             --stockfish "$executable" \
             --output "$output"
-      - name: Upload Stockfish teacher smoke evidence
+
+          node test/training/generate-training-sample.js \
+            --stockfish "$executable" \
+            --output "$sample"
+      - name: Upload teacher smoke and sample summary
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -224,6 +229,7 @@ jobs:
             ${{ runner.temp }}/stockfish-smoke/runner.log
             ${{ runner.temp }}/stockfish-smoke/sf18-100kn.provenance.json
             ${{ runner.temp }}/stockfish-smoke/sf18-100kn.uci.log
+            ${{ runner.temp }}/training-sample/sample-manifest.json
           if-no-files-found: warn
 
   browser:

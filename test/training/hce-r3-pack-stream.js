@@ -28,6 +28,13 @@ const FINAL_RECORD_FIELDS = Object.freeze([
   'schema', 'id', 'fen', 'canonicalFen', 'cluster', 'role',
   'positionFamily', 'strata', 'source', 'teacher'
 ]);
+const PRODUCTION_SOURCE_FIELDS = Object.freeze([
+  'dataset', 'snapshotSha256', 'license'
+]);
+const SAMPLE_SOURCE_FIELDS = Object.freeze([
+  'dataset', 'snapshotSha256', 'license', 'mechanismFixture'
+]);
+const SAMPLE_MECHANISM_FIXTURE = Prepare.MECHANISM_FIXTURE_MARKER;
 
 function hasExactKeys(value, expected) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -38,10 +45,11 @@ function hasExactKeys(value, expected) {
 }
 
 function parseArgs(argv) {
-  const result = { input: [] };
+  const result = { input: [], sampleOnly: false };
   for (let index = 0; index < argv.length; index++) {
     const option = argv[index];
-    if (option !== '--input' && option !== '--role') {
+    if (option !== '--input' && option !== '--role' &&
+        option !== '--sample-only') {
       throw new Error('unknown argument: ' + option);
     }
     if (index + 1 >= argv.length || argv[index + 1].startsWith('--')) {
@@ -49,12 +57,149 @@ function parseArgs(argv) {
     }
     const value = argv[++index];
     if (option === '--input') result.input.push(value);
-    else if (result.role) throw new Error('duplicate --role');
-    else result.role = value;
+    else if (option === '--role') {
+      if (result.role) throw new Error('duplicate --role');
+      result.role = value;
+    } else {
+      if (result.sampleOnly) throw new Error('duplicate --sample-only');
+      if (value !== 'true') {
+        throw new Error('--sample-only must be exactly true');
+      }
+      result.sampleOnly = true;
+    }
   }
   if (!result.input.length) throw new Error('at least one --input is required');
   if (!ROLES.has(result.role)) throw new Error('--role is invalid');
   return result;
+}
+
+function sampleOnlyOption(options) {
+  if (!options || typeof options !== 'object') {
+    throw new Error('stream options are required');
+  }
+  if (!Object.prototype.hasOwnProperty.call(options, 'sampleOnly')) {
+    return false;
+  }
+  if (typeof options.sampleOnly !== 'boolean') {
+    throw new Error('sampleOnly direct option must be boolean');
+  }
+  return options.sampleOnly;
+}
+
+function exactMechanismFixture(value) {
+  return hasExactKeys(value, Object.keys(SAMPLE_MECHANISM_FIXTURE)) &&
+    Prepare.stableJson(value) ===
+      Prepare.stableJson(SAMPLE_MECHANISM_FIXTURE);
+}
+
+function streamDisposition(sampleOnly) {
+  if (typeof sampleOnly !== 'boolean') {
+    throw new Error('sample-only mode must be boolean');
+  }
+  if (sampleOnly) {
+    return {
+      status: SAMPLE_MECHANISM_FIXTURE.status,
+      mode: 'sample-only',
+      sampleOnly: true,
+      fitAllowed: SAMPLE_MECHANISM_FIXTURE.fitAllowed,
+      officialEvaluationSnapshot:
+        SAMPLE_MECHANISM_FIXTURE.officialEvaluationSnapshot
+    };
+  }
+  return {
+    status: 'authenticated-production-input',
+    mode: 'production',
+    sampleOnly: false
+  };
+}
+
+function validateSidecarMode(sidecar, sampleOnly) {
+  streamDisposition(sampleOnly);
+  if (sampleOnly) {
+    if (sidecar.state !== 'pinned-teacher-labels-sample-only' ||
+        sidecar.fitAllowed !== false ||
+        !exactMechanismFixture(sidecar.mechanismFixture)) {
+      throw new Error(
+        'sample-only teacher sidecar state or mechanism marker differs'
+      );
+    }
+    return;
+  }
+  if (sidecar.state !== 'pinned-teacher-labels' ||
+      Object.prototype.hasOwnProperty.call(sidecar, 'fitAllowed') ||
+      Object.prototype.hasOwnProperty.call(sidecar, 'mechanismFixture')) {
+    throw new Error('production teacher sidecar state differs');
+  }
+}
+
+function validateSelectionMode(sidecar, context, sampleOnly) {
+  streamDisposition(sampleOnly);
+  const sideSelection = sidecar.input &&
+    sidecar.input.selectionManifest;
+  const selection = context && context.manifest;
+  const certification = context && context.certification;
+  if (sampleOnly) {
+    if (!context || context.sampleOnly !== true ||
+        !selection ||
+        selection.state !== 'mechanism-test-selection-only' ||
+        selection.finalFitAllowed !== false ||
+        !exactMechanismFixture(selection.mechanismFixture) ||
+        !sideSelection ||
+        sideSelection.certificationStatus !==
+          'awaiting-opening-freeze' ||
+        !certification ||
+        certification.status !== 'awaiting-opening-freeze') {
+      throw new Error(
+        'sample-only selection state, marker, or certification differs'
+      );
+    }
+    return;
+  }
+  if (!selection ||
+      selection.state !== 'exploration-selection-only' ||
+      Object.prototype.hasOwnProperty.call(
+        selection, 'mechanismFixture') ||
+      !sideSelection ||
+      sideSelection.certificationStatus !== 'frozen' ||
+      !certification ||
+      certification.status !== 'frozen') {
+    throw new Error('production selection or certification state differs');
+  }
+}
+
+function validateSelectionBinding(sideSelection, sideShard, context) {
+  if (!sideSelection || !sideShard || !context ||
+      !context.manifest || !context.manifest.adapter ||
+      !context.shard || !context.certification ||
+      context.manifestSha256 !== sideSelection.sha256 ||
+      context.inputSha256 !== sideShard.sha256 ||
+      context.shard.rows !== sideShard.rows ||
+      sideSelection.selectionContractSha256 !==
+        context.manifest.adapter.selectionContractSha256 ||
+      sideSelection.certificationStatus !== context.certification.status) {
+    throw new Error('selection shard sidecar binding failed');
+  }
+}
+
+function validateTeacherSource(source, context) {
+  const manifestSource = context && context.manifest &&
+    context.manifest.source;
+  const sampleOnly = context && context.sampleOnly === true;
+  const expectedFields = sampleOnly ?
+    SAMPLE_SOURCE_FIELDS : PRODUCTION_SOURCE_FIELDS;
+  const expectedDataset = sampleOnly ?
+    Prepare.MECHANISM_FIXTURE_SOURCE_ID :
+    'lichess-evaluated-positions';
+  if (!manifestSource ||
+      !hasExactKeys(source, expectedFields) ||
+      source.dataset !== expectedDataset ||
+      source.snapshotSha256 !== context.sourceSha256 ||
+      source.license !== manifestSource.license ||
+      (sampleOnly && !exactMechanismFixture(source.mechanismFixture))) {
+    throw new Error(
+      'teacher record source provenance does not match its selection mode'
+    );
+  }
 }
 
 function exactTeacher(record, contracts) {
@@ -109,7 +254,7 @@ function validateTeacherRecord(record, context, contracts) {
   const parsed = Corpus.validateSourceState(record.fen);
   const expected = {
     id: Corpus.sha256(
-      context.manifest.source.compressedSha256 + '\n' + parsed.fen4),
+      context.sourceSha256 + '\n' + parsed.fen4),
     canonicalFen: Corpus.canonicalFen4(parsed.fen4),
     cluster: Corpus.clusterKey(parsed.fen4),
     positionFamily: Corpus.positionFamilyKey(parsed.fen4)
@@ -120,13 +265,10 @@ function validateTeacherRecord(record, context, contracts) {
       throw new Error('teacher record ' + name + ' does not recompute');
     }
   }
-  if (!record.source ||
-      record.source.dataset !== 'lichess-evaluated-positions' ||
-      record.source.snapshotSha256 !==
-        context.manifest.source.compressedSha256 ||
-      record.source.license !== context.manifest.source.license ||
-      !record.strata || record.strata.phase !== Corpus.phaseBucket(parsed.fen4)) {
-    throw new Error('teacher record source/phase provenance does not match');
+  validateTeacherSource(record.source, context);
+  if (!record.strata ||
+      record.strata.phase !== Corpus.phaseBucket(parsed.fen4)) {
+    throw new Error('teacher record phase provenance does not match');
   }
   if (expected.cluster === contracts.heldout.symmetryPolicy.clusterSha256 ||
       expected.positionFamily ===
@@ -139,14 +281,15 @@ function validateTeacherRecord(record, context, contracts) {
   return record;
 }
 
-async function authenticateInput(filename, contracts) {
+async function authenticateInput(filename, contracts, options) {
+  const sampleOnly = sampleOnlyOption(options || {});
   const input = path.resolve(filename);
   const sidecarPath = input + '.manifest.json';
   const sidecarText = fs.readFileSync(sidecarPath, 'utf8');
   const sidecar = JSON.parse(sidecarText);
+  validateSidecarMode(sidecar, sampleOnly);
   const sideTeacher = sidecar.teacher;
   if (sidecar.schemaVersion !== 1 ||
-      sidecar.state !== 'pinned-teacher-labels' ||
       !sidecar.output ||
       path.basename(input) !== sidecar.output.path ||
       !Number.isSafeInteger(sidecar.output.rows) ||
@@ -171,14 +314,14 @@ async function authenticateInput(filename, contracts) {
     embeddedName: network.embeddedName,
     sha256: network.sha256
   }));
-  if (JSON.stringify(sideTeacher.networks) !==
-      JSON.stringify(expectedNetworks)) {
+  if (Prepare.stableJson(sideTeacher.networks) !==
+      Prepare.stableJson(expectedNetworks)) {
     throw new Error(input + ': teacher network pins differ');
   }
-  if (JSON.stringify(sideTeacher.options) !==
-        JSON.stringify(contracts.teacher.uci) ||
-      JSON.stringify(sideTeacher.watchdog) !==
-        JSON.stringify(contracts.teacher.watchdog)) {
+  if (Prepare.stableJson(sideTeacher.options) !==
+        Prepare.stableJson(contracts.teacher.uci) ||
+      Prepare.stableJson(sideTeacher.watchdog) !==
+        Prepare.stableJson(contracts.teacher.watchdog)) {
     throw new Error(input + ': teacher UCI/watchdog pins differ');
   }
   if (!sidecar.input || !sidecar.input.selectionManifest ||
@@ -202,16 +345,16 @@ async function authenticateInput(filename, contracts) {
       sideSelection.sha256) {
     throw new Error(input + ': selection manifest hash differs');
   }
-  const selection = JSON.parse(selectionText);
   const context = await Label.loadSelectionContext(
-    selectionPath, selectionShard, contracts);
-  if (context.inputSha256 !== sideShard.sha256 ||
-      context.shard.rows !== sideShard.rows ||
-      sideSelection.selectionContractSha256 !==
-        selection.adapter.selectionContractSha256 ||
-      sideSelection.certificationStatus !== context.certification.status ||
-      context.certification.status !== 'frozen') {
-    throw new Error(input + ': selection shard sidecar binding failed');
+    selectionPath,
+    selectionShard,
+    contracts,
+    sampleOnly ? { sampleOnly: true } : undefined);
+  validateSelectionMode(sidecar, context, sampleOnly);
+  try {
+    validateSelectionBinding(sideSelection, sideShard, context);
+  } catch (error) {
+    throw new Error(input + ': ' + error.message);
   }
   return {
     input,
@@ -220,8 +363,41 @@ async function authenticateInput(filename, contracts) {
     sidecarSha256: Corpus.sha256(sidecarText),
     rows: sidecar.output.rows,
     context,
-    selectionManifestSha256: sideSelection.sha256,
-    selectionContractSha256: selection.adapter.selectionContractSha256
+    selectionManifestSha256: context.manifestSha256,
+    selectionContractSha256:
+      context.manifest.adapter.selectionContractSha256,
+    sourceSnapshotSha256: context.sourceSha256,
+    selectionShard: {
+      path: path.resolve(selectionShard),
+      index: context.shardIndex,
+      rows: sideShard.rows,
+      sha256: sideShard.sha256
+    }
+  };
+}
+
+function sharedProvenance(authenticated) {
+  if (!Array.isArray(authenticated) || !authenticated.length) {
+    throw new Error('at least one authenticated teacher shard is required');
+  }
+  const selectionContracts = new Set(
+    authenticated.map(item => item.selectionContractSha256));
+  const selectionManifests = new Set(
+    authenticated.map(item => item.selectionManifestSha256));
+  if (selectionContracts.size !== 1 || selectionManifests.size !== 1) {
+    throw new Error(
+      'teacher shards do not share one selection manifest and contract'
+    );
+  }
+  const sourceSnapshots = new Set(
+    authenticated.map(item => item.sourceSnapshotSha256));
+  if (sourceSnapshots.size !== 1) {
+    throw new Error('teacher shards do not share one source snapshot');
+  }
+  return {
+    selectionManifestSha256: authenticated[0].selectionManifestSha256,
+    selectionContractSha256: authenticated[0].selectionContractSha256,
+    sourceSnapshotSha256: authenticated[0].sourceSnapshotSha256
   };
 }
 
@@ -293,20 +469,15 @@ function heapPop(heap) {
 }
 
 async function streamRows(options, write) {
+  const sampleOnly = sampleOnlyOption(options);
+  const disposition = streamDisposition(sampleOnly);
   const contracts = Label.loadFrozenContracts();
   const authenticated = [];
   for (const filename of options.input) {
-    authenticated.push(await authenticateInput(filename, contracts));
+    authenticated.push(await authenticateInput(
+      filename, contracts, { sampleOnly }));
   }
-  const selectionContracts = new Set(
-    authenticated.map(item => item.selectionContractSha256));
-  const selectionManifests = new Set(
-    authenticated.map(item => item.selectionManifestSha256));
-  if (selectionContracts.size !== 1 || selectionManifests.size !== 1) {
-    throw new Error(
-      'teacher shards do not share one selection manifest and contract'
-    );
-  }
+  const provenance = sharedProvenance(authenticated);
   const states = authenticated.map(auth => ({
     auth,
     iterator: lineIterator(auth.input),
@@ -350,14 +521,29 @@ async function streamRows(options, write) {
       throw new Error(state.auth.input + ': sidecar row count differs');
     }
   }
-  return {
+  return Object.assign({
     rows,
     role: options.role,
+  }, disposition, {
     teacherManifestSha256: contracts.teacherSha256,
-    selectionContractSha256: authenticated[0].selectionContractSha256,
+    selectionManifestSha256: provenance.selectionManifestSha256,
+    selectionContractSha256: provenance.selectionContractSha256,
+    sourceSnapshotSha256: provenance.sourceSnapshotSha256,
     inputSha256: authenticated.map(item => item.inputSha256),
-    inputSidecarSha256: authenticated.map(item => item.sidecarSha256)
-  };
+    inputSidecarSha256: authenticated.map(item => item.sidecarSha256),
+    providedShardInventory: authenticated.map((item, index) => ({
+      index,
+      teacherPath: item.input,
+      teacherRows: item.rows,
+      teacherSha256: item.inputSha256,
+      teacherSidecarPath: item.sidecarPath,
+      teacherSidecarSha256: item.sidecarSha256,
+      selectionShardPath: item.selectionShard.path,
+      selectionShardIndex: item.selectionShard.index,
+      selectionShardRows: item.selectionShard.rows,
+      selectionShardSha256: item.selectionShard.sha256
+    }))
+  });
 }
 
 async function main() {
@@ -378,9 +564,17 @@ if (require.main === module) {
 
 module.exports = {
   parseArgs,
+  sampleOnlyOption,
+  exactMechanismFixture,
+  streamDisposition,
+  validateSidecarMode,
+  validateSelectionMode,
+  validateSelectionBinding,
+  validateTeacherSource,
   exactTeacher,
   validateTeacherRecord,
   authenticateInput,
+  sharedProvenance,
   heapPush,
   heapPop,
   streamRows

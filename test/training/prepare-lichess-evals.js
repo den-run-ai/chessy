@@ -26,6 +26,16 @@ const { once } = require('events');
 const Corpus = require('./corpus');
 const E4 = require('../eval/e4-protocol');
 
+const MECHANISM_FIXTURE_MARKER = Object.freeze({
+  status: 'sample-only-not-fit-eligible',
+  fitAllowed: false,
+  officialEvaluationSnapshot: false
+});
+const MECHANISM_FIXTURE_SOURCE_ID =
+  'chessy-training-mechanism-fixture';
+const MECHANISM_FIXTURE_LABEL_TEACHER =
+  'mechanism-fixture-placeholder';
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
@@ -92,6 +102,60 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
+function validateMechanismFixtureMarker(value) {
+  const expectedKeys = Object.keys(MECHANISM_FIXTURE_MARKER).sort();
+  const actualKeys = value && typeof value === 'object' &&
+    !Array.isArray(value) ? Object.keys(value).sort() : [];
+  if (stableJson(actualKeys) !== stableJson(expectedKeys) ||
+      value.status !== MECHANISM_FIXTURE_MARKER.status ||
+      value.fitAllowed !== MECHANISM_FIXTURE_MARKER.fitAllowed ||
+      value.officialEvaluationSnapshot !==
+        MECHANISM_FIXTURE_MARKER.officialEvaluationSnapshot) {
+    throw new Error('mechanism fixture marker is invalid');
+  }
+  return value;
+}
+
+function acquirePrefixLock(filename) {
+  let fd;
+  try {
+    fd = fs.openSync(filename, 'wx', 0o600);
+  } catch (error) {
+    if (error.code === 'EEXIST') {
+      throw new Error(
+        'another selection run holds the output prefix lock: ' + filename
+      );
+    }
+    throw error;
+  }
+  try {
+    const body = stableJson({
+      pid: process.pid,
+      startedAtUtc: new Date().toISOString()
+    }) + '\n';
+    fs.writeSync(fd, body);
+    fs.fsyncSync(fd);
+    return fd;
+  } catch (error) {
+    try { fs.closeSync(fd); } catch (_) {}
+    try { fs.unlinkSync(filename); } catch (_) {}
+    throw error;
+  }
+}
+
+function releasePrefixLock(fd, filename) {
+  try {
+    const held = fs.fstatSync(fd);
+    let current = null;
+    try { current = fs.statSync(filename); } catch (_) {}
+    if (current && current.dev === held.dev && current.ino === held.ino) {
+      fs.unlinkSync(filename);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function validateHeldoutExclusionPolicy(heldout) {
   const exclusion = heldout && heldout.exclusion;
   const controls = exclusion && exclusion.controls;
@@ -136,9 +200,28 @@ async function closeStream(stream) {
   await once(stream, 'finish');
 }
 
-async function prepare(options) {
+async function abortStream(stream) {
+  if (stream.closed) return;
+  await new Promise(function (resolve) {
+    function ignoreCleanupError() {}
+    function closed() {
+      stream.removeListener('error', ignoreCleanupError);
+      resolve();
+    }
+    stream.on('error', ignoreCleanupError);
+    stream.once('close', closed);
+    try {
+      stream.destroy();
+    } catch (_) {
+      stream.removeListener('close', closed);
+      stream.removeListener('error', ignoreCleanupError);
+      resolve();
+    }
+  });
+}
+
+async function prepareLocked(options, output) {
   const input = path.resolve(options.input);
-  const output = path.resolve(options.output);
   const expectedSha = String(options['source-sha256'] || '').toLowerCase();
   const retrieved = options.retrieved;
   const modulus = positiveInt(options.modulus, 'modulus', 100);
@@ -152,6 +235,12 @@ async function prepare(options) {
   const requireAllRoles = options['allow-missing-roles'] !== 'true';
   const allowPendingCertification =
     options['allow-pending-certification-for-test'] === 'true';
+  if (options['mechanism-fixture'] !== undefined &&
+      options['mechanism-fixture'] !== 'true' &&
+      options['mechanism-fixture'] !== 'false') {
+    throw new Error('--mechanism-fixture must be true or false');
+  }
+  const mechanismFixture = options['mechanism-fixture'] === 'true';
   if (numerator > modulus) throw new Error('--numerator cannot exceed --modulus');
   if (!/^[0-9a-f]{64}$/.test(expectedSha)) {
     throw new Error('--source-sha256 must be 64 lowercase hexadecimal characters');
@@ -190,6 +279,14 @@ async function prepare(options) {
   if (certification.status !== 'frozen' && !allowPendingCertification) {
     throw new Error('E4 certification manifest must be frozen before corpus selection');
   }
+  if (mechanismFixture &&
+      (certification.status !== 'awaiting-opening-freeze' ||
+       !allowPendingCertification)) {
+    throw new Error(
+      'mechanism fixture requires the awaiting-opening-freeze ' +
+      'certification and its explicit pending test override'
+    );
+  }
   const certificationClusters = new Set();
   const certificationFamilies = new Set();
   if (certification.status === 'frozen') {
@@ -209,15 +306,12 @@ async function prepare(options) {
     throw new Error('held-out incident keys drifted');
   }
 
-  const staging = output + '.tmp-' + process.pid;
-  fs.mkdirSync(staging, { recursive: false });
-  const streams = [], hashes = [], shardRows = new Array(shardCount).fill(0);
-  for (let i = 0; i < shardCount; i++) {
-    const name = 'selection-' + String(i).padStart(3, '0') + '.ndjson';
-    streams.push(fs.createWriteStream(path.join(staging, name), { flags: 'wx' }));
-    hashes.push(crypto.createHash('sha256'));
-  }
-
+  const nonce =
+    process.pid + '-' + crypto.randomBytes(8).toString('hex');
+  const staging = output + '.tmp-' + nonce;
+  const streams = [];
+  const hashes = [];
+  const shardRows = new Array(shardCount).fill(0);
   const counts = {
     inputRows: 0,
     malformed: 0,
@@ -236,10 +330,26 @@ async function prepare(options) {
   };
   const selectedClusters = new Set();
   const selectedFamilies = new Map();
-  const opened = inputStream(input);
-  const lines = readline.createInterface({ input: opened.stream, crlfDelay: Infinity });
+  let opened = null;
+  let streamFailure = null;
 
   try {
+    fs.mkdirSync(staging, { recursive: false });
+    for (let i = 0; i < shardCount; i++) {
+      const name = 'selection-' + String(i).padStart(3, '0') + '.ndjson';
+      const stream =
+        fs.createWriteStream(path.join(staging, name), { flags: 'wx' });
+      stream.on('error', function (error) {
+        if (!streamFailure) streamFailure = error;
+      });
+      streams.push(stream);
+      hashes.push(crypto.createHash('sha256'));
+    }
+    opened = inputStream(input);
+    const lines = readline.createInterface({
+      input: opened.stream,
+      crlfDelay: Infinity
+    });
     for await (const line of lines) {
       if (!line.trim()) continue;
       counts.inputRows++;
@@ -256,6 +366,20 @@ async function prepare(options) {
         if (!selected) counts.noCentipawnLabel++;
         else counts.scoreExcluded++;
         continue;
+      }
+      if (mechanismFixture) {
+        adapted = Object.assign({}, adapted, {
+          explorationLabel: Object.assign({}, adapted.explorationLabel, {
+            teacher: MECHANISM_FIXTURE_LABEL_TEACHER
+          }),
+          source: {
+            dataset: MECHANISM_FIXTURE_SOURCE_ID,
+            snapshotSha256: expectedSha,
+            license: 'CC0-1.0',
+            mechanismFixture:
+              Object.assign({}, MECHANISM_FIXTURE_MARKER)
+          }
+        });
       }
       if (adapted.cluster === heldout.symmetryPolicy.clusterSha256) {
         counts.incidentClusterExcluded++;
@@ -294,7 +418,9 @@ async function prepare(options) {
 
       const shard = parseInt(adapted.id.slice(0, 8), 16) % shardCount;
       const encoded = stableJson(adapted) + '\n';
+      if (streamFailure) throw streamFailure;
       if (!streams[shard].write(encoded)) await once(streams[shard], 'drain');
+      if (streamFailure) throw streamFailure;
       hashes[shard].update(encoded);
       shardRows[shard]++;
       counts.selected++;
@@ -306,6 +432,9 @@ async function prepare(options) {
       const code = await opened.done;
       if (code !== 0) throw new Error('zstd exited with status ' + code);
     }
+    if (streamFailure) throw streamFailure;
+    for (const stream of streams) await closeStream(stream);
+    if (streamFailure) throw streamFailure;
     if (counts.selected < minimumSelected) {
       throw new Error('selected only ' + counts.selected +
         ' positions; minimum is ' + minimumSelected);
@@ -325,7 +454,6 @@ async function prepare(options) {
           missingRoles.join(', '));
       }
     }
-    for (const stream of streams) await closeStream(stream);
 
     const shards = shardRows.map(function (rows, index) {
       return {
@@ -340,22 +468,33 @@ async function prepare(options) {
       Corpus.sha256(fs.readFileSync(corpusContractPath));
     const e4ValidatorSha256 = Corpus.sha256(
       fs.readFileSync(path.join(__dirname, '..', 'eval', 'e4-protocol.js')));
-    const selectionContractSha256 = Corpus.sha256(stableJson({
+    const selectionContract = {
       wrapperSha256,
       corpusContractSha256,
       e4ValidatorSha256,
       heldoutManifestSha256: Corpus.sha256(heldoutText),
       sourcePolicySha256: Corpus.sha256(sourcePolicyText),
       certificationManifestSha256: Corpus.sha256(certificationText)
-    }));
+    };
+    if (mechanismFixture) {
+      selectionContract.mechanismFixture =
+        Object.assign({}, MECHANISM_FIXTURE_MARKER);
+    }
+    const selectionContractSha256 =
+      Corpus.sha256(stableJson(selectionContract));
     const manifest = {
       schemaVersion: 1,
-      state: 'exploration-selection-only',
+      state: mechanismFixture ?
+        'mechanism-test-selection-only' : 'exploration-selection-only',
       finalFitAllowed: false,
-      reason: 'Selected records retain mixed upstream Stockfish labels and require pinned-teacher relabelling.',
+      reason: mechanismFixture ?
+        'Mechanism fixture only; the source is not an official evaluation ' +
+          'snapshot and the records are never fit-eligible.' :
+        'Selected records retain mixed upstream Stockfish labels and require pinned-teacher relabelling.',
       source: {
-        id: 'lichess-evaluations',
-        url: sourceEntry.canonicalUrl,
+        id: mechanismFixture ?
+          MECHANISM_FIXTURE_SOURCE_ID : 'lichess-evaluations',
+        url: mechanismFixture ? null : sourceEntry.canonicalUrl,
         retrieved,
         compressedSha256: expectedSha,
         license: 'CC0-1.0'
@@ -413,14 +552,50 @@ async function prepare(options) {
       counts,
       shards
     };
+    if (mechanismFixture) {
+      manifest.mechanismFixture =
+        Object.assign({}, MECHANISM_FIXTURE_MARKER);
+      manifest.source.mechanismFixture =
+        Object.assign({}, MECHANISM_FIXTURE_MARKER);
+    }
     const manifestText = stableJson(manifest) + '\n';
     fs.writeFileSync(path.join(staging, 'manifest.json'), manifestText, { flag: 'wx' });
+    if (fs.existsSync(output)) {
+      throw new Error(
+        'refusing concurrently created --output directory: ' + output
+      );
+    }
     fs.renameSync(staging, output);
     return manifest;
   } catch (error) {
-    for (const stream of streams) stream.destroy();
+    if (opened) {
+      if (!opened.stream.destroyed) opened.stream.destroy();
+      if (opened.child &&
+          opened.child.exitCode === null &&
+          opened.child.signalCode === null) {
+        opened.child.kill('SIGKILL');
+      }
+      if (opened.done) {
+        try { await opened.done; } catch (_) {}
+      }
+    }
+    await Promise.all(streams.map(abortStream));
     fs.rmSync(staging, { recursive: true, force: true });
     throw error;
+  }
+}
+
+async function prepare(options) {
+  if (!options || typeof options !== 'object') {
+    throw new Error('prepare options are required');
+  }
+  const output = path.resolve(options.output);
+  const lockPath = output + '.lock';
+  const lockFd = acquirePrefixLock(lockPath);
+  try {
+    return await prepareLocked(options, output);
+  } finally {
+    releasePrefixLock(lockFd, lockPath);
   }
 }
 
@@ -444,9 +619,16 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MECHANISM_FIXTURE_MARKER,
+  MECHANISM_FIXTURE_SOURCE_ID,
+  MECHANISM_FIXTURE_LABEL_TEACHER,
   parseArgs,
   fileSha256,
   stableJson,
+  validateMechanismFixtureMarker,
+  acquirePrefixLock,
+  releasePrefixLock,
+  abortStream,
   validateHeldoutExclusionPolicy,
   prepare
 };
