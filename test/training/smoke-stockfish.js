@@ -318,22 +318,20 @@ async function runSmoke(options, dependencies) {
   fs.mkdirSync(path.dirname(prefix), { recursive: true });
   const lockPath = prefix + '.lock';
   const lockFd = acquirePrefixLock(lockPath);
+  let stagedExecutable = null;
   try {
     refuseExisting(paths);
     const archiveStat = requireRegularFile(archive, 'archive');
-    const executableStat = requireRegularFile(executable, 'stockfish');
     const archiveSha256 = await Prepare.fileSha256(archive);
     if (archiveSha256 !== contracts.teacher.engine.archive.sha256) {
       throw new Error(
         'Stockfish archive does not match the checked-in teacher manifest'
       );
     }
-    const executableSha256 = await Prepare.fileSha256(executable);
-    if (executableSha256 !== contracts.teacher.engine.executable.sha256) {
-      throw new Error(
-        'Stockfish executable does not match the checked-in teacher manifest'
-      );
-    }
+    stagedExecutable = Label.stageVerifiedExecutable(
+      executable, contracts.teacher.engine.executable.sha256
+    );
+    const executableSha256 = stagedExecutable.sha256;
 
     const nonce = process.pid + '-' + crypto.randomBytes(8).toString('hex');
     const transcriptTemporary = paths.transcript + '.tmp-' + nonce;
@@ -357,7 +355,7 @@ async function runSmoke(options, dependencies) {
       },
       executable: {
         sha256: executableSha256,
-        bytes: executableStat.size
+        bytes: stagedExecutable.bytes
       },
       networks: []
     };
@@ -365,7 +363,7 @@ async function runSmoke(options, dependencies) {
     let transcriptSummary = null;
     try {
       engine = new Engine(
-        executable,
+        stagedExecutable.path,
         transcript,
         contracts.teacher.watchdog,
         networkDirectory
@@ -458,7 +456,13 @@ async function runSmoke(options, dependencies) {
       try { fs.unlinkSync(provenanceTemporary); } catch (_) {}
     }
   } finally {
-    releasePrefixLock(lockFd, lockPath);
+    try {
+      if (stagedExecutable) {
+        Label.cleanupVerifiedExecutable(stagedExecutable);
+      }
+    } finally {
+      releasePrefixLock(lockFd, lockPath);
+    }
   }
 }
 

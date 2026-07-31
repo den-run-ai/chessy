@@ -26,11 +26,42 @@ const ROLES = Object.freeze([
   'nnue-validation',
   'nnue-test'
 ]);
-const ROWS_PER_ROLE = 2;
+const SAMPLE_PROFILES = Object.freeze({
+  smoke: Object.freeze(Object.fromEntries(
+    ROLES.map(role => [role, 2])
+  )),
+  preliminary: Object.freeze({
+    'shared-train': 18,
+    'hce-validation': 4,
+    'hce-test': 9,
+    'nnue-validation': 2,
+    'nnue-test': 7
+  })
+});
+const LABELLED_PROFILES = Object.freeze({
+  smoke: SAMPLE_PROFILES.smoke,
+  preliminary: Object.freeze({
+    'shared-train': 17,
+    'hce-validation': 4,
+    'hce-test': 9,
+    'nnue-validation': 2,
+    'nnue-test': 7
+  })
+});
+const EXPECTED_EXCLUSIONS = Object.freeze({
+  smoke: 0,
+  preliminary: 1
+});
+const EXPECTED_EXCLUSION_REASONS = Object.freeze({
+  smoke: Object.freeze({}),
+  preliminary: Object.freeze({
+    'bestmove-pv-mismatch': 1
+  })
+});
 
 function parseArgs(argv) {
   const result = {};
-  const allowed = new Set(['stockfish', 'output']);
+  const allowed = new Set(['stockfish', 'output', 'profile']);
   for (let index = 0; index < argv.length; index++) {
     const item = argv[index];
     if (!item.startsWith('--')) {
@@ -46,8 +77,12 @@ function parseArgs(argv) {
     }
     result[name] = argv[++index];
   }
-  for (const name of allowed) {
+  for (const name of ['stockfish', 'output']) {
     if (!result[name]) throw new Error('--' + name + ' is required');
+  }
+  if (!result.profile) result.profile = 'smoke';
+  if (!Object.prototype.hasOwnProperty.call(SAMPLE_PROFILES, result.profile)) {
+    throw new Error('--profile must be smoke or preliminary');
   }
   return result;
 }
@@ -81,7 +116,10 @@ function writeJsonSuccessMarker(filename, value) {
   }
 }
 
-function openingWireFixture() {
+function openingWireFixture(profile) {
+  const profileName = profile || 'smoke';
+  const target = SAMPLE_PROFILES[profileName];
+  if (!target) throw new Error('unknown sample profile: ' + profileName);
   const corpusPath = path.join(ROOT, 'eval', 'corpus', 'eval-v1.ndjson');
   const selected = Object.fromEntries(ROLES.map(role => [role, []]));
   const clusters = new Set();
@@ -104,7 +142,7 @@ function openingWireFixture() {
     const cluster = Corpus.clusterKey(parsed.fen4);
     const family = Corpus.positionFamilyKey(parsed.fen4);
     const role = Corpus.roleForCluster(family);
-    if (selected[role].length >= ROWS_PER_ROLE ||
+    if (selected[role].length >= target[role] ||
         clusters.has(cluster) || families.has(family)) {
       continue;
     }
@@ -123,15 +161,19 @@ function openingWireFixture() {
       }
     });
   }
-  const missing = ROLES.filter(role => selected[role].length !== ROWS_PER_ROLE);
+  const missing = ROLES.filter(role =>
+    selected[role].length !== target[role]
+  );
   if (missing.length) {
     throw new Error(
-      'checked-in CC0 opening fixture lacks role coverage: ' + missing.join(', ')
+      'checked-in CC0 opening fixture lacks ' + profileName +
+        ' role coverage: ' + missing.join(', ')
     );
   }
   const flat = ROLES.flatMap(role => selected[role]);
   return {
     corpusPath,
+    profile: profileName,
     sourceIds: flat.map(item => item.sourceId),
     rows: flat.map(item => item.wire)
   };
@@ -222,16 +264,36 @@ function roleCounts(records) {
   return counts;
 }
 
-function expectedRoleCounts() {
-  return Object.fromEntries(ROLES.map(role => [role, ROWS_PER_ROLE]));
+function expectedRoleCounts(profile) {
+  const profileName = profile || 'smoke';
+  const counts = SAMPLE_PROFILES[profileName];
+  if (!counts) throw new Error('unknown sample profile: ' + profileName);
+  return Object.assign({}, counts);
 }
 
-function hasExactRoleCounts(counts) {
+function expectedLabelledRoleCounts(profile) {
+  const profileName = profile || 'smoke';
+  const counts = LABELLED_PROFILES[profileName];
+  if (!counts) throw new Error('unknown sample profile: ' + profileName);
+  return Object.assign({}, counts);
+}
+
+function hasExactRoleCounts(counts, profile) {
   return Prepare.stableJson(counts) ===
-    Prepare.stableJson(expectedRoleCounts());
+    Prepare.stableJson(expectedRoleCounts(profile));
 }
 
-async function generateCreated(output, stockfish) {
+function hasExactLabelledRoleCounts(counts, profile) {
+  return Prepare.stableJson(counts) ===
+    Prepare.stableJson(expectedLabelledRoleCounts(profile));
+}
+
+function totalRows(profile) {
+  return Object.values(expectedRoleCounts(profile))
+    .reduce((sum, value) => sum + value, 0);
+}
+
+async function generateCreated(output, stockfish, profile) {
   const certificationTemplate = path.join(
     ROOT, 'eval', 'e4', 'certification-manifest.template.json'
   );
@@ -246,7 +308,8 @@ async function generateCreated(output, stockfish) {
   const certification = JSON.parse(
     fs.readFileSync(certificationPath, 'utf8')
   );
-  const fixture = openingWireFixture();
+  const fixture = openingWireFixture(profile);
+  const expectedRows = totalRows(profile);
   const sourcePath = path.join(output, 'opening-wire-fixture.jsonl');
   fs.writeFileSync(
     sourcePath,
@@ -265,16 +328,17 @@ async function generateCreated(output, stockfish) {
     numerator: '1',
     'family-cap': '64',
     shards: '1',
-    'minimum-selected': String(ROLES.length * ROWS_PER_ROLE),
+    'minimum-selected': String(expectedRows),
     'max-malformed-ppm': '0',
     'certification-manifest': certificationPath,
     'allow-pending-certification-for-test': 'true',
     'mechanism-fixture': 'true'
   });
-  if (selection.counts.selected !== ROLES.length * ROWS_PER_ROLE ||
-      !hasExactRoleCounts(selection.counts.byRole)) {
+  if (selection.counts.selected !== expectedRows ||
+      !hasExactRoleCounts(selection.counts.byRole, profile)) {
     throw new Error(
-      'selection sample did not retain exactly two rows in every role'
+      'selection sample did not retain the exact ' + profile +
+        ' role inventory'
     );
   }
 
@@ -291,12 +355,20 @@ async function generateCreated(output, stockfish) {
   }, { sampleOnly: true });
   const labelled = readNdjson(teacherPath);
   const labelledRoles = roleCounts(labelled);
-  if (teacher.output.rows !== ROLES.length * ROWS_PER_ROLE ||
-      teacher.exclusions.rows !== 0 ||
-      labelled.length !== ROLES.length * ROWS_PER_ROLE ||
-      !hasExactRoleCounts(labelledRoles)) {
+  const expectedLabelled = Object.values(
+    expectedLabelledRoleCounts(profile)
+  ).reduce((sum, value) => sum + value, 0);
+  if (teacher.output.rows !== expectedLabelled ||
+      teacher.exclusions.rows !== EXPECTED_EXCLUSIONS[profile] ||
+      Prepare.stableJson(teacher.exclusions.reasons) !==
+        Prepare.stableJson(EXPECTED_EXCLUSION_REASONS[profile]) ||
+      labelled.length !== expectedLabelled ||
+      !hasExactLabelledRoleCounts(labelledRoles, profile)) {
     throw new Error(
-      'real teacher sample must label all 10 rows with two in every role'
+      'real teacher sample must label the exact ' + profile +
+        ' frozen eligibility and exclusion inventory; labelled=' +
+        Prepare.stableJson(labelledRoles) + ', excluded=' +
+        teacher.exclusions.rows
     );
   }
 
@@ -306,12 +378,14 @@ async function generateCreated(output, stockfish) {
       nnue.fitAllowed !== false ||
       nnue.train.length !== 1 ||
       nnue.validation.length !== 1 ||
-      nnue.train[0].rows !== ROLES.length * ROWS_PER_ROLE ||
-      nnue.validation[0].rows !== ROLES.length * ROWS_PER_ROLE ||
-      nnue.train[0].selectedRows !== ROWS_PER_ROLE ||
-      nnue.validation[0].selectedRows !== ROWS_PER_ROLE ||
-      !hasExactRoleCounts(nnue.train[0].roleRows) ||
-      !hasExactRoleCounts(nnue.validation[0].roleRows)) {
+      nnue.train[0].rows !== expectedLabelled ||
+      nnue.validation[0].rows !== expectedLabelled ||
+      nnue.train[0].selectedRows !==
+        expectedLabelledRoleCounts(profile)['shared-train'] ||
+      nnue.validation[0].selectedRows !==
+        expectedLabelledRoleCounts(profile)['nnue-validation'] ||
+      !hasExactLabelledRoleCounts(nnue.train[0].roleRows, profile) ||
+      !hasExactLabelledRoleCounts(nnue.validation[0].roleRows, profile)) {
     throw new Error('NNUE sample validation did not preserve exact role counts');
   }
   const nnuePath = path.join(output, 'nnue-input-validation.json');
@@ -335,8 +409,10 @@ async function generateCreated(output, stockfish) {
     'hce-validation',
     hceValidationPath
   );
-  if (hceTrain.rows !== ROWS_PER_ROLE ||
-      hceValidation.rows !== ROWS_PER_ROLE ||
+  if (hceTrain.rows !==
+        expectedLabelledRoleCounts(profile)['shared-train'] ||
+      hceValidation.rows !==
+        expectedLabelledRoleCounts(profile)['hce-validation'] ||
       hceTrain.status !== 'sample-only-not-fit-eligible' ||
       hceValidation.status !== 'sample-only-not-fit-eligible' ||
       hceTrain.fitAllowed !== false ||
@@ -349,12 +425,16 @@ async function generateCreated(output, stockfish) {
     status: 'sample-only-not-fit-eligible',
     fitAllowed: false,
     publishableArtifact: false,
+    profile,
     purpose:
       'Exercise an explicitly test-only selection, real pinned-teacher labelling, mixed-role NNUE validation, and HCE role extraction before corpus-scale compute.',
     caveats: [
       'The input is a local wire-format fixture derived from checked-in CC0 opening positions, not an official Lichess evaluation archive snapshot.',
       'The E4 certification boundary remains awaiting-opening-freeze; this run uses the explicit pending-certification test path and cannot enter production fitting.',
-      'Counts are intentionally tiny and cannot support fitting, certification, or quality claims.',
+      'Counts are intentionally tiny and can support only a non-candidate convex mechanism diagnostic, never fitting, certification, or quality claims.',
+      ...(profile === 'preliminary' ? [
+        'The preliminary profile intentionally preserves one deterministic bestmove/PV eligibility exclusion in shared-train instead of substituting a label-friendly position post hoc.'
+      ] : []),
       'Generated labels still require the declared artifact-license and legal review before public release.'
     ],
     sourceFixture: {
@@ -391,6 +471,8 @@ async function generateCreated(output, stockfish) {
       fitAllowed: teacher.fitAllowed,
       rows: teacher.output.rows,
       excludedRows: teacher.exclusions.rows,
+      exclusionReasons: teacher.exclusions.reasons,
+      exclusionSha256: teacher.exclusions.sha256,
       outputSha256: teacher.output.sha256,
       byRole: labelledRoles
     },
@@ -429,12 +511,16 @@ async function generateCreated(output, stockfish) {
 async function generate(options) {
   const output = path.resolve(options.output);
   const stockfish = path.resolve(options.stockfish);
+  const profile = options.profile || 'smoke';
+  if (!Object.prototype.hasOwnProperty.call(SAMPLE_PROFILES, profile)) {
+    throw new Error('unknown sample profile: ' + profile);
+  }
   if (!fs.statSync(stockfish).isFile()) {
     throw new Error('--stockfish must name a file');
   }
   fs.mkdirSync(output, { recursive: false });
   try {
-    return await generateCreated(output, stockfish);
+    return await generateCreated(output, stockfish, profile);
   } catch (error) {
     fs.rmSync(output, { recursive: true, force: true });
     throw error;
@@ -458,6 +544,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  SAMPLE_PROFILES,
+  LABELLED_PROFILES,
+  EXPECTED_EXCLUSIONS,
+  EXPECTED_EXCLUSION_REASONS,
   parseArgs,
   openingWireFixture,
   roleCounts,

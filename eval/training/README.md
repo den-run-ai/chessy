@@ -154,37 +154,73 @@ validation, and HCE feature-stream boundaries with a small external fixture:
 ```sh
 node test/training/generate-training-sample.js \
   --stockfish /opt/stockfish-18/stockfish \
-  --output /data/chessy-training-sample
+  --output /data/chessy-training-sample \
+  --profile preliminary
 ```
 
-This creates 10 canonical records—two in each role—from checked-in CC0
-opening positions encoded in the accepted evaluation wire format. The
-selection manifest and every selection/teacher row identify the source as
+The explicit immutable `preliminary` profile creates all 40 distinct
+checked-in CC0 opening-family records, with exact role counts
+`18/4/9/2/7` for shared-train, HCE validation/test, and NNUE
+validation/test. Omitting `--profile` retains the faster 10-row smoke profile
+with two records per role for local/debug runs. Both are encoded in the
+accepted evaluation wire format. The selection manifest and every
+selection/teacher
+row identify the source as
 `chessy-training-mechanism-fixture`, carry the exact non-fit fixture marker,
 and use a fixture-placeholder exploration teacher; they never claim the
 official Lichess evaluation snapshot or mixed-Lichess teacher identity. The
 generator uses the checked-in `awaiting-opening-freeze` certification
-template, runs selection, labels all 10 rows with the real pinned Stockfish
+template, runs selection, labels every row with the real pinned Stockfish
 teacher, validates the resulting mixed-role shard through the NNUE input
-boundary, and extracts two `shared-train` plus two `hce-validation` HCE
-feature rows. Exact counts are enforced.
+boundary, and extracts the profile's exact `shared-train` and
+`hce-validation` HCE feature inventories. In the preliminary profile the
+pinned teacher deterministically excludes one shared-train position because
+its final best move does not head the last eligible exact-score PV, leaving
+exact labelled counts `17/4/9/2/7`; preserving that
+`bestmove-pv-mismatch` exercises the real exclusion ledger without post-hoc
+substitution. Any other selection, labelled, or exclusion inventory fails the
+run. The default smoke profile remains exactly 10 labelled rows and zero
+exclusions.
+
+The preliminary profile may additionally exercise packing and the frozen
+convex solver math without crossing the production fit boundary:
+
+```sh
+python -m pip install 'numpy==2.3.5' 'scipy==1.17.0'
+node test/training/hce-r3-baseline.js \
+  --output-dir /data/chessy-hce-r3-baseline
+python tools/training/sample-hce-convex.py \
+  --sample-manifest /data/chessy-training-sample/sample-manifest.json \
+  --center /data/chessy-hce-r3-baseline/center.json \
+  --scales /data/chessy-hce-r3-baseline/scales.json \
+  --output /data/chessy-training-sample/preliminary-convex-diagnostic.json
+```
+
+That separate diagnostic accepts only the exact 40-row preliminary sample,
+authenticates both feature files and adjacent sidecars, and requires
+train/validation row, cluster, and position-family disjointness. It evaluates
+the preregistered R3.0/R3.1 lambda grid on only 17 fit and four validation
+rows but emits metrics and hashes only: no weights, selected lambda, candidate,
+or test result. Those 21 rows support no quality inference. Its output remains
+`sample-only`, `fitAllowed: false`, and non-publishable. The production NPZ
+packer and fitter continue to reject the sample disposition.
 
 Fixture state is carried in the selection manifest, teacher sidecar, NNUE
 report, and HCE stream summary as `sample-only-not-fit-eligible`. Production
 label, train, and pack entry points reject it; the explicit sample override is
-validation-only and cannot run NNUE training or HCE packing/fitting. The
-packer/NPZ/fitter provenance chain remains covered by its strict contract and
-self-tests rather than this sample.
+validation-only and cannot run NNUE training or production HCE
+packing/fitting. The sample diagnostic is a bounded, explicitly separate
+mechanism path; it cannot create a production matrix or fit artifact.
 
 `sample-manifest.json` is written last and is the sole completion marker;
 consumers must treat a sample directory without it as incomplete. On handled
 failure the generator removes its sample directory. An abrupt termination may
 leave an incomplete directory that requires inspection and manual cleanup.
-CI uploads only the non-replayable summary—not the generated labels, features,
-transcript, or detached internal sidecars. It is a mechanism-status record,
-not standalone evidence of the teacher run whose artifacts it hashes. The
-fixture is neither an official Lichess evaluation snapshot nor a production
-opening freeze.
+CI uploads only the non-replayable sample summary and weight-free convex
+diagnostic—not the generated labels, features, transcript, or detached
+internal sidecars. They are mechanism-status records, not standalone evidence
+of the teacher run whose artifacts they hash. The fixture is neither an
+official Lichess evaluation snapshot nor a production opening freeze.
 
 Only after that admission succeeds, label the frozen selection:
 

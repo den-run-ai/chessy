@@ -145,6 +145,7 @@ jobs:
           node test/training/corpus.test.js
           node test/training/label-stockfish.test.js
           node test/training/smoke-stockfish.test.js
+          node test/training/generate-training-sample.test.js
       - name: Validate HCE R3 representation and NNUE G1 feature contracts
         run: |
           node test/training/hce-r3-features.test.js
@@ -162,6 +163,8 @@ jobs:
           python -m py_compile tools/training/pack-hce.py
           python tools/training/pack-hce.py --self-test
           python tools/training/hce-fit.py --self-test
+          python -m py_compile tools/training/sample-hce-convex.py
+          python tools/training/sample-hce-convex.py --self-test
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset
@@ -227,6 +230,8 @@ jobs:
         run: node test/calculation.test.js
       - name: Run critical-moment selector tests
         run: node test/moment-selector.test.js
+      - name: Run score and move-annotation policy tests
+        run: node test/analysis-notation.test.js
       - name: Run resumable moment-scan tests
         run: node test/moment-scan.test.js
 
@@ -238,6 +243,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Download and run the pinned Stockfish 18 teacher
         timeout-minutes: 8
         shell: bash
@@ -252,6 +260,7 @@ jobs:
           extract="$RUNNER_TEMP/stockfish-18"
           output="$RUNNER_TEMP/stockfish-smoke/sf18-100kn"
           sample="$RUNNER_TEMP/training-sample"
+          baseline="$RUNNER_TEMP/hce-r3-baseline"
           mkdir -p "$extract" "$(dirname "$output")"
           exec > >(tee "$RUNNER_TEMP/stockfish-smoke/runner.log") 2>&1
 
@@ -270,7 +279,17 @@ jobs:
 
           node test/training/generate-training-sample.js \
             --stockfish "$executable" \
-            --output "$sample"
+            --output "$sample" \
+            --profile preliminary
+
+          python -m pip install 'numpy==2.3.5' 'scipy==1.17.0'
+          node test/training/hce-r3-baseline.js \
+            --output-dir "$baseline"
+          python tools/training/sample-hce-convex.py \
+            --sample-manifest "$sample/sample-manifest.json" \
+            --center "$baseline/center.json" \
+            --scales "$baseline/scales.json" \
+            --output "$sample/preliminary-convex-diagnostic.json"
       - name: Upload teacher smoke and sample summary
         if: always()
         uses: actions/upload-artifact@v4
@@ -281,6 +300,7 @@ jobs:
             ${{ runner.temp }}/stockfish-smoke/sf18-100kn.provenance.json
             ${{ runner.temp }}/stockfish-smoke/sf18-100kn.uci.log
             ${{ runner.temp }}/training-sample/sample-manifest.json
+            ${{ runner.temp }}/training-sample/preliminary-convex-diagnostic.json
           if-no-files-found: warn
 
   browser:

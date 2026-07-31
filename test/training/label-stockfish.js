@@ -10,6 +10,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
@@ -40,6 +41,7 @@ const SELECTION_RECORD_FIELDS = Object.freeze([
   'schema', 'id', 'fen', 'canonicalFen', 'cluster', 'role',
   'positionFamily', 'strata', 'explorationLabel', 'source'
 ]);
+const VERIFIED_EXECUTABLE_PREFIX = 'chessy-stockfish-executable-';
 
 function hasExactKeys(value, expected) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -47,6 +49,129 @@ function hasExactKeys(value, expected) {
   const wanted = expected.slice().sort();
   return actual.length === wanted.length &&
     actual.every((key, index) => key === wanted[index]);
+}
+
+function fileIdentity(stat) {
+  return Object.freeze({ dev: stat.dev, ino: stat.ino });
+}
+
+function hasIdentity(stat, identity) {
+  return stat.dev === identity.dev && stat.ino === identity.ino;
+}
+
+function cleanupVerifiedExecutable(staged) {
+  if (!staged) return;
+  let executableStat = null;
+  try {
+    executableStat = fs.lstatSync(staged.path);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (executableStat) {
+    if (!executableStat.isFile() ||
+        !hasIdentity(executableStat, staged.executableIdentity)) {
+      throw new Error(
+        'refusing to remove replaced verified Stockfish executable'
+      );
+    }
+    fs.unlinkSync(staged.path);
+  }
+  const directoryStat = fs.lstatSync(staged.directory);
+  if (!directoryStat.isDirectory() ||
+      !hasIdentity(directoryStat, staged.directoryIdentity)) {
+    throw new Error(
+      'refusing to remove replaced verified Stockfish directory'
+    );
+  }
+  if (fs.readdirSync(staged.directory).length !== 0) {
+    throw new Error(
+      'refusing to remove non-empty verified Stockfish directory'
+    );
+  }
+  fs.rmdirSync(staged.directory);
+}
+
+function stageVerifiedExecutable(filename, expectedSha256) {
+  if (!HEX_256.test(expectedSha256 || '')) {
+    throw new Error('expected Stockfish executable SHA-256 is invalid');
+  }
+  const sourceFd = fs.openSync(filename, 'r');
+  let destinationFd = null;
+  let staged = null;
+  try {
+    const sourceStat = fs.fstatSync(sourceFd);
+    if (!sourceStat.isFile()) {
+      throw new Error('--stockfish must name an executable file');
+    }
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), VERIFIED_EXECUTABLE_PREFIX)
+    );
+    staged = {
+      directory,
+      directoryIdentity: fileIdentity(fs.statSync(directory)),
+      path: path.join(directory, 'stockfish'),
+      executableIdentity: null
+    };
+    fs.chmodSync(directory, 0o700);
+    destinationFd = fs.openSync(staged.path, 'wx', 0o500);
+    const hash = crypto.createHash('sha256');
+    const buffer = Buffer.allocUnsafe(1024 * 1024);
+    let bytes = 0;
+    for (;;) {
+      const read = fs.readSync(
+        sourceFd, buffer, 0, buffer.length, null
+      );
+      if (read === 0) break;
+      hash.update(buffer.subarray(0, read));
+      let written = 0;
+      while (written < read) {
+        written += fs.writeSync(
+          destinationFd, buffer, written, read - written
+        );
+      }
+      bytes += read;
+    }
+    fs.fsyncSync(destinationFd);
+    fs.fchmodSync(destinationFd, 0o500);
+    staged.executableIdentity =
+      fileIdentity(fs.fstatSync(destinationFd));
+    fs.closeSync(destinationFd);
+    destinationFd = null;
+    const sha256 = hash.digest('hex');
+    if (sha256 !== expectedSha256) {
+      throw new Error(
+        'Stockfish executable does not match the checked-in teacher manifest'
+      );
+    }
+    return Object.freeze({
+      path: staged.path,
+      directory: staged.directory,
+      directoryIdentity: staged.directoryIdentity,
+      executableIdentity: staged.executableIdentity,
+      sha256,
+      bytes
+    });
+  } catch (error) {
+    if (destinationFd !== null) {
+      try {
+        if (staged && !staged.executableIdentity) {
+          staged.executableIdentity =
+            fileIdentity(fs.fstatSync(destinationFd));
+        }
+      } catch (_) {}
+      try { fs.closeSync(destinationFd); } catch (_) {}
+    }
+    if (staged) {
+      try {
+        cleanupVerifiedExecutable(staged);
+      } catch (cleanupError) {
+        error.cleanupError = cleanupError.message;
+      }
+    }
+    throw error;
+  } finally {
+    fs.closeSync(sourceFd);
+  }
 }
 
 function parseArgs(argv) {
@@ -1278,9 +1403,6 @@ async function labelShard(options, runOptions) {
   const output = path.resolve(options.output);
   const executable = path.resolve(options.stockfish);
   if (!fs.statSync(input).isFile()) throw new Error('--input must name a file');
-  if (!fs.statSync(executable).isFile()) {
-    throw new Error('--stockfish must name an executable file');
-  }
   const exclusionPath = output + '.exclusions.ndjson';
   const transcriptPath = output + '.uci.log';
   const sidecarPath = output + '.manifest.json';
@@ -1292,6 +1414,7 @@ async function labelShard(options, runOptions) {
   };
   const lockPath = output + '.lock';
   const lockFd = acquirePrefixLock(lockPath);
+  let stagedExecutable = null;
   try {
     refuseExistingArtifacts(Object.values(finalArtifacts));
 
@@ -1302,12 +1425,10 @@ async function labelShard(options, runOptions) {
       sampleOnly ? { sampleOnly: true } : undefined
     );
     const records = await loadRecords(input, context);
-    const actualExecutableSha = await Prepare.fileSha256(executable);
-    if (actualExecutableSha !== contracts.teacher.engine.executable.sha256) {
-      throw new Error(
-        'Stockfish executable does not match the checked-in teacher manifest'
-      );
-    }
+    stagedExecutable = stageVerifiedExecutable(
+      executable, contracts.teacher.engine.executable.sha256
+    );
+    const actualExecutableSha = stagedExecutable.sha256;
 
     const nonce =
       process.pid + '-' + crypto.randomBytes(8).toString('hex');
@@ -1328,7 +1449,9 @@ async function labelShard(options, runOptions) {
       exclusionWriter = new LineArtifact(temporary.exclusions);
       transcriptWriter = new LineArtifact(temporary.transcript);
       engine = new UciEngine(
-        executable, transcriptWriter, contracts.teacher.watchdog
+        stagedExecutable.path,
+        transcriptWriter,
+        contracts.teacher.watchdog
       );
       await engine.initialize(contracts.teacher.uci);
       for (const record of records) {
@@ -1399,7 +1522,13 @@ async function labelShard(options, runOptions) {
       throw error;
     }
   } finally {
-    releasePrefixLock(lockFd, lockPath);
+    try {
+      if (stagedExecutable) {
+        cleanupVerifiedExecutable(stagedExecutable);
+      }
+    } finally {
+      releasePrefixLock(lockFd, lockPath);
+    }
   }
 }
 
@@ -1433,6 +1562,8 @@ module.exports = {
   loadSelectionContext,
   validateSelectionRecord,
   UciEngine,
+  stageVerifiedExecutable,
+  cleanupVerifiedExecutable,
   LineArtifact,
   loadRecords,
   labelledRecord,

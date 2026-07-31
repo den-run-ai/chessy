@@ -36,6 +36,7 @@ require('../assets/analysis-service.js');
 // controller's DOM listeners are skipped exactly as in a worker-less page).
 require('../assets/analysis-result.js');
 require('../assets/moment-selector.js');
+require('../assets/analysis-notation.js');
 require('../assets/moment-scan.js');
 const Chess = globalThis.Chess;
 const Core = globalThis.ChessyAnalysisCore;
@@ -967,7 +968,7 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   let monotone = stream.length > 0;
   for (let i = 0; i < stream.length; i++) {
     const e = stream[i];
-    if (e.gameId !== 'e3b-scan' || e.total !== 2 || e.checked > e.total ||
+    if (e.gameId !== 'e3b-scan' || e.total !== 4 || e.checked > e.total ||
         e.verifyIndex > e.verifyTotal || e.verifyTotal > 2 || e.error !== null) monotone = false;
     if (i === 0) continue;
     const p = stream[i - 1];
@@ -976,13 +977,13 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   }
   check(stream.length >= 5 && monotone,
     'the scan progress stream over the real service is monotonic and self-consistent');
-  check(doneIdx === stream.length - 1 && stream[doneIdx].checked === 2 &&
+  check(doneIdx === stream.length - 1 && stream[doneIdx].checked === 4 &&
     stream[doneIdx].pass === 2 && stream[doneIdx].verifyTotal === 1 &&
     stream[doneIdx].verifyIndex === stream[doneIdx].verifyTotal &&
     stream[doneIdx].unresolvedCount === 0,
     'done is claimed exactly once, last, with no work remaining (never a dressed-up partial)');
-  check(!!seamDone && seamDone.state === 'done' && seamDone.checked === 2 && seamDone.total === 2,
-    'the returned public state agrees with the stream: both decisions checked, blunder verified');
+  check(!!seamDone && seamDone.state === 'done' && seamDone.checked === 4 && seamDone.total === 4,
+    'the returned public state agrees with the stream: every move scored, player blunder verified');
   const sanitized = stream.every(function (e) {
     return e.moments.every(function (m) {
       return Object.keys(m).sort().join(',') === 'playedSan,ply';

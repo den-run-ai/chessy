@@ -523,6 +523,18 @@
       return;
     }
     const reflection = JSON.parse(JSON.stringify(built.value));
+    // Gate 0 is crossed by the player's valid structured self-report, not by
+    // engine completion or by saving a lesson card. The scan job stores only a
+    // minimal ply receipt (never these answers) so Review can reveal this
+    // move's score and, after every suggestion is reflected on, the complete
+    // score ledger. A failed cache checkpoint stays fail-closed.
+    if (typeof ChessyMomentScan !== 'undefined' &&
+        typeof ChessyMomentScan.recordReflection === 'function') {
+      try {
+        Promise.resolve(ChessyMomentScan.recordReflection(r, r.ply))
+          .catch(function () {});
+      } catch (e) { /* score history remains locked */ }
+    }
     const token = ++verifySeq;
     saveSeq++; // this verdict owns the card controls now
     const ply = r.ply;
@@ -642,6 +654,19 @@
       const legal = Chess.legalMoves(pos);
       const top = res.bestLines[0];
       const bm = checked.topMove;
+      // A valid complete manual probe can replace this reflected row's shallow
+      // estimate with the exact deep-profile score. The scan controller
+      // revalidates provenance/position itself and never grants a generated NAG
+      // to a manually chosen non-suggestion.
+      if (res.complete === true &&
+          typeof ChessyMomentScan !== 'undefined' &&
+          typeof ChessyMomentScan.recordVerifiedSummary === 'function') {
+        try {
+          Promise.resolve(
+            ChessyMomentScan.recordVerifiedSummary(r, ply, res)
+          ).catch(function () {});
+        } catch (e) { /* the existing trusted row remains unchanged */ }
+      }
       const playedUci = Chess.sqName(entry.move.from) + Chess.sqName(entry.move.to) +
         (entry.move.promotion ? entry.move.promotion.toLowerCase() : '');
       // A partial result with no playedLine has no head-to-head standing. Even

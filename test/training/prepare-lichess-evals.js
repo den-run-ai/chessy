@@ -73,23 +73,68 @@ async function fileSha256(filename) {
   return hash.digest('hex');
 }
 
-function inputStream(filename) {
-  if (!filename.endsWith('.zst')) {
-    return { stream: fs.createReadStream(filename), child: null, done: null };
+function openInputSnapshot(filename) {
+  const fd = fs.openSync(filename, 'r');
+  try {
+    if (!fs.fstatSync(fd).isFile()) {
+      throw new Error('--input must name a file');
+    }
+    return { filename, fd, closed: false };
+  } catch (error) {
+    fs.closeSync(fd);
+    throw error;
   }
-  const child = spawn('zstd', ['-dc', '--', filename], {
-    stdio: ['ignore', 'pipe', 'inherit']
+}
+
+function closeInputSnapshot(snapshot) {
+  if (!snapshot || snapshot.closed) return;
+  try {
+    fs.closeSync(snapshot.fd);
+  } catch (error) {
+    if (error.code !== 'EBADF') throw error;
+  }
+  snapshot.closed = true;
+}
+
+function snapshotReadStream(snapshot, autoClose) {
+  return fs.createReadStream(null, {
+    fd: snapshot.fd,
+    autoClose: autoClose === true,
+    start: 0
+  });
+}
+
+async function snapshotSha256(snapshot) {
+  const hash = crypto.createHash('sha256');
+  const stream = snapshotReadStream(snapshot);
+  stream.on('data', chunk => hash.update(chunk));
+  await once(stream, 'end');
+  return hash.digest('hex');
+}
+
+function inputStream(snapshot) {
+  const source = snapshotReadStream(snapshot, true);
+  if (!snapshot.filename.endsWith('.zst')) {
+    return { stream: source, source, child: null, done: null };
+  }
+  const child = spawn('zstd', ['-dc'], {
+    stdio: ['pipe', 'pipe', 'inherit']
   });
   child.on('error', function (error) {
     if (error.code === 'ENOENT') {
       error.message = 'zstd is required to read .zst input';
     }
   });
+  child.stdin.on('error', function (error) {
+    if (error.code !== 'EPIPE') source.destroy(error);
+  });
+  source.pipe(child.stdin);
   const done = new Promise(function (resolve, reject) {
+    source.once('error', reject);
     child.once('error', reject);
     child.once('close', resolve);
   });
-  return { stream: child.stdout, child, done };
+  return { stream: child.stdout, source, child, done };
 }
 
 function stableJson(value) {
@@ -248,13 +293,7 @@ async function prepareLocked(options, output) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(retrieved || '')) {
     throw new Error('--retrieved must be an ISO date (YYYY-MM-DD)');
   }
-  if (!fs.statSync(input).isFile()) throw new Error('--input must name a file');
   if (fs.existsSync(output)) throw new Error('refusing existing --output directory: ' + output);
-
-  const actualSha = await fileSha256(input);
-  if (actualSha !== expectedSha) {
-    throw new Error('source SHA-256 mismatch: expected ' + expectedSha + ', got ' + actualSha);
-  }
 
   const heldoutPath = path.join(__dirname, '..', '..', 'eval', 'training', 'heldout-v1.json');
   const sourcePolicyPath = path.join(
@@ -330,10 +369,16 @@ async function prepareLocked(options, output) {
   };
   const selectedClusters = new Set();
   const selectedFamilies = new Map();
+  let snapshot = null;
   let opened = null;
   let streamFailure = null;
 
   try {
+    snapshot = openInputSnapshot(input);
+    const actualSha = await snapshotSha256(snapshot);
+    if (actualSha !== expectedSha) {
+      throw new Error('source SHA-256 mismatch: expected ' + expectedSha + ', got ' + actualSha);
+    }
     fs.mkdirSync(staging, { recursive: false });
     for (let i = 0; i < shardCount; i++) {
       const name = 'selection-' + String(i).padStart(3, '0') + '.ndjson';
@@ -345,7 +390,7 @@ async function prepareLocked(options, output) {
       streams.push(stream);
       hashes.push(crypto.createHash('sha256'));
     }
-    opened = inputStream(input);
+    opened = inputStream(snapshot);
     const lines = readline.createInterface({
       input: opened.stream,
       crlfDelay: Infinity
@@ -432,6 +477,7 @@ async function prepareLocked(options, output) {
       const code = await opened.done;
       if (code !== 0) throw new Error('zstd exited with status ' + code);
     }
+    snapshot.closed = true;
     if (streamFailure) throw streamFailure;
     for (const stream of streams) await closeStream(stream);
     if (streamFailure) throw streamFailure;
@@ -570,6 +616,9 @@ async function prepareLocked(options, output) {
   } catch (error) {
     if (opened) {
       if (!opened.stream.destroyed) opened.stream.destroy();
+      if (opened.source !== opened.stream && !opened.source.destroyed) {
+        opened.source.destroy();
+      }
       if (opened.child &&
           opened.child.exitCode === null &&
           opened.child.signalCode === null) {
@@ -578,6 +627,9 @@ async function prepareLocked(options, output) {
       if (opened.done) {
         try { await opened.done; } catch (_) {}
       }
+      snapshot.closed = true;
+    } else {
+      closeInputSnapshot(snapshot);
     }
     await Promise.all(streams.map(abortStream));
     fs.rmSync(staging, { recursive: true, force: true });
@@ -624,6 +676,9 @@ module.exports = {
   MECHANISM_FIXTURE_LABEL_TEACHER,
   parseArgs,
   fileSha256,
+  openInputSnapshot,
+  closeInputSnapshot,
+  snapshotSha256,
   stableJson,
   validateMechanismFixtureMarker,
   acquirePrefixLock,

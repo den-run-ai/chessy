@@ -16,6 +16,14 @@ from typing import BinaryIO
 
 import numpy as np
 
+from _artifact_publication import (
+    acquire_output_prefix_lock,
+    publish_pair_no_replace,
+    refuse_existing_pair,
+    release_output_prefix_lock,
+    self_test_pair_publication,
+)
+
 
 PARAMETERS = 965
 MATRIX_SCHEMA = "chessy.hce-csr.v2"
@@ -207,6 +215,15 @@ def self_test() -> None:
         except ValueError:
             continue
         raise AssertionError("packer accepted a non-production disposition")
+    with tempfile.TemporaryDirectory(
+        prefix="chessy-hce-publication-self-test-"
+    ) as temporary:
+        self_test_pair_publication(
+            Path(temporary),
+            "matrix.npz",
+            ".manifest.json",
+            "HCE matrix/sidecar pair",
+        )
     print("HCE packer self-test passed")
 
 
@@ -608,8 +625,26 @@ def main() -> None:
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        os.replace(temporary_npz, output)
-        os.replace(temporary_sidecar, sidecar)
+        lock_path = output.with_name(output.name + ".lock")
+        try:
+            lock_descriptor = acquire_output_prefix_lock(
+                lock_path, "HCE matrix/sidecar pair"
+            )
+        except FileExistsError as error:
+            raise SystemExit(str(error)) from error
+        try:
+            refuse_existing_pair((output, sidecar), "output or sidecar")
+            publish_pair_no_replace(
+                temporary_npz,
+                temporary_sidecar,
+                output,
+                sidecar,
+                "output or sidecar",
+            )
+        except FileExistsError as error:
+            raise SystemExit(str(error)) from error
+        finally:
+            release_output_prefix_lock(lock_descriptor, lock_path)
     print(f"packed {rows} {args.role} rows / {nonzeros} nonzeros")
     print("output SHA-256 " + manifest["output"]["sha256"])
 

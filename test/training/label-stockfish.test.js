@@ -328,6 +328,100 @@ function selectedRecord(fen, sourceSha256) {
   }, { sha256: sourceSha256 });
 }
 
+function lichessSourceBody(fen) {
+  return Prepare.stableJson({
+    fen,
+    evals: [{
+      depth: 20,
+      knodes: 100,
+      pvs: [{ cp: 12, line: 'e2e4 e8e7' }]
+    }]
+  }) + '\n';
+}
+
+async function assertAuthenticatedSourceSurvivesReplacement(
+  temporary, extension
+) {
+  const authenticatedFen = '4k3/8/8/8/8/8/4P3/4K3 w - -';
+  const replacementFen = '4k3/8/8/8/8/8/3P4/4K3 w - -';
+  const authenticatedBody = lichessSourceBody(authenticatedFen);
+  const replacementBody = lichessSourceBody(replacementFen);
+  const input = path.join(temporary, 'authenticated-source' + extension);
+  const replacement = input + '.replacement';
+  const output = path.join(
+    temporary,
+    extension === '.zst' ?
+      'authenticated-zst-selection' : 'authenticated-jsonl-selection'
+  );
+  fs.writeFileSync(input, authenticatedBody);
+  fs.writeFileSync(replacement, replacementBody);
+  const expectedSha256 = Corpus.sha256(authenticatedBody);
+  const originalCreateReadStream = fs.createReadStream;
+  const originalPath = process.env.PATH;
+  let replaced = false;
+  if (extension === '.zst') {
+    const bin = path.join(temporary, 'fake-zstd-bin');
+    fs.mkdirSync(bin, { recursive: true });
+    const zstd = path.join(bin, 'zstd');
+    fs.writeFileSync(zstd, [
+      '#!/usr/bin/env node',
+      "'use strict';",
+      "const fs = require('fs');",
+      'const filename = process.argv.find(arg => arg.endsWith(".zst"));',
+      '(filename ? fs.createReadStream(filename) : process.stdin)' +
+        '.pipe(process.stdout);',
+      ''
+    ].join('\n'), { mode: 0o755 });
+    fs.chmodSync(zstd, 0o755);
+    process.env.PATH = bin + path.delimiter + originalPath;
+  }
+  fs.createReadStream = function (filename, options) {
+    const stream = originalCreateReadStream.call(fs, filename, options);
+    if (!replaced && options && Number.isInteger(options.fd)) {
+      stream.once('end', function () {
+        fs.renameSync(replacement, input);
+        replaced = true;
+      });
+    }
+    return stream;
+  };
+  let manifest;
+  try {
+    manifest = await Prepare.prepare({
+      input,
+      'source-sha256': expectedSha256,
+      retrieved: '2026-07-31',
+      output,
+      modulus: '1',
+      numerator: '1',
+      shards: '1',
+      'family-cap': '64',
+      'minimum-selected': '1',
+      'max-malformed-ppm': '0',
+      'allow-missing-roles': 'true',
+      'allow-pending-certification-for-test': 'true',
+      'mechanism-fixture': 'true'
+    });
+  } finally {
+    fs.createReadStream = originalCreateReadStream;
+    process.env.PATH = originalPath;
+  }
+  equal(replaced, true,
+    extension + ' source path is atomically replaced after authentication');
+  equal(manifest.source.compressedSha256, expectedSha256,
+    extension + ' manifest retains the authenticated source digest');
+  const selected = JSON.parse(fs.readFileSync(
+    path.join(output, 'selection-000.ndjson'), 'utf8'
+  ).trim());
+  equal(selected.fen, authenticatedFen,
+    extension + ' parsing consumes the authenticated open descriptor');
+  equal(
+    Corpus.sha256(fs.readFileSync(input)),
+    Corpus.sha256(replacementBody),
+    extension + ' test confirms the pathname now names replacement bytes'
+  );
+}
+
 async function integration() {
   const temporary = fs.mkdtempSync(
     path.join(os.tmpdir(), 'chessy-label-contract-')
@@ -530,6 +624,13 @@ async function integration() {
     const records = await Label.loadRecords(shardPath, context);
     equal(records.length, 1);
     equal(records[0].id, record.id);
+
+    await assertAuthenticatedSourceSurvivesReplacement(
+      temporary, '.jsonl'
+    );
+    await assertAuthenticatedSourceSurvivesReplacement(
+      temporary, '.zst'
+    );
 
     const mechanismInputPath =
       path.join(temporary, 'mechanism-input.jsonl');
@@ -840,6 +941,65 @@ async function integration() {
       'production row validation rejects a fixture marker'
     );
 
+    const authenticatedExecutable =
+      path.join(temporary, 'authenticated-stockfish');
+    const authenticatedExecutableBody = [
+      '#!/usr/bin/env node',
+      "'use strict';",
+      "const readline = require('readline');",
+      'const input = readline.createInterface({ input: process.stdin });',
+      "input.on('line', function (line) {",
+      "  if (line === 'uci') {",
+      "    console.log('id name authenticated executable');",
+      "    console.log('uciok');",
+      "  } else if (line === 'isready') {",
+      "    console.log('readyok');",
+      "  } else if (line === 'quit') {",
+      '    input.close();',
+      '    process.exit(0);',
+      '  }',
+      '});',
+      ''
+    ].join('\n');
+    fs.writeFileSync(
+      authenticatedExecutable,
+      authenticatedExecutableBody,
+      { mode: 0o755 }
+    );
+    const stagedExecutable = Label.stageVerifiedExecutable(
+      authenticatedExecutable,
+      Corpus.sha256(authenticatedExecutableBody)
+    );
+    ok(stagedExecutable.path !== authenticatedExecutable,
+      'the verified teacher executes from a private snapshot path');
+    if (process.platform !== 'win32') {
+      equal(fs.statSync(stagedExecutable.path).mode & 0o777, 0o500,
+        'the private executable snapshot is read/execute-only');
+    }
+    const attackerExecutable = authenticatedExecutable + '.replacement';
+    fs.writeFileSync(attackerExecutable, authenticatedExecutableBody.replace(
+      'authenticated executable', 'replacement attacker'
+    ), { mode: 0o755 });
+    fs.renameSync(attackerExecutable, authenticatedExecutable);
+    const stagedTranscript = [];
+    const stagedEngine = new Label.UciEngine(
+      stagedExecutable.path,
+      { append: line => stagedTranscript.push(line) },
+      contracts.teacher.watchdog
+    );
+    await stagedEngine.initialize(contracts.teacher.uci);
+    await stagedEngine.quit();
+    ok(
+      stagedTranscript.includes('< id name authenticated executable'),
+      'atomic source replacement cannot change the verified executable'
+    );
+    ok(
+      !stagedTranscript.includes('< id name replacement attacker'),
+      'the replacement executable is never spawned'
+    );
+    Label.cleanupVerifiedExecutable(stagedExecutable);
+    equal(fs.existsSync(stagedExecutable.directory), false,
+      'the private executable snapshot is narrowly removed after use');
     const dummyStockfish = path.join(temporary, 'not-stockfish');
     fs.writeFileSync(dummyStockfish, 'not the pinned executable\n');
     const mechanismLabelOutput =

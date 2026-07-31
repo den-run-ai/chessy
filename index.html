@@ -20,14 +20,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="assets/style.css?r=r71">
+  <link rel="stylesheet" href="assets/style.css?r=r73">
 </head>
 <body>
   <div class="app">
     <header class="topbar">
       <div class="brand-lockup">
         <h1 class="brand">♞ Chessy</h1>
-        <span class="app-version" id="appVersion">Version r71</span>
+        <span class="app-version" id="appVersion">Version r73</span>
       </div>
       <div class="status" id="status" role="status" aria-live="polite">White to move</div>
     </header>
@@ -76,6 +76,11 @@
             <button id="newGame" class="btn primary">New game</button>
             <button id="undo" class="btn">Undo</button>
             <button id="flip" class="btn">Flip board</button>
+          </div>
+          <div class="buttons game-ending-controls" role="group"
+               aria-label="Game ending controls">
+            <button type="button" id="offerDraw" class="btn">Offer draw</button>
+            <button type="button" id="resign" class="btn danger">Resign</button>
           </div>
           <div class="buttons">
             <button id="exportPgn" class="btn">Save PGN</button>
@@ -147,11 +152,12 @@
             <section id="momentScan" class="coach-form scan-panel"
                      aria-labelledby="momentScanTitle">
               <h3 id="momentScanTitle">Find moments to revisit</h3>
-              <p class="coach-note">Chessy checks the game in the background,
-                but keeps every engine score and alternative move hidden until
-                you reflect first.</p>
+              <p class="coach-note">Chessy checks every played move for the
+                score trail and looks for coaching moments on the chosen side.
+                Engine scores and alternatives stay hidden until you reflect
+                first.</p>
               <fieldset id="scanSideChoice" class="scan-side" hidden>
-                <legend>Whose moves should Chessy check?</legend>
+                <legend>Whose moves should Chessy consider for suggestions?</legend>
                 <div class="scan-side-options">
                   <label><input type="radio" name="scanColor" value="w"> White</label>
                   <label><input type="radio" name="scanColor" value="b"> Black</label>
@@ -266,6 +272,16 @@
               <p class="coach-note" id="cardSaved" aria-live="polite" hidden></p>
             </div>
           </div>
+          <section class="review-history" aria-labelledby="reviewHistoryTitle">
+            <h3 id="reviewHistoryTitle">Move history</h3>
+            <p class="coach-note" id="reviewHistoryNote" role="status"
+               aria-live="polite">
+              Select a move to review the position before it. Scores stay hidden
+              until you reflect first.
+            </p>
+            <ol id="reviewMoveList" class="review-moves"
+                aria-label="Game move history"></ol>
+          </section>
         </div>
       </div>
     </section>
@@ -430,6 +446,16 @@
     <div class="promotion-choices" id="promotionChoices"></div>
   </dialog>
 
+  <dialog id="endGameDialog" class="setup" aria-labelledby="endGameTitle"
+          aria-describedby="endGameDetail">
+    <h2 id="endGameTitle"></h2>
+    <p id="endGameDetail" class="coach-note"></p>
+    <div class="buttons setup-actions">
+      <button type="button" id="endGameConfirm" class="btn"></button>
+      <button type="button" id="endGameCancel" class="btn">Cancel</button>
+    </div>
+  </dialog>
+
   <dialog id="gameOverDialog" class="gameover" aria-labelledby="gameOverTitle"
           aria-describedby="gameOverDetail">
     <h2 id="gameOverTitle"></h2>
@@ -451,35 +477,36 @@
        of old cached scripts under new HTML. The token below, the ?r= on each
        tag, and RELEASE in sw.js must agree; test/browser/sw-update.test.js
        fails the build if they drift. -->
-  <script>window.CHESSY_RELEASE = 'r71';</script>
-  <script src="assets/engine.js?r=r71"></script>
-  <script src="assets/ai-telemetry.js?r=r71"></script>
-  <script src="assets/level-presets.js?r=r71"></script>
+  <script>window.CHESSY_RELEASE = 'r73';</script>
+  <script src="assets/engine.js?r=r73"></script>
+  <script src="assets/ai-telemetry.js?r=r73"></script>
+  <script src="assets/level-presets.js?r=r73"></script>
   <!-- store.js and archive.js load BEFORE app.js: by the time the app
        boots (starting a restored game's clock and AI), archive support has
        either definitively loaded or definitively failed — a restored timer
        expiring can never race a still-loading archive module into a false
        "storage unavailable" verdict. -->
-  <script src="assets/calculation.js?r=r71"></script>
-  <script src="assets/store.js?r=r71"></script>
-  <script src="assets/storage-health.js?r=r71"></script>
-  <script src="assets/archive.js?r=r71"></script>
-  <script src="assets/runtime-update.js?r=r71"></script>
-  <script src="assets/app.js?r=r71"></script>
-  <script src="assets/mini-board.js?r=r71"></script>
-  <script src="assets/review.js?r=r71"></script>
-  <script src="assets/analysis-core.js?r=r71"></script>
-  <script src="assets/analysis-service.js?r=r71"></script>
-  <script src="assets/analysis-result.js?r=r71"></script>
-  <script src="assets/equivalence.js?r=r71"></script>
-  <script src="assets/moment-selector.js?r=r71"></script>
-  <script src="assets/moment-scan.js?r=r71"></script>
-  <script src="assets/pgn.js?r=r71"></script>
-  <script src="assets/import.js?r=r71"></script>
-  <script src="assets/data-controls.js?r=r71"></script>
-  <script src="assets/reflection.js?r=r71"></script>
-  <script src="assets/train.js?r=r71"></script>
-  <script src="assets/progress.js?r=r71"></script>
+  <script src="assets/calculation.js?r=r73"></script>
+  <script src="assets/store.js?r=r73"></script>
+  <script src="assets/storage-health.js?r=r73"></script>
+  <script src="assets/archive.js?r=r73"></script>
+  <script src="assets/runtime-update.js?r=r73"></script>
+  <script src="assets/app.js?r=r73"></script>
+  <script src="assets/mini-board.js?r=r73"></script>
+  <script src="assets/review.js?r=r73"></script>
+  <script src="assets/analysis-core.js?r=r73"></script>
+  <script src="assets/analysis-service.js?r=r73"></script>
+  <script src="assets/analysis-result.js?r=r73"></script>
+  <script src="assets/equivalence.js?r=r73"></script>
+  <script src="assets/moment-selector.js?r=r73"></script>
+  <script src="assets/analysis-notation.js?r=r73"></script>
+  <script src="assets/moment-scan.js?r=r73"></script>
+  <script src="assets/pgn.js?r=r73"></script>
+  <script src="assets/import.js?r=r73"></script>
+  <script src="assets/data-controls.js?r=r73"></script>
+  <script src="assets/reflection.js?r=r73"></script>
+  <script src="assets/train.js?r=r73"></script>
+  <script src="assets/progress.js?r=r73"></script>
   <script>
     // Offline status: show the actual service-worker state instead of an
     // unconditional "fully offline" claim.

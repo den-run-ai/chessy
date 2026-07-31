@@ -70,6 +70,113 @@
     }
     return hex32(a) + hex32(b);
   }
+  function sameEnding(a, b) {
+    return !!a && !!b && a.id === b.id &&
+      Array.isArray(a.sans) && Array.isArray(b.sans) &&
+      a.sans.length === b.sans.length &&
+      a.sans.every(function (san, i) { return san === b.sans[i]; }) &&
+      a.result === b.result && a.reason === b.reason;
+  }
+  function validEnding(value, id) {
+    return !!value && typeof value === 'object' && !Array.isArray(value) &&
+      Object.keys(value).sort().join(',') === 'id,reason,result,sans' &&
+      typeof value.id === 'string' && value.id === id && !!value.id &&
+      Array.isArray(value.sans) &&
+      value.sans.every(function (san) {
+        return typeof san === 'string' && san.length > 0;
+      }) &&
+      ((value.reason === 'resignation' &&
+        (value.result === '1-0' || value.result === '0-1')) ||
+       (value.reason === 'draw agreement' && value.result === '1/2-1/2'));
+  }
+
+  // Writes can overlap by design: a revised finish must not wait behind an
+  // older write that is stalled on storage. Track them by exact ending so an
+  // Undo retraction can wait out only the write it supersedes, delete once
+  // before and once after it, and never erase a newer different revision.
+  const activeCommits = new Map();
+  const activeRetractions = new Map();
+  const completedRetractions = new Map();
+  function endingKey(value) {
+    return endingSig(value.id, value.sans, value.result, value.reason);
+  }
+  function trackCommit(rec, promise) {
+    const key = endingKey(rec);
+    let entries = activeCommits.get(key);
+    if (!entries) {
+      entries = new Set();
+      activeCommits.set(key, entries);
+    }
+    const entry = { rec: rec, promise: promise };
+    entries.add(entry);
+    function forget() {
+      entries.delete(entry);
+      if (entries.size === 0 && activeCommits.get(key) === entries) {
+        activeCommits.delete(key);
+      }
+    }
+    promise.then(forget, forget);
+    return promise;
+  }
+  function matchingCommitPromises(expected) {
+    const entries = activeCommits.get(endingKey(expected));
+    if (!entries) return [];
+    return Array.from(entries)
+      .filter(function (entry) { return sameEnding(entry.rec, expected); })
+      .map(function (entry) { return entry.promise; });
+  }
+  function matchingRetraction(expected) {
+    const entry = activeRetractions.get(endingKey(expected));
+    return entry && sameEnding(entry.ending, expected) ? entry : null;
+  }
+  function afterGameRetractions(id, work) {
+    const waits = Array.from(activeRetractions.values())
+      .filter(function (entry) { return entry.ending.id === id; })
+      .map(function (entry) {
+        return entry.promise.then(
+          function () { return null; }, function () { return null; });
+      });
+    return waits.length === 0 ? work() : Promise.all(waits).then(work);
+  }
+  function rememberRetraction(expected) {
+    completedRetractions.set(endingKey(expected), {
+      id: expected.id,
+      sans: expected.sans.slice(),
+      result: expected.result,
+      reason: expected.reason
+    });
+  }
+  function forgetRetraction(expected) {
+    const key = endingKey(expected);
+    const completed = completedRetractions.get(key);
+    if (completed && sameEnding(completed, expected)) {
+      completedRetractions.delete(key);
+    }
+  }
+  function queuedRetraction(expected) {
+    const map = readPending();
+    if (!map) return false;
+    const entry = map[expected.id];
+    return !!(entry && entry.op === 'retract' &&
+      validEnding(entry.ending, expected.id) &&
+      sameEnding(entry.ending, expected));
+  }
+  // Review and the boot snapshot use this while an exact Undo is active,
+  // parked for retry, or has just completed in this document. A later
+  // intentional re-adjudication calls recordPrepared(), which forgets the
+  // completed marker before storing the new outcome.
+  function suppressesEnding(id, sans, result, reason) {
+    const expected = {
+      id: id,
+      sans: Array.isArray(sans) ? sans : [],
+      result: result,
+      reason: reason
+    };
+    if (!validEnding(expected, id)) return false;
+    if (matchingRetraction(expected) || queuedRetraction(expected)) return true;
+    const completed = completedRetractions.get(endingKey(expected));
+    return !!(completed && sameEnding(completed, expected));
+  }
   function fenceChecksum(entries) {
     const s = JSON.stringify([2, entries]);
     let h = 0x811c9dc5;
@@ -232,7 +339,11 @@
   // this fails (storage momentarily blocked), reconcilePending() honours the
   // fence, so a fenced ending is not re-committed when storage recovers.
   function dropPendingQueue() {
-    try { localStorage.removeItem(PENDING_KEY); return true; } catch (e) { return false; }
+    try {
+      localStorage.removeItem(PENDING_KEY);
+      completedRetractions.clear();
+      return true;
+    } catch (e) { return false; }
   }
 
   // Suspend live archive writes while a destructive operation (restore /
@@ -253,6 +364,7 @@
     else if (suspendDepth > 0) suspendDepth--;
   }
   function operationActive() { return suspendDepth > 0; }
+  function retractionActive() { return activeRetractions.size > 0; }
 
   function parkToken() {
     // Unique across reloads too: a stale entry must never token-match a
@@ -288,6 +400,20 @@
     return writePending(map) ? token : null; // quota/blocked → best effort
   }
 
+  // Undo is itself durable work. Replace this game's parked archive copy with
+  // an exact-ending retraction before the live save is reopened. If the tab
+  // dies before IndexedDB cleanup settles, reconcilePending() completes this
+  // tombstone on the next boot instead of resurrecting the withdrawn result.
+  function parkRetraction(ending) {
+    const token = parkToken();
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return null; }
+    const map = raw === null ? {} : readPending();
+    if (!map) return null;
+    map[ending.id] = { w: token, op: 'retract', ending: ending };
+    return writePending(map) ? token : null;
+  }
+
   function clearPendingIf(id, token) {
     let raw;
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
@@ -303,8 +429,45 @@
     return writePending(map);
   }
 
+  // Retraction completion may find that a newer revision has already replaced
+  // its queue slot. That is success: clear only our own token and preserve the
+  // newer recovery source.
+  function settlePendingIfCurrent(id, token) {
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
+    if (raw === null) return true;
+    const map = readPending();
+    if (!map) return false;
+    const cur = map[id];
+    if (!cur || cur.w !== token) return true;
+    delete map[id];
+    return writePending(map);
+  }
+
+  // Best-effort fallback when the retraction tombstone could not initially be
+  // parked (for example, quota was momentarily exhausted). A same-signature
+  // new archive is held behind the active retraction, so removing the exact
+  // old queue entry here cannot eat a newer intentional finish.
+  function clearPendingEnding(expected) {
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
+    if (raw === null) return true;
+    const map = readPending();
+    if (!map) return false;
+    const cur = map[expected.id];
+    if (!cur) return true;
+    const value = cur.op === 'retract' ? cur.ending : cur.rec;
+    if (!sameEnding(value, expected)) return true;
+    delete map[expected.id];
+    return writePending(map);
+  }
+
   function commit(rec, token) {
-    return CoachStore.archiveGame(rec).then(function (storedId) {
+    let write;
+    try { write = Promise.resolve(CoachStore.archiveGame(rec)); }
+    catch (e) { write = Promise.reject(e); }
+    write = trackCommit(rec, write);
+    return write.then(function (storedId) {
       if (token) clearPendingIf(rec.id, token);
       // First durable archive write → one-time persistent-storage request
       // (#82). Best-effort and synchronously guarded: it can neither fail
@@ -312,6 +475,97 @@
       if (window.ChessyStorageHealth) ChessyStorageHealth.noteDurableWrite();
       return storedId;
     });
+  }
+
+  function deleteExactEnding(expected) {
+    if (!CoachStore.retractGameEnding) {
+      return Promise.reject(new Error('archive retraction is unavailable'));
+    }
+    try { return Promise.resolve(CoachStore.retractGameEnding(expected)); }
+    catch (e) { return Promise.reject(e); }
+  }
+
+  function runRetraction(expected, token) {
+    const existing = matchingRetraction(expected);
+    if (existing) return existing.promise;
+
+    // Snapshot all already-started writes for this exact outcome. A first
+    // conditional delete makes Review stop reporting a committed result
+    // promptly; the second runs after those writes settle and catches one that
+    // committed late. Different revisions are protected by the store's exact
+    // comparison.
+    const writes = matchingCommitPromises(expected);
+    const firstDelete = deleteExactEnding(expected).then(
+      function () { return null; }, function () { return null; });
+    const settledWrites = Promise.all(writes.map(function (write) {
+      return write.then(function () { return null; }, function () { return null; });
+    }));
+    const key = endingKey(expected);
+    const entry = { ending: expected, promise: null, retain: false, token: token };
+    const work = Promise.all([firstDelete, settledWrites])
+      .then(function () { return deleteExactEnding(expected); })
+      .then(function () {
+        // If reopening the live save failed, retain the tombstone for one boot
+        // so the stale finished save cannot resurrect this exact outcome.
+        if (!entry.retain) {
+          const cleared = token
+            ? settlePendingIfCurrent(expected.id, token)
+            : clearPendingEnding(expected);
+          if (!cleared) {
+            throw new Error('archive retraction could not clear its recovery entry');
+          }
+        }
+        rememberRetraction(expected);
+        return expected.id;
+      });
+
+    entry.promise = work.then(function (value) {
+      if (activeRetractions.get(key) === entry) activeRetractions.delete(key);
+      return value;
+    }, function (err) {
+      if (activeRetractions.get(key) === entry) activeRetractions.delete(key);
+      throw err;
+    });
+    activeRetractions.set(key, entry);
+    return entry.promise;
+  }
+
+  function retractEnding(id, sans, result, reason) {
+    const expected = {
+      id: id,
+      sans: Array.isArray(sans) ? sans.slice() : sans,
+      result: result,
+      reason: reason
+    };
+    if (!validEnding(expected, id)) {
+      return Promise.reject(new Error('invalid ending retraction'));
+    }
+    const existing = matchingRetraction(expected);
+    if (existing) return existing.promise;
+    return runRetraction(expected, parkRetraction(expected));
+  }
+
+  // App calls this when its synchronous reopened-game save failed. Keep (or
+  // restage) the exact tombstone so the next boot can complete the Undo before
+  // considering a stale finished save.
+  function retainRetraction(id, sans, result, reason) {
+    const expected = {
+      id: id,
+      sans: Array.isArray(sans) ? sans.slice() : sans,
+      result: result,
+      reason: reason
+    };
+    if (!validEnding(expected, id)) return false;
+    const active = matchingRetraction(expected);
+    if (active) {
+      if (!active.token) {
+        active.token = parkRetraction(expected);
+        if (!active.token) return false;
+      }
+      active.retain = true;
+      return true;
+    }
+    return !!parkRetraction(expected);
   }
 
   // Capture the exact pending entry an incomplete checkpoint supersedes.
@@ -374,17 +628,14 @@
   // opts: { endedAt, startedRelease } — persisted completion time and the
   // release that began the game, so a boot-time reconcile keeps chronology
   // and attribution instead of stamping either with the restart.
-  function record(state, settings, status, gameId, opts) {
-    if (!gameId || !status.over) {
-      return Promise.resolve(null);
-    }
-    const rec = makeRecord(state, settings, status, gameId, opts);
+  function recordPrepared(rec) {
+    forgetRetraction(rec);
     // Fenced ending: a specific finish cleared/replaced by Delete-all or
     // Restore must not be (re)archived — covers the boot re-archive of the
     // saved finished game and a reopened game-over. A REVISED ending of the
     // same instance (Undo → different finish) has a different signature and is
     // NOT fenced, so it archives normally.
-    const fence = fenceMatch(gameId, rec.sans, rec.result, rec.reason);
+    const fence = fenceMatch(rec.id, rec.sans, rec.result, rec.reason);
     if (fence === true) {
       return Promise.resolve(null);
     }
@@ -393,7 +644,7 @@
     if (fence === null) {
       park(rec);
       const err = new Error('archive-clear fence is unavailable');
-      err.failedGameIds = [gameId];
+      err.failedGameIds = [rec.id];
       return Promise.reject(err);
     }
     // A destructive replace is in progress: PARK the record but do NOT commit
@@ -409,6 +660,21 @@
     return commit(rec, park(rec));
   }
 
+  function record(state, settings, status, gameId, opts) {
+    if (!gameId || !status.over) {
+      return Promise.resolve(null);
+    }
+    const rec = makeRecord(state, settings, status, gameId, opts);
+    // Any finish reached while the prior manual outcome is still retracting
+    // waits behind it. Otherwise a stalled old write could land after a newer
+    // revision, and the retraction's final exact delete would remove that old
+    // row while leaving no copy of the newer result. The live save remains the
+    // durable source during this short wait.
+    return afterGameRetractions(rec.id, function () {
+      return recordPrepared(rec);
+    });
+  }
+
   // Preserve a non-empty game that New Game is about to replace. This is an
   // archive checkpoint, not a chess result: PGN stays "*" and Review labels
   // it Incomplete/Abandoned rather than scoring a resignation or loss.
@@ -420,13 +686,8 @@
   // for the same UUID: the live save is the recovery copy until IndexedDB
   // succeeds, and pre-clearing avoids a half-success where the new row exists
   // but the stale queue still wins Backup or the next boot.
-  function recordAbandoned(state, settings, status, gameId, opts) {
-    if (!gameId || !status || status.over || !state ||
-        !Array.isArray(state.history) || state.history.length === 0) {
-      return Promise.resolve(null);
-    }
-    const abandoned = { result: '*', reason: 'abandoned' };
-    const rec = makeRecord(state, settings, abandoned, gameId, opts);
+  function recordAbandonedPrepared(rec) {
+    const gameId = rec.id;
     const fence = fenceMatch(gameId, rec.sans, rec.result, rec.reason);
     if (fence === true) return Promise.resolve(null);
     if (fence === null) {
@@ -443,6 +704,18 @@
       return Promise.reject(new Error('archive recovery queue could not be superseded'));
     }
     return commit(rec, null);
+  }
+
+  function recordAbandoned(state, settings, status, gameId, opts) {
+    if (!gameId || !status || status.over || !state ||
+        !Array.isArray(state.history) || state.history.length === 0) {
+      return Promise.resolve(null);
+    }
+    const abandoned = { result: '*', reason: 'abandoned' };
+    const rec = makeRecord(state, settings, abandoned, gameId, opts);
+    return afterGameRetractions(gameId, function () {
+      return recordAbandonedPrepared(rec);
+    });
   }
 
   // Boot recovery for parked records whose commits never settled. Every
@@ -463,22 +736,47 @@
       try { localStorage.removeItem(PENDING_KEY); } catch (e) { /* gone */ }
       return Promise.resolve(null);
     }
-    // UNKNOWN may represent a damaged signature for one of these exact
-    // records. Leave the queue untouched and surface the block; treating every
-    // entry as fenced would destroy unrelated recoverable games.
-    if (!readFenced().known) {
-      const err = new Error('archive-clear fence is unavailable');
-      err.failedGameIds = Object.keys(map);
-      return Promise.reject(err);
-    }
+    // UNKNOWN may represent a damaged signature for an archived record. Such
+    // records stay parked and fail closed, but retraction tombstones are safe
+    // to execute independently and must still be able to remove an outcome the
+    // user withdrew.
+    const fenceState = readFenced();
     const drains = [];
     let dirty = false;
     for (const id of Object.keys(map)) {
       const entry = map[id];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+          typeof entry.w !== 'string' || !entry.w) {
+        delete map[id];
+        dirty = true;
+        continue;
+      }
+      if (entry.op === 'retract') {
+        if (!validEnding(entry.ending, id) ||
+            Object.keys(entry).sort().join(',') !== 'ending,op,w') {
+          delete map[id];
+          dirty = true;
+          continue;
+        }
+        drains.push(runRetraction(entry.ending, entry.w).then(
+          function (v) { return { ok: true, v: v }; },
+          function (e) { return { ok: false, e: e, id: id }; }));
+        continue;
+      }
+      if (entry.op !== undefined) {
+        delete map[id];
+        dirty = true;
+        continue;
+      }
       const rec = entry && entry.rec;
       if (!rec || typeof rec.id !== 'string' || rec.id !== id || !Array.isArray(rec.sans)) {
         delete map[id]; // malformed entry — drop it
         dirty = true;
+        continue;
+      }
+      if (!fenceState.known) {
+        const unavailable = new Error('archive-clear fence is unavailable');
+        drains.push(Promise.resolve({ ok: false, e: unavailable, id: id }));
         continue;
       }
       // A restore/Delete-all fenced this ending but couldn't drop the queue
@@ -494,8 +792,9 @@
         function (v) { return { ok: true, v: v }; },
         function (e) { return { ok: false, e: e, id: id }; }));
     }
-    // Synchronous with respect to the commits above: their token-matched
-    // clears run strictly later, so this write cannot resurrect one.
+    // Synchronous with respect to the commits/retractions above: their
+    // token-matched clears run strictly later, so this write cannot resurrect
+    // one.
     // (An empty or invalid-only map is removed outright.)
     if (drains.length === 0) { writePending(map); return Promise.resolve(null); }
     if (dirty) writePending(map);
@@ -525,9 +824,12 @@
   }
 
   window.ChessyArchive = { record: record, recordAbandoned: recordAbandoned,
+    retractEnding: retractEnding, retainRetraction: retainRetraction,
+    suppressesEnding: suppressesEnding,
     reconcilePending: reconcilePending,
     isFencedEnding: isFencedEnding, fenceEnding: fenceEnding, fenceEndings: fenceEndings,
     stageFenceEndings: stageFenceEndings, fenceKnown: fenceKnown, resetFence: resetFence,
     dropPendingQueue: dropPendingQueue, setSuspended: setSuspended,
-    operationActive: operationActive, pendingRecords: pendingRecords };
+    operationActive: operationActive, retractionActive: retractionActive,
+    pendingRecords: pendingRecords };
 })();

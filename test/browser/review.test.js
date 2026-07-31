@@ -23,6 +23,71 @@ require('./helper').run('review', async function (t) {
     'Review game opens the archived record in the coaching review');
   check(await page.evaluate(function () { return document.activeElement.id; }) === 'reviewBack',
     'the asynchronous handoff moves focus into the review flow');
+  const openingLedger = await page.evaluate(function () {
+    return {
+      count: document.querySelectorAll('#reviewMoveList .review-ply:not(.empty)').length,
+      text: document.getElementById('reviewMoveList').textContent,
+      note: document.getElementById('reviewHistoryNote').textContent,
+      labels: Array.from(document.querySelectorAll('#reviewMoveList .review-ply:not(.empty)'))
+        .map(function (button) { return button.getAttribute('aria-label'); }),
+      scores: document.querySelectorAll('#reviewMoveList .review-eval').length,
+      marks: document.querySelectorAll('#reviewMoveList .review-nag').length
+    };
+  });
+  check(openingLedger.count === 4 &&
+        /f3/.test(openingLedger.text) && /e5/.test(openingLedger.text) &&
+        /g4/.test(openingLedger.text) && /Qh4#/.test(openingLedger.text),
+    'Review always renders the complete SAN move history');
+  check(/reflect/i.test(openingLedger.note) &&
+        openingLedger.scores === 0 && openingLedger.marks === 0 &&
+        openingLedger.labels.every(function (label) {
+          return !/score|annotation|plus|minus|mate in/i.test(label);
+        }),
+    'the initial ledger explains and enforces the spoiler-free score gate');
+  await page.setViewportSize({ width: 360, height: 740 });
+  const phoneLayout = await page.evaluate(function () {
+    const doc = document.documentElement;
+    return {
+      overflow: doc.scrollWidth - doc.clientWidth,
+      scanTop: document.getElementById('scanStart').getBoundingClientRect().top,
+      historyTop: document.querySelector('.review-history')
+        .getBoundingClientRect().top
+    };
+  });
+  check(phoneLayout.overflow <= 1 && phoneLayout.scanTop < phoneLayout.historyTop,
+    'phone Review keeps scan actions before the compact history with no horizontal overflow');
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.locator('#reviewMoveList .review-ply:not(.empty)').nth(1).click();
+  check((await page.textContent('#reviewStatus')).includes('Position 1/4') &&
+        await page.locator('#reviewMoveList .review-ply.current').count() === 1 &&
+        (await page.textContent('#reviewMoveList .review-ply.current')).includes('e5') &&
+        await page.evaluate(function () {
+          return document.activeElement &&
+            document.activeElement.dataset.ply === '1';
+        }),
+    'choosing a SAN entry opens the position before that move and preserves focus');
+  const ledgerContinuity = await page.evaluate(function () {
+    const list = document.getElementById('reviewMoveList');
+    list.style.maxHeight = '44px';
+    list.scrollTop = list.scrollHeight;
+    const before = list.scrollTop;
+    const last = list.querySelector('.review-ply[data-ply="3"]');
+    last.focus();
+    last.click();
+    const result = {
+      hadScroll: before > 0,
+      keptScroll: list.scrollTop > 0 &&
+        Math.abs(list.scrollTop - before) <= 8,
+      keptFocus: document.activeElement &&
+        document.activeElement.dataset.ply === '3'
+    };
+    list.style.maxHeight = '';
+    return result;
+  });
+  check(ledgerContinuity.hadScroll && ledgerContinuity.keptScroll &&
+        ledgerContinuity.keptFocus,
+    'ledger navigation preserves keyboard focus and a long list’s scroll position');
+  await page.click('#revStart');
 
   // Save the SELECTED archived game, not a closure over Play's live state.
   // The ordinary action stays clean; the explicit log action adds bounded
@@ -315,6 +380,32 @@ require('./helper').run('review', async function (t) {
         (await page.textContent('#reviewStatus')).includes('Black to move') &&
         (await page.textContent('#reviewStatus')).includes('played here: Ke7'),
     'a SetUp/FEN import replays from its custom initial position in Review');
+  const setupLedger = await page.evaluate(function () {
+    return {
+      text: document.getElementById('reviewMoveList').textContent,
+      count: document.querySelectorAll('#reviewMoveList .review-ply:not(.empty)').length,
+      marks: document.querySelectorAll('#reviewMoveList .review-nag').length,
+      scores: document.querySelectorAll('#reviewMoveList .review-eval').length,
+      labels: Array.from(document.querySelectorAll('#reviewMoveList .review-ply:not(.empty)'))
+        .map(function (button) { return button.getAttribute('aria-label'); })
+    };
+  });
+  check(setupLedger.count === 2 && /17…/.test(setupLedger.text) &&
+        /Ke7/.test(setupLedger.text) && /18\./.test(setupLedger.text) &&
+        /e4/.test(setupLedger.text),
+    'custom-FEN history uses its archived move number and Black-to-move start');
+  check(setupLedger.marks === 0 && setupLedger.scores === 0 &&
+        setupLedger.labels.every(function (label) {
+          return !/imported(?: PGN)? annotation|score|plus|minus/i.test(label);
+        }),
+    'imported PGN NAGs also remain hidden before reflection');
+  await page.locator('#reviewMoveList .review-ply:not(.empty)').nth(1).click();
+  check((await page.textContent('#reviewStatus')).includes('Position 1/2') &&
+        (await page.getAttribute(
+          '#reviewMoveList .review-ply.current', 'aria-label'))
+          .includes('Move 18, White, e4'),
+    'custom-FEN SAN entries navigate by replayed ply rather than parity');
+  await page.click('#revStart');
   const [setupDownload] = await Promise.all([
     page.waitForEvent('download'),
     page.click('#reviewExportPgn')

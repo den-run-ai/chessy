@@ -317,6 +317,104 @@ async function main() {
       'concurrent admission leaves no live prefix lock');
     equal(exportedNetworkTempNames(), networkTempsBefore,
       'concurrent admission leaves no exported network directory');
+
+    const attackExecutable = path.join(
+      temporary, 'replace-after-verification-stockfish'
+    );
+    const authenticatedExecutableBody =
+      fakeEngineSource(bigBody, smallBody);
+    fs.writeFileSync(
+      attackExecutable, authenticatedExecutableBody, { mode: 0o755 }
+    );
+    const attackContracts = fixtureContracts(
+      Label.loadFrozenContracts(),
+      archiveBody,
+      attackExecutable,
+      bigBody,
+      smallBody
+    );
+    let observedExecutablePath = null;
+    let observedExecutableBody = null;
+    class ReplacingEngine {
+      constructor(filename, transcript, watchdog, workingDirectory) {
+        observedExecutablePath = filename;
+        const replacement = attackExecutable + '.replacement';
+        fs.writeFileSync(
+          replacement,
+          authenticatedExecutableBody.replace(
+            'Hermetic Stockfish 18 fixture',
+            'replacement attacker'
+          ),
+          { mode: 0o755 }
+        );
+        fs.renameSync(replacement, attackExecutable);
+        observedExecutableBody = fs.readFileSync(filename, 'utf8');
+        this.transcript = transcript;
+        this.workingDirectory = workingDirectory;
+      }
+
+      async initialize() {
+        this.transcript.append('< id name authenticated smoke executable');
+      }
+
+      async exportNetworks() {
+        fs.writeFileSync(
+          path.join(this.workingDirectory, 'big.nnue'), bigBody
+        );
+        fs.writeFileSync(
+          path.join(this.workingDirectory, 'small.nnue'), smallBody
+        );
+        return ['big.nnue', 'small.nnue'];
+      }
+
+      async label() {
+        return {
+          info: {
+            depth: 16,
+            seldepth: 22,
+            cpSideToMove: 23,
+            wdlSideToMove: [310, 620, 70],
+            nodes: 100000,
+            pvUci: ['e2e4', 'e7e5']
+          },
+          terminalInfo: { nodes: 100000 },
+          bestMove: 'e2e4'
+        };
+      }
+
+      async quit() {}
+      async abort() {}
+    }
+    const attackOutput = path.join(
+      temporary, 'replace-after-verification', 'sf18-100kn'
+    );
+    const attackProvenance = await Smoke.runSmoke({
+      archive,
+      stockfish: attackExecutable,
+      output: attackOutput
+    }, {
+      contracts: attackContracts,
+      Engine: ReplacingEngine
+    });
+    equal(attackProvenance.state, 'passed',
+      'the authenticated executable snapshot completes the smoke');
+    ok(observedExecutablePath !== attackExecutable,
+      'smoke passes the engine a private verified executable path');
+    equal(
+      observedExecutableBody,
+      authenticatedExecutableBody,
+      'atomic pathname replacement cannot change the executable bytes'
+    );
+    ok(
+      fs.readFileSync(attackExecutable, 'utf8')
+        .includes('replacement attacker'),
+      'the adversarial test confirms the public pathname was replaced'
+    );
+    equal(
+      fs.existsSync(path.dirname(observedExecutablePath)),
+      false,
+      'smoke narrowly cleans its private executable snapshot'
+    );
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }

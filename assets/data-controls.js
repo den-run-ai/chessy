@@ -24,10 +24,10 @@
   // save) as an archive record, or null if there is no valid finished save.
   // Mirrors what app.js would archive: replay the saved moves (rejecting a
   // corrupt save rather than fabricating a record), derive result/reason —
-  // honouring a saved time forfeit, which the rules engine knows nothing about
-  // — and carry the game's id and completion time so a later restore keeps its
-  // chronology. Only a FINISHED game is returned (an in-progress save is not
-  // archived until it ends).
+  // honouring saved clock and player-agreed endings, which the rules engine
+  // knows nothing about — and carry the game's id and completion time so a
+  // later restore keeps its chronology. Only a FINISHED game is returned (an
+  // in-progress save is not archived until it ends).
   const GAME_SAVE_KEY = 'chessy-game-v1';
   const PENDING_KEY = 'chessy-pending-archive-v1';
   const LEGACY_FENCE_KEY = 'chessy-archive-fenced-v1';
@@ -37,6 +37,22 @@
     return typeof value === 'string' && value.length <= 32 &&
       value.trim() === value && /^r\d+$/.test(value)
       ? value : null;
+  }
+  function manualEndingStatus(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const keys = Object.keys(value).sort().join(',');
+    if (value.kind === 'resignation' && keys === 'color,kind' &&
+        (value.color === 'w' || value.color === 'b')) {
+      return {
+        over: true,
+        result: value.color === 'w' ? '0-1' : '1-0',
+        reason: 'resignation'
+      };
+    }
+    if (value.kind === 'draw-agreement' && keys === 'kind') {
+      return { over: true, result: '1/2-1/2', reason: 'draw agreement' };
+    }
+    return null;
   }
   // A destructive operation (restore / Delete-all) holds this mutex while it
   // runs, so the two can never overlap: a second confirm is refused rather than
@@ -73,13 +89,31 @@
         ? ChessyAiTelemetry.sanitizeTelemetry(entry.ai) : null);
       s = Chess.playMove(s, m);
     }
+    // Match Play's load-time trust boundary before deriving any outcome. A
+    // legal move list paired with another board is not one coherent save and
+    // must not fabricate a Backup row from its adjudication metadata.
+    if (typeof data.fen !== 'string' || Chess.toFen(s) !== data.fen) {
+      return null;
+    }
+    const hasManualEnding = data.manualEnding !== undefined &&
+      data.manualEnding !== null;
+    const boardStatus = Chess.gameStatus(s);
+    const manualStatus = manualEndingStatus(data.manualEnding);
+    const hasTimeForfeit = data.timeForfeit &&
+      (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b');
+    // A malformed or contradictory adjudication is not a recoverable result:
+    // exclude it instead of fabricating a decisive backup row.
+    if ((hasManualEnding && !manualStatus) ||
+        (manualStatus && (hasTimeForfeit || boardStatus.over))) return null;
     let status;
-    if (data.timeForfeit && (data.timeForfeit.color === 'w' || data.timeForfeit.color === 'b')) {
+    if (manualStatus) {
+      status = manualStatus;
+    } else if (hasTimeForfeit) {
       status = { over: true,
         result: data.timeForfeit.draw ? '1/2-1/2' : (data.timeForfeit.color === 'w' ? '0-1' : '1-0'),
         reason: data.timeForfeit.draw ? 'time forfeit (no mating material)' : 'time forfeit' };
     } else {
-      status = Chess.gameStatus(s);
+      status = boardStatus;
     }
     if (!status.over) return null; // in-progress — not archived until it finishes
     return {
@@ -149,12 +183,13 @@
 
   // Read the durability queue without archive.js. A partial offline release
   // can leave this transport module available while ChessyArchive is absent;
-  // backup must still include the only copy of a finished game.
-  function rawPendingRecords() {
+  // backup must still include the only copy of a finished game AND honour a
+  // durable retraction parked when a manual adjudication was undone.
+  function rawPendingSources() {
     let raw;
     try { raw = localStorage.getItem(PENDING_KEY); }
     catch (e) { throw new Error('could not read the pending-game recovery queue'); }
-    if (raw == null) return [];
+    if (raw == null) return { records: [], retractions: [] };
     let map;
     try {
       map = JSON.parse(raw);
@@ -164,9 +199,30 @@
     if (!map || typeof map !== 'object' || Array.isArray(map)) {
       throw new Error('the pending-game recovery queue is malformed');
     }
-    const out = [];
+    const out = { records: [], retractions: [] };
     Object.keys(map).forEach(function (id) {
       const entry = map[id];
+      if (entry && entry.op === 'retract') {
+        const ending = entry.ending;
+        if (typeof entry !== 'object' || Array.isArray(entry) ||
+            Object.keys(entry).sort().join(',') !== 'ending,op,w' ||
+            typeof entry.w !== 'string' || !entry.w ||
+            !ending || typeof ending !== 'object' || Array.isArray(ending) ||
+            Object.keys(ending).sort().join(',') !== 'id,reason,result,sans' ||
+            typeof ending.id !== 'string' || !ending.id || ending.id !== id ||
+            !Array.isArray(ending.sans) ||
+            !ending.sans.every(function (san) {
+              return typeof san === 'string' && san.length > 0;
+            }) ||
+            !((ending.reason === 'resignation' &&
+               (ending.result === '1-0' || ending.result === '0-1')) ||
+              (ending.reason === 'draw agreement' &&
+               ending.result === '1/2-1/2'))) {
+          throw new Error('the pending-game recovery queue is malformed');
+        }
+        out.retractions.push(ending);
+        return;
+      }
       const rec = entry && entry.rec;
       // This queue can hold the only durable copy of a finished game. Treat
       // any damaged entry as unknown queue state instead of filtering it out
@@ -174,6 +230,7 @@
       // wrapper written by archive.js, its keyed identity, and the same fields
       // restore requires for a usable game row.
       if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+          entry.op !== undefined ||
           typeof entry.w !== 'string' || !entry.w ||
           !rec || typeof rec !== 'object' || Array.isArray(rec) ||
           typeof rec.id !== 'string' || !rec.id || rec.id !== id ||
@@ -188,7 +245,7 @@
           CoachStore.validateGameRecord(rec) !== null) {
         throw new Error('the pending-game recovery queue is malformed');
       }
-      out.push(rec);
+      out.records.push(rec);
     });
     return out;
   }
@@ -316,6 +373,14 @@
       if (cur) pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
       byId[rec.id] = rec; // new id, or a revision that supersedes the committed row
     }
+    function retract(ending) {
+      const cur = ending && byId[ending.id];
+      if (!cur || !sameEnding(cur, ending)) return;
+      delete byId[ending.id];
+      for (let i = cards.length - 1; i >= 0; i--) {
+        if (cards[i] && cards[i].gameId === ending.id) cards.splice(i, 1);
+      }
+    }
     // Local save first, pending queue last: a still-parked write is the most
     // recent authoritative intent, so it wins over the live save on a genuine
     // difference.
@@ -325,7 +390,9 @@
     // pendingRecords() intentionally turns an unreadable queue into [], which
     // is fine for best-effort boot recovery but unsafe for an advertised
     // backup. Unknown must fail the backup, not be mistaken for empty.
-    rawPendingRecords().forEach(apply);
+    const pending = rawPendingSources();
+    pending.records.forEach(apply);
+    pending.retractions.forEach(retract);
     data.stores.games = Object.keys(byId).map(function (id) { return byId[id]; });
   }
 
@@ -432,7 +499,7 @@
         // Use the strict transport reader, not archive.js's best-effort boot
         // view: a damaged/blocked queue cannot be mistaken for empty while a
         // destructive operation is deciding whether it is safe to retire v1.
-        const pending = rawPendingRecords();
+        const pending = rawPendingSources().records;
         if (pending.length === 0) {
           pendingSafe = true;
         } else if (fenceWasKnown && ChessyArchive.fenceEndings) {
@@ -622,6 +689,12 @@
         setStatus('Another data operation is already in progress. Try again once it finishes.', 'error');
         return;
       }
+      if (typeof ChessyArchive !== 'undefined' &&
+          typeof ChessyArchive.retractionActive === 'function' &&
+          ChessyArchive.retractionActive()) {
+        setStatus('Undo is still updating the archive. Try Restore again once it finishes.', 'error');
+        return;
+      }
       opInFlight = true;
       setStatus('Restoring…', 'info');
       cancelAnalysis(); // stop an in-flight analysis before replacing its inputs
@@ -684,6 +757,12 @@
       // Mutex: never let a Delete-all overlap another Delete-all or a restore.
       if (opInFlight) {
         setStatus('Another data operation is already in progress. Try again once it finishes.', 'error');
+        return;
+      }
+      if (typeof ChessyArchive !== 'undefined' &&
+          typeof ChessyArchive.retractionActive === 'function' &&
+          ChessyArchive.retractionActive()) {
+        setStatus('Undo is still updating the archive. Try Delete all again once it finishes.', 'error');
         return;
       }
       opInFlight = true;

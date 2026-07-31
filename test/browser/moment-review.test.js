@@ -13,6 +13,12 @@ require('./helper').run('moment-review', async function (t) {
       source: 'import',
       tags: {},
       sans: ['f3', 'e5', 'g4', 'Qh4#'],
+      moves: [
+        { san: 'f3', nags: ['$6'] },
+        { san: 'e5', nags: ['$1'] },
+        { san: 'g4', nags: ['$2'] },
+        { san: 'Qh4#', nags: ['$4'] }
+      ],
       playerColor: null,
       clocks: [null, null, null, null],
       result: '0-1',
@@ -37,15 +43,72 @@ require('./helper').run('moment-review', async function (t) {
       pause: ChessyMomentScan.pause
     };
     window.__scanPauseCalls = 0;
-    ChessyAnalysisService.analyse = function () {
-      return Promise.resolve({ complete: true, internalScore: 999 });
+    ChessyAnalysisService.analyse = function (req) {
+      const state = Chess.parseFen(req.fen);
+      const legal = Chess.legalMoves(state);
+      const played = req.opts.playedMove;
+      const different = legal.find(function (move) {
+        return move.from !== played.from || move.to !== played.to ||
+          (move.promotion || null) !== (played.promotion || null);
+      }) || played;
+      const loss = req.ply === 0 ? 450 : 150;
+      const whiteScore = function (moverScore) {
+        return state.turn === 'w' ? moverScore : -moverScore;
+      };
+      const uci = function (move) {
+        return Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
+      };
+      const line = function (move, moverScore, rank, amongCandidates) {
+        const san = Chess.toSan(state, move, legal);
+        return {
+          move: move,
+          uci: uci(move),
+          san: san,
+          scoreCpWhite: whiteScore(moverScore),
+          scoreCpPlayer: moverScore,
+          mate: null,
+          pv: [san],
+          rank: rank,
+          amongCandidates: amongCandidates
+        };
+      };
+      const identity = ChessyAnalysisCore.identity(state,
+        Object.assign({}, req.opts, { positions: req.positions }));
+      return Promise.resolve({
+        complete: true,
+        turn: state.turn,
+        depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+        nodes: 100,
+        elapsedMs: 1,
+        engine: {
+          id: identity.engineId,
+          version: identity.version,
+          configHash: identity.configHash
+        },
+        positionFingerprint: identity.positionFingerprint,
+        bestLines: [line(different, 100, 1, true)],
+        playedLine: line(played, 100 - loss, 2, false),
+        classification: 'different',
+        internalScore: 999,
+        stability: req.opts.nodeLimit === 80000
+          ? { depths: [3, 4], bestMoveStable: true } : null
+      });
     };
     window.__fastScanAnalyse = ChessyAnalysisService.analyse;
-    ChessyAnalysisResult.validate = function () { return { ok: true }; };
+    ChessyAnalysisResult.validate = function (result) {
+      return {
+        ok: true,
+        topMove: result.bestLines && result.bestLines[0] &&
+          result.bestLines[0].move,
+        playedMove: result.playedLine && result.playedLine.move
+      };
+    };
     ChessyMomentSelector.quickCandidate = function (result, meta) {
       return {
         ply: meta.ply,
         playedSan: meta.playedSan,
+        turn: meta.turn,
         internalScore: 999,
         category: 'collapse',
         bestSan: 'e4'
@@ -108,6 +171,12 @@ require('./helper').run('moment-review', async function (t) {
       labels: Array.from(document.querySelectorAll('#scanMomentList .scan-moment'))
         .map(function (b) { return b.textContent; }),
       panel: document.getElementById('momentScan').textContent,
+      history: document.getElementById('reviewMoveList').textContent,
+      historyCount: document.querySelectorAll(
+        '#reviewMoveList .review-ply:not(.empty)').length,
+      historyScores: document.querySelectorAll('#reviewMoveList .review-eval').length,
+      historyMarks: document.querySelectorAll('#reviewMoveList .review-nag').length,
+      publicReport: ChessyMomentScan.state().report,
       progressSeen: window.__scanProgressSeen,
       cards: (await CoachStore.listCards()).length
     };
@@ -115,7 +184,7 @@ require('./helper').run('moment-review', async function (t) {
   check(completed.jobColor === 'w' && completed.state === 'done',
     'Start scans only the explicitly chosen side and checkpoints completion');
   check(completed.progressSeen.some(function (s) {
-    return s.indexOf('Checking decisions') !== -1;
+    return s.indexOf('Checking moves') !== -1;
   }) && completed.progressSeen.some(function (s) {
     return s.indexOf('Confirming suggestions') !== -1;
   }), 'the live status reports both scan passes as they progress');
@@ -124,6 +193,12 @@ require('./helper').run('moment-review', async function (t) {
     'Review shows at most two suggestions using move number and played SAN only');
   check(!/999|collapse|best move|better move|e4/i.test(completed.panel),
     'the Review scan surface leaks no scores, categories, or alternative moves');
+  check(completed.historyCount === 4 &&
+        /f3/.test(completed.history) && /e5/.test(completed.history) &&
+        /g4/.test(completed.history) && /Qh4#/.test(completed.history) &&
+        completed.historyScores === 0 && completed.historyMarks === 0 &&
+        completed.publicReport === undefined,
+    'the SAN ledger is complete while score and source/generated NAGs remain gated');
   check(completed.cards === 0,
     'a completed scan creates no lesson cards');
 
@@ -227,6 +302,93 @@ require('./helper').run('moment-review', async function (t) {
     'suggestion reflection is fresh and blank, with focus on the first prompt');
   check(opened.pauses >= 3 && opened.scanDisabled && opened.cards === 0,
     'suggestion reflection pauses ownership, locks scan controls, and creates no card');
+
+  // A VALID structured submit—not merely opening the form—crosses Gate 0.
+  // It reveals this row only; imported PGN and Chessy-generated punctuation
+  // remain visibly distinct.
+  await page.selectOption('#reflectThreatKind', 'none');
+  await page.selectOption('#reflectCandidatesKind', 'none');
+  await page.selectOption('#reflectLineKind', 'none');
+  await page.selectOption('#reflectEval', 'worse');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#reviewMoveList .review-eval').length === 1;
+  });
+  const firstScore = await page.evaluate(function () {
+    const state = ChessyMomentScan.state();
+    return {
+      unlocked: state.reportUnlocked,
+      report: state.report,
+      scores: Array.from(document.querySelectorAll('#reviewMoveList .review-eval'))
+        .map(function (node) { return node.textContent; }),
+      sourceMarks: Array.from(document.querySelectorAll(
+        '#reviewMoveList .review-nag.source'))
+        .map(function (node) { return node.textContent; }),
+      chessyMarks: Array.from(document.querySelectorAll(
+        '#reviewMoveList .review-nag.chessy'))
+        .map(function (node) { return node.textContent; }),
+      note: document.getElementById('reviewHistoryNote').textContent,
+      cards: 0
+    };
+  });
+  check(firstScore.unlocked === false && firstScore.report.length === 1 &&
+        firstScore.report[0].ply === 0 &&
+        firstScore.scores.join('|') === '-3.5' &&
+        firstScore.sourceMarks.join('|') === 'PGN ?!' &&
+        firstScore.chessyMarks.join('|') === 'Chessy ??' &&
+        /remaining suggested moment/.test(firstScore.note),
+    'one submitted reflection reveals one score with distinct PGN and Chessy marks');
+
+  // Reflect on the second suggestion to unlock all scanned scores and every
+  // source annotation. Opponent moves receive quick estimates, but no
+  // Chessy-generated NAG because nominations were explicitly White-only.
+  await page.evaluate(function () { CoachReview.goToPly(2); });
+  await page.locator('#scanMomentList .scan-moment').nth(1).click();
+  await page.selectOption('#reflectThreatKind', 'none');
+  await page.selectOption('#reflectCandidatesKind', 'none');
+  await page.selectOption('#reflectLineKind', 'none');
+  await page.selectOption('#reflectEval', 'worse');
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return document.querySelectorAll('#reviewMoveList .review-eval').length === 4;
+  });
+  const fullScore = await page.evaluate(async function () {
+    const state = ChessyMomentScan.state();
+    return {
+      unlocked: state.reportUnlocked,
+      completed: state.reflectionCompleted,
+      required: state.reflectionRequired,
+      report: state.report,
+      historyCount: document.querySelectorAll(
+        '#reviewMoveList .review-ply:not(.empty)').length,
+      scores: Array.from(document.querySelectorAll('#reviewMoveList .review-eval'))
+        .map(function (node) { return node.textContent; }),
+      sourceMarks: Array.from(document.querySelectorAll(
+        '#reviewMoveList .review-nag.source'))
+        .map(function (node) { return node.textContent; }),
+      chessyMarks: Array.from(document.querySelectorAll(
+        '#reviewMoveList .review-nag.chessy'))
+        .map(function (node) { return node.textContent; }),
+      note: document.getElementById('reviewHistoryNote').textContent,
+      cards: (await CoachStore.listCards()).length
+    };
+  });
+  check(fullScore.unlocked === true &&
+        fullScore.completed === fullScore.required &&
+        fullScore.report.length === 4 && fullScore.historyCount === 4 &&
+        fullScore.scores.join('|') === '-3.5|≈ +0.5|-0.5|≈ +0.5' &&
+        fullScore.sourceMarks.join('|') === 'PGN ?!|PGN !|PGN ?|PGN ??' &&
+        fullScore.chessyMarks.join('|') === 'Chessy ??|Chessy ?!' &&
+        /White’s perspective/.test(fullScore.note) && fullScore.cards === 0,
+    'all required reflections unlock every White-POV score without inventing opponent NAGs');
+  await page.setViewportSize({ width: 360, height: 740 });
+  const unlockedOverflow = await page.evaluate(function () {
+    const doc = document.documentElement;
+    return doc.scrollWidth - doc.clientWidth;
+  });
+  check(unlockedOverflow <= 1,
+    'scores plus PGN/Chessy badges do not overflow a narrow phone viewport');
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   const guarded = await page.evaluate(function () {
     const before = CoachReview.current().ply;
@@ -342,11 +504,13 @@ require('./helper').run('moment-review', async function (t) {
     return CoachReview.openArchivedGame('phase5-custom-label');
   });
   await page.waitForFunction(function () {
-    return !document.getElementById('scanResume').hidden;
+    const start = document.getElementById('scanStart');
+    return !start.hidden && !start.disabled && start.textContent === 'Start scan';
   });
   check(await page.locator('#scanMomentList .scan-moment').count() === 0 &&
-        await page.locator('#scanSuggestions').isHidden(),
-    'a same-id source revision cannot repaint the previous game’s suggestions');
+        await page.locator('#scanSuggestions').isHidden() &&
+        await page.locator('#scanResume').isHidden(),
+    'a same-id source revision cannot repaint or resume the previous game’s work');
 
   // A live timed game owns the CPU and clock-sensitive foreground. Review may
   // stay open, but every scan action and side choice must be disabled. Start a

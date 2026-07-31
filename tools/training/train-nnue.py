@@ -22,6 +22,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from _artifact_publication import (
+    acquire_output_prefix_lock,
+    publish_pair_no_replace,
+    refuse_existing_pair,
+    release_output_prefix_lock,
+    self_test_pair_publication,
+)
+
 
 PIECES = ("P", "N", "B", "R", "Q", "K")
 CORPUS_ROLES = (
@@ -2104,6 +2112,16 @@ def self_test() -> None:
             "test-role refusal",
         )
 
+    with tempfile.TemporaryDirectory(
+        prefix="chessy-nnue-publication-self-test-"
+    ) as temporary:
+        checks += self_test_pair_publication(
+            Path(temporary),
+            "checkpoint.pt",
+            ".model-card.json",
+            "NNUE checkpoint/model-card pair",
+        )
+
     print(f"{checks} PyTorch-free NNUE trainer self-test checks passed")
 
 
@@ -2148,6 +2166,7 @@ def train(args: argparse.Namespace) -> None:
     card_path = output.with_suffix(output.suffix + ".model-card.json")
     if output.exists() or card_path.exists():
         raise SystemExit("refusing to overwrite checkpoint or model card")
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
@@ -2247,36 +2266,61 @@ def train(args: argparse.Namespace) -> None:
         "seed": args.seed,
         "inputStateDict": model.state_dict(),
     }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(output.name + f".tmp-{os.getpid()}")
-    torch.save(checkpoint, temporary)
-    temporary.replace(output)
-
-    model_card = {
-        "schemaVersion": 1,
-        "status": "research-only-no-runtime-path",
-        "architecture": args.architecture,
-        "seed": args.seed,
-        "history": history,
-        "checkpoint": {
-            "path": output.name,
-            "sha256": sha256_file(output),
-        },
-        "inputs": report,
-        "contracts": {
-            "architectureSha256": sha256_file(architecture_path),
-            "trainingConfigSha256": sha256_file(config_path),
-            "teacherManifestSha256": contracts.teacher_sha256,
-            "heldoutManifestSha256": contracts.heldout_sha256,
-            "corpusContractSha256": contracts.corpus_sha256,
-            "torchVersion": torch.__version__,
-            "pythonVersion": sys.version.split()[0],
-            "device": str(device),
-        },
-    }
-    card_path.write_text(
-        json.dumps(model_card, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    with tempfile.TemporaryDirectory(
+        prefix=f".{output.name}.publish-", dir=output.parent
+    ) as temporary_directory:
+        temporary_root = Path(temporary_directory)
+        temporary_checkpoint = temporary_root / "checkpoint"
+        temporary_card = temporary_root / "model-card.json"
+        torch.save(checkpoint, temporary_checkpoint)
+        model_card = {
+            "schemaVersion": 1,
+            "status": "research-only-no-runtime-path",
+            "architecture": args.architecture,
+            "seed": args.seed,
+            "history": history,
+            "checkpoint": {
+                "path": output.name,
+                "sha256": sha256_file(temporary_checkpoint),
+            },
+            "inputs": report,
+            "contracts": {
+                "architectureSha256": sha256_file(architecture_path),
+                "trainingConfigSha256": sha256_file(config_path),
+                "teacherManifestSha256": contracts.teacher_sha256,
+                "heldoutManifestSha256": contracts.heldout_sha256,
+                "corpusContractSha256": contracts.corpus_sha256,
+                "torchVersion": torch.__version__,
+                "pythonVersion": sys.version.split()[0],
+                "device": str(device),
+            },
+        }
+        temporary_card.write_text(
+            json.dumps(model_card, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        lock_path = output.with_name(output.name + ".lock")
+        try:
+            lock_descriptor = acquire_output_prefix_lock(
+                lock_path, "NNUE checkpoint/model-card pair"
+            )
+        except FileExistsError as error:
+            raise SystemExit(str(error)) from error
+        try:
+            refuse_existing_pair(
+                (output, card_path), "checkpoint or model card"
+            )
+            publish_pair_no_replace(
+                temporary_checkpoint,
+                temporary_card,
+                output,
+                card_path,
+                "checkpoint or model card",
+            )
+        except FileExistsError as error:
+            raise SystemExit(str(error)) from error
+        finally:
+            release_output_prefix_lock(lock_descriptor, lock_path)
 
 
 def main() -> None:
