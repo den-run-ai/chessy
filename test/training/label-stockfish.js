@@ -677,8 +677,8 @@ function validateSelectionManifest(
   });
 }
 
-async function loadSelectionContext(
-  manifestFilename, input, contracts, validationOptions
+async function loadSelectionContextSnapshot(
+  manifestFilename, input, contracts, validationOptions, snapshot
 ) {
   const manifestPath = path.resolve(manifestFilename);
   if (!fs.statSync(manifestPath).isFile()) {
@@ -689,7 +689,7 @@ async function loadSelectionContext(
   const validated = validateSelectionManifest(
     manifest, manifestPath, input, contracts, validationOptions
   );
-  const actualSha256 = await Prepare.fileSha256(input);
+  const actualSha256 = await Prepare.snapshotSha256(snapshot);
   if (actualSha256 !== validated.shard.canonicalNdjsonSha256) {
     throw new Error('selection shard SHA-256 does not match its manifest');
   }
@@ -702,9 +702,28 @@ async function loadSelectionContext(
     certification: validated.certification,
     sourceSha256: manifest.source.compressedSha256,
     inputSha256: actualSha256,
+    inputPath: input,
     sampleOnly: validated.sampleOnly,
     contracts
   });
+}
+
+async function loadSelectionContext(
+  manifestFilename, input, contracts, validationOptions
+) {
+  const inputPath = path.resolve(input);
+  const snapshot = Prepare.openInputSnapshot(inputPath);
+  try {
+    return await loadSelectionContextSnapshot(
+      manifestFilename,
+      inputPath,
+      contracts,
+      validationOptions,
+      snapshot
+    );
+  } finally {
+    Prepare.closeInputSnapshot(snapshot);
+  }
 }
 
 function validateSelectionRecord(record, context) {
@@ -1032,33 +1051,54 @@ class UciEngine {
   }
 }
 
-async function loadRecords(filename, context) {
+async function loadRecords(snapshot, context) {
+  if (!snapshot || !Number.isInteger(snapshot.fd) || snapshot.closed ||
+      path.resolve(snapshot.filename) !== context.inputPath) {
+    throw new Error(
+      'selection records require the authenticated open shard snapshot'
+    );
+  }
   const records = [];
+  const input = fs.createReadStream(null, {
+    fd: snapshot.fd,
+    autoClose: true,
+    start: 0
+  });
+  const closed = new Promise(resolve => input.once('close', resolve));
   const lines = readline.createInterface({
-    input: fs.createReadStream(filename),
+    input,
     crlfDelay: Infinity
   });
   let lineNumber = 0;
-  for await (const line of lines) {
-    lineNumber++;
-    if (!line.trim()) {
-      throw new Error('selection shard contains a blank row at line ' + lineNumber);
+  try {
+    for await (const line of lines) {
+      lineNumber++;
+      if (!line.trim()) {
+        throw new Error(
+          'selection shard contains a blank row at line ' + lineNumber
+        );
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(line);
+      } catch (error) {
+        throw new Error(
+          'selection shard contains invalid JSON at line ' + lineNumber +
+          ': ' + error.message
+        );
+      }
+      if (Prepare.stableJson(parsed) !== line) {
+        throw new Error(
+          'selection shard row is not canonical JSON at line ' + lineNumber
+        );
+      }
+      records.push(validateSelectionRecord(parsed, context));
     }
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch (error) {
-      throw new Error(
-        'selection shard contains invalid JSON at line ' + lineNumber +
-        ': ' + error.message
-      );
-    }
-    if (Prepare.stableJson(parsed) !== line) {
-      throw new Error(
-        'selection shard row is not canonical JSON at line ' + lineNumber
-      );
-    }
-    records.push(validateSelectionRecord(parsed, context));
+  } finally {
+    lines.close();
+    if (!input.destroyed) input.destroy();
+    await closed;
+    snapshot.closed = true;
   }
   if (records.length !== context.shard.rows) {
     throw new Error(
@@ -1084,6 +1124,26 @@ async function loadRecords(filename, context) {
     familyCounts.set(record.positionFamily, count);
   }
   return records;
+}
+
+async function loadSelectionRecords(
+  manifestFilename, input, contracts, validationOptions
+) {
+  const inputPath = path.resolve(input);
+  const snapshot = Prepare.openInputSnapshot(inputPath);
+  try {
+    const context = await loadSelectionContextSnapshot(
+      manifestFilename,
+      inputPath,
+      contracts,
+      validationOptions,
+      snapshot
+    );
+    const records = await loadRecords(snapshot, context);
+    return Object.freeze({ context, records });
+  } finally {
+    Prepare.closeInputSnapshot(snapshot);
+  }
 }
 
 class LineArtifact {
@@ -1418,13 +1478,14 @@ async function labelShard(options, runOptions) {
   try {
     refuseExistingArtifacts(Object.values(finalArtifacts));
 
-    const context = await loadSelectionContext(
+    const authenticated = await loadSelectionRecords(
       selectionManifest,
       input,
       contracts,
       sampleOnly ? { sampleOnly: true } : undefined
     );
-    const records = await loadRecords(input, context);
+    const context = authenticated.context;
+    const records = authenticated.records;
     stagedExecutable = stageVerifiedExecutable(
       executable, contracts.teacher.engine.executable.sha256
     );
@@ -1560,6 +1621,7 @@ module.exports = {
   loadFrozenContracts,
   validateSelectionManifest,
   loadSelectionContext,
+  loadSelectionRecords,
   validateSelectionRecord,
   UciEngine,
   stageVerifiedExecutable,

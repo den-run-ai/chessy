@@ -2,6 +2,7 @@
 'use strict';
 
 const assert = require('assert');
+const path = require('path');
 const Label = require('./label-stockfish');
 const Stream = require('./hce-r3-pack-stream');
 
@@ -349,6 +350,84 @@ assert.throws(
     provenanceEntry({ sourceSnapshotSha256: '5'.repeat(64) })
   ]),
   /one source snapshot/
+);
+checks++;
+
+const inventoryManifestPath = path.resolve(
+  '/frozen/selection/manifest.json');
+const declaredSelectionShards = [0, 1].map(index => ({
+  path: 'selection-' + String(index).padStart(3, '0') + '.ndjson',
+  rows: index + 7,
+  canonicalNdjsonSha256: String(index + 1).repeat(64)
+}));
+function inventoryEntry(index, overrides) {
+  const shard = declaredSelectionShards[index];
+  const manifestPath = overrides && overrides.manifestPath ||
+    inventoryManifestPath;
+  return {
+    context: {
+      manifestPath,
+      manifest: { shards: declaredSelectionShards }
+    },
+    selectionShard: Object.assign({
+      index,
+      path: path.resolve(path.dirname(manifestPath), shard.path),
+      rows: shard.rows,
+      sha256: shard.canonicalNdjsonSha256
+    }, overrides && overrides.selectionShard)
+  };
+}
+
+assert.deepStrictEqual(
+  Stream.selectionInventory(
+    [inventoryEntry(1), inventoryEntry(0)], false),
+  {
+    scope: 'complete-selection-shard-inventory',
+    declared: declaredSelectionShards.map((shard, index) => ({
+      index,
+      path: path.resolve(path.dirname(inventoryManifestPath), shard.path),
+      rows: shard.rows,
+      sha256: shard.canonicalNdjsonSha256
+    }))
+  }
+);
+checks++;
+
+assert.throws(
+  () => Stream.selectionInventory([inventoryEntry(0)], false),
+  /complete selection shard inventory/
+);
+assert.throws(
+  () => Stream.selectionInventory(
+    [inventoryEntry(0), inventoryEntry(0)], false),
+  /uniquely cover/
+);
+assert.throws(
+  () => Stream.selectionInventory([
+    inventoryEntry(0),
+    inventoryEntry(1, {
+      selectionShard: {
+        path: '/frozen/selection/replaced.ndjson'
+      }
+    })
+  ], false),
+  /does not match its declared selection shard/
+);
+assert.throws(
+  () => Stream.selectionInventory([
+    inventoryEntry(0),
+    inventoryEntry(1, {
+      manifestPath: '/separate/selection/manifest.json'
+    })
+  ], false),
+  /one selection manifest file/
+);
+checks += 4;
+
+assert.strictEqual(
+  Stream.selectionInventory([inventoryEntry(0)], true).scope,
+  'provided-teacher-shards-only',
+  'sample-only mechanism streams retain subset validation behavior'
 );
 checks++;
 

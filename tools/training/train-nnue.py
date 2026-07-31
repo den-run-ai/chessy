@@ -1237,6 +1237,30 @@ def assert_shards_unchanged(
             )
 
 
+def require_complete_selection_inventory(
+    provided_paths: Iterable[Path],
+    expected_paths: set[Path],
+    label: str,
+) -> None:
+    provided = list(provided_paths)
+    if len(set(provided)) != len(provided):
+        raise ValueError(
+            f"{label} bind the same selection input shard more than once"
+        )
+    provided_set = set(provided)
+    if provided_set != expected_paths:
+        missing = sorted(
+            str(path) for path in expected_paths.difference(provided_set)
+        )
+        unexpected = sorted(
+            str(path) for path in provided_set.difference(expected_paths)
+        )
+        raise ValueError(
+            f"{label} do not cover the complete selection shard inventory; "
+            f"missing={missing}; unexpected={unexpected}"
+        )
+
+
 def validate_inputs(
     train_values: Iterable[str],
     validation_values: Iterable[str],
@@ -1295,17 +1319,25 @@ def validate_inputs(
     expected_selection_paths = {
         shard.path for shard in selection_binding.shards
     }
-    if set(provided_selection_paths) != expected_selection_paths:
-        missing = sorted(
-            str(path)
-            for path in expected_selection_paths.difference(
-                provided_selection_paths
-            )
-        )
-        raise ValueError(
-            "teacher inputs do not cover the complete selection shard "
-            f"inventory; missing={missing}"
-        )
+    require_complete_selection_inventory(
+        provided_selection_paths,
+        expected_selection_paths,
+        "teacher inputs",
+    )
+    # Production selection shards are physical mixed-role shards. Each logical
+    # stream must therefore name the entire authenticated inventory before
+    # role filtering; accepting complementary subsets would silently omit
+    # shared-train or nnue-validation records from otherwise valid shards.
+    require_complete_selection_inventory(
+        (shard.selection_shard.path for shard in train),
+        expected_selection_paths,
+        "--train teacher inputs",
+    )
+    require_complete_selection_inventory(
+        (shard.selection_shard.path for shard in validation),
+        expected_selection_paths,
+        "--validation teacher inputs",
+    )
 
     iterators = [
         iter_validated_shard(shard, contracts)
@@ -1640,6 +1672,34 @@ def self_test() -> None:
         "batch size must be positive",
         lambda: list(batches(records, 0)),
         "zero batch size",
+    )
+    inventory = {
+        Path("selection-000.ndjson"),
+        Path("selection-001.ndjson"),
+    }
+    require_complete_selection_inventory(
+        sorted(inventory), inventory, "--train teacher inputs"
+    )
+    checks += 1
+    rejects(
+        ValueError,
+        "--train teacher inputs do not cover the complete selection shard inventory",
+        lambda: require_complete_selection_inventory(
+            [Path("selection-000.ndjson")],
+            inventory,
+            "--train teacher inputs",
+        ),
+        "incomplete training-stream inventory",
+    )
+    rejects(
+        ValueError,
+        "--validation teacher inputs do not cover the complete selection shard inventory",
+        lambda: require_complete_selection_inventory(
+            [Path("selection-001.ndjson")],
+            inventory,
+            "--validation teacher inputs",
+        ),
+        "incomplete validation-stream inventory",
     )
 
     def find_role_fen(role: str) -> str:

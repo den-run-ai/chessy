@@ -158,6 +158,79 @@ def require_production_disposition(summary: object) -> str:
     return PRODUCTION_INPUT_DISPOSITION
 
 
+def validate_complete_selection_inventory(
+    summary: dict, provided: list[dict]
+) -> list[dict]:
+    if summary.get("selectionInventoryScope") != (
+        "complete-selection-shard-inventory"
+    ):
+        raise ValueError(
+            "feature stream did not authenticate the complete selection "
+            "shard inventory"
+        )
+    declared = summary.get("declaredSelectionShardInventory")
+    if not isinstance(declared, list) or not declared:
+        raise ValueError("declared selection shard inventory is missing")
+    if len(declared) != len(provided):
+        raise ValueError(
+            "teacher inputs do not cover the complete selection shard inventory"
+        )
+    declared_fields = {"index", "path", "rows", "sha256"}
+    expected_by_index: dict[int, dict] = {}
+    for position, item in enumerate(declared):
+        if not isinstance(item, dict) or set(item) != declared_fields:
+            raise ValueError(
+                f"declared selection shard inventory[{position}] is malformed"
+            )
+        index = item["index"]
+        rows = item["rows"]
+        shard_path = item["path"]
+        if (
+            isinstance(index, bool)
+            or not isinstance(index, int)
+            or index != position
+            or isinstance(rows, bool)
+            or not isinstance(rows, int)
+            or rows < 0
+            or not isinstance(shard_path, str)
+            or not shard_path
+            or not Path(shard_path).is_absolute()
+        ):
+            raise ValueError(
+                f"declared selection shard inventory[{position}] is malformed"
+            )
+        item["sha256"] = require_sha256(
+            item["sha256"],
+            f"declared selection shard inventory[{position}].sha256",
+        )
+        expected_by_index[index] = item
+
+    provided_by_index: dict[int, dict] = {}
+    for position, item in enumerate(provided):
+        index = item["selectionShardIndex"]
+        if index in provided_by_index:
+            raise ValueError(
+                "multiple teacher shards bind the same selection input shard"
+            )
+        provided_by_index[index] = item
+    if set(provided_by_index) != set(expected_by_index):
+        raise ValueError(
+            "teacher inputs do not cover the complete selection shard inventory"
+        )
+    for index, expected in expected_by_index.items():
+        item = provided_by_index[index]
+        if (
+            Path(item["selectionShardPath"]).resolve()
+            != Path(expected["path"])
+            or item["selectionShardRows"] != expected["rows"]
+            or item["selectionShardSha256"] != expected["sha256"]
+        ):
+            raise ValueError(
+                "teacher input does not match its declared selection shard"
+            )
+    return declared
+
+
 def self_test() -> None:
     row = {
         "id": "0" * 64,
@@ -215,6 +288,69 @@ def self_test() -> None:
         except ValueError:
             continue
         raise AssertionError("packer accepted a non-production disposition")
+    declared = [
+        {
+            "index": index,
+            "path": f"/selection/selection-{index:03d}.ndjson",
+            "rows": index + 1,
+            "sha256": str(index + 1) * 64,
+        }
+        for index in range(2)
+    ]
+    provided = [
+        {
+            "selectionShardIndex": item["index"],
+            "selectionShardPath": item["path"],
+            "selectionShardRows": item["rows"],
+            "selectionShardSha256": item["sha256"],
+        }
+        for item in reversed(declared)
+    ]
+    complete_summary = {
+        "selectionInventoryScope": "complete-selection-shard-inventory",
+        "declaredSelectionShardInventory": declared,
+    }
+    validate_complete_selection_inventory(complete_summary, provided)
+    inventory_attacks = (
+        (complete_summary, provided[:1]),
+        (
+            complete_summary,
+            [
+                provided[0],
+                dict(
+                    provided[1],
+                    selectionShardIndex=provided[0]["selectionShardIndex"],
+                ),
+            ],
+        ),
+        (
+            {
+                **complete_summary,
+                "declaredSelectionShardInventory": [
+                    declared[0],
+                    {**declared[1], "path": "/selection/replaced.ndjson"},
+                ],
+            },
+            provided,
+        ),
+        (
+            {
+                **complete_summary,
+                "selectionInventoryScope": "provided-teacher-shards-only",
+            },
+            provided,
+        ),
+    )
+    for attack_summary, attack_provided in inventory_attacks:
+        try:
+            validate_complete_selection_inventory(
+                attack_summary, attack_provided
+            )
+        except ValueError:
+            continue
+        raise AssertionError(
+            "packer accepted an incomplete or mismatched selection inventory"
+        )
     with tempfile.TemporaryDirectory(
         prefix="chessy-hce-publication-self-test-"
     ) as temporary:
@@ -492,6 +628,9 @@ def main() -> None:
                         f"feature-stream shard inventory[{index}] "
                         "does not match --input"
                     )
+            declared_inventory = validate_complete_selection_inventory(
+                summary, inventory
+            )
         except (TypeError, ValueError) as error:
             raise SystemExit(f"invalid feature-stream provenance: {error}") from error
         if teacher_sha != sha256_file(teacher_path):
@@ -573,7 +712,8 @@ def main() -> None:
                 "path": output.name,
                 "sha256": sha256_file(temporary_npz),
             },
-            "inputInventoryScope": "provided-teacher-shards-only",
+            "inputInventoryScope": "complete-selection-shard-inventory",
+            "declaredSelectionShards": declared_inventory,
             "inputs": [
                 {
                     "path": str(filename),

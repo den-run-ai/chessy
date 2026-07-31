@@ -615,15 +615,84 @@ async function integration() {
       /requires a frozen E4 certification holdout/,
       'production label validation refuses a pending certification selection'
     );
-    const context = await Label.loadSelectionContext(
+    const authenticatedSelection = await Label.loadSelectionRecords(
       manifestPath,
       shardPath,
       contracts,
       { allowPendingCertificationForTest: true }
     );
-    const records = await Label.loadRecords(shardPath, context);
+    const context = authenticatedSelection.context;
+    const records = authenticatedSelection.records;
     equal(records.length, 1);
     equal(records[0].id, record.id);
+
+    const replacementRecord = selectedRecord(
+      '4k3/8/8/8/8/8/3P4/4K3 w - -',
+      sourceSha256
+    );
+    const replacementBody =
+      Prepare.stableJson(replacementRecord) + '\n';
+    const racedDirectory =
+      path.join(temporary, 'raced-selection');
+    fs.mkdirSync(racedDirectory);
+    const racedShardPath =
+      path.join(racedDirectory, 'selection-000.ndjson');
+    const racedReplacementPath = racedShardPath + '.replacement';
+    const racedManifestPath =
+      path.join(racedDirectory, 'manifest.json');
+    fs.writeFileSync(racedShardPath, body);
+    fs.writeFileSync(racedReplacementPath, replacementBody);
+    fs.writeFileSync(
+      racedManifestPath,
+      Prepare.stableJson(
+        selectionManifest(sourceSha256, path.basename(racedShardPath), body)
+      ) + '\n'
+    );
+    const originalCreateReadStream = fs.createReadStream;
+    let shardReplaced = false;
+    let snapshotStreamCount = 0;
+    let parseOpenedAfterReplacement = false;
+    fs.createReadStream = function (filename, options) {
+      const stream = originalCreateReadStream.call(fs, filename, options);
+      if (filename === null && options && Number.isInteger(options.fd)) {
+        snapshotStreamCount++;
+        if (snapshotStreamCount === 1) {
+          stream.once('end', function () {
+            fs.renameSync(racedReplacementPath, racedShardPath);
+            shardReplaced = true;
+          });
+        } else if (snapshotStreamCount === 2) {
+          parseOpenedAfterReplacement = shardReplaced;
+        }
+      }
+      return stream;
+    };
+    let racedSelection;
+    try {
+      racedSelection = await Label.loadSelectionRecords(
+        racedManifestPath,
+        racedShardPath,
+        contracts,
+        { allowPendingCertificationForTest: true }
+      );
+    } finally {
+      fs.createReadStream = originalCreateReadStream;
+    }
+    equal(shardReplaced, true,
+      'selection shard pathname is replaced immediately after hashing');
+    equal(snapshotStreamCount, 2,
+      'selection authentication and parsing use two reads of one descriptor');
+    equal(parseOpenedAfterReplacement, true,
+      'record parsing begins only after the pathname names replacement bytes');
+    equal(racedSelection.context.inputSha256, Corpus.sha256(body),
+      'selection context retains the authenticated shard digest');
+    equal(racedSelection.records[0].id, record.id,
+      'record parsing consumes the authenticated open shard descriptor');
+    equal(
+      fs.readFileSync(racedShardPath, 'utf8'),
+      replacementBody,
+      'the adversarial pathname now names different valid records'
+    );
 
     await assertAuthenticatedSourceSurvivesReplacement(
       temporary, '.jsonl'

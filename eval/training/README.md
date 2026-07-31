@@ -381,8 +381,10 @@ teacher shard may be supplied under both `--train` and `--validation`: it is
 authenticated and fully validated once, then only `shared-train` records enter
 the training stream and only `nnue-validation` records enter the validation
 stream. HCE and test records remain validated but are never consumed by NNUE.
-The report records complete per-role physical counts plus each stream's
-selected count.
+Both options must name the complete declared teacher-shard inventory; using
+complementary subsets is rejected because it could silently omit a role from a
+physical mixed-role shard. The report records complete per-role physical
+counts plus each stream's selected count.
 
 The G1 head is an expected-score logit, not a falsely labelled centipawn score.
 G2 must fit and freeze its logit-to-centipawn scale on `nnue-validation` before
@@ -392,8 +394,8 @@ Example research run:
 
 ```sh
 python3 tools/training/train-nnue.py \
-  --train /data/teacher/train-*.ndjson \
-  --validation /data/teacher/nnue-validation-*.ndjson \
+  --train /data/teacher/teacher-*.ndjson \
+  --validation /data/teacher/teacher-*.ndjson \
   --architecture h64-screlu \
   --seed 10501 \
   --device cpu \
@@ -401,10 +403,11 @@ python3 tools/training/train-nnue.py \
 ```
 
 `--train` and `--validation` each accept one or more paths, so the shell-expanded
-globs above pass every shard under the corresponding option. Repeat either
-option if the inputs span multiple directories. To validate all sidecars and
-records without installing or importing PyTorch, run the same shard arguments
-with `--validate-inputs` and omit the architecture, seed, device, and output.
+globs above pass the same complete mixed-role inventory under both options.
+Repeat either option if the inputs span multiple directories, preserving that
+complete inventory in each stream. To validate all sidecars and records without
+installing or importing PyTorch, run the same shard arguments with
+`--validate-inputs` and omit the architecture, seed, device, and output.
 CI byte-compiles the complete trainer and runs `--self-test`, which exercises
 FEN parsing, exact feature maps, symmetry/role derivation, deterministic
 shuffle/batching, generated authenticated train/validation shards, provenance

@@ -401,6 +401,71 @@ function sharedProvenance(authenticated) {
   };
 }
 
+function selectionInventory(authenticated, sampleOnly) {
+  if (!Array.isArray(authenticated) || !authenticated.length) {
+    throw new Error('at least one authenticated teacher shard is required');
+  }
+  const first = authenticated[0].context;
+  if (!first || !first.manifest ||
+      typeof first.manifestPath !== 'string' ||
+      !Array.isArray(first.manifest.shards)) {
+    throw new Error('authenticated selection inventory is missing');
+  }
+  const manifestPath = path.resolve(first.manifestPath);
+  const manifestDirectory = path.dirname(manifestPath);
+  const declared = first.manifest.shards.map((shard, index) => ({
+    index,
+    path: path.resolve(manifestDirectory, shard.path),
+    rows: shard.rows,
+    sha256: shard.canonicalNdjsonSha256
+  }));
+  if (sampleOnly) {
+    return {
+      scope: 'provided-teacher-shards-only',
+      declared
+    };
+  }
+  const manifestPaths = new Set(authenticated.map(item =>
+    path.resolve(item.context.manifestPath)));
+  if (manifestPaths.size !== 1) {
+    throw new Error(
+      'production teacher shards must reference one selection manifest file'
+    );
+  }
+  const providedByIndex = new Map();
+  for (const item of authenticated) {
+    const selected = item.selectionShard;
+    if (!selected || !Number.isSafeInteger(selected.index) ||
+        providedByIndex.has(selected.index)) {
+      throw new Error(
+        'production teacher inputs do not uniquely cover the selection shards'
+      );
+    }
+    providedByIndex.set(selected.index, selected);
+  }
+  if (providedByIndex.size !== declared.length) {
+    throw new Error(
+      'production teacher inputs do not cover the complete selection shard ' +
+      'inventory'
+    );
+  }
+  for (const expected of declared) {
+    const provided = providedByIndex.get(expected.index);
+    if (!provided ||
+        path.resolve(provided.path) !== expected.path ||
+        provided.rows !== expected.rows ||
+        provided.sha256 !== expected.sha256) {
+      throw new Error(
+        'production teacher input does not match its declared selection shard'
+      );
+    }
+  }
+  return {
+    scope: 'complete-selection-shard-inventory',
+    declared
+  };
+}
+
 function lineIterator(filename) {
   const lines = readline.createInterface({
     input: fs.createReadStream(filename),
@@ -478,6 +543,7 @@ async function streamRows(options, write) {
       filename, contracts, { sampleOnly }));
   }
   const provenance = sharedProvenance(authenticated);
+  const completeInventory = selectionInventory(authenticated, sampleOnly);
   const states = authenticated.map(auth => ({
     auth,
     iterator: lineIterator(auth.input),
@@ -531,6 +597,8 @@ async function streamRows(options, write) {
     sourceSnapshotSha256: provenance.sourceSnapshotSha256,
     inputSha256: authenticated.map(item => item.inputSha256),
     inputSidecarSha256: authenticated.map(item => item.sidecarSha256),
+    selectionInventoryScope: completeInventory.scope,
+    declaredSelectionShardInventory: completeInventory.declared,
     providedShardInventory: authenticated.map((item, index) => ({
       index,
       teacherPath: item.input,
@@ -575,6 +643,7 @@ module.exports = {
   validateTeacherRecord,
   authenticateInput,
   sharedProvenance,
+  selectionInventory,
   heapPush,
   heapPop,
   streamRows

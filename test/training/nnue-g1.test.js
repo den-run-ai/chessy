@@ -385,7 +385,11 @@ function spawnValidation(train, validation, options) {
 }
 
 function expectRejected(train, validation, message, options) {
-  const result = validateCommand(train, validation, options);
+  materializeSelectionBinding(train, validation, options);
+  const completeInventory =
+    Array.from(new Set(train.concat(validation))).sort();
+  const result = spawnValidation(
+    completeInventory, completeInventory, options);
   assert.notStrictEqual(result.status, 0, result.stdout);
   assert.match(result.stderr, message);
   checks += 2;
@@ -404,22 +408,38 @@ try {
   const validation = writeShard(goodDir, 'validation-000.ndjson', [
     labelledRecord(VALIDATION_FEN)
   ]);
-  const good = validateCommand([trainA, trainB], [validation]);
+  const completeInventory = [trainA, trainB, validation];
+  const good = validateCommand(completeInventory, completeInventory);
   assert.strictEqual(good.status, 0, good.stderr);
   const report = JSON.parse(good.stdout);
   assert.strictEqual(report.status, 'validated-pinned-teacher-inputs');
-  assert.strictEqual(report.train.length, 2);
-  assert.strictEqual(report.validation[0].role, 'nnue-validation');
+  assert.strictEqual(report.train.length, 3);
+  assert.strictEqual(report.validation.length, 3);
   assert.strictEqual(report.selectionContractSha256, SELECTION_CONTRACT_SHA);
   assert.strictEqual(
     Object.prototype.hasOwnProperty.call(report, 'fitAllowed'), false);
   checks += 6;
-  const incomplete = spawnValidation([trainA], [validation]);
-  assert.notStrictEqual(incomplete.status, 0, incomplete.stdout);
+  const incompleteUnion = spawnValidation([trainA], [validation]);
+  assert.notStrictEqual(incompleteUnion.status, 0, incompleteUnion.stdout);
   assert.match(
-    incomplete.stderr,
+    incompleteUnion.stderr,
     /teacher inputs do not cover the complete selection shard inventory/);
   checks += 2;
+  const incompleteTrainStream = spawnValidation(
+    [trainA, trainB], completeInventory);
+  assert.notStrictEqual(
+    incompleteTrainStream.status, 0, incompleteTrainStream.stdout);
+  assert.match(
+    incompleteTrainStream.stderr,
+    /--train teacher inputs do not cover the complete selection shard inventory/);
+  const incompleteValidationStream = spawnValidation(
+    completeInventory, [validation]);
+  assert.notStrictEqual(
+    incompleteValidationStream.status, 0, incompleteValidationStream.stdout);
+  assert.match(
+    incompleteValidationStream.stderr,
+    /--validation teacher inputs do not cover the complete selection shard inventory/);
+  checks += 4;
 
   const mixedDir = path.join(temporary, 'mixed-teacher-shard');
   fs.mkdirSync(mixedDir);

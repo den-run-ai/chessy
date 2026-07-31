@@ -357,13 +357,16 @@ def validate_matrix_sidecar(
     for name, value in current.items():
         if contracts.get(name) != value:
             raise ValueError(f"{sidecar_path}: {name} differs")
-    if sidecar.get("inputInventoryScope") != "provided-teacher-shards-only":
+    if sidecar.get("inputInventoryScope") != (
+        "complete-selection-shard-inventory"
+    ):
         raise ValueError(
-            f"{sidecar_path}: input inventory scope is not explicit"
+            f"{sidecar_path}: input inventory is not selection-complete"
         )
     inputs = sidecar.get("inputs")
     if not isinstance(inputs, list) or not inputs:
         raise ValueError(f"{sidecar_path}: authenticated input list is empty")
+    provided_selection: dict[int, dict] = {}
     for index, item in enumerate(inputs):
         if not isinstance(item, dict):
             raise ValueError(f"{sidecar_path}: malformed input provenance")
@@ -402,6 +405,44 @@ def validate_matrix_sidecar(
             str(selection_shard.get("sha256", "")),
             f"{sidecar_path}: selection shard sha256",
         )
+        if selection_shard["index"] in provided_selection:
+            raise ValueError(
+                f"{sidecar_path}: duplicate selection shard index"
+            )
+        provided_selection[selection_shard["index"]] = selection_shard
+    declared = sidecar.get("declaredSelectionShards")
+    if not isinstance(declared, list) or len(declared) != len(inputs):
+        raise ValueError(
+            f"{sidecar_path}: declared selection inventory is incomplete"
+        )
+    for index, item in enumerate(declared):
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"index", "path", "rows", "sha256"}
+            or item.get("index") != index
+            or not isinstance(item.get("path"), str)
+            or not item["path"]
+            or isinstance(item.get("rows"), bool)
+            or not isinstance(item.get("rows"), int)
+            or item["rows"] < 0
+        ):
+            raise ValueError(
+                f"{sidecar_path}: malformed declared selection shard[{index}]"
+            )
+        require_sha256(
+            str(item.get("sha256", "")),
+            f"{sidecar_path}: declared selection shard sha256",
+        )
+        provided = provided_selection.get(index)
+        if (
+            provided is None
+            or Path(provided["path"]).resolve() != Path(item["path"]).resolve()
+            or provided["rows"] != item["rows"]
+            or provided["sha256"] != item["sha256"]
+        ):
+            raise ValueError(
+                f"{sidecar_path}: declared/provided selection shard differs"
+            )
     return sidecar, sidecar_sha256
 
 
