@@ -235,7 +235,10 @@
                 return ply !== null && ply >= 0 && ply < p;
               });
             }
-            ['candidates', 'shortlist', 'moments', 'unresolved'].forEach(pruneList);
+            [
+              'candidates', 'shortlist', 'moments', 'unresolved',
+              'moveSummaries', 'reflected'
+            ].forEach(pruneList);
 
             job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
               ? Math.min(job.cursorPly, p) : p;
