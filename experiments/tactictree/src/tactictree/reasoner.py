@@ -178,15 +178,18 @@ class OpenRouterReasoner(Reasoner):
     def __init__(self, model: str = "google/gemini-3.6-flash",
                  usage: dict | None = None,
                  cache_dir: str = ".llmcache",
-                 reasoning: dict | None = None):
+                 reasoning: dict | None = None,
+                 provider: dict | None = None):
         self.key = os.environ.get("OPENROUTER_API_KEY")
         if not self.key:
             raise RuntimeError("Set OPENROUTER_API_KEY (do not hard-code it).")
         self.model = model
         self.reasoning = reasoning       # e.g. {"enabled": False}
-        # cache key must distinguish reasoning configs of the same model
-        self._key_prefix = model + (json.dumps(reasoning, sort_keys=True)
-                                    if reasoning else "")
+        self.provider = provider         # e.g. {"only": ["deepseek"]}
+        # cache key must distinguish reasoning/provider configs of one model
+        self._key_prefix = model \
+            + (json.dumps(reasoning, sort_keys=True) if reasoning else "") \
+            + (json.dumps(provider, sort_keys=True) if provider else "")
         self.calls = 0
         self.usage = usage if usage is not None else {"in": 0, "out": 0}
         self.providers = {}              # serving provider -> fresh-call count
@@ -207,6 +210,8 @@ class OpenRouterReasoner(Reasoner):
         }
         if self.reasoning is not None:
             payload["reasoning"] = self.reasoning
+        if self.provider is not None:
+            payload["provider"] = self.provider
         body = json.dumps(payload).encode()
         req = urllib.request.Request(self.URL, data=body, headers={
             "Authorization": f"Bearer {self.key}",

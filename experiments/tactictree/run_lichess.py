@@ -87,8 +87,20 @@ def main():
                     help="disable provider-side reasoning (distinct cache keys)")
     ap.add_argument("--themes", default="",
                     help="comma-separated sampled_theme filter (default: all)")
+    ap.add_argument("--provider", default="",
+                    help="pin OpenRouter serving provider(s), comma-separated"
+                         " (e.g. 'DeepSeek'); distinct cache keys")
+    ap.add_argument("--quant", default="",
+                    help="pin quantization(s), e.g. 'fp8' — excludes lossier"
+                         " hosts; distinct cache keys")
     args = ap.parse_args()
     in_rate, out_rate = args.in_rate, args.out_rate
+    prov_cfg = {}
+    if args.provider:
+        prov_cfg["only"] = args.provider.split(",")
+    if args.quant:
+        prov_cfg["quantizations"] = args.quant.split(",")
+    prov_cfg = prov_cfg or None
 
     here = pathlib.Path(__file__).parent
     outp = here / args.out
@@ -176,7 +188,8 @@ def main():
                     r = OpenRouterReasoner(
                         model=args.model, usage=usage,
                         cache_dir=str(here / ".llmcache"),
-                        reasoning={"enabled": False} if args.no_reasoning else None)
+                        reasoning={"enabled": False} if args.no_reasoning else None,
+                        provider=prov_cfg)
                     llm_rep = compose_root(root, r, pov)
                     llm_set = set(llm_rep.motifs) | set(llm_rep.llm_motifs or [])
                     lonly = llm_only_motifs(root, llm_rep)
