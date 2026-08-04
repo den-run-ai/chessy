@@ -1,1 +1,5 @@
 [2/50] 0BqNv  deflection        r822 static=n rules=n llm=n llmOnly=n  34.8s est=$0.040
+[3/50] 07dgW  skewer            r800 static=n rules=n llm=Y llmOnly=Y  34.1s est=$0.079
+[4/50] 00mvr  discoveredAttack  r812 static=n rules=n llm=Y llmOnly=Y  52.5s est=$0.141
+[5/50] 04qGt  mateIn2           r808 static=n rules=Y llm=Y llmOnly=Y  20.5s est=$0.166
+[6/50] 00qqD  fork              r805 static=n rules=Y llm=Y llmOnly=Y  28.6s est=$0.201
