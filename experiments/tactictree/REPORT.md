@@ -1,7 +1,7 @@
 # tactictree — feasibility report
 
 **Recursive LLM labelling of chess tactics over minimal contrastive game trees**
-2026-08-04 · Stockfish 16 (depth 14) · google/gemini-3.6-flash via OpenRouter · total API spend $2.55 of a $3 throwaway key (verified against billed usage)
+2026-08-04 · Stockfish 16 (depth 14) · google/gemini-3.6-flash via OpenRouter · total API spend $2.91 of a $3 throwaway key (verified against billed usage)
 
 ## 1. Thesis
 
@@ -125,9 +125,52 @@ Headline findings:
   `deflection` verdicts.
 
 Cost: 92.9K in / 276.0K out tokens ≈ **$2.21** for the 48-puzzle session
-(~$0.046/puzzle, ~7 calls each), wall 32 min. Whole-project billed total on
-the key, verified against OpenRouter's usage endpoint: **$2.55** — fixtures,
-two models, forensic probes, and the 50-puzzle run included.
+(~$0.046/puzzle, ~7 calls each), wall 32 min.
+
+### At-scale cheap-model comparison: reasoning is the differentiator
+
+The same 50 puzzles were rerun with **deepseek-v4-flash-0731** (released
+2026-07-31; `:nitro` routing, **reasoning disabled** — the default routing
+was too slow at ~24s/call with ~1.3K hidden reasoning tokens) for **$0.011
+total** (97.6K in / 13.4K out, 11 min wall, zero errors):
+
+| system | total | feature-backed themes¹ | inference-required themes² | precision |
+|---|---|---|---|---|
+| static rules | 16% | 8/32 | 0/18 | 24% |
+| tree + rules | 58%³ | 28/32 | 1/18 | 32% |
+| tree + deepseek-v4-flash, no reasoning | **58%** | 28/32 | **1/18** | 29% |
+| tree + gemini-3.6-flash, reasoning | **84%** | 31/32 | **11/18** | 40% |
+
+¹ intermezzo, mateIn2, fork, pin, hangingPiece — motifs with direct
+feature/rule support (mate flag, fork_targets, pins, hanging, the
+deterministic contrast rule).
+² skewer, deflection, discoveredAttack — no feature support; must be read
+from the FEN and line. (discoveredAttack has a discovered-*check* feature
+only.)
+³ rules dropped 64%→58% across runs from engine-thread tree drift (3 hits;
+engine-solution match 49/50 vs 50/50); within-run columns share identical
+trees and are directly comparable.
+
+The no-reasoning model reduces to a noisy re-implementation of its feature
+sheet: identical splits to the hand rules (28/32 + 1/18), slightly worse
+precision (fork/pin/hangingPiece label spray), and a compose call that is
+pure prompt-priming — **17/17 verdicts said `intermezzo`**, including on
+skewer and fork puzzles, versus gemini's 15/3/1 histogram with genuinely
+correct unprimed verdicts. Net LLM-over-rules disagreement: zero (+1
+intermezzo via compose, −1 hangingPiece dropped).
+
+This sharpens the thesis rather than contradicting it: the tree removes
+*search*, but converting tree evidence into labels beyond what the features
+literally spell out still requires the model to *read* the positions — and
+that is what reasoning buys. The measured trade: 58% at $0.01 (no
+reasoning) vs 84% at $2.21 (reasoning), a 26-point gap for ~200× the cost.
+Caveat: reasoning-*enabled* deepseek-v4-flash was not run at scale (provider
+congestion + budget); the fair reasoning-vs-reasoning model comparison
+remains open.
+
+Whole-project billed total on the key, verified against OpenRouter's usage
+endpoint: **$2.91** — fixtures, three models, forensic probes, ablations,
+and both 50-puzzle runs included.
 
 ## 5. What the recursion contributes — mechanism analysis
 
