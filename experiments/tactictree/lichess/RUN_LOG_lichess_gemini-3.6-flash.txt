@@ -3,3 +3,13 @@
 [4/50] 00mvr  discoveredAttack  r812 static=n rules=n llm=Y llmOnly=Y  52.5s est=$0.141
 [5/50] 04qGt  mateIn2           r808 static=n rules=Y llm=Y llmOnly=Y  20.5s est=$0.166
 [6/50] 00qqD  fork              r805 static=n rules=Y llm=Y llmOnly=Y  28.6s est=$0.201
+[7/50] 07046  pin               r806 static=n rules=Y llm=Y llmOnly=Y  39.4s est=$0.251
+[8/50] 08vD8  hangingPiece      r811 static=Y rules=Y llm=Y llmOnly=Y  51.2s est=$0.311
+[10/50] 0BlMI  deflection        r1201 static=n rules=n llm=n llmOnly=n  42.8s est=$0.360
+[11/50] 00AB1  skewer            r1128 static=n rules=n llm=Y llmOnly=Y  33.7s est=$0.399
+[12/50] 03jNq  discoveredAttack  r1255 static=n rules=n llm=Y llmOnly=Y  47.5s est=$0.453
+[13/50] 05bPj  mateIn2           r1083 static=n rules=Y llm=Y llmOnly=Y  28.5s est=$0.487
+[14/50] 01yqP  fork              r1107 static=n rules=Y llm=Y llmOnly=Y  37.0s est=$0.531
+[15/50] 02cdm  pin               r1291 static=n rules=Y llm=Y llmOnly=Y  61.5s est=$0.592
+[16/50] 04CtU  hangingPiece      r1225 static=Y rules=Y llm=Y llmOnly=Y  47.1s est=$0.640
+[17/50] 0T46W  intermezzo        r1431 static=n rules=Y llm=Y llmOnly=Y  55.8s est=$0.695
