@@ -38,12 +38,15 @@ def _line(node: TreeNode) -> list[TreeNode]:
 
 def compose_root(root: TreeNode, reasoner: Reasoner,
                  pov: chess.Color) -> TreeReport:
-    for c in root.children:
-        label_subtree(c, reasoner, pov)
-    root.annotation = reasoner.label_node(root.board, None, pov, [])
-
     best_head = next((c for c in root.children if c.branch == BRANCH_BEST), None)
     nat_head = next((c for c in root.children if c.branch == BRANCH_NATURAL), None)
+
+    # Label only the BEST branch. The natural branch contributes its head eval
+    # and SAN line to the contrast, but its per-node annotations are never
+    # read — labelling it spends ~40% of reasoner sub-calls on dead weight.
+    if best_head is not None:
+        label_subtree(best_head, reasoner, pov)
+    root.annotation = reasoner.label_node(root.board, None, pov, [])
 
     motifs: list[Motif] = list(root.annotation.motifs)
     bits: list[str] = []

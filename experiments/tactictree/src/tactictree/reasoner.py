@@ -10,6 +10,8 @@ import json
 import hashlib
 import pathlib
 import os
+import time
+import urllib.error
 import urllib.request
 import chess
 from .labels import Motif, NodeAnnotation
@@ -199,8 +201,22 @@ class OpenRouterReasoner(Reasoner):
         req = urllib.request.Request(self.URL, data=body, headers={
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=90) as r:
-            data = json.loads(r.read())
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=90) as r:
+                    data = json.loads(r.read())
+                break
+            except urllib.error.HTTPError as e:
+                # retry transient server/rate errors; auth/spend errors are final
+                if e.code in (429, 500, 502, 503, 504) and attempt < 2:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                raise
+            except (urllib.error.URLError, TimeoutError, OSError):
+                if attempt < 2:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                raise
         self.calls += 1
         u = data.get("usage", {})
         self.usage["in"] += u.get("prompt_tokens", 0)
