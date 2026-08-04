@@ -1,0 +1,26 @@
+[mono] 0F9xB  intermezzo        hit=Y(main Y) ['deflection', 'hangingPiece', 'intermezzo', 'pin'] est=$0.009
+[mono] 0NgNm  intermezzo        hit=Y(main Y) ['hangingPiece', 'intermezzo'] est=$0.018
+[mono] 0BqNv  deflection        hit=n(main n) ['hangingPiece', 'mateThreat', 'pin'] est=$0.025
+[mono] 0BlMI  deflection        hit=n(main n) ['hangingPiece', 'intermezzo', 'mateThreat'] est=$0.035
+[mono] 07dgW  skewer            hit=Y(main Y) ['hangingPiece', 'skewer'] est=$0.043
+[mono] 00AB1  skewer            hit=Y(main Y) ['skewer'] est=$0.050
+[mono] 00mvr  discoveredAttack  hit=Y(main Y) ['discoveredAttack', 'hangingPiece'] est=$0.061
+[mono] 03jNq  discoveredAttack  hit=Y(main Y) ['discoveredAttack', 'hangingPiece'] est=$0.073
+[mono] 04qGt  mateIn2           hit=n(main Y) ['hangingPiece'] est=$0.079
+[mono] 05bPj  mateIn2           hit=Y(main Y) ['deflection', 'hangingPiece', 'mateThreat'] est=$0.094
+[mono] 00qqD  fork              hit=Y(main Y) ['fork'] est=$0.102
+[mono] 01yqP  fork              hit=Y(main Y) ['fork', 'hangingPiece'] est=$0.109
+[mono] 07046  pin               hit=Y(main Y) ['hangingPiece', 'pin'] est=$0.117
+[mono] 02cdm  pin               hit=Y(main Y) ['hangingPiece', 'mateThreat', 'pin'] est=$0.129
+[mono] 08vD8  hangingPiece      hit=Y(main Y) ['hangingPiece'] est=$0.138
+[mono] 04CtU  hangingPiece      hit=Y(main Y) ['hangingPiece', 'pin'] est=$0.146
+
+mono: 13/16 vs main 14/16 on the same puzzles | lost=['04qGt'] gained=[] | shared ablation spend ≈ $0.146
+[nobackup] 0F9xB  intermezzo        hit=Y(main Y) ['fork', 'hangingPiece', 'intermezzo', 'pin'] est=$0.184
+[nobackup] 09uWW  deflection        hit=Y(main Y) ['deflection', 'hangingPiece', 'mateThreat', 'pin'] est=$0.197
+[nobackup] 07dgW  skewer            hit=Y(main Y) ['hangingPiece', 'skewer'] est=$0.239
+[nobackup] 00mvr  discoveredAttack  hit=Y(main Y) ['discoveredAttack', 'hangingPiece', 'pin', 'quiet', 'skewer'] est=$0.281
+[nobackup] 04qGt  mateIn2           hit=Y(main Y) ['hangingPiece', 'mateThreat', 'pin'] est=$0.294
+[nobackup] 01yqP  fork              hit=Y(main Y) ['fork', 'hangingPiece', 'quiet'] est=$0.324
+
+nobackup: 6/6 vs main 6/6 on the same puzzles | lost=[] gained=[] | shared ablation spend ≈ $0.324

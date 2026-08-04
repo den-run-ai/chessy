@@ -168,11 +168,31 @@ natural branch was built, i.e. where the compose level was never given input
 — not where a layer malfunctioned. Failures that localize this cleanly are
 evidence the decomposition matches the problem's structure.
 
-Two ablations would complete this analysis and are deliberately cheap
-(~$1 each with the cache): (a) whole-tree-in-one-prompt vs. the recursion,
-isolating whether decomposition beats a single long-context judgment; and
-(b) node calls with the `children` field removed, isolating the backup's
-contribution. Neither has been run yet.
+Both ablations were then run on the leftover key budget ($0.30 total,
+paired against the main run; `ablations.py`, `lichess/ablations.jsonl`):
+
+- **Monolithic — whole tree in one prompt (16 puzzles, 2/theme):** 13/16
+  vs the recursion's 14/16 on the same puzzles. The tree itself carries
+  most of the recall signal even without decomposition — consistent with
+  the thesis that the tree, not the model, does the calculating. The one
+  paired loss is diagnostic: on a mateIn2 puzzle the single call, shown
+  SAN lines whose evals announce a forced mate, answered only
+  `hangingPiece` — the deep fact a leaf sub-call sees directly (and the
+  backup surfaces) got overlooked inside one long-context judgment. The
+  monolithic call also failed the same contrastive-theme puzzles as every
+  other system: it cannot invent the missing counterfactual branch either.
+- **No-backup — children withheld from every node prompt (6 main-run
+  hits):** 6/6 — recall fully intact, exactly as union scoring predicts
+  (a motif caught at its own node still counts). What degrades is
+  coherence: 3.50 vs 3.00 labels/puzzle, `quiet` co-occurring with
+  tactical labels on 2/6 puzzles vs 1/6 (isolated interior nodes cannot
+  see what the line proves), tag-verifiable precision 37% vs 41%. The
+  semantic backup is load-bearing for label coherence and narrative
+  quality, not for union-recall.
+
+Caveats: small paired subsets (n=16 / n=6, skewed low-to-mid rating by
+construction), and rebuilt trees can drift slightly from the main run's
+(engine multithreading nondeterminism).
 
 ## 6. Forensics — why a deflection puzzle was missed (and what it proves)
 
@@ -254,7 +274,7 @@ intends.
    (deflection, desperado, trap), not just intermezzo.
 3. Scale to ~1K puzzles for per-theme F1 with confidence intervals
    (≈ $45 at 3.6-flash rates, ≈ $2 at 2.5-flash rates given caching).
-5. Run the two §5 ablations: whole-tree-single-prompt, and node
-   calls without child labels (isolates the semantic backup).
+5. Re-run the §5 ablations at n=50 to tighten the paired comparison (the
+   leftover-budget versions used n=16 and n=6).
 4. Let the LLM drive expansion RLM-style (choose which branches to open)
    instead of the fixed two-branch tree.
