@@ -1,0 +1,48 @@
+
+=== elephant_trap_zwischenzug ===
+  FEN: r1bBkb1r/pppn1ppp/8/3n4/3P4/8/PP2PPPP/R2QKBNR b KQkq - 0 7
+  best Bb4+ (+353cp)  natural Kxd8 (-505cp)
+  static-only : hangingPiece
+  recursive   : intermezzo,hangingPiece,pin
+  llm-composed: intermezzo  <- Black plays the forcing intermezzo check 7...Bb4+ instead of immediately recapturing 7...Kxd8, forcing White to give up the queen with 8.Qd2 before Bl
+  narrative   : instead of the automatic Kxd8 (eval -505cp), the in-between move Bb4+ first (+353cp, gap +858cp), and the deferred capture still lands later | ply 1: Black gives check with the bishop, pinning White's queen while White's
+
+=== petroff_discovered_check ===
+  FEN: rnbqkb1r/pppp1ppp/5n2/4N3/8/8/PPPPQPPP/RNB1KB1R w KQkq - 2 5
+  best Nc6+ (+582cp)  natural None (Nonecp)
+  static-only : quiet
+  recursive   : discoveredCheck,discoveredAttack,fork,pin,hangingPiece
+  narrative   : ply 1: White plays Nc6, delivering a discovered check while attacking Black's queen on d8. | ply 2: Black's queen aligns on the e-file creating a mutual pin, while White's knight on c6 is hanging. | ply 3: White's knight
+
+=== royal_fork ===
+  FEN: r3k3/5p2/8/1N6/8/8/5PPP/6K1 w - - 0 1
+  best Nc7+ (+625cp)  natural None (Nonecp)
+  static-only : quiet
+  recursive   : fork,hangingPiece
+  narrative   : ply 1: White forks Black's king and rook with Nc7+, winning the rook on a8. | ply 2: White can capture the undefended rook on a8 after Black's king steps away from the fork. | ply 3: White's knight moves to a8, leaving i
+
+=== absolute_pin ===
+  FEN: 4r1k1/8/8/8/4N3/8/8/4K3 w - - 0 1
+  best Kf1 (-498cp)  natural None (Nonecp)
+  static-only : hangingPiece,pin
+  recursive   : pin,hangingPiece,quiet
+  narrative   : ply 1: White leaves the knight on e4 hanging, allowing Black to capture it and easily win. | ply 2: White faces a lost endgame down a rook with no tactical counterplay. | ply 3: White faces a lost endgame down a rook wit
+
+=== quiet_italian ===
+  FEN: r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQK2R w KQkq - 0 6
+  best O-O (+20cp)  natural None (Nonecp)
+  static-only : quiet
+  recursive   : quiet
+  narrative   : ply 1: White castles to safety, maintaining a balanced position with plans for slow queenside expansion. | ply 2: Black completes castling, allowing White to initiate a quiet queenside expansion threatening the dark-squa
+
+==============================================================================
+fixture                         expected      static          tree✓ static✓ 
+elephant_trap_zwischenzug       intermezzo    hangingPiece    Y     n       
+petroff_discovered_check        discoveredCheckquiet           Y     n       
+royal_fork                      fork          quiet           Y     n       
+absolute_pin                    pin           hangingPiece,pinY     Y       
+quiet_italian                   quiet         quiet           Y     Y       
+==============================================================================
+recall  — recursive tree: 5/5   static baseline: 2/5
+avg tree size: 8.2 nodes | avg simulated LLM sub-calls: 8.4/position | wall time 197s
+OpenRouter usage: 11644 in / 26748 out tokens ≈ $0.2181 (google/gemini-3.6-flash; gemini-3.6-flash rates)

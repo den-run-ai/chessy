@@ -1,0 +1,47 @@
+
+=== elephant_trap_zwischenzug ===
+  FEN: r1bBkb1r/pppn1ppp/8/3n4/3P4/8/PP2PPPP/R2QKBNR b KQkq - 0 7
+  best Bb4+ (+353cp)  natural Kxd8 (-505cp)
+  static-only : hangingPiece
+  recursive   : intermezzo,hangingPiece,pin
+  narrative   : instead of the automatic Kxd8 (eval -505cp), the in-between move Bb4+ first (+353cp, gap +858cp), and the deferred capture still lands later | ply 1: pinned piece | ply 2: pinned piece
+
+=== petroff_discovered_check ===
+  FEN: rnbqkb1r/pppp1ppp/5n2/4N3/8/8/PPPPQPPP/RNB1KB1R w KQkq - 2 5
+  best Nc6+ (+582cp)  natural None (Nonecp)
+  static-only : quiet
+  recursive   : discoveredCheck,hangingPiece,pin
+  narrative   : ply 1: discovered check | ply 2: pinned piece | ply 3: pinned piece | ply 4: pinned piece
+
+=== royal_fork ===
+  FEN: r3k3/5p2/8/1N6/8/8/5PPP/6K1 w - - 0 1
+  best Nc7+ (+625cp)  natural None (Nonecp)
+  static-only : quiet
+  recursive   : fork,hangingPiece
+  narrative   : ply 1: fork hitting a8, e8
+
+=== absolute_pin ===
+  FEN: 4r1k1/8/8/8/4N3/8/8/4K3 w - - 0 1
+  best Kf1 (-498cp)  natural None (Nonecp)
+  static-only : hangingPiece,pin
+  recursive   : pin,hangingPiece
+  narrative   : 
+
+=== quiet_italian ===
+  FEN: r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQK2R w KQkq - 0 6
+  best O-O (+20cp)  natural None (Nonecp)
+  static-only : quiet
+  recursive   : quiet
+  narrative   : 
+
+==============================================================================
+fixture                         expected      static          tree✓ static✓ 
+elephant_trap_zwischenzug       intermezzo    hangingPiece    Y     n       
+petroff_discovered_check        discoveredCheckquiet           Y     n       
+royal_fork                      fork          quiet           Y     n       
+absolute_pin                    pin           hangingPiece,pinY     Y       
+quiet_italian                   quiet         quiet           Y     Y       
+==============================================================================
+recall  — recursive tree: 5/5   static baseline: 2/5
+avg tree size: 8.2 nodes | avg simulated LLM sub-calls: 8.2/position | wall time 3s
+cost projection (real RLM, haiku-class sub-calls, ~700 tok/call): ~8 calls ≈ 6K tokens/position
