@@ -205,7 +205,7 @@ class OpenRouterReasoner(Reasoner):
         # max_tokens is headroom, not spend: gemini-3.6-flash burns ~300-600
         # hidden reasoning tokens per call, and a 400 cap truncates the JSON.
         payload = {
-            "model": self.model, "temperature": 0, "max_tokens": 2000,
+            "model": self.model, "temperature": 0, "max_tokens": 4000,
             "messages": [{"role": "user", "content": prompt}],
         }
         if self.reasoning is not None:
@@ -247,19 +247,25 @@ class OpenRouterReasoner(Reasoner):
             text = (msg.get("reasoning") or "").strip()
         text = text.removeprefix("```json").removeprefix("```")
         text = text.removesuffix("```").strip()
-        parse_ok = True
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError:
-            m = re.search(r"\{.*\}", text, re.DOTALL)   # salvage last JSON blob
-            try:
-                parsed = json.loads(m.group(0)) if m else None
-            except json.JSONDecodeError:
-                parsed = None
-            if parsed is None:
-                parse_ok = False
-                parsed = {"motifs": [], "narrative": text[:80]}
-        if parse_ok:                       # never cache a failed parse
+            # Reasoning-in-content hosts bury the answer JSON at the end of
+            # the thought stream, which also quotes the features dict — so a
+            # greedy {.*} span is junk. Take the LAST balanced object that
+            # parses AND carries a "motifs" key.
+            parsed = None
+            for m in re.finditer(r"\{(?:[^{}]|\{[^{}]*\})*\}", text, re.DOTALL):
+                try:
+                    cand = json.loads(m.group(0))
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(cand, dict) and "motifs" in cand:
+                    parsed = cand
+        ok = isinstance(parsed, dict) and "motifs" in parsed
+        if not ok:
+            parsed = {"motifs": [], "narrative": text[:80]}
+        else:                              # never cache a failed parse
             cached.write_text(json.dumps(parsed))
         return parsed
 
