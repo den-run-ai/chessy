@@ -170,26 +170,37 @@ remains open.
 
 ### Reasoning-enabled DeepSeek: partial, and confounded by serving quality
 
-To separate "reasoning" from "model family," the same hard-theme puzzles
+To separate "reasoning" from "model family," the hard-theme puzzles
 (skewer, deflection, discoveredAttack — the 18 where no-reasoning DeepSeek
 scored 1/18 and reasoning gemini scored 11/18) were rerun with DeepSeek's
-reasoning enabled. **This arm is incomplete and its numbers should be read
-as provisional**:
+reasoning enabled. **The arm was abandoned before completion after three
+attempts; its numbers are provisional and reported as a negative result**:
 
 | config | hard-theme recall | n |
 |---|---|---|
 | tree + rules (no LLM) | 1/18 | 18 |
 | deepseek-v4-flash, reasoning OFF | 1/18 | 18 |
-| deepseek-v4-flash, reasoning ON (`:nitro`) | **2/14** | 14 (stopped) |
+| deepseek-v4-flash, reasoning ON (`:nitro`) | 2/14 | 14 |
+| deepseek-v4-flash, reasoning ON (Novita, fp8) | 0/3 | 3 |
 | gemini-3.6-flash, reasoning ON | **11/18** | 18 |
 
-Both DeepSeek hits with reasoning on were skewers — geometry it could not
-read at all without thinking. So reasoning lifts the model off the
-feature-sheet floor, but on this evidence does not approach gemini's
-performance on deflection or discoveredAttack. Two caveats keep this from
-being a clean model-vs-model claim: the arm never completed (reasoning
-latency ran 150–350s/puzzle, ~20× the no-reasoning path), and serving
-quality varied underneath it — see below.
+Pooled across both serving configurations, 14 distinct puzzles were scored
+and **2 were hit — both skewers** (deflection 0/6, discoveredAttack 0/5 at
+the call level). Reasoning lifts DeepSeek off the feature-sheet floor on
+the one motif that is pure geometry, but on this evidence does not
+approach gemini's performance on the motifs that require reading a
+mechanism out of the line.
+
+Why it was abandoned rather than completed: reasoning latency ran
+150–360s/puzzle (~20× the no-reasoning path, ~1 hour per 18-puzzle
+attempt), and three successive attempts were lost to a parse defect, a
+truncated-body defect, and a process-launch mistake — while every arm
+pointed the same direction. Completing it would plausibly move the result
+between 2/18 and 4/18 without changing the conclusion. The honest summary
+is therefore: *at the serving quality available here, reasoning-enabled
+deepseek-v4-flash did not close the gap to gemini-3.6-flash on
+inference-required motifs*, with the serving-quality caveats below and the
+fair reasoning-vs-reasoning comparison still formally open.
 
 ### Serving quality is an experimental variable, not an implementation detail
 
