@@ -5,3 +5,5 @@
 [5/18] 00AB1  skewer            r1128 static=n rules=n llm=Y llmOnly=Y 171.0s est=$0.026
 [6/18] 03jNq  discoveredAttack  r1255 static=n rules=n llm=n llmOnly=n 167.5s est=$0.032
 [7/18] 09uWW  deflection        r1452 static=n rules=n llm=n llmOnly=n 107.9s est=$0.035
+[8/18] 01qI9  skewer            r1327 static=n rules=n llm=n llmOnly=n 157.8s est=$0.041
+[9/18] 03HtZ  discoveredAttack  r1417 static=n rules=Y llm=n llmOnly=n 175.8s est=$0.046
