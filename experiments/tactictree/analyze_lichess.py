@@ -21,7 +21,7 @@ COLS = ["static", "rules", "llm", "llm_only"]
 BANDS = [(800, 1200), (1200, 1800), (1800, 2401)]
 
 
-def main(path):
+def main(path, in_rate=1.50, out_rate=7.50):
     recs = [json.loads(l) for l in open(path) if l.strip()]
     ok = [r for r in recs if "hits" in r]
     errs = [r for r in recs if "error" in r]
@@ -80,11 +80,13 @@ def main(path):
 
     if ok:
         last = recs[-1].get("cum_tokens", {})
-        est = last.get("in", 0) / 1e6 * 1.50 + last.get("out", 0) / 1e6 * 7.50
+        est = last.get("in", 0) / 1e6 * in_rate + last.get("out", 0) / 1e6 * out_rate
         print(f"\nsession tokens: {last.get('in', 0)} in / {last.get('out', 0)} out"
               f" ≈ ${est:.2f} | wall {sum(r.get('dt', 0) for r in recs):.0f}s")
 
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv) > 1 else
-         pathlib.Path(__file__).parent / "lichess/results_gemini-3.6-flash.jsonl")
+         pathlib.Path(__file__).parent / "lichess/results_gemini-3.6-flash.jsonl",
+         float(sys.argv[2]) if len(sys.argv) > 2 else 1.50,
+         float(sys.argv[3]) if len(sys.argv) > 3 else 7.50)

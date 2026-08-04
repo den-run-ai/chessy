@@ -80,7 +80,11 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--cap-usd", type=float, default=2.30)
     ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--in-rate", type=float, default=IN_RATE,
+                    help="$/M prompt tokens (cap math + est display)")
+    ap.add_argument("--out-rate", type=float, default=OUT_RATE)
     args = ap.parse_args()
+    in_rate, out_rate = args.in_rate, args.out_rate
 
     here = pathlib.Path(__file__).parent
     outp = here / args.out
@@ -122,7 +126,7 @@ def main():
         for i, row in enumerate(rows):
             if row["puzzle_id"] in done:
                 continue
-            est = usage["in"] / 1e6 * IN_RATE + usage["out"] / 1e6 * OUT_RATE
+            est = usage["in"] / 1e6 * in_rate + usage["out"] / 1e6 * out_rate
             if est >= args.cap_usd:
                 print(f"SPEND CAP: est ${est:.2f} >= ${args.cap_usd} — "
                       f"stopping before puzzle {i + 1}/{len(rows)}", flush=True)
@@ -194,7 +198,7 @@ def main():
                   f"rules={'Y' if h.get('rules') else 'n'} "
                   f"llm={'Y' if h.get('llm') else 'n'} "
                   f"llmOnly={'Y' if h.get('llm_only') else 'n'} "
-                  f"{rec['dt']:5.1f}s est=${usage['in'] / 1e6 * IN_RATE + usage['out'] / 1e6 * OUT_RATE:.3f}"
+                  f"{rec['dt']:5.1f}s est=${usage['in'] / 1e6 * in_rate + usage['out'] / 1e6 * out_rate:.3f}"
                   + (f"  ERR {rec['error']}" if "error" in rec else ""),
                   flush=True)
     eng.close()
@@ -222,7 +226,7 @@ def main():
           f" | natural branch existed: "
           f"{sum(r['natural_exists'] for r in ok)}/{len(ok)}"
           f" | errors: {len(errs)}")
-    est = usage["in"] / 1e6 * IN_RATE + usage["out"] / 1e6 * OUT_RATE
+    est = usage["in"] / 1e6 * in_rate + usage["out"] / 1e6 * out_rate
     print(f"this session: {usage['in']} in / {usage['out']} out tokens "
           f"≈ ${est:.4f} | wall {time.time() - t0:.0f}s"
           + (" | STOPPED AT SPEND CAP" if stopped else ""))
