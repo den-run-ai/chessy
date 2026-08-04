@@ -85,6 +85,8 @@ def main():
     ap.add_argument("--out-rate", type=float, default=OUT_RATE)
     ap.add_argument("--no-reasoning", action="store_true",
                     help="disable provider-side reasoning (distinct cache keys)")
+    ap.add_argument("--themes", default="",
+                    help="comma-separated sampled_theme filter (default: all)")
     args = ap.parse_args()
     in_rate, out_rate = args.in_rate, args.out_rate
 
@@ -102,6 +104,9 @@ def main():
                 pass
 
     rows = list(csv.DictReader(open(here / args.puzzles)))
+    if args.themes:
+        keep = set(args.themes.split(","))
+        rows = [r for r in rows if r["sampled_theme"] in keep]
     if args.limit:
         rows = rows[: args.limit]
 
