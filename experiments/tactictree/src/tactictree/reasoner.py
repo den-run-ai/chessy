@@ -189,6 +189,7 @@ class OpenRouterReasoner(Reasoner):
                                     if reasoning else "")
         self.calls = 0
         self.usage = usage if usage is not None else {"in": 0, "out": 0}
+        self.providers = {}              # serving provider -> fresh-call count
         self.cache = pathlib.Path(cache_dir)
         self.cache.mkdir(exist_ok=True)
 
@@ -227,6 +228,9 @@ class OpenRouterReasoner(Reasoner):
                     continue
                 raise
         self.calls += 1
+        prov = data.get("provider")
+        if prov:
+            self.providers[prov] = self.providers.get(prov, 0) + 1
         u = data.get("usage", {})
         self.usage["in"] += u.get("prompt_tokens", 0)
         self.usage["out"] += u.get("completion_tokens", 0)

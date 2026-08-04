@@ -186,6 +186,7 @@ def main():
                         "compose": fmt(llm_rep.llm_motifs or []),
                         "compose_narrative": llm_rep.llm_narrative[:200],
                         "llm_calls": r.calls,
+                        "providers": r.providers,
                     })
                 else:
                     llm_set, lonly = set(), set()
