@@ -83,6 +83,19 @@ Full transcripts: `RUN_LOG_openrouter_gemini-3.6-flash.txt`,
 responses) makes re-runs free: `OPENROUTER_API_KEY=dummy python3
 run_feasibility.py --reasoner openrouter` replays from cache.
 
+## Lichess evaluation (50 theme-stratified puzzles)
+
+`lichess_sample.py` streams the official puzzle dump and samples 8 themes
+with a rating-quantile spread; `run_lichess.py` scores four systems per
+puzzle; `analyze_lichess.py` prints the tables. Result (gemini-3.6-flash):
+**static 16% → tree+rules 64% → tree+LLM 84%** recall on the sampled theme,
+with the LLM strictly dominating the rules (10 wins, 0 losses), equal or
+better tag-verifiable precision, and every miss structurally attributable
+(mostly: no natural-move branch → the compose level never saw the contrast).
+Full analysis, forensics, and limitations: **[REPORT.md](REPORT.md)**.
+Artifacts: `lichess/puzzles_50.csv`, `lichess/results_gemini-3.6-flash.jsonl`,
+`lichess/RUN_LOG_lichess_gemini-3.6-flash.txt`.
+
 Plumbing note: `max_tokens` is set to 2000, not ~400 — reasoning models spend
 hundreds of hidden thinking tokens per call and a tight cap truncates the JSON
 answer. The run-log cost line prices all models at gemini-3.6-flash rates; the

@@ -1,7 +1,7 @@
 # tactictree — feasibility report
 
 **Recursive LLM labelling of chess tactics over minimal contrastive game trees**
-2026-08-04 · Stockfish 16 (depth 14) · google/gemini-3.6-flash via OpenRouter · total API spend ≈ $2.5 of a $3 throwaway key
+2026-08-04 · Stockfish 16 (depth 14) · google/gemini-3.6-flash via OpenRouter · total API spend $2.55 of a $3 throwaway key (verified against billed usage)
 
 ## 1. Thesis
 
@@ -76,8 +76,58 @@ spend cap degrades all themes uniformly if hit.
 
 ### Results
 
-*(pending — run in progress at time of writing; final tables inserted on
-completion by `analyze_lichess.py`)*
+50/50 puzzles scored, zero errors, and the engine's best move equalled the
+puzzle solution on **50/50** — the trees were built on the right lines
+throughout. Recall on the sampled theme:
+
+| theme | n | static | tree+rules | tree+LLM | natural branch existed |
+|---|---|---|---|---|---|
+| intermezzo | 8 | 0 | 6 | **7** | 7 |
+| deflection | 6 | 0 | 0 | **2** | 2 |
+| skewer | 6 | 0 | 0 | **4** | 1 |
+| discoveredAttack | 6 | 0 | 2 | **5** | 1 |
+| mateIn2 | 6 | 0 | 6 | 6 | 2 |
+| fork | 6 | 0 | 6 | 6 | 2 |
+| pin | 6 | 2 | 6 | 6 | 1 |
+| hangingPiece | 6 | 6 | 6 | 6 | 1 |
+| **TOTAL** | **50** | **8 (16%)** | **32 (64%)** | **42 (84%)** | 17/50 |
+
+Headline findings:
+
+- **The capability gradient is monotone and large**: static 16% → tree+rules
+  64% → tree+LLM 84%. The LLM column *strictly dominates* the rules column:
+  10 puzzles where the LLM hit and rules missed (all 3 covered skewers, 3
+  discoveredAttack, 2 deflection, 1 intermezzo, 1 more skewer), and **zero**
+  puzzles the other way.
+- **The pure LLM labeller (`llm_only`) equalled the full hybrid on all 50**
+  — the deterministic intermezzo rule never rescued the model. On the
+  flagship theme the model beat the hand rule 7/8 vs 6/8: the rule's rigid
+  "deferred capture" conjunct failed on 07b0J while the compose call judged
+  it correctly ("instead of the natural queen trade, the forcing intermezzo
+  38.Rd2 …").
+- **Tag-verifiable precision rises with recall**: static 24% → rules 34% →
+  LLM 40% of emitted labels appear in the puzzle's full Lichess tag set
+  (which understates true precision for all systems, but ranks them fairly).
+  The LLM is not buying recall with label spam (2.7 vs 2.5 labels/puzzle).
+- **A rating cliff above ~1800**: recall 10/11 (800–1199), 21/23
+  (1200–1799), 11/16 (1800–2400). High-rated skewer misses show *adjacent-
+  concept* confusion — the model labels `pin` where the mechanism is a
+  skewer — a graceful, human-like degradation rather than noise.
+- **Every one of the 8 misses is structurally explained**: 7 had no natural
+  branch (the recapture/SEE heuristic proposed nothing, so the compose level
+  — the only place contrastive motifs can be judged — never ran; this
+  includes the single intermezzo miss), and the 8th is the compose-priming
+  case (§6) where the model answered `intermezzo` on a deflection-tagged
+  contrast. None trace to plumbing, parsing, or the engine.
+- **The compose call fired on 17/50** (wherever a natural branch existed)
+  with verdict histogram intermezzo ×15, deflection ×3, mateThreat ×1 —
+  the priming gradient of §6 at scale, including two correct unprimed
+  `deflection` verdicts.
+
+Cost: 92.9K in / 276.0K out tokens ≈ **$2.21** for the 48-puzzle session
+(~$0.046/puzzle, ~7 calls each), wall 32 min. Whole-project billed total on
+the key, verified against OpenRouter's usage endpoint: **$2.55** — fixtures,
+two models, forensic probes, and the 50-puzzle run included.
 
 ## 5. What the recursion contributes — mechanism analysis
 

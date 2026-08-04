@@ -40,3 +40,25 @@
 [42/50] 04Wkb  deflection        r2378 static=n rules=n llm=n llmOnly=n  39.8s est=$1.832
 [43/50] 0ASzV  skewer            r2285 static=n rules=n llm=n llmOnly=n  55.3s est=$1.877
 [44/50] 02nDq  discoveredAttack  r2343 static=n rules=Y llm=Y llmOnly=Y  41.1s est=$1.921
+[45/50] 024nn  mateIn2           r2327 static=n rules=Y llm=Y llmOnly=Y  43.3s est=$1.972
+[46/50] 03E8w  fork              r2342 static=n rules=Y llm=Y llmOnly=Y  43.1s est=$2.019
+[47/50] 07Qve  pin               r2400 static=n rules=Y llm=Y llmOnly=Y  34.4s est=$2.058
+[48/50] 01aC9  hangingPiece      r2376 static=Y rules=Y llm=Y llmOnly=Y  43.3s est=$2.110
+[49/50] 0aR9t  intermezzo        r1999 static=n rules=n llm=n llmOnly=n  43.2s est=$2.160
+[50/50] 0PSpy  intermezzo        r2371 static=n rules=Y llm=Y llmOnly=Y  44.5s est=$2.209
+
+==========================================================================
+theme               n   static    rules      llm  llmOnly
+intermezzo          8     0/8     6/8     7/8     7/8
+deflection          6     0/6     0/6     2/6     2/6
+skewer              6     0/6     0/6     4/6     4/6
+discoveredAttack    6     0/6     2/6     5/6     5/6
+mateIn2             6     0/6     6/6     6/6     6/6
+fork                6     0/6     6/6     6/6     6/6
+pin                 6     2/6     6/6     6/6     6/6
+hangingPiece        6     6/6     6/6     6/6     6/6
+--------------------------------------------------------------------------
+TOTAL              50    8/50   32/50   42/50   42/50
+
+engine best == puzzle solution: 50/50 | natural branch existed: 17/50 | errors: 0
+this session: 92913 in / 276008 out tokens ≈ $2.2094 | wall 1941s
