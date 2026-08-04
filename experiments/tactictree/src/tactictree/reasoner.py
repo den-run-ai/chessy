@@ -8,6 +8,7 @@ logic (recursion.py) is identical for both — that separation is the point.
 from __future__ import annotations
 import json
 import hashlib
+import http.client
 import pathlib
 import os
 import re
@@ -227,7 +228,11 @@ class OpenRouterReasoner(Reasoner):
                     time.sleep(3 * (attempt + 1))
                     continue
                 raise
-            except (urllib.error.URLError, TimeoutError, OSError):
+            except (urllib.error.URLError, TimeoutError, OSError,
+                    http.client.HTTPException, json.JSONDecodeError):
+                # IncompleteRead (truncated body mid-stream) is an
+                # HTTPException, NOT an OSError — long reasoning streams from
+                # third-party hosts hit it regularly, so it must be retried.
                 if attempt < 2:
                     time.sleep(3 * (attempt + 1))
                     continue
