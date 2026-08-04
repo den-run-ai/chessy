@@ -38,3 +38,5 @@
 [40/50] 05DKu  hangingPiece      r1914 static=Y rules=Y llm=Y llmOnly=Y  31.7s est=$1.728
 [41/50] 052st  intermezzo        r1862 static=n rules=Y llm=Y llmOnly=Y  54.1s est=$1.788
 [42/50] 04Wkb  deflection        r2378 static=n rules=n llm=n llmOnly=n  39.8s est=$1.832
+[43/50] 0ASzV  skewer            r2285 static=n rules=n llm=n llmOnly=n  55.3s est=$1.877
+[44/50] 02nDq  discoveredAttack  r2343 static=n rules=Y llm=Y llmOnly=Y  41.1s est=$1.921
