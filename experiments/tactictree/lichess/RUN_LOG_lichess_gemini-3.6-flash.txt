@@ -23,3 +23,8 @@
 [25/50] 07b0J  intermezzo        r1572 static=n rules=n llm=Y llmOnly=Y  38.9s est=$1.015
 [26/50] 07WU6  deflection        r1612 static=n rules=n llm=Y llmOnly=Y  45.1s est=$1.070
 [27/50] 0N6FJ  skewer            r1554 static=n rules=n llm=Y llmOnly=Y  52.3s est=$1.132
+[28/50] 092BS  discoveredAttack  r1577 static=n rules=n llm=n llmOnly=n  45.2s est=$1.189
+[29/50] 01f7r  mateIn2           r1399 static=n rules=Y llm=Y llmOnly=Y  25.3s est=$1.215
+[30/50] 01pkQ  fork              r1588 static=n rules=Y llm=Y llmOnly=Y  46.5s est=$1.272
+[31/50] 05V7Z  pin               r1723 static=Y rules=Y llm=Y llmOnly=Y  21.8s est=$1.291
+[32/50] 05VYE  hangingPiece      r1676 static=Y rules=Y llm=Y llmOnly=Y  37.4s est=$1.335
