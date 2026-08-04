@@ -7,3 +7,17 @@
 [7/18] 09uWW  deflection        r1452 static=n rules=n llm=n llmOnly=n 107.9s est=$0.035
 [8/18] 01qI9  skewer            r1327 static=n rules=n llm=n llmOnly=n 157.8s est=$0.041
 [9/18] 03HtZ  discoveredAttack  r1417 static=n rules=Y llm=n llmOnly=n 175.8s est=$0.046
+[10/18] 07WU6  deflection        r1612 static=n rules=n llm=n llmOnly=n 201.8s est=$0.053
+[11/18] 0N6FJ  skewer            r1554 static=n rules=n llm=n llmOnly=n 203.0s est=$0.060
+SPEND CAP: est $0.06 >= $0.055 — stopping before puzzle 12/18
+
+==========================================================================
+theme               n   static    rules      llm  llmOnly
+deflection          4     0/4     0/4     0/4     0/4
+skewer              4     0/4     0/4     2/4     2/4
+discoveredAttack    3     0/3     1/3     0/3     0/3
+--------------------------------------------------------------------------
+TOTAL              11    0/11    1/11    2/11    2/11
+
+engine best == puzzle solution: 11/11 | natural branch existed: 3/11 | errors: 0
+this session: 26396 in / 143934 out tokens ≈ $0.0597 | wall 1857s | STOPPED AT SPEND CAP
