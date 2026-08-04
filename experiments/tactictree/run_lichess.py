@@ -83,6 +83,8 @@ def main():
     ap.add_argument("--in-rate", type=float, default=IN_RATE,
                     help="$/M prompt tokens (cap math + est display)")
     ap.add_argument("--out-rate", type=float, default=OUT_RATE)
+    ap.add_argument("--no-reasoning", action="store_true",
+                    help="disable provider-side reasoning (distinct cache keys)")
     args = ap.parse_args()
     in_rate, out_rate = args.in_rate, args.out_rate
 
@@ -93,7 +95,9 @@ def main():
     if outp.exists():
         for line in outp.read_text().splitlines():
             try:
-                done.add(json.loads(line)["id"])
+                r = json.loads(line)
+                if "hits" in r:            # errored puzzles get retried
+                    done.add(r["id"])
             except Exception:
                 pass
 
@@ -164,8 +168,10 @@ def main():
                 })
 
                 if not args.no_llm:
-                    r = OpenRouterReasoner(model=args.model, usage=usage,
-                                           cache_dir=str(here / ".llmcache"))
+                    r = OpenRouterReasoner(
+                        model=args.model, usage=usage,
+                        cache_dir=str(here / ".llmcache"),
+                        reasoning={"enabled": False} if args.no_reasoning else None)
                     llm_rep = compose_root(root, r, pov)
                     llm_set = set(llm_rep.motifs) | set(llm_rep.llm_motifs or [])
                     lonly = llm_only_motifs(root, llm_rep)

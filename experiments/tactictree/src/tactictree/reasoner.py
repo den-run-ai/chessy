@@ -10,6 +10,7 @@ import json
 import hashlib
 import pathlib
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -176,11 +177,16 @@ class OpenRouterReasoner(Reasoner):
 
     def __init__(self, model: str = "google/gemini-3.6-flash",
                  usage: dict | None = None,
-                 cache_dir: str = ".llmcache"):
+                 cache_dir: str = ".llmcache",
+                 reasoning: dict | None = None):
         self.key = os.environ.get("OPENROUTER_API_KEY")
         if not self.key:
             raise RuntimeError("Set OPENROUTER_API_KEY (do not hard-code it).")
         self.model = model
+        self.reasoning = reasoning       # e.g. {"enabled": False}
+        # cache key must distinguish reasoning configs of the same model
+        self._key_prefix = model + (json.dumps(reasoning, sort_keys=True)
+                                    if reasoning else "")
         self.calls = 0
         self.usage = usage if usage is not None else {"in": 0, "out": 0}
         self.cache = pathlib.Path(cache_dir)
@@ -188,16 +194,19 @@ class OpenRouterReasoner(Reasoner):
 
     # ---- plumbing -----------------------------------------------------------
     def _call(self, prompt: str) -> dict:
-        h = hashlib.sha1((self.model + prompt).encode()).hexdigest()
+        h = hashlib.sha1((self._key_prefix + prompt).encode()).hexdigest()
         cached = self.cache / f"{h}.json"
         if cached.exists():
             return json.loads(cached.read_text())
         # max_tokens is headroom, not spend: gemini-3.6-flash burns ~300-600
         # hidden reasoning tokens per call, and a 400 cap truncates the JSON.
-        body = json.dumps({
+        payload = {
             "model": self.model, "temperature": 0, "max_tokens": 2000,
             "messages": [{"role": "user", "content": prompt}],
-        }).encode()
+        }
+        if self.reasoning is not None:
+            payload["reasoning"] = self.reasoning
+        body = json.dumps(payload).encode()
         req = urllib.request.Request(self.URL, data=body, headers={
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json"})
@@ -221,14 +230,28 @@ class OpenRouterReasoner(Reasoner):
         u = data.get("usage", {})
         self.usage["in"] += u.get("prompt_tokens", 0)
         self.usage["out"] += u.get("completion_tokens", 0)
-        text = data["choices"][0]["message"]["content"]
-        text = text.strip().removeprefix("```json").removeprefix("```")
+        msg = data["choices"][0]["message"]
+        # some providers return content=None with the answer (or everything)
+        # in the reasoning channel — fall back rather than crash
+        text = (msg.get("content") or "").strip()
+        if not text:
+            text = (msg.get("reasoning") or "").strip()
+        text = text.removeprefix("```json").removeprefix("```")
         text = text.removesuffix("```").strip()
+        parse_ok = True
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError:
-            parsed = {"motifs": [], "narrative": text[:80]}
-        cached.write_text(json.dumps(parsed))
+            m = re.search(r"\{.*\}", text, re.DOTALL)   # salvage last JSON blob
+            try:
+                parsed = json.loads(m.group(0)) if m else None
+            except json.JSONDecodeError:
+                parsed = None
+            if parsed is None:
+                parse_ok = False
+                parsed = {"motifs": [], "narrative": text[:80]}
+        if parse_ok:                       # never cache a failed parse
+            cached.write_text(json.dumps(parsed))
         return parsed
 
     @staticmethod
