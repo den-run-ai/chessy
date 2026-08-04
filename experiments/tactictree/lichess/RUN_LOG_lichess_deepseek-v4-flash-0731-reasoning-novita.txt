@@ -1,0 +1,2 @@
+[1/18] 0BqNv  deflection        r822 static=n rules=n llm=n llmOnly=n 187.1s est=$0.004
+[2/18] 07dgW  skewer            r800 static=n rules=n llm=n llmOnly=n 243.4s est=$0.010

@@ -92,7 +92,11 @@ puzzle; `analyze_lichess.py` prints the tables. Result (gemini-3.6-flash):
 with the LLM strictly dominating the rules (10 wins, 0 losses), equal or
 better tag-verifiable precision, and every miss structurally attributable
 (mostly: no natural-move branch → the compose level never saw the contrast).
-Full analysis, forensics, and limitations: **[REPORT.md](REPORT.md)**.
+A cheap no-reasoning model (deepseek-v4-flash) scores **58%** on the same
+trees — exactly matching the hand-written rules and their theme-by-theme
+split — so reasoning, not just the tree, is what converts tree evidence
+into labels the features don't spell out. Full analysis, forensics,
+serving-quality findings, and limitations: **[REPORT.md](REPORT.md)**.
 Artifacts: `lichess/puzzles_50.csv`, `lichess/results_gemini-3.6-flash.jsonl`,
 `lichess/RUN_LOG_lichess_gemini-3.6-flash.txt`.
 

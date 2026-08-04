@@ -1,7 +1,7 @@
 # tactictree — feasibility report
 
 **Recursive LLM labelling of chess tactics over minimal contrastive game trees**
-2026-08-04 · Stockfish 16 (depth 14) · google/gemini-3.6-flash via OpenRouter · total API spend $2.91 of a $3 throwaway key (verified against billed usage)
+2026-08-04 · Stockfish 16 (depth 14) · google/gemini-3.6-flash via OpenRouter · total API spend $3.01 (verified against billed usage)
 
 ## 1. Thesis
 
@@ -168,9 +168,67 @@ Caveat: reasoning-*enabled* deepseek-v4-flash was not run at scale (provider
 congestion + budget); the fair reasoning-vs-reasoning model comparison
 remains open.
 
+### Reasoning-enabled DeepSeek: partial, and confounded by serving quality
+
+To separate "reasoning" from "model family," the same hard-theme puzzles
+(skewer, deflection, discoveredAttack — the 18 where no-reasoning DeepSeek
+scored 1/18 and reasoning gemini scored 11/18) were rerun with DeepSeek's
+reasoning enabled. **This arm is incomplete and its numbers should be read
+as provisional**:
+
+| config | hard-theme recall | n |
+|---|---|---|
+| tree + rules (no LLM) | 1/18 | 18 |
+| deepseek-v4-flash, reasoning OFF | 1/18 | 18 |
+| deepseek-v4-flash, reasoning ON (`:nitro`) | **2/14** | 14 (stopped) |
+| gemini-3.6-flash, reasoning ON | **11/18** | 18 |
+
+Both DeepSeek hits with reasoning on were skewers — geometry it could not
+read at all without thinking. So reasoning lifts the model off the
+feature-sheet floor, but on this evidence does not approach gemini's
+performance on deflection or discoveredAttack. Two caveats keep this from
+being a clean model-vs-model claim: the arm never completed (reasoning
+latency ran 150–350s/puzzle, ~20× the no-reasoning path), and serving
+quality varied underneath it — see below.
+
+### Serving quality is an experimental variable, not an implementation detail
+
+Running the same open-weights model through OpenRouter surfaced four
+distinct ways the *provider*, not the model, moved the results. All are
+engineering findings that any multi-provider LLM evaluation should control:
+
+1. **Quantization varies by host.** For this model the 18 endpoints split
+   fp8 / fp4 / undisclosed. Cheapest-first routing lands on fp4, and
+   throughput-first (`:nitro`) also tends to prefer quantized hosts, so
+   default routing can silently anti-select for precision.
+2. **Account data policy silently removes the best endpoint.** Pinning
+   DeepSeek first-party (fp8, 99.99% uptime) returns a *guardrail* 404 under
+   this account's privacy settings; unpinned routing instead served
+   Fireworks — undisclosed quantization, the lowest uptime on the list.
+3. **Unpinned routing shuffles hosts mid-tree.** With only a quantization
+   filter, a single puzzle's 7 sub-calls were served by 5–6 *different*
+   providers — flaky, and a confounded experiment. Runs now pin one
+   provider and record the serving provider per call.
+4. **Providers differ in output handling, and in answers.** Some stream
+   chain-of-thought as `content` with the answer JSON at the tail (28 of 32
+   calls in one attempt parsed empty until the extractor was hardened);
+   others truncate bodies mid-stream (`IncompleteRead`, which subclasses
+   `HTTPException` rather than `OSError` and so escaped the retry loop).
+   Most striking: on puzzle 07dgW, identical model/prompt/temperature-0
+   returned `skewer` (hit) from the nitro host and `fork` (miss) from
+   Novita — n=1, but a direct illustration that provider choice can flip a
+   scored outcome.
+
+Practical rule adopted here: **pin one provider, pin quantization, record
+the serving provider with every call, and never cache an unparsed
+response.** The gemini and no-reasoning-DeepSeek results above predate the
+provider-attribution patch, so their serving mix is unrecorded; the gemini
+numbers come from a single first-party-served model and are unaffected by
+the multi-host issues.
+
 Whole-project billed total on the key, verified against OpenRouter's usage
-endpoint: **$2.91** — fixtures, three models, forensic probes, ablations,
-and both 50-puzzle runs included.
+endpoint: **$3.01** — fixtures, three models, forensic probes, ablations,
+both 50-puzzle runs, and the partial reasoning arm included.
 
 ## 5. What the recursion contributes — mechanism analysis
 
