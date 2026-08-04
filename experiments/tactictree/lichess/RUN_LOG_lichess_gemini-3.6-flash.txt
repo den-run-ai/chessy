@@ -33,3 +33,8 @@
 [35/50] 08LZy  skewer            r1836 static=n rules=n llm=n llmOnly=n  38.0s est=$1.494
 [36/50] 05FMy  discoveredAttack  r1817 static=n rules=n llm=Y llmOnly=Y  46.0s est=$1.547
 [37/50] 00rNc  mateIn2           r1635 static=n rules=Y llm=Y llmOnly=Y  41.8s est=$1.595
+[38/50] 022dV  fork              r1838 static=n rules=Y llm=Y llmOnly=Y  54.5s est=$1.647
+[39/50] 04ViB  pin               r1941 static=Y rules=Y llm=Y llmOnly=Y  39.6s est=$1.694
+[40/50] 05DKu  hangingPiece      r1914 static=Y rules=Y llm=Y llmOnly=Y  31.7s est=$1.728
+[41/50] 052st  intermezzo        r1862 static=n rules=Y llm=Y llmOnly=Y  54.1s est=$1.788
+[42/50] 04Wkb  deflection        r2378 static=n rules=n llm=n llmOnly=n  39.8s est=$1.832

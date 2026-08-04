@@ -79,7 +79,52 @@ spend cap degrades all themes uniformly if hit.
 *(pending — run in progress at time of writing; final tables inserted on
 completion by `analyze_lichess.py`)*
 
-## 5. Forensics — why a deflection puzzle was missed (and what it proves)
+## 5. What the recursion contributes — mechanism analysis
+
+Three mechanisms, each visible in the run's own transcripts:
+
+**Search becomes recognition.** Every sub-call's task is node-local: one
+position, the move that just landed, a features JSON, the children's labels.
+Nothing ever simulates the game forward. The captured hidden reasoning shows
+the model spending its thinking tokens *verifying* handed evidence
+("confirming Rxf8# validity", cross-checking the pin against the features) —
+not exploring lines. This sidesteps exactly the failure mode measured in the
+LLM-chess literature (near-zero board-state tracking): calculation stays in
+the engine, recognition-and-naming in the model. The static baseline is the
+ablation of this property — it stares at the root, where the tactic has not
+happened yet, and collapses (see §4 table); the recursive labeller watches
+the tactic execute node by node.
+
+**Semantic backup — deep facts climb the tree as language.** Child labels are
+part of the parent's prompt, so a fact proven at ply k is context at ply k−1.
+The deflection puzzle's actual call chain: the leaf says *"White delivers
+checkmate with Rf8#"* → the Kh8 node, holding that label, says *"White can
+deliver immediate checkmate by capturing the pinned bishop"* → the f7+ node
+concludes *"pawn check forces the king to h8, setting up an immediate mate."*
+A mate found two plies deep is expressed, correctly attributed, at the top of
+the line — minimax backup where what propagates is the explanation, not a
+number. The skewer results are a pure win of this level: no skewer feature
+exists in the rules, and no compose call ran on most skewer puzzles (no
+natural branch), so every skewer the LLM caught came from node calls + line
+context alone.
+
+**Recursion levels map onto motif classes — and misses localize to starved
+levels.** Node calls catch localized motifs (fork, pin, mate-on-board); the
+backed-up line catches line-dependent motifs (discovered check, mate
+threats); only the root-level compose call, which sees both branches, catches
+contrastive motifs — every intermezzo/deflection verdict in the run came from
+it. Correspondingly, the contrastive-theme misses all occurred where no
+natural branch was built, i.e. where the compose level was never given input
+— not where a layer malfunctioned. Failures that localize this cleanly are
+evidence the decomposition matches the problem's structure.
+
+Two ablations would complete this analysis and are deliberately cheap
+(~$1 each with the cache): (a) whole-tree-in-one-prompt vs. the recursion,
+isolating whether decomposition beats a single long-context judgment; and
+(b) node calls with the `children` field removed, isolating the backup's
+contribution. Neither has been run yet.
+
+## 6. Forensics — why a deflection puzzle was missed (and what it proves)
 
 Puzzle 0BqNv (rating 822, tags: deflection, mate, mateIn2): after Black grabs
 a bishop with Rxd5, White mates via **f7+! Kh8 Rxf8#**. The g8 king is the f8
@@ -118,7 +163,7 @@ FEN, cross-checking the features JSON, confirming the mate is real — rather
 than open-ended search: exactly the division of labor the architecture
 intends.
 
-## 6. Cost & engineering notes
+## 7. Cost & engineering notes
 
 - gemini-3.6-flash is a reasoning model: ~300–900 hidden thinking tokens per
   sub-call. `max_tokens` must be headroom (2000), not a cost control — a 400
@@ -134,7 +179,7 @@ intends.
   cached node calls replay exactly; compose prompts embed evals and are
   engine-version-sensitive.
 
-## 7. Limitations
+## 8. Limitations
 
 - Recall is scored on the sampled theme only; the tag-verifiable precision
   metric (see results) uses the full tag set but Lichess tags are not
@@ -151,7 +196,7 @@ intends.
   the rule features cannot see; that is the point, but it means the rules
   column understates what richer hand-crafted features could do.
 
-## 8. Next steps
+## 9. Next steps
 
 1. Replace `natural_move()` with a Maia-style human-move model — §5 predicts
    this converts several deflection misses directly.
@@ -159,5 +204,7 @@ intends.
    (deflection, desperado, trap), not just intermezzo.
 3. Scale to ~1K puzzles for per-theme F1 with confidence intervals
    (≈ $45 at 3.6-flash rates, ≈ $2 at 2.5-flash rates given caching).
+5. Run the two §5 ablations: whole-tree-single-prompt, and node
+   calls without child labels (isolates the semantic backup).
 4. Let the LLM drive expansion RLM-style (choose which branches to open)
    instead of the fixed two-branch tree.
