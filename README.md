@@ -68,10 +68,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   player's opponent could not possibly checkmate by any series of legal
   moves (a helpmate counts, tested on the full position with both sides'
   pieces on the board). Every move records its think time and both
-  remaining clocks, so replay shows the clocks as they stood, undo rewinds
-  them, and the debug PGN embeds standard `[%clk h:mm:ss]` comments plus a
-  `TimeControl` tag. The live clock is persisted whenever the page is
-  hidden or closed, so reloading never refunds thinking time.
+  remaining clocks. During replay the primary clocks stay live and visibly
+  active, while a separately labelled snapshot shows the clocks after the
+  viewed move; replay exits automatically when the live side reaches 20
+  seconds. Undo rewinds the clocks, and the debug PGN embeds standard
+  `[%clk h:mm:ss]` comments plus a `TimeControl` tag. The live clock is
+  persisted whenever the page is hidden or closed, so reloading never refunds
+  thinking time.
 - **Persistence** — the game is saved to `localStorage` and survives reloads
   and app restarts. Each computer move retains its release, effective search
   config, completed/attempted depth, counters, White-POV score (including

@@ -332,6 +332,19 @@ body {
 .replay-nav .btn:disabled { opacity: 0.35; cursor: default; }
 .replay-nav .btn:disabled:hover { background: #3d3936; }
 
+.replay-clock-snapshot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+.replay-clock-snapshot[hidden] { display: none; }
+.replay-clock-snapshot > :first-child { flex-basis: 100%; }
+.replay-clock-snapshot b { color: var(--text); }
+
 .offline-note {
   font-size: 0.78rem;
   color: var(--muted);
