@@ -133,6 +133,32 @@ require('./helper').run('data-controls', async function (t) {
     localStorage.removeItem('chessy-archive-fenced-v2');
   });
 
+  // The saved live game can be the only surviving copy after its IndexedDB
+  // archive write failed. A blocked localStorage read is therefore UNKNOWN,
+  // not "no saved game": fail the backup instead of silently omitting it.
+  const unreadableSavedDownload = page.waitForEvent('download', { timeout: 1000 })
+    .then(function () { return true; }, function () { return false; });
+  await page.evaluate(function () {
+    const realGet = Storage.prototype.getItem;
+    window.__restoreSavedGameRead = function () {
+      Storage.prototype.getItem = realGet;
+      delete window.__restoreSavedGameRead;
+    };
+    Storage.prototype.getItem = function (key) {
+      if (key === 'chessy-game-v1') throw new Error('blocked');
+      return realGet.call(this, key);
+    };
+    document.getElementById('backupBtn').click();
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('dataStatus').dataset.kind === 'error';
+  }, { timeout: 5000 });
+  check(/saved-game recovery source/.test(await page.textContent('#dataStatus')),
+    'backup fails safely when the saved-game recovery source cannot be read');
+  check(!(await unreadableSavedDownload),
+    'an unreadable saved-game source emits no partial backup download');
+  await page.evaluate(function () { window.__restoreSavedGameRead(); });
+
   // An unreadable queue is unknown, not empty: fail the backup rather than
   // claim success while potentially omitting its only finished game.
   await page.evaluate(function () {

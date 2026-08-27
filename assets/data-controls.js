@@ -384,7 +384,11 @@
     // Local save first, pending queue last: a still-parked write is the most
     // recent authoritative intent, so it wins over the live save on a genuine
     // difference.
-    const saved = savedFinishedRecord();
+    const saveRead = { failed: false };
+    const saved = savedFinishedRecord(saveRead);
+    if (saveRead.failed) {
+      throw new Error('could not read the saved-game recovery source');
+    }
     if (saved) apply(saved);
     // Read the durable source directly even when archive.js is present:
     // pendingRecords() intentionally turns an unreadable queue into [], which
