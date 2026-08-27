@@ -44,12 +44,29 @@ require('./helper').run('clocks', async function (t) {
   check(!!rec && rec.thinkMs >= 0 && rec.wMs > 300000 && rec.bMs === 300000,
     'move records thinkMs and both remaining clocks');
 
-  // Replay shows the snapshot as of the viewed move.
+  // Replay keeps the LIVE clocks visible and active while showing the viewed
+  // move's historical values in a separately labelled snapshot. Otherwise a
+  // player can flag while the only clock on screen appears frozen (#34).
   await mv('e7', 'e5');
   await page.locator('#moveList .ply').nth(0).click();
-  check(secs(await clockText('#clockWhite')) === Math.ceil(rec.wMs / 1000),
-    'replay shows recorded clock snapshot');
+  const replayLiveBefore = secs(await clockText('#clockWhite'));
+  check((await page.getAttribute('#clockWhite', 'class')).includes('active'),
+    'replay keeps the live side active');
+  check(await page.locator('#replayClockSnapshot').isVisible() &&
+        (await page.textContent('#replayClockLabel')).includes('after 1. e4') &&
+        secs(await page.textContent('#replayClockWhite')) === Math.ceil(rec.wMs / 1000),
+    'replay labels the recorded clock snapshot separately');
+  const replaySnapshotBefore = secs(await page.textContent('#replayClockWhite'));
+  await page.waitForTimeout(1600);
+  const replayLiveAfter = secs(await clockText('#clockWhite'));
+  check(replayLiveAfter <= replayLiveBefore - 1,
+    'the visible live clock keeps decreasing during replay (' +
+      replayLiveBefore + 's -> ' + replayLiveAfter + 's)');
+  check(secs(await page.textContent('#replayClockWhite')) === replaySnapshotBefore,
+    'the separately labelled historical replay snapshot stays fixed');
   await page.keyboard.press('End');
+  check(await page.locator('#replayClockSnapshot').isHidden(),
+    'returning live hides the historical clock snapshot');
 
   // Persistence: reload restores clocks and control.
   await page.reload();
@@ -69,6 +86,22 @@ require('./helper').run('clocks', async function (t) {
   const afterReload = secs(await clockText('#clockWhite'));
   check(afterReload <= beforeWait - 2,
     'reload does not refund clock time (' + beforeWait + 's -> ' + afterReload + 's)');
+
+  // Cheap final warning: if replay is open when the live side enters its last
+  // 20 seconds, return to live automatically before the flag can appear.
+  await t.inject(function () {
+    const d = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    d.clocks.wMs = 19500; // white to move after 1. e4 e5
+    localStorage.setItem('chessy-game-v1', JSON.stringify(d));
+  });
+  await page.locator('#moveList .ply').nth(0).click();
+  await page.waitForFunction(function () {
+    return document.getElementById('replayLive').disabled &&
+      document.getElementById('clockWhite').classList.contains('low');
+  }, { timeout: 5000 });
+  check(!(await page.textContent('#status')).includes('Reviewing') &&
+        (await page.getAttribute('#clockWhite', 'class')).includes('active'),
+    'low live time automatically leaves replay with its warning visible');
 
   // Flag: give the side to move 700 ms and wait for the forfeit.
   await t.inject(function () {

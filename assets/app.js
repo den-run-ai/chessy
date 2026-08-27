@@ -40,6 +40,10 @@
   const clocksEl = document.getElementById('clocks');
   const clockWhiteEl = document.getElementById('clockWhite');
   const clockBlackEl = document.getElementById('clockBlack');
+  const replayClockSnapshotEl = document.getElementById('replayClockSnapshot');
+  const replayClockLabelEl = document.getElementById('replayClockLabel');
+  const replayClockWhiteEl = document.getElementById('replayClockWhite');
+  const replayClockBlackEl = document.getElementById('replayClockBlack');
   const capturedByWhiteEl = document.getElementById('capturedByWhite');
   const capturedByBlackEl = document.getElementById('capturedByBlack');
   const promotionDialog = document.getElementById('promotionDialog');
@@ -172,6 +176,7 @@
         fullStatus().over) return;
     const remaining = liveRemaining(state.turn);
     if (remaining <= 0) flag(state.turn);
+    else if (isViewing() && remaining <= 20000) setViewPly(null);
     else renderClocks();
   }
 
@@ -500,26 +505,35 @@
     updateLiveNote();
     const timed = clocks.wMs !== null;
     clocksEl.hidden = !timed;
+    replayClockSnapshotEl.hidden = !timed || !isViewing();
     if (!timed) return;
-    let w, b;
-    if (isViewing()) {
-      // Replay shows the clocks as they stood after the viewed move.
-      const snap = viewPly > 0 ? state.history[viewPly - 1].clock : null;
-      const base = tcParts().baseMs;
-      w = snap ? snap.wMs : base;
-      b = snap ? snap.bMs : base;
-    } else {
-      w = liveRemaining('w');
-      b = liveRemaining('b');
-    }
-    const running = !isViewing() && turnStartedAt !== null &&
-      !fullStatus().over;
+
+    // The primary clocks always belong to the live game. Replacing them with
+    // a historical snapshot while browsing made a running clock invisible,
+    // including its active-side and low-time warnings (#34).
+    const w = liveRemaining('w');
+    const b = liveRemaining('b');
+    const running = turnStartedAt !== null && !fullStatus().over;
     clockWhiteEl.querySelector('b').textContent = fmtClock(w);
     clockBlackEl.querySelector('b').textContent = fmtClock(b);
     clockWhiteEl.classList.toggle('active', running && state.turn === 'w');
     clockBlackEl.classList.toggle('active', running && state.turn === 'b');
     clockWhiteEl.classList.toggle('low', w < 20000);
     clockBlackEl.classList.toggle('low', b < 20000);
+
+    // Historical clocks remain useful evidence, but are explicitly secondary
+    // and labelled so they cannot be mistaken for the ticking game clocks.
+    if (isViewing()) {
+      const snap = viewPly > 0 ? state.history[viewPly - 1].clock : null;
+      const base = tcParts().baseMs;
+      const moveLabel = viewPly === 0 ? 'at the start position'
+        : 'after ' + (Math.floor((viewPly - 1) / 2) + 1) +
+          ((viewPly - 1) % 2 === 0 ? '. ' : '… ') +
+          state.history[viewPly - 1].san;
+      replayClockLabelEl.textContent = 'Replay clocks ' + moveLabel;
+      replayClockWhiteEl.textContent = fmtClock(snap ? snap.wMs : base);
+      replayClockBlackEl.textContent = fmtClock(snap ? snap.bMs : base);
+    }
   }
 
   function renderStatus(status) {
