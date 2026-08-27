@@ -263,7 +263,8 @@
             }
             [
               'candidates', 'shortlist', 'moments', 'unresolved',
-              'moveSummaries', 'reflected'
+              'moveSummaries', 'deepResults', 'quickResults', 'quickEvidence',
+              'quickSummaries', 'reflected'
             ].forEach(pruneList);
 
             job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
@@ -978,7 +979,9 @@
   // One resumable, reload-safe two-pass scan per game, keyed on gameId:
   //   { schema, algorithm, gameId, sourceRev, analysisRev, scanColor,
   //     state, pass, cursorPly, checked, total, candidates, shortlist,
-  //     verifyIndex, moments: [{ ply, playedSan }], unresolved, updatedAt }
+  //     quickResults, quickEvidence, quickSummaries, deepResults, verifyIndex,
+  //     moments: [{ ply, playedSan }],
+  //     unresolved, updatedAt }
   // archiveGame() prunes a job from the first divergent ply when its game is
   // revised, so a resume never trusts progress over positions that changed.
   function putJob(job) {

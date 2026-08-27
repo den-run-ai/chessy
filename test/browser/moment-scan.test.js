@@ -13,7 +13,7 @@ require('./helper').run('moment-scan', async function (t) {
       source: 'play',
       tags: {},
       sans: ['f3', 'e5', 'g4', 'Qh4#'],
-      playerColor: 'w',
+      playerColor: 'both',
       clocks: [
         { thinkMs: 1000, wMs: 59000, bMs: 60000 },
         { thinkMs: 1200, wMs: 59000, bMs: 58800 },
@@ -45,10 +45,6 @@ require('./helper').run('moment-scan', async function (t) {
     // still carries real analysis provenance/line shapes so the production
     // notation policy and durable summary boundary run unchanged.
     const realAnalyse = ChessyAnalysisService.analyse;
-    const realValidate = ChessyAnalysisResult.validate;
-    const realQuick = ChessyMomentSelector.quickCandidate;
-    const realShortlist = ChessyMomentSelector.shortlist;
-    const realAccept = ChessyMomentSelector.acceptDeep;
     ChessyAnalysisService.analyse = function (req, owner) {
       calls.push({ ply: req.ply, nodeLimit: req.opts.nodeLimit, owner: owner });
       const state = Chess.parseFen(req.fen);
@@ -64,14 +60,17 @@ require('./helper').run('moment-scan', async function (t) {
       };
       const line = function (move, moverScore, rank, amongCandidates) {
         const san = Chess.toSan(state, move, legal);
+        const uci = Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
         return {
           move: move,
-          uci: Chess.sqName(move.from) + Chess.sqName(move.to),
+          uci: uci,
           san: san,
           scoreCpWhite: whiteScore(moverScore),
           scoreCpPlayer: moverScore,
           mate: null,
           pv: [san],
+          pvUci: [uci],
           rank: rank,
           amongCandidates: amongCandidates
         };
@@ -81,8 +80,10 @@ require('./helper').run('moment-scan', async function (t) {
       return Promise.resolve({
         complete: true,
         turn: state.turn,
+        wdl: null,
         depth: req.opts.nodeLimit === 80000 ? 4 : 2,
         nodes: 100,
+        qnodes: 20,
         elapsedMs: 1,
         engine: {
           id: identity.engineId,
@@ -90,28 +91,16 @@ require('./helper').run('moment-scan', async function (t) {
           configHash: identity.configHash
         },
         positionFingerprint: identity.positionFingerprint,
+        scoreCpWhite: whiteScore(100),
+        scoreCpPlayer: 100,
+        mate: null,
         bestLines: [line(different, 100, 1, true)],
         playedLine: line(played, 100 - loss, 2, false),
-        classification: 'different',
+        classification: 'unknown-equivalence',
         internalScore: 999,
         stability: req.opts.nodeLimit === 80000
           ? { depths: [3, 4], bestMoveStable: true } : null
       });
-    };
-    ChessyAnalysisResult.validate = function () { return { ok: true }; };
-    ChessyMomentSelector.quickCandidate = function (result, meta) {
-      return {
-        ply: meta.ply,
-        playedSan: meta.playedSan,
-        turn: meta.turn,
-        internalScore: 999
-      };
-    };
-    ChessyMomentSelector.shortlist = function (candidates) {
-      return candidates.slice(0, 2);
-    };
-    ChessyMomentSelector.acceptDeep = function (quick, result, meta) {
-      return { ply: meta.ply, playedSan: meta.playedSan };
     };
 
     const done = await ChessyMomentScan.start(CoachReview.current(), { restart: true });
@@ -119,10 +108,6 @@ require('./helper').run('moment-scan', async function (t) {
     const cards = await CoachStore.listCards();
 
     ChessyAnalysisService.analyse = realAnalyse;
-    ChessyAnalysisResult.validate = realValidate;
-    ChessyMomentSelector.quickCandidate = realQuick;
-    ChessyMomentSelector.shortlist = realShortlist;
-    ChessyMomentSelector.acceptDeep = realAccept;
 
     return {
       loaded: !!ChessyAnalysisResult && !!ChessyMomentSelector &&
@@ -133,8 +118,13 @@ require('./helper').run('moment-scan', async function (t) {
       deepCalls: calls.filter(function (c) { return c.nodeLimit === 80000; }).length,
       owners: calls.every(function (c) { return c.owner === 'moment-scan'; }),
       storedState: stored && stored.state,
+      storedSchema: stored && stored.schema,
       storedMoments: stored && stored.moments,
       storedSummaries: stored && stored.moveSummaries,
+      storedDeepResults: stored && stored.deepResults,
+      storedQuickResults: stored && stored.quickResults,
+      storedQuickEvidence: stored && stored.quickEvidence,
+      storedQuickSummaries: stored && stored.quickSummaries,
       publicMoments: ChessyMomentScan.state().moments,
       publicReport: ChessyMomentScan.state().report,
       historyButtons: document.querySelectorAll('#reviewMoveList .review-ply:not(.empty)').length,
@@ -154,9 +144,9 @@ require('./helper').run('moment-scan', async function (t) {
   check(outcome.loaded, 'analysis, notation and scan modules load in release order');
   check(outcome.doneState === 'done' && outcome.storedState === 'done',
     'a completed scan is durably checkpointed in analysisJobs');
-  check(outcome.callPlies === '0,1,2,3,0,2' &&
+  check(outcome.callPlies === '0,1,2,3,0,1' &&
         outcome.quickCalls === 4 && outcome.deepCalls === 2,
-    'the browser controller scores every move then deep-checks at most two White decisions');
+    'the browser controller scores every move then deep-checks two side-separated decisions');
   check(outcome.owners,
     'every batch request carries moment-scan ownership');
   check(outcome.storedMoments.length === 2 && outcome.publicMoments.length === 2 &&
@@ -164,6 +154,24 @@ require('./helper').run('moment-scan', async function (t) {
     'public proposals contain only move location and played SAN');
   check(outcome.storedSummaries.length === 4 && outcome.publicReport === undefined,
     'score summaries persist privately without crossing Gate 0');
+  check(outcome.storedSchema === 3 && outcome.storedDeepResults.length === 2 &&
+        outcome.storedQuickResults.length === 4 &&
+        outcome.storedDeepResults.every(function (row) {
+          return row.resultPolicy === 'critical-deep-result-v1' &&
+            row.result && row.result.stability.bestMoveStable === true;
+        }) &&
+        outcome.storedQuickEvidence.length === 4 &&
+        outcome.storedQuickSummaries.length === 4 &&
+        outcome.storedQuickResults.every(function (row) {
+          return row.resultPolicy === 'critical-quick-result-v1' &&
+            row.result && row.result.complete === true &&
+            !Object.prototype.hasOwnProperty.call(row.result, 'internalScore');
+        }) &&
+        outcome.storedQuickEvidence.every(function (row) {
+          return typeof row.bestUci === 'string' && typeof row.bestSan === 'string' &&
+            row.profile.indexOf('quick') === 0;
+        }),
+    'schema-v3 checkpoints retain full validated quick/deep results for exact reload');
   check(!outcome.leaked && !outcome.startLeaked,
     'events and start() never leak internal score/category/better-move evidence');
   check(outcome.historyButtons === 4 &&
@@ -276,11 +284,11 @@ require('./helper').run('moment-scan', async function (t) {
 
   const fullReveal = await page.evaluate(async function () {
     const review = CoachReview.current();
-    const reflection = ChessyCalculation.build(review.states[2], {
+    const reflection = ChessyCalculation.build(review.states[1], {
       threatKind: 'none', candidateStatus: 'none',
       calculationStatus: 'none', evaluation: 'unclear'
     }).value;
-    await ChessyMomentScan.recordReflection(review, 2, reflection);
+    await ChessyMomentScan.recordReflection(review, 1, reflection);
     const state = ChessyMomentScan.state();
     return {
       unlocked: state.reportUnlocked,
@@ -296,9 +304,9 @@ require('./helper').run('moment-scan', async function (t) {
   check(fullReveal.unlocked === true &&
         fullReveal.completed === fullReveal.required &&
         fullReveal.report.length === 4 &&
-        fullReveal.scores.join('|') === '-3.5|≈ +0.5|-0.5|≈ +0.5' &&
+        fullReveal.scores.join('|') === '-3.5|+0.5|≈ -0.5|≈ +0.5' &&
         fullReveal.marks.join('|') === 'Chessy ??|Chessy ?!',
-    'all required reflections unlock scores for every move without inventing opponent NAGs');
+    'all required structured reflections unlock the complete score trail');
 
   // Reload destroys the in-memory controller owner but not the durable job or
   // its revision-bound structured-reflection receipts.

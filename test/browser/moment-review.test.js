@@ -61,14 +61,16 @@ require('./helper').run('moment-review', async function (t) {
       };
       const line = function (move, moverScore, rank, amongCandidates) {
         const san = Chess.toSan(state, move, legal);
+        const moveUci = uci(move);
         return {
           move: move,
-          uci: uci(move),
+          uci: moveUci,
           san: san,
           scoreCpWhite: whiteScore(moverScore),
           scoreCpPlayer: moverScore,
           mate: null,
           pv: [san],
+          pvUci: [moveUci],
           rank: rank,
           amongCandidates: amongCandidates
         };
@@ -78,8 +80,10 @@ require('./helper').run('moment-review', async function (t) {
       return Promise.resolve({
         complete: true,
         turn: state.turn,
+        wdl: null,
         depth: req.opts.nodeLimit === 80000 ? 4 : 2,
         nodes: 100,
+        qnodes: 20,
         elapsedMs: 1,
         engine: {
           id: identity.engineId,
@@ -87,9 +91,12 @@ require('./helper').run('moment-review', async function (t) {
           configHash: identity.configHash
         },
         positionFingerprint: identity.positionFingerprint,
+        scoreCpWhite: whiteScore(100),
+        scoreCpPlayer: 100,
+        mate: null,
         bestLines: [line(different, 100, 1, true)],
         playedLine: line(played, 100 - loss, 2, false),
-        classification: 'different',
+        classification: 'unknown-equivalence',
         internalScore: 999,
         stability: req.opts.nodeLimit === 80000
           ? { depths: [3, 4], bestMoveStable: true } : null
@@ -371,10 +378,11 @@ require('./helper').run('moment-review', async function (t) {
       };
       const line = function (move, score, rank, amongCandidates) {
         const san = Chess.toSan(state, move, legal);
+        const moveUci = uci(move);
         return {
-          move: move, uci: uci(move), san: san,
+          move: move, uci: moveUci, san: san,
           scoreCpWhite: whiteScore(score), scoreCpPlayer: score,
-          mate: null, pv: [san], rank: rank,
+          mate: null, pv: [san], pvUci: [moveUci], rank: rank,
           amongCandidates: amongCandidates
         };
       };
@@ -382,14 +390,16 @@ require('./helper').run('moment-review', async function (t) {
         Object.assign({}, req.opts, { positions: req.positions }));
       return Promise.resolve({
         complete: true, turn: state.turn,
+        wdl: null,
         depth: req.opts.nodeLimit === 80000 ? 4 : 2,
-        nodes: 100, elapsedMs: 1,
+        nodes: 100, qnodes: 20, elapsedMs: 1,
         engine: { id: identity.engineId, version: identity.version,
           configHash: identity.configHash },
         positionFingerprint: identity.positionFingerprint,
+        scoreCpWhite: whiteScore(100), scoreCpPlayer: 100, mate: null,
         bestLines: [line(different, 100, 1, true)],
         playedLine: line(played, 100 - loss, 2, false),
-        classification: 'different',
+        classification: 'unknown-equivalence',
         stability: req.opts.nodeLimit === 80000
           ? { depths: [3, 4], bestMoveStable: true } : null
       });
@@ -402,13 +412,26 @@ require('./helper').run('moment-review', async function (t) {
         playedMove: result.playedLine && result.playedLine.move };
     };
     ChessyMomentSelector.quickCandidate = function (result, meta) {
-      return { ply: meta.ply, playedSan: meta.playedSan, turn: meta.turn };
+      return {
+        ply: meta.ply,
+        playedSan: meta.playedSan,
+        turn: meta.turn,
+        internalScore: 999,
+        category: 'collapse',
+        bestSan: 'e4'
+      };
     };
     ChessyMomentSelector.shortlist = function (candidates) {
       return candidates.slice(0, 2);
     };
     ChessyMomentSelector.acceptDeep = function (quick, result, meta) {
-      return { ply: meta.ply, playedSan: meta.playedSan };
+      return {
+        ply: meta.ply,
+        playedSan: meta.playedSan,
+        internalScore: 999,
+        category: 'collapse',
+        bestSan: 'e4'
+      };
     };
     return CoachReview.openArchivedGame('phase5-review-ui');
   });

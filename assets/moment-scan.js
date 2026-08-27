@@ -31,8 +31,14 @@
       typeof ChessyMomentSelector === 'undefined' ||
       typeof ChessyAnalysisNotation === 'undefined') return;
 
-  var JOB_SCHEMA = 2;
-  var ALGORITHM = 'critical-moments-v2';
+  var JOB_SCHEMA = 3;
+  var ALGORITHM = 'critical-moments-v3';
+  var QUICK_EVIDENCE_SCHEMA = 1;
+  var QUICK_EVIDENCE_POLICY = 'critical-quick-evidence-v1';
+  var QUICK_RESULT_SCHEMA = 1;
+  var QUICK_RESULT_POLICY = 'critical-quick-result-v1';
+  var DEEP_RESULT_SCHEMA = 1;
+  var DEEP_RESULT_POLICY = 'critical-deep-result-v1';
   var QUICK = {
     maxDepth: 5, nodeLimit: 5000, nodeBudget: 150000, multiPV: 1, pvLen: 3
   };
@@ -58,6 +64,24 @@
   // installing an already-stale snapshot.
   var reflectionEpoch = 0;
   var OWNER = 'moment-scan';
+
+  var QUICK_EVIDENCE_KEYS = [
+    'accepted', 'bestMate', 'bestSan', 'bestScoreCpWhite', 'bestUci',
+    'clockAnomaly', 'configHash', 'depth', 'engineId', 'engineVersion',
+    'evidencePolicy', 'evidenceSchema', 'lossUtility', 'mate', 'playedSan',
+    'ply', 'policy', 'positionFingerprint', 'profile', 'schema',
+    'scoreCpWhite', 'stability', 'turn'
+  ].sort();
+  var QUICK_SUMMARY_KEYS = [
+    'accepted', 'bestMate', 'bestScoreCpWhite', 'clockAnomaly', 'configHash',
+    'depth', 'engineId', 'engineVersion', 'lossUtility', 'mate', 'playedSan',
+    'ply', 'policy', 'positionFingerprint', 'profile', 'schema',
+    'scoreCpWhite', 'stability', 'turn'
+  ].sort();
+  var QUICK_RESULT_KEYS = [
+    'ply', 'profile', 'result', 'resultPolicy', 'resultSchema'
+  ].sort();
+  var DEEP_RESULT_KEYS = QUICK_RESULT_KEYS;
 
   function now() {
     return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
@@ -208,6 +232,11 @@
     return { w: median(times.w), b: median(times.b) };
   }
 
+  function profileOf(name) {
+    return name === 'deep' ? DEEP :
+      (name === 'quick-fallback' ? QUICK_FALLBACK : QUICK);
+  }
+
   function arrays(job) {
     job.candidates = Array.isArray(job.candidates) ? job.candidates : [];
     job.shortlist = Array.isArray(job.shortlist) ? job.shortlist : [];
@@ -215,8 +244,17 @@
     job.unresolved = Array.isArray(job.unresolved) ? job.unresolved : [];
     job.moveSummaries = Array.isArray(job.moveSummaries)
       ? job.moveSummaries : [];
-    // Legacy schema-2 jobs may contain shape-valid `reflected` rows. They are
-    // untrusted cache fields and must not survive normalization/checkpointing.
+    job.deepResults = Array.isArray(job.deepResults)
+      ? job.deepResults : [];
+    job.quickEvidence = Array.isArray(job.quickEvidence)
+      ? job.quickEvidence : [];
+    job.quickResults = Array.isArray(job.quickResults)
+      ? job.quickResults : [];
+    job.quickSummaries = Array.isArray(job.quickSummaries)
+      ? job.quickSummaries : [];
+    // Legacy jobs may contain shape-valid `reflected` rows. They are untrusted
+    // cache fields and must not survive normalization/checkpointing; durable,
+    // replay-validated reflectionReceipts are the only Gate-0 authority.
     delete job.reflected;
     return job;
   }
@@ -238,6 +276,442 @@
     });
     job.moveSummaries.push(summary);
     job.moveSummaries.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function copyMate(mate) {
+    return mate === null ? null : {
+      forWhite: mate.forWhite,
+      inPlies: mate.inPlies
+    };
+  }
+
+  function copyStability(stability) {
+    return stability === null ? null : {
+      depths: stability.depths.slice(),
+      bestMoveStable: stability.bestMoveStable
+    };
+  }
+
+  /*
+   * The public ledger summary deliberately omits engine alternatives. Pass 1
+   * nevertheless needs the validated best root move to reproduce the
+   * selector's quiet-line weight after a reload. Keep its canonical UCI and
+   * SAN integrity mirror beside a frozen quick summary, then regenerate and
+   * compare SAN from legal replay; every other selector input is derived from
+   * the summary and exact archived clocks.
+   */
+  function makeQuickEvidence(result, summary) {
+    var top = result && Array.isArray(result.bestLines)
+      ? result.bestLines[0] : null;
+    if (!summary || (summary.profile !== 'quick' &&
+        summary.profile !== 'quick-fallback') || !top ||
+        typeof top.uci !== 'string' || typeof top.san !== 'string') return null;
+    return {
+      evidenceSchema: QUICK_EVIDENCE_SCHEMA,
+      evidencePolicy: QUICK_EVIDENCE_POLICY,
+      schema: summary.schema,
+      policy: summary.policy,
+      ply: summary.ply,
+      playedSan: summary.playedSan,
+      turn: summary.turn,
+      profile: summary.profile,
+      scoreCpWhite: summary.scoreCpWhite,
+      mate: copyMate(summary.mate),
+      bestScoreCpWhite: summary.bestScoreCpWhite,
+      bestMate: copyMate(summary.bestMate),
+      lossUtility: summary.lossUtility,
+      clockAnomaly: summary.clockAnomaly,
+      depth: summary.depth,
+      stability: copyStability(summary.stability),
+      accepted: summary.accepted,
+      engineId: summary.engineId,
+      engineVersion: summary.engineVersion,
+      configHash: summary.configHash,
+      positionFingerprint: summary.positionFingerprint,
+      bestUci: top.uci,
+      bestSan: top.san
+    };
+  }
+
+  function replaceQuickEvidence(job, evidence) {
+    if (!evidence) return;
+    job.quickEvidence = job.quickEvidence.filter(function (old) {
+      return old.ply !== evidence.ply;
+    });
+    job.quickEvidence.push(evidence);
+    job.quickEvidence.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  // The complete validated engine contract is the only durable Pass-1
+  // authority. First detach hostile/cyclic input, then copy the explicit
+  // AnalysisCore contract allowlist so validator-ignored provider/test fields
+  // can never influence restored selection.
+  function snapshotResult(result) {
+    try {
+      var encoded = JSON.stringify(result);
+      if (typeof encoded !== 'string') return null;
+      var source = JSON.parse(encoded);
+      if (!source || typeof source !== 'object' || Array.isArray(source)) {
+        return null;
+      }
+      var required = [
+        'bestLines', 'classification', 'complete', 'depth', 'elapsedMs',
+        'engine', 'mate', 'nodes', 'playedLine', 'positionFingerprint',
+        'qnodes', 'scoreCpPlayer', 'scoreCpWhite', 'stability', 'turn', 'wdl'
+      ];
+      if (!required.every(function (key) {
+        return Object.prototype.hasOwnProperty.call(source, key);
+      }) || source.wdl !== null ||
+          !Number.isInteger(source.qnodes) || source.qnodes < 0 ||
+          !Number.isInteger(source.nodes) || source.qnodes > source.nodes) {
+        return null;
+      }
+      function mate(value) {
+        return value === null ? null : value && typeof value === 'object'
+          ? { forWhite: value.forWhite, inPlies: value.inPlies } : value;
+      }
+      function move(value) {
+        return value && typeof value === 'object' ? {
+          from: value.from,
+          to: value.to,
+          promotion: value.promotion == null ? null : value.promotion
+        } : value;
+      }
+      function line(value, played) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+          return value;
+        }
+        var copy = {
+          move: move(value.move),
+          uci: value.uci,
+          san: value.san,
+          scoreCpWhite: value.scoreCpWhite,
+          scoreCpPlayer: value.scoreCpPlayer,
+          mate: mate(value.mate),
+          pv: Array.isArray(value.pv) ? value.pv.slice() : value.pv,
+          pvUci: Array.isArray(value.pvUci)
+            ? value.pvUci.slice() : value.pvUci
+        };
+        if (played) {
+          copy.rank = value.rank;
+          copy.amongCandidates = value.amongCandidates;
+        }
+        return copy;
+      }
+      return {
+        engine: source.engine && typeof source.engine === 'object' ? {
+          id: source.engine.id,
+          version: source.engine.version,
+          configHash: source.engine.configHash
+        } : source.engine,
+        turn: source.turn,
+        positionFingerprint: source.positionFingerprint,
+        wdl: null,
+        complete: source.complete,
+        depth: source.depth,
+        nodes: source.nodes,
+        qnodes: source.qnodes,
+        elapsedMs: source.elapsedMs,
+        scoreCpWhite: source.scoreCpWhite,
+        scoreCpPlayer: source.scoreCpPlayer,
+        mate: mate(source.mate),
+        bestLines: Array.isArray(source.bestLines)
+          ? source.bestLines.map(function (value) { return line(value, false); })
+          : source.bestLines,
+        playedLine: source.playedLine === null ? null :
+          line(source.playedLine, true),
+        classification: source.classification,
+        stability: source.stability === null ? null :
+          source.stability && typeof source.stability === 'object' ? {
+            depths: Array.isArray(source.stability.depths)
+              ? source.stability.depths.slice() : source.stability.depths,
+            bestMoveStable: source.stability.bestMoveStable
+          } : source.stability
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function makeQuickResult(result, ply, profile) {
+    var snapshot = snapshotResult(result);
+    if (!snapshot || !Number.isInteger(ply) ||
+        (profile !== 'quick' && profile !== 'quick-fallback')) return null;
+    return {
+      resultSchema: QUICK_RESULT_SCHEMA,
+      resultPolicy: QUICK_RESULT_POLICY,
+      ply: ply,
+      profile: profile,
+      result: snapshot
+    };
+  }
+
+  function replaceQuickResult(job, record) {
+    if (!record) return;
+    job.quickResults = job.quickResults.filter(function (old) {
+      return old.ply !== record.ply;
+    });
+    job.quickResults.push(record);
+    job.quickResults.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function makeDeepResult(result, ply) {
+    var snapshot = snapshotResult(result);
+    if (!snapshot || !Number.isInteger(ply)) return null;
+    return {
+      resultSchema: DEEP_RESULT_SCHEMA,
+      resultPolicy: DEEP_RESULT_POLICY,
+      ply: ply,
+      profile: 'deep',
+      result: snapshot
+    };
+  }
+
+  function replaceDeepResult(job, record) {
+    if (!record) return;
+    job.deepResults = job.deepResults.filter(function (old) {
+      return old.ply !== record.ply;
+    });
+    job.deepResults.push(record);
+    job.deepResults.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function copyQuickSummary(summary) {
+    return {
+      schema: summary.schema,
+      policy: summary.policy,
+      ply: summary.ply,
+      playedSan: summary.playedSan,
+      turn: summary.turn,
+      profile: summary.profile,
+      scoreCpWhite: summary.scoreCpWhite,
+      mate: copyMate(summary.mate),
+      bestScoreCpWhite: summary.bestScoreCpWhite,
+      bestMate: copyMate(summary.bestMate),
+      lossUtility: summary.lossUtility,
+      clockAnomaly: summary.clockAnomaly,
+      depth: summary.depth,
+      stability: copyStability(summary.stability),
+      accepted: summary.accepted,
+      engineId: summary.engineId,
+      engineVersion: summary.engineVersion,
+      configHash: summary.configHash,
+      positionFingerprint: summary.positionFingerprint
+    };
+  }
+
+  function replaceQuickSummary(job, summary) {
+    if (!summary) return;
+    job.quickSummaries = job.quickSummaries.filter(function (old) {
+      return old.ply !== summary.ply;
+    });
+    job.quickSummaries.push(copyQuickSummary(summary));
+    job.quickSummaries.sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function exactKeys(value, expected) {
+    return !!value && typeof value === 'object' && !Array.isArray(value) &&
+      Object.keys(value).sort().join('\n') === expected.join('\n');
+  }
+
+  function exactMateValue(value) {
+    return value === null ||
+      (exactKeys(value, ['forWhite', 'inPlies']) &&
+       typeof value.forWhite === 'boolean' &&
+       Number.isInteger(value.inPlies) && value.inPlies > 0);
+  }
+
+  function exactStabilityValue(value) {
+    return value === null ||
+      (exactKeys(value, ['bestMoveStable', 'depths']) &&
+       Array.isArray(value.depths) && value.depths.length === 2 &&
+       Object.keys(value.depths).sort().join('\n') === '0\n1' &&
+       Number.isInteger(value.depths[0]) && Number.isInteger(value.depths[1]) &&
+       typeof value.bestMoveStable === 'boolean');
+  }
+
+  function sameMateValue(a, b) {
+    return exactMateValue(a) && exactMateValue(b) &&
+      (a === null ? b === null : b !== null &&
+       a.forWhite === b.forWhite && a.inPlies === b.inPlies);
+  }
+
+  function sameStabilityValue(a, b) {
+    return exactStabilityValue(a) && exactStabilityValue(b) &&
+      (a === null ? b === null : b !== null &&
+       a.depths[0] === b.depths[0] && a.depths[1] === b.depths[1] &&
+       a.bestMoveStable === b.bestMoveStable);
+  }
+
+  function sameSummaryEvidence(evidence, summary) {
+    if (!exactKeys(summary, QUICK_SUMMARY_KEYS)) return false;
+    var scalarFields = [
+      'schema', 'policy', 'ply', 'playedSan', 'turn', 'profile',
+      'scoreCpWhite', 'bestScoreCpWhite', 'lossUtility', 'clockAnomaly',
+      'depth', 'accepted', 'engineId',
+      'engineVersion', 'configHash', 'positionFingerprint'
+    ];
+    return scalarFields.every(function (name) {
+      return evidence[name] === summary[name];
+    }) && sameMateValue(evidence.mate, summary.mate) &&
+      sameMateValue(evidence.bestMate, summary.bestMate) &&
+      sameStabilityValue(evidence.stability, summary.stability);
+  }
+
+  function sameQuickEvidence(actual, canonicalSummary, canonicalEvidence) {
+    return exactKeys(actual, QUICK_EVIDENCE_KEYS) &&
+      canonicalEvidence &&
+      actual.evidenceSchema === canonicalEvidence.evidenceSchema &&
+      actual.evidencePolicy === canonicalEvidence.evidencePolicy &&
+      actual.bestUci === canonicalEvidence.bestUci &&
+      actual.bestSan === canonicalEvidence.bestSan &&
+      sameSummaryEvidence(actual, canonicalSummary);
+  }
+
+  /*
+   * Canonical restored-state boundary. The full quick engine result is
+   * replay/provenance-validated against its exact request profile, then every
+   * summary and selector value is regenerated from that checked contract plus
+   * the current archived clocks. Persisted compact/derived fields never feed
+   * this function.
+   */
+  function rebuildQuickState(record, review, job) {
+    if (!exactKeys(record, QUICK_RESULT_KEYS) ||
+        record.resultSchema !== QUICK_RESULT_SCHEMA ||
+        record.resultPolicy !== QUICK_RESULT_POLICY ||
+        (record.profile !== 'quick' &&
+         record.profile !== 'quick-fallback') ||
+        !Number.isInteger(record.ply) ||
+        !scannable(review, record.ply)) {
+      return { ok: false };
+    }
+    var result = snapshotResult(record.result);
+    if (!result) return { ok: false };
+    var state = review.states[record.ply];
+    var req = moveRequest(
+      review, job, record.ply, profileOf(record.profile), false);
+    var checked;
+    try {
+      checked = ChessyAnalysisResult.validate(
+        result, state, expectedFor(state, req, true, 2));
+    } catch (e) {
+      checked = { ok: false };
+    }
+    if (!checked || !checked.ok) return { ok: false };
+    var meta = {
+      ply: record.ply,
+      playedSan: review.gs.history[record.ply].san,
+      turn: state.turn,
+      thinkMs: exactThinkMs(review.game, record.ply),
+      typicalThinkMs: job.typicalThinkMsBySide[state.turn],
+      validated: true
+    };
+    var summary = ChessyAnalysisNotation.summarize(
+      result, Object.assign({}, meta, { profile: record.profile }));
+    var evidence = summary ? makeQuickEvidence(result, summary) : null;
+    if (!summary || !evidence) return { ok: false };
+    return {
+      ok: true,
+      result: result,
+      summary: summary,
+      evidence: evidence,
+      candidate: eligible(review, record.ply, job.scanColor)
+        ? ChessyMomentSelector.quickCandidate(result, meta) : null
+    };
+  }
+
+  function validateDeepRecord(record, review, job, requireEligible) {
+    if (!exactKeys(record, DEEP_RESULT_KEYS) ||
+        record.resultSchema !== DEEP_RESULT_SCHEMA ||
+        record.resultPolicy !== DEEP_RESULT_POLICY ||
+        record.profile !== 'deep' ||
+        !Number.isInteger(record.ply) ||
+        !scannable(review, record.ply) ||
+        (requireEligible && !eligible(review, record.ply, job.scanColor))) {
+      return { ok: false, reason: 'deep-result-shape' };
+    }
+    var result = snapshotResult(record.result);
+    if (!result) return { ok: false, reason: 'deep-result-shape' };
+    var state = review.states[record.ply];
+    var req = moveRequest(review, job, record.ply, DEEP, false);
+    var checked;
+    try {
+      checked = ChessyAnalysisResult.validate(
+        result, state, expectedFor(state, req, true, 3));
+    } catch (e) {
+      checked = { ok: false, reason: 'validator-failed' };
+    }
+    if (!checked || !checked.ok) {
+      return { ok: false, reason: checked && checked.reason };
+    }
+    return {
+      ok: true,
+      result: result,
+      meta: {
+        ply: record.ply,
+        playedSan: review.gs.history[record.ply].san,
+        turn: state.turn,
+        thinkMs: exactThinkMs(review.game, record.ply),
+        typicalThinkMs: job.typicalThinkMsBySide[state.turn],
+        validated: true
+      }
+    };
+  }
+
+  function rebuildDeepState(record, quick, review, job) {
+    if (!quick || quick.ply !== (record && record.ply)) {
+      return { ok: false, reason: 'deep-result-shape' };
+    }
+    var checked = validateDeepRecord(record, review, job, true);
+    if (!checked.ok) return checked;
+    var accepted = ChessyMomentSelector.acceptDeep(
+      quick, checked.result, checked.meta);
+    var summary = ChessyAnalysisNotation.summarize(
+      checked.result, Object.assign({}, checked.meta, {
+        profile: 'deep',
+        accepted: !!accepted
+      }));
+    if (!summary) return { ok: false, reason: 'summary-invalid' };
+    return {
+      ok: true,
+      result: checked.result,
+      summary: summary,
+      accepted: accepted
+    };
+  }
+
+  function rebuildManualDeepState(record, review, job) {
+    var checked = validateDeepRecord(record, review, job, false);
+    if (!checked.ok) return checked;
+    var summary = ChessyAnalysisNotation.summarize(
+      checked.result, Object.assign({}, checked.meta, {
+        profile: 'deep',
+        accepted: false
+      }));
+    return summary ? {
+      ok: true,
+      result: checked.result,
+      summary: summary,
+      accepted: null
+    } : { ok: false, reason: 'summary-invalid' };
+  }
+
+  function sameFlatRecord(a, b) {
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' ||
+        Array.isArray(a) || Array.isArray(b)) return false;
+    var aKeys = Object.keys(a).sort();
+    var bKeys = Object.keys(b).sort();
+    return aKeys.length === bKeys.length &&
+      aKeys.every(function (key, index) {
+        return key === bKeys[index] && a[key] === b[key];
+      });
+  }
+
+  function sameCandidateList(actual, expected) {
+    return Array.isArray(actual) && actual.length === expected.length &&
+      actual.every(function (candidate, index) {
+        return sameFlatRecord(candidate, expected[index]);
+      });
   }
 
   function reflectionGate(job) {
@@ -476,6 +950,25 @@
     var ply = nextScannable(review, job.cursorPly);
     if (ply >= review.gs.history.length) {
       job.shortlist = ChessyMomentSelector.shortlist(job.candidates, 2);
+      // A manual deep promotion may predate shortlisting. Pass 2 owns exact
+      // admission for selected slots, so restore their canonical quick rows
+      // and verify them in order; unrelated manual rows remain authoritative.
+      var selected = Object.create(null);
+      job.shortlist.forEach(function (candidate) {
+        selected[candidate.ply] = true;
+      });
+      job.deepResults = job.deepResults.filter(function (record) {
+        return !selected[record.ply];
+      });
+      job.moments = job.moments.filter(function (moment) {
+        return !selected[moment.ply];
+      });
+      job.moveSummaries = job.moveSummaries.map(function (summary) {
+        return selected[summary.ply]
+          ? copyQuickSummary(job.quickSummaries.find(function (quickSummary) {
+            return quickSummary.ply === summary.ply;
+          })) : summary;
+      });
       job.pass = 2;
       job.verifyIndex = 0;
       delete job.error;
@@ -495,25 +988,21 @@
       if (out.unusable) {
         unresolved(job, ply, 'quick', out.reason);
       } else {
-        var entry = review.gs.history[ply];
-        var meta = {
-          ply: ply,
-          playedSan: entry.san,
-          turn: review.states[ply].turn,
-          thinkMs: exactThinkMs(review.game, ply),
-          typicalThinkMs:
-            job.typicalThinkMsBySide[review.states[ply].turn],
-          validated: true
-        };
-        var quickSummary = ChessyAnalysisNotation.summarize(
-          out.result, Object.assign({}, meta, { profile: out.profile }));
-        if (!quickSummary) {
-          unresolved(job, ply, 'quick', 'summary-invalid');
+        var record = makeQuickResult(out.result, ply, out.profile);
+        var rebuilt = record
+          ? rebuildQuickState(record, review, job) : { ok: false };
+        if (!rebuilt.ok) {
+          unresolved(job, ply, 'quick', 'quick-result-invalid');
         } else {
-          replaceSummary(job, quickSummary);
-          var candidate = eligible(review, ply, job.scanColor)
-            ? ChessyMomentSelector.quickCandidate(out.result, meta) : null;
-          if (candidate) job.candidates.push(candidate);
+          replaceSummary(job, rebuilt.summary);
+          replaceQuickSummary(job, rebuilt.summary);
+          replaceQuickEvidence(job, rebuilt.evidence);
+          replaceQuickResult(job, record);
+          job.candidates = job.candidates.filter(function (candidate) {
+            return candidate.ply !== ply;
+          });
+          if (rebuilt.candidate) job.candidates.push(rebuilt.candidate);
+          job.candidates.sort(function (a, b) { return a.ply - b.ply; });
         }
       }
       job.cursorPly = ply + 1; // cursor always denotes the NEXT absolute ply
@@ -537,44 +1026,37 @@
     var quick = job.shortlist[job.verifyIndex];
     var ply = quick.ply;
     if (!eligible(review, ply, job.scanColor)) {
-      unresolved(job, ply, 'deep', 'position-no-longer-eligible');
-      job.verifyIndex++;
-      return checkpoint(token, job).then(function (saved) {
-        return saved ? runPassTwo(review, job, token) : job;
-      });
+      return pauseDeepFailure(
+        token, job, ply, 'position-no-longer-eligible');
     }
-    var state = review.states[ply];
     var req = moveRequest(review, job, ply, DEEP, false);
     return ChessyAnalysisService.analyse(req, OWNER).then(function (res) {
       if (!owns(token, job)) return job;
       if (res === null) return pauseAfterNull(token, job);
-      var checked = validate(res, state, req, 3);
-      if (!checked.ok) {
-        unresolved(job, ply, 'deep', checked.reason);
-      } else {
-        var meta = {
-          ply: ply,
-          playedSan: review.gs.history[ply].san,
-          turn: state.turn,
-          thinkMs: exactThinkMs(review.game, ply),
-          typicalThinkMs: job.typicalThinkMsBySide[state.turn],
-          validated: true
-        };
-        var accepted = ChessyMomentSelector.acceptDeep(quick, res, meta);
-        var summary = ChessyAnalysisNotation.summarize(
-          res, Object.assign({}, meta, {
-            profile: 'deep',
-            accepted: !!accepted
-          }));
-        if (!summary) {
-          unresolved(job, ply, 'deep', 'summary-invalid');
-        } else {
-          replaceSummary(job, summary);
-        }
-        if (accepted && summary && summary.accepted === true) {
-          // Enforce the spoiler boundary even if a future selector regresses.
-          job.moments.push({ ply: accepted.ply, playedSan: accepted.playedSan });
-        }
+      var record = makeDeepResult(res, ply);
+      var rebuilt = record
+        ? rebuildDeepState(record, quick, review, job) : { ok: false };
+      if (!rebuilt.ok) {
+        return pauseDeepFailure(
+          token, job, ply, rebuilt.reason || 'deep-result-invalid');
+      }
+      replaceDeepResult(job, record);
+      replaceSummary(job, rebuilt.summary);
+      job.unresolved = job.unresolved.filter(function (item) {
+        return !(item.phase === 'deep' && item.ply === ply);
+      });
+      // Replace by ply even if a future caller repeats a verification. A
+      // rejected repeat must also remove stale admission for that slot.
+      job.moments = job.moments.filter(function (moment) {
+        return moment.ply !== ply;
+      });
+      if (rebuilt.accepted && rebuilt.summary.accepted === true) {
+        // Enforce the spoiler boundary even if a future selector regresses.
+        job.moments.push({
+          ply: rebuilt.accepted.ply,
+          playedSan: rebuilt.accepted.playedSan
+        });
+        job.moments.sort(function (a, b) { return a.ply - b.ply; });
       }
       job.verifyIndex++;
       delete job.error;
@@ -592,12 +1074,31 @@
     return checkpoint(token, job).then(function () { return job; });
   }
 
+  function pauseDeepFailure(token, job, ply, reason) {
+    if (!owns(token, job)) return Promise.resolve(job);
+    job.unresolved = job.unresolved.filter(function (item) {
+      return !(item.phase === 'deep' && item.ply === ply);
+    });
+    unresolved(job, ply, 'deep', reason);
+    job.state = 'paused';
+    job.error = 'Deep analysis was unusable — resume to retry.';
+    running = false;
+    return checkpoint(token, job).then(function () { return job; });
+  }
+
   function normalizeLoaded(job, review, scanColor) {
     if (!job || job.schema !== JOB_SCHEMA || job.algorithm !== ALGORITHM ||
         job.gameId !== review.game.id ||
         job.sourceRev !== sourceRevision(review.game, scanColor) ||
         job.analysisRev !== analysisRevision(review.game) ||
         job.scanColor !== scanColor) return null;
+    // Schema 3 persists these as integrity mirrors plus their independent,
+    // full quick-result authority. Missing/malformed arrays are not migrated.
+    if (!Array.isArray(job.candidates) || !Array.isArray(job.shortlist) ||
+        !Array.isArray(job.deepResults) ||
+        !Array.isArray(job.quickResults) ||
+        !Array.isArray(job.quickEvidence) ||
+        !Array.isArray(job.quickSummaries)) return null;
     arrays(job);
     function validRef(item) {
       return !!item && typeof item === 'object' &&
@@ -610,30 +1111,19 @@
     function validEligibleRef(item) {
       return validRef(item) && eligible(review, item.ply, scanColor);
     }
-    // The job store is cache state, not a trust boundary. A malformed/relic
-    // entry must neither throw during pass 2 nor surface an invented link.
-    job.shortlist = job.shortlist.filter(function (item) {
-      return validEligibleRef(item) &&
-        item.turn === review.states[item.ply].turn;
-    }).slice(0, 2);
-    var seenMoments = Object.create(null);
-    job.moments = job.moments.filter(function (m) {
-      if (!validEligibleRef(m) || seenMoments[m.ply]) return false;
-      seenMoments[m.ply] = true;
-      return true;
-    }).slice(0, 2);
+    var unresolvedCount = job.unresolved.length;
     job.unresolved = job.unresolved.filter(function (item) {
       return !!item && typeof item === 'object' &&
         Number.isInteger(item.ply) && item.ply >= 0 &&
         item.ply < review.gs.history.length &&
+        scannable(review, item.ply) &&
         (item.phase === 'quick' || item.phase === 'deep') &&
         typeof item.reason === 'string' && item.reason.length > 0;
     });
-    function profileOf(name) {
-      return name === 'deep' ? DEEP :
-        (name === 'quick-fallback' ? QUICK_FALLBACK : QUICK);
-    }
+    if (job.unresolved.length !== unresolvedCount) return null;
     var normalizedTypicalThinkMs = typicalThinkMsBySide(review, scanColor);
+    job.typicalThinkMsBySide = normalizedTypicalThinkMs;
+    delete job.typicalThinkMs;
     var seenSummaries = Object.create(null);
     job.moveSummaries = job.moveSummaries.filter(function (summary) {
       if (!summary || seenSummaries[summary.ply] ||
@@ -656,6 +1146,273 @@
       if (ok) seenSummaries[summary.ply] = true;
       return ok;
     }).sort(function (a, b) { return a.ply - b.ply; });
+    var seenQuickSummaries = Object.create(null);
+    job.quickSummaries = job.quickSummaries.filter(function (summary) {
+      if (!summary || seenQuickSummaries[summary.ply] ||
+          !validRef(summary) ||
+          (summary.profile !== 'quick' &&
+           summary.profile !== 'quick-fallback') ||
+          summary.turn !== review.states[summary.ply].turn ||
+          !exactKeys(summary, QUICK_SUMMARY_KEYS)) return false;
+      var req = moveRequest(
+        review, job, summary.ply, profileOf(summary.profile), false);
+      var identity = expectedFor(
+        review.states[summary.ply], req, true, 2).identity;
+      var ok = ChessyAnalysisNotation.validate(summary, {
+        ply: summary.ply,
+        playedSan: review.gs.history[summary.ply].san,
+        turn: review.states[summary.ply].turn,
+        thinkMs: exactThinkMs(review.game, summary.ply),
+        typicalThinkMs:
+          normalizedTypicalThinkMs[review.states[summary.ply].turn],
+        identity: identity
+      });
+      if (ok) seenQuickSummaries[summary.ply] = true;
+      return ok;
+    }).sort(function (a, b) { return a.ply - b.ply; });
+
+    job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
+      ? Math.min(job.cursorPly, review.gs.history.length) : 0;
+    job.total = countScannable(review);
+    if (!Number.isInteger(job.checked) || job.checked < 0 ||
+        job.checked !== countScannableBefore(review, job.cursorPly)) return null;
+    job.pass = job.pass === 2 ? 2 : 1;
+
+    // A quick failure proves only that the previous process could not obtain a
+    // usable result. It is never positive coverage for that ply. On restore,
+    // retry from the earliest such marker and discard every downstream cache
+    // field so an inserted unresolved suffix cannot advance Pass 1 or Pass 2.
+    var quickRetryPly = null;
+    job.unresolved.forEach(function (item) {
+      if (item.phase !== 'quick') return;
+      if (quickRetryPly === null || item.ply < quickRetryPly) {
+        quickRetryPly = item.ply;
+      }
+    });
+    if (quickRetryPly !== null) {
+      quickRetryPly = Math.min(job.cursorPly, quickRetryPly);
+      function beforeRetry(item) {
+        return !!item && Number.isInteger(item.ply) &&
+          item.ply < quickRetryPly;
+      }
+      job.quickResults = job.quickResults.filter(beforeRetry);
+      job.deepResults = [];
+      job.quickEvidence = job.quickEvidence.filter(beforeRetry);
+      job.quickSummaries = job.quickSummaries.filter(beforeRetry);
+      job.candidates = job.candidates.filter(beforeRetry);
+      job.cursorPly = quickRetryPly;
+      job.checked = countScannableBefore(review, quickRetryPly);
+      job.pass = 1;
+      job.verifyIndex = 0;
+      job.shortlist = [];
+      job.moments = [];
+      job.unresolved = [];
+      job.moveSummaries = job.quickSummaries.map(copyQuickSummary);
+      job.state = 'paused';
+      delete job.retry;
+      delete job.error;
+    }
+
+    var storedCandidates = job.candidates;
+    var storedShortlist = job.shortlist;
+
+    // Rebuild every compact/selector field from full quick results which pass
+    // the production replay/provenance validator. Persisted summaries,
+    // evidence, candidates and shortlist are comparison mirrors only.
+    var resultByPly = Object.create(null);
+    var evidenceByPly = Object.create(null);
+    var quickSummaryByPly = Object.create(null);
+    var canonicalCandidates = [];
+    function persistedPly(item) {
+      return item && typeof item === 'object' && Number.isInteger(item.ply)
+        ? item.ply : -1;
+    }
+    job.quickEvidence.sort(function (a, b) {
+      return persistedPly(a) - persistedPly(b);
+    });
+    job.quickSummaries.sort(function (a, b) {
+      return persistedPly(a) - persistedPly(b);
+    });
+    for (var mirrorIndex = 0;
+         mirrorIndex < job.quickEvidence.length; mirrorIndex++) {
+      var mirrorEvidence = job.quickEvidence[mirrorIndex];
+      if (!mirrorEvidence || evidenceByPly[mirrorEvidence.ply]) return null;
+      evidenceByPly[mirrorEvidence.ply] = mirrorEvidence;
+    }
+    for (var quickSummaryIndex = 0;
+         quickSummaryIndex < job.quickSummaries.length; quickSummaryIndex++) {
+      var quickSummary = job.quickSummaries[quickSummaryIndex];
+      if (!quickSummary || quickSummaryByPly[quickSummary.ply]) return null;
+      quickSummaryByPly[quickSummary.ply] = quickSummary;
+    }
+    job.quickResults.sort(function (a, b) {
+      return persistedPly(a) - persistedPly(b);
+    });
+    for (var resultIndex = 0;
+         resultIndex < job.quickResults.length; resultIndex++) {
+      var record = job.quickResults[resultIndex];
+      if (!record || resultByPly[record.ply] ||
+          record.ply >= job.cursorPly) return null;
+      var rebuilt = rebuildQuickState(record, review, job);
+      if (!rebuilt.ok) return null;
+      // Persist the allowlisted snapshot on the next checkpoint as well, so
+      // harmless validator-ignored fields injected into cache state are
+      // scrubbed rather than carried forward indefinitely.
+      record.result = rebuilt.result;
+      var matchingEvidence = evidenceByPly[record.ply];
+      var matchingQuickSummary = quickSummaryByPly[record.ply];
+      if (!matchingEvidence || !matchingQuickSummary ||
+          !sameQuickEvidence(
+            matchingEvidence, rebuilt.summary, rebuilt.evidence) ||
+          !sameSummaryEvidence(rebuilt.evidence, matchingQuickSummary)) {
+        return null;
+      }
+      var matchingSummary = summaryAt(job, record.ply);
+      if (!matchingSummary) return null;
+      if ((matchingSummary.profile === 'quick' ||
+           matchingSummary.profile === 'quick-fallback') &&
+          !sameSummaryEvidence(rebuilt.evidence, matchingSummary)) return null;
+      resultByPly[record.ply] = record;
+      if (rebuilt.candidate) canonicalCandidates.push(rebuilt.candidate);
+    }
+    for (var completedPly = 0;
+         completedPly < job.cursorPly; completedPly++) {
+      if (!scannable(review, completedPly)) continue;
+      if (!resultByPly[completedPly]) return null;
+    }
+    if (job.quickResults.length !== job.quickEvidence.length ||
+        job.quickResults.length !== job.quickSummaries.length) return null;
+    if (!sameCandidateList(storedCandidates, canonicalCandidates)) return null;
+    var canonicalShortlist = job.pass === 2
+      ? ChessyMomentSelector.shortlist(canonicalCandidates, 2) : [];
+    if (!sameCandidateList(storedShortlist, canonicalShortlist)) return null;
+    job.candidates = canonicalCandidates;
+    job.shortlist = canonicalShortlist;
+
+    if (!Number.isInteger(job.verifyIndex) || job.verifyIndex < 0 ||
+        job.verifyIndex > job.shortlist.length) return null;
+    var shortlistIndexByPly = Object.create(null);
+    job.shortlist.forEach(function (candidate, index) {
+      shortlistIndexByPly[candidate.ply] = index;
+    });
+
+    // A persisted deep failure is no more authoritative than a quick one. It
+    // marks the earliest slot which must be retried; it cannot complete a
+    // prefix, suppress a suggestion, or reach the zero-suggestion gate.
+    var deepRetryIndex = null;
+    var invalidDeepFailure = false;
+    job.unresolved.forEach(function (item) {
+      if (item.phase !== 'deep') return;
+      var index = shortlistIndexByPly[item.ply];
+      if (job.pass !== 2 || !Number.isInteger(index)) {
+        invalidDeepFailure = true;
+        return;
+      }
+      if (deepRetryIndex === null || index < deepRetryIndex) {
+        deepRetryIndex = index;
+      }
+    });
+    if (invalidDeepFailure) return null;
+    if (deepRetryIndex !== null) {
+      deepRetryIndex = Math.min(job.verifyIndex, deepRetryIndex);
+      var retryPly = Object.create(null);
+      for (var retryIndex = deepRetryIndex;
+           retryIndex < job.shortlist.length; retryIndex++) {
+        retryPly[job.shortlist[retryIndex].ply] = true;
+      }
+      job.deepResults = job.deepResults.filter(function (record) {
+        var index = record && typeof record === 'object'
+          ? shortlistIndexByPly[record.ply] : null;
+        return Number.isInteger(index) ? index < deepRetryIndex :
+          !!record && typeof record === 'object' &&
+            Number.isInteger(record.ply) && index === undefined;
+      });
+      job.moveSummaries = job.moveSummaries.filter(function (summary) {
+        return !retryPly[summary.ply];
+      });
+      for (var restoreIndex = deepRetryIndex;
+           restoreIndex < job.shortlist.length; restoreIndex++) {
+        var restorePly = job.shortlist[restoreIndex].ply;
+        var restoreSummary = quickSummaryByPly[restorePly];
+        if (!restoreSummary) return null;
+        job.moveSummaries.push(copyQuickSummary(restoreSummary));
+      }
+      job.moveSummaries.sort(function (a, b) { return a.ply - b.ply; });
+      job.moments = job.moments.filter(function (moment) {
+        return !retryPly[moment.ply];
+      });
+      job.verifyIndex = deepRetryIndex;
+      job.unresolved = [];
+      job.state = 'paused';
+      delete job.retry;
+      delete job.error;
+    }
+
+    var deepByPly = Object.create(null);
+    var expectedMoments = [];
+    function persistedPlyForDeep(item) {
+      return item && typeof item === 'object' && Number.isInteger(item.ply)
+        ? item.ply : -1;
+    }
+    job.deepResults.sort(function (a, b) {
+      return persistedPlyForDeep(a) - persistedPlyForDeep(b);
+    });
+    for (var deepIndex = 0;
+         deepIndex < job.deepResults.length; deepIndex++) {
+      var deepRecord = job.deepResults[deepIndex];
+      var completedIndex = deepRecord && typeof deepRecord === 'object'
+        ? shortlistIndexByPly[deepRecord.ply] : null;
+      if (!deepRecord || typeof deepRecord !== 'object' ||
+          deepByPly[deepRecord.ply]) return null;
+      var rebuiltDeep;
+      if (Number.isInteger(completedIndex)) {
+        if (completedIndex >= job.verifyIndex) return null;
+        rebuiltDeep = rebuildDeepState(
+          deepRecord, job.shortlist[completedIndex], review, job);
+      } else {
+        rebuiltDeep = rebuildManualDeepState(deepRecord, review, job);
+      }
+      if (!rebuiltDeep.ok) return null;
+      deepRecord.result = rebuiltDeep.result;
+      var deepSummary = summaryAt(job, deepRecord.ply);
+      if (!deepSummary ||
+          !sameSummaryEvidence(rebuiltDeep.summary, deepSummary)) return null;
+      deepByPly[deepRecord.ply] = deepRecord;
+      if (Number.isInteger(completedIndex) && rebuiltDeep.accepted) {
+        expectedMoments.push({
+          ply: rebuiltDeep.accepted.ply,
+          playedSan: rebuiltDeep.accepted.playedSan
+        });
+      }
+    }
+    for (var completedIndex = 0;
+         completedIndex < job.verifyIndex; completedIndex++) {
+      if (!deepByPly[job.shortlist[completedIndex].ply]) return null;
+    }
+    for (var suffixIndex = job.verifyIndex;
+         suffixIndex < job.shortlist.length; suffixIndex++) {
+      var suffixSummary = summaryAt(job, job.shortlist[suffixIndex].ply);
+      if (suffixSummary && suffixSummary.profile === 'deep') return null;
+    }
+    var deepSummaryCount = job.moveSummaries.filter(function (summary) {
+      return summary.profile === 'deep';
+    }).length;
+    if (job.deepResults.length !== deepSummaryCount ||
+        job.unresolved.length !== 0) return null;
+    if (job.moveSummaries.some(function (summary) {
+      return summary.profile === 'deep' && !deepByPly[summary.ply];
+    })) return null;
+
+    // Moments are an exact integrity mirror, not a filterable cache hint.
+    // Duplicate or malformed rows must restart instead of being silently
+    // collapsed into a seemingly canonical coaching requirement.
+    var seenMoments = Object.create(null);
+    if (job.moments.length > 2 || job.moments.some(function (m) {
+      if (!exactKeys(m, ['playedSan', 'ply']) ||
+          !validEligibleRef(m) || seenMoments[m.ply]) return true;
+      seenMoments[m.ply] = true;
+      return false;
+    })) return null;
     // Selector admission is represented redundantly on purpose: the summary
     // controls punctuation, while moments controls coaching links and Gate 0.
     // They must agree exactly, and every admitted moment must have originated
@@ -685,16 +1442,11 @@
     })) return null;
     // Never upgrade a legacy cache row into receipt authority.
     delete job.reflected;
-    job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
-      ? Math.min(job.cursorPly, review.gs.history.length) : 0;
-    job.total = countScannable(review);
-    if (!Number.isInteger(job.checked) || job.checked < 0 ||
-        job.checked !== countScannableBefore(review, job.cursorPly)) return null;
-    job.typicalThinkMsBySide = normalizedTypicalThinkMs;
-    delete job.typicalThinkMs;
-    job.pass = job.pass === 2 ? 2 : 1;
-    job.verifyIndex = Number.isInteger(job.verifyIndex) && job.verifyIndex >= 0
-      ? Math.min(job.verifyIndex, job.shortlist.length) : 0;
+    if (job.moments.length !== expectedMoments.length ||
+        job.moments.some(function (moment, index) {
+          return moment.ply !== expectedMoments[index].ply ||
+            moment.playedSan !== expectedMoments[index].playedSan;
+        })) return null;
     if (job.state === 'running') job.state = 'paused'; // stale process ownership
     if (job.state !== 'done' && job.state !== 'paused' &&
         job.state !== 'idle') job.state = 'paused';
@@ -705,16 +1457,6 @@
     if (job.pass === 2 &&
         (job.cursorPly !== review.gs.history.length ||
          job.checked !== job.total)) return null;
-    if (job.pass === 2) {
-      var quickUnresolved = Object.create(null);
-      job.unresolved.forEach(function (item) {
-        if (item.phase === 'quick') quickUnresolved[item.ply] = true;
-      });
-      for (var ply = 0; ply < review.gs.history.length; ply++) {
-        if (scannable(review, ply) &&
-            !summaryAt(job, ply) && !quickUnresolved[ply]) return null;
-      }
-    }
     return job;
   }
 
@@ -737,6 +1479,10 @@
       moments: [],
       unresolved: [],
       moveSummaries: [],
+      deepResults: [],
+      quickResults: [],
+      quickEvidence: [],
+      quickSummaries: [],
       typicalThinkMsBySide: typicalThinkMsBySide(review, scanColor),
       updatedAt: now()
     };
@@ -898,28 +1644,47 @@
     var req = moveRequest(review, job, ply, DEEP, false);
     var checked = validate(result, state, req, 3);
     if (!checked.ok) return Promise.resolve(false);
-    var summary = ChessyAnalysisNotation.summarize(result, {
-      ply: ply,
-      playedSan: review.gs.history[ply].san,
-      turn: state.turn,
-      thinkMs: exactThinkMs(review.game, ply),
-      typicalThinkMs: job.typicalThinkMsBySide[state.turn],
-      profile: 'deep',
-      accepted: job.moments.some(function (moment) {
-        return moment.ply === ply;
-      }),
-      validated: true
+    var shortlistIndex = job.shortlist.findIndex(function (candidate) {
+      return candidate.ply === ply;
     });
-    var identity = expectedFor(state, req, true, 3).identity;
-    if (!summary || !ChessyAnalysisNotation.validate(summary, {
-      ply: ply,
-      playedSan: review.gs.history[ply].san,
-      turn: state.turn,
-      thinkMs: exactThinkMs(review.game, ply),
-      typicalThinkMs: job.typicalThinkMsBySide[state.turn],
-      identity: identity
-    })) return Promise.resolve(false);
-    replaceSummary(job, summary);
+    if (shortlistIndex >= 0) {
+      var fillsRetry = shortlistIndex === job.verifyIndex &&
+        job.unresolved.some(function (item) {
+          return item.phase === 'deep' && item.ply === ply;
+        });
+      if (shortlistIndex > job.verifyIndex ||
+          (shortlistIndex === job.verifyIndex && !fillsRetry)) {
+        return Promise.resolve(false);
+      }
+      var record = makeDeepResult(result, ply);
+      var rebuilt = record ? rebuildDeepState(
+        record, job.shortlist[shortlistIndex], review, job) : { ok: false };
+      if (!rebuilt.ok) return Promise.resolve(false);
+      replaceDeepResult(job, record);
+      replaceSummary(job, rebuilt.summary);
+      job.moments = job.moments.filter(function (moment) {
+        return moment.ply !== ply;
+      });
+      if (rebuilt.accepted) {
+        job.moments.push({
+          ply: rebuilt.accepted.ply,
+          playedSan: rebuilt.accepted.playedSan
+        });
+        job.moments.sort(function (a, b) { return a.ply - b.ply; });
+      }
+      job.unresolved = job.unresolved.filter(function (item) {
+        return !(item.phase === 'deep' && item.ply === ply);
+      });
+      if (fillsRetry) job.verifyIndex++;
+      var scanToken = generation;
+      return checkpoint(scanToken, job);
+    }
+    var manualRecord = makeDeepResult(result, ply);
+    var manualRebuilt = manualRecord
+      ? rebuildManualDeepState(manualRecord, review, job) : { ok: false };
+    if (!manualRebuilt.ok) return Promise.resolve(false);
+    replaceDeepResult(job, manualRecord);
+    replaceSummary(job, manualRebuilt.summary);
     var token = generation;
     return checkpoint(token, job);
   }
