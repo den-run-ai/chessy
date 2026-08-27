@@ -9,8 +9,10 @@
 'use strict';
 require('../assets/engine.js');
 require('../assets/calculation.js');
+require('../assets/analysis-result.js');
 
 const Chess = globalThis.Chess;
+const ChessyAnalysisResult = globalThis.ChessyAnalysisResult;
 let passed = 0, failed = 0;
 function check(ok, label, detail) {
   if (ok) { passed++; console.log('  ok  ' + label); }
@@ -114,13 +116,6 @@ globalThis.ChessyAnalysisCore = {
   }
 };
 
-globalThis.ChessyAnalysisResult = {
-  validate: function (result) {
-    return result && result.valid === true && result.complete === true
-      ? { ok: true } : { ok: false, reason: result && result.reason || 'bad-result' };
-  }
-};
-
 let quickMetas = [];
 globalThis.ChessyMomentSelector = {
   constants: { lost: -300, mateUtility: 4000, deepRegret: 100 },
@@ -132,36 +127,68 @@ globalThis.ChessyMomentSelector = {
     return Math.max(-2000, Math.min(2000, mover));
   },
   clockFlags: function (meta) {
+    const loss = arguments.length > 1 ? arguments[1] : 0;
+    const impulse = !!meta && Number.isFinite(meta.thinkMs) &&
+      Number.isFinite(meta.typicalThinkMs) && meta.typicalThinkMs > 0 &&
+      loss >= 80 &&
+      meta.thinkMs <= Math.min(3000, meta.typicalThinkMs / 3);
+    const overthink = !!meta && Number.isFinite(meta.thinkMs) &&
+      Number.isFinite(meta.typicalThinkMs) && meta.typicalThinkMs > 0 &&
+      meta.thinkMs >= Math.max(30000, meta.typicalThinkMs * 3);
     return {
-      anomaly: !!meta && Number.isFinite(meta.thinkMs) &&
-        Number.isFinite(meta.typicalThinkMs) &&
-        meta.thinkMs >= Math.max(30000, meta.typicalThinkMs * 3)
+      impulse: impulse,
+      overthink: overthink,
+      anomaly: impulse || overthink
     };
   },
   evidence: function (result, meta) {
-    if (!meta.validated || !Number.isFinite(result.bestUtility) ||
-        !Number.isFinite(result.playedUtility)) return null;
+    if (!meta.validated) return null;
+    const bestUtility = this.utility(
+      result.bestLines && result.bestLines[0], meta.turn);
+    const playedUtility = this.utility(result.playedLine, meta.turn);
+    if (!Number.isFinite(bestUtility) || !Number.isFinite(playedUtility)) return null;
+    const loss = Math.max(0, bestUtility - playedUtility);
+    const clock = this.clockFlags(meta, loss);
     return {
-      bestUtility: result.bestUtility,
-      playedUtility: result.playedUtility,
-      loss: Math.max(0, result.bestUtility - result.playedUtility),
-      clockAnomaly: result.clockOnly === true
+      bestUtility: bestUtility,
+      playedUtility: playedUtility,
+      loss: loss,
+      clockAnomaly: clock.anomaly
     };
   },
   quickCandidate: function (result, meta) {
     quickMetas.push(clone(meta));
-    if (!meta.validated || result.nominate === false) return null;
+    const ev = this.evidence(result, meta);
+    if (!ev || (ev.loss < 80 && !ev.clockAnomaly)) return null;
+    const clock = this.clockFlags(meta, ev.loss);
+    const bestSan = result.bestLines[0].san;
+    const quiet = !/[x+#=]/.test(bestSan) && !/[x+#=]/.test(meta.playedSan);
     return {
+      algorithm: 'critical-v1',
       ply: meta.ply,
       playedSan: meta.playedSan,
       turn: meta.turn,
-      loss: result.loss || 100
+      bestUtility: ev.bestUtility,
+      playedUtility: ev.playedUtility,
+      loss: ev.loss,
+      defensive: false,
+      conversion: false,
+      collapse: false,
+      quiet: quiet,
+      impulse: clock.impulse,
+      overthink: clock.overthink,
+      clockAnomaly: clock.anomaly,
+      alreadyLost: ev.bestUtility <= -300,
+      score: ev.loss + (quiet ? 75 : 0) + (clock.overthink ? 250 : 0) +
+        (clock.impulse ? 75 : 0)
     };
   },
   shortlist: function (candidates, limit) { return candidates.slice(0, limit); },
   acceptDeep: function (quick, result, meta) {
+    const ev = this.evidence(result, meta);
     return meta.validated &&
-      (result.loss >= 100 || result.clockOnly === true) &&
+      ev && (ev.loss >= 100 ||
+        (quick.clockAnomaly === true && ev.clockAnomaly === true)) &&
       result.stability &&
       result.stability.bestMoveStable === true
       ? { ply: quick.ply, playedSan: quick.playedSan } : null;
@@ -177,32 +204,60 @@ function completeResult(req, supplied) {
   const state = Chess.parseFen(req.fen);
   const loss = Number.isFinite(supplied.loss) ? supplied.loss : 120;
   const turn = state.turn;
+  const legal = Chess.legalMoves(state);
+  const playedMove = req.opts.playedMove;
+  const bestMove = legal.find(function (move) {
+    return !playedMove || move.from !== playedMove.from || move.to !== playedMove.to ||
+      (move.promotion || null) !== (playedMove.promotion || null);
+  }) || playedMove || legal[0];
+  const uci = function (move) {
+    return Chess.sqName(move.from) + Chess.sqName(move.to) +
+      (move.promotion ? move.promotion.toLowerCase() : '');
+  };
+  const bestSan = Chess.toSan(state, bestMove, legal);
+  const playedSan = Chess.toSan(state, playedMove, legal);
   const base = {
     valid: true,
     complete: true,
     loss: loss,
-    bestUtility: loss,
-    playedUtility: 0,
     turn: turn,
+    wdl: null,
     depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+    nodes: 100,
+    qnodes: 20,
+    elapsedMs: 1,
     engine: {
       id: 'test',
       version: '1',
       configHash: String(req.opts.nodeLimit) + ':' + String(req.opts.multiPV)
     },
     positionFingerprint: Chess.positionKey(state),
+    scoreCpWhite: turn === 'w' ? loss : -loss,
+    scoreCpPlayer: loss,
+    mate: null,
     bestLines: [{
-      san: 'best',
+      move: bestMove,
+      uci: uci(bestMove),
+      san: bestSan,
       scoreCpWhite: turn === 'w' ? loss : -loss,
       scoreCpPlayer: loss,
-      mate: null
+      mate: null,
+      pv: [bestSan],
+      pvUci: [uci(bestMove)]
     }],
     playedLine: {
-      san: 'played',
+      move: playedMove,
+      uci: uci(playedMove),
+      san: playedSan,
       scoreCpWhite: 0,
       scoreCpPlayer: 0,
-      mate: null
+      mate: null,
+      pv: [playedSan],
+      pvUci: [uci(playedMove)],
+      rank: 2,
+      amongCandidates: false
     },
+    classification: 'unknown-equivalence',
     stability: req.opts.nodeLimit === 80000
       ? { depths: [3, 4], bestMoveStable: true } : null
   };
@@ -553,6 +608,22 @@ function manualDeepResult(review, ply, supplied) {
       afterPromotion.annotation === null,
     'manual deep verification promotes a quick row without inventing a NAG');
   const promotionJob = clone(jobs.get('manual-promotion'));
+  const manualDeepResultRow = promotionJob.deepResults.find(function (row) {
+    return row.ply === 5;
+  });
+  check(!!manualDeepResultRow &&
+      manualDeepResultRow.resultPolicy === 'critical-deep-result-v1',
+    'manual deep promotion persists its canonical full result authority');
+  const missingManualResult = clone(promotionJob);
+  missingManualResult.deepResults = missingManualResult.deepResults.filter(
+    function (row) { return row.ply !== 5; });
+  Scan.invalidate();
+  jobs.set('manual-promotion', missingManualResult);
+  requests = [];
+  const rejectedMissingManualResult = await Scan.load(promotionReview);
+  check(rejectedMissingManualResult.state === 'idle' &&
+      rejectedMissingManualResult.report === undefined && requests.length === 0,
+    'a manual deep summary cannot survive without its validated full result');
   const forgedAccepted = clone(promotionJob);
   forgedAccepted.moveSummaries.find(function (row) {
     return row.ply === 5;
@@ -595,6 +666,15 @@ function manualDeepResult(review, ply, supplied) {
   check(retried.state === 'done' && retried.cursorPly === 2 &&
     retried.checked === 2 && retried.unresolvedCount === 0,
     'a successful fallback advances and checkpoints the next absolute ply');
+  const fallbackEvidence = clone(jobs.get('retry').quickEvidence).find(function (row) {
+    return row.ply === 1;
+  });
+  Scan.invalidate();
+  requests = [];
+  const reloadedFallback = await Scan.load(retryReview);
+  check(fallbackEvidence.profile === 'quick-fallback' &&
+      reloadedFallback.state === 'done' && requests.length === 0,
+    'quick-fallback evidence rebinds to its distinct profile identity on reload');
 
   // Two unusable answers are recorded as unresolved, then the cursor advances;
   // a single bad position never traps the whole resumable job.
@@ -627,13 +707,443 @@ function manualDeepResult(review, ply, supplied) {
   check(requests[0].ply === 1 && resumed.state === 'done' && resumed.checked === 2,
     'resume restarts the exact interrupted ply and finishes from its checkpoint');
 
+  // A true reload after a nominated quick row must rebuild that candidate from
+  // evidence, preserve the next-ply cursor, and never reanalyse completed work.
+  reset();
+  const genuineReview = autoReview('genuine-evidence-resume', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 180 },
+    null
+  ];
+  const genuinePaused = await Scan.start(genuineReview, { restart: true });
+  const genuineCheckpoint = clone(jobs.get('genuine-evidence-resume'));
+  check(genuinePaused.state === 'paused' && genuinePaused.cursorPly === 1 &&
+      genuineCheckpoint.candidates.length === 1 &&
+      genuineCheckpoint.quickResults.length === 1 &&
+      genuineCheckpoint.quickResults[0].resultPolicy ===
+        'critical-quick-result-v1' &&
+      genuineCheckpoint.quickEvidence.length === 1 &&
+      typeof genuineCheckpoint.quickEvidence[0].bestUci === 'string',
+    'a paused pass-one checkpoint retains a canonical full quick result for its nominee');
+  Scan.invalidate();
+  requests = [];
+  replies = [];
+  const genuineResumed = await Scan.resume(genuineReview);
+  const resumedQuickPlies = requests.filter(function (req) {
+    return req.opts.nodeLimit !== 80000;
+  }).map(function (req) { return req.ply; });
+  check(resumedQuickPlies.join(',') === '1,2,3' &&
+      genuineResumed.state === 'done' &&
+      genuineResumed.moments.some(function (moment) { return moment.ply === 0; }) &&
+      jobs.get('genuine-evidence-resume').quickResults.length === 4 &&
+      jobs.get('genuine-evidence-resume').quickEvidence.length === 4,
+    'reload resumes at the exact next ply and preserves the result-derived nominee');
+
+  // Every persisted selector field is only an integrity mirror. Mutating any
+  // one of them must restart this recomputable job before analysis dispatch.
+  const candidateFields = Object.keys(genuineCheckpoint.candidates[0]);
+  const candidateTamperFailures = [];
+  for (const field of candidateFields) {
+    const tampered = clone(genuineCheckpoint);
+    const old = tampered.candidates[0][field];
+    tampered.candidates[0][field] = typeof old === 'boolean'
+      ? !old : (typeof old === 'number' ? old + 1 : old + '-tampered');
+    Scan.invalidate();
+    jobs.set('genuine-evidence-resume', tampered);
+    requests = [];
+    const loadedTamper = await Scan.load(genuineReview);
+    if (loadedTamper.state !== 'idle' || loadedTamper.moments.length !== 0 ||
+        loadedTamper.report !== undefined || requests.length !== 0) {
+      candidateTamperFailures.push(field);
+    }
+  }
+  check(candidateFields.length === 16 && candidateTamperFailures.length === 0,
+    'field-by-field candidate tampering restarts spoiler-free without deep dispatch',
+    candidateTamperFailures.join(','));
+
+  // The source evidence is independently strict: it must be complete, unique,
+  // quick-profiled, replay-legal and bound to the exact analysis/clock identity.
+  const alternateBestMove = Chess.legalMoves(genuineReview.states[0]).find(
+    function (move) {
+      return ChessyAnalysisResult.uciOf(move) !==
+        genuineCheckpoint.quickEvidence[0].bestUci;
+    });
+  const evidenceTamperCases = {
+    missing: function (job) { job.quickEvidence = []; },
+    duplicate: function (job) {
+      job.quickEvidence.push(clone(job.quickEvidence[0]));
+    },
+    illegalBestUci: function (job) { job.quickEvidence[0].bestUci = 'a1a1'; },
+    legalBestUci: function (job) {
+      job.quickEvidence[0].bestUci = ChessyAnalysisResult.uciOf(alternateBestMove);
+    },
+    wrongBestSan: function (job) { job.quickEvidence[0].bestSan += '+'; },
+    wrongProfile: function (job) { job.quickEvidence[0].profile = 'deep'; },
+    wrongIdentity: function (job) { job.quickEvidence[0].configHash += ':forged'; },
+    wrongClock: function (job) {
+      job.quickEvidence[0].clockAnomaly = !job.quickEvidence[0].clockAnomaly;
+    },
+    wrongLoss: function (job) { job.quickEvidence[0].lossUtility += 1; }
+  };
+  const evidenceTamperFailures = [];
+  for (const name of Object.keys(evidenceTamperCases)) {
+    const tampered = clone(genuineCheckpoint);
+    evidenceTamperCases[name](tampered);
+    Scan.invalidate();
+    jobs.set('genuine-evidence-resume', tampered);
+    requests = [];
+    const loadedTamper = await Scan.load(genuineReview);
+    if (loadedTamper.state !== 'idle' || loadedTamper.report !== undefined ||
+        requests.length !== 0) evidenceTamperFailures.push(name);
+  }
+  check(evidenceTamperFailures.length === 0,
+    'missing, duplicate or mutated quick evidence restarts without disclosure',
+    evidenceTamperFailures.join(','));
+  const cyclicEvidence = clone(genuineCheckpoint);
+  cyclicEvidence.quickEvidence[0].stability = {
+    depths: [cyclicEvidence.quickEvidence[0].depth - 1,
+      cyclicEvidence.quickEvidence[0].depth],
+    bestMoveStable: false
+  };
+  cyclicEvidence.quickEvidence[0].stability.self =
+    cyclicEvidence.quickEvidence[0].stability;
+  const realGetJobForCycle = CoachStore.getJob;
+  CoachStore.getJob = function () { return Promise.resolve(cyclicEvidence); };
+  Scan.invalidate();
+  requests = [];
+  let cyclicLoaded = null;
+  let cyclicThrew = false;
+  try { cyclicLoaded = await Scan.load(genuineReview); }
+  catch (e) { cyclicThrew = true; }
+  finally { CoachStore.getJob = realGetJobForCycle; }
+  check(!cyclicThrew && cyclicLoaded && cyclicLoaded.state === 'idle' &&
+      cyclicLoaded.report === undefined && requests.length === 0,
+    'cyclic nested quick evidence restarts instead of escaping normalization');
+
+  const fullResultTamperCases = {
+    missing: function (job) { job.quickResults = []; },
+    duplicate: function (job) {
+      job.quickResults.push(clone(job.quickResults[0]));
+    },
+    malformed: function (job) { job.quickResults[0] = null; },
+    wrapperField: function (job) { job.quickResults[0].unexpected = true; },
+    wrongProfile: function (job) { job.quickResults[0].profile = 'deep'; },
+    topEval: function (job) { job.quickResults[0].result.scoreCpWhite += 1; },
+    provenance: function (job) {
+      job.quickResults[0].result.engine.configHash += ':forged';
+    },
+    lineSan: function (job) {
+      job.quickResults[0].result.bestLines[0].san += '+';
+    }
+  };
+  const fullResultTamperFailures = [];
+  for (const name of Object.keys(fullResultTamperCases)) {
+    const tampered = clone(genuineCheckpoint);
+    fullResultTamperCases[name](tampered);
+    Scan.invalidate();
+    jobs.set('genuine-evidence-resume', tampered);
+    requests = [];
+    let loadedTamper = null;
+    let tamperThrew = false;
+    try { loadedTamper = await Scan.load(genuineReview); }
+    catch (e) { tamperThrew = true; }
+    if (tamperThrew || !loadedTamper || loadedTamper.state !== 'idle' ||
+        loadedTamper.report !== undefined || requests.length !== 0) {
+      fullResultTamperFailures.push(name);
+    }
+  }
+  check(fullResultTamperFailures.length === 0,
+    'missing, malformed or mutated full quick results restart before selection',
+    fullResultTamperFailures.join(','));
+
+  // Quick unresolved rows are retry markers, never positive Pass-1 coverage.
+  // Inflating the cursor with shape-valid failures must rewind to the earliest
+  // unproved ply and cannot jump directly into deep work.
+  const unresolvedEscalation = clone(genuineCheckpoint);
+  unresolvedEscalation.state = 'paused';
+  unresolvedEscalation.cursorPly = 4;
+  unresolvedEscalation.checked = 4;
+  unresolvedEscalation.unresolved = [1, 2, 3].map(function (ply) {
+    return { ply: ply, phase: 'quick', reason: 'forged-unusable' };
+  });
+  Scan.invalidate();
+  jobs.set('genuine-evidence-resume', unresolvedEscalation);
+  requests = [];
+  const rewoundUnresolved = await Scan.load(genuineReview);
+  const rewoundCheckpoint = clone(jobs.get('genuine-evidence-resume'));
+  check(rewoundUnresolved.state === 'paused' &&
+      rewoundUnresolved.cursorPly === 1 && rewoundUnresolved.checked === 1 &&
+      rewoundUnresolved.verifyTotal === 0 &&
+      rewoundUnresolved.moments.length === 0 && requests.length === 0 &&
+      rewoundCheckpoint.quickResults.length === 1 &&
+      rewoundCheckpoint.unresolved.length === 0,
+    'forged quick-unresolved coverage rewinds and prunes downstream work');
+  requests = [];
+  const retriedUnresolved = await Scan.resume(genuineReview);
+  const retryPrefix = requests.slice(0, 3).map(function (req) {
+    return req.ply + ':' + req.opts.nodeLimit;
+  }).join(',');
+  check(retryPrefix === '1:5000,2:5000,3:5000' &&
+      retriedUnresolved.state === 'done',
+    'resume recomputes every unproved quick ply before any deep dispatch');
+
+  // Reload midway through pass two must reconstruct the exact shortlist,
+  // retain the first verified moment, and dispatch only the remaining deep row.
+  reset();
+  const passTwoResumeReview = autoReview('pass-two-resume', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 160 },
+    { valid: true, complete: true, loss: 150 },
+    { valid: true, complete: true, loss: 140 },
+    { valid: true, complete: true, loss: 130 },
+    { valid: true, complete: true, loss: 160 },
+    null
+  ];
+  const passTwoPaused = await Scan.start(passTwoResumeReview, { restart: true });
+  const passTwoCheckpoint = clone(jobs.get('pass-two-resume'));
+  check(passTwoPaused.state === 'paused' && passTwoPaused.pass === 2 &&
+      passTwoCheckpoint.verifyIndex === 1 &&
+      passTwoCheckpoint.deepResults.length === 1 &&
+      passTwoCheckpoint.moments.length === 1 &&
+      passTwoCheckpoint.shortlist.length === 2,
+    'a mid-pass-two checkpoint records exactly one completed verification');
+  const deepResultTamperCases = {
+    missing: function (job) { job.deepResults = []; },
+    duplicate: function (job) {
+      job.deepResults.push(clone(job.deepResults[0]));
+    },
+    wrapperField: function (job) { job.deepResults[0].unexpected = true; },
+    topEval: function (job) { job.deepResults[0].result.scoreCpWhite += 1; },
+    provenance: function (job) {
+      job.deepResults[0].result.engine.configHash += ':forged';
+    },
+    lineSan: function (job) {
+      job.deepResults[0].result.bestLines[0].san += '+';
+    }
+  };
+  const deepResultTamperFailures = [];
+  for (const name of Object.keys(deepResultTamperCases)) {
+    const tampered = clone(passTwoCheckpoint);
+    deepResultTamperCases[name](tampered);
+    Scan.invalidate();
+    jobs.set('pass-two-resume', tampered);
+    requests = [];
+    const loadedTamper = await Scan.load(passTwoResumeReview);
+    if (loadedTamper.state !== 'idle' || loadedTamper.report !== undefined ||
+        requests.length !== 0) deepResultTamperFailures.push(name);
+  }
+  check(deepResultTamperFailures.length === 0,
+    'missing, duplicate or mutated full deep results restart before disclosure',
+    deepResultTamperFailures.join(','));
+  const forgedDeepFailure = clone(passTwoCheckpoint);
+  forgedDeepFailure.unresolved = [{
+    ply: forgedDeepFailure.shortlist[0].ply,
+    phase: 'deep',
+    reason: 'forged-unusable'
+  }];
+  Scan.invalidate();
+  jobs.set('pass-two-resume', forgedDeepFailure);
+  requests = [];
+  const rewoundDeepFailure = await Scan.load(passTwoResumeReview);
+  const rewoundDeepJob = clone(jobs.get('pass-two-resume'));
+  check(rewoundDeepFailure.state === 'paused' &&
+      rewoundDeepFailure.verifyIndex === 0 &&
+      rewoundDeepFailure.moments.length === 0 && requests.length === 0 &&
+      rewoundDeepJob.deepResults.length === 0 &&
+      rewoundDeepJob.unresolved.length === 0 &&
+      rewoundDeepJob.moveSummaries.find(function (summary) {
+        return summary.ply === forgedDeepFailure.shortlist[0].ply;
+      }).profile.indexOf('quick') === 0,
+    'a forged deep failure rewinds instead of suppressing a required suggestion');
+  const downgradedAcceptance = clone(passTwoCheckpoint);
+  downgradedAcceptance.moveSummaries.find(function (summary) {
+    return summary.ply === downgradedAcceptance.shortlist[0].ply;
+  }).accepted = false;
+  downgradedAcceptance.moments = [];
+  Scan.invalidate();
+  jobs.set('pass-two-resume', downgradedAcceptance);
+  requests = [];
+  const rejectedDowngrade = await Scan.load(passTwoResumeReview);
+  check(rejectedDowngrade.state === 'idle' &&
+      rejectedDowngrade.moments.length === 0 &&
+      rejectedDowngrade.report === undefined && requests.length === 0,
+    'full deep evidence prevents accepted-moment downgrade by coordinated mirrors');
+  const rolledBackPassTwo = clone(passTwoCheckpoint);
+  rolledBackPassTwo.verifyIndex = 0;
+  Scan.invalidate();
+  jobs.set('pass-two-resume', rolledBackPassTwo);
+  requests = [];
+  const rejectedRollback = await Scan.load(passTwoResumeReview);
+  check(rejectedRollback.state === 'idle' &&
+      rejectedRollback.moments.length === 0 &&
+      rejectedRollback.report === undefined && requests.length === 0,
+    'verifyIndex rollback cannot repeat an already completed deep slot');
+  const duplicateMoment = clone(passTwoCheckpoint);
+  duplicateMoment.moments.push(clone(duplicateMoment.moments[0]));
+  Scan.invalidate();
+  jobs.set('pass-two-resume', duplicateMoment);
+  requests = [];
+  const rejectedDuplicateMoment = await Scan.load(passTwoResumeReview);
+  check(rejectedDuplicateMoment.state === 'idle' &&
+      rejectedDuplicateMoment.moments.length === 0 &&
+      rejectedDuplicateMoment.report === undefined && requests.length === 0,
+    'duplicate persisted moments restart instead of being silently collapsed');
+  Scan.invalidate();
+  jobs.set('pass-two-resume', clone(passTwoCheckpoint));
+  const remainingDeepPly = passTwoCheckpoint.shortlist[1].ply;
+  requests = [];
+  replies = [];
+  const passTwoResumed = await Scan.resume(passTwoResumeReview);
+  check(requests.length === 1 && requests[0].opts.nodeLimit === 80000 &&
+      requests[0].ply === remainingDeepPly &&
+      passTwoResumed.state === 'done' && passTwoResumed.moments.length === 2,
+    'pass-two reload dispatches only the remaining canonical shortlist slot');
+  const verifiedDeepPly = passTwoCheckpoint.shortlist[0].ply;
+  const deepPhaseEvidenceTamper = clone(passTwoCheckpoint);
+  deepPhaseEvidenceTamper.quickEvidence.find(function (row) {
+    return row.ply === verifiedDeepPly;
+  }).depth = 1;
+  Scan.invalidate();
+  jobs.set('pass-two-resume', deepPhaseEvidenceTamper);
+  requests = [];
+  const rejectedDeepPhaseEvidence = await Scan.load(passTwoResumeReview);
+  check(rejectedDeepPhaseEvidence.state === 'idle' &&
+      rejectedDeepPhaseEvidence.report === undefined && requests.length === 0,
+    'quick evidence stays exactly bound after its public summary becomes deep');
+  const deepPhaseMirrorTamper = clone(passTwoCheckpoint);
+  deepPhaseMirrorTamper.quickSummaries.find(function (row) {
+    return row.ply === verifiedDeepPly;
+  }).lossUtility += 1;
+  Scan.invalidate();
+  jobs.set('pass-two-resume', deepPhaseMirrorTamper);
+  requests = [];
+  const rejectedDeepPhaseMirror = await Scan.load(passTwoResumeReview);
+  check(rejectedDeepPhaseMirror.state === 'idle' &&
+      rejectedDeepPhaseMirror.report === undefined && requests.length === 0,
+    'the retained validated quick-summary mirror is not independently mutable');
+  const shortlistTamperFailures = [];
+  for (const field of Object.keys(passTwoCheckpoint.shortlist[0])) {
+    const tampered = clone(passTwoCheckpoint);
+    const old = tampered.shortlist[0][field];
+    tampered.shortlist[0][field] = typeof old === 'boolean'
+      ? !old : (typeof old === 'number' ? old + 1 : old + '-tampered');
+    Scan.invalidate();
+    jobs.set('pass-two-resume', tampered);
+    requests = [];
+    const loadedTamper = await Scan.load(passTwoResumeReview);
+    if (loadedTamper.state !== 'idle' || loadedTamper.report !== undefined ||
+        requests.length !== 0) shortlistTamperFailures.push(field);
+  }
+  check(shortlistTamperFailures.length === 0,
+    'field-by-field shortlist tampering restarts before deep dispatch',
+    shortlistTamperFailures.join(','));
+
+  // A legitimate unusable deep result pauses without proving completion.
+  // Reload rewinds to that slot, retries it, and dispatches the remaining
+  // suffix exactly once.
+  reset();
+  const deepUnresolvedReview = autoReview('deep-unresolved', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 160 },
+    { valid: true, complete: true, loss: 150 },
+    { valid: true, complete: true, loss: 140 },
+    { valid: true, complete: true, loss: 130 },
+    { valid: false, complete: true, reason: 'deep-unusable' },
+    null
+  ];
+  const deepUnresolvedPaused = await Scan.start(
+    deepUnresolvedReview, { restart: true });
+  const deepUnresolvedCheckpoint = clone(jobs.get('deep-unresolved'));
+  check(deepUnresolvedPaused.state === 'paused' &&
+      deepUnresolvedCheckpoint.verifyIndex === 0 &&
+      deepUnresolvedCheckpoint.unresolved.length === 1 &&
+      deepUnresolvedCheckpoint.unresolved[0].phase === 'deep' &&
+      deepUnresolvedCheckpoint.moments.length === 0,
+    'an unusable deep result pauses without claiming a completed slot');
+  Scan.invalidate();
+  requests = [];
+  replies = [];
+  const deepUnresolvedResumed = await Scan.resume(deepUnresolvedReview);
+  check(requests.length === 2 && requests.every(function (request) {
+        return request.opts.nodeLimit === 80000;
+      }) &&
+      requests[0].ply === deepUnresolvedCheckpoint.shortlist[0].ply &&
+      requests[1].ply === deepUnresolvedCheckpoint.shortlist[1].ply &&
+      deepUnresolvedResumed.state === 'done',
+    'deep-unresolved reload retries the unproved slot before its suffix');
+
+  // Even coordinated corruption of every compact/derived field cannot create
+  // circular proof. The full quick result remains genuinely subthreshold,
+  // while the attacker forges matching quick mirrors, a candidate/shortlist,
+  // an accepted deep summary and moment beside a genuine Gate-0 receipt.
+  reset();
+  const coordinatedReview = autoReview('coordinated-forge', 2, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 20 },
+    { valid: true, complete: true, loss: 20 }
+  ];
+  await Scan.start(coordinatedReview, { restart: true });
+  await Scan.recordVerifiedSummary(
+    coordinatedReview, 0,
+    manualDeepResult(coordinatedReview, 0, { loss: 150 }));
+  const coordinatedReceipt = await Scan.recordReflection(
+    coordinatedReview, 0, reflectionFor(coordinatedReview, 0));
+  const coordinated = clone(jobs.get('coordinated-forge'));
+  const targetEvidence = coordinated.quickEvidence[0];
+  const targetQuickSummary = coordinated.quickSummaries[0];
+  const forgedEvidence = clone(genuineCheckpoint.quickEvidence[0]);
+  const forgedQuickSummary = clone(genuineCheckpoint.quickSummaries[0]);
+  [
+    'ply', 'playedSan', 'turn', 'profile', 'engineId', 'engineVersion',
+    'configHash', 'positionFingerprint', 'bestUci', 'bestSan'
+  ].forEach(function (field) {
+    if (Object.prototype.hasOwnProperty.call(targetEvidence, field)) {
+      forgedEvidence[field] = clone(targetEvidence[field]);
+    }
+  });
+  [
+    'ply', 'playedSan', 'turn', 'profile', 'engineId', 'engineVersion',
+    'configHash', 'positionFingerprint'
+  ].forEach(function (field) {
+    forgedQuickSummary[field] = clone(targetQuickSummary[field]);
+  });
+  coordinated.quickEvidence = [forgedEvidence];
+  coordinated.quickSummaries = [forgedQuickSummary];
+  const forgedCandidate = clone(genuineCheckpoint.candidates[0]);
+  forgedCandidate.ply = 0;
+  forgedCandidate.playedSan = coordinatedReview.gs.history[0].san;
+  forgedCandidate.turn = coordinatedReview.states[0].turn;
+  coordinated.candidates = [forgedCandidate];
+  coordinated.shortlist = [clone(forgedCandidate)];
+  coordinated.moments = [{
+    ply: 0,
+    playedSan: coordinatedReview.gs.history[0].san
+  }];
+  coordinated.moveSummaries.find(function (summary) {
+    return summary.ply === 0;
+  }).accepted = true;
+  coordinated.pass = 2;
+  coordinated.verifyIndex = 1;
+  coordinated.state = 'done';
+  Scan.invalidate();
+  jobs.set('coordinated-forge', coordinated);
+  requests = [];
+  const rejectedCoordinated = await Scan.load(coordinatedReview);
+  check(coordinatedReceipt === true &&
+      coordinated.quickResults[0].result.bestLines[0].scoreCpPlayer === 20 &&
+      coordinated.quickEvidence[0].lossUtility >= 80 &&
+      rejectedCoordinated.state === 'idle' &&
+      rejectedCoordinated.moments.length === 0 &&
+      rejectedCoordinated.report === undefined && requests.length === 0,
+    'coordinated full-state forgery cannot override the validated quick result');
+
   // A process that dies while marked running has no live owner on reload.
   // load() normalizes and persists it as paused without dispatching analysis.
   reset();
   const reloadReview = autoReview('reload', 2, 'b');
   const seeded = {
-    schema: 2,
-    algorithm: 'critical-moments-v2',
+    schema: 3,
+    algorithm: 'critical-moments-v3',
     gameId: 'reload',
     sourceRev: Scan.sourceRevision(reloadReview.game, 'b'),
     analysisRev: Scan.analysisRevision(reloadReview.game),
@@ -644,23 +1154,31 @@ function manualDeepResult(review, ply, supplied) {
     checked: 1,
     total: 2,
     candidates: [],
-    shortlist: [{
-      ply: 1, playedSan: reloadReview.gs.history[1].san, turn: 'w'
-    }],
+    shortlist: [],
     verifyIndex: 0,
     moments: [],
-    unresolved: [],
+    unresolved: [{ ply: 0, phase: 'quick', reason: 'fixture-unusable' }],
     moveSummaries: [],
+    deepResults: [],
+    quickResults: [],
+    quickEvidence: [],
+    quickSummaries: [],
     reflected: []
   };
   jobs.set('reload', clone(seeded));
   const loaded = await Scan.load(reloadReview);
   check(loaded.state === 'paused' && jobs.get('reload').state === 'paused' &&
     requests.length === 0,
-    'a persisted running job reloads as an honestly paused checkpoint');
-  check(loaded.total === 2 && loaded.checked === 1 &&
-      loaded.moments.length === 0 && loaded.verifyTotal === 0,
-    'reload restores all-move progress and drops wrong-mover shortlist entries');
+    'a persisted running unresolved job reloads as an honestly paused retry');
+  check(loaded.total === 2 && loaded.cursorPly === 0 && loaded.checked === 0 &&
+      loaded.moments.length === 0 && loaded.verifyTotal === 0 &&
+      jobs.get('reload').unresolved.length === 0,
+    'reload rewinds a genuine quick-unresolved boundary instead of trusting it');
+  requests = [];
+  const resumedUnresolved = await Scan.resume(reloadReview);
+  check(requests[0].ply === 0 && requests[0].opts.nodeLimit === 5000 &&
+      resumedUnresolved.state === 'done' && resumedUnresolved.checked === 2,
+    'resume retries the unresolved ply under the ordinary quick profile');
 
   // A persisted required suggestion without its exact valid deep row cannot
   // ever satisfy the reveal gate. Treat that cache record as recomputable and
@@ -702,23 +1220,36 @@ function manualDeepResult(review, ply, supplied) {
       jobs.get('partial-pass-two').moveSummaries.length === 0,
     'a pass-two checkpoint missing an all-move score row restarts before Resume');
 
-  // The summary schema is recomputable cache state. An earlier controller
-  // version becomes a fresh, spoiler-free job instead of being half-migrated.
+  // The r73 job lacks canonical full quick-result contracts. It is
+  // recomputable cache state, so schema 2 restarts spoiler-free instead of
+  // half-migrating its persisted selector fields.
   reset();
   const legacyReview = autoReview('legacy', 2, 'b');
+  const legacyReceipt = await Scan.recordReflection(
+    legacyReview, 1, reflectionFor(legacyReview, 1));
   const legacy = Object.assign({}, seeded, {
-    schema: 1,
-    algorithm: 'critical-moments-v1',
+    schema: 2,
+    algorithm: 'critical-moments-v2',
     gameId: 'legacy',
     sourceRev: Scan.sourceRevision(legacyReview.game, 'b'),
     analysisRev: Scan.analysisRevision(legacyReview.game),
-    state: 'done'
+    state: 'done',
+    reflected: [{
+      ply: 1,
+      playedSan: legacyReview.gs.history[1].san
+    }]
   });
   jobs.set('legacy', clone(legacy));
   const replacedLegacy = await Scan.load(legacyReview);
-  check(replacedLegacy.state === 'idle' && replacedLegacy.report === undefined &&
-      jobs.get('legacy').schema === 2,
-    'a legacy scan checkpoint restarts without exposing stale score state');
+  const freshLegacyJob = clone(jobs.get('legacy'));
+  const rescannedLegacy = await Scan.start(legacyReview);
+  check(legacyReceipt === true && replacedLegacy.state === 'idle' &&
+      replacedLegacy.report === undefined && freshLegacyJob.schema === 3 &&
+      !Object.prototype.hasOwnProperty.call(freshLegacyJob, 'reflected') &&
+      receipts.size === 1 && rescannedLegacy.reportUnlocked === true &&
+      rescannedLegacy.reflectionCompleted === 1 &&
+      rescannedLegacy.report.length === 2,
+    'a legacy job restarts spoiler-free while its durable receipt survives');
 
   // Generation invalidation must beat an already-resolving callback. No
   // checkpoint may appear after destructive controls have taken ownership.
