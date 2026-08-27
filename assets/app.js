@@ -910,6 +910,13 @@
       "This game's withdrawn result could not be removed (storage unavailable).";
   }
 
+  function showMalformedRetractionFailure(ownerId) {
+    bootNoteOwner = ownerId || '*';
+    archiveBootNoteEl.hidden = false;
+    archiveBootNoteEl.textContent =
+      "This game's withdrawn result is hidden because its archive recovery data is damaged.";
+  }
+
   function clearArchiveFailure(ownerId) {
     if (bootNoteOwner !== ownerId) return;
     bootNoteOwner = null;
@@ -1865,7 +1872,11 @@
         // Blame the specific game where one is attributable, so a later
         // successful replacement write can withdraw the note.
         const ids = (err && err.failedGameIds) || [];
-        showArchiveFailure(archiveBootNoteEl, ids.length === 1 ? ids[0] : null);
+        if (err && err.malformedRetraction && ids.length === 1) {
+          showMalformedRetractionFailure(ids[0]);
+        } else {
+          showArchiveFailure(archiveBootNoteEl, ids.length === 1 ? ids[0] : null);
+        }
       })
       .then(function () {
         if (!bootStatus.over || bootRecoveryInvalidated) return;
