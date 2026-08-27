@@ -49,10 +49,14 @@
   var current = null;
   var currentSource = null;
   var running = false;
-  // A valid reflection may happen before the first scan (or while a scan is
-  // being prepared). Keep only its exact game-revision/ply receipt in memory
-  // and merge it into the first compatible durable job. No answers are kept.
-  var pendingReflections = [];
+  // Validated durable Gate-0 receipts for the current exact game source. This
+  // is populated only through CoachStore's replay validator; analysisJobs and
+  // lesson cards are never reflection authority.
+  var currentReflections = [];
+  // Monotonic within this page. A durable commit/invalidation that overlaps a
+  // slower prepare() forces that preparation to re-read receipts instead of
+  // installing an already-stale snapshot.
+  var reflectionEpoch = 0;
   var OWNER = 'moment-scan';
 
   function now() {
@@ -100,6 +104,36 @@
         ? JSON.parse(JSON.stringify(game.clocks)) : [],
       timeControl: game.timeControl || null
     };
+  }
+
+  function sameReflectionSource(snapshot, game) {
+    return global.CoachStore &&
+      typeof CoachStore.sameReflectionSource === 'function' &&
+      CoachStore.sameReflectionSource(snapshot, game);
+  }
+
+  function receiptRows(rows) {
+    return Array.isArray(rows) ? rows.map(function (receipt) {
+      return { ply: receipt.ply, playedSan: receipt.playedSan };
+    }) : [];
+  }
+
+  function readReceipts(review) {
+    return global.CoachStore &&
+      typeof CoachStore.listValidReflectionReceipts === 'function'
+      ? Promise.resolve(CoachStore.listValidReflectionReceipts(review.game))
+      : Promise.resolve([]);
+  }
+
+  // If a durable receipt change overlapped an earlier read, repeat until one
+  // read spans a stable epoch. Each returned row has already crossed Store's
+  // exact-source replay boundary.
+  function settleReceiptRead(review, rows, observedEpoch) {
+    if (observedEpoch === reflectionEpoch) return Promise.resolve(rows);
+    var nextEpoch = reflectionEpoch;
+    return readReceipts(review).then(function (fresh) {
+      return settleReceiptRead(review, fresh, nextEpoch);
+    });
   }
 
   function scanColorFor(game, requested) {
@@ -181,7 +215,9 @@
     job.unresolved = Array.isArray(job.unresolved) ? job.unresolved : [];
     job.moveSummaries = Array.isArray(job.moveSummaries)
       ? job.moveSummaries : [];
-    job.reflected = Array.isArray(job.reflected) ? job.reflected : [];
+    // Legacy schema-2 jobs may contain shape-valid `reflected` rows. They are
+    // untrusted cache fields and must not survive normalization/checkpointing.
+    delete job.reflected;
     return job;
   }
 
@@ -204,29 +240,9 @@
     job.moveSummaries.sort(function (a, b) { return a.ply - b.ply; });
   }
 
-  function mergePendingReflections(job, review) {
-    var remaining = [];
-    pendingReflections.forEach(function (item) {
-      var matches = item.gameId === job.gameId &&
-        item.analysisRev === job.analysisRev &&
-        item.ply < review.gs.history.length &&
-        review.gs.history[item.ply].san === item.playedSan &&
-        scannable(review, item.ply);
-      if (!matches) {
-        remaining.push(item);
-        return;
-      }
-      if (!job.reflected.some(function (old) { return old.ply === item.ply; })) {
-        job.reflected.push({ ply: item.ply, playedSan: item.playedSan });
-      }
-    });
-    pendingReflections = remaining;
-    job.reflected.sort(function (a, b) { return a.ply - b.ply; });
-  }
-
   function reflectionGate(job) {
     var reflected = Object.create(null);
-    job.reflected.forEach(function (item) { reflected[item.ply] = true; });
+    currentReflections.forEach(function (item) { reflected[item.ply] = true; });
     var required = job.moments.map(function (moment) { return moment.ply; });
     var completed;
     var unlocked;
@@ -667,14 +683,8 @@
         !summary.stability ||
         summary.stability.bestMoveStable !== true;
     })) return null;
-    var seenReflections = Object.create(null);
-    job.reflected = job.reflected.filter(function (item) {
-      if (!validRef(item) || seenReflections[item.ply]) return false;
-      seenReflections[item.ply] = true;
-      return true;
-    }).map(function (item) {
-      return { ply: item.ply, playedSan: item.playedSan };
-    });
+    // Never upgrade a legacy cache row into receipt authority.
+    delete job.reflected;
     job.cursorPly = Number.isInteger(job.cursorPly) && job.cursorPly >= 0
       ? Math.min(job.cursorPly, review.gs.history.length) : 0;
     job.total = countScannable(review);
@@ -727,7 +737,6 @@
       moments: [],
       unresolved: [],
       moveSummaries: [],
-      reflected: [],
       typicalThinkMsBySide: typicalThinkMsBySide(review, scanColor),
       updatedAt: now()
     };
@@ -742,6 +751,7 @@
     stopLocal();
     current = null;
     currentSource = null;
+    currentReflections = [];
     var token = generation;
     // A restart discards prior WORK, but an imported game may still need the
     // explicit White/Black/Both choice saved with that work. Read only for a
@@ -750,32 +760,40 @@
     // dependency.
     var needsStoredChoice = !scanColorFor(review.game, opts.scanColor);
     var shouldRead = !opts.restart || needsStoredChoice;
-    var get = global.CoachStore && CoachStore.getJob && shouldRead
+    var getJob = global.CoachStore && CoachStore.getJob && shouldRead
       ? Promise.resolve(CoachStore.getJob(review.game.id)) : Promise.resolve(null);
-    return get.then(function (stored) {
+    var receiptReadEpoch = reflectionEpoch;
+    var getReceipts = readReceipts(review);
+    return Promise.all([getJob, getReceipts]).then(function (loaded) {
+      var stored = loaded[0];
       if (token !== generation) return null;
-      // An imported game has no known owner. The explicit first-run choice is
-      // stored on the job and remains the choice on reload/resume; do not make
-      // the player answer again, and never silently default to both.
-      var priorChoice = stored &&
-        (stored.scanColor === 'w' || stored.scanColor === 'b' ||
-         stored.scanColor === 'both') ? stored.scanColor : null;
-      var scanColor = scanColorFor(
-        review.game, opts.scanColor !== undefined ? opts.scanColor : priorChoice);
-      if (!scanColor) {
-        throw new Error('choose White, Black or both before scanning this game');
-      }
-      var job = opts.restart ? null : normalizeLoaded(stored, review, scanColor);
-      if (!job) job = freshJob(review, scanColor);
-      currentSource = sourceSnapshot(review.game);
-      current = job;
-      mergePendingReflections(job, review);
-      emit(job);
-      // A synchronous scanchange listener (or a microtask queued by it) may
-      // pause/navigate before start() receives this prepared job. Carry the
-      // ownership token across the promise boundary so that continuation can
-      // never acquire a newer generation after its preparation was cancelled.
-      return { job: job, token: token };
+      return settleReceiptRead(review, loaded[1], receiptReadEpoch)
+        .then(function (receipts) {
+          if (token !== generation) return null;
+          // An imported game has no known owner. The explicit first-run choice
+          // is stored on the job and remains the choice on reload/resume; do
+          // not make the player answer again, and never silently default.
+          var priorChoice = stored &&
+            (stored.scanColor === 'w' || stored.scanColor === 'b' ||
+             stored.scanColor === 'both') ? stored.scanColor : null;
+          var scanColor = scanColorFor(
+            review.game,
+            opts.scanColor !== undefined ? opts.scanColor : priorChoice);
+          if (!scanColor) {
+            throw new Error(
+              'choose White, Black or both before scanning this game');
+          }
+          var job = opts.restart ? null :
+            normalizeLoaded(stored, review, scanColor);
+          if (!job) job = freshJob(review, scanColor);
+          currentSource = sourceSnapshot(review.game);
+          current = job;
+          currentReflections = receiptRows(receipts);
+          emit(job);
+          // A synchronous scanchange listener (or a microtask queued by it)
+          // may pause/navigate before start() receives this prepared job.
+          return { job: job, token: token };
+        });
     });
   }
 
@@ -827,44 +845,40 @@
   }
 
   /*
-   * Record only that a valid structured reflection was submitted for one ply.
-   * The reflection content itself belongs to durable lesson-card
-   * evidence when the player saves a card; this recomputable job keeps only the
-   * minimum Gate-0 receipt needed to reveal score history.
+   * Durably bind one canonical structured Calculation value to this exact
+   * archived source and ply. Store replay validation is the only path that can
+   * add Gate-0 authority; cache/job fields and lesson cards are ignored.
    */
-  function recordReflection(review, ply) {
-    var job = current;
+  function recordReflection(review, ply, calculation) {
     if (!review || !review.game || !Number.isInteger(ply) ||
         !review.gs || !Array.isArray(review.gs.history) ||
         ply < 0 || ply >= review.gs.history.length ||
         !scannable(review, ply)) return Promise.resolve(false);
-    if (!job || review.game.id !== job.gameId ||
-        job.sourceRev !== sourceRevision(review.game, job.scanColor) ||
-        job.analysisRev !== analysisRevision(review.game)) {
-      var pending = {
-        gameId: review.game.id,
-        analysisRev: analysisRevision(review.game),
-        ply: ply,
-        playedSan: review.gs.history[ply].san
-      };
-      if (!pendingReflections.some(function (item) {
-        return item.gameId === pending.gameId &&
-          item.analysisRev === pending.analysisRev &&
-          item.ply === pending.ply &&
-          item.playedSan === pending.playedSan;
-      })) pendingReflections.push(pending);
-      return Promise.resolve(true);
+    if (!global.CoachStore ||
+        typeof CoachStore.putReflectionReceipt !== 'function') {
+      return Promise.resolve(false);
     }
-    if (job.reflected.some(function (item) { return item.ply === ply; })) {
-      return Promise.resolve(true);
-    }
-    job.reflected.push({
-      ply: ply,
-      playedSan: review.gs.history[ply].san
-    });
-    job.reflected.sort(function (a, b) { return a.ply - b.ply; });
-    var token = generation;
-    return checkpoint(token, job);
+    return Promise.resolve(CoachStore.putReflectionReceipt(
+      review.game, ply, calculation)).then(function (stored) {
+      if (!stored) return false;
+      reflectionEpoch++;
+      var token = generation;
+      // Re-read the committed record instead of manufacturing an in-memory
+      // tuple from 32-bit revision hashes. This also observes a revision or
+      // retraction that serialized immediately after the receipt write.
+      return readReceipts(review).then(function (receipts) {
+        var job = current;
+        if (token !== generation || !job ||
+            job.gameId !== review.game.id ||
+            !sameReflectionSource(currentSource, review.game) ||
+            job.sourceRev !== sourceRevision(review.game, job.scanColor)) {
+          return true;
+        }
+        currentReflections = receiptRows(receipts);
+        emit(job);
+        return true;
+      }, function () { return true; });
+    }, function () { return false; });
   }
 
   /*
@@ -917,7 +931,7 @@
     stopLocal();
     current = null;
     currentSource = null;
-    pendingReflections = [];
+    currentReflections = [];
     emit(null);
   }
 
@@ -937,6 +951,16 @@
 
   if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('chessy:archivecleared', invalidate);
+    document.addEventListener('chessy:reflectionsourceinvalidated', function (e) {
+      reflectionEpoch++;
+      var gameId = e && e.detail && e.detail.gameId;
+      if (!current || current.gameId !== gameId) return;
+      stopLocal();
+      current = null;
+      currentSource = null;
+      currentReflections = [];
+      emit(null);
+    });
     document.addEventListener('chessy:reviewrender', function () {
       if (global.CoachReview && !CoachReview.current()) pause();
     });

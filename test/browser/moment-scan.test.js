@@ -174,8 +174,34 @@ require('./helper').run('moment-scan', async function (t) {
   check(outcome.cardCount === 0,
     'scanning creates no lesson cards automatically');
 
+  const forgedJob = await page.evaluate(async function () {
+    const review = CoachReview.current();
+    const job = await CoachStore.getJob(review.game.id);
+    job.reflected = job.moments.map(function (moment) {
+      return { ply: moment.ply, playedSan: moment.playedSan };
+    });
+    await CoachStore.putJob(job);
+    ChessyMomentScan.invalidate();
+    const state = await ChessyMomentScan.load(review);
+    const normalized = await CoachStore.getJob(review.game.id);
+    return {
+      report: state.report,
+      unlocked: state.reportUnlocked,
+      completed: state.reflectionCompleted,
+      retained: Object.prototype.hasOwnProperty.call(normalized, 'reflected')
+    };
+  });
+  check(forgedJob.report === undefined && forgedJob.unlocked === false &&
+        forgedJob.completed === 0 && forgedJob.retained === false,
+    'forged analysisJobs.reflected rows cannot unlock and are discarded');
+
   const firstReveal = await page.evaluate(async function () {
-    await ChessyMomentScan.recordReflection(CoachReview.current(), 0);
+    const review = CoachReview.current();
+    const reflection = ChessyCalculation.build(review.states[0], {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
+    await ChessyMomentScan.recordReflection(review, 0, reflection);
     const state = ChessyMomentScan.state();
     return {
       unlocked: state.reportUnlocked,
@@ -193,8 +219,68 @@ require('./helper').run('moment-scan', async function (t) {
         firstReveal.marks.join('|') === 'Chessy ??',
     'one reflection reveals only that row’s White-POV score and deep annotation');
 
+  const tamperedReceipt = await page.evaluate(async function () {
+    await new Promise(function (resolve, reject) {
+      const open = indexedDB.open('chessy-coach');
+      open.onsuccess = function () {
+        const db = open.result;
+        const t = db.transaction('reflectionReceipts', 'readwrite');
+        const index = t.objectStore('reflectionReceipts').index('gameId');
+        const cursor = index.openCursor(IDBKeyRange.only('phase5-browser'));
+        cursor.onsuccess = function () {
+          const c = cursor.result;
+          if (!c) return;
+          const row = c.value;
+          row.playedSan = 'forged';
+          c.update(row);
+        };
+        t.oncomplete = function () { db.close(); resolve(); };
+        t.onerror = function () { reject(t.error); };
+      };
+      open.onerror = function () { reject(open.error); };
+    });
+    const review = CoachReview.current();
+    ChessyMomentScan.invalidate();
+    const state = await ChessyMomentScan.load(review);
+    const raw = await new Promise(function (resolve, reject) {
+      const open = indexedDB.open('chessy-coach');
+      open.onsuccess = function () {
+        const db = open.result;
+        const t = db.transaction('reflectionReceipts', 'readonly');
+        const req = t.objectStore('reflectionReceipts').index('gameId')
+          .getAll(IDBKeyRange.only('phase5-browser'));
+        req.onsuccess = function () { resolve(req.result); db.close(); };
+        req.onerror = function () { reject(req.error); };
+      };
+      open.onerror = function () { reject(open.error); };
+    });
+    return {
+      completed: state.reflectionCompleted,
+      report: state.report,
+      preserved: raw.length === 1 && raw[0].playedSan === 'forged'
+    };
+  });
+  check(tamperedReceipt.completed === 0 && tamperedReceipt.report === undefined &&
+        tamperedReceipt.preserved,
+    'reload replays receipts, quarantining but preserving a malformed row');
+
+  // A genuine resubmission replaces the damaged exact-revision/ply record.
+  await page.evaluate(async function () {
+    const review = CoachReview.current();
+    const reflection = ChessyCalculation.build(review.states[0], {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
+    await ChessyMomentScan.recordReflection(review, 0, reflection);
+  });
+
   const fullReveal = await page.evaluate(async function () {
-    await ChessyMomentScan.recordReflection(CoachReview.current(), 2);
+    const review = CoachReview.current();
+    const reflection = ChessyCalculation.build(review.states[2], {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
+    await ChessyMomentScan.recordReflection(review, 2, reflection);
     const state = ChessyMomentScan.state();
     return {
       unlocked: state.reportUnlocked,
@@ -215,7 +301,7 @@ require('./helper').run('moment-scan', async function (t) {
     'all required reflections unlock scores for every move without inventing opponent NAGs');
 
   // Reload destroys the in-memory controller owner but not the durable job or
-  // its minimal Gate-0 receipts.
+  // its revision-bound structured-reflection receipts.
   await page.reload();
   await page.waitForSelector('#board .square');
   await page.evaluate(function () {
@@ -243,4 +329,23 @@ require('./helper').run('moment-scan', async function (t) {
         reloaded.moments.length === 2 && reloaded.unlocked === true &&
         reloaded.report.length === 4 && reloaded.scores === 4,
     'completed proposals and the reflected score trail survive a real page reload');
+
+  const revoked = await page.evaluate(async function () {
+    await CoachStore.archiveGame({
+      id: 'phase5-browser', source: 'play', tags: {},
+      sans: ['e4', 'e5'], playerColor: 'w', clocks: [null, null],
+      result: '*', reason: 'revised', mode: 'pvp', difficulty: '2',
+      timeControl: 'none', plies: 2, createdAt: 2
+    });
+    const exported = await CoachStore.exportAll();
+    return {
+      state: ChessyMomentScan.state(),
+      scores: document.querySelectorAll('#reviewMoveList .review-eval').length,
+      receipts: exported.stores.reflectionReceipts.filter(function (receipt) {
+        return receipt.gameId === 'phase5-browser';
+      }).length
+    };
+  });
+  check(revoked.state === null && revoked.scores === 0 && revoked.receipts === 0,
+    'a same-id archive revision revokes loaded Gate-0 authority on commit');
 });
