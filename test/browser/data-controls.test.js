@@ -1,6 +1,7 @@
 /*
  * Archive data controls (roadmap #23, Phase 4b2/4b3). "Back up (JSON)"
- * downloads a versioned snapshot of the DURABLE archive (games + cards);
+ * downloads a versioned snapshot of the DURABLE archive (games + cards +
+ * revision-bound structured-reflection receipts);
  * recomputable engine caches (analyses / analysisJobs) are omitted. Restore
  * replaces the archive atomically from a validated backup and fences its
  * recovery sources by ENDING SIGNATURE, clearing the derived caches too.
@@ -14,12 +15,17 @@ const fs = require('fs');
 require('./helper').run('data-controls', async function (t) {
   const page = t.page, check = t.check;
 
-  // Seed two imported games, a lesson card, and an analysis (which must NOT
-  // appear in the backup — it is recomputable).
+  // Seed two imported games, a lesson card, one reflection receipt, and an
+  // analysis (which must NOT appear in the backup — it is recomputable).
   await page.evaluate(function () {
     const a = ChessyPGN.toRecord(ChessyPGN.parseGame('1. e4 e5 2. Nf3 Nc6 *'), { playerColor: 'w' });
     const b = ChessyPGN.toRecord(ChessyPGN.parseGame('1. d4 d5 *'), { playerColor: 'b' });
+    const reflection = ChessyCalculation.build(Chess.newGameState(), {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
     return CoachStore.importGame(a).then(function () { return CoachStore.importGame(b); })
+      .then(function () { return CoachStore.putReflectionReceipt(a, 0, reflection); })
       .then(function () { return CoachStore.addCard({ gameId: a.id, ply: 2, cause: 'test', due: 1, step: -1, attempts: [],
         fenBefore: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
         playedSan: 'e5', bestSan: 'e5', bestMove: { from: 12, to: 28, promotion: null } }); })
@@ -42,14 +48,96 @@ require('./helper').run('data-controls', async function (t) {
   try { backup = JSON.parse(backupJson); } catch (e) { /* asserted below */ }
 
   check(/\.json$/.test(download.suggestedFilename()), 'the backup downloads as a .json file');
-  check(backup && backup.format === 'chessy-coach-backup' && backup.version === 1 &&
+  check(backup && backup.format === 'chessy-coach-backup' && backup.version === 2 &&
     typeof backup.dbVersion === 'number', 'the backup is format-tagged and versioned');
-  check(backup && backup.stores.games.length === 2 && backup.stores.cards.length === 1,
-    'the backup contains the durable games and cards');
+  check(backup && backup.stores.games.length === 2 && backup.stores.cards.length === 1 &&
+        backup.stores.reflectionReceipts.length === 1,
+    'the backup contains games, cards and revision-bound reflections');
   check(backup && backup.stores.analyses === undefined && backup.stores.analysisJobs === undefined,
     'recomputable analyses / jobs are omitted from the backup');
   check(/Backed up 2 games and 1 card/.test(await page.$eval('#dataStatus', function (e) { return e.textContent; })),
     'the status reports what was backed up');
+
+  const receiptValidation = await page.evaluate(async function () {
+    const exported = await CoachStore.exportAll();
+    const receipt = exported.stores.reflectionReceipts[0];
+    function envelope(row) {
+      return {
+        format: exported.format, version: exported.version,
+        dbVersion: exported.dbVersion,
+        stores: {
+          games: exported.stores.games,
+          cards: exported.stores.cards,
+          reflectionReceipts: [row]
+        }
+      };
+    }
+    function mutate(fn) {
+      const row = JSON.parse(JSON.stringify(receipt));
+      fn(row);
+      return CoachStore.validateBackup(envelope(row));
+    }
+    return {
+      shape: mutate(function (r) { r.forged = true; }),
+      schema: mutate(function (r) { r.schema = 99; }),
+      key: mutate(function (r) { r.key += '-forged'; }),
+      gameId: mutate(function (r) { r.gameId = 'other'; }),
+      sourceId: mutate(function (r) { r.source.id = 'other'; }),
+      setup: mutate(function (r) {
+        r.source.setupFen =
+          '8/8/8/8/8/5k2/8/R6K b - - 0 37';
+      }),
+      playerColor: mutate(function (r) { r.source.playerColor = 'b'; }),
+      timeControl: mutate(function (r) { r.source.timeControl = '60+1'; }),
+      clocks: mutate(function (r) {
+        r.source.clocks[0] = { thinkMs: 1, wMs: 59999, bMs: 60000 };
+      }),
+      sourceRevision: mutate(function (r) { r.sourceRev += '-forged'; }),
+      revision: mutate(function (r) { r.analysisRev += '-forged'; }),
+      source: mutate(function (r) { r.source.sans[0] = 'd4'; }),
+      ply: mutate(function (r) { r.ply = 1; }),
+      playedSan: mutate(function (r) { r.playedSan = 'd4'; }),
+      fen: mutate(function (r) { r.fenBefore += ' forged'; }),
+      position: mutate(function (r) { r.positionKey += '-forged'; }),
+      calculation: mutate(function (r) {
+        r.reflection.calculation.evaluation = 'certainly-winning';
+      }),
+      submittedAt: mutate(function (r) { r.submittedAt = -1; }),
+      missingV2Store: CoachStore.validateBackup({
+        format: exported.format, version: 2, dbVersion: 7,
+        stores: { games: exported.stores.games, cards: exported.stores.cards }
+      }),
+      downgradedV1: CoachStore.validateBackup({
+        format: exported.format, version: 1, dbVersion: 7,
+        stores: { games: exported.stores.games, cards: exported.stores.cards }
+      }),
+      prematureV2: CoachStore.validateBackup({
+        format: exported.format, version: 2, dbVersion: 6,
+        stores: { games: [], cards: [], reflectionReceipts: [] }
+      }),
+      legacyV1: CoachStore.validateBackup({
+        format: exported.format, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [] }
+      }),
+      legacyV1WithReceipts: CoachStore.validateBackup({
+        format: exported.format, version: 1, dbVersion: 6,
+        stores: { games: [], cards: [], reflectionReceipts: [] }
+      })
+    };
+  });
+  check(['shape', 'schema', 'key', 'gameId', 'sourceId', 'setup',
+    'playerColor', 'timeControl', 'clocks', 'sourceRevision', 'revision',
+    'source', 'ply',
+    'playedSan', 'fen', 'position', 'calculation', 'submittedAt']
+    .every(function (field) {
+      return !!receiptValidation[field];
+    }), 'field-by-field receipt tampering fails backup validation closed');
+  check(!!receiptValidation.missingV2Store &&
+        !!receiptValidation.downgradedV1 &&
+        !!receiptValidation.prematureV2 &&
+        receiptValidation.legacyV1 === null &&
+        !!receiptValidation.legacyV1WithReceipts,
+    'format/schema coherence prevents receipt erasure while v1/v6 stays readable');
 
   // A finished game recoverable ONLY from the durability queue (its IndexedDB
   // write failed) must still be included in the backup, not silently dropped.
@@ -609,14 +697,20 @@ require('./helper').run('data-controls', async function (t) {
       !Object.prototype.hasOwnProperty.call(legacyTelemetry, 'ai'),
     'an all-null recovery does not invent an AI array on a legacy committed row');
 
-  // A parked REVISION prunes lesson cards from the abandoned continuation.
+  // A parked REVISION prunes lesson cards and receipts from the abandoned
+  // complete source revision.
   await page.evaluate(function () {
     localStorage.removeItem('chessy-pending-archive-v1');
     const g = { id: 'rev-x', source: 'play', sans: ['e4', 'e5', 'Nf3'], result: '*', reason: 'imported',
       mode: 'pvp', plies: 3, createdAt: 1 };
     const afterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
     const afterE4E5 = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2';
+    const reflection = ChessyCalculation.build(Chess.newGameState(), {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
     return CoachStore.putGame(g)
+      .then(function () { return CoachStore.putReflectionReceipt(g, 0, reflection); })
       .then(function () { return CoachStore.addCard({ gameId: 'rev-x', ply: 1, cause: 't', due: 1,
         step: -1, attempts: [], fenBefore: afterE4, bestSan: 'e5',
         bestMove: { from: 12, to: 28, promotion: null } }); })
@@ -634,6 +728,9 @@ require('./helper').run('data-controls', async function (t) {
   const backup7 = JSON.parse(fs.readFileSync(await dl7.path(), 'utf8'));
   check(!backup7.stores.cards.some(function (c) { return c.gameId === 'rev-x'; }),
     'a parked revision prunes lesson cards from the abandoned continuation');
+  check(!backup7.stores.reflectionReceipts.some(function (r) {
+    return r.gameId === 'rev-x';
+  }), 'a parked revision prunes receipts bound to the abandoned source');
 
   // A finished local save that REVISES the committed game (no pending record —
   // archive.js failed to load, say) still wins over the stale committed row.
@@ -687,18 +784,21 @@ require('./helper').run('data-controls', async function (t) {
     return document.getElementById('dataStatus').textContent.indexOf('Restored') !== -1;
   }, { timeout: 5000 });
   const restored = await page.evaluate(function () {
-    return Promise.all([CoachStore.listGames(), CoachStore.listCards()]).then(function (r) {
+    return Promise.all([
+      CoachStore.listGames(), CoachStore.listCards(), CoachStore.exportAll()
+    ]).then(function (r) {
       let fence = null;
       try { fence = JSON.parse(localStorage.getItem('chessy-archive-fenced-v2')); } catch (e) {}
       return { g: r[0].length, c: r[1].length,
+        reflections: r[2].stores.reflectionReceipts.length,
         pending: localStorage.getItem('chessy-pending-archive-v1'),
         ghostFenced: ChessyArchive.isFencedEnding('ghost', [], '*', 'imported'),
         legacy: localStorage.getItem('chessy-archive-fenced-v1'),
         v2: fence };
     });
   });
-  check(restored.g === 2 && restored.c === 1,
-    'restore replaces the archive with the backup (third game removed)');
+  check(restored.g === 2 && restored.c === 1 && restored.reflections === 1,
+    'restore atomically replaces games, cards and reflection receipts');
   check(restored.pending === null && restored.ghostFenced === true,
     'restore fences recovery: the durability queue is dropped and its parked ending is fenced');
   check(restored.legacy === null && restored.v2 && restored.v2.version === 2 &&

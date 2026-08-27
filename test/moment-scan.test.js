@@ -8,6 +8,7 @@
  */
 'use strict';
 require('../assets/engine.js');
+require('../assets/calculation.js');
 
 const Chess = globalThis.Chess;
 let passed = 0, failed = 0;
@@ -19,8 +20,38 @@ function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
 
 const jobs = new Map();
 const games = new Map();
+const receipts = new Map();
 let puts = 0;
+function sourceOf(game) {
+  return {
+    id: game.id,
+    setupFen: game.setupFen || null,
+    playerColor: game.playerColor || null,
+    sans: game.sans || [],
+    timeControl: game.timeControl || null,
+    clocks: game.clocks || []
+  };
+}
+function receiptKey(game, ply) {
+  return JSON.stringify([sourceOf(game), ply]);
+}
+function replay(game, ply) {
+  let state = initial(game.setupFen);
+  for (let i = 0; i < ply; i++) {
+    const legal = Chess.legalMoves(state);
+    const move = legal.find(function (candidate) {
+      return Chess.toSan(state, candidate, legal) === game.sans[i];
+    });
+    if (!move) return null;
+    state = Chess.playMove(state, move);
+  }
+  return state;
+}
 globalThis.CoachStore = {
+  sameReflectionSource: function (a, b) {
+    return !!a && !!b &&
+      JSON.stringify(sourceOf(a)) === JSON.stringify(sourceOf(b));
+  },
   getGame: function (id) { return Promise.resolve(clone(games.get(id))); },
   getJob: function (id) { return Promise.resolve(clone(jobs.get(id))); },
   putJob: function (job) {
@@ -44,7 +75,32 @@ globalThis.CoachStore = {
     jobs.set(job.gameId, clone(job));
     return Promise.resolve(true);
   },
-  deleteJob: function (id) { jobs.delete(id); return Promise.resolve(); }
+  deleteJob: function (id) { jobs.delete(id); return Promise.resolve(); },
+  putReflectionReceipt: function (expected, ply, reflection) {
+    const game = games.get(expected.id);
+    if (!game || JSON.stringify(sourceOf(game)) !== JSON.stringify(sourceOf(expected))) {
+      return Promise.resolve(false);
+    }
+    const state = replay(game, ply);
+    if (!state || globalThis.ChessyCalculation.validate(reflection, state)) {
+      return Promise.resolve(false);
+    }
+    receipts.set(receiptKey(game, ply), {
+      gameId: game.id, source: clone(sourceOf(game)),
+      ply: ply, playedSan: game.sans[ply]
+    });
+    return Promise.resolve(true);
+  },
+  listValidReflectionReceipts: function (expected) {
+    const game = games.get(expected.id);
+    if (!game || JSON.stringify(sourceOf(game)) !== JSON.stringify(sourceOf(expected))) {
+      return Promise.resolve([]);
+    }
+    return Promise.resolve(Array.from(receipts.values()).filter(function (receipt) {
+      return receipt.gameId === game.id &&
+        JSON.stringify(receipt.source) === JSON.stringify(sourceOf(game));
+    }).map(clone));
+  }
 };
 
 globalThis.ChessyAnalysisCore = {
@@ -223,11 +279,21 @@ function reset() {
   Scan.invalidate();
   jobs.clear();
   games.clear();
+  receipts.clear();
   puts = 0;
   replies = [];
   requests = [];
   activeDeferred = null;
   quickMetas = [];
+}
+
+function reflectionFor(review, ply) {
+  return globalThis.ChessyCalculation.build(review.states[ply], {
+    threatKind: 'none',
+    candidateStatus: 'none',
+    calculationStatus: 'none',
+    evaluation: 'unclear'
+  }).value;
 }
 
 function manualDeepResult(review, ply, supplied) {
@@ -281,13 +347,13 @@ function manualDeepResult(review, ply, supplied) {
     pub.report === undefined &&
     !/(scoreCpWhite|lossCp|annotation)/.test(JSON.stringify(pub)),
     'state() and start() expose no scores, labels, better moves or internal candidates');
-  const oneReceipt = await Scan.recordReflection(black, 0);
+  const oneReceipt = await Scan.recordReflection(black, 0, reflectionFor(black, 0));
   const oneVisible = Scan.state();
   check(oneReceipt === true && oneVisible.reportUnlocked === false &&
       oneVisible.reflectionCompleted === 1 &&
       oneVisible.report.length === 1 && oneVisible.report[0].ply === 0,
     'a structured reflection reveals only its matching move score');
-  await Scan.recordReflection(black, 2);
+  await Scan.recordReflection(black, 2, reflectionFor(black, 2));
   const allVisible = Scan.state();
   check(allVisible.reportUnlocked === true &&
       allVisible.reflectionCompleted === allVisible.reflectionRequired &&
@@ -309,11 +375,64 @@ function manualDeepResult(review, ply, supplied) {
       reloadedReport.report.length === 4,
     'reflection receipts and the unlocked report survive a same-game reload');
 
+  reset();
+  const forgedReview = autoReview('forged-job-receipts', 4, 'b');
+  await Scan.start(forgedReview, { restart: true });
+  const forgedReceiptJob = clone(jobs.get('forged-job-receipts'));
+  forgedReceiptJob.reflected = forgedReceiptJob.moments.map(function (moment) {
+    return { ply: moment.ply, playedSan: moment.playedSan };
+  });
+  Scan.invalidate();
+  jobs.set('forged-job-receipts', forgedReceiptJob);
+  const forgedReceiptState = await Scan.load(forgedReview);
+  check(forgedReceiptState.reflectionCompleted === 0 &&
+      forgedReceiptState.report === undefined &&
+      !Object.prototype.hasOwnProperty.call(
+        jobs.get('forged-job-receipts'), 'reflected'),
+    'analysisJobs.reflected cannot forge Gate-0 authority on reload');
+
+  // The receipt read may finish before a slower job read. A durable submit in
+  // that preparation window must advance the epoch and force an exact re-read,
+  // not leave this active load locked until another reload.
+  reset();
+  const prepareRaceReview = autoReview('prepare-receipt-race', 2, 'b');
+  await Scan.start(prepareRaceReview, { restart: true });
+  const prepareRaceJob = clone(jobs.get('prepare-receipt-race'));
+  Scan.invalidate();
+  const realRaceGetJob = CoachStore.getJob;
+  const realRaceList = CoachStore.listValidReflectionReceipts;
+  let releaseRaceJob;
+  let raceJobRead = false;
+  let receiptReads = 0;
+  CoachStore.getJob = function () {
+    raceJobRead = true;
+    return new Promise(function (resolve) { releaseRaceJob = resolve; });
+  };
+  CoachStore.listValidReflectionReceipts = function (expected) {
+    receiptReads++;
+    return receiptReads === 1 ? Promise.resolve([]) : realRaceList(expected);
+  };
+  const racingLoad = Scan.load(prepareRaceReview);
+  while (!raceJobRead || receiptReads < 1) {
+    await new Promise(function (resolve) { setTimeout(resolve, 0); });
+  }
+  const duringPrepare = await Scan.recordReflection(
+    prepareRaceReview, 1, reflectionFor(prepareRaceReview, 1));
+  releaseRaceJob(prepareRaceJob);
+  const preparedWithReceipt = await racingLoad;
+  CoachStore.getJob = realRaceGetJob;
+  CoachStore.listValidReflectionReceipts = realRaceList;
+  check(duringPrepare === true && receiptReads >= 3 &&
+      preparedWithReceipt.reportUnlocked === true &&
+      preparedWithReceipt.report.length === 2,
+    'a receipt committed during prepare is re-read into the active report');
+
   // A structured reflection can finish before Scan analysis starts. The exact
   // revision/ply receipt is merged into the first compatible durable job.
   reset();
   const preStartReview = autoReview('pre-start-reflection', 2, 'b');
-  const queuedReceipt = await Scan.recordReflection(preStartReview, 1);
+  const queuedReceipt = await Scan.recordReflection(
+    preStartReview, 1, reflectionFor(preStartReview, 1));
   const preStartDone = await Scan.start(preStartReview, { restart: true });
   check(queuedReceipt === true && preStartDone.state === 'done' &&
       preStartDone.moments.length === 1 &&
@@ -329,7 +448,8 @@ function manualDeepResult(review, ply, supplied) {
   reset();
   const idleReview = autoReview('idle-reflection', 2, 'b');
   const idle = await Scan.load(idleReview);
-  const idleReceipt = await Scan.recordReflection(idleReview, 1);
+  const idleReceipt = await Scan.recordReflection(
+    idleReview, 1, reflectionFor(idleReview, 1));
   const idleDone = await Scan.start(idleReview);
   check(idle.state === 'idle' && idleReceipt === true &&
       idleDone.state === 'done' && idleDone.reportUnlocked === true &&
@@ -342,7 +462,8 @@ function manualDeepResult(review, ply, supplied) {
   reset();
   const otherSideReview = autoReview('other-side-reflection', 4, 'b');
   await Scan.start(otherSideReview, { restart: true });
-  await Scan.recordReflection(otherSideReview, 0);
+  await Scan.recordReflection(
+    otherSideReview, 0, reflectionFor(otherSideReview, 0));
   const otherSideVisible = Scan.state();
   const otherSideBefore = otherSideVisible.report.find(function (row) {
     return row.ply === 0;
@@ -388,7 +509,7 @@ function manualDeepResult(review, ply, supplied) {
   const clockSummary = jobs.get('clock-only').moveSummaries.find(function (row) {
     return row.ply === 5;
   });
-  await Scan.recordReflection(clockReview, 5);
+  await Scan.recordReflection(clockReview, 5, reflectionFor(clockReview, 5));
   const clockVisible = Scan.state();
   const clockRow = clockVisible.report.find(function (row) {
     return row.ply === 5;
@@ -414,7 +535,8 @@ function manualDeepResult(review, ply, supplied) {
   reset();
   const promotionReview = autoReview('manual-promotion', 6, 'b');
   const promotionDone = await Scan.start(promotionReview, { restart: true });
-  await Scan.recordReflection(promotionReview, 5);
+  await Scan.recordReflection(
+    promotionReview, 5, reflectionFor(promotionReview, 5));
   const beforePromotion = Scan.state().report.find(function (row) {
     return row.ply === 5;
   });

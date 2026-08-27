@@ -2,7 +2,8 @@
  * Chessy archive data controls (roadmap #23, Phase 4b).
  *
  * 4b2 (this file, so far): "Back up (JSON)" downloads a versioned snapshot of
- * the durable archive (games + cards). Restore (4b3) and a fenced Delete-all
+ * the durable archive (games + cards + structured-reflection receipts).
+ * Restore (4b3) and a fenced Delete-all
  * (4b4) attach their handlers here in later slices.
  *
  * Correctness lives in store.js; this file is transport, fencing and feedback.
@@ -181,6 +182,17 @@
     }
   }
 
+  function sameReflectionSource(a, b) {
+    return typeof CoachStore.sameReflectionSource === 'function' &&
+      CoachStore.sameReflectionSource(a, b);
+  }
+
+  function pruneReceiptsForGame(receipts, id) {
+    for (let i = receipts.length - 1; i >= 0; i--) {
+      if (receipts[i] && receipts[i].gameId === id) receipts.splice(i, 1);
+    }
+  }
+
   // Read the durability queue without archive.js. A partial offline release
   // can leave this transport module available while ChessyArchive is absent;
   // backup must still include the only copy of a finished game AND honour a
@@ -348,6 +360,8 @@
   function mergeRecoverySources(data, keep) {
     const games = data.stores.games || (data.stores.games = []);
     const cards = data.stores.cards || (data.stores.cards = []);
+    const receipts = data.stores.reflectionReceipts ||
+      (data.stores.reflectionReceipts = []);
     // Game ids are user-controlled strings (imports/restores included).
     // A null-prototype map keeps "__proto__" enumerable and round-trippable.
     const byId = Object.create(null);
@@ -357,6 +371,9 @@
       if (keep && !keep(rec)) return;
       const cur = byId[rec.id];
       if (cur && sameEnding(cur, rec)) {
+        if (!sameReflectionSource(cur, rec)) {
+          pruneReceiptsForGame(receipts, rec.id);
+        }
         if (Number.isFinite(rec.createdAt) && Number.isFinite(cur.createdAt)) {
           cur.createdAt = Math.min(cur.createdAt, rec.createdAt);
         }
@@ -370,7 +387,12 @@
         }
         return; // keep the committed record's moves and earliest date
       }
-      if (cur) pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
+      if (cur) {
+        pruneCardsFromDivergence(cards, rec.id, cur.sans, rec.sans);
+        // Receipts bind the complete archived revision, so even a shared
+        // prefix cannot inherit authority from an abandoned ending.
+        pruneReceiptsForGame(receipts, rec.id);
+      }
       byId[rec.id] = rec; // new id, or a revision that supersedes the committed row
     }
     function retract(ending) {
@@ -380,6 +402,7 @@
       for (let i = cards.length - 1; i >= 0; i--) {
         if (cards[i] && cards[i].gameId === ending.id) cards.splice(i, 1);
       }
+      pruneReceiptsForGame(receipts, ending.id);
     }
     // Local save first, pending queue last: a still-parked write is the most
     // recent authoritative intent, so it wins over the live save on a genuine
@@ -436,8 +459,11 @@
         setTimeout(function () { URL.revokeObjectURL(url); }, 0);
         const games = (data.stores.games || []).length;
         const cards = (data.stores.cards || []).length;
+        const receipts = (data.stores.reflectionReceipts || []).length;
         setStatus('Backed up ' + games + ' game' + (games === 1 ? '' : 's') +
-          ' and ' + cards + ' card' + (cards === 1 ? '' : 's') + '.', 'info');
+          ' and ' + cards + ' card' + (cards === 1 ? '' : 's') +
+          ', including ' + receipts + ' structured reflection' +
+          (receipts === 1 ? '' : 's') + '.', 'info');
       }).catch(function (err) {
         setStatus('Backup failed: ' + (err && err.message ? err.message : 'storage unavailable'), 'error');
       });
@@ -669,10 +695,13 @@
         pendingRestore = data;
         const g = (data.stores.games || []).length;
         const c = (data.stores.cards || []).length;
+        const r = (data.stores.reflectionReceipts || []).length;
         $('restoreConfirmText').textContent =
           'This replaces your entire archive with the backup: ' + g + ' game' +
           (g === 1 ? '' : 's') + ' and ' + c + ' lesson card' + (c === 1 ? '' : 's') +
-          '. Your current games and cards will be removed. This cannot be undone.';
+          ', plus ' + r + ' structured reflection' + (r === 1 ? '' : 's') +
+          '. Your current games, cards, and reflections will be removed. ' +
+          'This cannot be undone.';
         openDialog(restoreDialog);
         $('restoreCancel').focus();
       };
@@ -715,7 +744,8 @@
         // A restored archive is durable data worth protecting too (#82).
         if (window.ChessyStorageHealth) ChessyStorageHealth.noteDurableWrite();
         const msg = 'Restored ' + total(counts) + ' record' + (total(counts) === 1 ? '' : 's') +
-          ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards).' +
+          ' (' + (counts.games || 0) + ' games, ' + (counts.cards || 0) + ' cards, ' +
+          (counts.reflectionReceipts || 0) + ' structured reflections).' +
           (neutralized ? '' : ' Reload once storage is available so the old game cannot return.');
         // Force the Review panel back to a fresh list even if a stale game was
         // left open (refreshGames no-ops then): otherwise a Verify/Save on that

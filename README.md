@@ -125,7 +125,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   annotations, and alternative moves remain absent from public scan state
   until a valid structured reflection is submitted. That submission reveals
   only the matching move first; reflecting on every suggestion unlocks the
-  scanned score trail. Scores evaluate the played root line, use a fixed
+  scanned score trail. Each unlock receipt is durably bound to the exact game
+  revision—including clock and time-control evidence—the replayed position,
+  played SAN, and canonical structured answer, so it survives reload without
+  trusting scan caches or lesson cards. Scores
+  evaluate the played root line, use a fixed
   White-POV sign, and mark quick-pass values with `≈`.
   Chessy adds only conservative negative `?!`, `?`, or `??` badges to stable,
   deep-confirmed critical moments; imported move-quality PGN NAGs carry a
@@ -157,8 +161,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   persistence is requested once, after the first durable archive write, and
   reduces eviction exposure without guaranteeing it.
 - **Coaching data controls** — paste or upload one PGN into the archive
-  (legality-validated and deduplicated), back up games/cards to versioned JSON,
-  including release/search provenance, atomically restore a validated backup,
+  (legality-validated and deduplicated), back up games/cards/structured
+  reflections to versioned JSON, including release/search provenance,
+  atomically restore a validated backup,
   or Delete All behind a recovery fence. Bulk/Lichess import and an optional
   language coach remain future work (roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23), scan tracker
@@ -297,7 +302,7 @@ dispatch.
 | `assets/ai-worker.js` | WASM-only Play worker |
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
-| `assets/store.js` | IndexedDB coaching store (games, lesson cards, bounded LRU analysis cache, resumable scan jobs) |
+| `assets/store.js` | IndexedDB coaching store (games, lesson cards, durable revision-bound reflection receipts, bounded LRU analysis cache, resumable scan jobs) |
 | `assets/storage-health.js` | One-time persistent-storage request (after the first durable archive write) and the Progress storage snapshot |
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |

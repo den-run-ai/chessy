@@ -1,11 +1,11 @@
-/* IndexedDB schema migration: the v5→v6 upgrade is NON-DESTRUCTIVE.
+/* IndexedDB schema migration: released-schema upgrades are NON-DESTRUCTIVE.
  *
  * v5 was the first RELEASED schema, so real users have shipped games and
  * lesson cards in it. The old upgrade code deleted every object store on
- * any version bump (safe only for the throwaway v1–v4 previews); v6 must
- * instead ADD the analyses + analysisJobs stores while leaving all v5 data
+ * any version bump (safe only for the throwaway v1–v4 previews); v7 must
+ * instead ADD missing stores while leaving all released data
  * exactly where it is. This suite seeds a genuine v5 database from OUTSIDE
- * the app, then boots the app (which opens at v6) and checks nothing was
+ * the app, then boots the app (which opens at v7) and checks nothing was
  * lost and the new stores work. */
 'use strict';
 require('./helper').run('migration', async function (t) {
@@ -14,7 +14,7 @@ require('./helper').run('migration', async function (t) {
   // Raw-IDB helper: delete chessy-coach, then recreate it at version 5 with
   // the EXACT old schema (wipe-all + games + cards[due,gameId]) and seed a
   // game and a lesson card — the data a shipped v5 user would hold. Runs on
-  // the app-less blank origin so the app's store.js (v6) can't open first.
+  // the app-less blank origin so the app's store.js (v7) can't open first.
   await page.goto(url + 'blank');
   await page.evaluate(function () {
     return new Promise(function (resolve, reject) {
@@ -52,26 +52,26 @@ require('./helper').run('migration', async function (t) {
     });
   });
 
-  // Boot the real app: its store.js opens chessy-coach at v6, triggering the
-  // v5→v6 upgrade.
+  // Boot the real app: its store.js opens chessy-coach at v7, triggering the
+  // v5→v7 upgrade.
   await page.goto(url);
   await page.waitForSelector('#board .square');
 
   // The v5 game survived byte-for-byte.
   const game = await page.evaluate(function () { return CoachStore.getGame('v5-game'); });
   check(!!game && game.sans.join(' ') === 'e4 e5' && game.createdAt === 5000,
-    'v5→v6: the shipped game survives the upgrade unchanged');
+    'v5→v7: the shipped game survives the upgrade unchanged');
 
   // The v5 card survived, with its attempt history and working `due` index.
   const cards = await page.evaluate(function () { return CoachStore.listCards(); });
   check(cards.length === 1 && cards[0].lesson === 'preserved across the migration' &&
         cards[0].attempts.length === 1,
-    'v5→v6: the shipped lesson card survives with its attempt history');
+    'v5→v7: the shipped lesson card survives with its attempt history');
   const due = await page.evaluate(function () { return CoachStore.dueCards(2000); });
   check(due.length === 1 && due[0].gameId === 'v5-game',
-    'v5→v6: the card indexes (due/gameId) survive and still resolve');
+    'v5→v7: the card indexes (due/gameId) survive and still resolve');
 
-  // The database is now v6 and carries all four stores.
+  // The database is now v7 and carries all five stores.
   const shape = await page.evaluate(function () {
     return new Promise(function (resolve, reject) {
       const req = indexedDB.open('chessy-coach');
@@ -85,9 +85,10 @@ require('./helper').run('migration', async function (t) {
       req.onerror = function () { reject(req.error); };
     });
   });
-  check(shape.version === 6, 'the upgraded database reports version 6');
-  check(shape.names.join(',') === 'analyses,analysisJobs,cards,games',
-    'v6 adds the analyses + analysisJobs stores alongside the preserved games/cards');
+  check(shape.version === 7, 'the upgraded database reports version 7');
+  check(shape.names.join(',') ===
+      'analyses,analysisJobs,cards,games,reflectionReceipts',
+    'v7 adds caches and receipts alongside the preserved games/cards');
 
   // The new stores are usable, and analysisKey folds in the fields that
   // change a result — the SAME FEN with a different repetition history is a
@@ -116,7 +117,87 @@ require('./helper').run('migration', async function (t) {
   check(!!job && job.state === 'scanning' && job.cursorPly === 2,
     'analysisJobs round-trips a resumable scan record');
 
-  // A FRESH install (no prior DB) creates all four stores from nothing —
+  // Seed the immediately previous released schema too: v6 already contains
+  // both cache stores, and the v7 upgrade must add receipts without rewriting
+  // any durable OR resumable row.
+  await page.goto(url + 'blank');
+  await page.evaluate(function () {
+    return new Promise(function (resolve, reject) {
+      const del = indexedDB.deleteDatabase('chessy-coach');
+      del.onerror = function () { reject(del.error); };
+      del.onsuccess = function () {
+        const req = indexedDB.open('chessy-coach', 6);
+        req.onupgradeneeded = function () {
+          const db = req.result;
+          db.createObjectStore('games', { keyPath: 'id' });
+          const cards = db.createObjectStore(
+            'cards', { keyPath: 'id', autoIncrement: true });
+          cards.createIndex('due', 'due');
+          cards.createIndex('gameId', 'gameId');
+          const analyses = db.createObjectStore('analyses', { keyPath: 'key' });
+          analyses.createIndex('gameId', 'gameId');
+          analyses.createIndex('gamePly', ['gameId', 'ply']);
+          const jobs = db.createObjectStore('analysisJobs', { keyPath: 'gameId' });
+          jobs.createIndex('state', 'state');
+        };
+        req.onsuccess = function () {
+          const db = req.result;
+          const tr = db.transaction(
+            ['games', 'cards', 'analyses', 'analysisJobs'], 'readwrite');
+          tr.objectStore('games').put({
+            id: 'v6-game', source: 'play', tags: {}, sans: ['d4'],
+            playerColor: 'w', clocks: [null], result: '*', reason: 'imported',
+            mode: 'pvp', difficulty: '2', timeControl: 'none',
+            plies: 1, createdAt: 6000
+          });
+          tr.objectStore('cards').put({
+            gameId: 'v6-game', ply: 0, due: 1000, step: -1, attempts: [],
+            fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            bestSan: 'd4', bestMove: { from: 51, to: 35, promotion: null }
+          });
+          tr.objectStore('analyses').put({
+            key: 'v6-analysis', gameId: 'v6-game', ply: 0, marker: 'keep'
+          });
+          tr.objectStore('analysisJobs').put({
+            gameId: 'v6-game', state: 'paused', cursorPly: 1, marker: 'keep'
+          });
+          tr.oncomplete = function () { db.close(); resolve(); };
+          tr.onerror = function () { reject(tr.error); };
+        };
+        req.onerror = function () { reject(req.error); };
+      };
+    });
+  });
+  await page.goto(url);
+  await page.waitForSelector('#board .square');
+  const v6 = await page.evaluate(async function () {
+    const dbShape = await new Promise(function (resolve, reject) {
+      const req = indexedDB.open('chessy-coach');
+      req.onsuccess = function () {
+        const db = req.result;
+        resolve({ version: db.version,
+          names: Array.from(db.objectStoreNames).sort().join(',') });
+        db.close();
+      };
+      req.onerror = function () { reject(req.error); };
+    });
+    return {
+      game: await CoachStore.getGame('v6-game'),
+      cards: await CoachStore.listCards(),
+      analysis: await CoachStore.getAnalysis('v6-analysis'),
+      job: await CoachStore.getJob('v6-game'),
+      shape: dbShape
+    };
+  });
+  check(v6.game && v6.game.createdAt === 6000 && v6.cards.length === 1 &&
+        v6.analysis && v6.analysis.marker === 'keep' &&
+        v6.job && v6.job.marker === 'keep',
+    'v6→v7 preserves games, cards, analyses and resumable jobs');
+  check(v6.shape.version === 7 && v6.shape.names ===
+      'analyses,analysisJobs,cards,games,reflectionReceipts',
+    'v6→v7 adds only the reflectionReceipts store');
+
+  // A FRESH install (no prior DB) creates all five stores from nothing —
   // the create-if-absent path must not depend on a preview having existed.
   const fresh = await page.evaluate(function () {
     return new Promise(function (resolve) {
@@ -126,7 +207,7 @@ require('./helper').run('migration', async function (t) {
   });
   void fresh;
   const freshShape = await page.evaluate(function () {
-    // First CoachStore call reopens the DB from nothing at v6.
+    // First CoachStore call reopens the DB from nothing at v7.
     return CoachStore.putGame({ id: 'fresh', source: 'play', tags: {}, sans: [],
       playerColor: 'both', clocks: [], result: '1-0', reason: 'x', mode: 'pvp',
       difficulty: '1', timeControl: 'none', plies: 0, createdAt: 1 })
@@ -147,8 +228,9 @@ require('./helper').run('migration', async function (t) {
         });
       });
   });
-  check(freshShape.version === 6 && freshShape.names === 'analyses,analysisJobs,cards,games',
-    'a fresh install creates all four v6 stores from nothing');
+  check(freshShape.version === 7 && freshShape.names ===
+      'analyses,analysisJobs,cards,games,reflectionReceipts',
+    'a fresh install creates all five v7 stores from nothing');
 
   // Revising an archived ending prunes the derived data (cards, analyses,
   // scan job) from the FIRST DIVERGENT ply, leaving the shared prefix.
@@ -261,6 +343,102 @@ require('./helper').run('migration', async function (t) {
   check(guarded.first === true && guarded.stale === false &&
         guarded.cursor === 1 && guarded.state === 'paused',
     'an atomic source guard refuses a late checkpoint for a same-id replacement');
+
+  const receiptLifecycle = await page.evaluate(async function () {
+    function game(sans, createdAt) {
+      return {
+        id: 'receipt-lifecycle', source: 'play', tags: {}, sans: sans,
+        playerColor: 'w', clocks: sans.map(function () { return null; }),
+        result: '1-0', reason: 'resignation', mode: 'pvp', difficulty: '2',
+        timeControl: 'none', plies: sans.length, createdAt: createdAt
+      };
+    }
+    const first = game(['e4', 'e5'], 1);
+    const revised = game(['d4', 'd5'], 2);
+    const reflection = ChessyCalculation.build(Chess.newGameState(), {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
+    await CoachStore.archiveGame(first);
+    const wrote = await CoachStore.putReflectionReceipt(first, 0, reflection);
+    const before = (await CoachStore.listValidReflectionReceipts(first)).length;
+    await CoachStore.archiveGame(revised);
+    const afterRevision = (await CoachStore.exportAll()).stores.reflectionReceipts
+      .filter(function (r) { return r.gameId === revised.id; }).length;
+    const staleWrite = await CoachStore.putReflectionReceipt(first, 0, reflection);
+    await CoachStore.putReflectionReceipt(revised, 0, reflection);
+    await CoachStore.archiveGame(Object.assign({}, revised, { createdAt: 3 }));
+    const afterReoffer = (await CoachStore.listValidReflectionReceipts(revised)).length;
+    let invalidations = 0;
+    function invalidated(e) {
+      if (e.detail && e.detail.gameId === revised.id) invalidations++;
+    }
+    document.addEventListener('chessy:reflectionsourceinvalidated', invalidated);
+    const clockRevised = Object.assign({}, revised, {
+      createdAt: 4,
+      clocks: [
+        { thinkMs: 1000, wMs: 59000, bMs: 60000 },
+        { thinkMs: 1200, wMs: 59000, bMs: 58800 }
+      ]
+    });
+    const clockRevChanged = CoachStore.reflectionSourceRevision(revised) !==
+      CoachStore.reflectionSourceRevision(clockRevised);
+    await CoachStore.archiveGame(clockRevised);
+    const afterClockRevision =
+      (await CoachStore.exportAll()).stores.reflectionReceipts
+        .filter(function (r) { return r.gameId === revised.id; }).length;
+    const staleClockWrite = await CoachStore.putReflectionReceipt(
+      revised, 0, reflection);
+    await CoachStore.putReflectionReceipt(clockRevised, 0, reflection);
+    const timedRevised = Object.assign({}, clockRevised, {
+      createdAt: 5, timeControl: '60+1'
+    });
+    const timeRevChanged = CoachStore.reflectionSourceRevision(clockRevised) !==
+      CoachStore.reflectionSourceRevision(timedRevised);
+    await CoachStore.archiveGame(timedRevised);
+    const afterTimeRevision =
+      (await CoachStore.exportAll()).stores.reflectionReceipts
+        .filter(function (r) { return r.gameId === revised.id; }).length;
+    const staleTimeWrite = await CoachStore.putReflectionReceipt(
+      clockRevised, 0, reflection);
+    await CoachStore.putReflectionReceipt(timedRevised, 0, reflection);
+    await CoachStore.archiveGame(Object.assign({}, timedRevised, { createdAt: 6 }));
+    const afterExactReoffer =
+      (await CoachStore.listValidReflectionReceipts(timedRevised)).length;
+    document.removeEventListener(
+      'chessy:reflectionsourceinvalidated', invalidated);
+    const retracted = await CoachStore.retractGameEnding(timedRevised);
+    const afterRetraction = (await CoachStore.exportAll()).stores.reflectionReceipts
+      .filter(function (r) { return r.gameId === revised.id; }).length;
+    return {
+      wrote: wrote, before: before, afterRevision: afterRevision,
+      staleWrite: staleWrite, afterReoffer: afterReoffer,
+      clockRevChanged: clockRevChanged,
+      afterClockRevision: afterClockRevision,
+      staleClockWrite: staleClockWrite,
+      timeRevChanged: timeRevChanged,
+      afterTimeRevision: afterTimeRevision,
+      staleTimeWrite: staleTimeWrite,
+      afterExactReoffer: afterExactReoffer,
+      invalidations: invalidations,
+      retracted: retracted, afterRetraction: afterRetraction
+    };
+  });
+  check(receiptLifecycle.wrote && receiptLifecycle.before === 1 &&
+        receiptLifecycle.afterRevision === 0 && receiptLifecycle.staleWrite === false,
+    'same-id revision atomically prunes receipts and rejects a stale late write');
+  check(receiptLifecycle.afterReoffer === 1 && receiptLifecycle.retracted &&
+        receiptLifecycle.afterExactReoffer === 1 &&
+        receiptLifecycle.afterRetraction === 0,
+    'same-source reoffer preserves a receipt and exact retraction deletes it');
+  check(receiptLifecycle.clockRevChanged &&
+        receiptLifecycle.timeRevChanged &&
+        receiptLifecycle.afterClockRevision === 0 &&
+        receiptLifecycle.afterTimeRevision === 0 &&
+        receiptLifecycle.staleClockWrite === false &&
+        receiptLifecycle.staleTimeWrite === false &&
+        receiptLifecycle.invalidations === 2,
+    'clock/time-control revisions atomically prune receipts, reject stale writes, and notify');
 
   // Corrupt/relic job shapes are recomputable cache state, not a reason to
   // abort the user-data transaction that archives a revised ending.

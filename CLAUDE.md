@@ -137,13 +137,13 @@ issue #44 and must not be improvised as a side effect of another change.
   reflection receipt; the full SAN score trail unlocks only under the reviewed
   all-suggestions/zero-suggestion rule.
 - Persisted `analysisJobs.candidates`, `shortlist`, and `reflected` fields are
-  not authority. On r73, #152 and #153 remain open blockers: rebuild restored
-  candidates and the shortlist from validated quick-pass evidence, and derive
-  Gate-0 unlock only from durable, revision-bound, revalidated structured-
-  reflection receipts. Shape-valid cache records alone must never dispatch deep
-  work or reveal a score. Require field-tampering tests plus the real
-  submit -> reload -> reveal flow in Chromium and WebKit before calling either
-  defect fixed.
+  not authority. #152 remains an open blocker: rebuild restored candidates and
+  the shortlist from validated quick-pass evidence. Since r78, Gate-0 unlock is
+  derived only from durable, revision-bound, replay-validated structured-
+  reflection receipts; their exact source includes clock and time-control
+  evidence, and shape-valid cache records or lesson cards cannot reveal a
+  score. Preserve field-tampering tests, source-revision invalidation, plus the
+  real submit -> reload -> reveal flow in Chromium and WebKit.
 - Scores use White POV. Quick-pass scores remain visibly approximate. Chessy
   may add only conservative negative `?!`, `?`, or `??` marks from stable,
   deep-confirmed evidence; imported PGN NAGs retain separate provenance.

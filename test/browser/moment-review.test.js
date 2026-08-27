@@ -339,6 +339,104 @@ require('./helper').run('moment-review', async function (t) {
         /remaining suggested moment/.test(firstScore.note),
     'one submitted reflection reveals one score with distinct PGN and Chessy marks');
 
+  // Forge the old cache field for the OTHER suggestion, then cross a real
+  // page boundary. Only the genuine first form submission may survive.
+  await page.evaluate(async function () {
+    const job = await CoachStore.getJob('phase5-review-ui');
+    job.reflected = job.moments.map(function (moment) {
+      return { ply: moment.ply, playedSan: moment.playedSan };
+    });
+    await CoachStore.putJob(job);
+  });
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  await page.evaluate(function () {
+    // Reinstall the deterministic engine boundary for the remainder of this
+    // integration suite; the page reload intentionally destroyed all stubs.
+    ChessyAnalysisService.analyse = function (req) {
+      const state = Chess.parseFen(req.fen);
+      const legal = Chess.legalMoves(state);
+      const played = req.opts.playedMove;
+      const different = legal.find(function (move) {
+        return move.from !== played.from || move.to !== played.to ||
+          (move.promotion || null) !== (played.promotion || null);
+      }) || played;
+      const loss = req.ply === 0 ? 450 : 150;
+      const whiteScore = function (score) {
+        return state.turn === 'w' ? score : -score;
+      };
+      const uci = function (move) {
+        return Chess.sqName(move.from) + Chess.sqName(move.to) +
+          (move.promotion ? move.promotion.toLowerCase() : '');
+      };
+      const line = function (move, score, rank, amongCandidates) {
+        const san = Chess.toSan(state, move, legal);
+        return {
+          move: move, uci: uci(move), san: san,
+          scoreCpWhite: whiteScore(score), scoreCpPlayer: score,
+          mate: null, pv: [san], rank: rank,
+          amongCandidates: amongCandidates
+        };
+      };
+      const identity = ChessyAnalysisCore.identity(state,
+        Object.assign({}, req.opts, { positions: req.positions }));
+      return Promise.resolve({
+        complete: true, turn: state.turn,
+        depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+        nodes: 100, elapsedMs: 1,
+        engine: { id: identity.engineId, version: identity.version,
+          configHash: identity.configHash },
+        positionFingerprint: identity.positionFingerprint,
+        bestLines: [line(different, 100, 1, true)],
+        playedLine: line(played, 100 - loss, 2, false),
+        classification: 'different',
+        stability: req.opts.nodeLimit === 80000
+          ? { depths: [3, 4], bestMoveStable: true } : null
+      });
+    };
+    window.__fastScanAnalyse = ChessyAnalysisService.analyse;
+    ChessyAnalysisResult.validate = function (result) {
+      return { ok: true,
+        topMove: result.bestLines && result.bestLines[0] &&
+          result.bestLines[0].move,
+        playedMove: result.playedLine && result.playedLine.move };
+    };
+    ChessyMomentSelector.quickCandidate = function (result, meta) {
+      return { ply: meta.ply, playedSan: meta.playedSan, turn: meta.turn };
+    };
+    ChessyMomentSelector.shortlist = function (candidates) {
+      return candidates.slice(0, 2);
+    };
+    ChessyMomentSelector.acceptDeep = function (quick, result, meta) {
+      return { ply: meta.ply, playedSan: meta.playedSan };
+    };
+    return CoachReview.openArchivedGame('phase5-review-ui');
+  });
+  await page.waitForFunction(function () {
+    const state = ChessyMomentScan.state();
+    return state && state.state === 'done' &&
+      document.querySelectorAll('#reviewMoveList .review-eval').length === 1;
+  });
+  const afterSubmitReload = await page.evaluate(async function () {
+    const state = ChessyMomentScan.state();
+    const game = await CoachStore.getGame('phase5-review-ui');
+    const job = await CoachStore.getJob('phase5-review-ui');
+    return {
+      unlocked: state.reportUnlocked,
+      completed: state.reflectionCompleted,
+      report: state.report,
+      receipts: (await CoachStore.listValidReflectionReceipts(game)).length,
+      cards: (await CoachStore.listCards()).length,
+      cacheField: Object.prototype.hasOwnProperty.call(job, 'reflected')
+    };
+  });
+  check(afterSubmitReload.unlocked === false &&
+        afterSubmitReload.completed === 1 &&
+        afterSubmitReload.report.length === 1 &&
+        afterSubmitReload.receipts === 1 && afterSubmitReload.cards === 0 &&
+        afterSubmitReload.cacheField === false,
+    'real submit → reload restores one durable receipt and ignores forged job rows');
+
   // Reflect on the second suggestion to unlock all scanned scores and every
   // source annotation. Opponent moves receive quick estimates, but no
   // Chessy-generated NAG because nominations were explicitly White-only.
@@ -389,6 +487,100 @@ require('./helper').run('moment-review', async function (t) {
   check(unlockedOverflow <= 1,
     'scores plus PGN/Chessy badges do not overflow a narrow phone viewport');
   await page.setViewportSize({ width: 1280, height: 720 });
+
+  // A same-ending rearchive can still change the exact scan source through
+  // its clock/time-control evidence. That revision must revoke the already
+  // rendered Gate-0 authority synchronously with the durable commit, delete
+  // its receipts, and leave a newly loaded scan locked.
+  const sourceRevisionRevoked = await page.evaluate(async function () {
+    const original = await CoachStore.getGame('phase5-review-ui');
+    let invalidations = 0;
+    function invalidated(e) {
+      if (e.detail && e.detail.gameId === original.id) invalidations++;
+    }
+    document.addEventListener(
+      'chessy:reflectionsourceinvalidated', invalidated);
+    const revised = Object.assign({}, original, {
+      clocks: [
+        { thinkMs: 1000, wMs: 59000, bMs: 60000 },
+        { thinkMs: 1200, wMs: 59000, bMs: 58800 },
+        { thinkMs: 900, wMs: 58100, bMs: 58800 },
+        { thinkMs: 1100, wMs: 58100, bMs: 57700 }
+      ],
+      timeControl: '60+1',
+      createdAt: original.createdAt + 1
+    });
+    const changed = CoachStore.reflectionSourceRevision(original) !==
+      CoachStore.reflectionSourceRevision(revised);
+    await CoachStore.archiveGame(revised);
+    document.removeEventListener(
+      'chessy:reflectionsourceinvalidated', invalidated);
+    return {
+      changed: changed,
+      invalidations: invalidations,
+      stateNull: ChessyMomentScan.state() === null,
+      scores: document.querySelectorAll('#reviewMoveList .review-eval').length,
+      receipts: (await CoachStore.exportAll()).stores.reflectionReceipts
+        .filter(function (r) { return r.gameId === original.id; }).length
+    };
+  });
+  check(sourceRevisionRevoked.changed &&
+        sourceRevisionRevoked.invalidations === 1 &&
+        sourceRevisionRevoked.stateNull &&
+        sourceRevisionRevoked.scores === 0 &&
+        sourceRevisionRevoked.receipts === 0,
+    'clock/time-control revision revokes the loaded report and durable receipts');
+
+  await page.evaluate(function () {
+    return CoachReview.openArchivedGame('phase5-review-ui');
+  });
+  await page.waitForFunction(function () {
+    const state = ChessyMomentScan.state();
+    return state && state.state === 'idle';
+  });
+  const revisedSourceLocked = await page.evaluate(async function () {
+    const state = ChessyMomentScan.state();
+    const game = await CoachStore.getGame('phase5-review-ui');
+    return {
+      completed: state.reflectionCompleted,
+      unlocked: state.reportUnlocked,
+      report: Object.prototype.hasOwnProperty.call(state, 'report'),
+      scores: document.querySelectorAll('#reviewMoveList .review-eval').length,
+      receipts: (await CoachStore.listValidReflectionReceipts(game)).length
+    };
+  });
+  check(revisedSourceLocked.completed === 0 &&
+        revisedSourceLocked.unlocked === false &&
+        revisedSourceLocked.report === false &&
+        revisedSourceLocked.scores === 0 &&
+        revisedSourceLocked.receipts === 0,
+    'the revised source loads with Gate 0 locked until a new reflection');
+
+  // Rebuild recomputable scan work for the revised source so later lifecycle
+  // checks exercise a completed current-source job. Reanalysis must not
+  // recreate the deleted user-action receipts or unlock any score.
+  await page.evaluate(function () {
+    return ChessyMomentScan.start(CoachReview.current(), { restart: true });
+  });
+  await page.waitForFunction(function () {
+    const state = ChessyMomentScan.state();
+    return state && state.state === 'done';
+  });
+  const revisedSourceRescanned = await page.evaluate(async function () {
+    const state = ChessyMomentScan.state();
+    const game = await CoachStore.getGame('phase5-review-ui');
+    return {
+      unlocked: state.reportUnlocked,
+      completed: state.reflectionCompleted,
+      report: Object.prototype.hasOwnProperty.call(state, 'report'),
+      receipts: (await CoachStore.listValidReflectionReceipts(game)).length
+    };
+  });
+  check(revisedSourceRescanned.unlocked === false &&
+        revisedSourceRescanned.completed === 0 &&
+        revisedSourceRescanned.report === false &&
+        revisedSourceRescanned.receipts === 0,
+    'rescanning the revised source cannot recreate reflection authority');
 
   const guarded = await page.evaluate(function () {
     const before = CoachReview.current().ply;

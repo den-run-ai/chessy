@@ -14,6 +14,8 @@
  *            see "Bounded analyses cache" below.
  *   analysisJobs: { gameId, state, cursorPly, moments, ... } — one
  *            reload-safe, resumable two-pass scan per game (Phase 5).
+ *   reflectionReceipts: { key, gameId, source, ply, reflection, ... } —
+ *            durable Gate-0 proof bound to one exact archived revision.
  *
  * The games keyPath is the app's own per-game UUID: a re-shown or revised
  * ending of the same game instance (reload, undo → replay, reopened
@@ -36,7 +38,8 @@
 
   const DB_NAME = 'chessy-coach';
   // v5 was the FIRST released schema (v1–v4 only ever existed on pre-release
-  // preview branches). v6 adds the analyses + analysisJobs stores.
+  // preview branches). v6 adds the analyses + analysisJobs stores; v7 adds
+  // durable structured-reflection receipts.
   //
   // MIGRATIONS ARE NON-DESTRUCTIVE from v5 on. The old code unconditionally
   // deleted EVERY object store in onupgradeneeded and recreated them — safe
@@ -46,7 +49,7 @@
   // install, or a wiped preview) and leave existing v5 data untouched. The
   // preview wipe is scoped to genuinely pre-release versions (oldVersion in
   // 1..4) — never to released data.
-  const DB_VERSION = 6;
+  const DB_VERSION = 7;
 
   let dbPromise = null;
   let opLock = false;
@@ -100,6 +103,14 @@
             const jobs = db.createObjectStore('analysisJobs', { keyPath: 'gameId' });
             jobs.createIndex('state', 'state');
           }
+          // v7 durable Gate-0 receipts. The gameId index supports exact
+          // revision validation and atomic lifecycle cleanup without trusting
+          // any fields in the recomputable analysisJobs store.
+          if (!db.objectStoreNames.contains('reflectionReceipts')) {
+            const receipts = db.createObjectStore(
+              'reflectionReceipts', { keyPath: 'key' });
+            receipts.createIndex('gameId', 'gameId');
+          }
         };
         req.onsuccess = function () {
           const db = req.result;
@@ -147,6 +158,18 @@
     });
   }
 
+  // Revoke in-memory Gate-0 authority after an exact source revision or
+  // retraction commits. The durable transaction remains authoritative; this
+  // event only tells the single active page to discard its validated snapshot.
+  function notifyReflectionSourceInvalidated(gameId) {
+    if (typeof document === 'undefined' || !document.dispatchEvent ||
+        typeof CustomEvent === 'undefined') return;
+    try {
+      document.dispatchEvent(new CustomEvent(
+        'chessy:reflectionsourceinvalidated', { detail: { gameId: gameId } }));
+    } catch (e) { /* a later load still revalidates from IndexedDB */ }
+  }
+
   function putGame(game) {
     return tx('games', 'readwrite', function (s) { return s.put(game); });
   }
@@ -176,14 +199,16 @@
   function archiveGame(game) {
     return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
-        // Includes 'cards'/'analyses'/'analysisJobs': revising an ending in
-        // place must ATOMICALLY remove the derived data (lesson cards,
-        // engine analyses, scan progress) flagged on the abandoned
-        // continuation, in the same transaction that rewrites the game.
-        const t = db.transaction(['games', 'cards', 'analyses', 'analysisJobs'], 'readwrite');
+        // Includes every dependent store: revising an ending in place must
+        // ATOMICALLY remove derived data and revision-bound reflection proof
+        // from the abandoned continuation in the game rewrite transaction.
+        const t = db.transaction([
+          'games', 'cards', 'analyses', 'analysisJobs', 'reflectionReceipts'
+        ], 'readwrite');
         const s = t.objectStore('games');
         const getReq = s.get(game.id);
         let putReq = null;
+        let receiptsInvalidated = false;
         // A revised ending replaces the old one under the same id. Anything
         // derived from plies BEYOND the moves the two endings share now
         // references positions this game no longer contains; prune from the
@@ -262,19 +287,42 @@
             t.objectStore('analysisJobs').put(job);
           };
         }
+        function deleteReceipts(id) {
+          receiptsInvalidated = true;
+          const rc = t.objectStore('reflectionReceipts').index('gameId')
+            .openCursor(IDBKeyRange.only(id));
+          rc.onsuccess = function () {
+            const cursor = rc.result;
+            if (!cursor) return;
+            cursor.delete();
+            cursor.continue();
+          };
+        }
         getReq.onsuccess = function () {
           const existing = getReq.result;
           const record = Object.assign({}, game);
           if (existing) {
             if (sameEnding(existing, record)) {
               record.createdAt = Math.min(existing.createdAt, record.createdAt);
+              // Ending equality intentionally ignores the rest of the archived
+              // analysis source. Receipts do not: setup, ownership, clock
+              // evidence, and time-control changes all create a new source.
+              if (!sameReflectionSource(existing, record)) {
+                deleteReceipts(game.id);
+              }
             } else {
               pruneFromDivergence(game.id, existing.sans, record.sans); // revised ending
+              // A receipt is bound to the COMPLETE SAN source revision, not a
+              // shared prefix. No receipt from the abandoned ending survives.
+              deleteReceipts(game.id);
             }
           }
           putReq = s.put(record);
         };
-        t.oncomplete = function () { resolve(game.id); };
+        t.oncomplete = function () {
+          if (receiptsInvalidated) notifyReflectionSourceInvalidated(game.id);
+          resolve(game.id);
+        };
         t.onerror = function () { reject((putReq && putReq.error) || getReq.error || t.error); };
         t.onabort = function () {
           reject((putReq && putReq.error) || getReq.error || t.error ||
@@ -299,7 +347,8 @@
     return openForWrite().then(function (db) {
       return new Promise(function (resolve, reject) {
         const t = db.transaction(
-          ['games', 'cards', 'analyses', 'analysisJobs'], 'readwrite');
+          ['games', 'cards', 'analyses', 'analysisJobs', 'reflectionReceipts'],
+          'readwrite');
         const games = t.objectStore('games');
         const getReq = games.get(expected.id);
         let matched = false;
@@ -328,8 +377,20 @@
           };
 
           t.objectStore('analysisJobs').delete(expected.id);
+
+          const receipts = t.objectStore('reflectionReceipts').index('gameId')
+            .openCursor(IDBKeyRange.only(expected.id));
+          receipts.onsuccess = function () {
+            const cursor = receipts.result;
+            if (!cursor) return;
+            cursor.delete();
+            cursor.continue();
+          };
         };
-        t.oncomplete = function () { resolve(matched); };
+        t.oncomplete = function () {
+          if (matched) notifyReflectionSourceInvalidated(expected.id);
+          resolve(matched);
+        };
         t.onerror = function () { reject(getReq.error || t.error); };
         t.onabort = function () {
           reject(getReq.error || t.error || new Error('retraction aborted'));
@@ -478,6 +539,218 @@
       (game.playerColor || null) === (expected.playerColor || null) &&
       gameSans.length === expectedSans.length &&
       gameSans.every(function (san, i) { return san === expectedSans[i]; });
+  }
+
+  // ---- durable structured-reflection receipts (#153) ------------------
+  // The 32-bit revisions are convenient lookup metadata, never the trust
+  // boundary. Every receipt also carries the complete canonical source and is
+  // replayed against the current archived game before it can unlock anything.
+  var REFLECTION_RECEIPT_SCHEMA = 1;
+
+  function stableHash(str) {
+    var h = 5381;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  function reflectionSource(game) {
+    if (!game || typeof game.id !== 'string' || !game.id) return null;
+    var clocks;
+    try {
+      clocks = JSON.parse(JSON.stringify(
+        Array.isArray(game.clocks) ? game.clocks : []));
+    } catch (e) {
+      return null;
+    }
+    return {
+      id: game.id,
+      setupFen: game.setupFen || null,
+      playerColor: game.playerColor || null,
+      sans: Array.isArray(game.sans) ? game.sans.slice() : [],
+      timeControl: game.timeControl || null,
+      clocks: clocks
+    };
+  }
+
+  // Full-value equality is the authority boundary; the compact revision below
+  // is lookup metadata only. Keep this one predicate shared by receipt writes,
+  // reads, archive lifecycle cleanup, and recovery-source backup merging.
+  function sameReflectionSource(a, b) {
+    var left = reflectionSource(a);
+    var right = reflectionSource(b);
+    if (!left || !right) return false;
+    try { return JSON.stringify(left) === JSON.stringify(right); }
+    catch (e) { return false; }
+  }
+
+  function reflectionAnalysisRevision(game) {
+    return stableHash(JSON.stringify({
+      setupFen: game && game.setupFen || null,
+      sans: game && Array.isArray(game.sans) ? game.sans : []
+    }));
+  }
+
+  function reflectionSourceRevision(game) {
+    var source = reflectionSource(game);
+    return source ? stableHash(JSON.stringify(source)) : null;
+  }
+
+  function reflectionReceiptKey(game, ply) {
+    var revision = reflectionSourceRevision(game);
+    return revision === null ? null : JSON.stringify([game.id, revision, ply]);
+  }
+
+  function exactOwnKeys(value, expected) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var keys = Object.keys(value).sort();
+    var wanted = expected.slice().sort();
+    return keys.length === wanted.length && keys.every(function (key, i) {
+      return key === wanted[i];
+    });
+  }
+
+  function makeReflectionReceipt(game, ply, calculation, submittedAt) {
+    var replay = replayGameToPly(game, ply);
+    var source = reflectionSource(game);
+    var sourceRev = reflectionSourceRevision(game);
+    var reflection;
+    try { reflection = JSON.parse(JSON.stringify(calculation)); }
+    catch (e) { return null; }
+    if (!replay || !source || sourceRev === null || ply >= game.sans.length ||
+        typeof game.sans[ply] !== 'string' ||
+        typeof global.ChessyCalculation === 'undefined' ||
+        typeof global.ChessyCalculation.validate !== 'function' ||
+        global.ChessyCalculation.validate(reflection, replay.state)) return null;
+    return {
+      key: JSON.stringify([game.id, sourceRev, ply]),
+      schema: REFLECTION_RECEIPT_SCHEMA,
+      gameId: game.id,
+      sourceRev: sourceRev,
+      analysisRev: reflectionAnalysisRevision(game),
+      source: source,
+      ply: ply,
+      playedSan: game.sans[ply],
+      fenBefore: replay.fen,
+      positionKey: Chess.positionKey(replay.state),
+      reflection: reflection,
+      submittedAt: submittedAt
+    };
+  }
+
+  // Returns null only for an exact, replay-valid record. Malformed rows are
+  // deliberately preserved in IndexedDB for recovery/diagnosis, but never
+  // returned by listValidReflectionReceipts or accepted by restore.
+  function validateReflectionReceipt(record, game, prefix) {
+    prefix = prefix || 'structured-reflection receipt';
+    if (!exactOwnKeys(record, [
+      'key', 'schema', 'gameId', 'sourceRev', 'analysisRev', 'source',
+      'ply', 'playedSan', 'fenBefore', 'positionKey', 'reflection',
+      'submittedAt'
+    ])) return prefix + ' has an invalid shape';
+    if (record.schema !== REFLECTION_RECEIPT_SCHEMA ||
+        typeof record.gameId !== 'string' || !record.gameId ||
+        !Number.isInteger(record.ply) || record.ply < 0 ||
+        !Number.isFinite(record.submittedAt) || record.submittedAt < 0) {
+      return prefix + ' has invalid metadata';
+    }
+    if (!game || !sameReflectionSource(game, record.source) ||
+        record.gameId !== game.id ||
+        !exactOwnKeys(record.source, [
+          'id', 'setupFen', 'playerColor', 'sans', 'timeControl', 'clocks'
+        ])) {
+      return prefix + ' does not match its archived game revision';
+    }
+    if (record.sourceRev !== reflectionSourceRevision(game) ||
+        record.analysisRev !== reflectionAnalysisRevision(game) ||
+        record.key !== reflectionReceiptKey(game, record.ply)) {
+      return prefix + ' has a stale revision binding';
+    }
+    var replay = replayGameToPly(game, record.ply);
+    if (!replay || record.ply >= game.sans.length ||
+        record.playedSan !== game.sans[record.ply] ||
+        record.fenBefore !== replay.fen ||
+        record.positionKey !== Chess.positionKey(replay.state)) {
+      return prefix + ' does not match its replayed position';
+    }
+    if (typeof global.ChessyCalculation === 'undefined' ||
+        typeof global.ChessyCalculation.validate !== 'function') {
+      return prefix + ' cannot be checked by this release';
+    }
+    var calculationError = global.ChessyCalculation.validate(
+      record.reflection, replay.state);
+    return calculationError ? prefix + ' contains ' + calculationError : null;
+  }
+
+  // Bind a canonical Calculation value to the CURRENT exact archived source.
+  // The game guard and receipt write share one readwrite transaction, closing
+  // the same-id revision TOCTOU window.
+  function putReflectionReceipt(expectedGame, ply, calculation) {
+    if (!expectedGame || typeof expectedGame.id !== 'string' ||
+        !Number.isInteger(ply) ||
+        !makeReflectionReceipt(expectedGame, ply, calculation, Date.now())) {
+      return Promise.resolve(false);
+    }
+    return openForWrite().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['games', 'reflectionReceipts'], 'readwrite');
+        var getReq = t.objectStore('games').get(expectedGame.id);
+        var putReq = null;
+        var wrote = false;
+        getReq.onsuccess = function () {
+          var game = getReq.result;
+          if (!sameReflectionSource(game, expectedGame)) return;
+          var receipt = makeReflectionReceipt(game, ply, calculation, Date.now());
+          if (!receipt) return;
+          putReq = t.objectStore('reflectionReceipts').put(receipt);
+          wrote = true;
+        };
+        t.oncomplete = function () { resolve(wrote); };
+        t.onerror = function () {
+          reject((putReq && putReq.error) || getReq.error || t.error);
+        };
+        t.onabort = function () {
+          reject((putReq && putReq.error) || getReq.error || t.error ||
+            new Error('reflection receipt transaction aborted'));
+        };
+      });
+    });
+  }
+
+  // Read only receipts that still validate against the exact current archived
+  // source. Neither analysisJobs.reflected nor lesson cards participate.
+  function listValidReflectionReceipts(expectedGame) {
+    if (!expectedGame || typeof expectedGame.id !== 'string') {
+      return Promise.resolve([]);
+    }
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['games', 'reflectionReceipts'], 'readonly');
+        var gameReq = t.objectStore('games').get(expectedGame.id);
+        var receiptReq = null;
+        var out = [];
+        gameReq.onsuccess = function () {
+          var game = gameReq.result;
+          if (!sameReflectionSource(game, expectedGame)) return;
+          receiptReq = t.objectStore('reflectionReceipts').index('gameId')
+            .getAll(IDBKeyRange.only(expectedGame.id));
+          receiptReq.onsuccess = function () {
+            out = receiptReq.result.filter(function (receipt) {
+              return validateReflectionReceipt(receipt, game) === null;
+            }).sort(function (a, b) { return a.ply - b.ply; });
+          };
+        };
+        t.oncomplete = function () { resolve(out); };
+        t.onerror = function () {
+          reject((receiptReq && receiptReq.error) || gameReq.error || t.error);
+        };
+        t.onabort = function () {
+          reject((receiptReq && receiptReq.error) || gameReq.error || t.error ||
+            new Error('reflection receipt read aborted'));
+        };
+      });
+    });
   }
 
   // ONE card per moment (gameId + ply), enforced atomically: the index
@@ -762,23 +1035,23 @@
   }
 
   // ---- Backup (Phase 4b2) ----------------------------------------------
-  // A versioned JSON snapshot of the DURABLE stores only. games and cards
-  // carry everything the user cannot recompute — archived games with clocked
-  // moves, and lesson cards with their reflections, attempt history and
-  // spaced-review scheduling. `analyses`/`analysisJobs` are engine caches and
-  // resumable scan progress: recomputable from the games, so they are OMITTED
-  // to keep backups small and portable. `version` is the backup-format
+  // A versioned JSON snapshot of the DURABLE stores only. Games, lesson cards,
+  // and revision-bound structured-reflection receipts carry user evidence
+  // that cannot be recomputed. `analyses`/`analysisJobs` are engine caches and
+  // resumable scan progress, so they are OMITTED. `version` is the backup-format
   // version; `dbVersion` is the schema the backup was taken from, so a restore
   // can refuse a backup from a FUTURE schema it cannot understand. `release`
   // identifies the app release that assembled the envelope; game-start and
   // per-AI-move release identifiers remain on the records themselves.
   var BACKUP_FORMAT = 'chessy-coach-backup';
-  var BACKUP_VERSION = 1;
-  var DURABLE_STORES = ['games', 'cards'];
+  var BACKUP_VERSION = 2;
+  var DURABLE_STORES = ['games', 'cards', 'reflectionReceipts'];
   // A restore CLEARS the recomputable caches too (they belong to games being
   // removed) but only re-adds the durable rows — so it opens a transaction over
-  // all four stores while iterating DURABLE_STORES for the re-add.
-  var RESTORE_STORES = ['games', 'cards', 'analyses', 'analysisJobs'];
+  // every store while iterating DURABLE_STORES for the re-add.
+  var RESTORE_STORES = [
+    'games', 'cards', 'reflectionReceipts', 'analyses', 'analysisJobs'
+  ];
 
   function exportAll() {
     return open().then(function (db) {
@@ -1548,6 +1821,13 @@
       return 'backup has no valid database version';
     }
     if (data.dbVersion > DB_VERSION) return 'backup is from a newer database schema';
+    // Format v2 is what introduced the v7 durable receipt store. A damaged
+    // envelope must not be able to downgrade only `version` and thereby make
+    // a same-schema backup silently omit/erase those receipts.
+    if ((data.version === 1 && data.dbVersion > 6) ||
+        (data.version === 2 && data.dbVersion < 7)) {
+      return 'backup format does not match its database schema';
+    }
     // Must be a plain object: an ARRAY passes `typeof === 'object'` but then
     // every named store reads as absent, so a `stores: []` backup would clear
     // the archive while "restoring" zero records.
@@ -1556,6 +1836,14 @@
     }
     if (!Array.isArray(data.stores.games) || !Array.isArray(data.stores.cards)) {
       return 'backup is missing the games or cards array';
+    }
+    if (data.version === 1 &&
+        Object.prototype.hasOwnProperty.call(
+          data.stores, 'reflectionReceipts')) {
+      return 'backup format predates structured-reflection receipts';
+    }
+    if (data.version >= 2 && !Array.isArray(data.stores.reflectionReceipts)) {
+      return 'backup is missing the structured-reflection receipts array';
     }
     // Cross-store validation needs the complete restored game set. Use a
     // prototype-free lookup so a string id such as "__proto__" remains
@@ -1569,7 +1857,11 @@
       for (var j = 0; j < rows.length; j++) {
         var r = rows[j];
         if (!r || typeof r !== 'object') return 'store "' + name + '" has a non-object record';
-        if (!validIdbKey(r.id)) return 'store "' + name + '" record ' + j + ' has an invalid "id" key';
+        var keyName = name === 'reflectionReceipts' ? 'key' : 'id';
+        if (!validIdbKey(r[keyName])) {
+          return 'store "' + name + '" record ' + j +
+            ' has an invalid "' + keyName + '" key';
+        }
         // Required schema so a restored record is USABLE, not merely addable:
         // a game must replay AND render in Review; a card must attach to a game
         // AND be trainable. Otherwise the destructive restore swaps in records
@@ -1591,13 +1883,23 @@
             r, 'store "cards" record ' + j, game);
           if (cardError) return cardError;
         }
+        if (name === 'reflectionReceipts') {
+          var receiptGame = gamesById[r.gameId];
+          if (!receiptGame) {
+            return 'store "reflectionReceipts" record ' + j +
+              ' references a missing game';
+          }
+          var receiptError = validateReflectionReceipt(
+            r, receiptGame, 'store "reflectionReceipts" record ' + j);
+          if (receiptError) return receiptError;
+        }
       }
     }
     return null;
   }
 
   // Replace the DURABLE archive with a validated backup, ATOMICALLY: one
-  // read-write transaction clears games+cards and re-adds the backup's rows.
+  // read-write transaction clears all stores and re-adds the durable rows.
   // Validated in memory first (invalid → rejected, zero writes). Crucially, a
   // SYNCHRONOUS enqueue failure (an invalid key that slipped validation) must
   // NOT let the preceding clear() auto-commit and destroy the archive: the loop
@@ -1614,7 +1916,7 @@
         // replacement must still CLEAR them in the SAME atomic transaction:
         // analyses and analysisJobs keyed to games the restore removes are no
         // longer reachable yet keep consuming quota, which can later fail game
-        // or card writes. Clear all four, re-add only the durable backup rows.
+        // or card writes. Clear all stores, re-add only durable backup rows.
         var t = db.transaction(RESTORE_STORES, 'readwrite');
         var counts = {};
         var failed = null;
@@ -1647,7 +1949,7 @@
   // the cleared endings by signature, drop the durability queue) guarantee
   // cleared games do not reappear, including after a reload.
   function deleteAllData() {
-    var all = RESTORE_STORES; // games, cards, analyses, analysisJobs
+    var all = RESTORE_STORES;
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
         var t = db.transaction(all, 'readwrite');
@@ -1684,6 +1986,11 @@
     putJobIfGame: putJobIfGame,
     getJob: getJob,
     deleteJob: deleteJob,
+    putReflectionReceipt: putReflectionReceipt,
+    listValidReflectionReceipts: listValidReflectionReceipts,
+    validateReflectionReceipt: validateReflectionReceipt,
+    sameReflectionSource: sameReflectionSource,
+    reflectionSourceRevision: reflectionSourceRevision,
     exportAll: exportAll,
     validateGameReplayRecord: validateGameReplayRecord,
     validateGameRecord: validateGameRecord,
