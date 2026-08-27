@@ -37,11 +37,11 @@ does not relax the shipped app's offline boundary.
 | `assets/engine.js` | Dependency-free JavaScript chess rules, legal moves, SAN, draw state; **not AI search** |
 | `experiments/wasm/src/` | Production Rust search, evaluation, move generation, exact-root analysis |
 | `experiments/wasm/build.sh` | Pinned reproducible WASM build; output is copied to `assets/chessy-ai-fast.wasm` |
-| `assets/wasm-engine.js`, `ai-worker.js` | Strict ABI-v2 loader and Worker-only Play search |
-| `assets/analysis-{core,worker,service,result}.js` | Coaching orchestration, worker lifecycle, caching, result trust boundary |
+| `assets/{wasm-engine,ai-worker}.js` | Strict ABI-v2 loader and Worker-only Play search |
+| `assets/{analysis-core,analysis-worker,analysis-service,analysis-result}.js` | Coaching orchestration, worker lifecycle, caching, result trust boundary |
 | `assets/app.js` | Live game, clocks, replay, local save, UI orchestration |
-| `assets/store.js`, `archive.js`, `data-controls.js` | IndexedDB records, archive durability, backup/restore/delete fences |
-| `assets/review.js`, `moment-*.js`, `reflection.js`, `train.js`, `progress.js` | Reflection-gated coaching loop |
+| `assets/{store,archive,data-controls}.js` | IndexedDB records, archive durability, backup/restore/delete fences |
+| `assets/{review,moment-scan,moment-selector,reflection,train,progress}.js` | Reflection-gated coaching loop |
 | `sw.js`, `assets/runtime-update.js` | Immutable release units, offline cache, update/takeover lifecycle |
 | `test/`, `eval/`, `.github/workflows/` | Contracts, regression suites, scorecards, and authoritative CI |
 
@@ -68,9 +68,12 @@ issue #44 and must not be improvised as a side effect of another change.
 
 ### Offline release units
 
-- Runtime URLs are immutable per `rN`. An `assets/**` change requires a release
-  number strictly greater than the current **base-branch tip**, not merely the
-  merge base.
+- Runtime URLs are immutable per `rN`. Any executable change under `assets/**`
+  or in `index.html` or `sw.js` must ship as one coherent release with a number
+  strictly greater than the current **base-branch tip**, not merely the merge
+  base. On r73 the CI release gate detects only `assets/**` changes and runs only
+  in PR context; until that gate is widened, verify executable shell and service-
+  worker changes explicitly and do not infer push/deploy safety from that job.
 - Keep these identities equal: `sw.js` `RELEASE`, the visible version and
   `window.CHESSY_RELEASE` in `index.html`, every runtime `?r=rN` URL, and worker
   descendant URLs.
@@ -108,6 +111,12 @@ issue #44 and must not be improvised as a side effect of another change.
   matches (game ID, moves, result, and reason), then remove its derived
   cards/analyses/jobs in the same transaction. A UUID alone must not erase a
   newer revised ending.
+- Current r73 has an unresolved fail-closed defect in Undo recovery: malformed
+  retraction tombstones must be preserved or losslessly quarantined and must
+  block that game ID from boot rearchive, Review, and Backup (#154). Issue #96
+  tracks the broader same-ID source-authority design. Do not describe this
+  contract as satisfied until the two-reload and mixed-game recovery regressions
+  pass.
 
 ### Async ownership
 
@@ -129,9 +138,14 @@ issue #44 and must not be improvised as a side effect of another change.
   may score every non-terminal move, but the matching row unlocks only after its
   reflection receipt; the full SAN score trail unlocks only under the reviewed
   all-suggestions/zero-suggestion rule.
-- Reflection receipts and restored shortlist evidence must be bound to trusted,
-  recomputable user/action and quick-pass state. Shape-valid persisted data is
-  not proof that the gate was crossed.
+- Persisted `analysisJobs.candidates`, `shortlist`, and `reflected` fields are
+  not authority. On r73, #152 and #153 remain open blockers: rebuild restored
+  candidates and the shortlist from validated quick-pass evidence, and derive
+  Gate-0 unlock only from durable, revision-bound, revalidated structured-
+  reflection receipts. Shape-valid cache records alone must never dispatch deep
+  work or reveal a score. Require field-tampering tests plus the real
+  submit -> reload -> reveal flow in Chromium and WebKit before calling either
+  defect fixed.
 - Scores use White POV. Quick-pass scores remain visibly approximate. Chessy
   may add only conservative negative `?!`, `?`, or `??` marks from stable,
   deep-confirmed evidence; imported PGN NAGs retain separate provenance.
@@ -177,8 +191,8 @@ Browser tests that seed `localStorage` before boot should use the harness's
 pre-navigation injection or an app-less `/blank` page; seeding on the app page
 and then reloading can be overwritten by the app's `pagehide` persistence.
 
-The Master `11...e4` regression test is intentionally diagnostic on the current
-baseline: normal mode tracks the known miss, while `--require-fix` is opt-in.
+The Master `11...e4` target regression test is intentionally diagnostic on the
+current baseline: normal mode tracks the known miss, while `--require-fix` is opt-in.
 Do not claim that incident is fixed or make the opt-in gate mandatory without a
 genuinely new candidate and its required formal evidence.
 
@@ -197,6 +211,10 @@ genuinely new candidate and its required formal evidence.
 - `test/fixtures/wasm-r69-signatures.json` is immutable evidence tied to its
   recorded historical commit. Never regenerate or relabel it from current
   bytes; a new behavioral baseline needs separately versioned evidence.
+- `test/gen-wasm-signatures.js` intentionally rejects every module except the
+  exact r69 hash. Do not weaken that guard or overwrite the r69 fixture; an
+  approved new production baseline requires a separately named fixture,
+  generator contract, and review.
 - Preserve score perspective, mate ordering, repetition identity/counts,
   complete legal-root analysis, shared-budget accounting, and legal PV replay.
 
@@ -208,10 +226,16 @@ genuinely new candidate and its required formal evidence.
 - Correctness scorecards gate at 100%. Quality ratchets may improve without
   treating unsolved positions as infrastructure failures. Coverage counts are
   part of the result.
-- A pure strength/evaluation candidate uses the complete formal fixed-node
-  protocol: 100 openings × 4 seeds × both colors = 800 games at 10,000
-  nodes/move and 180 plies, with the opening-clustered one-sided 95% lower bound
-  strictly above 50%.
+- The current v1 fixed-node runners encode 100 openings × 4 seed slots × both
+  colors. Rust/WASM search has no seed input, so the four slots are deterministic
+  repeats: existing clustered results contain 100 independent opening clusters,
+  not 400. They are not automatically invalid, but v1 wastes 75% of its games;
+  do not dispatch it for a new candidate.
+- Replace v1 under a new manifest hash and protocol identity with 400 distinct
+  openings × both colors = 800 games, clustered by opening. Pre-register the
+  budget, ply cap, selection rule, and acceptance threshold, and update the
+  runner, aggregator, workflows, tests, and README together. Never relabel or
+  combine v1 artifacts as v2 evidence.
 - The lower >49% bound is only for a separately demonstrated material
   efficiency optimization under the formal WASM efficiency protocol. It is not
   a substitute strength gate. Equal-time infrastructure remains diagnostic.
