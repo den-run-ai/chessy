@@ -71,9 +71,9 @@ issue #44 and must not be improvised as a side effect of another change.
 - Runtime URLs are immutable per `rN`. Any executable change under `assets/**`
   or in `index.html` or `sw.js` must ship as one coherent release with a number
   strictly greater than the current **base-branch tip**, not merely the merge
-  base. On r73 the CI release gate detects only `assets/**` changes and runs only
-  in PR context; until that gate is widened, verify executable shell and service-
-  worker changes explicitly and do not infer push/deploy safety from that job.
+  base. The shared CI release gate enforces those paths in pull requests and
+  `main` pushes, and Pages deployment waits for that gate plus the other five
+  full checks. Preserve that parity; never add a second reduced deploy path.
 - Keep these identities equal: `sw.js` `RELEASE`, the visible version and
   `window.CHESSY_RELEASE` in `index.html`, every runtime `?r=rN` URL, and worker
   descendant URLs.
