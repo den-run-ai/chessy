@@ -1,0 +1,59 @@
+name: Full evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly full-corpus guard; workflow_dispatch is the pre-release entry point.
+    - cron: '17 8 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-eval-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-eval:
+    name: 117-case correctness + 103-case analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install chess.js (dev-only independent legal-move oracle)
+        run: npm install --no-save chess.js@1.4.0
+      - name: Verify the committed corpus is reproducible
+        run: |
+          node test/eval/gen-corpus.js
+          if ! git diff --quiet -- eval/corpus/; then
+            echo '::error::eval/corpus is stale — regenerate and commit it'
+            git --no-pager diff --stat -- eval/corpus/
+            exit 1
+          fi
+      - name: Run both full-corpus baseline gates
+        run: |
+          mkdir -p full-eval-results
+          set +e
+          node test/eval/scorecard.js --full \
+            --baseline eval/FULL-BASELINE.json \
+            --out full-eval-results/correctness.json
+          correctness_status=$?
+          node test/eval/analysis-scorecard.js --full \
+            --baseline eval/ANALYSIS-FULL-BASELINE.json \
+            --out full-eval-results/analysis.json
+          analysis_status=$?
+          set -e
+          if [ "$correctness_status" -ne 0 ] || [ "$analysis_status" -ne 0 ]; then
+            exit 1
+          fi
+      - name: Upload full score vectors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-eval-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: full-eval-results/
+          if-no-files-found: warn
+          retention-days: 30

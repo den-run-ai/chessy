@@ -274,9 +274,12 @@ node test/browser/all.js            # BROWSER=webkit for the WebKit engine
 ```
 
 (With `playwright-core` instead, point `CHROMIUM_PATH` at a Chromium
-binary.) Both test layers run on every pull request via GitHub Actions —
-the browser suites on both Chromium and WebKit — and deploys to Pages are
-gated on the engine *and* browser suites.
+binary.) Every pull request and every `main` deployment runs the same six CI
+checks: hygiene, pinned Rust/WASM reproducibility, release-token enforcement,
+the complete engine/eval job, Chromium, and WebKit. Pages deployment waits for
+all six. A separate **Full evaluation** action runs the complete 117-case
+correctness and 103-case analysis scorecards weekly and on manual pre-release
+dispatch.
 
 ## Structure
 
