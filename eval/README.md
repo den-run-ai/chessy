@@ -37,31 +37,47 @@ steps:
 | `corpus/manifest.json` | Counts, split policy, shared `analyse` opts, generator version, corpus + source sha256 |
 | `BASELINE.md` / `BASELINE.json` | The first published correctness baseline (human + machine) |
 | `ANALYSIS-BASELINE.md` / `.json` | The first published **analysis/coaching** baseline (the E3 slice) |
+| `FULL-BASELINE.json` | Reviewed r73 correctness vector over all 117 cases |
+| `ANALYSIS-FULL-BASELINE.json` | Reviewed r73 analysis/coaching vector over all 103 live cases |
 | `LICENSE-REPORT.md` | Per-source license provenance and the explicit exclusion list |
 | `../test/eval/fetch-corpus.js` | **Online** fetcher: commits the frozen CC0 sample under `corpus/sources/` |
 | `../test/eval/gen-corpus.js` | **Offline** deterministic, self-validating generator that derives the corpus |
 | `../test/eval/scorecard.js` | Correctness score-vector runner (frozen 64-case PR shard + full mode) |
 | `../test/eval/analysis-scorecard.js` | **Analysis/coaching** score-vector runner (frozen 34-case train/val PR shard + full mode) |
+| `../.github/workflows/full-eval.yml` | Manual + weekly full-corpus baseline gate; uploads both score vectors |
 
 ## Run it
 
 ```sh
 node test/eval/scorecard.js            # frozen 64-case PR shard (runs in CI, <1s)
-node test/eval/scorecard.js --full     # the whole committed corpus
+node test/eval/scorecard.js --full     # the whole 117-case committed corpus
+node test/eval/scorecard.js --full --baseline eval/FULL-BASELINE.json
 node test/eval/scorecard.js --json --out run.json          # machine-readable vector
 node test/eval/scorecard.js --baseline eval/BASELINE.json   # before/after vs the baseline
 node test/eval/gen-corpus.js           # regenerate the corpus offline from committed sources
 node test/eval/fetch-corpus.js         # (online) refresh the frozen CC0 sample under corpus/sources/
 
 node test/eval/analysis-scorecard.js   # E3 analysis vector — frozen 34-case train/val shard (runs in CI, ~9s)
-node test/eval/analysis-scorecard.js --full   # all 103 live cases (~95s, nightly / pre-release)
+node test/eval/analysis-scorecard.js --full   # all 103 live cases (weekly / pre-release)
+node test/eval/analysis-scorecard.js --full --baseline eval/ANALYSIS-FULL-BASELINE.json
 node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json   # strict gate + quality ratchet
 node test/eval/analysis-scorecard.js --self-test    # prove the strict gate turns red
 ```
 
-The three tools are **development/build-time Node tools** (they use
+These four tools are **development/build-time Node tools** (they use
 `node:crypto`, and the fetcher shells out to `curl`); they are never loaded by
 the browser app.
+
+The full baselines are deterministic score vectors generated from release
+**r73**, commit `07b29d39c07761bd9e1cec242ac16e0435e15f7a`, and corpus digest
+`34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27`.
+The reviewed correctness vector is 310/310 strict checks over 117 cases. The
+reviewed 103-case analysis vector has 103/103 complete-root and 40/40
+played-rank checks, 27/40 puzzle top-1, 34/40 recall@3, 53/80 PV stability,
+68/103 budget stability, median/p90/p99 regret 0/17/440 cp, zero catastrophic
+misses, and 40 exact accepted-move fixtures. Quality misses establish the
+ratchet; only strict failures or a regression from these reviewed values make
+the full baseline gate fail.
 
 ## The corpus (eval-v1)
 
@@ -98,8 +114,9 @@ split — split-before-extract). Test-tagged records are excluded from routine P
 analysis-quality feedback (strict correctness coverage may still include
 test-tagged shard records). The frozen **64-case PR shard** (`shard: true`: every
 correctness-critical generated case, then a fill stratified round-robin across
-ECO volumes and puzzle rating bands) runs on every PR; the full corpus is for
-nightly / pre-release runs. The Syzygy exact-WDL fixtures and the rotating
+ECO volumes and puzzle rating bands) runs on every PR; the full corpus is used
+by the manual + weekly Full evaluation workflow and for pre-release runs. The
+Syzygy exact-WDL fixtures and the rotating
 later-month OOD sample are staged for later E1 work — see `LICENSE-REPORT.md`.
 Historical exception: the full
 `eval-v1` metrics were already consulted when selecting accepted-move criterion
@@ -136,9 +153,11 @@ chess.js`), never bundled into the offline app; when it is absent the check
 degrades to the self-consistency form and the corpus regenerates identically
 (the oracle only validates, it never alters records).
 
-**Baseline gate in CI.** The PR job runs `scorecard.js --baseline
+**Baseline gates in CI.** The PR job runs `scorecard.js --baseline
 eval/BASELINE.json`, so a lost check, a vacuous axis, or a changed analysis
-config fails the gate — not just a new assertion failure.
+config fails the gate — not just a new assertion failure. The Full evaluation
+workflow applies the same compatibility rules to all 117 cases against
+`FULL-BASELINE.json`.
 
 ## The analysis scorecard (the E3 slice)
 
@@ -156,11 +175,11 @@ silently conflated:
 | `pvStability` | ratchet | Best move unchanged one ply shallower — **measured independently**, not read off the engine's own stability flag |
 | `budgetStability` | ratchet | Best line unchanged at ¼× budget (`--full` adds the 4× tier); a tier rejected by the shipped validator scores as a miss |
 | `regret` | ratchet | Median / p90 / p99 cp regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
-| `equivalence` | **exact fixture** | The shipped `ChessyEquivalence` verdict/reason for each frozen **PR-shard** puzzle key through the shipped-width `playedMove` path; criterion identity, per-case outcome, and coverage must match the reviewed baseline (`--full` reports all puzzle keys descriptively) |
+| `equivalence` | **exact fixture** | The shipped `ChessyEquivalence` verdict/reason for each puzzle key in the selected mode through the shipped-width `playedMove` path; criterion identity, per-case outcome, and coverage must match the mode's reviewed baseline |
 
 **Strict axes gate at 100%; quality axes ratchet** — they may improve but never
-regress against `ANALYSIS-BASELINE.json`. An unsolved puzzle is a measured
-quality level, not a broken build; determinism (proven by the E2 axis) makes
+regress against the matching shard or full baseline. An unsolved puzzle is a
+measured quality level, not a broken build; determinism (proven by the E2 axis) makes
 the ratchet **exact**, with no tolerance band. Coverage is part of the score:
 the fraction axes' `checked` counts and the regret sample `n` fail the ratchet
 when they shrink, so an engine can never look better by measuring less. Per the
@@ -174,9 +193,9 @@ automatic build failures. What fails is an unreviewed semantic change. The
 baseline embeds the exact criterion identity and per-case
 `id → verdict/reason`, so opposite shifts cannot cancel in an aggregate count;
 identity drift, a missing case, or any changed outcome requires a conscious
-same-change re-baseline. This exact gate covers the 12 puzzle cases in the
-committed shard baseline. The 40-case `--full` output has no committed
-full-mode baseline and is therefore descriptive.
+same-change re-baseline. The committed shard baseline covers 12 puzzle cases;
+`ANALYSIS-FULL-BASELINE.json` covers all 40 puzzle cases for the manual and
+weekly full-corpus gate.
 
 The strict axes delegate whole-object validation to the shipped
 `ChessyAnalysisResult.validate` (against an independently derived identity), so

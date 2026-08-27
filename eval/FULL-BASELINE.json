@@ -1,0 +1,64 @@
+{
+  "baseline_release": "r73",
+  "baseline_commit": "07b29d39c07761bd9e1cec242ac16e0435e15f7a",
+  "corpus": "eval-v1",
+  "generator_version": "eval-v1.0.0",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
+  "mode": "full",
+  "cases": 117,
+  "analyse_opts": {
+    "nodeLimit": 3000,
+    "nodeBudget": 2000000,
+    "multiPV": 3,
+    "pvLen": 4,
+    "quiesce": true
+  },
+  "axes": {
+    "legalRoot": {
+      "checked": 117,
+      "pass": 117,
+      "fail": 0
+    },
+    "terminalStatus": {
+      "checked": 113,
+      "pass": 113,
+      "fail": 0
+    },
+    "specialMoves": {
+      "checked": 22,
+      "pass": 22,
+      "fail": 0
+    },
+    "expectedLegal": {
+      "checked": 40,
+      "pass": 40,
+      "fail": 0
+    },
+    "pvReplay": {
+      "checked": 6,
+      "pass": 6,
+      "fail": 0
+    },
+    "perspectiveMate": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    },
+    "symmetry": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    },
+    "determinism": {
+      "checked": 4,
+      "pass": 4,
+      "fail": 0
+    }
+  },
+  "totals": {
+    "checks": 310,
+    "pass": 310,
+    "fail": 0
+  },
+  "gate": "PASS"
+}

@@ -3,8 +3,8 @@
  *
  * Static gate: the release token must agree everywhere it appears —
  * index.html's inline CHESSY_RELEASE, every ?r= asset reference, and
- * sw.js's RELEASE — and the service worker must precache exactly the
- * versioned URLs the HTML references.
+ * sw.js's RELEASE — and the service worker must precache the versioned URLs
+ * referenced by both the HTML and the worker-only dependency graph.
  *
  * Dynamic gate: an old service worker receiving a NEW release must never
  * produce mixed execution (new HTML with old cached scripts or the
@@ -35,6 +35,12 @@ function check(cond, label) {
 // ---- Static coherence ----
 const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const htmlSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const appSrc = fs.readFileSync(path.join(ROOT, 'assets', 'app.js'), 'utf8');
+const analysisServiceSrc = fs.readFileSync(
+  path.join(ROOT, 'assets', 'analysis-service.js'), 'utf8');
+const aiWorkerSrc = fs.readFileSync(path.join(ROOT, 'assets', 'ai-worker.js'), 'utf8');
+const analysisWorkerSrc = fs.readFileSync(
+  path.join(ROOT, 'assets', 'analysis-worker.js'), 'utf8');
 const swToken = (swSrc.match(/const RELEASE = '([^']+)'/) || [])[1];
 const inlineToken = (htmlSrc.match(/window\.CHESSY_RELEASE = '([^']+)'/) || [])[1];
 const displayedToken = (htmlSrc.match(/id="appVersion"[^>]*>Version ([^<]+)</) || [])[1];
@@ -51,8 +57,32 @@ check(refTokens.length > 0 && refTokens.every(function (t) { return t === swToke
   'every ?r= reference in index.html carries the same token (' + refTokens.length + ' refs)');
 check(versionedRefs.every(function (ref) { return swSrc.indexOf(ref.replace('?r=' + swToken, '')) !== -1; }),
   'every versioned index.html reference has a matching sw.js precache entry');
-check(swSrc.indexOf("'./assets/ai-worker.js?r=' + RELEASE") !== -1,
-  'the worker script is precached under the release token');
+const workerOnlyAssets = [
+  {
+    path: 'ai-worker.js',
+    referenced: /new Worker\('assets\/ai-worker\.js'\s*\+\s*\(window\.CHESSY_RELEASE\s*\?\s*'\?r='\s*\+\s*window\.CHESSY_RELEASE\s*:\s*''\)\)/.test(appSrc)
+  },
+  {
+    path: 'analysis-worker.js',
+    referenced: /new Worker\('assets\/analysis-worker\.js'\s*\+\s*\(global\.CHESSY_RELEASE\s*\?\s*'\?r='\s*\+\s*global\.CHESSY_RELEASE\s*:\s*''\)\)/.test(analysisServiceSrc)
+  },
+  {
+    path: 'wasm-engine.js',
+    referenced: aiWorkerSrc.indexOf("importScripts('wasm-engine.js'") !== -1 &&
+      analysisWorkerSrc.indexOf("'wasm-engine.js' + self.location.search") !== -1
+  },
+  {
+    path: 'chessy-ai-fast.wasm',
+    referenced: /wasmUrl:\s*'chessy-ai-fast\.wasm'\s*\+\s*\(window\.CHESSY_RELEASE\s*\?\s*'\?r='\s*\+\s*window\.CHESSY_RELEASE\s*:\s*''\)/.test(appSrc) &&
+      analysisWorkerSrc.indexOf("fetch('chessy-ai-fast.wasm'") !== -1
+  }
+];
+workerOnlyAssets.forEach(function (asset) {
+  check(asset.referenced,
+    asset.path + ' is release-bound in the production worker graph');
+  check(swSrc.indexOf("'./assets/" + asset.path + "?r=' + RELEASE") !== -1,
+    asset.path + ' is precached under the release token');
+});
 
 // ---- Dynamic old-worker → new-release transition ----
 function browserType() {
