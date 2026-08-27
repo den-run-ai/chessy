@@ -111,12 +111,10 @@ issue #44 and must not be improvised as a side effect of another change.
   matches (game ID, moves, result, and reason), then remove its derived
   cards/analyses/jobs in the same transaction. A UUID alone must not erase a
   newer revised ending.
-- Current r73 has an unresolved fail-closed defect in Undo recovery: malformed
-  retraction tombstones must be preserved or losslessly quarantined and must
-  block that game ID from boot rearchive, Review, and Backup (#154). Issue #96
-  tracks the broader same-ID source-authority design. Do not describe this
-  contract as satisfied until the two-reload and mixed-game recovery regressions
-  pass.
+- Malformed Undo tombstones are preserved or losslessly quarantined and block
+  their game ID from boot rearchive, Review, and Backup. Keep the #154
+  field-mutation, two-reload, mixed-game, and unreadable-whole-queue regressions
+  intact. Issue #96 tracks the broader same-ID source-authority design.
 
 ### Async ownership
 

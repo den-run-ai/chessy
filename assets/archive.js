@@ -90,6 +90,74 @@
        (value.reason === 'draw agreement' && value.result === '1/2-1/2'));
   }
 
+  // A damaged Undo tombstone is authority that an outcome may have been
+  // withdrawn, even when its exact ending can no longer be trusted enough to
+  // delete. Keep that authority keyed by game id for the rest of this page:
+  // after reconcile observes the damage, a later transient localStorage read
+  // failure must not make the same boot fail open and re-offer the stale save.
+  // The durable queue rediscovers the block on every later reload.
+  const blockedRetractionIds = new Set();
+  let pendingQueueBlocked = false;
+  function own(value, key) {
+    return Object.prototype.hasOwnProperty.call(value, key);
+  }
+  function retractionEntryState(entry, id) {
+    const object = !!entry && typeof entry === 'object' && !Array.isArray(entry);
+    // `ending` is tombstone-specific. Treat a missing/damaged `op` as a
+    // malformed retraction too instead of reclassifying and deleting it as a
+    // bad archive record.
+    const tombstoneLike = object && (entry.op === 'retract' || own(entry, 'ending'));
+    if (!tombstoneLike) {
+      if (entry === undefined) return { kind: 'none', ending: null };
+      const rec = object && entry.rec;
+      const validArchiveWrapper = object && entry.op === undefined &&
+        Object.keys(entry).sort().join(',') === 'rec,w' &&
+        typeof entry.w === 'string' && !!entry.w &&
+        rec && typeof rec === 'object' && !Array.isArray(rec) &&
+        typeof rec.id === 'string' && rec.id === id && !!rec.id &&
+        Array.isArray(rec.sans);
+      if (validArchiveWrapper) return { kind: 'none', ending: null };
+      // Once keyed durable bytes are present, an unrecognizable wrapper may
+      // be a tombstone whose discriminator was damaged. Never guess that it
+      // was an expendable archive record and delete the only withdrawal
+      // authority.
+      blockedRetractionIds.add(id);
+      return { kind: 'blocked', ending: null };
+    }
+    if (entry.op === 'retract' && typeof entry.w === 'string' && !!entry.w &&
+        Object.keys(entry).sort().join(',') === 'ending,op,w' &&
+        validEnding(entry.ending, id)) {
+      return { kind: 'valid', ending: entry.ending };
+    }
+    blockedRetractionIds.add(id);
+    return { kind: 'blocked', ending: null };
+  }
+  function pendingRetractionState(id) {
+    if (pendingQueueBlocked) return { kind: 'blocked', ending: null };
+    if (blockedRetractionIds.has(id)) return { kind: 'blocked', ending: null };
+    const map = readPending();
+    if (!map) {
+      pendingQueueBlocked = true;
+      return { kind: 'blocked', ending: null };
+    }
+    return retractionEntryState(map[id], id);
+  }
+  function malformedRetractionBlocked(id) {
+    return pendingRetractionState(id).kind === 'blocked';
+  }
+  function malformedRetractionError(id) {
+    const err = new Error('archive retraction recovery is malformed');
+    err.failedGameIds = [id];
+    err.malformedRetraction = true;
+    return err;
+  }
+  function malformedPendingError() {
+    const err = new Error('archive recovery queue is unreadable');
+    err.failedGameIds = [];
+    err.malformedRecovery = true;
+    return err;
+  }
+
   // Writes can overlap by design: a revised finish must not wait behind an
   // older write that is stalled on storage. Track them by exact ending so an
   // Undo retraction can wait out only the write it supersedes, delete once
@@ -154,18 +222,18 @@
     }
   }
   function queuedRetraction(expected) {
-    const map = readPending();
-    if (!map) return false;
-    const entry = map[expected.id];
-    return !!(entry && entry.op === 'retract' &&
-      validEnding(entry.ending, expected.id) &&
-      sameEnding(entry.ending, expected));
+    const pending = pendingRetractionState(expected.id);
+    return pending.kind === 'valid' && sameEnding(pending.ending, expected);
   }
   // Review and the boot snapshot use this while an exact Undo is active,
   // parked for retry, or has just completed in this document. A later
   // intentional re-adjudication calls recordPrepared(), which forgets the
   // completed marker before storing the new outcome.
   function suppressesEnding(id, sans, result, reason) {
+    // An exact valid tombstone suppresses only the ending it names. A damaged
+    // tombstone cannot safely name an exact ending, so it suppresses every
+    // archive/Review view of that game id until a later boot can recover it.
+    if (pendingQueueBlocked || malformedRetractionBlocked(id)) return true;
     const expected = {
       id: id,
       sans: Array.isArray(sans) ? sans : [],
@@ -342,6 +410,8 @@
     try {
       localStorage.removeItem(PENDING_KEY);
       completedRetractions.clear();
+      blockedRetractionIds.clear();
+      pendingQueueBlocked = false;
       return true;
     } catch (e) { return false; }
   }
@@ -372,12 +442,18 @@
     return 'w' + Date.now().toString(36) + '-' + (++writeSeq);
   }
 
-  function readPending() {
+  function parsePending(raw) {
+    if (raw === null) return {};
     try {
-      const map = JSON.parse(localStorage.getItem(PENDING_KEY));
+      const map = JSON.parse(raw);
       if (map && typeof map === 'object' && !Array.isArray(map)) return map;
     } catch (e) { /* corrupt */ }
     return null;
+  }
+
+  function readPending() {
+    try { return parsePending(localStorage.getItem(PENDING_KEY)); }
+    catch (e) { return null; }
   }
 
   function writePending(map) {
@@ -410,11 +486,12 @@
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return null; }
     const map = raw === null ? {} : readPending();
     if (!map) return null;
+    if (retractionEntryState(map[ending.id], ending.id).kind === 'blocked') return null;
     map[ending.id] = { w: token, op: 'retract', ending: ending };
     return writePending(map) ? token : null;
   }
 
-  function clearPendingIf(id, token) {
+  function clearPendingIf(id, token, allowValidRetraction) {
     let raw;
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
     if (raw === null) return true;
@@ -425,6 +502,12 @@
     // A different token is a newer recovery source. Never clear it on behalf
     // of this write, and let callers that require neutralization fail closed.
     if (!token || cur.w !== token) return false;
+    // Archive commits never have authority to remove a retraction. This also
+    // catches a parked record whose wrapper was mutated into a tombstone while
+    // its IndexedDB write was in flight.
+    const retraction = retractionEntryState(cur, id);
+    if (retraction.kind === 'blocked' ||
+        (retraction.kind === 'valid' && !allowValidRetraction)) return false;
     delete map[id];
     return writePending(map);
   }
@@ -432,7 +515,7 @@
   // Retraction completion may find that a newer revision has already replaced
   // its queue slot. That is success: clear only our own token and preserve the
   // newer recovery source.
-  function settlePendingIfCurrent(id, token) {
+  function settlePendingIfCurrent(id, token, expected) {
     let raw;
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { return false; }
     if (raw === null) return true;
@@ -440,6 +523,11 @@
     if (!map) return false;
     const cur = map[id];
     if (!cur || cur.w !== token) return true;
+    const state = retractionEntryState(cur, id);
+    // A mutation after this exact retraction began turns settlement into a
+    // retryable failure. Never erase the newly-unknown authority by token
+    // alone.
+    if (state.kind !== 'valid' || !sameEnding(state.ending, expected)) return false;
     delete map[id];
     return writePending(map);
   }
@@ -456,7 +544,9 @@
     if (!map) return false;
     const cur = map[expected.id];
     if (!cur) return true;
-    const value = cur.op === 'retract' ? cur.ending : cur.rec;
+    const state = retractionEntryState(cur, expected.id);
+    if (state.kind === 'blocked') return false;
+    const value = state.kind === 'valid' ? state.ending : cur.rec;
     if (!sameEnding(value, expected)) return true;
     delete map[expected.id];
     return writePending(map);
@@ -509,7 +599,7 @@
         // so the stale finished save cannot resurrect this exact outcome.
         if (!entry.retain) {
           const cleared = token
-            ? settlePendingIfCurrent(expected.id, token)
+            ? settlePendingIfCurrent(expected.id, token, expected)
             : clearPendingEnding(expected);
           if (!cleared) {
             throw new Error('archive retraction could not clear its recovery entry');
@@ -540,6 +630,9 @@
     if (!validEnding(expected, id)) {
       return Promise.reject(new Error('invalid ending retraction'));
     }
+    if (malformedRetractionBlocked(id)) {
+      return Promise.reject(malformedRetractionError(id));
+    }
     const existing = matchingRetraction(expected);
     if (existing) return existing.promise;
     return runRetraction(expected, parkRetraction(expected));
@@ -556,6 +649,7 @@
       reason: reason
     };
     if (!validEnding(expected, id)) return false;
+    if (malformedRetractionBlocked(id)) return false;
     const active = matchingRetraction(expected);
     if (active) {
       if (!active.token) {
@@ -572,6 +666,9 @@
   // The abandonment path removes only this token before committing; a newer
   // revision that replaced it in the meantime makes the checkpoint fail safe.
   function pendingToken(id) {
+    if (malformedRetractionBlocked(id)) {
+      return { known: false, token: null };
+    }
     let raw;
     try { raw = localStorage.getItem(PENDING_KEY); } catch (e) {
       return { known: false, token: null };
@@ -629,6 +726,9 @@
   // release that began the game, so a boot-time reconcile keeps chronology
   // and attribution instead of stamping either with the restart.
   function recordPrepared(rec) {
+    if (malformedRetractionBlocked(rec.id)) {
+      return Promise.reject(malformedRetractionError(rec.id));
+    }
     forgetRetraction(rec);
     // Fenced ending: a specific finish cleared/replaced by Delete-all or
     // Restore must not be (re)archived — covers the boot re-archive of the
@@ -688,6 +788,9 @@
   // but the stale queue still wins Backup or the next boot.
   function recordAbandonedPrepared(rec) {
     const gameId = rec.id;
+    if (malformedRetractionBlocked(gameId)) {
+      return Promise.reject(malformedRetractionError(gameId));
+    }
     const fence = fenceMatch(gameId, rec.sans, rec.result, rec.reason);
     if (fence === true) return Promise.resolve(null);
     if (fence === null) {
@@ -700,7 +803,7 @@
     if (!pending.known) {
       return Promise.reject(new Error('archive recovery queue is unavailable'));
     }
-    if (pending.token && !clearPendingIf(gameId, pending.token)) {
+    if (pending.token && !clearPendingIf(gameId, pending.token, true)) {
       return Promise.reject(new Error('archive recovery queue could not be superseded'));
     }
     return commit(rec, null);
@@ -728,13 +831,20 @@
   // id), so drain order does not matter and one entry failing never stops
   // another from committing.
   function reconcilePending() {
-    let raw = null;
-    try { raw = localStorage.getItem(PENDING_KEY); } catch (e) { /* unavailable */ }
+    let raw;
+    try { raw = localStorage.getItem(PENDING_KEY); }
+    catch (e) {
+      pendingQueueBlocked = true;
+      return Promise.reject(malformedPendingError());
+    }
     if (raw === null) return Promise.resolve(null);
-    const map = readPending();
-    if (!map) { // unparseable — nothing recoverable
-      try { localStorage.removeItem(PENDING_KEY); } catch (e) { /* gone */ }
-      return Promise.resolve(null);
+    const map = parsePending(raw);
+    if (!map) {
+      // UNKNOWN can be the only surviving withdrawal/archive authority. Keep
+      // the bytes intact across reloads and globally suppress rearchive until
+      // Restore/Delete All explicitly clears the quarantine.
+      pendingQueueBlocked = true;
+      return Promise.reject(malformedPendingError());
     }
     // UNKNOWN may represent a damaged signature for an archived record. Such
     // records stay parked and fail closed, but retraction tombstones are safe
@@ -745,33 +855,40 @@
     let dirty = false;
     for (const id of Object.keys(map)) {
       const entry = map[id];
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
-          typeof entry.w !== 'string' || !entry.w) {
-        delete map[id];
-        dirty = true;
+      const retraction = retractionEntryState(entry, id);
+      if (retraction.kind === 'blocked') {
+        drains.push(Promise.resolve({
+          ok: false, e: malformedRetractionError(id), id: id
+        }));
         continue;
       }
-      if (entry.op === 'retract') {
-        if (!validEnding(entry.ending, id) ||
-            Object.keys(entry).sort().join(',') !== 'ending,op,w') {
-          delete map[id];
-          dirty = true;
-          continue;
-        }
-        drains.push(runRetraction(entry.ending, entry.w).then(
+      if (retraction.kind === 'valid') {
+        drains.push(runRetraction(retraction.ending, entry.w).then(
           function (v) { return { ok: true, v: v }; },
           function (e) { return { ok: false, e: e, id: id }; }));
         continue;
       }
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+          typeof entry.w !== 'string' || !entry.w) {
+        blockedRetractionIds.add(id);
+        drains.push(Promise.resolve({
+          ok: false, e: malformedRetractionError(id), id: id
+        }));
+        continue;
+      }
       if (entry.op !== undefined) {
-        delete map[id];
-        dirty = true;
+        blockedRetractionIds.add(id);
+        drains.push(Promise.resolve({
+          ok: false, e: malformedRetractionError(id), id: id
+        }));
         continue;
       }
       const rec = entry && entry.rec;
       if (!rec || typeof rec.id !== 'string' || rec.id !== id || !Array.isArray(rec.sans)) {
-        delete map[id]; // malformed entry — drop it
-        dirty = true;
+        blockedRetractionIds.add(id);
+        drains.push(Promise.resolve({
+          ok: false, e: malformedRetractionError(id), id: id
+        }));
         continue;
       }
       if (!fenceState.known) {
