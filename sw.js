@@ -26,7 +26,7 @@
  *   game/Rematch explicitly run an update check before replacing that save,
  *   so a long-open foreground tab cannot begin another game on stale code.
  */
-const RELEASE = 'r73';
+const RELEASE = 'r74';
 const CACHE = 'chessy-' + RELEASE;
 const UPDATE_MARKER = './__chessy-update__';
 const ASSETS = [
@@ -84,21 +84,24 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      // Delete only our own old caches — the github.io origin is shared with
-      // sibling GitHub Pages apps whose caches we must not touch.
-      const oldKeys = keys.filter((k) => k.startsWith('chessy-') && k !== CACHE);
       const releaseNumber = Number(RELEASE.slice(1));
+      // A rollback can install an older worker while a newer release cache is
+      // still the only coherent way back forward. Delete only exact
+      // chessy-rN caches that are numerically older than this worker. The
+      // github.io origin is shared, so other chessy-* caches are not ours.
+      const older = keys.map((key) => {
+        const match = /^chessy-(r(\d+))$/.exec(key);
+        return match
+          ? { key, release: match[1], number: Number(match[2]) }
+          : null;
+      }).filter((entry) => entry && entry.number < releaseNumber);
       // A failed older install can leave an empty named cache. Only a cache
       // containing its app shell proves that release completed precaching and
       // is eligible to appear in an "updated from" message.
-      return Promise.all(oldKeys.map((key) => {
-        const release = key.slice('chessy-'.length);
-        if (!/^r\d+$/.test(release) || Number(release.slice(1)) >= releaseNumber) {
-          return null;
-        }
-        return caches.open(key)
+      return Promise.all(older.map((entry) => {
+        return caches.open(entry.key)
           .then((cache) => cache.match('./index.html'))
-          .then((shell) => shell ? release : null)
+          .then((shell) => shell ? entry.release : null)
           .catch(() => null);
       })).then((installed) => {
         const previous = installed.filter(Boolean)
@@ -115,7 +118,7 @@ self.addEventListener('activate', (event) => {
             })
           )).catch(() => undefined)
           : Promise.resolve();
-        return mark.then(() => Promise.all(oldKeys.map((k) => caches.delete(k))));
+        return mark.then(() => Promise.all(older.map((entry) => caches.delete(entry.key))));
       });
     })
       .then(() => self.clients.claim())

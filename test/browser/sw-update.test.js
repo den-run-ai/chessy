@@ -11,8 +11,9 @@
  * reverse). This suite serves the repo with the release token rewritten
  * on the fly: install release rA, flip the server to rB behind a long-open
  * active game, request New game, and assert B takes over before the old
- * runtime can replace the save. Every loaded executable asset must carry
- * the DOCUMENT's own release token — online and offline.
+ * runtime can replace the save. It then rolls the worker back and proves
+ * B's coherent cache survives as the path forward. Every loaded executable
+ * asset must carry the DOCUMENT's own release token — online and offline.
  */
 'use strict';
 const http = require('http');
@@ -97,7 +98,8 @@ function browserType() {
 (async function () {
   // Numeric tokens, like production: the worker ORDERS tokens to refuse
   // refilling a stale release's URL from the current deployment.
-  const RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
+  const ROLLBACK = 'r8999', RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
+  const OTHER_CACHES = ['chessy-sibling-pages-cache', 'chessy-r9000-extra'];
   const phase = { release: RA, failWorker: false, holdProgress: false };
   let releaseHeldProgress = null;
   let resolveProgressHeld = null;
@@ -243,6 +245,16 @@ function browserType() {
   // index.html. The r9002 activation must report the last COMPLETE release
   // (r9000), never this empty cache name.
   await page.evaluate(function (failed) { return caches.open('chessy-' + failed); }, FAILED);
+  // These names share Chessy's prefix but are not exact chessy-rN release
+  // caches. Activation must leave both sibling storage and release-like
+  // malformed names alone on the shared github.io origin.
+  await page.evaluate(function (keys) {
+    return Promise.all(keys.map(function (key) {
+      return caches.open(key).then(function (cache) {
+        return cache.put('./sentinel', new Response(key));
+      });
+    }));
+  }, OTHER_CACHES);
 
   // Leave a real active game in the long-open A tab. New game checks A's
   // worker before replacing the save; with no update yet it starts normally.
@@ -288,12 +300,14 @@ function browserType() {
   // while B installs). Before testing B's OWN cache offline, wait for
   // proof the B worker activated: its activate handler deletes the A
   // cache, so B's cache present + A's gone = takeover complete.
-  await stable(function (s) {
+  const cleaned = await stable(function (s) {
     return s.caches.indexOf('chessy-' + RB) !== -1 &&
       s.caches.indexOf('chessy-' + RA) === -1 &&
       s.caches.indexOf('chessy-' + FAILED) === -1;
   }, 'B worker takeover (old caches cleaned)');
   check(true, 'the B worker activates and cleans up complete and failed old caches');
+  check(OTHER_CACHES.every(function (key) { return cleaned.caches.indexOf(key) !== -1; }),
+    'forward activation preserves non-release chessy-* caches');
   const expectedUpdate = 'Chessy updated from ' + RA + ' to ' + RB +
     '. Your saved games and training data are unchanged.';
   const noticed = await stable(function (s) {
@@ -385,6 +399,36 @@ function browserType() {
     freshState.updateSession === '',
     'a fresh browsing session shows the version without replaying the old update note');
   await fresh.close();
+
+  // A rollback is a byte-distinct service-worker update too. Its activation
+  // may clean exact caches older than itself, but the current B cache is
+  // numerically newer and must survive as the coherent path forward. Prefix
+  // neighbors remain unrelated during rollback just as they do on upgrade.
+  phase.release = ROLLBACK;
+  await page.evaluate(function () {
+    return navigator.serviceWorker.getRegistration().then(function (registration) {
+      return registration.update();
+    });
+  });
+  const rolledBack = await stable(function (s) {
+    return s.token === ROLLBACK && s.build === ROLLBACK && s.ready && s.controlled &&
+      s.caches.indexOf('chessy-' + ROLLBACK) !== -1 &&
+      s.caches.indexOf('chessy-' + RB) !== -1;
+  }, 'rollback worker takeover (newer cache retained)');
+  check(rolledBack.caches.indexOf('chessy-' + RB) !== -1,
+    'rollback activation preserves the numerically newer release cache');
+  check(OTHER_CACHES.every(function (key) { return rolledBack.caches.indexOf(key) !== -1; }),
+    'rollback activation preserves non-release chessy-* caches');
+  const forwardBytes = await page.evaluate(function (rb) {
+    return fetch('assets/app.js?r=' + rb).then(function (response) {
+      return response.text().then(function (body) {
+        return { status: response.status, body: body };
+      });
+    });
+  }, RB);
+  check(forwardBytes.status === 200 &&
+      forwardBytes.body.indexOf("window.CHESSY_BUILD = '" + RB + "'") !== -1,
+    'after rollback, the preserved newer cache still serves coherent forward bytes');
 
   check(errors.length === 0,
     'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
