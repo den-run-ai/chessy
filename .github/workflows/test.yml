@@ -181,6 +181,8 @@ jobs:
         run: node test/ai-match-openings-v2.test.js
       - name: Verify match-v2 holdout grouping audit
         run: node test/ai-match-holdout-audit.test.js
+      - name: Validate v2 registration, raw replay and complete-shard contracts
+        run: node test/ai-match-v2.test.js
       - name: Validate match protocol CLI and equal-time smoke
         run: node test/ai-match-cli.test.js
       - name: Run match cluster-statistics tests
