@@ -1,0 +1,993 @@
+{
+  "auditEvidence": {
+    "auditedClosureSha256": "5f5deaf0ff2240ce4e507451322af465f67d4b219d1ddb0a030a70f56ab3156f",
+    "auditedFiles": 53,
+    "labelAuditSha256": "5af7e6f2ef9d3f6d0668555ac2c43c7f0e2a35aeeb0b84b19a090c60bdc851d9",
+    "selectionAuditSha256": "97753b24c87378d6fc26b1b6d907563e0458cad00858404ec7891b0a0ded2264"
+  },
+  "baseline": {
+    "train": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.2862416935659491,
+          "rows": 5094,
+          "teacherCpMae": 162.0121711817825,
+          "teacherCpRmse": 213.25260085333224
+        },
+        "middlegame": {
+          "crossEntropy": 0.28578387917586245,
+          "rows": 10550,
+          "teacherCpMae": 141.44710900473933,
+          "teacherCpRmse": 196.36742642591577
+        },
+        "opening": {
+          "crossEntropy": 0.502847950543368,
+          "rows": 17459,
+          "teacherCpMae": 115.31765851423334,
+          "teacherCpRmse": 162.65503374761147
+        }
+      },
+      "crossEntropy": 0.40033705346545495,
+      "rows": 33103,
+      "teacherCpMae": 130.83067999879165,
+      "teacherCpRmse": 182.32097316667114
+    },
+    "validation": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.29056715285214874,
+          "rows": 746,
+          "teacherCpMae": 174.9785522788204,
+          "teacherCpRmse": 226.13573944459884
+        },
+        "middlegame": {
+          "crossEntropy": 0.29627800878359173,
+          "rows": 1469,
+          "teacherCpMae": 143.39414567733152,
+          "teacherCpRmse": 198.04470000344725
+        },
+        "opening": {
+          "crossEntropy": 0.5019128975655116,
+          "rows": 2502,
+          "teacherCpMae": 112.4828137490008,
+          "teacherCpRmse": 158.3935995364103
+        }
+      },
+      "crossEntropy": 0.4044480730633261,
+      "rows": 4717,
+      "teacherCpMae": 131.9932160271359,
+      "teacherCpRmse": 183.32932008121776
+    }
+  },
+  "calibration": {
+    "baselineScoreForCalibration": "smooth affine surrogate; train only",
+    "iterations": 5,
+    "trainLoss": 0.40033851634154655,
+    "value": 4.0
+  },
+  "candidates": [
+    {
+      "lambda": 0.02,
+      "optimizer": {
+        "activeParameters": 749,
+        "iterations": 47,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3938947696734854,
+        "parametersAtBounds": 204,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.27671949061983153,
+            "rows": 5094,
+            "teacherCpMae": 158.26953278366705,
+            "teacherCpRmse": 209.15608985970846
+          },
+          "middlegame": {
+            "crossEntropy": 0.2816582940400986,
+            "rows": 10550,
+            "teacherCpMae": 139.81118483412322,
+            "teacherCpRmse": 194.86738375414402
+          },
+          "opening": {
+            "crossEntropy": 0.494362849287486,
+            "rows": 17459,
+            "teacherCpMae": 112.5306145827367,
+            "teacherCpRmse": 159.3702804950081
+          }
+        },
+        "crossEntropy": 0.39308174706373084,
+        "rows": 33103,
+        "teacherCpMae": 128.26345044255808,
+        "teacherCpRmse": 179.52642062858786
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28273616563418946,
+            "rows": 746,
+            "teacherCpMae": 171.49061662198392,
+            "teacherCpRmse": 222.07574849520398
+          },
+          "middlegame": {
+            "crossEntropy": 0.2939140330646722,
+            "rows": 1469,
+            "teacherCpMae": 142.53029271613343,
+            "teacherCpRmse": 197.78032212605456
+          },
+          "opening": {
+            "crossEntropy": 0.4953566117250025,
+            "rows": 2502,
+            "teacherCpMae": 109.8441247002398,
+            "teacherCpRmse": 156.09813931217317
+          }
+        },
+        "crossEntropy": 0.3989957889911098,
+        "rows": 4717,
+        "teacherCpMae": 129.77294890820437,
+        "teacherCpRmse": 181.4010551309688
+      }
+    },
+    {
+      "lambda": 0.05,
+      "optimizer": {
+        "activeParameters": 749,
+        "iterations": 30,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3947868082185684,
+        "parametersAtBounds": 67,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2777448237224914,
+            "rows": 5094,
+            "teacherCpMae": 158.69905771495877,
+            "teacherCpRmse": 209.6323061198826
+          },
+          "middlegame": {
+            "crossEntropy": 0.28227015775529835,
+            "rows": 10550,
+            "teacherCpMae": 140.02142180094788,
+            "teacherCpRmse": 195.05125198386688
+          },
+          "opening": {
+            "crossEntropy": 0.49485491874181947,
+            "rows": 17459,
+            "teacherCpMae": 112.65839967924852,
+            "teacherCpRmse": 159.6072803282724
+          }
+        },
+        "crossEntropy": 0.39369405560445264,
+        "rows": 33103,
+        "teacherCpMae": 128.4639458659336,
+        "teacherCpRmse": 179.78638840327903
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28342309192048903,
+            "rows": 746,
+            "teacherCpMae": 171.86193029490616,
+            "teacherCpRmse": 222.43097251397356
+          },
+          "middlegame": {
+            "crossEntropy": 0.2938539325008508,
+            "rows": 1469,
+            "teacherCpMae": 142.48944860449285,
+            "teacherCpRmse": 197.62733699940358
+          },
+          "opening": {
+            "crossEntropy": 0.4950507798164388,
+            "rows": 2502,
+            "teacherCpMae": 109.73381294964028,
+            "teacherCpRmse": 155.99008710229202
+          }
+        },
+        "crossEntropy": 0.398923490463677,
+        "rows": 4717,
+        "teacherCpMae": 129.76044095823616,
+        "teacherCpRmse": 181.36865594044238
+      }
+    },
+    {
+      "lambda": 0.1,
+      "optimizer": {
+        "activeParameters": 749,
+        "iterations": 28,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3955752364555601,
+        "parametersAtBounds": 33,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.27896863169595765,
+            "rows": 5094,
+            "teacherCpMae": 159.20612485276797,
+            "teacherCpRmse": 210.1661559658615
+          },
+          "middlegame": {
+            "crossEntropy": 0.28283244677200625,
+            "rows": 10550,
+            "teacherCpMae": 140.1770616113744,
+            "teacherCpRmse": 195.14613991614237
+          },
+          "opening": {
+            "crossEntropy": 0.49552141308630043,
+            "rows": 17459,
+            "teacherCpMae": 112.85119422647345,
+            "teacherCpRmse": 159.85265478306468
+          }
+        },
+        "crossEntropy": 0.39441310075756253,
+        "rows": 33103,
+        "teacherCpMae": 128.6932604295683,
+        "teacherCpRmse": 180.02992724322004
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28429098242456746,
+            "rows": 746,
+            "teacherCpMae": 172.32975871313673,
+            "teacherCpRmse": 222.94447426634758
+          },
+          "middlegame": {
+            "crossEntropy": 0.29390227209230096,
+            "rows": 1469,
+            "teacherCpMae": 142.51055139550715,
+            "teacherCpRmse": 197.50060447469343
+          },
+          "opening": {
+            "crossEntropy": 0.49518826392646265,
+            "rows": 2502,
+            "teacherCpMae": 109.73501199040767,
+            "teacherCpRmse": 156.0297464414409
+          }
+        },
+        "crossEntropy": 0.3991487273555919,
+        "rows": 4717,
+        "teacherCpMae": 129.84163663345348,
+        "teacherCpRmse": 181.44345560281218
+      }
+    },
+    {
+      "lambda": 0.2,
+      "optimizer": {
+        "activeParameters": 749,
+        "iterations": 23,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.39642094272584677,
+        "parametersAtBounds": 21,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2801166889833371,
+            "rows": 5094,
+            "teacherCpMae": 159.7430310168826,
+            "teacherCpRmse": 210.7442599681914
+          },
+          "middlegame": {
+            "crossEntropy": 0.28332608965713835,
+            "rows": 10550,
+            "teacherCpMae": 140.34521327014218,
+            "teacherCpRmse": 195.2110715724264
+          },
+          "opening": {
+            "crossEntropy": 0.49629592538556955,
+            "rows": 17459,
+            "teacherCpMae": 113.10567615556447,
+            "teacherCpRmse": 160.15496783921805
+          }
+        },
+        "crossEntropy": 0.3951555816956345,
+        "rows": 33103,
+        "teacherCpMae": 128.9636890916231,
+        "teacherCpRmse": 180.29786608486793
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2849041654661622,
+            "rows": 746,
+            "teacherCpMae": 172.7828418230563,
+            "teacherCpRmse": 223.43017454104617
+          },
+          "middlegame": {
+            "crossEntropy": 0.29420589781068057,
+            "rows": 1469,
+            "teacherCpMae": 142.61061946902655,
+            "teacherCpRmse": 197.43373482264298
+          },
+          "opening": {
+            "crossEntropy": 0.49573435069235783,
+            "rows": 2502,
+            "teacherCpMae": 109.95963229416466,
+            "teacherCpRmse": 156.2551063913794
+          }
+        },
+        "crossEntropy": 0.3996299166321658,
+        "rows": 4717,
+        "teacherCpMae": 130.063599745601,
+        "teacherCpRmse": 181.61806133619856
+      }
+    },
+    {
+      "lambda": 0.5,
+      "optimizer": {
+        "activeParameters": 749,
+        "iterations": 25,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.39762345958973566,
+        "parametersAtBounds": 9,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28117118893787885,
+            "rows": 5094,
+            "teacherCpMae": 160.30035335689047,
+            "teacherCpRmse": 211.36474483519282
+          },
+          "middlegame": {
+            "crossEntropy": 0.28391362340247656,
+            "rows": 10550,
+            "teacherCpMae": 140.58255924170615,
+            "teacherCpRmse": 195.39135355141494
+          },
+          "opening": {
+            "crossEntropy": 0.49777988654818006,
+            "rows": 17459,
+            "teacherCpMae": 113.62019588750788,
+            "teacherCpRmse": 160.79718870529626
+          }
+        },
+        "crossEntropy": 0.3962877625167011,
+        "rows": 33103,
+        "teacherCpMae": 129.39645953538954,
+        "teacherCpRmse": 180.77272695732637
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2856787299354928,
+            "rows": 746,
+            "teacherCpMae": 173.30965147453082,
+            "teacherCpRmse": 223.92533644111845
+          },
+          "middlegame": {
+            "crossEntropy": 0.29452317490036983,
+            "rows": 1469,
+            "teacherCpMae": 142.62968005445882,
+            "teacherCpRmse": 197.4046081165536
+          },
+          "opening": {
+            "crossEntropy": 0.4967537939505374,
+            "rows": 2502,
+            "teacherCpMae": 110.40687450039968,
+            "teacherCpRmse": 156.70156762127183
+          }
+        },
+        "crossEntropy": 0.40039195864421573,
+        "rows": 4717,
+        "teacherCpMae": 130.39007843968625,
+        "teacherCpRmse": 181.90844808657477
+      }
+    },
+    {
+      "lambda": 1,
+      "optimizer": {
+        "activeParameters": 749,
+        "iterations": 24,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3985021138374523,
+        "parametersAtBounds": 2,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2828212079915752,
+            "rows": 5094,
+            "teacherCpMae": 160.82960345504515,
+            "teacherCpRmse": 211.9375042152099
+          },
+          "middlegame": {
+            "crossEntropy": 0.28448470145543114,
+            "rows": 10550,
+            "teacherCpMae": 140.85962085308057,
+            "teacherCpRmse": 195.68429526234922
+          },
+          "opening": {
+            "crossEntropy": 0.499143278788742,
+            "rows": 17459,
+            "teacherCpMae": 114.10206770147202,
+            "teacherCpRmse": 161.38235038630899
+          }
+        },
+        "crossEntropy": 0.39744274954646186,
+        "rows": 33103,
+        "teacherCpMae": 129.8203486088874,
+        "teacherCpRmse": 181.25129264310348
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28734154025614417,
+            "rows": 746,
+            "teacherCpMae": 173.8391420911528,
+            "teacherCpRmse": 224.61943985638044
+          },
+          "middlegame": {
+            "crossEntropy": 0.29500826867753976,
+            "rows": 1469,
+            "teacherCpMae": 142.8652144315861,
+            "teacherCpRmse": 197.54032944261482
+          },
+          "opening": {
+            "crossEntropy": 0.4979973459545764,
+            "rows": 2502,
+            "teacherCpMae": 110.94604316546763,
+            "teacherCpRmse": 157.2140305407914
+          }
+        },
+        "crossEntropy": 0.40146561274045783,
+        "rows": 4717,
+        "teacherCpMae": 130.83315666737332,
+        "teacherCpRmse": 182.32373414403258
+      }
+    },
+    {
+      "lambda": 0.02,
+      "optimizer": {
+        "activeParameters": 755,
+        "iterations": 44,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.39381399823160107,
+        "parametersAtBounds": 208,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753-plus-pawn-attacks",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2766858462974497,
+            "rows": 5094,
+            "teacherCpMae": 158.26815861798195,
+            "teacherCpRmse": 209.15131103330276
+          },
+          "middlegame": {
+            "crossEntropy": 0.2816447282419762,
+            "rows": 10550,
+            "teacherCpMae": 139.76843601895735,
+            "teacherCpRmse": 194.79402683602817
+          },
+          "opening": {
+            "crossEntropy": 0.4941974654823191,
+            "rows": 17459,
+            "teacherCpMae": 112.48725585657827,
+            "teacherCpRmse": 159.2940489167002
+          }
+        },
+        "crossEntropy": 0.3929850205071403,
+        "rows": 33103,
+        "teacherCpMae": 128.22674682052985,
+        "teacherCpRmse": 179.46449812445246
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2826614391570477,
+            "rows": 746,
+            "teacherCpMae": 171.50268096514745,
+            "teacherCpRmse": 222.05038012503587
+          },
+          "middlegame": {
+            "crossEntropy": 0.29387525492240724,
+            "rows": 1469,
+            "teacherCpMae": 142.48059904697072,
+            "teacherCpRmse": 197.73944735475362
+          },
+          "opening": {
+            "crossEntropy": 0.49519815356198205,
+            "rows": 2502,
+            "teacherCpMae": 109.87609912070344,
+            "teacherCpRmse": 156.08346216774595
+          }
+        },
+        "crossEntropy": 0.39888784466912297,
+        "rows": 4717,
+        "teacherCpMae": 129.77634089463643,
+        "teacherCpRmse": 181.3755656741467
+      }
+    },
+    {
+      "lambda": 0.05,
+      "optimizer": {
+        "activeParameters": 755,
+        "iterations": 31,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3947243836751919,
+        "parametersAtBounds": 70,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753-plus-pawn-attacks",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.27777314382059715,
+            "rows": 5094,
+            "teacherCpMae": 158.72202591283863,
+            "teacherCpRmse": 209.65748330608815
+          },
+          "middlegame": {
+            "crossEntropy": 0.28226629433634076,
+            "rows": 10550,
+            "teacherCpMae": 139.99478672985782,
+            "teacherCpRmse": 194.9821561892972
+          },
+          "opening": {
+            "crossEntropy": 0.49469324047257507,
+            "rows": 17459,
+            "teacherCpMae": 112.62065410390056,
+            "teacherCpRmse": 159.53769843180507
+          }
+        },
+        "crossEntropy": 0.393611910862496,
+        "rows": 33103,
+        "teacherCpMae": 128.43908407093014,
+        "teacherCpRmse": 179.73443985472272
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2834317156560149,
+            "rows": 746,
+            "teacherCpMae": 171.89544235924933,
+            "teacherCpRmse": 222.4462341280427
+          },
+          "middlegame": {
+            "crossEntropy": 0.29378659777561844,
+            "rows": 1469,
+            "teacherCpMae": 142.44860449285227,
+            "teacherCpRmse": 197.58079234344441
+          },
+          "opening": {
+            "crossEntropy": 0.49507941325787286,
+            "rows": 2502,
+            "teacherCpMae": 109.83932853717026,
+            "teacherCpRmse": 156.07564932861666
+          }
+        },
+        "crossEntropy": 0.3989190722881002,
+        "rows": 4717,
+        "teacherCpMae": 129.80898876404495,
+        "teacherCpRmse": 181.3948657145807
+      }
+    },
+    {
+      "lambda": 0.1,
+      "optimizer": {
+        "activeParameters": 755,
+        "iterations": 26,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3955332189154746,
+        "parametersAtBounds": 35,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753-plus-pawn-attacks",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2789513159942185,
+            "rows": 5094,
+            "teacherCpMae": 159.20318021201413,
+            "teacherCpRmse": 210.15827368914125
+          },
+          "middlegame": {
+            "crossEntropy": 0.282818064061646,
+            "rows": 10550,
+            "teacherCpMae": 140.16018957345972,
+            "teacherCpRmse": 195.11887250489877
+          },
+          "opening": {
+            "crossEntropy": 0.49540321081265787,
+            "rows": 17459,
+            "teacherCpMae": 112.82009278881952,
+            "teacherCpRmse": 159.82433903566496
+          }
+        },
+        "crossEntropy": 0.3943435107725315,
+        "rows": 33103,
+        "teacherCpMae": 128.67102679515452,
+        "teacherCpRmse": 180.00583128370118
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28426944901850554,
+            "rows": 746,
+            "teacherCpMae": 172.32975871313673,
+            "teacherCpRmse": 222.937042532137
+          },
+          "middlegame": {
+            "crossEntropy": 0.2938872903742397,
+            "rows": 1469,
+            "teacherCpMae": 142.50578624914908,
+            "teacherCpRmse": 197.49462599645915
+          },
+          "opening": {
+            "crossEntropy": 0.49512452967497966,
+            "rows": 2502,
+            "teacherCpMae": 109.76618705035972,
+            "teacherCpRmse": 156.07705904876266
+          }
+        },
+        "crossEntropy": 0.39910685006876456,
+        "rows": 4717,
+        "teacherCpMae": 129.85668857324572,
+        "teacherCpRmse": 181.46156787264223
+      }
+    },
+    {
+      "lambda": 0.2,
+      "optimizer": {
+        "activeParameters": 755,
+        "iterations": 24,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3963954575515368,
+        "parametersAtBounds": 23,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753-plus-pawn-attacks",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28010767392472635,
+            "rows": 5094,
+            "teacherCpMae": 159.739497447978,
+            "teacherCpRmse": 210.73911333886736
+          },
+          "middlegame": {
+            "crossEntropy": 0.2833136176462746,
+            "rows": 10550,
+            "teacherCpMae": 140.33478672985783,
+            "teacherCpRmse": 195.1907624455518
+          },
+          "opening": {
+            "crossEntropy": 0.49622645219281275,
+            "rows": 17459,
+            "teacherCpMae": 113.09273154247093,
+            "teacherCpRmse": 160.13087393365947
+          }
+        },
+        "crossEntropy": 0.39511357840603784,
+        "rows": 33103,
+        "teacherCpMae": 128.95299519680995,
+        "teacherCpRmse": 180.27864483460962
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2848773235109739,
+            "rows": 746,
+            "teacherCpMae": 172.77882037533513,
+            "teacherCpRmse": 223.41816610047567
+          },
+          "middlegame": {
+            "crossEntropy": 0.2942199497322601,
+            "rows": 1469,
+            "teacherCpMae": 142.61130020422056,
+            "teacherCpRmse": 197.444421353163
+          },
+          "opening": {
+            "crossEntropy": 0.495643831721479,
+            "rows": 2502,
+            "teacherCpMae": 109.95243804956036,
+            "teacherCpRmse": 156.25572283684392
+          }
+        },
+        "crossEntropy": 0.39958203444202184,
+        "rows": 4717,
+        "teacherCpMae": 130.05935976256094,
+        "teacherCpRmse": 181.6196243175507
+      }
+    },
+    {
+      "lambda": 0.5,
+      "optimizer": {
+        "activeParameters": 755,
+        "iterations": 24,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.3976121273255557,
+        "parametersAtBounds": 13,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753-plus-pawn-attacks",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28116753779234144,
+            "rows": 5094,
+            "teacherCpMae": 160.29917550058892,
+            "teacherCpRmse": 211.36286592370044
+          },
+          "middlegame": {
+            "crossEntropy": 0.2839120533426131,
+            "rows": 10550,
+            "teacherCpMae": 140.5781990521327,
+            "teacherCpRmse": 195.3818839317514
+          },
+          "opening": {
+            "crossEntropy": 0.4977397513444017,
+            "rows": 17459,
+            "teacherCpMae": 113.6129217022739,
+            "teacherCpRmse": 160.78126066447547
+          }
+        },
+        "crossEntropy": 0.39626553239889634,
+        "rows": 33103,
+        "teacherCpMae": 129.39105217049814,
+        "teacherCpRmse": 180.76165456341977
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28567533064928907,
+            "rows": 746,
+            "teacherCpMae": 173.30965147453082,
+            "teacherCpRmse": 223.92506107149177
+          },
+          "middlegame": {
+            "crossEntropy": 0.29452192228473656,
+            "rows": 1469,
+            "teacherCpMae": 142.6289993192648,
+            "teacherCpRmse": 197.405868512253
+          },
+          "opening": {
+            "crossEntropy": 0.49673121345733134,
+            "rows": 2502,
+            "teacherCpMae": 110.41766586730616,
+            "teacherCpRmse": 156.7111995995693
+          }
+        },
+        "crossEntropy": 0.40037905375681376,
+        "rows": 4717,
+        "teacherCpMae": 130.39559041763832,
+        "teacherCpRmse": 181.91322157094373
+      }
+    },
+    {
+      "lambda": 1,
+      "optimizer": {
+        "activeParameters": 755,
+        "iterations": 24,
+        "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "objective": 0.39849614072166256,
+        "parametersAtBounds": 7,
+        "success": true
+      },
+      "stopReasons": [],
+      "surface": "constrained753-plus-pawn-attacks",
+      "train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.28282110629642077,
+            "rows": 5094,
+            "teacherCpMae": 160.82979976442874,
+            "teacherCpRmse": 211.93727033425105
+          },
+          "middlegame": {
+            "crossEntropy": 0.28449288697911695,
+            "rows": 10550,
+            "teacherCpMae": 140.86161137440757,
+            "teacherCpRmse": 195.6791018491089
+          },
+          "opening": {
+            "crossEntropy": 0.49913776457043724,
+            "rows": 17459,
+            "teacherCpMae": 114.10006300475399,
+            "teacherCpRmse": 161.3663264117277
+          }
+        },
+        "crossEntropy": 0.3974424343636201,
+        "rows": 33103,
+        "teacherCpMae": 129.8199558952361,
+        "teacherCpRmse": 181.24193892512596
+      },
+      "validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2873419960395012,
+            "rows": 746,
+            "teacherCpMae": 173.84048257372655,
+            "teacherCpRmse": 224.6210601066419
+          },
+          "middlegame": {
+            "crossEntropy": 0.29498379927615637,
+            "rows": 1469,
+            "teacherCpMae": 142.8434309053778,
+            "teacherCpRmse": 197.52093752922352
+          },
+          "opening": {
+            "crossEntropy": 0.498005251306024,
+            "rows": 2502,
+            "teacherCpMae": 110.95203836930456,
+            "teacherCpRmse": 157.20169624199005
+          }
+        },
+        "crossEntropy": 0.40146225756833026,
+        "rows": 4717,
+        "teacherCpMae": 130.82976468094128,
+        "teacherCpRmse": 182.31186544362623
+      }
+    }
+  ],
+  "coefficientVectorsIncluded": false,
+  "coverage": {
+    "train": {
+      "baselineWasmParityMismatches": 0,
+      "baselineWasmParityRows": 33103,
+      "phases": {
+        "endgame": 5094,
+        "middlegame": 10550,
+        "opening": 17459
+      },
+      "positionFamilies": 32711,
+      "rows": 33103,
+      "uniqueSourceGames": 33103
+    },
+    "validation": {
+      "baselineWasmParityMismatches": 0,
+      "baselineWasmParityRows": 4717,
+      "phases": {
+        "endgame": 746,
+        "middlegame": 1469,
+        "opening": 2502
+      },
+      "positionFamilies": 4658,
+      "rows": 4717,
+      "uniqueSourceGames": 4717
+    }
+  },
+  "eloOrTimeClaimAllowed": false,
+  "environment": {
+    "numpy": "2.3.5",
+    "python": "3.12.14",
+    "scipy": "1.17.0"
+  },
+  "fitPreregistrationSha256": "0b258e14c66562394df4f5cea9e14bc812c85c15a19f72993f7543f206e4ddb9",
+  "frozenSelectionSha256": "022c0cd99d61293d8262fd98df06fd4401e462954a24895a855d790ea779db69",
+  "labelSummarySha256": "8862475a1c4d22867832b6a7399da91f2a1a14f1aad26994826e98a8975bc26d",
+  "limitations": [
+    "Research natural-game sample is not authenticated production training data.",
+    "Teacher loss is not Elo/time evidence; no runtime integration or level recalibration authorized by this report.",
+    "Baseline parity is against shipped WASM; candidate parity is between Python and Node affine arithmetic.",
+    "PST and mobility restrictions intentionally prevent large evaluator drift."
+  ],
+  "originalReportSha256": "a70fd8c11747d84bc8509dea208ba2630b1e90930856f6246fdb05953f819ada",
+  "preFitPublishedCommit": "f06ff0b4dadee94ca896c08d7763047b5924f47f",
+  "researchOnly": true,
+  "scaleRecommended": true,
+  "schema": "chessy.natural-pilot-fit-report.v1",
+  "selected": {
+    "lambda": 0.02,
+    "surface": "constrained753-plus-pawn-attacks",
+    "weightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef"
+  },
+  "selectionManifestSha256": "eb0cff9bb74555e425146182b05f0708683faa9c993bcf41896e104d63c1c7c1",
+  "shippingCandidateEmitted": false,
+  "stageScope": "Historical fit-stage snapshot, frozen before private compiled/runtime measurements. scaleRecommended and stopReasons describe eligibility to enter that subsequent stage only; they do not describe the final candidate decision. The Python/Node-only parity limitation is historical at this stage.",
+  "status": "test-completed-research-only",
+  "stopReasons": [],
+  "subsequentEvidence": {
+    "compiledParity": "natural-runtime-static-2026-09.json",
+    "finalCandidateStatus": "STOP: mixed development results do not establish an Elo/time gain; no production integration or further scaling.",
+    "finalRuntimeDecision": "natural-runtime-match-2026-09.json",
+    "fixedNodeCost": "natural-runtime-bench-2026-09.json"
+  },
+  "test": {
+    "baseline": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.25743688583921165,
+          "rows": 721,
+          "teacherCpMae": 157.5242718446602,
+          "teacherCpRmse": 206.70237973087725
+        },
+        "middlegame": {
+          "crossEntropy": 0.2816211650089299,
+          "rows": 1455,
+          "teacherCpMae": 136.63780068728522,
+          "teacherCpRmse": 183.47487444678796
+        },
+        "opening": {
+          "crossEntropy": 0.4988093419622193,
+          "rows": 2502,
+          "teacherCpMae": 114.08792965627498,
+          "teacherCpRmse": 160.54270220914407
+        }
+      },
+      "crossEntropy": 0.39405552872328714,
+      "rows": 4678,
+      "teacherCpMae": 127.79628046173579,
+      "teacherCpRmse": 175.61442190691966
+    },
+    "coverage": {
+      "baselineWasmParityMismatches": 0,
+      "baselineWasmParityRows": 4678,
+      "phases": {
+        "endgame": 721,
+        "middlegame": 1455,
+        "opening": 2502
+      },
+      "positionFamilies": 4622,
+      "rows": 4678,
+      "uniqueSourceGames": 4678
+    },
+    "pairedBootstrap": {
+      "candidateMinusBaselineMean": -0.005883857275348637,
+      "ci95": [
+        -0.007364223170266513,
+        -0.004379255774411415
+      ],
+      "families": 4622,
+      "iterations": 2000,
+      "maxRowsPerFamily": 4,
+      "seed": 1370915,
+      "unit": "position-family cluster; row-weighted mean"
+    },
+    "selected": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.2543372793357286,
+          "rows": 721,
+          "teacherCpMae": 156.14701803051318,
+          "teacherCpRmse": 204.42740980778783
+        },
+        "middlegame": {
+          "crossEntropy": 0.27730139861378544,
+          "rows": 1455,
+          "teacherCpMae": 135.43986254295532,
+          "teacherCpRmse": 181.45391621935363
+        },
+        "opening": {
+          "crossEntropy": 0.49121357539941574,
+          "rows": 2502,
+          "teacherCpMae": 111.9820143884892,
+          "teacherCpRmse": 157.62124740622022
+        }
+      },
+      "crossEntropy": 0.38817167144793857,
+      "rows": 4678,
+      "teacherCpMae": 126.08507909362976,
+      "teacherCpRmse": 173.11772061303327
+    }
+  },
+  "testEligible": true,
+  "testOpened": true
+}
