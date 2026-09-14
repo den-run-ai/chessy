@@ -298,6 +298,7 @@ Rust/WASM changes (requires the pinned Rust/Binaryen tools):
 ./experiments/wasm/build.sh
 cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
 node test/wasm-asset.test.js
+node test/wasm-size.test.js
 node test/wasm-signatures.test.js
 node test/analysis-core.test.js
 node test/ai-tactics.js

@@ -224,11 +224,18 @@ fixture but intentionally skips the exact r69 search signature; check out the
 recorded commit to reproduce that historical result. Its pinned Stockfish Lite
 comparison covers four forced root moves only, not every legal move.
 
-The engine measurement tools are manual (too slow for PR CI).
-`test/ai-match.js` supports one formal paired-WASM protocol plus diagnostic
-modes. Only `--formal --nodes 10000 --plies 180`
+The engine measurement tools below are **historical v1 infrastructure**.
+Do not dispatch them for a new candidate: Rust/WASM ignores the four seed
+slots, so 800 games repeat only 100 opening pairs. Issue #156 replaces them.
+The [prospective 400-opening CC0 manifest](eval/match-v2/PROVENANCE.md) is
+frozen, but trusted v2 execution/aggregation/workflow integration is not yet
+available. The [expanded PeSTO pilot](eval/PESTO-PILOT-2026-09.md) changed
+neither the shipped evaluator nor level budgets.
+
+For historical reproduction, `test/ai-match.js` supports the archived
+paired-WASM protocol plus diagnostic modes. `--formal --nodes 10000 --plies 180`
 aggregated over 100 openings x 4 seeds x both colors (800 games), against a
-distinct base commit, is the formal gate for a pure evaluation/strength
+distinct base commit, was the formal gate for a pure evaluation/strength
 change, and it passes only when the opening-clustered one-sided 95% lower
 bound is strictly above 50%. The looser lower-bound-above-49% non-inferiority
 criterion is not sufficient for such a change; it is reserved for a separately
@@ -253,10 +260,10 @@ A valid statistical miss fails the strict-strength check but is
 informational/green in the equal-time diagnostic;
 malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
-valid statistical miss. Start a fresh complete 20-shard run for a genuinely
-new experiment, because post-selection invalidates the predeclared result.
+valid statistical miss. Historical protocol IDs and artifacts are retained;
+new experiments must wait for v2 rather than reusing these exposed openings.
 
-Rust/WASM search optimizations use a separate formal efficiency
+Historical Rust/WASM search optimizations used a separate formal efficiency
 non-inferiority protocol after first demonstrating a material efficiency
 benefit. `test/wasm-efficiency-match.js` compares exact candidate and frozen
 base modules across the reviewed ABI-v2/v1 ordinary-search boundary at the

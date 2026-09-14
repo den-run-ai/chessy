@@ -4,6 +4,14 @@ Chessy is licensed under the MIT License (see `LICENSE`). It bundles no
 third-party source code. This file records attribution for third-party
 **data** incorporated into the project.
 
+## Lichess chess opening manifest
+
+`eval/match-v2/openings.json` derives 400 opening endpoints from the
+CC0-1.0 `lichess-org/chess-openings` catalog at commit
+`4b8622759e7ae6f93f011cc6c83a3823401ab45e`.
+Exact input/license hashes and selection rules are in
+`eval/match-v2/PROVENANCE.md`. This is development data, not a game asset.
+
 ## PeSTO evaluation coefficients
 
 `experiments/wasm/src/eval.rs` uses the **PeSTO** tapered evaluation

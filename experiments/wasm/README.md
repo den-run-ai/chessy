@@ -43,10 +43,21 @@ allocator, garbage collector, `wasm-bindgen`, or per-node allocation is used.
 ```sh
 (cd experiments/wasm && cargo test --locked --offline)
 node test/wasm-asset.test.js
+node test/wasm-size.test.js
 node test/wasm-signatures.test.js
 node test/analysis-core.test.js
 node test/ai-tactics.js
 ```
+
+`test/wasm-size.test.js` ratchets the production download at **37,172 raw
+bytes** and **17,690 bytes with Node's Brotli quality 11**. A smaller module
+passes without rebaselining. If reviewed strength or efficiency evidence
+justifies a larger module, keep the exception narrow and visible by setting
+exact `CHESSY_WASM_MAX_RAW_BYTES` and `CHESSY_WASM_MAX_BROTLI_BYTES` ceilings
+plus a concrete `CHESSY_WASM_SIZE_OVERRIDE_REASON` on this test's CI step.
+Partial, unexplained, malformed, or unbounded overrides fail closed. Record the
+tradeoff and benchmark evidence in the same pull request; do not use a
+repository secret or broad workflow environment to bypass the gate.
 
 The frozen `test/fixtures/wasm-r69-signatures.json` records the last accepted
 ABI-v1 production behavior before the JavaScript engine was removed. It keeps

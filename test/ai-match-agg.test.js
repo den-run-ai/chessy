@@ -8,6 +8,8 @@ const os = require('os');
 const path = require('path');
 const cp = require('child_process');
 const MatchProtocol = require('./ai-match-protocol');
+const WasmEfficiencyMatch = require('./wasm-efficiency-match');
+const { clusterStats } = require('./match-stats');
 
 const AGG = path.join(__dirname, 'ai-match-agg.js');
 const OPENINGS = 100;
@@ -81,6 +83,10 @@ function shardFile(name, seed, over) {
       'candidate-wasm-sha256', over.candidateWasm || CANDIDATE_WASM
     ]);
     fields.push(['base-wasm-sha256', over.baseWasm || BASE_WASM]);
+    fields.push(['candidate-result-abi', over.candidateResultAbi ||
+      String(protocolConfig.candidateResultAbi)]);
+    fields.push(['base-result-abi', over.baseResultAbi ||
+      String(protocolConfig.baseResultAbi)]);
   }
   if (!over.local) fields.push(['workflow-run', over.workflow || WORKFLOW]);
   fields.push(['records', JSON.stringify(recs)]);
@@ -146,6 +152,40 @@ function expectMessage(files, status, message, label, extra) {
     'exit ' + r.status + ': ' + r.output.trim());
 }
 
+function renderedWasmShardFile(name, seed, openbase) {
+  const recs = records(seed).slice(openbase, openbase + 20);
+  let wins = 0, draws = 0, losses = 0;
+  for (const record of recs) for (const score of [record.white, record.black]) {
+    if (score === 1) wins++;
+    else if (score === 0) losses++;
+    else draws++;
+  }
+  const output = WasmEfficiencyMatch.renderShardOutput({
+    candidateSha: CANDIDATE,
+    baseSha: BASE,
+    harnessSha: HARNESS,
+    seedbase: seed,
+    openbase
+  }, {
+    candidateDigest: CANDIDATE_WASM,
+    referenceDigest: BASE_WASM,
+    candidateAbiVersion: 2,
+    referenceAbiVersion: 1,
+    workflowRun: WORKFLOW,
+    pairScores: recs.map(function (record) { return record.pair; }),
+    records: recs,
+    telemetry: { moves: 40, depthGe5: 40, depths: { 5: 40 } },
+    games: recs.length * 2,
+    wins,
+    draws,
+    losses,
+    stats: clusterStats(recs)
+  });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, output + '\n');
+  return file;
+}
+
 const full = [
   shardFile('s0.txt', 0, { formal: true }),
   shardFile('s1.txt', 1, { formal: true }),
@@ -163,12 +203,26 @@ const wasmFull = [
   shardFile('wasm-s3.txt', 3, { wasm: true })
 ];
 const wasmProvenance = provenanceFile('wasm-PROVENANCE');
+const renderedWasmFull = [];
+for (let seed = 0; seed < 4; seed++) {
+  for (let openbase = 0; openbase < OPENINGS; openbase += 20) {
+    renderedWasmFull.push(renderedWasmShardFile(
+      'rendered-wasm-s' + seed + '-o' + openbase + '.txt', seed, openbase));
+  }
+}
 
 console.log('accepts canonical complete manifests');
 expect(full, 0, 'canonical 100x4 workflow manifest passes');
 expect(wasmFull, 0,
   'canonical 100x4 WASM efficiency manifest passes at >49%',
   ['--provenance', wasmProvenance]);
+const renderedRoundTrip = run(renderedWasmFull,
+  ['--provenance', wasmProvenance]);
+check(renderedRoundTrip.status === 0 &&
+    renderedRoundTrip.output.includes('combined: 400 pairs, 800 games'),
+  'production shard renderer round-trips through the aggregator',
+  'exit ' + renderedRoundTrip.status + ': ' +
+    renderedRoundTrip.output.trim());
 expectMessage(wasmFull, 2, 'requires --provenance',
   'formal WASM evidence cannot pass without trusted provenance');
 expectMessage(wasmFull, 3, 'trusted provenance candidate-sha',
@@ -397,9 +451,39 @@ expect([shardFile('wasm-missing-digest.txt', 0, {
 expect([shardFile('wasm-bad-digest.txt', 0, {
   wasm: true, candidateWasm: 'ABC'
 })], 2, 'WASM digest must be canonical SHA-256', ['--seeds', '1']);
+expectMessage([shardFile('wasm-missing-candidate-abi.txt', 0, {
+  wasm: true, omit: 'candidate-result-abi'
+})], 2, 'exactly one candidate-result-abi',
+'WASM protocol requires candidate result ABI evidence', ['--seeds', '1']);
+expectMessage([shardFile('wasm-missing-base-abi.txt', 0, {
+  wasm: true, omit: 'base-result-abi'
+})], 2, 'exactly one base-result-abi',
+'WASM protocol requires base result ABI evidence', ['--seeds', '1']);
+expectMessage([shardFile('wasm-wrong-candidate-abi.txt', 0, {
+  wasm: true, candidateResultAbi: '1'
+})], 2, 'requires candidate-result-abi 2 and base-result-abi 1',
+'formal efficiency protocol rejects an ABI-v1 candidate', ['--seeds', '1']);
+expectMessage([shardFile('wasm-wrong-base-abi.txt', 0, {
+  wasm: true, baseResultAbi: '2'
+})], 2, 'requires candidate-result-abi 2 and base-result-abi 1',
+'formal efficiency protocol rejects an ABI-v2 reference', ['--seeds', '1']);
+expectMessage([shardFile('wasm-noncanonical-abi.txt', 0, {
+  wasm: true, candidateResultAbi: '2.0'
+})], 2, 'requires candidate-result-abi 2 and base-result-abi 1',
+'result ABI evidence must use its canonical integer spelling',
+['--seeds', '1']);
+expect([shardFile('wasm-duplicate-abi.txt', 0, {
+  wasm: true, duplicate: 'candidate-result-abi'
+})], 2, 'duplicate result ABI evidence is rejected', ['--seeds', '1']);
+expect([shardFile('wasm-duplicate-base-abi.txt', 0, {
+  wasm: true, duplicate: 'base-result-abi'
+})], 2, 'duplicate base result ABI evidence is rejected', ['--seeds', '1']);
 expect([shardFile('js-with-wasm-digest.txt', 0, {
   extra: 'candidate-wasm-sha256: ' + CANDIDATE_WASM
 })], 2, 'non-WASM protocol rejects WASM-only provenance', ['--seeds', '1']);
+expect([shardFile('js-with-result-abi.txt', 0, {
+  extra: 'candidate-result-abi: 2'
+})], 2, 'non-WASM protocol rejects result ABI provenance', ['--seeds', '1']);
 
 console.log('rejects malformed records');
 function mutatedRecords(over) {

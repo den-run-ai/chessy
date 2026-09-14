@@ -133,6 +133,8 @@ jobs:
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset
         run: node test/wasm-asset.test.js
+      - name: Enforce the production WASM download-size ratchet
+        run: node test/wasm-size.test.js
       - name: Verify frozen pre-removal WASM behavior
         run: node test/wasm-signatures.test.js
       - name: Verify recalibrated difficulty presets
@@ -174,6 +176,8 @@ jobs:
           fi
       - name: Validate frozen match openings
         run: node test/ai-match.js --check-openings
+      - name: Validate prospective CC0 match-v2 holdout
+        run: node test/ai-match-openings-v2.test.js
       - name: Validate match protocol CLI and equal-time smoke
         run: node test/ai-match-cli.test.js
       - name: Run match cluster-statistics tests
