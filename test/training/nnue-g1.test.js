@@ -8,6 +8,8 @@ const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
 const Corpus = require('./corpus');
+const Prepare = require('./prepare-lichess-evals');
+const AdmissionFixture = require('./selection-admission-fixture');
 
 const ROOT = path.join(__dirname, '..', '..');
 const ARCH_PATH = path.join(ROOT, 'eval', 'training', 'nnue-v1-architecture.json');
@@ -266,104 +268,68 @@ function writeShard(directory, name, records, options) {
 
 function materializeSelectionBinding(train, validation, options) {
   const settings = options || {};
-  const mode = settings.sampleOnly ?
-    training.data.trustBoundary.sampleOnlyValidation :
-    training.data.trustBoundary.productionValidation;
   const teacherFiles = Array.from(new Set(train.concat(validation))).sort();
   const bindingDirectory = fs.mkdtempSync(
     path.join(temporary, 'selection-binding-'));
-  const certification = {
-    schema: 'chessy.e4.certification-manifest.v1',
-    protocolId: 'E4-v1',
-    kind: 'certification',
-    status: mode.certificationStatus,
-    openingClusters: (settings.certificationFens || []).map(fen => ({ fen })),
-    assignments: []
-  };
-  const certificationPath = path.join(
-    bindingDirectory, 'certification-manifest.json');
-  fs.writeFileSync(
-    certificationPath, JSON.stringify(certification) + '\n');
-  const certificationClusters = new Set(
-    certification.openingClusters.map(item => Corpus.clusterKey(item.fen)));
-  const certificationFamilies = new Set(
-    certification.openingClusters.map(
-      item => Corpus.positionFamilyKey(item.fen)));
-
-  const listedShards = teacherFiles.map((teacherFile, index) => {
-    const body = fs.readFileSync(teacherFile);
-    const selectionName =
-      'selection-' + String(index).padStart(3, '0') + '.ndjson';
-    const selectionPath = path.join(bindingDirectory, selectionName);
-    fs.writeFileSync(selectionPath, body);
+  const inputs = teacherFiles.map(teacherFile => {
+    const body = fs.readFileSync(teacherFile, 'utf8');
+    const records = body.trim().split('\n').map(line => JSON.parse(line));
     const sidecarPath = teacherFile + '.manifest.json';
-    let rows = body.toString('utf8').split('\n').filter(Boolean).length;
-    if (fs.existsSync(sidecarPath)) {
-      const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
-      rows = sidecar.input.shard.rows;
-    }
     return {
-      teacherFile,
-      selectionPath,
+      teacherFile, records, sidecarPath,
+      sidecar: fs.existsSync(sidecarPath) ?
+        JSON.parse(fs.readFileSync(sidecarPath, 'utf8')) : null
+    };
+  });
+  const sourceSha = SOURCE_SHA;
+  const rowCount = inputs.reduce((sum, input) => sum + input.records.length, 0);
+  const seedPath = path.join(bindingDirectory,
+    path.basename(bindingDirectory) + '-fixture.ndjson');
+  fs.writeFileSync(seedPath,
+    inputs.flatMap(input => input.records).map(record => JSON.stringify(record)).join('\n') + '\n');
+  const binding = AdmissionFixture.writeSelectionFixture({
+    directory: temporary,
+    filename: seedPath,
+    rows: rowCount,
+    snapshotSha256: sourceSha,
+    sampleOnly: settings.sampleOnly === true,
+    certificationFens: settings.certificationFens || []
+  });
+  const selectionPath = binding.path;
+  const selection = JSON.parse(fs.readFileSync(selectionPath, 'utf8'));
+  const listedShards = inputs.map((input, index) => {
+    const selectionName = 'selection-' + String(index).padStart(3, '0') + '.ndjson';
+    const selectionPath = path.join(path.dirname(binding.path), selectionName);
+    const records = input.records.map(record =>
+      AdmissionFixture.selectionRecord(record, sourceSha, settings.sampleOnly))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const body = records.map(record => Prepare.stableJson(record)).join('\n') + '\n';
+    fs.writeFileSync(selectionPath, body);
+    return {
+      input, selectionPath,
       manifest: {
         path: selectionName,
-        rows,
+        rows: input.sidecar ? input.sidecar.input.shard.rows : records.length,
         canonicalNdjsonSha256: sha256(body)
       }
     };
   });
-  const selection = {
-    schemaVersion: 1,
-    state: mode.selectionState,
-    finalFitAllowed: mode.selectionFitAllowed,
-    source: {
-      id: mode.selectionSourceId,
-      url: mode.selectionSourceUrl,
-      retrieved: '2026-07-31',
-      compressedSha256: SOURCE_SHA,
-      license: 'CC0-1.0'
-    },
-    adapter: {
-      selectionContractSha256: SELECTION_CONTRACT_SHA,
-      shardCount: listedShards.length
-    },
-    exclusions: {
-      certificationManifest: certificationPath,
-      certificationManifestSha256: sha256(
-        fs.readFileSync(certificationPath)),
-      certificationStatus: mode.certificationStatus,
-      certificationClusterCount: certificationClusters.size,
-      certificationPositionFamilyCount: certificationFamilies.size,
-      pendingCertificationAllowedForTestOnly:
-        mode.pendingCertificationAllowedForTestOnly
-    },
-    counts: {
-      selected: listedShards.reduce(
-        (sum, shard) => sum + shard.manifest.rows, 0)
-    },
-    shards: listedShards.map(shard => shard.manifest)
-  };
-  if (settings.sampleOnly) {
-    selection.mechanismFixture = clone(mode.mechanismFixture);
-    selection.source.mechanismFixture = clone(mode.mechanismFixture);
-  }
-  const selectionPath = path.join(bindingDirectory, 'manifest.json');
-  fs.writeFileSync(selectionPath, JSON.stringify(selection) + '\n');
+  selection.adapter.shardCount = listedShards.length;
+  selection.shards = listedShards.map(shard => shard.manifest);
+  selection.counts.selected = listedShards.reduce((sum, shard) => sum + shard.manifest.rows, 0);
+  fs.writeFileSync(selectionPath, Prepare.stableJson(selection) + '\n');
   const selectionSha = sha256(fs.readFileSync(selectionPath));
-
   for (const listed of listedShards) {
-    const sidecarPath = listed.teacherFile + '.manifest.json';
-    if (!fs.existsSync(sidecarPath)) continue;
-    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+    const sidecar = listed.input.sidecar;
+    if (!sidecar) continue;
     sidecar.input.selectionManifest.path = selectionPath;
     sidecar.input.selectionManifest.sha256 = selectionSha;
-    sidecar.input.selectionManifest.selectionContractSha256 =
-      SELECTION_CONTRACT_SHA;
+    sidecar.input.selectionManifest.selectionContractSha256 = binding.selectionContractSha256;
     sidecar.input.shard.path = listed.selectionPath;
-    sidecar.input.shard.sha256 =
-      listed.manifest.canonicalNdjsonSha256;
-    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar) + '\n');
+    sidecar.input.shard.sha256 = listed.manifest.canonicalNdjsonSha256;
+    fs.writeFileSync(listed.input.sidecarPath, JSON.stringify(sidecar) + '\n');
   }
+  return binding;
 }
 
 function validateCommand(train, validation, options) {
@@ -415,7 +381,9 @@ try {
   assert.strictEqual(report.status, 'validated-pinned-teacher-inputs');
   assert.strictEqual(report.train.length, 3);
   assert.strictEqual(report.validation.length, 3);
-  assert.strictEqual(report.selectionContractSha256, SELECTION_CONTRACT_SHA);
+  assert.strictEqual(report.selectionContractSha256,
+    JSON.parse(fs.readFileSync(trainA + '.manifest.json', 'utf8'))
+      .input.selectionManifest.selectionContractSha256);
   assert.strictEqual(
     Object.prototype.hasOwnProperty.call(report, 'fitAllowed'), false);
   checks += 6;

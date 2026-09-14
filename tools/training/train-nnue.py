@@ -16,9 +16,10 @@ import math
 import os
 import random
 import re
+import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable, Iterator
 
@@ -175,6 +176,7 @@ class SelectionBinding:
     shards: tuple[SelectionShard, ...]
     certification_clusters: frozenset[str]
     certification_families: frozenset[str]
+    admission_files: tuple[tuple[Path, str], ...]
 
 
 @dataclass
@@ -502,6 +504,10 @@ def load_json_buffer(
     filename: Path, label: str
 ) -> tuple[dict[str, Any], str]:
     data = filename.read_bytes()
+    return decode_json_buffer(data, label)
+
+
+def decode_json_buffer(data: bytes, label: str) -> tuple[dict[str, Any], str]:
     digest = hashlib.sha256(data).hexdigest()
     try:
         text = data.decode("utf-8")
@@ -669,7 +675,8 @@ def load_selection_binding(
     sample_only: bool,
 ) -> SelectionBinding:
     label = str(selection_path)
-    manifest, manifest_sha256 = load_json_buffer(selection_path, label)
+    manifest_bytes = selection_path.read_bytes()
+    manifest, manifest_sha256 = decode_json_buffer(manifest_bytes, label)
     if manifest_sha256 != expected_sha256:
         raise ValueError(f"{label}: selection manifest SHA-256 does not match")
     trust = contracts.config["data"]["trustBoundary"]
@@ -742,13 +749,67 @@ def load_selection_binding(
         repository,
         f"{label}.exclusions.certificationManifest",
     )
-    certification, actual_certification_sha256 = load_json_buffer(
-        certification_path, str(certification_path)
+    certification_bytes = certification_path.read_bytes()
+    certification, actual_certification_sha256 = decode_json_buffer(
+        certification_bytes, str(certification_path)
     )
     if actual_certification_sha256 != certification_sha256:
         raise ValueError(
             f"{label}: certification manifest SHA-256 does not match"
         )
+    # Reuse the authoritative E4/selection contracts on these retained bytes.
+    # The former Python shape checks accepted self-rehashed dummy contracts
+    # and an empty 'frozen' certification manifest.
+    admission_files = tuple(
+        (repository / relative, sha256_file(repository / relative))
+        for relative in (
+            "test/training/validate-selection-admission.js",
+            "test/training/label-stockfish.js",
+            "test/training/prepare-lichess-evals.js",
+            "test/training/corpus.js",
+            "test/eval/e4-protocol.js",
+            "eval/training/source-manifest.json",
+            "eval/e4/certification-manifest.schema.json",
+            "eval/training/heldout-v1.json",
+            "eval/training/teacher-sf18-100kn-v1.json",
+        )
+    )
+    try:
+        completed = subprocess.run(
+            ["node", str(admission_files[0][0])],
+            input=json.dumps({
+                "schema": "chessy.nnue-selection-admission.v1",
+                "manifestPath": str(selection_path),
+                "manifestText": manifest_bytes.decode("utf-8"),
+                "certificationPath": str(certification_path),
+                "certificationText": certification_bytes.decode("utf-8"),
+                "sampleOnly": sample_only,
+            }),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"canonical selection admission could not run: {error}") from error
+    if completed.returncode:
+        raise ValueError(completed.stderr.strip() or "canonical selection admission failed")
+    admission, _ = decode_json_buffer(completed.stdout.encode("utf-8"), "admission result")
+    for key, expected in (
+        ("schema", "chessy.nnue-selection-admission.v1"),
+        ("manifestSha256", manifest_sha256),
+        ("certificationSha256", certification_sha256),
+        ("selectionContractSha256", selection_contract_sha256),
+        ("teacherSha256", contracts.teacher_sha256),
+        ("heldoutSha256", contracts.heldout_sha256),
+        ("corpusSha256", contracts.corpus_sha256),
+        ("sampleOnly", sample_only),
+    ):
+        if admission.get(key) != expected:
+            raise ValueError(f"canonical selection admission disagrees on {key}")
+    for filename, expected in admission_files:
+        if sha256_file(filename) != expected:
+            raise ValueError(f"canonical admission implementation changed: {filename}")
     if (
         certification.get("schema")
         != "chessy.e4.certification-manifest.v1"
@@ -792,6 +853,11 @@ def load_selection_binding(
         raise ValueError(
             f"{label}: certification holdout counts do not match"
         )
+    if (
+        admission.get("certificationClusters") != sorted(certification_clusters)
+        or admission.get("certificationFamilies") != sorted(certification_families)
+    ):
+        raise ValueError("canonical selection admission disagrees on holdout keys")
     if sample_only and (
         openings
         or certification.get("assignments") != []
@@ -867,6 +933,7 @@ def load_selection_binding(
         shards=tuple(selection_shards),
         certification_clusters=frozenset(certification_clusters),
         certification_families=frozenset(certification_families),
+        admission_files=admission_files,
     )
 
 
@@ -1305,6 +1372,9 @@ def assert_shards_unchanged(
                 f"input sidecar changed during {phase}: {shard.sidecar_path}"
             )
     for binding in selections.values():
+        for filename, expected in binding.admission_files:
+            if sha256_file(filename) != expected:
+                raise exception(f"canonical admission implementation changed during {phase}: {filename}")
         if sha256_file(binding.path) != binding.sha256:
             raise exception(
                 f"selection manifest changed during {phase}: {binding.path}"
@@ -1539,6 +1609,14 @@ def validation_report(
             "teacherManifestSha256": contracts.teacher_sha256,
             "heldoutManifestSha256": contracts.heldout_sha256,
             "corpusContractSha256": contracts.corpus_sha256,
+            "canonicalAdmission": {
+                "schema": "chessy.nnue-selection-admission.v1",
+                "scope": "selection-and-certification-manifests-only",
+                "files": [
+                    {"path": str(filename), "sha256": digest}
+                    for filename, digest in validated.train[0].selection.admission_files
+                ],
+            },
         },
     }
     if validated.sample_only:
@@ -1974,102 +2052,26 @@ def self_test() -> None:
         filename: Path,
         rows: int,
         snapshot_sha: str,
-        selection_contract_sha: str,
         *,
         sample_only: bool = False,
         certification_fens: tuple[str, ...] = (),
     ) -> dict[str, Any]:
-        mode = (
-            SAMPLE_ONLY_VALIDATION_CONTRACT
-            if sample_only
-            else PRODUCTION_VALIDATION_CONTRACT
+        # Synthetic fixtures satisfy the same complete canonical contracts as
+        # real admission; the helper never emits training/production artifacts.
+        completed = subprocess.run(
+            ["node", str(root / "test/training/selection-admission-fixture.js")],
+            input=json.dumps({
+                "directory": str(directory), "filename": str(filename),
+                "rows": rows, "snapshotSha256": snapshot_sha,
+                "sampleOnly": sample_only,
+                "certificationFens": list(certification_fens),
+            }),
+            text=True, capture_output=True, check=True, timeout=120,
         )
-        selection_directory = directory / f"{filename.stem}-selection"
-        selection_directory.mkdir()
-        selection_shard = selection_directory / "selection-000.ndjson"
-        selection_shard.write_bytes(filename.read_bytes())
-        selection_shard_sha = sha256_file(selection_shard)
-
-        certification = {
-            "schema": "chessy.e4.certification-manifest.v1",
-            "protocolId": "E4-v1",
-            "kind": "certification",
-            "status": mode["certificationStatus"],
-            "openingClusters": [
-                {"fen": fen} for fen in certification_fens
-            ],
-            "assignments": [],
-        }
-        certification_path = directory / f"{filename.stem}-certification.json"
-        certification_path.write_text(
-            json.dumps(certification, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        certification_clusters = {
-            cluster_key(fen) for fen in certification_fens
-        }
-        certification_families = {
-            position_family_key(fen) for fen in certification_fens
-        }
-        selection_manifest = {
-            "schemaVersion": 1,
-            "state": mode["selectionState"],
-            "finalFitAllowed": mode["selectionFitAllowed"],
-            "source": {
-                "id": mode["selectionSourceId"],
-                "url": mode["selectionSourceUrl"],
-                "retrieved": "2026-07-31",
-                "compressedSha256": snapshot_sha,
-                "license": "CC0-1.0",
-            },
-            "adapter": {
-                "selectionContractSha256": selection_contract_sha,
-                "shardCount": 1,
-            },
-            "exclusions": {
-                "certificationManifest": str(certification_path),
-                "certificationManifestSha256": sha256_file(
-                    certification_path
-                ),
-                "certificationStatus": mode["certificationStatus"],
-                "certificationClusterCount": len(certification_clusters),
-                "certificationPositionFamilyCount": len(
-                    certification_families
-                ),
-                "pendingCertificationAllowedForTestOnly": mode[
-                    "pendingCertificationAllowedForTestOnly"
-                ],
-            },
-            "counts": {"selected": rows},
-            "shards": [
-                {
-                    "path": selection_shard.name,
-                    "rows": rows,
-                    "canonicalNdjsonSha256": selection_shard_sha,
-                }
-            ],
-        }
-        if sample_only:
-            selection_manifest["mechanismFixture"] = mode[
-                "mechanismFixture"
-            ]
-            selection_manifest["source"]["mechanismFixture"] = mode[
-                "mechanismFixture"
-            ]
-        selection_path = selection_directory / "manifest.json"
-        selection_path.write_text(
-            json.dumps(selection_manifest, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        return {
-            "path": selection_path,
-            "sha256": sha256_file(selection_path),
-            "selectionContractSha256": selection_contract_sha,
-            "certificationStatus": mode["certificationStatus"],
-            "shardPath": selection_shard,
-            "shardRows": rows,
-            "shardSha256": selection_shard_sha,
-        }
+        result = json.loads(completed.stdout)
+        for key in ("path", "shardPath", "certificationPath"):
+            result[key] = Path(result[key])
+        return result
 
     def write_sidecar(
         filename: Path,
@@ -2143,7 +2145,6 @@ def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="chessy-nnue-self-test-") as temporary:
         directory = Path(temporary)
         snapshot_sha = "0" * 64
-        selection_contract_sha = "2" * 64
         teacher_file = directory / "teacher-000.ndjson"
         train_record = teacher_record(
             find_role_fen("shared-train"), "shared-train", snapshot_sha
@@ -2169,7 +2170,6 @@ def self_test() -> None:
             teacher_file,
             2,
             snapshot_sha,
-            selection_contract_sha,
         )
         write_sidecar(teacher_file, 2, selection)
         validated = validate_inputs(
@@ -2180,6 +2180,133 @@ def self_test() -> None:
             immutable_snapshots=True,
             snapshot_directory=directory,
         )
+        original_selection_bytes = selection["path"].read_bytes()
+        certification_path = selection["certificationPath"]
+        original_certification_bytes = certification_path.read_bytes()
+
+        def reject_rehashed_admission(label: str, mutate: Any) -> None:
+            manifest = json.loads(original_selection_bytes)
+            certification = json.loads(original_certification_bytes)
+            mutate(manifest, certification)
+            # Recompute every envelope digest after tampering. These cases
+            # must fail semantic admission even when all supplied hashes agree.
+            if not certification.get("openingClusters"):
+                manifest["exclusions"]["certificationClusterCount"] = 0
+                manifest["exclusions"]["certificationPositionFamilyCount"] = 0
+            if "freeze" in certification:
+                frozen = certification["freeze"]
+                frozen["openingSetSha256"] = sha256_text(json.dumps(
+                    certification["openingClusters"], sort_keys=True,
+                    separators=(",", ":"), ensure_ascii=False,
+                ))
+                frozen["assignmentSha256"] = sha256_text(json.dumps(
+                    certification["assignments"], sort_keys=True,
+                    separators=(",", ":"), ensure_ascii=False,
+                ))
+                certification["manifestId"] = "r71-cal-v1/cert/" + frozen["openingSetSha256"]
+                frozen["contentSha256"] = None
+                frozen["contentSha256"] = sha256_text(json.dumps(
+                    certification, sort_keys=True,
+                    separators=(",", ":"), ensure_ascii=False,
+                ))
+            certification_path.write_text(json.dumps(certification) + "\n", encoding="utf-8")
+            manifest["exclusions"]["certificationManifestSha256"] = sha256_file(certification_path)
+            adapter = manifest["adapter"]
+            aggregate = {
+                key: adapter.get(key) for key in (
+                    "wrapperSha256", "corpusContractSha256",
+                    "e4ValidatorSha256", "sourcePolicySha256",
+                )
+            }
+            aggregate["heldoutManifestSha256"] = manifest["exclusions"]["manifestSha256"]
+            aggregate["certificationManifestSha256"] = sha256_file(certification_path)
+            adapter["selectionContractSha256"] = sha256_text(json.dumps(
+                aggregate, sort_keys=True, separators=(",", ":"),
+            ))
+            selection["path"].write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+            try:
+                rejects(
+                    ValueError, "canonical selection admission",
+                    lambda: load_selection_binding(
+                        selection["path"], sha256_file(selection["path"]),
+                        contracts, sample_only=False,
+                    ), label,
+                )
+            finally:
+                selection["path"].write_bytes(original_selection_bytes)
+                certification_path.write_bytes(original_certification_bytes)
+
+        reject_rehashed_admission("rehashing a forged adapter cannot admit it",
+            lambda m, c: m["adapter"].__setitem__("wrapperSha256", "a" * 64))
+        reject_rehashed_admission("missing canonical adapter field is rejected",
+            lambda m, c: m["adapter"].pop("e4ValidatorSha256"))
+        reject_rehashed_admission("invalid canonical sampler is rejected",
+            lambda m, c: m["adapter"]["sample"].__setitem__("numerator", 0))
+        reject_rehashed_admission("forged heldout enforcement is rejected",
+            lambda m, c: m["exclusions"].__setitem__("appliedBeforeSplit", False))
+        reject_rehashed_admission("rehashed mutable certification is rejected",
+            lambda m, c: c["freeze"].__setitem__("immutable", False))
+        reject_rehashed_admission("rehashed source-release drift is rejected",
+            lambda m, c: c["source"].__setitem__("release", "forged-release"))
+        reject_rehashed_admission("rehashed schedule-count drift is rejected",
+            lambda m, c: c["externalSchedules"][0]["anchorAllocation"][0].__setitem__("openingClusters", 1))
+        reject_rehashed_admission("rehashed empty frozen certification is rejected",
+            lambda m, c: c.__setitem__("openingClusters", []))
+        reject_rehashed_admission("undeclared certification control is rejected",
+            lambda m, c: c.__setitem__("engineSeed", 1))
+        reject_rehashed_admission("minimal frozen certification from the old test is rejected",
+            lambda m, c: (c.clear(), c.update({
+                "schema": "chessy.e4.certification-manifest.v1",
+                "protocolId": "E4-v1", "kind": "certification",
+                "status": "frozen", "openingClusters": [], "assignments": [],
+            })))
+        # A legal-looking arbitrary aggregate hash is not an admission proof.
+        arbitrary_manifest = json.loads(original_selection_bytes)
+        arbitrary_manifest["adapter"]["selectionContractSha256"] = "a" * 64
+        selection["path"].write_text(json.dumps(arbitrary_manifest) + "\n", encoding="utf-8")
+        try:
+            rejects(ValueError, "aggregate contract SHA-256 does not match",
+                lambda: load_selection_binding(selection["path"], sha256_file(selection["path"]),
+                    contracts, sample_only=False), "arbitrary aggregate contract hash")
+        finally:
+            selection["path"].write_bytes(original_selection_bytes)
+        real_subprocess_run = subprocess.run
+        replaced_admission_paths = False
+
+        def replace_admission_paths(*args: Any, **kwargs: Any) -> Any:
+            nonlocal replaced_admission_paths
+            selection["path"].write_text('{"replacement":true}\n', encoding="utf-8")
+            certification_path.write_text('{"replacement":true}\n', encoding="utf-8")
+            replaced_admission_paths = True
+            return real_subprocess_run(*args, **kwargs)
+
+        try:
+            subprocess.run = replace_admission_paths
+            retained_binding = load_selection_binding(selection["path"], selection["sha256"],
+                contracts, sample_only=False)
+            equal(retained_binding.sha256, selection["sha256"],
+                "selection admission consumes retained authenticated manifest bytes")
+            equal(retained_binding.certification_sha256, hashlib.sha256(original_certification_bytes).hexdigest(),
+                "certification admission consumes retained authenticated manifest bytes")
+            check(replaced_admission_paths, "admission pathname replacement fixture executed")
+        finally:
+            subprocess.run = real_subprocess_run
+            selection["path"].write_bytes(original_selection_bytes)
+            certification_path.write_bytes(original_certification_bytes)
+        admission_probe = directory / "admission-implementation-probe.js"
+        admission_probe.write_text("original source\n", encoding="utf-8")
+        captured_probe = (admission_probe, sha256_file(admission_probe))
+        admitted_shard = validated.train[0]
+        original_binding = admitted_shard.selection
+        admitted_shard.selection = replace(original_binding,
+            admission_files=original_binding.admission_files + (captured_probe,))
+        admission_probe.write_text("changed source\n", encoding="utf-8")
+        try:
+            rejects(RuntimeError, "canonical admission implementation changed during training",
+                lambda: assert_inputs_unchanged(validated),
+                "captured canonical admission source mutation blocks publication")
+        finally:
+            admitted_shard.selection = original_binding
         report = validation_report(validated, contracts)
         check(
             validated.train[0].immutable_snapshot,
@@ -2331,7 +2458,6 @@ def self_test() -> None:
             sample_file,
             2,
             snapshot_sha,
-            selection_contract_sha,
             sample_only=True,
         )
         write_sidecar(
@@ -2419,7 +2545,6 @@ def self_test() -> None:
             certification_file,
             2,
             snapshot_sha,
-            selection_contract_sha,
             certification_fens=(train_record["fen"],),
         )
         write_sidecar(

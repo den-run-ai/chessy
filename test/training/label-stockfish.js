@@ -539,10 +539,22 @@ function validateCertificationBinding(manifest, contracts, validationOptions) {
   const certificationPath = path.resolve(
     ROOT, exclusions.certificationManifest
   );
-  if (!fs.statSync(certificationPath).isFile()) {
-    throw new Error('selection certification manifest is not a file');
+  // The NNUE admission bridge supplies the exact bytes already retained by
+  // Python. Do not reopen that pathname and validate a different document.
+  const snapshot = validationOptions && validationOptions.certificationSnapshot;
+  let certificationText;
+  if (snapshot !== undefined) {
+    if (!snapshot || snapshot.path !== certificationPath ||
+        typeof snapshot.text !== 'string') {
+      throw new Error('retained certification snapshot has the wrong identity');
+    }
+    certificationText = snapshot.text;
+  } else {
+    if (!fs.statSync(certificationPath).isFile()) {
+      throw new Error('selection certification manifest is not a file');
+    }
+    certificationText = fs.readFileSync(certificationPath, 'utf8');
   }
-  const certificationText = fs.readFileSync(certificationPath, 'utf8');
   if (Corpus.sha256(certificationText) !==
       exclusions.certificationManifestSha256) {
     throw new Error('selection certification manifest SHA-256 does not match');
