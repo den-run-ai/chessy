@@ -67,8 +67,9 @@ function idx(name) {
   return 'abcdefgh'.indexOf(name[0]) + (8 - Number(name[1])) * 8;
 }
 
-function run(name, suite) {
+function run(name, suite, options) {
   (async function () {
+    options = options || {};
     const server = serve();
     await new Promise(function (r) { server.listen(0, '127.0.0.1', r); });
     const url = 'http://127.0.0.1:' + server.address().port + '/';
@@ -127,8 +128,13 @@ function run(name, suite) {
       }
     };
 
-    await page.goto(url);
-    await page.waitForSelector('#board .square');
+    // Most suites start in the real app. Migration is the deliberate
+    // exception: it must seed an older IndexedDB schema before any current
+    // app code or service-worker installation has run on the fresh origin.
+    // Starting it on /blank also avoids cancelling an in-flight WebKit
+    // service-worker load merely to reach the app-less seeding page.
+    await page.goto(url + (options.startOnBlank ? 'blank' : ''));
+    if (!options.startOnBlank) await page.waitForSelector('#board .square');
     await suite(t);
 
     t.check(errors.length === 0,

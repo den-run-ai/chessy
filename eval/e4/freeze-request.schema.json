@@ -1,0 +1,681 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chessy.invalid/schema/e4/freeze-request.schema.json",
+  "title": "Chessy E4 opening-manifest freeze request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "freezeBaseCommit",
+    "source",
+    "rawArchiveSha256",
+    "candidateNdjsonSha256",
+    "candidateManifestSha256",
+    "stockfish",
+    "exploration"
+  ],
+  "properties": {
+    "schema": {
+      "const": "chessy.e4.freeze-request.v1"
+    },
+    "freezeBaseCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "release",
+        "url",
+        "license"
+      ],
+      "properties": {
+        "id": {
+          "const": "lichess-standard-rated-pgn"
+        },
+        "name": {
+          "const": "Lichess database"
+        },
+        "release": {
+          "const": "2026-06"
+        },
+        "url": {
+          "const": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst"
+        },
+        "license": {
+          "const": "CC0-1.0"
+        }
+      }
+    },
+    "rawArchiveSha256": {
+      "const": "8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79"
+    },
+    "candidateNdjsonSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "candidateManifestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "stockfish": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executableSha256",
+        "networkSha256s"
+      ],
+      "properties": {
+        "executableSha256": {
+          "const": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9"
+        },
+        "networkSha256s": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "const": "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7"
+            },
+            {
+              "const": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d"
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "exploration": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/easySchedule"
+        },
+        {
+          "$ref": "#/$defs/mediumSchedule"
+        },
+        {
+          "$ref": "#/$defs/hardSchedule"
+        },
+        {
+          "$ref": "#/$defs/expertSchedule"
+        },
+        {
+          "$ref": "#/$defs/masterSchedule"
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "positiveSafeInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "easySchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "anchorAllocation"
+      ],
+      "properties": {
+        "level": {
+          "const": "easy"
+        },
+        "anchorAllocation": {
+          "$ref": "#/$defs/easyAllocations"
+        }
+      }
+    },
+    "mediumSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "anchorAllocation"
+      ],
+      "properties": {
+        "level": {
+          "const": "medium"
+        },
+        "anchorAllocation": {
+          "$ref": "#/$defs/mediumAllocations"
+        }
+      }
+    },
+    "hardSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "anchorAllocation"
+      ],
+      "properties": {
+        "level": {
+          "const": "hard"
+        },
+        "anchorAllocation": {
+          "$ref": "#/$defs/hardAllocations"
+        }
+      }
+    },
+    "expertSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "anchorAllocation"
+      ],
+      "properties": {
+        "level": {
+          "const": "expert"
+        },
+        "anchorAllocation": {
+          "$ref": "#/$defs/expertAllocations"
+        }
+      }
+    },
+    "masterSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "anchorAllocation"
+      ],
+      "properties": {
+        "level": {
+          "const": "master"
+        },
+        "anchorAllocation": {
+          "$ref": "#/$defs/masterAllocations"
+        }
+      }
+    },
+    "easyAllocations": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/allocationArray"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/easyAllocation"
+          }
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1400"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1500"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1600"
+        }
+      ]
+    },
+    "mediumAllocations": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/allocationArray"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mediumAllocation"
+          }
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1600"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1700"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1800"
+        }
+      ]
+    },
+    "hardAllocations": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/allocationArray"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hardAllocation"
+          }
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1800"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate1900"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2000"
+        }
+      ]
+    },
+    "expertAllocations": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/allocationArray"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expertAllocation"
+          }
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2000"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2100"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2200"
+        }
+      ]
+    },
+    "masterAllocations": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/allocationArray"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/masterAllocation"
+          }
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2200"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2300"
+        },
+        {
+          "$ref": "#/$defs/noDuplicate2400"
+        }
+      ]
+    },
+    "allocationArray": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "easyAllocation": {
+      "$ref": "#/$defs/allocation1400to1600"
+    },
+    "mediumAllocation": {
+      "$ref": "#/$defs/allocation1600to1800"
+    },
+    "hardAllocation": {
+      "$ref": "#/$defs/allocation1800to2000"
+    },
+    "expertAllocation": {
+      "$ref": "#/$defs/allocation2000to2200"
+    },
+    "masterAllocation": {
+      "$ref": "#/$defs/allocation2200to2400"
+    },
+    "allocation1400to1600": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters"
+      ],
+      "properties": {
+        "elo": {
+          "enum": [
+            1400,
+            1500,
+            1600
+          ]
+        },
+        "openingClusters": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "allocation1600to1800": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters"
+      ],
+      "properties": {
+        "elo": {
+          "enum": [
+            1600,
+            1700,
+            1800
+          ]
+        },
+        "openingClusters": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "allocation1800to2000": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters"
+      ],
+      "properties": {
+        "elo": {
+          "enum": [
+            1800,
+            1900,
+            2000
+          ]
+        },
+        "openingClusters": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "allocation2000to2200": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters"
+      ],
+      "properties": {
+        "elo": {
+          "enum": [
+            2000,
+            2100,
+            2200
+          ]
+        },
+        "openingClusters": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "allocation2200to2400": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters"
+      ],
+      "properties": {
+        "elo": {
+          "enum": [
+            2200,
+            2300,
+            2400
+          ]
+        },
+        "openingClusters": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "allocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elo",
+        "openingClusters"
+      ],
+      "properties": {
+        "elo": {
+          "type": "integer"
+        },
+        "openingClusters": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "noDuplicate1400": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 1400
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate1500": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 1500
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate1600": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 1600
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate1700": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 1700
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate1800": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 1800
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate1900": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 1900
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate2000": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 2000
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate2100": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 2100
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate2200": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 2200
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate2300": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 2300
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "noDuplicate2400": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "elo",
+          "openingClusters"
+        ],
+        "properties": {
+          "elo": {
+            "const": 2400
+          },
+          "openingClusters": {
+            "$ref": "#/$defs/positiveSafeInteger"
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1
+    }
+  }
+}

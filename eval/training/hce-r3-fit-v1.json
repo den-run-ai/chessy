@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "id": "chessy-hce-r3-fit-v1",
+  "status": "solver-contract-frozen-no-candidate",
+  "issue": 137,
+  "featureManifest": "hce-r3-features-v1.json",
+  "data": {
+    "schema": "chessy.teacher-position.v1",
+    "trainRole": "shared-train",
+    "validationRole": "hce-validation",
+    "testRole": "hce-test",
+    "target": "pinned Stockfish teacher.targetWhite",
+    "mixedUpstreamLabelsAllowed": false,
+    "clusterIsolationRequired": true,
+    "incidentFamilyExcludedBeforeSplit": true
+  },
+  "matrix": {
+    "format": "chessy.hce-csr.v2",
+    "packer": "tools/training/pack-hce.py",
+    "authenticatedFeatureStreamer": "test/training/hce-r3-pack-stream.js",
+    "completeLinearExtractor": "test/training/hce-r3-linear.js",
+    "implementationProvenance": "The packer executes an authenticated private snapshot of the complete Node streamer code/data closure with a retained Node executable descriptor and an empty environment. It binds the deterministic closure SHA-256 plus the exact Node executable SHA-256, byte count, and version in both the NPZ and sidecar; the fitter reconstructs the closure, requires identical train/validation runtime provenance, and rehashes every closure member before candidate publication.",
+    "requiredInputDisposition": "authenticated-production-input",
+    "publicationInputRehash": "both NPZ matrices, both adjacent sidecars, center/scales files, and every fitter/packer/extractor/evaluator/contract input must retain its initially authenticated SHA-256 immediately before candidate publication",
+    "candidatePublication": "serialize and fsync a same-directory temporary file, perform the final input rehash, then hard-link to the final path without replacement; failed serialization, writing, or rehashing must not create the final path",
+    "featureUnits": "centipawns contributed by one integer weight unit; every tapered numerator is divided by exactly 24 by the packer",
+    "fixedCp": "all untuned score terms, White POV",
+    "requiredArrays": [
+      "indptr:int64",
+      "indices:uint16",
+      "data:float32",
+      "shape:int64[2]",
+      "fixed_cp:float32",
+      "target:float32",
+      "role:utf8 scalar",
+      "row_id:raw-sha256-bytes[rows]",
+      "cluster_id:raw-sha256-bytes[rows]",
+      "position_family_id:raw-sha256-bytes[rows]",
+      "matrix_schema:utf8 scalar",
+      "feature_order_sha256:utf8 scalar",
+      "feature_manifest_sha256:utf8 scalar",
+      "teacher_manifest_sha256:utf8 scalar",
+      "selection_manifest_sha256:utf8 scalar",
+      "selection_contract_sha256:utf8 scalar",
+      "source_snapshot_sha256:utf8 scalar",
+      "input_disposition:utf8 scalar",
+      "streamer_closure_sha256:utf8 scalar",
+      "node_executable_sha256:utf8 scalar",
+      "node_executable_bytes:int64 scalar",
+      "node_version:utf8 scalar",
+      "center_value_sha256:utf8 scalar",
+      "scales_value_sha256:utf8 scalar",
+      "score_denominator:int64 scalar"
+    ],
+    "rowOrder": "ascending teacher-position id",
+    "featureOrder": "hce-r3-features-v1 parameterOrder.sha256",
+    "duplicateSparseEntriesAllowed": false,
+    "crossRoleChecks": [
+      "row IDs disjoint",
+      "board-equivalence cluster IDs disjoint",
+      "position-family IDs disjoint",
+      "exact selection-manifest SHA-256 match",
+      "exact source-snapshot SHA-256 match",
+      "exact streamer-closure SHA-256 match",
+      "exact Node executable SHA-256, byte count, and version match",
+      "exact authenticated production-input disposition match"
+    ]
+  },
+  "calibration": {
+    "kind": "one-dimensional-convex-baseline-fit",
+    "fitOn": "shared-train only",
+    "formula": "sigmoid(k * cpWhite / 400)",
+    "initialK": 1,
+    "bounds": [
+      0.05,
+      4
+    ],
+    "solver": {
+      "algorithm": "L-BFGS-B",
+      "maxIterations": 100,
+      "gradientTolerance": 1e-12,
+      "functionTolerance": 1e-15
+    },
+    "freezeBeforeWeightFit": true,
+    "refitPerLambdaOrCandidate": false
+  },
+  "objective": {
+    "kind": "soft-label-logistic-cross-entropy-plus-L2",
+    "linearPredictor": "frozenK * (fixedCp + X * weights) / 400",
+    "regularizationCenter": "shipped weights for existing parameters; zero for every new term",
+    "regularizationFormula": "0.5 * lambda * mean_j(((weight_j - center_j) / scale_j)^2)",
+    "centerValueSha256": "da684745c074a1b750b91fbe3f3f148c64ee3398d4378362c1755f06e6e74a01",
+    "scalesValueSha256": "831736b11974f53849afcde65731d29633d2aee1b7d4d203d81520a7518c8eb4",
+    "centerAndScalesGenerator": "test/training/hce-r3-baseline.js",
+    "lambdaGrid": [
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.5,
+      1
+    ],
+    "lambdaZeroAllowed": false,
+    "convex": true,
+    "baselineAlwaysCandidate": true
+  },
+  "rounds": [
+    {
+      "id": "R3.0",
+      "safeMobilityWeights": "fixed at zero"
+    },
+    {
+      "id": "R3.1",
+      "safeMobilityWeights": "fitted",
+      "eligibility": "With safe-mobility weights reset to zero, validation loss must remain below baseline and retain at least 50% of the full candidate's validation-loss gain."
+    }
+  ],
+  "solver": {
+    "implementation": "tools/training/hce-fit.py",
+    "algorithm": "L-BFGS-B",
+    "singleThreaded": true,
+    "analyticGradient": true,
+    "dependency": {
+      "numpy": "2.3.5",
+      "scipy": "1.17.0",
+      "licenses": [
+        "BSD-3-Clause"
+      ]
+    },
+    "maxIterations": 500,
+    "gradientTolerance": 1e-08,
+    "functionTolerance": 1e-12,
+    "maxLineSearchSteps": 40
+  },
+  "selection": {
+    "lambdaMetric": "unregularized hce-validation cross-entropy",
+    "testOpenedOnce": true,
+    "integerRoundAndCoordinatePolishRequiredBeforeTest": true,
+    "fitterMayEditRuntime": false
+  },
+  "lockedPostFitGate": {
+    "fenSource": "heldout-v1.json",
+    "requiredMoveUci": "e5e4",
+    "exactNodes": 9187327,
+    "nearbyNodes": [
+      8268594,
+      10106060
+    ],
+    "runOnlyAfterUntouchedTestTransfer": true,
+    "failureAction": "Stop HCE. Do not retune features, weights, lambda, budgets, or this FEN."
+  },
+  "laterGates": [
+    "Rust evaluator-source extraction and development affine-extractor fidelity",
+    "affine reconstruction against the shipped Rust/WASM evaluator",
+    "tactics and scorecards",
+    "leaf-cost benchmark",
+    "issue-84 physical-device baseline",
+    "strict strength match"
+  ]
+}

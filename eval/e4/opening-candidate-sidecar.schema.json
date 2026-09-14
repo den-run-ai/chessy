@@ -1,0 +1,991 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chessy.invalid/schema/e4/opening-candidate-sidecar.schema.json",
+  "title": "Chessy E4 opening-candidate sidecar v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "state",
+    "rawArchive",
+    "provenance",
+    "extraction",
+    "teacher",
+    "output"
+  ],
+  "properties": {
+    "schema": {
+      "const": "chessy.e4.opening-candidate-sidecar.v1"
+    },
+    "state": {
+      "const": "pinned-opening-candidates"
+    },
+    "rawArchive": {
+      "$ref": "#/$defs/rawArchive"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "extraction": {
+      "$ref": "#/$defs/extraction"
+    },
+    "teacher": {
+      "$ref": "#/$defs/teacher"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonNegativeSafeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "positiveSafeInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "rawArchive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "dataset",
+        "release",
+        "url",
+        "bytes",
+        "sha256",
+        "compression",
+        "license",
+        "forbiddenTorrentUrl"
+      ],
+      "properties": {
+        "id": {
+          "const": "lichess-standard-rated-pgn"
+        },
+        "dataset": {
+          "const": "Lichess standard rated games"
+        },
+        "release": {
+          "const": "2026-06"
+        },
+        "url": {
+          "const": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst"
+        },
+        "bytes": {
+          "const": 28241946492
+        },
+        "sha256": {
+          "const": "8fd81071f56511e7546cb77e38db5cf32f7e8a437fb906e26959cc064d8b1f79"
+        },
+        "compression": {
+          "const": "zstd"
+        },
+        "license": {
+          "const": "CC0-1.0"
+        },
+        "forbiddenTorrentUrl": {
+          "const": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-06.pgn.zst.torrent"
+        }
+      }
+    },
+    "filePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourcePolicy",
+        "sourcePolicySchema",
+        "candidateSchema",
+        "candidateSidecarSchema",
+        "freezeRequestSchema",
+        "configurationSha256",
+        "compiler",
+        "engineRules",
+        "pgnParser",
+        "corpusContract",
+        "canonicalJsonProducer",
+        "stockfishAdapter",
+        "candidateValidator",
+        "e4ProtocolValidator",
+        "teacherManifest",
+        "heldoutManifest",
+        "heldoutFixture",
+        "trainingSourcePolicy"
+      ],
+      "properties": {
+        "sourcePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/e4/opening-candidate-source-v1.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "sourcePolicySchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/e4/opening-candidate-source.schema.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "candidateSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/e4/opening-candidate.schema.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "candidateSidecarSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/e4/opening-candidate-sidecar.schema.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "freezeRequestSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/e4/freeze-request.schema.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "configurationSha256": {
+          "const": "a80dca330b1076406bc5e534f67462820e415b167a2749ecc3a3c08b340cb013"
+        },
+        "compiler": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/eval/prepare-e4-opening-candidates.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "engineRules": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "assets/engine.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "pgnParser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "assets/pgn.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "corpusContract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/training/corpus.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "canonicalJsonProducer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/training/prepare-lichess-evals.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "stockfishAdapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/training/label-stockfish.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "candidateValidator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/eval/freeze-e4-manifests.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "e4ProtocolValidator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/eval/e4-protocol.js"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "teacherManifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/training/teacher-sf18-100kn-v1.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "heldoutManifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/training/heldout-v1.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "heldoutFixture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "test/fixtures/master-e4-regression-20260729.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "trainingSourcePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "eval/training/source-manifest.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initialPosition",
+        "variantTags",
+        "ratedSpeeds",
+        "ratedEventKinds",
+        "minimumElo",
+        "botTitle",
+        "botsAllowed",
+        "selfPlayAllowed"
+      ],
+      "properties": {
+        "initialPosition": {
+          "const": "standard-only-no-SetUp-or-FEN"
+        },
+        "variantTags": {
+          "const": [
+            "absent",
+            "Standard"
+          ]
+        },
+        "ratedSpeeds": {
+          "const": [
+            "Blitz",
+            "Rapid",
+            "Classical"
+          ]
+        },
+        "ratedEventKinds": {
+          "const": [
+            "game",
+            "tournament",
+            "swiss"
+          ]
+        },
+        "minimumElo": {
+          "const": 1800
+        },
+        "botTitle": {
+          "const": "BOT"
+        },
+        "botsAllowed": {
+          "const": false
+        },
+        "selfPlayAllowed": {
+          "const": false
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sitePrefix",
+        "gameIdRegex",
+        "caseSensitive",
+        "outputIdNamespace",
+        "rawIdRetention"
+      ],
+      "properties": {
+        "sitePrefix": {
+          "const": "https://lichess.org/"
+        },
+        "gameIdRegex": {
+          "const": "^[A-Za-z0-9]{8}$"
+        },
+        "caseSensitive": {
+          "const": true
+        },
+        "outputIdNamespace": {
+          "const": "chessy.e4.lichess-standard-rated.2026-06"
+        },
+        "rawIdRetention": {
+          "const": "forbidden-in-candidate-output"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eco",
+        "openingFamily",
+        "maximumOpeningCharacters"
+      ],
+      "properties": {
+        "eco": {
+          "const": "trimmed-[A-E][0-9]{2}"
+        },
+        "openingFamily": {
+          "const": "NFC-trimmed-prefix-before-first-colon"
+        },
+        "maximumOpeningCharacters": {
+          "const": 256
+        }
+      }
+    },
+    "candidatePly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum",
+        "maximum",
+        "algorithm",
+        "domain"
+      ],
+      "properties": {
+        "minimum": {
+          "const": 12
+        },
+        "maximum": {
+          "const": 20
+        },
+        "algorithm": {
+          "const": "sha256-modulo-inclusive-window"
+        },
+        "domain": {
+          "const": "chessy.e4.opening-candidate-ply.v1"
+        }
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "domain",
+        "modulus",
+        "numerator",
+        "maximumCandidates",
+        "overflow"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256-threshold-then-lowest-digest"
+        },
+        "domain": {
+          "const": "chessy.e4.opening-candidate-sample.v1"
+        },
+        "modulus": {
+          "const": 4096
+        },
+        "numerator": {
+          "const": 64
+        },
+        "maximumCandidates": {
+          "const": 25000
+        },
+        "overflow": {
+          "const": "retain-lowest-full-digests"
+        }
+      }
+    },
+    "balance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoreKind",
+        "maximumAbsoluteCp",
+        "mateAllowed",
+        "boundAllowed"
+      ],
+      "properties": {
+        "scoreKind": {
+          "const": "exact-cp"
+        },
+        "maximumAbsoluteCp": {
+          "const": 200
+        },
+        "mateAllowed": {
+          "const": false
+        },
+        "boundAllowed": {
+          "const": false
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filters",
+        "identity",
+        "metadata",
+        "candidatePly",
+        "sampling",
+        "balance",
+        "incidentDenial"
+      ],
+      "properties": {
+        "filters": {
+          "$ref": "#/$defs/filters"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "metadata": {
+          "$ref": "#/$defs/metadata"
+        },
+        "candidatePly": {
+          "$ref": "#/$defs/candidatePly"
+        },
+        "sampling": {
+          "$ref": "#/$defs/sampling"
+        },
+        "balance": {
+          "$ref": "#/$defs/balance"
+        },
+        "incidentDenial": {
+          "const": "cluster-and-position-family-before-scoring"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gamesSeen",
+        "sourceFilterEligible",
+        "hashSampled",
+        "legalCandidatePositions",
+        "retainedForScoring",
+        "scored",
+        "outputRows"
+      ],
+      "properties": {
+        "gamesSeen": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "sourceFilterEligible": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "hashSampled": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "legalCandidatePositions": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "retainedForScoring": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        },
+        "scored": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        },
+        "outputRows": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        }
+      }
+    },
+    "exclusions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nonstandard-initial-position": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "ineligible-event": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "bot-player": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "missing-player": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "self-play": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "elo-below-minimum-or-missing": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "missing-or-invalid-eco": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "missing-or-invalid-opening": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "hash-sample-rejected": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "invalid-pgn": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "candidate-ply-unavailable": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "legal-replay-failed": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "terminal-candidate-position": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "incident-cluster-or-family": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "sample-cap-pruned": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-mate-score": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-missing-score": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-missing-cp": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-bound-score": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-reported-nodes-under-budget": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-invalid-score-nodes": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-missing-wdl": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-invalid-wdl": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-invalid-search-depth": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-bestmove-pv-mismatch": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-invalid-white-pov-target": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        },
+        "teacher-abs-cp-over-200": {
+          "$ref": "#/$defs/positiveSafeInteger"
+        }
+      }
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rules",
+        "counts",
+        "exclusions"
+      ],
+      "properties": {
+        "rules": {
+          "$ref": "#/$defs/rules"
+        },
+        "counts": {
+          "$ref": "#/$defs/counts"
+        },
+        "exclusions": {
+          "$ref": "#/$defs/exclusions"
+        }
+      }
+    },
+    "uciOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "Threads",
+        "Hash",
+        "Ponder",
+        "MultiPV",
+        "SyzygyPath",
+        "UCI_LimitStrength",
+        "UCI_ShowWDL",
+        "ClearHashBeforeEveryPosition",
+        "UciNewGameBeforeEveryPosition",
+        "IsReadyBeforeEveryPosition"
+      ],
+      "properties": {
+        "Threads": {
+          "const": 1
+        },
+        "Hash": {
+          "const": 64
+        },
+        "Ponder": {
+          "const": false
+        },
+        "MultiPV": {
+          "const": 1
+        },
+        "SyzygyPath": {
+          "const": "<empty>"
+        },
+        "UCI_LimitStrength": {
+          "const": false
+        },
+        "UCI_ShowWDL": {
+          "const": true
+        },
+        "ClearHashBeforeEveryPosition": {
+          "const": true
+        },
+        "UciNewGameBeforeEveryPosition": {
+          "const": true
+        },
+        "IsReadyBeforeEveryPosition": {
+          "const": true
+        }
+      }
+    },
+    "bigNetwork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "option",
+        "embeddedName",
+        "sha256"
+      ],
+      "properties": {
+        "option": {
+          "const": "EvalFile"
+        },
+        "embeddedName": {
+          "const": "nn-c288c895ea92.nnue"
+        },
+        "sha256": {
+          "const": "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7"
+        }
+      }
+    },
+    "smallNetwork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "option",
+        "embeddedName",
+        "sha256"
+      ],
+      "properties": {
+        "option": {
+          "const": "EvalFileSmall"
+        },
+        "embeddedName": {
+          "const": "nn-37f18f62d772.nnue"
+        },
+        "sha256": {
+          "const": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d"
+        }
+      }
+    },
+    "teacherResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoredPositions",
+        "eligibleRows",
+        "excludedAfterScoring"
+      ],
+      "properties": {
+        "scoredPositions": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        },
+        "eligibleRows": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        },
+        "excludedAfterScoring": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        }
+      }
+    },
+    "teacher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "release",
+        "sourceCommit",
+        "manifestSha256",
+        "expectedExecutableSha256",
+        "actualExecutableSha256",
+        "nodeLimit",
+        "options",
+        "networks",
+        "results"
+      ],
+      "properties": {
+        "id": {
+          "const": "sf18-100kn-v1"
+        },
+        "name": {
+          "const": "Stockfish 18"
+        },
+        "release": {
+          "const": "sf_18"
+        },
+        "sourceCommit": {
+          "const": "cb3d4ee9b47d0c5aae855b12379378ea1439675c"
+        },
+        "manifestSha256": {
+          "const": "72bb9fd86921e0f2f7e7d092c5ab8b7704a3b69a6d4e27f1c381785026ccf34b"
+        },
+        "expectedExecutableSha256": {
+          "const": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9"
+        },
+        "actualExecutableSha256": {
+          "const": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9"
+        },
+        "nodeLimit": {
+          "const": 100000
+        },
+        "options": {
+          "$ref": "#/$defs/uciOptions"
+        },
+        "networks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/bigNetwork"
+            },
+            {
+              "$ref": "#/$defs/smallNetwork"
+            }
+          ],
+          "items": false
+        },
+        "results": {
+          "$ref": "#/$defs/teacherResults"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "schema",
+        "format",
+        "order",
+        "rows",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema": {
+          "const": "chessy.e4.opening-candidate.v1"
+        },
+        "format": {
+          "const": "canonical-ndjson"
+        },
+        "order": {
+          "const": "recordId-unicode-code-point"
+        },
+        "rows": {
+          "$ref": "#/$defs/nonNegativeSafeInteger",
+          "maximum": 25000
+        },
+        "bytes": {
+          "$ref": "#/$defs/nonNegativeSafeInteger"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

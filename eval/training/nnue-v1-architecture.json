@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "status": "g0-g1-training-only",
+  "runtimeIntegrationBlockedBy": 84,
+  "input": {
+    "size": 768,
+    "planes": 12,
+    "squaresPerPlane": 64,
+    "pieceOrder": [
+      "P",
+      "N",
+      "B",
+      "R",
+      "Q",
+      "K"
+    ],
+    "channelOrder": "perspective-own P,N,B,R,Q,K then opponent P,N,B,R,Q,K",
+    "whitePerspectiveSquare": "Chessy native a8=0,b8=1,...,h1=63",
+    "blackPerspectiveSquare": "Chessy native square XOR 56",
+    "blackPerspectiveColors": "swapped",
+    "activeBits": "exactly one per board piece"
+  },
+  "accumulators": {
+    "sharedFirstLayer": true,
+    "networkOrder": [
+      "side-to-move",
+      "not-side-to-move"
+    ]
+  },
+  "output": {
+    "networkPov": "side-to-move",
+    "trainingUnit": "uncalibrated expected-score logit",
+    "storedTeacherPov": "white",
+    "conversion": "negate centipawns and complement WDL expected score when side to move is Black",
+    "centipawnCalibration": "G2 fits and freezes the logit-to-centipawn scale on nnue-validation; the trainer does not pretend raw logits are centipawns.",
+    "mopUpAblation": [
+      "net-only",
+      "net-plus-existing-lone-king-mop-up"
+    ],
+    "mopUpPolicy": "Treat both as explicit validation variants; never silently retain the HCE term."
+  },
+  "candidates": [
+    {
+      "id": "h64-screlu",
+      "hidden": 64,
+      "activation": "SCReLU",
+      "selectionRole": "primary"
+    },
+    {
+      "id": "h64-crelu",
+      "hidden": 64,
+      "activation": "CReLU",
+      "selectionRole": "activation-ablation"
+    },
+    {
+      "id": "h128-screlu",
+      "hidden": 128,
+      "activation": "SCReLU",
+      "selectionRole": "capacity-screen-only",
+      "shippingBlockedUntil": "Issue #84 explicitly admits the added fixed-memory and device cost."
+    }
+  ],
+  "trainingSeeds": [
+    10501,
+    10502,
+    10503
+  ],
+  "selection": {
+    "architectureData": "shared-train + nnue-validation only",
+    "runRule": "Select the median validation run across all three frozen seeds, never the luckiest seed.",
+    "testOpening": "Open nnue-test once for the frozen selected candidate hash.",
+    "forbiddenData": [
+      "hce-validation",
+      "hce-test",
+      "locked incident family",
+      "E4-v1 certification opening clusters"
+    ]
+  }
+}

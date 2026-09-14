@@ -1,0 +1,513 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "2026-07-30",
+  "projectCodeLicense": "MIT",
+  "datasetLicenseRule": "Datasets retain their upstream licenses and are never relicensed as MIT by inclusion in this manifest.",
+  "policy": {
+    "defaultDisposition": "excluded",
+    "allowedDispositions": [
+      "primary",
+      "optional-fetch-only",
+      "excluded"
+    ],
+    "repositoryDistribution": "manifest-only",
+    "commitRawData": false,
+    "commitTransformedShards": false,
+    "inferLicenseFromProvenance": false,
+    "acceptMirrorLicenseMetadataAsAuthoritative": false,
+    "privacyMinimizationRequired": true,
+    "immutableSnapshotRequired": true,
+    "downloadSha256Required": true,
+    "incidentFamilyDenylistRequired": true,
+    "groupSplitBySourceLineageRequired": true,
+    "sourceLineageGate": {
+      "requiredForReleasedFitCorpus": true,
+      "staticFenSourceWithoutLineage": "policy-ineligible-for-public-release",
+      "mayClaimEnforcedWithoutLineage": false,
+      "enforcement": "policy-only",
+      "executableReleaseGateImplemented": false
+    },
+    "finalFitLabels": {
+      "requiredProducer": "pinned-external-stockfish",
+      "allowUpstreamLabelsAsFinalFitLabels": false,
+      "teacherBundledInMitRepository": false,
+      "requiredProvenance": [
+        "stockfishReleaseOrCommit",
+        "executableSha256",
+        "nnueFilename",
+        "nnueSha256",
+        "uciOptions",
+        "threads",
+        "hashSize",
+        "tablebaseConfiguration",
+        "deterministicNodeOrDepthBudget",
+        "labelPerspective",
+        "scoreConversion",
+        "inputSnapshot",
+        "filters",
+        "randomSeed",
+        "splitAndGroupingRules",
+        "outputSha256"
+      ]
+    },
+    "generatedArtifactLicenseReview": {
+      "status": "working-release-position-not-legal-advice",
+      "gnuFaqReferences": [
+        "https://www.gnu.org/licenses/gpl-faq.en.html#WhatCaseIsOutputGPL",
+        "https://www.gnu.org/licenses/gpl-faq.en.html#GPLOutput"
+      ],
+      "stockfishOutputPosition": "Numeric labels are not presumed GPL-covered merely because a GPL program produced them; copied protectable program material would require a separate analysis.",
+      "stockfishBinaryObligationsAreSeparate": true,
+      "inputDatasetRightsRemainApplicable": true,
+      "teacherProvenanceRequired": true,
+      "mitLicenseIsNotAutomatic": true,
+      "artifactLicenseDecisionRequired": true,
+      "legalReviewBeforePublicRelease": true,
+      "coveredArtifacts": [
+        "generated-label-corpora",
+        "hce-parameter-sets",
+        "nnue-checkpoints"
+      ]
+    },
+    "optionalSourceGate": {
+      "enabledByDefault": false,
+      "explicitSourceIdOptInRequired": true,
+      "preserveUpstreamLicense": true,
+      "preserveRequiredNotices": true,
+      "relabelingDoesNotClearUpstreamObligations": true
+    },
+    "releaseGate": [
+      "source-disposition-allowed",
+      "immutable-download-resolved",
+      "download-sha256-verified",
+      "upstream-license-recorded",
+      "required-attribution-recorded",
+      "raw-and-derived-data-outside-git",
+      "privacy-minimized",
+      "positions-legality-validated",
+      "incident-family-denylist-applied",
+      "source-lineage-group-split-applied",
+      "pinned-stockfish-labels-generated",
+      "run-manifest-and-output-checksums-recorded",
+      "generated-artifact-license-and-legal-review-recorded"
+    ]
+  },
+  "sources": [
+    {
+      "id": "lichess-evaluations",
+      "name": "Lichess evaluated positions",
+      "disposition": "primary",
+      "canonicalUrl": "https://database.lichess.org/",
+      "downloadUrls": [
+        "https://database.lichess.org/lichess_db_eval.jsonl.zst",
+        "https://huggingface.co/datasets/Lichess/chess-position-evaluations"
+      ],
+      "license": {
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "scope": "dataset"
+      },
+      "commercialUse": true,
+      "redistribution": "allowed",
+      "scale": {
+        "informational": true,
+        "asOf": "2026-07-29",
+        "positions": 394669566,
+        "officialMirrorRows": 957860115,
+        "officialMirrorBytesApprox": 42000000000
+      },
+      "content": [
+        "fen-without-move-counters",
+        "depth",
+        "knodes",
+        "centipawn-or-mate-score",
+        "principal-variation"
+      ],
+      "uses": [
+        "exploration",
+        "stratified-position-sampling",
+        "candidate-screening"
+      ],
+      "obligations": [
+        "record-source-snapshot-and-checksum",
+        "reconstruct-full-fen-or-reject-draw-state-sensitive-positions",
+        "relabel-final-fit-corpus-with-pinned-external-stockfish"
+      ],
+      "allowUpstreamLabelsForFinalFit": false
+    },
+    {
+      "id": "lichess-standard-rated-pgn",
+      "name": "Lichess standard rated games",
+      "disposition": "primary",
+      "canonicalUrl": "https://database.lichess.org/",
+      "downloadUrlTemplate": "https://database.lichess.org/standard/lichess_db_standard_rated_YYYY-MM.pgn.zst",
+      "license": {
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "scope": "standard-rated-game-exports-only",
+        "exclusion": "Lichess broadcast exports are CC-BY-SA and are not part of this source."
+      },
+      "commercialUse": true,
+      "redistribution": "allowed",
+      "scale": {
+        "informational": true,
+        "asOf": "2026-07-30",
+        "games": 7949495674,
+        "compressedBytesApprox": 2510000000000
+      },
+      "content": [
+        "pgn",
+        "game-result",
+        "ratings",
+        "clock-comments",
+        "occasional-engine-analysis"
+      ],
+      "uses": [
+        "complete-state-reconstruction",
+        "position-sampling",
+        "source-game-grouped-splits"
+      ],
+      "obligations": [
+        "select-and-pin-monthly-snapshots",
+        "verify-upstream-sha256",
+        "filter-standard-chess",
+        "discard-usernames-profile-urls-and-unneeded-identifiers",
+        "validate-legality-and-known-bad-ranges",
+        "relabel-final-fit-corpus-with-pinned-external-stockfish"
+      ],
+      "allowUpstreamLabelsForFinalFit": false
+    },
+    {
+      "id": "lichess-puzzles",
+      "name": "Lichess puzzle database",
+      "disposition": "primary",
+      "canonicalUrl": "https://database.lichess.org/",
+      "downloadUrls": [
+        "https://database.lichess.org/lichess_db_puzzle.csv.zst"
+      ],
+      "license": {
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "scope": "dataset"
+      },
+      "commercialUse": true,
+      "redistribution": "allowed",
+      "scale": {
+        "informational": true,
+        "asOf": "2026-07-29",
+        "puzzles": 6057356
+      },
+      "content": [
+        "fen",
+        "solution-moves",
+        "rating",
+        "themes",
+        "source-game-url"
+      ],
+      "uses": [
+        "tactical-auxiliary-set",
+        "frozen-tactical-holdout"
+      ],
+      "obligations": [
+        "do-not-use-as-general-position-distribution",
+        "discard-source-game-url-from-derived-training-records",
+        "relabel-final-fit-corpus-with-pinned-external-stockfish"
+      ],
+      "allowUpstreamLabelsForFinalFit": false
+    },
+    {
+      "id": "deepmind-chessbench",
+      "name": "DeepMind ChessBench",
+      "disposition": "optional-fetch-only",
+      "canonicalUrl": "https://github.com/google-deepmind/searchless_chess",
+      "licenseEvidenceUrl": "https://github.com/google-deepmind/searchless_chess#license-and-disclaimer",
+      "license": {
+        "spdx": "CC0-1.0 AND CC-BY-4.0",
+        "urls": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://creativecommons.org/licenses/by/4.0/"
+        ],
+        "scope": "Some dataset portions are Lichess CC0; the remainder is CC-BY-4.0.",
+        "codeLicenseIsNotDatasetLicense": "Repository software is Apache-2.0 and model weights are CC-BY-4.0."
+      },
+      "commercialUse": true,
+      "redistribution": "allowed-with-cc-by-attribution-and-change-notice",
+      "scale": {
+        "informational": true,
+        "boardStates": 530000000,
+        "sourceGames": 10000000,
+        "actionValuesApprox": 15000000000,
+        "actionValueTrainingBytesApprox": 1100000000000,
+        "behavioralCloningTrainingBytesApprox": 34000000000,
+        "stateValueTrainingBytesApprox": 36000000000
+      },
+      "uses": [
+        "optional-action-value-research",
+        "optional-nnue-research",
+        "external-comparison"
+      ],
+      "obligations": [
+        "fetch-official-release-only",
+        "give-attribution",
+        "link-cc-by-license",
+        "indicate-changes",
+        "do-not-label-dataset-apache-or-mit",
+        "relabel-final-fit-corpus-with-pinned-external-stockfish"
+      ],
+      "allowUpstreamLabelsForFinalFit": false
+    },
+    {
+      "id": "stockfish-master-binpacks",
+      "name": "Stockfish master NNUE binpacks",
+      "disposition": "optional-fetch-only",
+      "canonicalUrl": "https://huggingface.co/datasets/official-stockfish/master-binpacks",
+      "license": {
+        "spdx": "ODbL-1.0",
+        "url": "https://opendatacommons.org/licenses/odbl/1-0/",
+        "scope": "database"
+      },
+      "commercialUse": true,
+      "redistribution": "odbl-only-for-database-or-derivative-database",
+      "scale": {
+        "informational": true,
+        "asOf": "2026-07-30",
+        "bytesApprox": 287000000000
+      },
+      "content": [
+        "stockfish-nnue-training-binpacks"
+      ],
+      "uses": [
+        "optional-nnue-training-research"
+      ],
+      "obligations": [
+        "keep-database-and-derivative-database-under-odbl",
+        "provide-required-database-access-or-alteration-file-when-public",
+        "attach-odbl-section-4.3-notice-to-public-produced-work",
+        "do-not-relicense-data-as-mit"
+      ]
+    },
+    {
+      "id": "lczero-training-data",
+      "name": "Leela Chess Zero training data",
+      "disposition": "optional-fetch-only",
+      "canonicalUrl": "https://storage.lczero.org/",
+      "licenseEvidenceUrl": "https://lczero.org/blog/2021/06/the-importance-of-open-data/",
+      "license": {
+        "spdx": "ODbL-1.0 AND DbCL-1.0",
+        "urls": [
+          "https://opendatacommons.org/licenses/odbl/1-0/",
+          "https://opendatacommons.org/licenses/dbcl/1-0/"
+        ],
+        "scope": "ODbL covers the database; DbCL covers rights in individual contents."
+      },
+      "commercialUse": true,
+      "redistribution": "subject-to-odbl-and-dbcl",
+      "scale": {
+        "informational": true,
+        "note": "Large self-play corpus; no stable total size was asserted in the audited license statement."
+      },
+      "content": [
+        "self-play-search-policy-value-training-records"
+      ],
+      "uses": [
+        "optional-self-play-diversity",
+        "optional-nnue-research"
+      ],
+      "obligations": [
+        "keep-database-and-derivative-database-under-odbl",
+        "preserve-dbcl-content-terms",
+        "attach-odbl-section-4.3-notice-to-public-produced-work",
+        "do-not-treat-as-pinned-stockfish-centipawn-labels"
+      ]
+    },
+    {
+      "id": "stockfish-fishtest-ltc-pgns",
+      "name": "Stockfish Fishtest LTC PGNs",
+      "disposition": "optional-fetch-only",
+      "canonicalUrl": "https://huggingface.co/datasets/official-stockfish/fishtest_pgns",
+      "license": {
+        "spdx": "LGPL-3.0",
+        "url": "https://www.gnu.org/licenses/lgpl-3.0.html",
+        "scope": "dataset metadata"
+      },
+      "commercialUse": true,
+      "redistribution": "preserve-lgpl-dataset-license",
+      "scale": {
+        "informational": true,
+        "asOf": "2026-07-30",
+        "gamesApprox": 1000000000,
+        "bytesApprox": 1050000000000
+      },
+      "content": [
+        "classical-chess-pgn",
+        "evaluation-depth-time-comments",
+        "test-metadata"
+      ],
+      "uses": [
+        "optional-sampling",
+        "external-validation"
+      ],
+      "obligations": [
+        "preserve-lgpl-dataset-license",
+        "account-for-correlated-games-and-changing-development-builds",
+        "do-not-use-upstream-comments-as-final-fit-labels",
+        "do-not-relicense-data-as-mit"
+      ],
+      "allowUpstreamLabelsForFinalFit": false
+    },
+    {
+      "id": "tcec-games",
+      "name": "TCEC games archive",
+      "disposition": "optional-fetch-only",
+      "canonicalUrl": "https://github.com/TCEC-Chess/tcecgames",
+      "license": {
+        "spdx": "CC-BY-SA-3.0",
+        "url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "scope": "PGN files",
+        "codeLicenseIsNotDatasetLicense": "Archive scripts are Apache-2.0."
+      },
+      "commercialUse": true,
+      "redistribution": "allowed-with-attribution-and-sharealike",
+      "scale": {
+        "informational": true,
+        "note": "Multi-season engine-game archive; no stable total count was asserted in this manifest."
+      },
+      "content": [
+        "engine-game-pgn",
+        "engine-evaluation-comments"
+      ],
+      "uses": [
+        "external-engine-game-evaluation"
+      ],
+      "obligations": [
+        "give-attribution",
+        "preserve-sharealike-for-pgn-and-adapted-database-material",
+        "do-not-treat-apache-script-license-as-pgn-license",
+        "do-not-use-upstream-comments-as-final-fit-labels"
+      ],
+      "allowUpstreamLabelsForFinalFit": false
+    },
+    {
+      "id": "gigafish-3.8b-d10",
+      "name": "Gigafish 3.8B depth-10 evaluations",
+      "disposition": "excluded",
+      "canonicalUrl": "https://huggingface.co/datasets/lukesalamone/gigafish-3.8b-d10",
+      "license": {
+        "spdx": "NOASSERTION",
+        "url": null,
+        "scope": "No explicit dataset license or dataset card was present when audited."
+      },
+      "commercialUse": null,
+      "redistribution": "not-approved",
+      "scale": {
+        "informational": true,
+        "asOf": "2026-07-30",
+        "rows": 3919006164,
+        "bytes": 101000000000
+      },
+      "exclusionReason": "CC0 source ancestry does not substitute for an explicit license covering the published transformation."
+    },
+    {
+      "id": "ccrl-games",
+      "name": "Computer Chess Rating Lists games",
+      "disposition": "excluded",
+      "canonicalUrl": "https://computerchess.org.uk/ccrl/4040/",
+      "license": {
+        "spdx": "NOASSERTION",
+        "url": null,
+        "scope": "No explicit dataset license was found on the official download or About pages when audited."
+      },
+      "commercialUse": null,
+      "redistribution": "not-approved",
+      "scale": {
+        "informational": true,
+        "note": "Millions of downloadable engine games."
+      },
+      "exclusionReason": "No explicit dataset reuse grant."
+    },
+    {
+      "id": "chessdb-cloud",
+      "name": "Chess Cloud Database",
+      "disposition": "excluded",
+      "canonicalUrl": "https://chessdb.cn/cloudbookc_info_en.html",
+      "license": {
+        "spdx": "NOASSERTION",
+        "url": null,
+        "scope": "No explicit database license was found when audited."
+      },
+      "commercialUse": null,
+      "redistribution": "not-approved",
+      "scale": {
+        "informational": true,
+        "note": "Very large analysed-position service."
+      },
+      "exclusionReason": "No explicit database reuse grant."
+    },
+    {
+      "id": "maia-processed-csv",
+      "name": "Maia processed Lichess CSV datasets",
+      "disposition": "excluded",
+      "canonicalUrl": "https://csslab.cs.toronto.edu/datasets/",
+      "license": {
+        "spdx": "NOASSERTION",
+        "url": null,
+        "scope": "The data page did not state a dataset-specific license when audited."
+      },
+      "commercialUse": null,
+      "redistribution": "not-approved",
+      "scale": {
+        "informational": true,
+        "note": "Processed Lichess games and Maia KDD test data."
+      },
+      "exclusionReason": "Recreate needed subsets from primary Lichess CC0 exports instead of inferring a license.",
+      "toolingNote": "Maia-2 code at https://github.com/CSSLab/maia2 is MIT-licensed tooling, not an independently MIT-licensed dataset."
+    },
+    {
+      "id": "third-party-dataset-mirrors",
+      "name": "Unofficial dataset mirrors and repackagings",
+      "disposition": "excluded",
+      "canonicalUrl": null,
+      "exampleUrls": [
+        "https://huggingface.co/datasets/prdev/chessbench-full-policy-value"
+      ],
+      "license": {
+        "spdx": "NOASSERTION",
+        "url": null,
+        "scope": "Mirror metadata is not authoritative when upstream provenance or license terms are absent, incomplete, or conflicting."
+      },
+      "commercialUse": null,
+      "redistribution": "not-approved",
+      "scale": {
+        "informational": true,
+        "note": "Applies by policy to all unreviewed mirrors, regardless of host license tag."
+      },
+      "exclusionReason": "Use the official upstream source and license evidence."
+    }
+  ],
+  "toolingReferences": [
+    {
+      "id": "stockfish-teacher",
+      "name": "Stockfish",
+      "role": "required-external-final-label-teacher",
+      "canonicalUrl": "https://github.com/official-stockfish/Stockfish",
+      "codeLicense": {
+        "spdx": "GPL-3.0-or-later",
+        "url": "https://github.com/official-stockfish/Stockfish/blob/master/Copying.txt"
+      },
+      "bundled": false,
+      "note": "A software license is not a dataset license. Record the pinned binary and network hashes for every label run; apply policy.generatedArtifactLicenseReview before publishing labels, parameters, or checkpoints."
+    },
+    {
+      "id": "maia2-reference",
+      "name": "Maia-2",
+      "role": "optional-filtering-and-preprocessing-reference",
+      "canonicalUrl": "https://github.com/CSSLab/maia2",
+      "codeLicense": {
+        "spdx": "MIT",
+        "url": "https://github.com/CSSLab/maia2/blob/main/LICENSE"
+      },
+      "bundled": false,
+      "note": "The MIT code license does not change the license of input or generated datasets."
+    }
+  ]
+}

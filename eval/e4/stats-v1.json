@@ -1,0 +1,189 @@
+{
+  "schema": "chessy.e4.statistics-contract.v1",
+  "statsId": "E4-stats-v1",
+  "status": "frozen",
+  "protocolId": "E4-v1",
+  "scope": "Certification-result validation and deterministic statistical analysis only; no game execution, opening selection, or manifest generation.",
+  "implementation": {
+    "path": "test/eval/e4-stats.js",
+    "arithmetic": "IEEE-754 binary64 under Node.js 22",
+    "externalDependencies": []
+  },
+  "resultBundle": {
+    "schema": "chessy.e4.certification-results.v1",
+    "rowSchema": "chessy.e4.game-result.v1",
+    "manifestStatusRequired": "frozen",
+    "manifestKindRequired": "certification",
+    "analysisPhases": {
+      "master-first": {
+        "assignments": 800,
+        "games": 1600,
+        "includedAssignments": "scheduleKind=cert and levelOrPair=master",
+        "completeMeans": "Every frozen Master assignment has exactly one completed result for each subject color; no other assignment is present.",
+        "allowedAnalysis": "Master-only Davidson rating, color effect, draw parameter, and one-sided 95% lower bound."
+      },
+      "full-certification": {
+        "assignments": 4000,
+        "games": 8000,
+        "includedAssignments": "every frozen certification and adjacent assignment",
+        "completeMeans": "Every frozen assignment has exactly one completed result for each subject color.",
+        "allowedAnalysis": "All external rating bands, Master gate, adjacent-level gates, and the complete Holm family."
+      }
+    },
+    "canonicalRowOrder": "ascending resultId by Unicode code point",
+    "hashing": {
+      "algorithm": "SHA-256",
+      "canonicalJson": "UTF-8 JSON with object keys sorted by ECMAScript default UTF-16 code-unit order, array order retained, JSON.stringify primitive encoding, and no insignificant whitespace",
+      "rowsSha256": "SHA-256 of canonicalJson(rows)",
+      "contentSha256": "SHA-256 of canonicalJson(bundle) after replacing bundle.contentSha256 with null"
+    },
+    "requiredColorsPerAssignment": [
+      "white",
+      "black"
+    ],
+    "subject": {
+      "cert": "the Chessy product level named by levelOrPair",
+      "adjacent": "the stronger Chessy product level in the declared adjacent pair",
+      "subjectColorField": "subjectColor",
+      "resultIdColorSegment": "subjectColor"
+    },
+    "outcomesFromSubjectPov": [
+      "win",
+      "draw",
+      "loss"
+    ],
+    "failClosed": [
+      "manifest-not-frozen",
+      "bundle-not-immutable-or-complete",
+      "bundle-or-row-content-hash-mismatch",
+      "missing-assignment-game",
+      "duplicate-result-id",
+      "unexpected-result-id",
+      "posthoc-removed-result",
+      "void-or-unresolved-result",
+      "opening-cluster-reused-across-assignments",
+      "row-field-or-assignment-mismatch",
+      "termination-outcome-mismatch"
+    ],
+    "attemptLedger": "Void host attempts and their linked reruns remain in the immutable execution ledger outside this completed-result bundle. This bundle contains exactly one completed canonical result for every frozen assignment/color and cannot omit or replace a scheduled game post hoc."
+  },
+  "aggregation": {
+    "unit": "opening assignment",
+    "gamesPerUnit": 2,
+    "pairedColors": true,
+    "score": {
+      "win": 1,
+      "draw": 0.5,
+      "loss": 0
+    },
+    "reported": [
+      "wins",
+      "draws",
+      "losses",
+      "games",
+      "scorePoints",
+      "scoreRate"
+    ]
+  },
+  "externalAnchorModel": {
+    "family": "Davidson extension of Bradley-Terry with logistic-Elo abilities",
+    "anchorRatingsFixed": true,
+    "jointFit": true,
+    "fitScopes": {
+      "master-first": "Fit Master rating plus the shared color effect and shared draw parameter from only the 1,600 Master games.",
+      "full-certification": "Jointly fit all five level ratings plus the shared color effect and shared draw parameter from all 4,800 external-anchor games."
+    },
+    "parameters": {
+      "levelRatingsElo": [
+        "easy",
+        "medium",
+        "hard",
+        "expert",
+        "master"
+      ],
+      "sharedColorEffectElo": "Added when the subject is White and subtracted when the subject is Black.",
+      "sharedDrawParameterNu": "Strictly positive and fitted through unconstrained logNu."
+    },
+    "linearPredictor": "eta = ln(10) / 400 * (levelRatingElo - fixedAnchorElo + colorSign * sharedColorEffectElo), where colorSign is +1 for White and -1 for Black.",
+    "probabilities": {
+      "denominator": "D = exp(eta) + 1 + nu * exp(eta / 2)",
+      "win": "exp(eta) / D",
+      "draw": "nu * exp(eta / 2) / D",
+      "loss": "1 / D"
+    },
+    "fit": {
+      "criterion": "unpenalized maximum log likelihood over every completed external-anchor game",
+      "optimizer": "analytic-Hessian damped Newton",
+      "initialLevelRatingsElo": "declared nominal level ratings",
+      "initialColorEffectElo": 0,
+      "initialNu": 2,
+      "maximumIterations": 50,
+      "gradientInfinityTolerance": 1e-09,
+      "newtonDecrementSquaredTolerance": 1e-09,
+      "singularPivotTolerance": 1e-14,
+      "backtrackingFactor": 0.5,
+      "minimumAbsoluteNllDecrease": 1e-12,
+      "minimumLineSearchStep": 9.313225746154785e-10,
+      "nonConvergence": "fail-closed"
+    }
+  },
+  "bootstrap": {
+    "kind": "nonparametric stratified cluster bootstrap",
+    "replicates": 10000,
+    "rootSeed": 20260730,
+    "clusterUnit": "opening assignment with both subject colors",
+    "externalStrata": "levelOrPair and fixed anchor",
+    "adjacentStrata": "one independent stream per adjacent pair",
+    "sampleSize": "the frozen number of opening assignments in each stratum, sampled with replacement",
+    "rng": {
+      "algorithm": "xorshift32",
+      "streamSeed": "first four bytes, big-endian, of SHA-256(UTF-8(\"E4-stats-v1\\u0000\" + decimalRootSeed + \"\\u0000\" + streamId)); replace zero with 0x6d2b79f5",
+      "transition": "Starting from nonzero uint32 x: x ^= (x << 13) modulo 2^32; x ^= x unsigned-right-shift 17; x ^= (x << 5) modulo 2^32; return x as uint32.",
+      "index": "floor(nextUint32 * stratumSize / 2^32)"
+    },
+    "streamIds": {
+      "masterFirstRating": "master-first-rating",
+      "externalRatings": "external-ratings",
+      "adjacentPrefix": "adjacent/"
+    },
+    "replicateOrder": "replicate 0 through 9999; within each replicate, strata in protocol level order and then ascending numeric anchor",
+    "fitFailure": "fail-closed; no replicate may be skipped or replaced"
+  },
+  "intervalsAndTests": {
+    "quantile": "R type 7 linear interpolation: h = (n - 1) * p, interpolate sorted floor(h) and ceil(h)",
+    "basicBootstrap": {
+      "oneSided95Lower": "2 * pointEstimate - bootstrapQuantile(0.95)",
+      "twoSided90Lower": "2 * pointEstimate - bootstrapQuantile(0.95)",
+      "twoSided90Upper": "2 * pointEstimate - bootstrapQuantile(0.05)"
+    },
+    "bootstrapPValue": {
+      "rightTailed": "(1 + count((replicate - pointEstimate) >= (pointEstimate - nullValue))) / (replicates + 1)",
+      "leftTailed": "(1 + count((replicate - pointEstimate) <= (pointEstimate - nullValue))) / (replicates + 1)",
+      "equivalenceBand": "max(right-tailed p-value against the lower edge, left-tailed p-value against the upper edge)"
+    },
+    "master": {
+      "claim": "ratingElo > 2300",
+      "gate": "basic one-sided 95% lower bound >= 2300",
+      "multiplicityFamily": null
+    },
+    "holm": {
+      "familywiseAlpha": 0.05,
+      "method": "Holm step-down",
+      "claimsInTieBreakOrder": [
+        "easy-band",
+        "medium-band",
+        "hard-band",
+        "expert-band",
+        "easy-medium",
+        "medium-hard",
+        "hard-expert",
+        "expert-master"
+      ],
+      "bandClaims": "The unadjusted two-sided 90% basic interval must be wholly inside nominal Elo +/- 100 and the Holm-adjusted equivalence claim must reject.",
+      "adjacentClaims": "The unadjusted one-sided 95% basic score lower bound must be greater than 0.5 and the Holm-adjusted right-tailed claim must reject.",
+      "tieBreak": "contract claim order",
+      "stopRule": "At the first ordered raw p-value greater than alpha / remainingClaims, do not reject that or any later claim.",
+      "adjustedPValue": "ordered running maximum of remainingClaims * rawPValue, capped at 1"
+    }
+  }
+}

@@ -1,0 +1,234 @@
+{
+  "$schema": "./certification-manifest.schema.json",
+  "schema": "chessy.e4.certification-manifest.v1",
+  "manifestId": "r71-cal-v1/cert/awaiting-opening-freeze",
+  "protocolId": "E4-v1",
+  "kind": "certification",
+  "status": "awaiting-opening-freeze",
+  "protocol": {
+    "path": "eval/e4/protocol-v1.json",
+    "sha256": "b99204164fd3098a13fe5155f2c82985f4c438d48c8aa6324b036b8516ff7a0b"
+  },
+  "adapter": {
+    "path": "eval/e4/adapter-v1.json",
+    "sha256": "dc3a6ac3188ae8a44e10f1dd3ccd06d6a1f4fbf12bcef43fddd31be1190a2381"
+  },
+  "productBaseline": {
+    "release": "r71",
+    "gitCommit": "885e6941bf7fa4478370d759e7034567bf463169",
+    "wasmAsset": "assets/chessy-ai-fast.wasm",
+    "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+  },
+  "source": {
+    "name": "Lichess database",
+    "release": null,
+    "url": null,
+    "license": "CC0-1.0",
+    "selectionPolicy": "mechanical-holdout",
+    "strata": [
+      "ECO",
+      "opening-family",
+      "initial-balance"
+    ],
+    "clusterTogether": [
+      "mirrors",
+      "transpositions",
+      "positions-from-the-same-source-game"
+    ],
+    "untouchedAfterFreeze": true
+  },
+  "anchorRuntime": {
+    "engine": "Stockfish 18",
+    "releaseTag": "sf_18",
+    "sourceCommit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+    "archiveName": "stockfish-ubuntu-x86-64-avx2.tar",
+    "archiveSha256": "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964"
+  },
+  "schedulePolicy": {
+    "colorsPerOpening": 2,
+    "externalAllocation": "25-50-25-percent-by-opening",
+    "manifestSeedUse": "schedule-result-bootstrap-only",
+    "engineSeedOverride": false,
+    "masterFirst": true,
+    "postResultRemoval": false
+  },
+  "externalSchedules": [
+    {
+      "level": "easy",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 1400,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 1500,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 1600,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-1400-1600"
+    },
+    {
+      "level": "medium",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 1600,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 1700,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 1800,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-1600-1800"
+    },
+    {
+      "level": "hard",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 1800,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 1900,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 2000,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-1800-2000"
+    },
+    {
+      "level": "expert",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 2000,
+          "openingClusters": 100,
+          "games": 200
+        },
+        {
+          "elo": 2100,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 2200,
+          "openingClusters": 100,
+          "games": 200
+        }
+      ],
+      "gate": "two-sided-90-percent-rating-interval-within-2000-2200"
+    },
+    {
+      "level": "master",
+      "openingClusters": 800,
+      "games": 1600,
+      "colorsPerOpening": 2,
+      "anchorAllocation": [
+        {
+          "elo": 2200,
+          "openingClusters": 200,
+          "games": 400
+        },
+        {
+          "elo": 2300,
+          "openingClusters": 400,
+          "games": 800
+        },
+        {
+          "elo": 2400,
+          "openingClusters": 200,
+          "games": 400
+        }
+      ],
+      "gate": "one-sided-95-percent-rating-lower-bound-gte-2300"
+    }
+  ],
+  "adjacentSchedules": [
+    {
+      "pair": "easy-medium",
+      "weaker": "easy",
+      "stronger": "medium",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    },
+    {
+      "pair": "medium-hard",
+      "weaker": "medium",
+      "stronger": "hard",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    },
+    {
+      "pair": "hard-expert",
+      "weaker": "hard",
+      "stronger": "expert",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    },
+    {
+      "pair": "expert-master",
+      "weaker": "expert",
+      "stronger": "master",
+      "openingClusters": 400,
+      "games": 800,
+      "colorsPerOpening": 2,
+      "anchor": "direct",
+      "gate": "one-sided-95-percent-opening-cluster-score-lower-bound-gt-50-percent"
+    }
+  ],
+  "openingClusters": [],
+  "assignments": [],
+  "freeze": {
+    "immutable": false,
+    "freezeBaseCommit": null,
+    "contentSha256": null,
+    "openingSetSha256": null,
+    "assignmentSha256": null,
+    "rawArchiveSha256": null,
+    "candidateNdjsonSha256": null,
+    "candidateManifestSha256": null,
+    "selectionCodeSha256": null,
+    "stockfishExecutableSha256": null,
+    "stockfishNetworkSha256s": null
+  }
+}

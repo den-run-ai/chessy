@@ -1,9 +1,12 @@
 # Prospective opening manifest v2
 
-This is frozen development/test data, not a shipped engine asset and not an
-implemented release gate. Issue #156 still requires reviewed runner,
-aggregation, trusted provenance and workflow integration before measurement.
-Do not use these openings to choose weights, features or networks.
+This is frozen development/test data, not a shipped engine asset or a formal
+release gate. PR #170 implements the registered diagnostic runner, raw replay
+aggregation and manual workflow described in [EXECUTION.md](EXECUTION.md).
+Formal family/estimator admission remains unfinished in
+[issue #175](https://github.com/den-run-ai/chessy/issues/175), even though its
+original tracker #156 is closed. Do not use these openings to choose weights, features
+or networks.
 
 ## Source and license
 
@@ -77,5 +80,7 @@ node test/ai-match-openings-v2.test.js
 
 Omit `--check` only to reproduce the file. Any source/selector/record change
 needs a new identity before a candidate is evaluated. Never rewrite historical
-v1 evidence. The protocol constants are prospective only: no new formal match
-should run until #156's complete trust and integration tests pass.
+v1 evidence. The current protocol is diagnostic only and always reports
+`formalPass: false`. No formal match should run until a prospective family,
+estimator and admission policy is reviewed, frozen and implemented with its
+complete trust and integration tests.

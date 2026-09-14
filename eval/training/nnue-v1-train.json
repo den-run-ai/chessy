@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "architectureManifest": "nnue-v1-architecture.json",
+  "dependency": {
+    "python": ">=3.11",
+    "torch": "2.7.1",
+    "torchLicense": "BSD-3-Clause",
+    "trainerLicense": "MIT",
+    "forbiddenTrainer": "GPL nnue-pytorch code is not vendored or imported."
+  },
+  "data": {
+    "schema": "chessy.teacher-position.v1",
+    "trainRole": "shared-train",
+    "validationRole": "nnue-validation",
+    "testRole": "nnue-test",
+    "target": "teacher.targetWhite converted to side-to-move expected score; BCEWithLogits trains an uncalibrated logit",
+    "source": "pinned Stockfish labels only",
+    "upstreamMixedLabelsAllowed": false,
+    "trustBoundary": {
+      "sidecarSuffix": ".manifest.json",
+      "sidecarState": "pinned-teacher-labels",
+      "productionValidation": {
+        "selectionState": "exploration-selection-only",
+        "selectionFitAllowed": false,
+        "certificationStatus": "frozen",
+        "pendingCertificationAllowedForTestOnly": false,
+        "selectionSourceId": "lichess-evaluations",
+        "selectionSourceUrl": "https://database.lichess.org/",
+        "selectionSourceFields": [
+          "id",
+          "url",
+          "retrieved",
+          "compressedSha256",
+          "license"
+        ],
+        "recordSourceDataset": "lichess-evaluated-positions",
+        "recordSourceFields": [
+          "dataset",
+          "snapshotSha256",
+          "license"
+        ]
+      },
+      "sampleOnlyValidation": {
+        "sidecarState": "pinned-teacher-labels-sample-only",
+        "fitAllowed": false,
+        "selectionState": "mechanism-test-selection-only",
+        "selectionFitAllowed": false,
+        "certificationStatus": "awaiting-opening-freeze",
+        "pendingCertificationAllowedForTestOnly": true,
+        "selectionSourceId": "chessy-training-mechanism-fixture",
+        "selectionSourceUrl": null,
+        "selectionSourceFields": [
+          "id",
+          "url",
+          "retrieved",
+          "compressedSha256",
+          "license",
+          "mechanismFixture"
+        ],
+        "recordSourceDataset": "chessy-training-mechanism-fixture",
+        "recordSourceFields": [
+          "dataset",
+          "snapshotSha256",
+          "license",
+          "mechanismFixture"
+        ],
+        "mechanismFixture": {
+          "status": "sample-only-not-fit-eligible",
+          "fitAllowed": false,
+          "officialEvaluationSnapshot": false
+        }
+      },
+      "teacherId": "sf18-100kn-v1",
+      "teacherNodes": 100000,
+      "teacherManifest": "eval/training/teacher-sf18-100kn-v1.json",
+      "teacherManifestSha256": "72bb9fd86921e0f2f7e7d092c5ab8b7704a3b69a6d4e27f1c381785026ccf34b",
+      "heldoutManifest": "eval/training/heldout-v1.json",
+      "heldoutManifestSha256": "d481ccf533a89faef4c6bcc19860e3d9da1b3104d8c79d6aed09c7673b972823",
+      "corpusContract": "test/training/corpus.js",
+      "corpusContractSha256": "b21dcbbdef84996c1d308f86f652a08ea00b3d8284a040fa3958c183313b30f0",
+      "requirements": [
+        "adjacent sidecar hash and row count match each labelled shard",
+        "each sidecar's selection-manifest bytes, certification-manifest bytes, selected input-shard bytes, source snapshot, and complete shard inventory are authenticated before records are admitted",
+        "teacher executable, both embedded networks, UCI options, watchdog, and node limit match",
+        "physical teacher shards may contain all frozen corpus roles; every row's role is recomputed and only shared-train or nnue-validation records enter their disjoint streams",
+        "sample-only validation requires its distinct sidecar state, exact non-fit mechanism-fixture marker, pending certification status, and the explicit --sample-only validation flag; it can never enter training",
+        "record IDs are strictly sorted per shard and unique across all inputs",
+        "id, canonicalFen, cluster, positionFamily, and role are recomputed",
+        "locked incident cluster and position family are rejected",
+        "targetWhite agrees with the required WDL; scoreNodes identifies the exact score snapshot and terminal reportedNodes meets the search budget"
+      ]
+    }
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "learningRate": 0.001,
+    "weightDecay": 0.00001,
+    "batchSize": 4096,
+    "epochs": 8,
+    "shuffleBufferRecords": 65536,
+    "gradientClipNorm": 5
+  },
+  "determinism": {
+    "seeds": [
+      10501,
+      10502,
+      10503
+    ],
+    "torchDeterministicAlgorithms": true,
+    "cudnnBenchmark": false,
+    "workerCountAffectsRecordOrder": false
+  },
+  "artifacts": {
+    "checkpointFormat": "PyTorch state_dict; research only",
+    "modelCardRequired": true,
+    "recordInputManifestHashes": true,
+    "runtimeOrQuantizedArtifactProduced": false
+  }
+}
