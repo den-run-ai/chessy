@@ -143,6 +143,149 @@ def closure() -> dict[Path, str]:
     return {path: sha(path) for path in paths}
 
 
+def require_dependencies() -> None:
+    if np.__version__ != "2.3.5" or scipy.__version__ != "1.17.0":
+        raise ValueError("natural fit requires NumPy 2.3.5 and SciPy 1.17.0 before data access")
+
+
+def child(directory: Path, name: str) -> Path:
+    if not isinstance(name, str) or Path(name).name != name or name in ("", ".", ".."):
+        raise ValueError("audit artifact must be a direct child")
+    return directory.resolve() / name
+
+
+def authenticate_audits(summary_path: Path, selection_path: Path,
+                        selection_audit_path: Path, selection_audit_sha: str,
+                        label_audit_path: Path, label_audit_sha: str) -> tuple[dict[Path, str], dict]:
+    """Require externally hash-bound PASS reports and the exact audited closure.
+
+    Rehashing teacher/test bytes here is mechanical artifact authentication;
+    no rows, scores, moves, losses, or model predictions are decoded by it.
+    """
+    expected: dict[Path, str] = {}
+    reports, merged = {}, {}
+    for kind, path, wanted, schema, field in (
+            ("selection", selection_audit_path, selection_audit_sha,
+             "chessy.natural-selection-independent-audit.v1", "inputs"),
+            ("label", label_audit_path, label_audit_sha,
+             "chessy.natural-label-artifact-independent-audit.v1", "files")):
+        path = path.resolve()
+        arith.require_hash(wanted, kind + " audit external SHA-256")
+        if path.is_symlink() or sha(path) != wanted:
+            raise ValueError(kind + " audit external identity differs")
+        report = read_json(path)
+        if (report.get("schema") != schema or report.get("status") != "PASS"
+                or report.get("researchOnly") is not True or report.get("productionFitAllowed") is not False
+                or report.get("counts", {}).get("mismatches") != 0):
+            raise ValueError(kind + " independent audit must PASS without mismatches")
+        bindings = report.get(field)
+        if not isinstance(bindings, dict) or not bindings:
+            raise ValueError(kind + " audit has no authenticated evidence closure")
+        normalized = {}
+        for filename, identity in bindings.items():
+            filename = Path(filename)
+            if not filename.is_absolute() or str(filename.resolve()) != str(filename) or filename.is_symlink():
+                raise ValueError("audit evidence path must be absolute, canonical, and nonsymlink")
+            if not isinstance(identity, dict) or type(identity.get("bytes")) is not int or identity["bytes"] < 0:
+                raise ValueError("audit evidence bytes malformed")
+            arith.require_hash(identity.get("sha256"), "audit evidence SHA-256")
+            value = {"sha256": identity["sha256"], "bytes": identity["bytes"]}
+            if filename in merged and merged[filename] != value:
+                raise ValueError("independent audits disagree on shared evidence")
+            normalized[filename] = value
+            merged[filename] = value
+        reports[kind] = (report, normalized)
+        expected[path] = wanted
+
+    summary, selection = read_json(summary_path), read_json(selection_path)
+    source_count, selected_count = selection["source"]["games"], selection["selection"]["rows"]
+    selection_report, selected_files = reports["selection"]
+    label_report, label_files = reports["label"]
+    counts = selection_report["counts"]
+    if (selection_report.get("teacherLabelsRead") != 0
+            or counts.get("sourceInventoryRowsAuthenticated") != source_count
+            or any(counts.get(key) != selected_count for key in (
+                "selectedRows", "sourceGames", "clusters", "fullLegalPrefixReplays", "javascriptCorpusKeyComparisons"))
+            or any(counts.get(key) != 0 for key in ("quarantineIntersections", "crossRoleSourceOrFamilyOverlap"))
+            or selection_report.get("coverage") != selection["coverage"]):
+        raise ValueError("selection audit completeness or isolation differs")
+    counts, output = label_report["counts"], summary["output"]
+    if (label_report.get("modelEvaluationPerformed") is not False
+            or label_report.get("fitExclusionGateSatisfied") is not True
+            or any(counts.get(key) != selected_count for key in (
+                "selectedRows", "fullSourceHistoryReplays", "rawAdmissionReconstructions", "terminalBestmovesChecked"))
+            or counts.get("acceptedRows") != output["acceptedRows"]
+            or counts.get("excludedRows") != output["excludedRows"]
+            or counts.get("acceptedFullPvLegalityChecks") != output["acceptedRows"]
+            or counts.get("workersCompleted") != 8):
+        raise ValueError("label audit completeness or fit admission differs")
+
+    def need(files: dict, filename: Path, identity: dict | None = None) -> None:
+        filename = filename.resolve()
+        if filename not in files:
+            raise ValueError("audit omitted mandatory raw/source evidence: " + str(filename))
+        if identity is not None and any(files[filename][key] != identity[key] for key in ("sha256", "bytes")):
+            raise ValueError("audit evidence does not bind the exact artifact identity")
+
+    need(selected_files, selection_path)
+    need(label_files, selection_path)
+    need(label_files, summary_path)
+    need(selected_files, ROOT / "tools/training/audit-natural-selection.py")
+    need(label_files, ROOT / "tools/training/audit-natural-labels.py")
+    for entry in (selection["preregistration"], selection["fitPreregistration"], selection["teacherContract"]):
+        need(selected_files, ROOT / entry["path"], entry)
+        need(label_files, ROOT / entry["path"], entry)
+    for entry in selection["implementation"]:
+        need(selected_files, ROOT / entry["path"], entry)
+    for entry in selection["quarantine"]["sourceFiles"]:
+        if not any(value["sha256"] == entry["sha256"] and value["bytes"] == entry["bytes"] for value in selected_files.values()):
+            raise ValueError("selection audit omitted mandatory quarantine evidence")
+    for entry in selection["selection"]["files"]:
+        filename = child(selection_path.parent, entry["path"])
+        need(selected_files, filename, entry)
+        need(label_files, filename, entry)
+    entry = selection["selection"]["sourceInventory"]
+    need(selected_files, child(selection_path.parent, entry["path"]), entry)
+    if not any(value["sha256"] == selection["source"]["sha256"] and value["bytes"] == selection["source"]["bytes"] for value in selected_files.values()):
+        raise ValueError("selection audit omitted full compressed source archive")
+    teacher_hash = summary["teacher"]["engine"]["executable"]["sha256"]
+    if not any(value["sha256"] == teacher_hash for value in label_files.values()):
+        raise ValueError("label audit omitted the pinned teacher executable")
+    for relative, wanted in summary["provenance"]["implementation"].items():
+        filename = (ROOT / relative).resolve()
+        need(label_files, filename)
+        if label_files[filename]["sha256"] != wanted:
+            raise ValueError("label audit implementation closure differs")
+    raw = [*output["files"], output["exclusions"]]
+    workers = summary.get("workers", [])
+    if len(workers) != 8 or [worker["slot"] for worker in workers] != list(range(8)):
+        raise ValueError("audit worker inventory differs")
+    for worker in workers:
+        raw.extend((worker["transcript"], worker["partition"]))
+    for entry in raw:
+        need(label_files, child(summary_path.parent, entry["path"]), entry)
+    wanted_names = {summary_path.name, *(entry["path"] for entry in raw)}
+    if {path.name for path in summary_path.parent.iterdir()} != wanted_names:
+        raise ValueError("closed label directory contains missing or unaccounted raw artifacts")
+    for filename, identity in merged.items():
+        if filename.stat().st_size != identity["bytes"] or sha(filename) != identity["sha256"]:
+            raise ValueError("independently audited evidence changed: " + str(filename))
+        expected[filename] = identity["sha256"]
+    encoded = json.dumps({str(path): value for path, value in sorted(merged.items())}, sort_keys=True, separators=(",", ":")).encode()
+    evidence = {"selectionAuditPath": str(selection_audit_path.resolve()), "selectionAuditSha256": selection_audit_sha,
+                "labelAuditPath": str(label_audit_path.resolve()), "labelAuditSha256": label_audit_sha,
+                "auditedClosureSha256": hashlib.sha256(encoded).hexdigest(), "auditedFiles": len(merged)}
+    return expected, evidence
+
+
+def exposure_marker(summary_path: Path, selection_manifest_sha: str, teacher_sha: str) -> Path:
+    # State lives beside the immutable experiment inputs, outside the audited label
+    # directory. Every copied/renamed frozen selection resolves to this key.
+    identity = "\0".join(("chessy.natural-fit-test-exposure.v1", selection_manifest_sha, CONTRACT_SHA, teacher_sha))
+    key = hashlib.sha256(identity.encode()).hexdigest()
+    return summary_path.resolve().parent.parent / ".natural-fit-state" / (key + ".hce-test-opened.json")
+
+
 def load_summary(path: Path, selection_path: Path) -> tuple[dict, dict[Path, str]]:
     summary = read_json(path)
     if summary.get("schema") != "chessy.natural-pilot-label-summary.v1" or summary.get("status") != "completed":
@@ -400,13 +543,19 @@ def candidate_parity(data: Data, weights: np.ndarray) -> None:
         raise ValueError("integer candidate prediction differs from Node affine implementation")
 
 
-def select(summary_path: Path, selection_path: Path, output_path: Path, report_path: Path | None = None) -> dict:
+def select(summary_path: Path, selection_path: Path, output_path: Path, report_path: Path | None = None,
+           *, selection_audit_path: Path, selection_audit_sha: str,
+           label_audit_path: Path, label_audit_sha: str) -> dict:
+    require_dependencies()
     rules = contract()
     if output_path.exists() or (report_path is not None and report_path.exists()):
         raise FileExistsError("refusing to overwrite frozen selection/report")
     expected = closure()
     summary, inputs = load_summary(summary_path, selection_path)
     expected.update(inputs)
+    audited, audit_evidence = authenticate_audits(summary_path, selection_path, selection_audit_path,
+                                                selection_audit_sha, label_audit_path, label_audit_sha)
+    expected.update(audited)
     center, scales = metadata()
     train = load_role(summary, summary_path.parent, "shared-train", center, rules, expected)
     validation = load_role(summary, summary_path.parent, "hce-validation", center, rules, expected)
@@ -440,7 +589,7 @@ def select(summary_path: Path, selection_path: Path, output_path: Path, report_p
     report = {"schema": "chessy.natural-pilot-fit-report.v1", "status": "validation-frozen-test-unopened",
               "researchOnly": True, "shippingCandidateEmitted": False, "eloOrTimeClaimAllowed": False,
               "fitPreregistrationSha256": CONTRACT_SHA, "labelSummarySha256": sha(summary_path),
-              "selectionManifestSha256": sha(selection_path), "calibration": calibration,
+              "selectionManifestSha256": sha(selection_path), "auditEvidence": audit_evidence, "calibration": calibration,
               "environment": {"python": sys.version.split()[0], "numpy": np.__version__, "scipy": scipy.__version__},
               "coverage": {"train": coverage(train), "validation": coverage(validation)},
               "baseline": baseline, "candidates": candidates,
@@ -477,6 +626,7 @@ def bootstrap_families(data: Data, base: np.ndarray, candidate: np.ndarray, k: f
 
 
 def evaluate_test(selection_path: Path, output_path: Path) -> dict:
+    require_dependencies()
     rules, frozen = contract(), read_json(selection_path)
     if frozen.get("schema") != "chessy.natural-pilot-frozen-selection.v1":
         raise ValueError("invalid frozen selection")
@@ -485,6 +635,18 @@ def evaluate_test(selection_path: Path, output_path: Path) -> dict:
         raise ValueError("baseline/no-go selection cannot open test")
     expected = {Path(path): value for path, value in frozen["inputSha256"].items()}
     expected[selection_path] = sha(selection_path)
+    summary_path, source_manifest_path = Path(frozen["labelSummaryPath"]), Path(frozen["selectionManifestPath"])
+    audit = report.get("auditEvidence", {})
+    required = ("selectionAuditPath", "selectionAuditSha256", "labelAuditPath", "labelAuditSha256", "auditedClosureSha256")
+    if any(key not in audit for key in required):
+        raise ValueError("frozen selection lacks mandatory independent audit identities")
+    audited, evidence = authenticate_audits(summary_path, source_manifest_path,
+        Path(audit["selectionAuditPath"]), audit["selectionAuditSha256"], Path(audit["labelAuditPath"]), audit["labelAuditSha256"])
+    if evidence != audit:
+        raise ValueError("frozen independent audit evidence changed")
+    if any(expected.get(path) != wanted for path, wanted in audited.items()):
+        raise ValueError("frozen selection omitted independently audited evidence")
+    expected.update(audited)
     for path, wanted in expected.items():
         if sha(path) != wanted:
             raise ValueError("frozen selection input changed")
@@ -498,7 +660,9 @@ def evaluate_test(selection_path: Path, output_path: Path) -> dict:
         raise FileExistsError("refusing to overwrite test report")
     # Keep the marker on every failure: once test bytes may be visible, retrying
     # is a new exposure and requires a new preregistered independent experiment.
-    marker = selection_path.with_name(selection_path.name + ".test-opened")
+    summary = read_json(summary_path)
+    marker = exposure_marker(summary_path, report["selectionManifestSha256"],
+                             summary["provenance"]["teacherManifestSha256"])
     publish(marker, {"selectionSha256": sha(selection_path), "state": "test-exposure-consumed"}, expected)
     summary_path = Path(frozen["labelSummaryPath"])
     summary, inputs = load_summary(summary_path, Path(frozen["selectionManifestPath"]))
@@ -529,6 +693,10 @@ def main() -> None:
     p = sub.add_parser("select")
     p.add_argument("--label-summary", type=Path, required=True)
     p.add_argument("--selection-manifest", type=Path, required=True)
+    p.add_argument("--selection-audit", type=Path, required=True)
+    p.add_argument("--selection-audit-sha256", required=True)
+    p.add_argument("--label-audit", type=Path, required=True)
+    p.add_argument("--label-audit-sha256", required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--report", type=Path)
     p = sub.add_parser("test")
@@ -536,7 +704,9 @@ def main() -> None:
     p.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "select":
-        result = select(args.label_summary.resolve(), args.selection_manifest.resolve(), args.output.resolve(), args.report.resolve() if args.report else None)
+        result = select(args.label_summary.resolve(), args.selection_manifest.resolve(), args.output.resolve(), args.report.resolve() if args.report else None,
+            selection_audit_path=args.selection_audit.resolve(), selection_audit_sha=args.selection_audit_sha256,
+            label_audit_path=args.label_audit.resolve(), label_audit_sha=args.label_audit_sha256)
     else:
         result = evaluate_test(args.selection.resolve(), args.output.resolve())
     print(json.dumps({key: result[key] for key in ("status", "selected", "testEligible", "testOpened", "scaleRecommended", "stopReasons")}, sort_keys=True))

@@ -113,3 +113,48 @@ source/family/cluster isolation, quarantine without replacement, and honest
 coverage failure. A 275-position independently generated/corpus check matches
 the existing JavaScript model/structural-family keys exactly. A strict token
 check closes python-chess's permissive behavior of ignoring unknown PGN tokens.
+
+## Audited fitting and one-time test exposure
+
+The research fitter requires exactly NumPy **2.3.5** and SciPy **1.17.0** and
+fails before reading inputs if their versions differ. It accepts a completed
+label run only after both independent audits pass: the complete selection
+source audit and the closed label-artifact audit. Supply their reviewed
+SHA-256 identities explicitly; the examples below use uppercase placeholders.
+
+```sh
+python3 tools/training/natural-pilot-fit.py select \
+  --label-summary /data/natural-pilot/labels/summary.json \
+  --selection-manifest /data/natural-pilot/selection/manifest.json \
+  --selection-audit /data/natural-pilot/audit/selection-audit.json \
+  --selection-audit-sha256 SELECTION_AUDIT_SHA256 \
+  --label-audit /data/natural-pilot/audit/label-audit.json \
+  --label-audit-sha256 LABEL_AUDIT_SHA256 \
+  --output /data/natural-pilot/private-selection.json \
+  --report /data/natural-pilot/validation-report.json
+```
+
+The fitter verifies both audit reports, their exact source and label-summary
+identities, complete raw transcripts, worker partitions, exclusions, source
+files, quarantine and implementation evidence. It rehashes every audited file
+before model fitting and again before publishing a result. Mechanical hashing
+of reserved test artifacts does not decode their labels or calculate model
+metrics. The frozen selection retains all audit identities and the complete
+input hash map. Research weight vectors stay outside Git.
+
+Only a selection with `testEligible: true` may run the transfer command:
+
+```sh
+python3 tools/training/natural-pilot-fit.py test \
+  --selection /data/natural-pilot/private-selection.json \
+  --output /data/natural-pilot/test-report.json
+```
+
+This command revalidates the frozen audit evidence. Before opening test rows,
+it atomically creates a permanent experiment marker under
+`/data/natural-pilot/.natural-fit-state/`, outside the immutable selection and
+label directories. The key binds the dataset selection, fit contract and
+teacher contract; copying or renaming the frozen selection cannot reset it.
+Any failure after exposure leaves the marker in place. A baseline selection
+keeps the test closed. These consumer integrity checks leave the frozen
+scientific contract, thresholds and optimization grid unchanged.
