@@ -37,6 +37,35 @@ families can still be correlated; 400 unique positions is not proof of 400
 statistically independent chess families. Pair colors and report that limitation.
 No balance filter or candidate scores were used.
 
+## Grouping audit
+
+The reproducible [grouping audit](holdout-audit.json) distinguishes 400 unique
+endpoint/mirror keys, 340 static pawn/king/material families under PR #146's
+frozen family representation, and 60 named opening families. Sixty-one
+endpoints share a static family with the exposed v1 sources, although none
+shares an endpoint/mirror key. The audit does not change the manifest or
+inspect any candidate results.
+
+Static family keys omit other piece squares and state fields, and file
+reflection is a conservative training grouping rather than a legal castling
+symmetry. Named opening families are a taxonomy. Neither grouping establishes
+statistical independence or an effective sample size. Catalog rows have no
+source-game IDs, so source-game isolation cannot be inferred from distinct
+ECO codes or lines. A formal execution/uncertainty policy must resolve these
+distinctions before this data becomes a release gate.
+
+The exposed-line continuation count requires an entire historical opening of
+at least six plies as a strict prefix. Sharing a first move alone is not counted;
+even full-line continuation is an exposure descriptor, not proof of biased
+candidate results. Training should quarantine declared holdout families and
+source-game lineages explicitly rather than relying on endpoint deduplication.
+
+```sh
+node test/ai-match-holdout-audit.js > eval/match-v2/holdout-audit.json
+node test/ai-match-holdout-audit.js --check
+node test/ai-match-holdout-audit.test.js
+```
+
 ## Reproduction
 
 ```sh

@@ -50,7 +50,13 @@ node test/ai-tactics.js
 ```
 
 `test/wasm-size.test.js` ratchets the production download at **37,172 raw
-bytes** and **17,690 bytes with Node's Brotli quality 11**. A smaller module
+bytes** and **17,690 bytes with Node 22.23.2 / Brotli 1.1.0 quality 11**.
+The engine CI job pins that exact Node release, and the test verifies both
+runtime and encoder versions before issuing an authoritative verdict. This
+matches the successful PR #169 engine job; changing encoders requires a
+separate reviewed baseline comparison. On other local runtimes,
+`node test/wasm-size.test.js --diagnostic` reports a clearly non-authoritative
+measurement. A smaller module
 passes without rebaselining. If reviewed strength or efficiency evidence
 justifies a larger module, keep the exception narrow and visible by setting
 exact `CHESSY_WASM_MAX_RAW_BYTES` and `CHESSY_WASM_MAX_BROTLI_BYTES` ceilings

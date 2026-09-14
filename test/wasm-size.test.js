@@ -14,6 +14,9 @@ const zlib = require('zlib');
 
 const WASM_PATH = path.join(__dirname, '..', 'assets', 'chessy-ai-fast.wasm');
 const BASELINE = Object.freeze({ rawBytes: 37172, brotliBytes: 17690 });
+// Exact successful PR #169 engine-job runtime; do not silently rebaseline
+// compressed bytes when Node changes its bundled encoder.
+const ENCODER = Object.freeze({ node: '22.23.2', brotli: '1.1.0' });
 const RAW_OVERRIDE = 'CHESSY_WASM_MAX_RAW_BYTES';
 const BROTLI_OVERRIDE = 'CHESSY_WASM_MAX_BROTLI_BYTES';
 const REASON_OVERRIDE = 'CHESSY_WASM_SIZE_OVERRIDE_REASON';
@@ -135,6 +138,22 @@ try {
 }
 
 const bytes = fs.readFileSync(WASM_PATH);
+const pinnedEncoder = process.versions.node === ENCODER.node &&
+  process.versions.brotli === ENCODER.brotli;
+const diagnostic = process.argv.slice(2).length === 1 &&
+  process.argv[2] === '--diagnostic';
+if (process.argv.length > 2 && !diagnostic) {
+  throw new Error('only --diagnostic is supported');
+}
+console.log('  encoder Node ' + process.versions.node +
+  ' / Brotli ' + process.versions.brotli);
+if (!diagnostic) {
+  check(pinnedEncoder, 'compressed-size gate uses the pinned encoder',
+    'requires Node ' + ENCODER.node + ' / Brotli ' + ENCODER.brotli +
+    '; use --diagnostic for a non-authoritative local measurement');
+} else {
+  console.log('  DIAGNOSTIC ONLY: not the authoritative download-size gate');
+}
 const brotliBytes = zlib.brotliCompressSync(bytes, {
   params: {
     [zlib.constants.BROTLI_PARAM_QUALITY]: 11

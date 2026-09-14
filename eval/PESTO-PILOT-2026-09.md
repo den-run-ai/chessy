@@ -1,5 +1,9 @@
 # Expanded PeSTO pilot — September 2026
 
+Follow-up: [independent reproduction and corrected interpretation](COMPACT-EVAL-AUDIT-2026-09.md).
+The original loss results below reproduce exactly; the follow-up fixes research
+runtime rounding and qualifies the label-admission and holdout-family claims.
+
 ## Decision
 
 Keep the current evaluator and all five level budgets. No fitted weights or
@@ -37,7 +41,7 @@ nonnegative, passed-pawn ladders monotone, and all coefficients are bounded.
 Baseline calibration uses train only; six positive lambdas are compared on
 validation. Every surface chose lambda 0.02.
 
-| Surface | Parameters | Validation CE | Test CE | Rounded test CE |
+| Surface | Parameters | Validation CE | Test CE | Integer-weight, smooth-taper test CE |
 | --- | ---: | ---: | ---: | ---: |
 | Shipped PeSTO/HCE | 753 | 0.456182 | 0.440812 | 0.440812 |
 | Existing-weight retune | 753 | 0.441914 | 0.428055 | 0.428104 |

@@ -122,7 +122,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Exact encoder for the byte-level Brotli size ratchet.
+          node-version: '22.23.2'
       - name: Run engine tests
         run: node test/engine.test.js
       - name: Replay exact Master screenshot incident
@@ -178,6 +179,8 @@ jobs:
         run: node test/ai-match.js --check-openings
       - name: Validate prospective CC0 match-v2 holdout
         run: node test/ai-match-openings-v2.test.js
+      - name: Verify match-v2 holdout grouping audit
+        run: node test/ai-match-holdout-audit.test.js
       - name: Validate match protocol CLI and equal-time smoke
         run: node test/ai-match-cli.test.js
       - name: Run match cluster-statistics tests
