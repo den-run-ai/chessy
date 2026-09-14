@@ -182,6 +182,7 @@ jobs:
           python test/training/h4-model.test.py
           python test/training/h4-data.test.py
           python test/training/h4-screen.test.py
+          python test/training/h4-ablation.test.py
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset

@@ -27,6 +27,7 @@ import scipy
 from scipy import optimize
 import h4_model as model
 import h4_data as data_io
+from h4_ablation import require_explicit_mop_up, mop_up_reference
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "eval/training/natural-nnue-h4-v1.json"
@@ -106,8 +107,13 @@ def implementation():
     if np.__version__ != "2.3.5" or scipy.__version__ != "1.17.0":
         raise ValueError("requires frozen NumPy 2.3.5 / SciPy 1.17.0")
     rules = json.loads(read_exact(CONTRACT, CONTRACT_SHA))
+    # V1's secondary ablation was semantically mislabeled. Preserve its exact
+    # original code at 438f091, but never execute the contradictory contract
+    # again or silently replace its recorded result with corrected scoring.
+    require_explicit_mop_up(rules)
     paths = [Path(__file__), CONTRACT, ROOT / "tools/training/h4_model.py",
              ROOT / "tools/training/h4_data.py", ROOT / "test/training/h4-reference.js"]
+    paths.append(ROOT / "tools/training/h4_ablation.py")
     expected = {path: digest(path.read_bytes()) for path in paths}
     expected.update(data_io.fit.closure())
     # Freeze actual tool identities before any child or model work. This is a
@@ -235,6 +241,10 @@ def select(bundle, output):
     validation = data_io.load_role(auth, "nnue-validation")
     expected.update(auth.expected)
     data_io.fit.assert_disjoint(data_io.fit.identities(train), data_io.fit.identities(validation))
+    # Correct feature for a future, separately registered contract. V1 is
+    # rejected above and its completed ablation is never recomputed here.
+    additive = {role: np.asarray([item["mopUpCp"] for item in mop_up_reference(data.fens)])
+                for role, data in (("train", train), ("validation", validation))}
     comparators = {role: {name: quality_metrics(cp, data) for name, cp in comparator_predictions(auth, data).items()}
                    for role, data in (("train", train), ("validation", validation))}
     features = model.features_from_fens(train.fens)
@@ -281,7 +291,7 @@ def select(bundle, output):
                              "authoredParity": authored_parity, "parity": {role: value[2] for role, value in evaluated.items()}}
             variant_stops = []
             for role, data in (("train", train), ("validation", validation)):
-                extra = data.fixed_cp if variant != "net-only" else 0
+                extra = additive[role] if variant != "net-only" else 0
                 record[role] = quality_metrics(evaluated[role][0] + extra, data)
                 record[role + "Float"] = quality_metrics(evaluated[role][1] + extra, data)
                 if max(np.max(np.abs(evaluated[role][0] + extra)), np.max(np.abs(evaluated[role][1] + extra))) > 10000:
@@ -346,7 +356,8 @@ def evaluate_test(bundle, selection_path, output):
     data_io.fit.assert_disjoint(report["usedIdentities"], data_io.fit.identities(test))
     quant, floating, parity_report, reasons = parity(quantized, params, test, output.parent)
     if candidate["variant"] != "net-only":
-        quant, floating = quant + test.fixed_cp, floating + test.fixed_cp
+        additive = np.asarray([item["mopUpCp"] for item in mop_up_reference(test.fens)])
+        quant, floating = quant + additive, floating + additive
     if max(np.max(np.abs(quant)), np.max(np.abs(floating))) > 10000:
         reasons.append("ablation-score-range")
     metric = quality_metrics(quant, test)

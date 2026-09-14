@@ -1,5 +1,13 @@
 # Separate H4 neural screen
 
+**Completed and retired:** net-only failed validation and quantization guards;
+NNUE test remains unopened. The secondary ablation was invalid because `fixedCp`
+includes tapered material, not only `mopUpCp`. See the
+[complete result and correction](../neural-h4/REPORT.md). The original contract
+and execution at commit `438f091` are retained unchanged. Current execution
+rejects the ambiguous v1 contract before performance data access. A corrected
+ablation needs a separately registered experiment; no such rerun occurred.
+
 This research experiment asks whether a four-unit piece-square network can
 improve the clean natural pilot's teacher predictions at a small parameter cost.
 It does not replace the shipped HCE, change the H64 production plan, or establish
