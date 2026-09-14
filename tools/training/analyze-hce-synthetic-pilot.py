@@ -589,8 +589,34 @@ def predictions(dataset: Dataset, weights: np.ndarray) -> np.ndarray:
     return dataset.fixed_cp + dataset.matrix @ weights
 
 
-def metrics(dataset: Dataset, weights: np.ndarray, k: float) -> dict[str, Any]:
-    cp = predictions(dataset, weights)
+def runtime_predictions(dataset: Dataset, weights: np.ndarray) -> np.ndarray:
+    """Mirror Rust's integer numerator and floor((numerator + 12) / 24).
+
+    Integer weights alone do not reproduce the runtime: the training objective
+    keeps the final taper smooth, and summing divided floats can misround ties.
+    Fixed mop-up terms are integer cp, so including them in this numerator is
+    equivalent to adding them after the runtime taper.
+    """
+    if not np.all(np.isfinite(weights)) or not np.all(weights == np.rint(weights)):
+        raise ValueError("runtime predictions require integer weights")
+    matrix = dataset.matrix.copy()
+    scaled = matrix.data * 24.0
+    fixed = dataset.fixed_cp * 24.0
+    if not np.allclose(scaled, np.rint(scaled), rtol=0, atol=1e-8) or not np.allclose(
+        fixed, np.rint(fixed), rtol=0, atol=1e-8
+    ):
+        raise ValueError("runtime predictions require integer /24 coefficients")
+    matrix.data = np.rint(scaled)
+    numerator = np.rint(fixed) + matrix @ weights
+    if not np.all(np.isfinite(numerator)) or np.any(np.abs(numerator) > 2**52):
+        raise ValueError("runtime prediction numerator exceeds exact integer range")
+    return np.floor((numerator + 12.0) / 24.0)
+
+
+def metrics(
+    dataset: Dataset, weights: np.ndarray, k: float, *, runtime_rounding: bool = False
+) -> dict[str, Any]:
+    cp = runtime_predictions(dataset, weights) if runtime_rounding else predictions(dataset, weights)
     losses = row_losses(cp, dataset.target, k)
     residual = cp - dataset.teacher_cp
     by_phase: dict[str, Any] = {}
@@ -733,6 +759,10 @@ def compact_fit_result(
         },
         "rounded": {
             split: metrics(datasets[split], rounded, k) for split in SPLITS
+        },
+        "runtimeRounded": {
+            split: metrics(datasets[split], rounded, k, runtime_rounding=True)
+            for split in SPLITS
         },
         "weights": weight_summary(weights, center, names),
         "activeParameters": int(len(active)),
@@ -902,9 +932,10 @@ def analyze(
         "sourceSeedsCrossSplits": inventory["sourceSeedsCrossSplits"],
         "decision": "stop-no-runtime-candidate",
         "reason": (
-            "The random-continuation distribution induces boundary saturation "
-            "and implausible removal of established terms; a quieter natural-game "
-            "teacher corpus is required before any runtime candidate."
+            "Boundary saturation and removal of established terms persist on "
+            "this correlated random-continuation distribution. They warrant "
+            "cleaner-data ablations, not an inference of optimizer failure or "
+            "playing-strength loss; no runtime candidate is supported."
         ),
     }
     implementation_paths = [
@@ -953,6 +984,15 @@ def analyze(
         },
         "lambdaGrid": lambda_grid,
         "frozenBaseline": baseline,
+        "frozenBaselineRuntimeRounded": {
+            split: metrics(datasets[split], center, k, runtime_rounding=True)
+            for split in SPLITS
+        },
+        "predictionModes": {
+            "float": "floating weights and smooth taper; convex optimization objective",
+            "rounded": "integer weights and smooth taper; legacy pilot rounding metric",
+            "runtimeRounded": "integer weights and Rust-compatible integer-numerator taper",
+        },
         "surfaces": fitted_surfaces,
         "cheapR3CombinedAblations": cheap_ablations,
         "pairedSurfaceBootstrap": pairwise_surface_bootstrap,
@@ -1088,7 +1128,24 @@ def self_test() -> None:
         raise AssertionError("phase parser drifted")
     if split_from_family("0" * 64) != "train":
         raise AssertionError("family split parser drifted")
-    print("analyze-hce-synthetic-pilot self-test: 12 checks passed")
+    ties = Dataset(
+        matrix=sparse.csr_matrix((2, PARAMETERS)),
+        fixed_cp=np.asarray([-1138.5000000000002, 1138.4999999999998]),
+        target=np.zeros(2),
+        teacher_cp=np.zeros(2),
+        phase=np.asarray(["opening", "opening"]),
+        family=np.asarray(["a", "b"]),
+        row_id=np.asarray(["a", "b"]),
+    )
+    if not np.array_equal(runtime_predictions(ties, center), [-1138, 1139]):
+        raise AssertionError("runtime integer half-tie rounding differs from Rust")
+    try:
+        runtime_predictions(ties, center + 0.5)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("runtime rounding accepted fractional weights")
+    print("analyze-hce-synthetic-pilot self-test: 14 checks passed")
 
 
 def parse_args() -> argparse.Namespace:

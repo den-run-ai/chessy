@@ -108,3 +108,81 @@ Focused checks:
 node test/training/hce-synthetic-pilot.test.js
 python3 tools/training/analyze-hce-synthetic-pilot.py --self-test
 ```
+
+## Independent forensic audit (2026-09-14)
+
+The saved 10,911-row stream was recovered and its SHA-256 matched the original
+summary. Re-running the original implementation's complete 30-fit grid with
+NumPy 2.3.5/SciPy 1.17.0 reproduced all five selected lambdas, all five rounded
+weight-vector hashes, and every train/validation/test cross-entropy exactly.
+The original 4.706% relative test-loss reduction is numerically reproducible;
+it remains exploratory teacher-fit evidence, with no Elo or time claim.
+
+An independent python-chess legality check found zero invalid boards and zero
+illegal teacher PV sequences. All stored feature vectors, model-cluster keys,
+and position-family keys also recomputed exactly. Of these positions, 732 are
+in check; the random-continuation data include tactical states that a static
+evaluation fit cannot explain by quiet positional terms alone. All 102 source
+seeds still cross split boundaries. Position-family bootstrap intervals do not
+account for this common source dependence and cannot certify generalization.
+
+Two distinctions correct the earlier interpretation:
+
+- The 215 rows with `seldepth < depth` violate the frozen admission rule;
+  they are not thereby corrupt Stockfish scores. Stockfish 18 resets selective
+  depth at each iteration/PV and updates it on reached PV nodes, while nominal
+  depth is the search iteration. Reductions and pruning can make them differ.
+  See the pinned [Stockfish 18 search implementation](https://github.com/official-stockfish/Stockfish/blob/sf_18/src/search.cpp).
+  The frozen rule has **not** been relaxed. Filtering these rows also changes
+  the position distribution, so this is a protocol sensitivity, not a clean
+  new experiment.
+- Coefficients reaching bounds or suppressing mobility are observed fitted
+  behavior, not proof of a broken optimizer or worse play. Correlated features,
+  the WDL objective and tactical sampling can explain such behavior. Their
+  persistence justifies a clean ablation before considering runtime use.
+
+The audit did find a one-centipawn research reconstruction bug:
+`runtimeRoundedScore` accumulated already-divided floating coefficients before
+rounding, disagreeing with Rust on 153/10,911 rows at half-integer boundaries.
+It now accumulates exact integer numerators before the final `/24`; parity is
+10,911/10,911. The convex smooth objective and original fit numbers are unchanged.
+The analyzer's historical `rounded` field means rounded **weights** with a smooth
+taper; a separate `runtimeRounded` field now applies actual runtime score
+rounding. No runtime code or WASM bytes changed.
+
+Forensic refits after the 215 declared exclusions retain 7,517 train, 1,593
+validation and 1,586 test rows. The same five surfaces and same lambda grid
+give the following **post-hoc, smooth-taper** losses:
+
+| Surface | Validation | Test |
+| --- | ---: | ---: |
+| Frozen shipped coefficients | 0.452572 | 0.437485 |
+| Existing HCE retune | 0.437415 | 0.423358 |
+| Retune + pawn attacks | 0.430836 | 0.417455 |
+| Retune + king-bucket pawn PST | 0.436662 | 0.422548 |
+| Cheap combined | 0.430248 | 0.416486 |
+| Full R3 | 0.429270 | 0.415009 |
+
+All surfaces still choose lambda 0.02; full R3 rounds all four mobility terms to
+zero and saturates four pawn-attack terms. These are sensitivity results on the
+same contaminated source corpus, with no new candidate or admission gate.
+Exact reproduction, legality, rounding and sensitivity values are preserved in
+`pilots/hce-synthetic-12k-25kn-forensic-audit.json`. Historical run/review JSON
+remain byte-for-byte unchanged. Audit and refits used local CPU only: no Modal,
+GPU or CI dispatch.
+
+The checked-in forensic driver reproduces both analyses from the retained raw
+labels. It verifies the fixed historical source/input hashes, consumes read-only
+input snapshots, checks the independent legality and WASM reconstruction, and
+binds its own source hash in its output. It does not change the current analyzer's
+strict admission rules or execute Stockfish. With the pinned original git object
+available, NumPy 2.3.5, SciPy 1.17.0 and python-chess (`chess` module 1.11.2):
+
+```sh
+python3 tools/training/audit-hce-synthetic-pilot.py \
+  --input /absolute/path/to/pilot.ndjson \
+  --label-summary /absolute/path/to/pilot-summary.json \
+  --source-archive /absolute/path/to/stockfish-sf18.zip \
+  --executable /absolute/path/to/stockfish \
+  --output /absolute/path/to/new-forensic-audit.json
+```

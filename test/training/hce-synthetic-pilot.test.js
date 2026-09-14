@@ -198,6 +198,13 @@ check(function () {
     assert(summary.teacher.identityLines.includes('id name Stockfish 18'));
     assert.strictEqual(summary.teacher.networks.EvalFile.verified, false);
     for (const row of rows) {
+      const whiteToMove = row.fen.split(' ')[1] === 'w';
+      assert.strictEqual(row.teacher.cpWhite, whiteToMove ? 25 : -25);
+      assert.deepStrictEqual(
+        row.teacher.wdlWhite,
+        whiteToMove ? [500, 400, 100] : [100, 400, 500]
+      );
+      assert.strictEqual(row.teacher.targetWhite, whiteToMove ? 0.7 : 0.3);
       assert.strictEqual(row.teacher.pvUci[0], row.teacher.bestMoveUci);
       assert.strictEqual(
         row.teacher.targetWhite,

@@ -33,10 +33,20 @@ for (const fen of [
   'r3k2r/pp1n1ppp/2p1p3/8/3P4/2N2N2/PP3PPP/R3K2R w KQkq - 0 1',
   '4k3/3p4/8/4P3/8/8/8/4K3 b - - 0 1',
   '8/8/8/8/8/5k2/8/6RK w - - 0 1',
+  // Saved-pilot regression: dividing columns before accumulation moved the
+  // exact -1138.5 tie below the boundary and disagreed with WASM by one cp.
+  'rnb1kbnr/ppp2ppp/4p3/4N3/4p3/8/PPPq1PPP/RNB1KB1R w KQkq - 0 1',
   'r4rk1/ppp2ppp/2n5/2b2b2/4p3/1P1P1N2/q1PBBPPP/1R1Q1RK1 w - - 0 12'
 ]) {
   checkPosition(fen, fen);
 }
+
+const fractionalWeights = center.slice();
+fractionalWeights[0] += 0.5;
+assert.throws(function () {
+  Linear.runtimeRoundedScore(Linear.compile(Chess.START_FEN), fractionalWeights);
+}, /integer weights/);
+checks++;
 
 let state = Chess.newGameState();
 for (let ply = 0; ply < 120; ply++) {
