@@ -88,7 +88,10 @@ function fixture() {
 }
 function request(fixture) {
   const teacherText = rowsText(fixture.accepted);
-  const selectionText = rowsText(fixture.selected);
+  // Preserve selector order, as the production adapter does; only emitted
+  // teacher and exclusion artifacts are guaranteed to be sorted by ID.
+  const selectionText = fixture.selected
+    .map(record => Prepare.stableJson(record) + '\n').join('');
   const exclusionsText = rowsText(fixture.excluded);
   const transcriptText = fixture.transcriptLines.join('\n') + '\n';
   const sidecar = fixture.sidecar;
@@ -122,6 +125,28 @@ assert.strictEqual(good.selectedRows, 3);
 assert.strictEqual(good.acceptedRows, 2);
 assert.strictEqual(good.excludedRows, 1);
 checks += 3;
+
+const reversedSelection = fixture();
+reversedSelection.selected.reverse();
+const reversedRequest = request(reversedSelection);
+assert.notStrictEqual(reversedRequest.selectionText, request(fixture()).selectionText);
+assert.deepStrictEqual(Evidence.validateEvidence(reversedRequest, contracts), good,
+  'retained unsorted selection replays the labeler ID order');
+assert.strictEqual(reversedRequest.selectionText.split('\n')[0],
+  Prepare.stableJson(reversedSelection.selected[0]),
+  'replaying sorted IDs does not rewrite authenticated selection bytes');
+checks += 3;
+
+rejected('unsorted selection still rejects nonadjacent duplicate IDs', data => {
+  data.selected = [data.selected[2], data.selected[0], data.selected[1], data.selected[2]];
+  // Exercise the ID guard independently of optional canonical context checks.
+  delete data.selectionContext;
+}, /IDs must be unique/);
+rejected('permuted selection cannot authorize permuted UCI searches', data => {
+  data.selected.reverse();
+  data.transcriptLines = header().concat(...data.selected.map(record =>
+    searchLines(record, record.fen === fens[2])), ['> quit']);
+}, /expected command position fen/);
 
 rejected('coherently rehashed accepted row omission', data => {
   data.accepted.pop();

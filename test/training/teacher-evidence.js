@@ -40,13 +40,15 @@ function jsonRows(text, label) {
   });
 }
 
-function uniqueRows(records, label) {
+function uniqueRows(records, label, requireSorted = true) {
   const byId = new Map();
   let previous = null;
   for (const record of records) {
     if (!record || typeof record.id !== 'string' || !HEX.test(record.id) ||
-        (previous !== null && record.id <= previous)) {
-      throw new Error(label + ': IDs must be unique and strictly sorted');
+        byId.has(record.id) ||
+        (requireSorted && previous !== null && record.id <= previous)) {
+      throw new Error(label + ': IDs must be unique' +
+        (requireSorted ? ' and strictly sorted' : ''));
     }
     previous = record.id;
     byId.set(record.id, record);
@@ -175,7 +177,12 @@ function validateEvidence(request, contracts = Label.loadFrozenContracts()) {
   }
   const accepted = jsonRows(teacherText, 'teacher output');
   const excluded = jsonRows(exclusionsText, 'teacher exclusions');
-  const selectedById = uniqueRows(selected, 'teacher selection');
+  const selectedById = uniqueRows(selected, 'teacher selection', false);
+  // Selection shards preserve the selector's order. The actual labeler
+  // authenticates those original bytes, then sorts by ID in Label.loadRecords
+  // before issuing searches. Reproduce its execution order without changing
+  // the authenticated selection bytes or relaxing ID uniqueness.
+  selected.sort((a, b) => a.id.localeCompare(b.id));
   const acceptedById = uniqueRows(accepted, 'teacher output');
   const excludedById = uniqueRows(excluded, 'teacher exclusions');
   for (const [rows, expected, label] of [
