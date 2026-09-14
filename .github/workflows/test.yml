@@ -177,6 +177,11 @@ jobs:
           node test/training/natural-runtime-export.test.js
           node test/training/natural-runtime-run.test.js
           python test/training/audit-natural-runtime.test.py
+      - name: Validate research-only H4 neural math and admission guards
+        run: |
+          python test/training/h4-model.test.py
+          python test/training/h4-data.test.py
+          python test/training/h4-screen.test.py
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset
