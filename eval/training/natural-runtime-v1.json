@@ -1,0 +1,123 @@
+{
+  "baseline": {
+    "brotliBytes": 17690,
+    "commit": "79305aa783283abe043b50c0cc9e7451226c5a03",
+    "rawBytes": 37172,
+    "rebuildMustMatchCommittedBytes": true,
+    "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+  },
+  "candidate": {
+    "artifacts": "private local research builds only; never commit or ship fitted coefficients",
+    "frozenSelectionSha256": "022c0cd99d61293d8262fd98df06fd4401e462954a24895a855d790ea779db69",
+    "lambda": 0.02,
+    "surface": "constrained753-plus-pawn-attacks",
+    "testReportSha256": "a70fd8c11747d84bc8509dea208ba2630b1e90930856f6246fdb05953f819ada",
+    "weightChangesOrAblationsAllowed": false,
+    "weightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef"
+  },
+  "frozenBeforeRuntimeMeasurements": true,
+  "id": "natural-selected759-runtime-v1",
+  "matches": {
+    "analysis": {
+      "bootstrapReplicates": 2000,
+      "bootstrapSeed": 1370915,
+      "interpretation": "development diagnostic only, cannot establish Elo or shipping admission",
+      "score": "candidate mean points including draws",
+      "timing": "report actual per-side cost and imbalance, no exact wall-time equality claim",
+      "unit": "historical opening pair; not proven independent family"
+    },
+    "bothColors": true,
+    "concurrentGames": 4,
+    "dispatch": "fixed budget, registered opening order, candidate White then Black; complete four-game waves",
+    "historicalOpeningPairs": 20,
+    "maxDepth": 30,
+    "maxSearchedPlies": 180,
+    "quiesce": true,
+    "repetition": "complete prefix and generated game position history at every move",
+    "requiredPriorGates": [
+      "baseline-reproduction",
+      "compiled-parity",
+      "private-size",
+      "fixed-node-cost"
+    ],
+    "retainedPerMove": [
+      "requestedTimeMs",
+      "actualElapsedMs",
+      "nodes",
+      "qnodes",
+      "depth",
+      "stopReason",
+      "fen",
+      "moveUci",
+      "moduleSha256"
+    ],
+    "selection": "ascending SHA256('natural-runtime-v1|'+original opening index), first20 of100 historical exposed openings",
+    "terminal": "legal checkmate/stalemate/insufficient material/threefold/fifty-move; ply cap is a separately counted diagnostic draw",
+    "timeBudgetsMs": [
+      50,
+      200
+    ],
+    "totalGames": 80,
+    "validation": "independent full legal replay, repetition/terminal result check and complete registered game coverage",
+    "watchdogFailure": "invalidate complete run, preserve partial evidence; not a chess loss"
+  },
+  "microbench": {
+    "concurrency": 1,
+    "engineOrder": "alternate baseline-first/candidate-first by repeat and position",
+    "fullPrefixHistory": true,
+    "gateAppliesToEachBudget": true,
+    "maxDepth": 30,
+    "measuredPairsPerPositionBudget": 3,
+    "minimumAggregateNpsRatio": 0.95,
+    "minimumMedianPairedNpsRatio": 0.95,
+    "noConcurrentLocalBenchmarkOrMatches": true,
+    "nodeBudgets": [
+      10000,
+      100000
+    ],
+    "p90Timing": "diagnostic only",
+    "perPhase": 32,
+    "positions": 96,
+    "quiesce": true,
+    "selection": "first32 admitted shared-train row IDs lexicographically within each phase",
+    "warmupPairsPerPositionBudget": 1
+  },
+  "parity": {
+    "baselineComparator": "committed WASM",
+    "candidateComparator": "frozen selected integer affine predictions",
+    "maximumMismatches": 0,
+    "minimumNaturalRows": 42498,
+    "reservedNnueRolesAllowed": false,
+    "rows": "all admitted shared-train, hce-validation and once-opened hce-test; plus authored mapping fixtures"
+  },
+  "privateSizeGate": {
+    "maximumBrotliBytes": 18043,
+    "maximumRawBytes": 37915,
+    "rationale": "at most 2% additional private payload before spending on matches; production byte ratchet remains unchanged"
+  },
+  "productionIntegrationAllowed": false,
+  "registeredAtUtc": "2026-09-14T08:40:07.884130+00:00",
+  "registrationData": {
+    "bytes": 119324,
+    "path": "runtime/registration-data.json",
+    "sha256": "19a9a4cf15671bf48067120570def920c16a16c0775843ab9548c937fd6f178e"
+  },
+  "researchOnly": true,
+  "schema": "chessy.natural-runtime-private-contract.v1",
+  "shippingOrEloClaimAllowed": false,
+  "stopRule": {
+    "claimDespiteNumericalPass": "no production or Elo claim; existing PR146/formal-family/signature/device gates remain",
+    "gateFailure": "stop this runtime stage; preserve evidence; no weight retune, ablation rescue or formal holdout access",
+    "maxCompleteRuns": 1,
+    "performanceBasedRetry": false,
+    "selectiveRetry": false
+  },
+  "toolchain": {
+    "binaryen": "131",
+    "brotli": "1.1.0",
+    "compilerFlags": "unchanged experiments/wasm/build.sh production flags",
+    "node": "22.23.2",
+    "rust": "1.97.1",
+    "rustCommit": "8bab26f4f68e0e26f0bb7960be334d5b520ea452"
+  }
+}
