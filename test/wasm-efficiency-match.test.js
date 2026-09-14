@@ -80,6 +80,8 @@ check(protocol === match.PROTOCOL &&
     protocol.acceptanceClass === 'efficiency-noninferiority' &&
     protocol.lowerBoundThreshold === 0.49 &&
     protocol.engineKind === 'wasm' &&
+    protocol.candidateResultAbi === 2 &&
+    protocol.baseResultAbi === 1 &&
     protocol.formal === true,
   'protocol predeclares 10000x4x100x180 and a strict >49% lower bound');
 

@@ -1,0 +1,166 @@
+{
+  "schema": "chessy.holdout-grouping-audit.v1",
+  "disposition": "diagnostic-only",
+  "manifestSha256": "bda65b3253951863f2b01187b2a44becb8d36d29a7917780f6d920a92f4d7dab",
+  "implementationSha256": "b6d1ceb90a3ee68cf06875c3d64df384210c9433741ebe78aacd7ba08258510f",
+  "replayHelperSha256": "3bca4c2e755d8d235cc2af811322e9740526cfb73922d135367d15b261c41711",
+  "exposureSources": [
+    {
+      "path": "test/ai-match-openings.js",
+      "sha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27"
+    },
+    {
+      "path": "eval/corpus/sources/openings-v1.tsv",
+      "sha256": "6febbaa43f4c296f88940a567dfd7272b093643a0dafcda94cb8d3bbecbc8ec8"
+    }
+  ],
+  "definitions": {
+    "endpointEquivalence": "Legal repetition position key, plus color/rank mirror; ignores move counters.",
+    "staticStructuralFamilies": "PR146 at 1e01c0b: pawn squares, king squares, non-pawn material counts; file and color/rank reflection canonicalized. Ignores other piece squares and all FEN state fields.",
+    "namedOpeningFamilies": "Catalog name before colon; descriptive taxonomy, not a statistical independence test.",
+    "strictContinuation": "An entire exposed line of at least six plies is a strict UCI prefix of the selected line. Shared first moves alone do not qualify."
+  },
+  "sourceGameGrouping": {
+    "status": "unavailable-for-opening-catalog",
+    "sourceGames": null,
+    "reason": "catalog rows are opening facts, not games"
+  },
+  "independence": {
+    "established": false,
+    "effectiveSampleSize": null,
+    "conclusion": "Neither unique endpoints, structural keys, nor named families prove independent outcomes. These counts do not authorize a formal estimator or acceptance threshold."
+  },
+  "counts": {
+    "endpoints": 400,
+    "endpointEquivalence": {
+      "groups": 400,
+      "endpointsBeyondOnePerGroup": 0,
+      "largestGroup": 1,
+      "groupsBySize": {
+        "1": 400
+      }
+    },
+    "staticStructuralFamilies": {
+      "groups": 340,
+      "endpointsBeyondOnePerGroup": 60,
+      "largestGroup": 6,
+      "groupsBySize": {
+        "1": 298,
+        "2": 31,
+        "3": 7,
+        "4": 2,
+        "5": 1,
+        "6": 1
+      }
+    },
+    "namedOpeningFamilies": {
+      "groups": 60,
+      "endpointsBeyondOnePerGroup": 340,
+      "largestGroup": 63,
+      "groupsBySize": {
+        "1": 29,
+        "2": 4,
+        "3": 7,
+        "4": 1,
+        "6": 3,
+        "8": 6,
+        "16": 3,
+        "17": 1,
+        "23": 1,
+        "25": 1,
+        "32": 3,
+        "63": 1
+      },
+      "counts": {
+        "Sicilian Defense": 63,
+        "King's Indian Defense": 32,
+        "Nimzo-Indian Defense": 32,
+        "Ruy Lopez": 32,
+        "Queen's Gambit Declined": 25,
+        "English Opening": 23,
+        "Benoni Defense": 17,
+        "Dutch Defense": 16,
+        "French Defense": 16,
+        "Grünfeld Defense": 16,
+        "Caro-Kann Defense": 8,
+        "Catalan Opening": 8,
+        "Italian Game": 8,
+        "Neo-Grünfeld Defense": 8,
+        "Queen's Gambit Accepted": 8,
+        "Slav Defense": 8,
+        "King's Gambit Accepted": 6,
+        "Queen's Indian Defense": 6,
+        "Semi-Slav Defense": 6,
+        "Alekhine Defense": 4,
+        "Bishop's Opening": 3,
+        "Indian Defense": 3,
+        "Old Indian Defense": 3,
+        "Queen's Pawn Game": 3,
+        "Tarrasch Defense": 3,
+        "Vienna Game": 3,
+        "Zukertort Opening": 3,
+        "Bird Opening": 2,
+        "Modern Defense": 2,
+        "Pterodactyl Defense": 2,
+        "Réti Opening": 2,
+        "Benko Gambit Accepted": 1,
+        "Benko Gambit Declined": 1,
+        "Blackmar-Diemer Gambit Declined": 1,
+        "Blumenfeld Countergambit": 1,
+        "Bogo-Indian Defense": 1,
+        "Center Game": 1,
+        "Elephant Gambit": 1,
+        "Four Knights Game": 1,
+        "King's Gambit Declined": 1,
+        "King's Indian Attack, with e6": 1,
+        "King's Pawn Game": 1,
+        "King's Pawn Opening": 1,
+        "Lion Defense": 1,
+        "London System": 1,
+        "London System, with Be2": 1,
+        "Mikenas Defense": 1,
+        "Nimzo-Larsen Attack": 1,
+        "Petrov's Defense": 1,
+        "Philidor Defense": 1,
+        "Pirc Defense": 1,
+        "Richter-Veresov Attack": 1,
+        "Rubinstein Opening": 1,
+        "Scandinavian Defense": 1,
+        "Scotch Game": 1,
+        "Three Knights Opening": 1,
+        "Trompowsky Attack": 1,
+        "Van Geet Opening": 1,
+        "Vienna Gambit, with Max Lange Defense": 1,
+        "Vulture Defense": 1
+      }
+    },
+    "exposureOverlap": {
+      "union": {
+        "exposedRecords": 140,
+        "exposedEndpointEquivalenceGroups": 140,
+        "exposedStructuralFamilies": 118,
+        "endpointEquivalence": 0,
+        "structuralFamily": 61,
+        "strictContinuationOfExposedLineAtLeastSixPlies": 229
+      },
+      "bySource": {
+        "formal-match-v1": {
+          "exposedRecords": 100,
+          "exposedEndpointEquivalenceGroups": 100,
+          "exposedStructuralFamilies": 82,
+          "endpointEquivalence": 0,
+          "structuralFamily": 57,
+          "strictContinuationOfExposedLineAtLeastSixPlies": 226
+        },
+        "eval-corpus-v1": {
+          "exposedRecords": 40,
+          "exposedEndpointEquivalenceGroups": 40,
+          "exposedStructuralFamilies": 40,
+          "endpointEquivalence": 0,
+          "structuralFamily": 7,
+          "strictContinuationOfExposedLineAtLeastSixPlies": 15
+        }
+      }
+    }
+  }
+}

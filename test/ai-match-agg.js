@@ -9,9 +9,10 @@
  * acceptance class/lower-bound threshold, candidate/base commits, budget
  * mode/value, max plies, opening-manifest version/hash, Node runtime, records
  * and opening count. Rust/WASM protocols additionally bind the exact candidate
- * and base module SHA-256 digests. workflow-run is optional for local
- * artifacts, but must be present on every shard or none, and identical when present.
- * Unknown/duplicate metadata is rejected.
+ * and base module SHA-256 digests plus the result ABIs required by that exact
+ * protocol. workflow-run is optional for local artifacts, but must be present
+ * on every shard or none, and identical when present. Unknown/duplicate
+ * metadata is rejected.
  *
  * Exit codes:
  *   0  aggregated; candidate passes the statistical threshold
@@ -85,7 +86,8 @@ const REQUIRED = [
 const OPTIONAL = ['workflow-run'];
 const DIAGNOSTIC = ['pair-scores', 'shard', 'depth-dist', 'completed-depth'];
 const CONDITIONAL = [
-  'harness-sha', 'candidate-wasm-sha256', 'base-wasm-sha256'
+  'harness-sha', 'candidate-wasm-sha256', 'base-wasm-sha256',
+  'candidate-result-abi', 'base-result-abi'
 ];
 const KNOWN = new Set(REQUIRED.concat(OPTIONAL, DIAGNOSTIC, CONDITIONAL));
 
@@ -172,7 +174,8 @@ const sets = {
   acceptance: new Set(),
   budget: new Set(), maxPlies: new Set(), runtime: new Set(),
   manifest: new Set(), total: new Set(), workflow: new Set(),
-  harness: new Set(), candidateWasm: new Set(), baseWasm: new Set()
+  harness: new Set(), candidateWasm: new Set(), baseWasm: new Set(),
+  candidateResultAbi: new Set(), baseResultAbi: new Set()
 };
 let workflowPresent = 0;
 
@@ -233,13 +236,26 @@ for (const file of files) {
   const harnessValues = values(text, 'harness-sha');
   const candidateWasmValues = values(text, 'candidate-wasm-sha256');
   const baseWasmValues = values(text, 'base-wasm-sha256');
+  const candidateResultAbiValues = values(text, 'candidate-result-abi');
+  const baseResultAbiValues = values(text, 'base-result-abi');
   let harness = null;
   let candidateWasm = null;
   let baseWasm = null;
+  let candidateResultAbi = null;
+  let baseResultAbi = null;
   if (protocol.engineKind === 'wasm') {
+    if (!Number.isSafeInteger(protocol.candidateResultAbi) ||
+        protocol.candidateResultAbi <= 0 ||
+        !Number.isSafeInteger(protocol.baseResultAbi) ||
+        protocol.baseResultAbi <= 0) {
+      fail(2, file + ': protocol-id "' + protocolId +
+        '" has no canonical result ABI contract');
+    }
     harness = exactOne(text, 'harness-sha', file);
     candidateWasm = exactOne(text, 'candidate-wasm-sha256', file);
     baseWasm = exactOne(text, 'base-wasm-sha256', file);
+    candidateResultAbi = exactOne(text, 'candidate-result-abi', file);
+    baseResultAbi = exactOne(text, 'base-result-abi', file);
     if (!/^[0-9a-f]{40}$/.test(harness)) {
       fail(2, file +
         ': harness-sha must be canonical 40-character lowercase hex');
@@ -249,10 +265,19 @@ for (const file of files) {
       fail(2, file +
         ': candidate/base WASM SHA-256 must be canonical 64-character lowercase hex');
     }
+    if (candidateResultAbi !== String(protocol.candidateResultAbi) ||
+        baseResultAbi !== String(protocol.baseResultAbi)) {
+      fail(2, file + ': protocol-id "' + protocolId +
+        '" requires candidate-result-abi ' + protocol.candidateResultAbi +
+        ' and base-result-abi ' + protocol.baseResultAbi + ' (got ' +
+        JSON.stringify(candidateResultAbi) + ' and ' +
+        JSON.stringify(baseResultAbi) + ')');
+    }
   } else if (harnessValues.length || candidateWasmValues.length ||
-      baseWasmValues.length) {
+      baseWasmValues.length || candidateResultAbiValues.length ||
+      baseResultAbiValues.length) {
     fail(2, file +
-      ': harness/module provenance is only valid for a WASM protocol');
+      ': harness/module/result-ABI provenance is only valid for a WASM protocol');
   }
   if (manifestVersion !== MatchProtocol.OPENINGS_MANIFEST_VERSION ||
       manifestSha !== MatchProtocol.OPENINGS_MANIFEST_SHA256) {
@@ -298,6 +323,8 @@ for (const file of files) {
   if (harness) sets.harness.add(harness);
   if (candidateWasm) sets.candidateWasm.add(candidateWasm);
   if (baseWasm) sets.baseWasm.add(baseWasm);
+  if (candidateResultAbi) sets.candidateResultAbi.add(candidateResultAbi);
+  if (baseResultAbi) sets.baseResultAbi.add(baseResultAbi);
   if (workflow) {
     workflowPresent++;
     sets.workflow.add(workflow);
