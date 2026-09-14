@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "schema": "chessy.hce-synthetic-pilot-review.v1",
+  "status": "reviewed-mechanism-evidence-no-candidate",
+  "fitAllowed": false,
+  "publishableModel": false,
+  "qualityClaimAllowed": false,
+  "strengthClaimAllowed": false,
+  "runtimeChangeRecommended": false,
+  "sourceRun": {
+    "immutableImplementationCommit": "f769f87903cd8ee026a1aa2472f6e81a58514298",
+    "labelSummary": {
+      "path": "hce-synthetic-12k-25kn-label-summary.json",
+      "sha256": "2f8076471fb49cd57a87233b54d60a8b0e6406e4dcdfb28804d60550b2a0a57f"
+    },
+    "analysis": {
+      "path": "hce-synthetic-12k-25kn-analysis.json",
+      "sha256": "566ee8e8c5f11b9a573cf33ebd0fe0ee33c024615198391c0a28269224fce5f7"
+    },
+    "rawLabelStream": {
+      "committed": false,
+      "rows": 10911,
+      "sha256": "77db4b4b4c40b5bb4e14c67aaf98f3e36b590128bc9b02125028f9abe9a413ae"
+    },
+    "generatedInput": {
+      "committed": false,
+      "rows": 12000,
+      "sha256": "a7186f8dce3cbe71d8b481360b36906dabafcf2d7f6d557b6f854fc02dbfcef9"
+    }
+  },
+  "teacher": {
+    "name": "Stockfish 18",
+    "nodesPerPosition": 25000,
+    "reportedNodes": 272959388,
+    "elapsedSeconds": 411.077450962,
+    "executableSha256": "ef2b67169e88bafb47f6f2311fe059c64f26e77344c5d507f05928d7fce25319",
+    "evalFileSha256": "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7",
+    "evalFileSmallSha256": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d"
+  },
+  "data": {
+    "trainRows": 7671,
+    "validationRows": 1619,
+    "testRows": 1621,
+    "uniqueModelClusters": 10911,
+    "uniquePositionFamilies": 10206,
+    "positionFamiliesCrossSplits": 0,
+    "uniqueSourceSeeds": 102,
+    "sourceSeedsCrossSplits": 102,
+    "maxRowsFromOneSourceSeed": 260,
+    "licenses": {
+      "CC0-1.0": 7775,
+      "MIT": 3136
+    }
+  },
+  "crossEntropy": {
+    "frozenBaseline": {
+      "validation": 0.456182111291074,
+      "test": 0.44081217275020473
+    },
+    "baselineRetune": {
+      "lambda": 0.02,
+      "validation": 0.4419140615411498,
+      "test": 0.4280548802840077,
+      "testMinusFrozen": -0.012757292466197057
+    },
+    "baselinePlusPawnAttacks": {
+      "lambda": 0.02,
+      "validation": 0.4354843071195666,
+      "test": 0.4223375422865577,
+      "testMinusBaselineRetune": -0.0057173379974500005
+    },
+    "baselinePlusKingBucketPawnPst": {
+      "lambda": 0.02,
+      "validation": 0.44127624132575305,
+      "test": 0.42739815587017604,
+      "testMinusBaselineRetune": -0.000656724413831633
+    },
+    "cheapR3Combined": {
+      "lambda": 0.02,
+      "validation": 0.43500347477512985,
+      "test": 0.4215298674839762,
+      "testMinusPawnAttackSurface": -0.0008076748025814817
+    },
+    "fullR3": {
+      "lambda": 0.02,
+      "validation": 0.4339833703905215,
+      "test": 0.42006820448339305,
+      "roundedValidation": 0.43386906362133504,
+      "roundedTest": 0.4200359423760833,
+      "testMinusCheapR3Combined": -0.0014616630005831466
+    }
+  },
+  "featureCoverageOnTrain": {
+    "pawnAttacks": {
+      "parameters": 6,
+      "nonzeroRowsMin": 198,
+      "nonzeroRowsMedian": 373.5,
+      "nonzeroRowsMax": 786
+    },
+    "kingBucketPawnPst": {
+      "parameters": 192,
+      "zeroColumns": 5,
+      "nonzeroRowsMedian": 100.5,
+      "nonzeroRowsMax": 1607
+    }
+  },
+  "protocolReview": {
+    "acceptedRowsFailingFrozenDepthSeldepthRule": 215,
+    "failure": "seldepth below depth",
+    "bySplit": {
+      "train": 154,
+      "validation": 26,
+      "test": 35
+    },
+    "impact": "The original exploratory fitter admitted rows that PR #146's frozen production teacher contract would exclude. The original JSON is retained unchanged for traceability; results are not upgraded to production evidence.",
+    "followUp": "The exploratory labeler and analyzer now reject invalid depth/seldepth evidence, with a mutation-sensitive fake-UCI regression test. Labels and the full fit were not rerun."
+  },
+  "stopSignals": {
+    "allSurfacesSelectedLowestLambdaGridEdge": true,
+    "fullR3ZeroedShippedMobilityWeights": [
+      "baseline.aux.mobN",
+      "baseline.aux.mobB",
+      "baseline.aux.mobQ"
+    ],
+    "fullR3ZeroedOrNearlyZeroPawnStructure": true,
+    "fullR3PawnAttackWeightsAtUpper96CpBound": 4,
+    "fullR3ChangedBaselinePstParameters": 696,
+    "fullR3TestCpRmseMinusFrozenCp": 4.946339845130808,
+    "kingBucketTrainColumnsUnseen": 5,
+    "sourceSeedLeakageAcrossEverySplit": true,
+    "interpretation": "The random-continuation distribution is driving implausible and boundary-saturated parameters. Lower cross-entropy establishes feature/solver mechanism only, not a usable evaluator."
+  },
+  "decision": {
+    "outcome": "stop-no-runtime-candidate",
+    "lowRiskNextExperiment": "Use quiet, natural-game, source-family-isolated CC0 positions with the authenticated 100k-node teacher path. Retest baseline retune first, then direct pawn attacks; admit king buckets or safe mobility only after a clean paired ablation.",
+    "tinyNnH4H8": "not-run-until-cleaner-data",
+    "levelRecalibration": "not-warranted"
+  }
+}

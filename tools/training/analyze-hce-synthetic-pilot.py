@@ -41,6 +41,16 @@ BASELINE_PARAMETERS = 753
 PHASES = ("opening", "middlegame", "endgame")
 SPLITS = ("train", "validation", "test")
 HEX = frozenset("0123456789abcdef")
+EXPECTED_SOURCE_ARCHIVE_SHA256 = (
+    "2deeca8664333eb98103fcb2019b898879255cba7e1a9f8940e7c09a8aad2038"
+)
+EXPECTED_EXECUTABLE_SHA256 = (
+    "ef2b67169e88bafb47f6f2311fe059c64f26e77344c5d507f05928d7fce25319"
+)
+EXPECTED_NETWORK_SHA256 = {
+    "EvalFile": "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7",
+    "EvalFileSmall": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d",
+}
 
 
 @dataclass(frozen=True)
@@ -154,16 +164,100 @@ def load_summary(filename: Path, stream_filename: Path) -> dict[str, Any]:
         for name in ("EvalFile", "EvalFileSmall")
     ):
         raise ValueError("main pilot did not verify both embedded teacher networks")
+    teacher = summary["teacher"]
+    generator = summary.get("generator", {})
+    expected_uci = {
+        "Threads": 1,
+        "Hash": 16,
+        "Ponder": False,
+        "MultiPV": 1,
+        "SyzygyPath": "<empty>",
+        "UCI_LimitStrength": False,
+        "UCI_ShowWDL": True,
+        "ClearHashBeforeEveryPosition": True,
+        "UciNewGameBeforeEveryPosition": True,
+        "IsReadyBeforeEveryPosition": True,
+    }
+    if (
+        generator.get("rows") != 12000
+        or generator.get("seed") != 1370914
+        or generator.get("familyCap") != 4
+        or teacher.get("name") != "Stockfish 18"
+        or teacher.get("release") != "sf_18"
+        or teacher.get("executableSha256") != EXPECTED_EXECUTABLE_SHA256
+        or teacher.get("uci") != expected_uci
+        or teacher.get("search")
+        != {"command": "go nodes 25000", "nodeLimit": 25000}
+    ):
+        raise ValueError("label summary differs from the fixed pilot profile")
+    for name, expected_hash in EXPECTED_NETWORK_SHA256.items():
+        if networks[name].get("sha256") != expected_hash:
+            raise ValueError(f"{name} SHA-256 differs from the fixed pilot")
+    identity = teacher.get("identityLines")
+    if (
+        not isinstance(identity, list)
+        or "id name Stockfish 18" not in identity
+        or not any("option name EvalFile type" in line for line in identity)
+        or not any("option name EvalFileSmall type" in line for line in identity)
+    ):
+        raise ValueError("Stockfish identity/embedded-network option lines are missing")
+    output = summary.get("output", {})
+    reasons = output.get("exclusionReasons")
+    if (
+        not isinstance(output.get("labelledRows"), int)
+        or not isinstance(output.get("excludedRows"), int)
+        or not isinstance(reasons, dict)
+        or any(not isinstance(value, int) or value < 0 for value in reasons.values())
+        or output["labelledRows"] + output["excludedRows"] != generator["rows"]
+        or sum(reasons.values()) != output["excludedRows"]
+    ):
+        raise ValueError("label summary output accounting differs")
+    provenance = summary.get("provenance", {})
+    for name in (
+        "generatedInputSha256",
+        "labelledStreamSha256",
+        "generatorScriptSha256",
+        "labelerScriptSha256",
+    ):
+        require_hash(provenance.get(name), f"label summary {name}")
+    source = provenance.get("sourceCorpus")
+    if (
+        not isinstance(source, dict)
+        or source.get("path") != "eval/corpus/eval-v1.ndjson"
+    ):
+        raise ValueError("label summary source-corpus binding differs")
+    require_hash(source.get("sha256"), "label summary source corpus SHA-256")
     return summary
 
 
 def validate_row(value: object, number: int) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("schema") != ROW_SCHEMA:
+    expected_fields = {
+        "schema",
+        "id",
+        "fen",
+        "cluster",
+        "positionFamily",
+        "split",
+        "phase",
+        "fixedCp",
+        "indices",
+        "data",
+        "sourceSeed",
+        "teacher",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected_fields
+        or value.get("schema") != ROW_SCHEMA
+    ):
         raise ValueError(f"row {number}: wrong schema")
     for name in ("id", "cluster", "positionFamily"):
         require_hash(value.get(name), f"row {number} {name}")
     if value.get("split") not in SPLITS or value.get("phase") not in PHASES:
         raise ValueError(f"row {number}: invalid split or phase")
+    fen = value.get("fen")
+    if not isinstance(fen, str) or len(fen.split()) != 4:
+        raise ValueError(f"row {number}: FEN must contain four fields")
     fixed_cp = value.get("fixedCp")
     if isinstance(fixed_cp, bool) or not isinstance(fixed_cp, (int, float)) or not math.isfinite(fixed_cp):
         raise ValueError(f"row {number}: fixedCp must be finite")
@@ -185,7 +279,18 @@ def validate_row(value: object, number: int) -> dict[str, Any]:
     ):
         raise ValueError(f"row {number}: sparse data are invalid")
     teacher = value.get("teacher")
-    if not isinstance(teacher, dict):
+    expected_teacher_fields = {
+        "cpWhite",
+        "wdlWhite",
+        "targetWhite",
+        "bestMoveUci",
+        "pvUci",
+        "depth",
+        "seldepth",
+        "scoreNodes",
+        "reportedNodes",
+    }
+    if not isinstance(teacher, dict) or set(teacher) != expected_teacher_fields:
         raise ValueError(f"row {number}: teacher is missing")
     cp = teacher.get("cpWhite")
     target = teacher.get("targetWhite")
@@ -205,7 +310,56 @@ def validate_row(value: object, number: int) -> dict[str, Any]:
         or target != (wdl[0] + 0.5 * wdl[1]) / 1000
     ):
         raise ValueError(f"row {number}: teacher CP/WDL target is invalid")
+    if (
+        not isinstance(teacher["depth"], int)
+        or teacher["depth"] <= 0
+        or not isinstance(teacher["seldepth"], int)
+        or teacher["seldepth"] < teacher["depth"]
+        or not isinstance(teacher["scoreNodes"], int)
+        or teacher["scoreNodes"] <= 0
+        or not isinstance(teacher["reportedNodes"], int)
+        or teacher["reportedNodes"] < 25000
+        or teacher["scoreNodes"] > teacher["reportedNodes"]
+        or not isinstance(teacher["bestMoveUci"], str)
+        or not isinstance(teacher["pvUci"], list)
+        or not teacher["pvUci"]
+        or teacher["pvUci"][0] != teacher["bestMoveUci"]
+        or any(not isinstance(move, str) or not move for move in teacher["pvUci"])
+    ):
+        raise ValueError(f"row {number}: teacher search evidence is invalid")
+    source = value.get("sourceSeed")
+    if not isinstance(source, dict) or set(source) != {
+        "id",
+        "license",
+        "sourceSha256",
+    }:
+        raise ValueError(f"row {number}: source seed binding differs")
+    if not isinstance(source["id"], str) or not source["id"]:
+        raise ValueError(f"row {number}: source seed ID is missing")
+    if source["license"] not in ("MIT", "CC0-1.0"):
+        raise ValueError(f"row {number}: source seed license is not allowed")
+    require_hash(source["sourceSha256"], f"row {number} source seed SHA-256")
     return value
+
+
+def phase_from_fen(fen: str) -> str:
+    board = fen.split()[0]
+    phase = sum({"n": 1, "b": 1, "r": 2, "q": 4}.get(piece.lower(), 0) for piece in board)
+    phase = min(phase, 24)
+    if phase >= 18:
+        return "opening"
+    if phase >= 7:
+        return "middlegame"
+    return "endgame"
+
+
+def split_from_family(family: str) -> str:
+    cell = int(family[:12], 16) % 20
+    if cell < 14:
+        return "train"
+    if cell < 17:
+        return "validation"
+    return "test"
 
 
 def load_rows(filename: Path, summary: dict[str, Any]) -> tuple[dict[str, Dataset], dict[str, Any]]:
@@ -213,6 +367,12 @@ def load_rows(filename: Path, summary: dict[str, Any]) -> tuple[dict[str, Datase
     seen_rows: set[str] = set()
     seen_clusters: set[str] = set()
     family_split: dict[str, str] = {}
+    family_counts: dict[str, int] = {}
+    seed_counts: dict[str, int] = {}
+    seed_splits: dict[str, set[str]] = {}
+    observed_counts = {
+        split: {phase: 0 for phase in PHASES} for split in SPLITS
+    }
     out_of_range = {split: 0 for split in SPLITS}
     source_licenses: dict[str, int] = {}
     with filename.open("rb") as stream:
@@ -229,6 +389,17 @@ def load_rows(filename: Path, summary: dict[str, Any]) -> tuple[dict[str, Datase
             prior = family_split.setdefault(family, split)
             if prior != split:
                 raise ValueError(f"row {number}: position family crosses splits")
+            family_counts[family] = family_counts.get(family, 0) + 1
+            if family_counts[family] > summary["generator"]["familyCap"]:
+                raise ValueError(f"row {number}: position family exceeds its cap")
+            if split_from_family(family) != split:
+                raise ValueError(f"row {number}: position family hashes to another split")
+            if phase_from_fen(value["fen"]) != value["phase"]:
+                raise ValueError(f"row {number}: phase differs from FEN material")
+            observed_counts[split][value["phase"]] += 1
+            source_id = value["sourceSeed"]["id"]
+            seed_counts[source_id] = seed_counts.get(source_id, 0) + 1
+            seed_splits.setdefault(source_id, set()).add(split)
             license_name = value.get("sourceSeed", {}).get("license")
             if not isinstance(license_name, str) or not license_name:
                 raise ValueError(f"row {number}: source seed license is missing")
@@ -239,6 +410,8 @@ def load_rows(filename: Path, summary: dict[str, Any]) -> tuple[dict[str, Datase
             records[split].append(value)
     if len(seen_rows) != summary["output"]["labelledRows"]:
         raise ValueError("label summary row count differs")
+    if observed_counts != summary["output"]["labelledCounts"]:
+        raise ValueError("label summary split/phase counts differ")
 
     datasets: dict[str, Dataset] = {}
     for split, rows in records.items():
@@ -275,6 +448,9 @@ def load_rows(filename: Path, summary: dict[str, Any]) -> tuple[dict[str, Datase
         "uniqueModelClusters": len(seen_clusters),
         "uniquePositionFamilies": len(family_split),
         "positionFamiliesCrossSplits": 0,
+        "uniqueSourceSeeds": len(seed_counts),
+        "sourceSeedsCrossSplits": sum(len(splits) > 1 for splits in seed_splits.values()),
+        "maxRowsPerSourceSeed": max(seed_counts.values()),
     }
     if datasets["train"].rows < 7000 or sum(item.rows for item in datasets.values()) < 10000:
         raise ValueError("pilot retained too few rows for the preregistered mechanism screen")
@@ -434,6 +610,33 @@ def metrics(dataset: Dataset, weights: np.ndarray, k: float) -> dict[str, Any]:
     }
 
 
+def feature_coverage(dataset: Dataset) -> dict[str, Any]:
+    nonzero_rows = np.asarray(dataset.matrix.getnnz(axis=0)).reshape(-1)
+    groups = {
+        "baselineAux": (0, 17),
+        "baselinePst": (17, 753),
+        "pawnAttacks": (753, 759),
+        "safeMobility": (759, 767),
+        "advancedPawnCramp": (767, 773),
+        "kingBucketPawnPst": (773, 965),
+    }
+    output: dict[str, Any] = {}
+    for name, (first, last) in groups.items():
+        values = nonzero_rows[first:last]
+        output[name] = {
+            "parameters": last - first,
+            "zeroColumns": int(np.sum(values == 0)),
+            "nonzeroRowsMin": int(np.min(values)),
+            "nonzeroRowsMedian": float(np.median(values)),
+            "nonzeroRowsMax": int(np.max(values)),
+        }
+        if last - first <= 20:
+            output[name]["nonzeroRowsByParameter"] = [
+                int(value) for value in values
+            ]
+    return output
+
+
 def paired_family_bootstrap(
     dataset: Dataset,
     baseline: np.ndarray,
@@ -511,13 +714,15 @@ def compact_fit_result(
     names: list[str],
     k: float,
     bounds: list[tuple[float, float]],
+    active: np.ndarray,
 ) -> dict[str, Any]:
     weights = fit["weights"]
     rounded = np.rint(weights)
     active_bounds = sum(
         math.isclose(weights[index], pair[0], abs_tol=1e-7)
         or math.isclose(weights[index], pair[1], abs_tol=1e-7)
-        for index, pair in enumerate(bounds)
+        for index in active
+        for pair in (bounds[int(index)],)
         if not math.isclose(pair[0], pair[1])
     )
     return {
@@ -530,6 +735,7 @@ def compact_fit_result(
             split: metrics(datasets[split], rounded, k) for split in SPLITS
         },
         "weights": weight_summary(weights, center, names),
+        "activeParameters": int(len(active)),
         "parametersAtConstraintBoundary": int(active_bounds),
     }
 
@@ -548,6 +754,8 @@ def analyze(
             "pilot requires NumPy 2.3.5 and SciPy 1.17.0; got "
             f"{np.__version__} and {scipy.__version__}"
         )
+    if source_archive_sha256 != EXPECTED_SOURCE_ARCHIVE_SHA256:
+        raise ValueError("Stockfish source archive differs from the fixed pilot")
     summary = load_summary(label_summary_path, input_path)
     metadata = load_metadata(root)
     if metadata["corpus"]["sha256"] != summary["provenance"]["sourceCorpus"]["sha256"]:
@@ -591,7 +799,7 @@ def analyze(
         selected = min(eligible, key=lambda item: (item["validationLoss"], item["lambda"]))
         selected_weights[surface_name] = selected["weights"]
         compact = compact_fit_result(
-            selected, datasets, center, names, k, bounds
+            selected, datasets, center, names, k, bounds, active
         )
         compact["lambdaDiagnostics"] = [
             {
@@ -625,10 +833,80 @@ def analyze(
             split: metrics(datasets[split], ablated, k) for split in ("validation", "test")
         }
 
+    pairwise_surface_bootstrap = {}
+    for comparison_index, (comparison, baseline_name, candidate_name) in enumerate((
+        ("pawn-attacks-minus-baseline-retune", "baseline-retune", "baseline-plus-pawn-attacks"),
+        (
+            "king-bucket-minus-baseline-retune",
+            "baseline-retune",
+            "baseline-plus-king-bucket-pawn-pst",
+        ),
+        ("cheap-combined-minus-pawn-attacks", "baseline-plus-pawn-attacks", "cheap-r3-combined"),
+        ("full-r3-minus-cheap-combined", "cheap-r3-combined", "full-r3"),
+    )):
+        pairwise_surface_bootstrap[comparison] = {
+            split: paired_family_bootstrap(
+                datasets[split],
+                predictions(datasets[split], selected_weights[baseline_name]),
+                predictions(datasets[split], selected_weights[candidate_name]),
+                k,
+                24680 + comparison_index * 100 + split_index,
+            )
+            for split_index, split in enumerate(("validation", "test"))
+        }
+
     best = min(
         fitted_surfaces,
         key=lambda item: item["float"]["validation"]["crossEntropy"],
     )
+    coverage = feature_coverage(datasets["train"])
+    surface_by_name = {item["surface"]: item for item in fitted_surfaces}
+    full_weights = selected_weights["full-r3"]
+    rounded_full = np.rint(full_weights).astype(np.int64)
+    zeroed_mobility = [
+        names[index]
+        for index in range(4)
+        if rounded_full[index] == 0 and center[index] != 0
+    ]
+    saturated_attacks = [
+        names[index]
+        for index in range(753, 759)
+        if math.isclose(full_weights[index], bounds[index][1], abs_tol=1e-6)
+    ]
+    full_metrics = surface_by_name["full-r3"]["float"]
+    cheap_metrics = surface_by_name["cheap-r3-combined"]["float"]
+    pathology_stop_signals = {
+        "allSurfacesSelectedLowestLambda": all(
+            item["lambda"] == min(lambda_grid) for item in fitted_surfaces
+        ),
+        "fullR3ZeroedShippedMobilityWeights": zeroed_mobility,
+        "fullR3PawnAttackWeightsAtUpperBound": saturated_attacks,
+        "fullR3ChangedBaselinePstParameters": surface_by_name["full-r3"][
+            "weights"
+        ]["groups"]["baselinePst"]["changed"],
+        "fullR3TestCpRmseMinusFrozen": (
+            full_metrics["test"]["teacherCpRmse"]
+            - baseline["test"]["teacherCpRmse"]
+        ),
+        "fullR3ValidationCeMinusCheapCombined": (
+            full_metrics["validation"]["crossEntropy"]
+            - cheap_metrics["validation"]["crossEntropy"]
+        ),
+        "fullR3TestCeMinusCheapCombined": (
+            full_metrics["test"]["crossEntropy"]
+            - cheap_metrics["test"]["crossEntropy"]
+        ),
+        "kingBucketColumnsUnseenInTrain": coverage["kingBucketPawnPst"][
+            "zeroColumns"
+        ],
+        "sourceSeedsCrossSplits": inventory["sourceSeedsCrossSplits"],
+        "decision": "stop-no-runtime-candidate",
+        "reason": (
+            "The random-continuation distribution induces boundary saturation "
+            "and implausible removal of established terms; a quieter natural-game "
+            "teacher corpus is required before any runtime candidate."
+        ),
+    }
     implementation_paths = [
         Path(__file__).resolve(),
         root / "tools/training/hce-synthetic-pilot-data.js",
@@ -653,10 +931,11 @@ def analyze(
         "strengthClaimAllowed": False,
         "teacherTransferEvidence": True,
         "scope": (
-            "Exploratory comparison on deterministic legal continuations of "
+            "Exploratory comparison on deterministic engine-legal continuations of "
             "the checked-in MIT/CC0 corpus, labelled by Stockfish 18."
         ),
         "inventory": inventory,
+        "trainFeatureCoverage": coverage,
         "teacher": summary["teacher"] | {
             "sourceArchiveSha256": source_archive_sha256,
             "sourceTag": "sf_18",
@@ -676,6 +955,8 @@ def analyze(
         "frozenBaseline": baseline,
         "surfaces": fitted_surfaces,
         "cheapR3CombinedAblations": cheap_ablations,
+        "pairedSurfaceBootstrap": pairwise_surface_bootstrap,
+        "pathologyStopSignals": pathology_stop_signals,
         "numericallyBestValidationSurfaceNoCandidateSelection": {
             "surface": best["surface"],
             "lambda": best["lambda"],
@@ -685,16 +966,20 @@ def analyze(
         "tinyNnScreen": {
             "status": "not-run",
             "reason": (
-                "PR146's authenticated trainer is frozen to H64/H128 and rejects "
-                "this synthetic-position input; an H4/H8 screen would require a "
-                "separate nonconvex implementation and is not needed to interpret "
-                "the bounded HCE ablation."
+                "The HCE fit already exposes severe random-position distribution "
+                "bias. A separate nonconvex H4/H8 implementation would measure "
+                "that bias more efficiently, not establish a useful runtime model; "
+                "wait for quieter natural-game, family-isolated teacher data."
             ),
         },
         "provenance": {
             "labelSummarySha256": sha256_file(label_summary_path),
             "labelledStreamSha256": sha256_file(input_path),
             "generatedInputSha256": summary["provenance"]["generatedInputSha256"],
+            "labelRunImplementationSha256": {
+                "generator": summary["provenance"]["generatorScriptSha256"],
+                "labeler": summary["provenance"]["labelerScriptSha256"],
+            },
             "sourceCorpus": metadata["corpus"],
             "implementationSha256": {
                 str(path.relative_to(root)): sha256_file(path)
@@ -705,7 +990,7 @@ def analyze(
             "threads": 1,
         },
         "limitations": [
-            "The positions are generated legal continuations, not the frozen official Lichess selection.",
+            "The positions are generated engine-legal continuations, not the frozen official Lichess selection.",
             "The 25,000-node exploratory labels are shallower than the frozen 100,000-node production teacher contract.",
             "Position families are isolated across splits, but source-game lineage is unavailable for generated continuations.",
             "The locked incident and final E4-v2 match manifest were not opened or used.",
@@ -722,17 +1007,120 @@ def analyze(
     return report
 
 
+def self_test() -> None:
+    root = Path(__file__).resolve().parents[2]
+    metadata = load_metadata(root)
+    center = np.asarray(metadata["center"], dtype=np.float64)
+    scales = np.asarray(metadata["scales"], dtype=np.float64)
+    bounds = full_bounds(center)
+    if not all(
+        bounds[index][1] <= bounds[index + 1][0]
+        for first in (7, 12)
+        for index in range(first, first + 4)
+    ):
+        raise AssertionError("passed-pawn intervals do not imply monotonicity")
+
+    rng = np.random.default_rng(137105)
+    truth = center.copy()
+    truth[:4] = np.asarray([8.0, 7.0, 5.0, 3.0])
+
+    def synthetic(rows: int, serial: int) -> Dataset:
+        dense = np.zeros((rows, PARAMETERS), dtype=np.float64)
+        dense[:, :4] = rng.integers(-20, 21, size=(rows, 4))
+        matrix = sparse.csr_matrix(dense)
+        teacher_cp = np.asarray(matrix @ truth).reshape(-1)
+        target = sigmoid(1.3 * teacher_cp / 400.0)
+        return Dataset(
+            matrix=matrix,
+            fixed_cp=np.zeros(rows, dtype=np.float64),
+            target=target,
+            teacher_cp=teacher_cp,
+            phase=np.asarray([PHASES[index % 3] for index in range(rows)]),
+            family=np.asarray(
+                [f"family-{serial}-{index // 2}" for index in range(rows)]
+            ),
+            row_id=np.asarray([f"row-{serial}-{index}" for index in range(rows)]),
+        )
+
+    datasets = {
+        "train": synthetic(600, 0),
+        "validation": synthetic(240, 1),
+        "test": synthetic(240, 2),
+    }
+    before = metrics(datasets["validation"], center, 1.3)["crossEntropy"]
+    fitted = fit_surface(
+        "self-test",
+        np.arange(0, 4, dtype=np.int32),
+        datasets,
+        center,
+        scales,
+        1.3,
+        0.02,
+        bounds,
+    )
+    after = metrics(
+        datasets["validation"], fitted["weights"], 1.3
+    )["crossEntropy"]
+    if not fitted["success"] or not after < before - 1e-4:
+        raise AssertionError("bounded convex fit did not recover synthetic signal")
+    if any(
+        not bounds[index][0] <= fitted["weights"][index] <= bounds[index][1]
+        for index in range(PARAMETERS)
+    ):
+        raise AssertionError("bounded convex fit escaped a constraint")
+    bootstrap = paired_family_bootstrap(
+        datasets["validation"],
+        predictions(datasets["validation"], center),
+        predictions(datasets["validation"], fitted["weights"]),
+        1.3,
+        137,
+        200,
+    )
+    if bootstrap["candidateMinusBaselineMean"] >= 0:
+        raise AssertionError("paired bootstrap has the wrong loss orientation")
+    try:
+        strict_json(b'{"a":1,"a":2}', "duplicate self-test")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("strict JSON accepted a duplicate member")
+    if phase_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - -") != "opening":
+        raise AssertionError("phase parser drifted")
+    if split_from_family("0" * 64) != "train":
+        raise AssertionError("family split parser drifted")
+    print("analyze-hce-synthetic-pilot self-test: 12 checks passed")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--label-summary", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--stockfish-source-archive-sha256", required=True)
-    return parser.parse_args()
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--input", type=Path)
+    parser.add_argument("--label-summary", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--stockfish-source-archive-sha256")
+    args = parser.parse_args()
+    required = (
+        args.input,
+        args.label_summary,
+        args.output,
+        args.stockfish_source_archive_sha256,
+    )
+    if args.self_test:
+        if any(value is not None for value in required):
+            parser.error("--self-test cannot be combined with pilot inputs")
+    elif any(value is None for value in required):
+        parser.error(
+            "--input, --label-summary, --output, and "
+            "--stockfish-source-archive-sha256 are required"
+        )
+    return args
 
 
 def main() -> None:
     args = parse_args()
+    if args.self_test:
+        self_test()
+        return
     source_hash = require_hash(
         args.stockfish_source_archive_sha256,
         "Stockfish source archive SHA-256",

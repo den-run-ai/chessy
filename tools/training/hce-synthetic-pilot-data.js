@@ -7,8 +7,8 @@
  * Positions are legal random continuations of Chessy's checked-in MIT/CC0
  * evaluation corpus.  Rows are grouped by the same structural family key as
  * the production training contract before they are assigned to a split.
- * Labels are intentionally absent: run-hce-synthetic-pilot.py adds a planted
- * synthetic teacher and marks every result as ineligible for a quality claim.
+ * Labels are intentionally absent: hce-synthetic-pilot-label.js attaches an
+ * external Stockfish teacher and marks every result as non-release evidence.
  */
 'use strict';
 

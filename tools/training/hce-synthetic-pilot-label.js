@@ -266,6 +266,15 @@ class ExploratoryUci {
         latestExact.pvUci[0] !== bestMove) {
       return { eligible: false, reason: 'bestmove-pv-mismatch' };
     }
+    if (!Number.isSafeInteger(latestExact.depth) || latestExact.depth <= 0 ||
+        !Number.isSafeInteger(latestExact.seldepth) ||
+        latestExact.seldepth < latestExact.depth) {
+      return { eligible: false, reason: 'invalid-depth-or-seldepth' };
+    }
+    if (!Number.isSafeInteger(latestExact.nodes) || latestExact.nodes <= 0 ||
+        latestExact.nodes > latestEffort.nodes) {
+      return { eligible: false, reason: 'invalid-score-nodes' };
+    }
     const turn = fen.trim().split(/\s+/)[1];
     const pov = Label.whitePov(latestExact, turn);
     if (!pov) return { eligible: false, reason: 'invalid-white-pov' };
@@ -395,7 +404,8 @@ async function run(options) {
           exactCp: true,
           wdlTotal: 1000,
           bestMoveMustMatchPvHead: true,
-          mateExcluded: true
+          mateExcluded: true,
+          depthAndSeldepthRequired: true
         }
       },
       output: {
