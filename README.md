@@ -238,6 +238,9 @@ families, and source reproduction, correctness and device admission remain
 separate. No candidate has been measured on this manifest. The
 [expanded PeSTO pilot](eval/PESTO-PILOT-2026-09.md) changed
 neither the shipped evaluator nor level budgets.
+The [clean natural-game follow-up](eval/NATURAL-PILOT-2026-09.md) records the
+50,000-position experiment, audited admission, frozen selection and mixed
+80-game development result; no evaluator or level change ships.
 
 For historical reproduction, `test/ai-match.js` supports the archived
 paired-WASM protocol plus diagnostic modes. `--formal --nodes 10000 --plies 180`
@@ -268,7 +271,9 @@ informational/green in the equal-time diagnostic;
 malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
 valid statistical miss. Historical protocol IDs and artifacts are retained;
-new experiments must wait for v2 rather than reusing these exposed openings.
+new formal shipping evidence must wait for v2 family/estimator admission
+under #156. Historically exposed openings support only separately registered
+development diagnostics, such as the natural-game pilot above.
 
 Historical Rust/WASM search optimizations used a separate formal efficiency
 non-inferiority protocol after first demonstrating a material efficiency

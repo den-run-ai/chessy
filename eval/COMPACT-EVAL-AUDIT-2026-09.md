@@ -79,49 +79,52 @@ diagnostic cannot authorize production, regardless of its numerical bound.
 
 ## What still blocks a releasable evaluator
 
-PR #146's exact head `1e01c0b` still lacks canonical NNUE E4 admission and the
-authenticated exact partition of selected records into labels/exclusions.
-Its executable snapshot is retained but not sealed against a hostile process
-with the same user ID; that threat must be implemented or explicitly scoped
-to an isolated trusted runner. These are substantive remaining boundaries,
-not a reason to repeat resolved inventory/publication reviews.
+[PR #171](https://github.com/den-run-ai/chessy/pull/171) fixed canonical NNUE
+E4 selection/certification admission and merged into PR #146's foundation at
+`a2a8eb8625cd4b56f8cefdba9f6768ef7dc9eaf2`, **not into main**. The tools now
+explicitly require a trusted isolated runner; retained executables and input
+snapshots are not claimed sealed against a hostile process with the same user
+ID.
+
+PR #146 remains draft and blocked: its HCE/NNUE consumers must authenticate
+the actual raw UCI transcript and exclusion ledger, then prove the exact,
+disjoint partition of selected records into labels or exclusions with matching
+shared fields. Complete shard inventories and canonical manifest admission
+alone do not establish that transformation. The full foundation still needs
+conflict resolution, final-head validation and review before a main merge.
 
 Signature rotation (#155), formal v2 family/estimator admission (#156), and
 device/runtime evidence (#84) also remain open. The historical signature
 fixture and prior rejected strength trials must not be overwritten or reused
 as evidence for a new candidate. Level labels remain provisional (#113).
 
-## Concrete next data experiment
+## Natural-game follow-up
 
-Prepare a separately versioned natural-game pilot before another fit; do not
-silently change the June-2026 production source in PR #146. A practical small
-source is the complete official CC0
+The separately preregistered natural-game pilot has authenticated the complete
+official CC0
 [January 2013 archive](https://database.lichess.org/standard/lichess_db_standard_rated_2013-01.pgn.zst)
-(121,332 games, about 17.8 MB), with published SHA-256
+(121,332 games; 17,761,302 compressed bytes), SHA-256
 `aa40b3671fa3cf1072eb182892cd90b0e1e003a4a5943492f64b77e7f3fd1635`.
-See the [official checksums](https://database.lichess.org/standard/sha256sums.txt)
-and [CC0 policy](https://database.lichess.org/). This source has been identified,
-not downloaded, admitted or fitted in this follow-up. Old metadata sufficiency
-and phase coverage must be checked before committing to an eligible row count.
+Selection is complete: 50,000 positions from distinct source games, with
+49,381 structural families assigned to disjoint roles. Known incident,
+scorecard and opening boundaries are quarantined under the frozen rules;
+unknown incident upstream lineage and broader player/opening dependence remain
+limitations. The June 2026 production source is unchanged.
 
-Preregister a bounded 40–50k-position pilot, at most one quiet position per
-source game, with source/structural-family isolation and frozen incident,
-scorecard and match-family quarantine. Authenticate the whole compressed
-archive; a hash of a downloaded prefix cannot authenticate the pinned full
-June archive. Freeze the selection, roles, target, quietness, coverage, teacher
-and exclusion rules before 100k-node Stockfish labelling. Preserve all raw
-transcripts and exclusions with a completion manifest.
+The disclosed full replacement produced 47,203 admitted labels and 2,797
+frozen-rule exclusions; independent raw source/UCI/partition auditing found
+zero mismatches. The selected constrained existing weights plus six pawn-attack
+terms reduced validation CE by 1.375% and once-opened HCE test CE by 1.493%,
+with improved CP errors and all phases improving. The family-bootstrap interval
+for test CE difference is wholly negative. This is clean predictive evidence,
+not an Elo/time claim; broader player/opening dependence remains unmeasured.
+The exact selected vector passed private compiled parity, size and throughput
+gates. Its complete independently replayed development screen scored 42.5% at
+50 ms and 58.75% at 200 ms, with both 95% intervals including 50%. The candidate
+stops here without an established Elo/time gain or a larger dispatch.
 
-Compare strongly constrained existing weights against only six additional
-pawn-attack terms first, retaining the baseline in the candidate set. Select
-on validation, apply exact integer parity, then open the test once. Define
-coefficient/coverage/CP-error stop rules before seeing results. An H4/H8 screen
-needs a separate preregistration and untouched NNUE test role; this pilot
-would not complete #137's million-position study.
-
-Use CPU preparation/convex fits first. Check remaining monthly usage and
-benchmark throughput before authorizing any charge-bearing shard. A proposed
-allocation is at most $3 for data/teacher/HCE, $2 for an optional tiny-network
-screen, and $15 for matches, leaving $10 unallocated within the user's $30
-monthly ceiling. These are limits, not a claim of actual cost or scheduled
-spending. No paid job or formal match has been dispatched.
+See the [natural-pilot evidence and decision](NATURAL-PILOT-2026-09.md) for
+completion status, final metrics and preserved failure evidence. This research
+does not satisfy #146's generic consumer admission gap or #137's million-row
+study. The evaluator, difficulty levels and WASM remain unchanged; Modal spend
+is $0 and no paid job or formal match has been dispatched.
