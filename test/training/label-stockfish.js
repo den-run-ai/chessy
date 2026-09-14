@@ -296,6 +296,39 @@ function parseInfo(line) {
   return info;
 }
 
+// Shared by live UCI collection and retained transcript admission. Keep the
+// exact-CP/mate invalidation and terminal effort semantics in one place.
+function newTeacherSearch() {
+  return { latestScore: null, latestExactCp: null, latestEffort: null };
+}
+
+function accumulateTeacherInfo(state, line) {
+  const parsed = parseInfo(line);
+  if (parsed && Number.isSafeInteger(parsed.nodes) && parsed.nodes >= 0 &&
+      (!state.latestEffort || parsed.nodes >= state.latestEffort.nodes)) {
+    state.latestEffort = parsed;
+  }
+  if (parsed && (Number.isFinite(parsed.cpSideToMove) ||
+      Number.isFinite(parsed.mateSideToMove))) {
+    state.latestScore = parsed;
+    if (Number.isFinite(parsed.mateSideToMove)) state.latestExactCp = null;
+    else if (Number.isFinite(parsed.cpSideToMove) && !parsed.scoreBound) {
+      state.latestExactCp = parsed;
+    }
+  }
+}
+
+function finishTeacherSearch(state, bestMove) {
+  const info = state.latestScore &&
+    Number.isFinite(state.latestScore.mateSideToMove) ?
+    state.latestScore : state.latestExactCp;
+  return {
+    info,
+    terminalInfo: state.latestEffort || state.latestScore,
+    bestMove
+  };
+}
+
 function updateLatestScore(latest, line) {
   const parsed = parseInfo(line);
   return parsed && (Number.isFinite(parsed.cpSideToMove) ||
@@ -1039,8 +1072,7 @@ class UciEngine {
     }
     this.send('position fen ' + fen4 + ' 0 1');
     this.send('go nodes ' + nodes);
-    let latestScore = null, latestExactCp = null, latestEffort = null;
-    let bestMove = null;
+    const search = newTeacherSearch();
     const deadline = Date.now() + this.watchdog.positionTimeoutMs;
     for (;;) {
       const remaining = deadline - Date.now();
@@ -1054,34 +1086,9 @@ class UciEngine {
         remaining,
         'bestmove'
       );
-      if (/^info\s/.test(line)) {
-        const parsed = parseInfo(line);
-        if (parsed && Number.isSafeInteger(parsed.nodes) &&
-            parsed.nodes >= 0 &&
-            (!latestEffort || parsed.nodes >= latestEffort.nodes)) {
-          latestEffort = parsed;
-        }
-        if (parsed && (Number.isFinite(parsed.cpSideToMove) ||
-            Number.isFinite(parsed.mateSideToMove))) {
-          latestScore = parsed;
-          if (Number.isFinite(parsed.mateSideToMove)) {
-            // A later bound CP cannot make an exact CP from before a mate
-            // report current again. Only a newer unbounded CP can do that.
-            latestExactCp = null;
-          } else if (Number.isFinite(parsed.cpSideToMove) &&
-              !parsed.scoreBound) {
-            latestExactCp = parsed;
-          }
-        }
-      } else {
-        bestMove = line.split(/\s+/)[1];
-        break;
-      }
+      if (/^info\s/.test(line)) accumulateTeacherInfo(search, line);
+      else return finishTeacherSearch(search, line.split(/\s+/)[1]);
     }
-    const info = latestScore &&
-      Number.isFinite(latestScore.mateSideToMove) ?
-      latestScore : latestExactCp;
-    return { info, terminalInfo: latestEffort || latestScore, bestMove };
   }
 
   async waitForClose(timeoutMs, phase) {
@@ -1699,6 +1706,9 @@ if (require.main === module) {
 module.exports = {
   parseArgs,
   parseInfo,
+  newTeacherSearch,
+  accumulateTeacherInfo,
+  finishTeacherSearch,
   updateLatestScore,
   whitePov,
   assessTeacherResult,

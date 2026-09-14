@@ -1,0 +1,53 @@
+{
+  "candidateRustSuite": {
+    "disposition": "Unchanged baseline-only evaluator score oracle differs from the fitted candidate. Original failure retained; no test assertions weakened. Independent legal authored/native and exact compiled candidate parity pass. Production tests unchanged.",
+    "failed": 1,
+    "passed": 6
+  },
+  "contractSha256": "4a2d6069140d35ba22a21e9cafffa9e3ca478cd0835fe3e1ff183a3bc6e00e45",
+  "counts": {
+    "authoredMismatches": 0,
+    "authoredRows": 1050,
+    "baselineMismatches": 0,
+    "byRole": {
+      "authored": 1050,
+      "hce-test": 4678,
+      "hce-validation": 4717,
+      "shared-train": 33103
+    },
+    "candidateMismatches": 0,
+    "naturalMismatches": 0,
+    "naturalRows": 42498
+  },
+  "frozenSelectionSha256": "022c0cd99d61293d8262fd98df06fd4401e462954a24895a855d790ea779db69",
+  "gates": {
+    "authoredFixtureMismatches": 0,
+    "authoredFixtureRows": 1050,
+    "baselineRebuildByteIdentical": true,
+    "baselineRustSuitePassed": true,
+    "candidateBehaviorFailureUnexplained": false,
+    "candidateNativeAuthoredMismatches": 0,
+    "parityMismatches": 0,
+    "parityRows": 42498,
+    "sizePass": true
+  },
+  "modules": {
+    "baseline": {
+      "brotliBytes": 17690,
+      "rawBytes": 37172,
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+    },
+    "candidate": {
+      "brotliBytes": 17793,
+      "rawBytes": 37478,
+      "sha256": "6a68f2a9513224129d7527044c12cb53d57c5c9193109b739abc857b5ef84dd2"
+    }
+  },
+  "originalBuildReceiptSha256": "72a91ff22d729caf4552f72a09509340c489b8c6d9a0f49a2475eefd9797532b",
+  "researchOnly": true,
+  "runtimeTimingMeasured": false,
+  "schema": "chessy.natural-runtime-build-parity.v1",
+  "status": "PASS",
+  "testReportSha256": "a70fd8c11747d84bc8509dea208ba2630b1e90930856f6246fdb05953f819ada",
+  "weightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef"
+}

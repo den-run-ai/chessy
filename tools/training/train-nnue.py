@@ -160,6 +160,7 @@ class InputContracts:
 @dataclass(frozen=True)
 class SelectionShard:
     path: Path
+    index: int
     rows: int
     sha256: str
 
@@ -172,6 +173,7 @@ class SelectionBinding:
     certification_sha256: str
     selection_contract_sha256: str
     source_snapshot_sha256: str
+    position_family_cap: int
     sample_only: bool
     shards: tuple[SelectionShard, ...]
     certification_clusters: frozenset[str]
@@ -189,8 +191,15 @@ class Shard:
     sidecar_path: Path
     sidecar_sha256: str
     sidecar: dict[str, Any]
+    sidecar_bytes: bytes = field(repr=False)
     selection: SelectionBinding
     selection_shard: SelectionShard
+    transcript_path: Path
+    transcript_sha256: str
+    exclusions_path: Path
+    exclusions_sha256: str
+    teacher_evidence: dict[str, Any] = field(default_factory=dict)
+    evidence_admission_files: tuple[tuple[Path, str], ...] = ()
     observed_rows: int = 0
     role_rows: dict[str, int] = field(default_factory=dict)
     fully_validated: bool = False
@@ -912,6 +921,7 @@ def load_selection_binding(
         selection_shards.append(
             SelectionShard(
                 path=shard_path,
+                index=index,
                 rows=rows,
                 sha256=shard_sha256,
             )
@@ -929,6 +939,9 @@ def load_selection_binding(
         certification_sha256=certification_sha256,
         selection_contract_sha256=selection_contract_sha256,
         source_snapshot_sha256=source_snapshot_sha256,
+        position_family_cap=require_nonnegative_int(
+            adapter.get("positionFamilyCap"), f"{label}.adapter.positionFamilyCap"
+        ),
         sample_only=sample_only,
         shards=tuple(selection_shards),
         certification_clusters=frozenset(certification_clusters),
@@ -951,7 +964,8 @@ def validate_sidecar(
     if not sidecar_path.is_file():
         raise ValueError(f"{filename}: required sidecar is missing: {sidecar_path}")
     label = str(sidecar_path)
-    manifest, sidecar_sha = load_json_buffer(sidecar_path, label)
+    sidecar_bytes = sidecar_path.read_bytes()
+    manifest, sidecar_sha = decode_json_buffer(sidecar_bytes, label)
     trust = contracts.config["data"]["trustBoundary"]
     sample_contract = require_object(
         trust.get("sampleOnlyValidation"),
@@ -1094,13 +1108,23 @@ def validate_sidecar(
     exclusion_rows = require_nonnegative_int(
         exclusions.get("rows"), f"{label}.exclusions.rows"
     )
-    require_sha256(exclusions.get("sha256"), f"{label}.exclusions.sha256")
+    exclusions_sha256 = require_sha256(
+        exclusions.get("sha256"), f"{label}.exclusions.sha256"
+    )
+    exclusions_path = resolve_evidence_artifact(
+        exclusions.get("path"), sidecar_path, "exclusions"
+    )
     if input_rows != rows + exclusion_rows:
         raise ValueError(f"{label}: input/output/exclusion row counts do not balance")
     transcript = require_object(
         side_teacher.get("transcript"), f"{label}.teacher.transcript"
     )
-    require_sha256(transcript.get("sha256"), f"{label}.teacher.transcript.sha256")
+    transcript_sha256 = require_sha256(
+        transcript.get("sha256"), f"{label}.teacher.transcript.sha256"
+    )
+    transcript_path = resolve_evidence_artifact(
+        transcript.get("path"), sidecar_path, "teacher transcript"
+    )
     authenticated_stream, actual_sha = capture_teacher_bytes(
         filename,
         immutable_snapshot=immutable_snapshot,
@@ -1118,9 +1142,125 @@ def validate_sidecar(
         sidecar_path=sidecar_path,
         sidecar_sha256=sidecar_sha,
         sidecar=manifest,
+        sidecar_bytes=sidecar_bytes,
         selection=selection_binding,
         selection_shard=selection_shard,
+        transcript_path=transcript_path,
+        transcript_sha256=transcript_sha256,
+        exclusions_path=exclusions_path,
+        exclusions_sha256=exclusions_sha256,
     )
+
+
+def resolve_evidence_artifact(
+    value: Any, sidecar_path: Path, label: str
+) -> Path:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value in {".", ".."}
+        or "/" in value
+        or "\\" in value
+        or "\x00" in value
+        or Path(value).name != value
+    ):
+        raise ValueError(f"{sidecar_path}: {label} path must be a safe basename")
+    parent = sidecar_path.parent.resolve()
+    filename = parent / value
+    if filename.resolve().parent != parent:
+        raise ValueError(f"{sidecar_path}: {label} path escapes its sidecar directory")
+    if not filename.is_file():
+        raise ValueError(f"{sidecar_path}: required {label} artifact is missing: {filename}")
+    return filename
+
+
+def authenticate_teacher_evidence(shard: Shard, contracts: InputContracts) -> None:
+    """Authenticate the accepted/excluded partition against exact retained bytes.
+
+    The bridge parses actual UCI commands and engine responses. Hash-shaped
+    sidecar metadata alone cannot authorize teacher labels. Read each artifact
+    once for this admission, then keep its digest for the publication recheck;
+    retaining every transcript in memory through training is unnecessary.
+    """
+    repository = contracts.config_path.parents[2]
+    admission_files = tuple(
+        (repository / relative, sha256_file(repository / relative))
+        for relative in (
+            "test/training/validate-teacher-evidence.js",
+            "test/training/teacher-evidence.js",
+            "test/training/label-stockfish.js",
+            "test/training/corpus.js",
+        )
+    )
+
+    def captured_text(filename: Path, expected: str, label: str) -> str:
+        captured = filename.read_bytes()
+        if hashlib.sha256(captured).hexdigest() != expected:
+            raise ValueError(f"{filename}: {label} SHA-256 does not match")
+        try:
+            return captured.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"{filename}: {label} is not UTF-8") from error
+
+    stream = shard.authenticated_stream
+    stream.seek(0)
+    teacher_bytes = stream.read()
+    stream.seek(0)
+    if hashlib.sha256(teacher_bytes).hexdigest() != shard.sha256:
+        raise ValueError(f"{shard.path}: authenticated teacher bytes changed before admission")
+    request = {
+        "schema": "chessy.teacher-evidence-admission.v1",
+        "teacherPath": str(shard.path),
+        "teacherText": teacher_bytes.decode("utf-8"),
+        "selectionText": captured_text(
+            shard.selection_shard.path, shard.selection_shard.sha256, "selection shard"
+        ),
+        "sidecarText": shard.sidecar_bytes.decode("utf-8"),
+        "transcriptText": captured_text(
+            shard.transcript_path, shard.transcript_sha256, "teacher transcript"
+        ),
+        "exclusionsText": captured_text(
+            shard.exclusions_path, shard.exclusions_sha256, "teacher exclusions"
+        ),
+        "selectionContext": {
+            "sourceSha256": shard.selection.source_snapshot_sha256,
+            "sourceLicense": "CC0-1.0",
+            "sampleOnly": shard.selection.sample_only,
+            "shardCount": len(shard.selection.shards),
+            "shardIndex": shard.selection_shard.index,
+            "certificationClusters": sorted(shard.selection.certification_clusters),
+            "certificationFamilies": sorted(shard.selection.certification_families),
+            "positionFamilyCap": shard.selection.position_family_cap,
+        },
+    }
+    try:
+        completed = subprocess.run(
+            ["node", str(admission_files[0][0])],
+            input=json.dumps(request), capture_output=True, text=True,
+            timeout=120, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"teacher evidence admission could not run: {error}") from error
+    if completed.returncode:
+        raise ValueError(completed.stderr.strip() or "teacher evidence admission failed")
+    evidence, _ = decode_json_buffer(
+        completed.stdout.encode("utf-8"), "teacher evidence admission result"
+    )
+    for key, expected in (
+        ("schema", request["schema"]),
+        ("transcriptSha256", shard.transcript_sha256),
+        ("exclusionsSha256", shard.exclusions_sha256),
+        ("selectedRows", shard.selection_shard.rows),
+        ("acceptedRows", shard.rows),
+        ("excludedRows", shard.sidecar["exclusions"]["rows"]),
+    ):
+        if evidence.get(key) != expected:
+            raise ValueError(f"teacher evidence admission disagrees on {key}")
+    for filename, expected in admission_files:
+        if sha256_file(filename) != expected:
+            raise ValueError(f"teacher evidence admission implementation changed: {filename}")
+    shard.teacher_evidence = evidence
+    shard.evidence_admission_files = admission_files
 
 
 def validate_record(
@@ -1371,6 +1511,25 @@ def assert_shards_unchanged(
             raise exception(
                 f"input sidecar changed during {phase}: {shard.sidecar_path}"
             )
+        for filename, expected, label in (
+            (shard.transcript_path, shard.transcript_sha256, "teacher transcript"),
+            (shard.exclusions_path, shard.exclusions_sha256, "teacher exclusions"),
+        ):
+            try:
+                actual = sha256_file(filename)
+            except OSError as error:
+                raise exception(f"{label} unavailable during {phase}: {filename}") from error
+            if actual != expected:
+                raise exception(f"{label} changed during {phase}: {filename}")
+        if hashlib.sha256(shard.sidecar_bytes).hexdigest() != shard.sidecar_sha256:
+            raise exception(f"retained sidecar bytes changed during {phase}: {shard.sidecar_path}")
+        if not shard.teacher_evidence or not shard.evidence_admission_files:
+            raise exception(f"teacher evidence admission state missing during {phase}: {shard.path}")
+        for filename, expected in shard.evidence_admission_files:
+            if sha256_file(filename) != expected:
+                raise exception(
+                    f"teacher evidence admission implementation changed during {phase}: {filename}"
+                )
     for binding in selections.values():
         for filename, expected in binding.admission_files:
             if sha256_file(filename) != expected:
@@ -1520,6 +1679,28 @@ def _validate_inputs_retained(
         raise ValueError(
             "record source snapshot does not match authenticated selection"
         )
+    selected_clusters: set[str] = set()
+    selected_family_counts: dict[str, int] = {}
+    for shard in all_shards:
+        authenticate_teacher_evidence(shard, contracts)
+        for key in ("selectedClusters", "selectedFamilies"):
+            values = shard.teacher_evidence.get(key)
+            if (
+                not isinstance(values, list)
+                or len(values) != shard.selection_shard.rows
+                or any(not isinstance(value, str) or not HEX_256.fullmatch(value)
+                    for value in values)
+            ):
+                raise ValueError(f"teacher evidence admission has invalid {key} inventory")
+        for cluster in shard.teacher_evidence["selectedClusters"]:
+            if cluster in selected_clusters:
+                raise ValueError(f"duplicate selected cluster across shards: {cluster}")
+            selected_clusters.add(cluster)
+        for family in shard.teacher_evidence["selectedFamilies"]:
+            count = selected_family_counts.get(family, 0) + 1
+            if count > selection_binding.position_family_cap:
+                raise ValueError(f"selected position family exceeds global cap: {family}")
+            selected_family_counts[family] = count
     if sum(shard.role_rows["shared-train"] for shard in train) == 0:
         raise ValueError("training role contained zero records")
     if sum(shard.role_rows["nnue-validation"] for shard in validation) == 0:
@@ -1585,6 +1766,18 @@ def validation_report(
             "sidecar": {
                 "path": str(shard.sidecar_path),
                 "sha256": shard.sidecar_sha256,
+            },
+            "teacherEvidence": {
+                **{
+                    key: value for key, value in shard.teacher_evidence.items()
+                    if key not in {"selectedClusters", "selectedFamilies"}
+                },
+                "transcriptPath": str(shard.transcript_path),
+                "exclusionsPath": str(shard.exclusions_path),
+                "implementationFiles": [
+                    {"path": str(filename), "sha256": digest}
+                    for filename, digest in shard.evidence_admission_files
+                ],
             },
         }
 
@@ -2027,7 +2220,7 @@ def self_test() -> None:
             "cluster": cluster_key(fen),
             "role": role,
             "positionFamily": family,
-            "strata": {},
+            "strata": {"phase": "endgame", "eval": "0000-0050"},
             "source": source,
             "teacher": {
                 "id": teacher["id"],
@@ -2066,8 +2259,10 @@ def self_test() -> None:
                 "sampleOnly": sample_only,
                 "certificationFens": list(certification_fens),
             }),
-            text=True, capture_output=True, check=True, timeout=120,
+            text=True, capture_output=True, check=False, timeout=120,
         )
+        if completed.returncode:
+            raise AssertionError(completed.stderr.strip() or "selection fixture helper failed")
         result = json.loads(completed.stdout)
         for key in ("path", "shardPath", "certificationPath"):
             result[key] = Path(result[key])
@@ -2112,7 +2307,11 @@ def self_test() -> None:
                     "sha256": selection["shardSha256"],
                 },
             },
-            "exclusions": {"rows": 0, "sha256": "4" * 64},
+            "exclusions": {
+                "path": filename.name + ".exclusions.ndjson",
+                "rows": 0,
+                "sha256": sha256_text(""),
+            },
             "teacher": {
                 "manifest": {"sha256": contracts.teacher_sha256},
                 "id": teacher["id"],
@@ -2127,12 +2326,35 @@ def self_test() -> None:
                 "networks": expected_teacher_networks(teacher),
                 "options": expected_teacher_options(teacher),
                 "watchdog": teacher["watchdog"],
-                "transcript": {"sha256": "5" * 64},
+                "transcript": {
+                    "path": filename.name + ".uci.log",
+                    "sha256": sha256_text(""),
+                },
             },
         }
         if sample_only:
             manifest["fitAllowed"] = False
             manifest["mechanismFixture"] = sample_contract["mechanismFixture"]
+        completed = subprocess.run(
+            ["node", str(root / "test/training/teacher-evidence-fixture.js")],
+            input=json.dumps({
+                "teacherPath": str(filename),
+                "teacherText": filename.read_bytes().decode("utf-8"),
+                "selectionText": selection["shardPath"].read_bytes().decode("utf-8"),
+                "sidecarText": json.dumps(manifest, sort_keys=True) + "\n",
+            }),
+            text=True, capture_output=True, check=False, timeout=120,
+        )
+        if completed.returncode:
+            raise AssertionError(completed.stderr.strip() or "teacher evidence fixture helper failed")
+        evidence_fixture = json.loads(completed.stdout)
+        manifest = evidence_fixture["sidecar"]
+        (filename.parent / manifest["teacher"]["transcript"]["path"]).write_bytes(
+            evidence_fixture["transcriptText"].encode("utf-8")
+        )
+        (filename.parent / manifest["exclusions"]["path"]).write_bytes(
+            evidence_fixture["exclusionsText"].encode("utf-8")
+        )
         sidecar = Path(
             str(filename)
             + contracts.config["data"]["trustBoundary"]["sidecarSuffix"]
@@ -2159,7 +2381,7 @@ def self_test() -> None:
         )
         teacher_file.write_text(
             "".join(
-                json.dumps(record, sort_keys=True) + "\n"
+                json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
                 for record in mixed_records
             ),
             encoding="utf-8",
@@ -2307,7 +2529,111 @@ def self_test() -> None:
                 "captured canonical admission source mutation blocks publication")
         finally:
             admitted_shard.selection = original_binding
+        original_evidence_files = admitted_shard.evidence_admission_files
+        admitted_shard.evidence_admission_files += (captured_probe,)
+        try:
+            rejects(RuntimeError, "teacher evidence admission implementation changed during training",
+                lambda: assert_inputs_unchanged(validated),
+                "captured teacher evidence source mutation blocks publication")
+        finally:
+            admitted_shard.evidence_admission_files = original_evidence_files
+        evidence_originals = {
+            filename: filename.read_bytes()
+            for filename in (
+                admitted_shard.path, admitted_shard.sidecar_path,
+                admitted_shard.selection_shard.path,
+                admitted_shard.transcript_path, admitted_shard.exclusions_path,
+            )
+        }
+        for filename, label in (
+            (admitted_shard.transcript_path, "teacher transcript"),
+            (admitted_shard.exclusions_path, "exclusions"),
+        ):
+            filename.unlink()
+            try:
+                rejects(ValueError, f"required {label} artifact is missing",
+                    lambda: validate_sidecar(teacher_file, contracts,
+                        selection_cache={selection["path"]: admitted_shard.selection}),
+                    f"missing {label} artifact blocks admission")
+            finally:
+                filename.write_bytes(evidence_originals[filename])
+        for unsafe_name in ("../outside.log", "/tmp/outside.log", "..", "nested\\outside.log"):
+            rejects(ValueError, "safe basename",
+                lambda value=unsafe_name: resolve_evidence_artifact(
+                    value, admitted_shard.sidecar_path, "teacher transcript"),
+                "unsafe evidence artifact path is rejected")
+        nested = directory / "outside-evidence-directory"
+        nested.mkdir()
+        (nested / "escaped.log").write_bytes(b"outside\n")
+        escaped_evidence = directory / "escaped-evidence.log"
+        escaped_evidence.symlink_to(nested / "escaped.log")
+        rejects(ValueError, "escapes its sidecar directory",
+            lambda: resolve_evidence_artifact(escaped_evidence.name,
+                admitted_shard.sidecar_path, "teacher transcript"),
+            "symlink cannot escape evidence artifact directory")
+        for filename, admission_label, publication_label in (
+            (admitted_shard.transcript_path, "teacher transcript", "teacher transcript"),
+            (admitted_shard.exclusions_path, "teacher exclusions", "teacher exclusions"),
+        ):
+            filename.write_bytes(evidence_originals[filename] + b"tampered\n")
+            try:
+                rejects(ValueError, f"{admission_label} SHA-256 does not match",
+                    lambda: authenticate_teacher_evidence(admitted_shard, contracts),
+                    f"{admission_label} tampering blocks admission")
+                rejects(RuntimeError, f"{publication_label} changed during training",
+                    lambda: assert_inputs_unchanged(validated),
+                    f"{publication_label} mutation blocks publication")
+            finally:
+                filename.write_bytes(evidence_originals[filename])
+        changed_transcript = evidence_originals[admitted_shard.transcript_path].replace(
+            b"score cp 0", b"score cp 1", 1
+        )
+        check(changed_transcript != evidence_originals[admitted_shard.transcript_path],
+            "rehashed transcript fixture changes an actual teacher score")
+        forged_sidecar = json.loads(admitted_shard.sidecar_bytes)
+        changed_transcript_sha = hashlib.sha256(changed_transcript).hexdigest()
+        forged_sidecar["teacher"]["transcript"]["sha256"] = changed_transcript_sha
+        rehashed_shard = replace(admitted_shard, sidecar=forged_sidecar,
+            sidecar_bytes=(json.dumps(forged_sidecar) + "\n").encode("utf-8"),
+            transcript_sha256=changed_transcript_sha)
+        rehashed_shard.sidecar_sha256 = hashlib.sha256(rehashed_shard.sidecar_bytes).hexdigest()
+        admitted_shard.transcript_path.write_bytes(changed_transcript)
+        try:
+            rejects(ValueError, "teacher evidence",
+                lambda: authenticate_teacher_evidence(rehashed_shard, contracts),
+                "rehashing a contradictory teacher transcript cannot admit labels")
+        finally:
+            admitted_shard.transcript_path.write_bytes(
+                evidence_originals[admitted_shard.transcript_path])
+        replaced_evidence_paths = False
+
+        def replace_evidence_paths(*args: Any, **kwargs: Any) -> Any:
+            nonlocal replaced_evidence_paths
+            for filename in evidence_originals:
+                filename.write_bytes(b"pathname changed after evidence capture\n")
+            replaced_evidence_paths = True
+            return real_subprocess_run(*args, **kwargs)
+
+        try:
+            subprocess.run = replace_evidence_paths
+            authenticate_teacher_evidence(admitted_shard, contracts)
+            check(replaced_evidence_paths, "teacher evidence pathname replacement fixture executed")
+            equal(admitted_shard.teacher_evidence["acceptedRows"], 2,
+                "teacher admission consumes exact retained artifact bytes")
+            rejects(RuntimeError, "input shard changed during training",
+                lambda: assert_inputs_unchanged(validated),
+                "evidence pathname replacement blocks publication")
+        finally:
+            subprocess.run = real_subprocess_run
+            for filename, original in evidence_originals.items():
+                filename.write_bytes(original)
         report = validation_report(validated, contracts)
+        equal(report["train"][0]["teacherEvidence"]["transcriptSha256"],
+            admitted_shard.transcript_sha256, "authenticated transcript report provenance")
+        equal(report["train"][0]["teacherEvidence"]["exclusionsSha256"],
+            admitted_shard.exclusions_sha256, "authenticated exclusions report provenance")
+        equal(report["train"][0]["teacherEvidence"]["selectedRows"], 2,
+            "selected partition report provenance")
         check(
             validated.train[0].immutable_snapshot,
             "training fixture uses an immutable disk snapshot",
@@ -2370,7 +2696,7 @@ def self_test() -> None:
         snapshot_stream = validated.train[0].authenticated_stream
         snapshot_stream.seek(0)
         changed_snapshot_bytes = original_teacher_bytes.replace(
-            b'"targetWhite": 0.5', b'"targetWhite": 0.4', 1
+            b'"targetWhite":0.5', b'"targetWhite":0.4', 1
         )
         check(
             changed_snapshot_bytes != original_teacher_bytes,
@@ -2448,7 +2774,7 @@ def self_test() -> None:
         )
         sample_file.write_text(
             "".join(
-                json.dumps(record, sort_keys=True) + "\n"
+                json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
                 for record in sample_records
             ),
             encoding="utf-8",

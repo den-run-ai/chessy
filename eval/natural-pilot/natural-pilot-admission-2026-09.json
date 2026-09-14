@@ -1,0 +1,159 @@
+{
+  "byRole": {
+    "hce-test": {
+      "acceptedByPhase": {
+        "endgame": 721,
+        "middlegame": 1455,
+        "opening": 2502
+      },
+      "acceptedRows": 4678,
+      "excludedByPhase": {
+        "endgame": 136,
+        "middlegame": 78,
+        "opening": 70
+      },
+      "excludedRows": 284
+    },
+    "hce-validation": {
+      "acceptedByPhase": {
+        "endgame": 746,
+        "middlegame": 1469,
+        "opening": 2502
+      },
+      "acceptedRows": 4717,
+      "excludedByPhase": {
+        "endgame": 137,
+        "middlegame": 99,
+        "opening": 80
+      },
+      "excludedRows": 316
+    },
+    "nnue-test": {
+      "acceptedByPhase": {
+        "endgame": 349,
+        "middlegame": 722,
+        "opening": 1260
+      },
+      "acceptedRows": 2331,
+      "excludedByPhase": {
+        "endgame": 64,
+        "middlegame": 37,
+        "opening": 32
+      },
+      "excludedRows": 133
+    },
+    "nnue-validation": {
+      "acceptedByPhase": {
+        "endgame": 332,
+        "middlegame": 732,
+        "opening": 1310
+      },
+      "acceptedRows": 2374,
+      "excludedByPhase": {
+        "endgame": 59,
+        "middlegame": 38,
+        "opening": 39
+      },
+      "excludedRows": 136
+    },
+    "shared-train": {
+      "acceptedByPhase": {
+        "endgame": 5094,
+        "middlegame": 10550,
+        "opening": 17459
+      },
+      "acceptedRows": 33103,
+      "excludedByPhase": {
+        "endgame": 846,
+        "middlegame": 559,
+        "opening": 523
+      },
+      "excludedRows": 1928
+    }
+  },
+  "classification": "Exclusion reasons identify failures of the frozen admission rule; they do not establish that the underlying Stockfish score was wrong.",
+  "counts": {
+    "acceptedRows": 47203,
+    "excludedRows": 2797,
+    "exclusionFraction": 0.05594,
+    "rawUciJsonlLines": 1633597,
+    "selectedRows": 50000,
+    "workersCompleted": 8
+  },
+  "derivedFromFiles": {
+    "labels-v2/excluded.ndjson": {
+      "bytes": 4362582,
+      "sha256": "91be7f9f61558f0b0567191068d15b5b8c28d247707f3e4edec988bdae4769c4"
+    },
+    "labels-v2/hce-test.ndjson": {
+      "bytes": 6880695,
+      "sha256": "aa3f371e84a4c08a15aa16f7f2f05430754872ceb699006557fab0517d2cc1a2"
+    },
+    "labels-v2/hce-validation.ndjson": {
+      "bytes": 6987230,
+      "sha256": "8dbdf621d65680441ad5cdba103d3f7451b45e2af8c41d9be4779bfd5b2aebbf"
+    },
+    "labels-v2/nnue-test.ndjson": {
+      "bytes": 3435245,
+      "sha256": "5b2f21724f66790b76c938f6a54c32acbcb747d6674c457e616b508adf31a93a"
+    },
+    "labels-v2/nnue-validation.ndjson": {
+      "bytes": 3515275,
+      "sha256": "ce9f0e133985543585aa07d42b300cb455f791041ae514dacae988ef9486d262"
+    },
+    "labels-v2/shared-train.ndjson": {
+      "bytes": 48785600,
+      "sha256": "4dfdf9844d5bd9c236cb601fd3a6f32d854556754c035b43413b4e33965bc2ce"
+    }
+  },
+  "exclusionsByReason": {
+    "bestmove-pv-mismatch": 869,
+    "invalid-search-depth": 399,
+    "mate-score": 1525,
+    "reported-nodes-under-budget": 4
+  },
+  "exclusionsByReasonAndPhase": {
+    "bestmove-pv-mismatch": {
+      "endgame": 85,
+      "middlegame": 182,
+      "opening": 602
+    },
+    "invalid-search-depth": {
+      "endgame": 259,
+      "middlegame": 95,
+      "opening": 45
+    },
+    "mate-score": {
+      "endgame": 896,
+      "middlegame": 532,
+      "opening": 97
+    },
+    "reported-nodes-under-budget": {
+      "endgame": 2,
+      "middlegame": 2,
+      "opening": 0
+    }
+  },
+  "generatedAtUtc": "2026-09-14T08:27:53.919362+00:00",
+  "identities": {
+    "fitPreregistrationSha256": "0b258e14c66562394df4f5cea9e14bc812c85c15a19f72993f7543f206e4ddb9",
+    "labelArtifactAuditSha256": "5af7e6f2ef9d3f6d0668555ac2c43c7f0e2a35aeeb0b84b19a090c60bdc851d9",
+    "labelSummarySha256": "8862475a1c4d22867832b6a7399da91f2a1a14f1aad26994826e98a8975bc26d",
+    "preregistrationSha256": "c3b2407a5fc4bf31cc6b81097689fdf1b3c3f57da0b6b7cfed40fbc178c69c43",
+    "selectionAuditSha256": "97753b24c87378d6fc26b1b6d907563e0458cad00858404ec7891b0a0ded2264",
+    "selectionManifestSha256": "eb0cff9bb74555e425146182b05f0708683faa9c993bcf41896e104d63c1c7c1",
+    "sourceCompressedSha256": "aa40b3671fa3cf1072eb182892cd90b0e1e003a4a5943492f64b77e7f3fd1635",
+    "sourceGames": 121332,
+    "sourceLicense": "CC0-1.0",
+    "sourceUncompressedSha256": "8963b6a1620a0e9c77e5515a0744ec133e86869487188af047bb0a74400dee37",
+    "sourceUrl": "https://database.lichess.org/standard/lichess_db_standard_rated_2013-01.pgn.zst",
+    "teacherExecutableSha256": "ef2b67169e88bafb47f6f2311fe059c64f26e77344c5d507f05928d7fce25319",
+    "teacherManifestSha256": "710172dd66858a0de891aa83232985de57b69200dbfb520de1336b0bc084df02"
+  },
+  "method": "Count only immutable role, phaseBucket and exclusion.reason fields from closed artifacts whose complete raw/source/partition audit passed; no teacher score, WDL, PV, model prediction or loss aggregation.",
+  "modelEvaluationPerformed": false,
+  "schema": "chessy.natural-pilot-label-admission-publication-summary.v1",
+  "scoreValuesOrDistributionsIncluded": false,
+  "sourceSummarySha256": "027e225107a72c53a1ab4a34dce00c61f02e9bd053f62a2091ceae42757d0c3e",
+  "status": "audited-complete-research-only"
+}

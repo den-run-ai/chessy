@@ -387,10 +387,22 @@ certification, or a rehashed change to its source, schedules, or controls cannot
 replace the canonical contracts. The explicit sample mode continues to require
 the complete pending certification template and remains non-fit-eligible.
 
-This closes canonical manifest admission only. Authentication of the real
-exclusion ledger/transcript and proof of the exact selection-to-label/exclusion
-partition remain required work in PR #146. Passing these manifest tests does
-not certify label provenance, admit a production dataset, or authorize fitting.
+HCE and NNUE also require the actual exclusion ledger and complete UCI
+transcript beside every teacher shard. The shared `teacher-evidence.js`
+admission hashes and consumes the same retained bytes, validates all selected
+records, and requires each selected ID exactly once in accepted labels or
+exclusions. It replays the frozen UCI options, per-position resets, FENs and
+node budgets through the labeler's score reducer, then reconstructs the exact
+label or exclusion and its reason inventory. Missing files, substituted source
+fields, rehashed omissions, and labels inconsistent with the recorded search
+fail before fitting. HCE compiles only the retained authenticated teacher rows;
+NNUE trains from its retained snapshot and rechecks evidence at publication.
+
+This authenticates retained evidence and internal consistency in the trusted
+runner below; a wholly fabricated, coherently rehashed transcript is not a
+cryptographic attestation that Stockfish executed. Input licensing, frozen
+selection, experiment registration, device timing, and strength gates remain
+separate requirements. These changes do not integrate a learned evaluator.
 
 Training and labelling tools run in an isolated, trusted OS account with a
 fixed checkout and trusted Node/Python executables. Retained descriptors and

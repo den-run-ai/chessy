@@ -247,12 +247,14 @@ function assertBounded(engine, label) {
 }
 
 function assertFormalAbiPair(candidate, reference) {
-  if (!candidate || candidate.abiVersion !== 2) {
-    throw new Error('formal candidate must expose ordinary result ABI v2 ' +
+  if (!candidate || candidate.abiVersion !== PROTOCOL.candidateResultAbi) {
+    throw new Error('formal candidate must expose ordinary result ABI v' +
+      PROTOCOL.candidateResultAbi + ' ' +
       '(got ' + JSON.stringify(candidate && candidate.abiVersion) + ')');
   }
-  if (!reference || reference.abiVersion !== 1) {
-    throw new Error('formal frozen reference must expose ordinary result ABI v1 ' +
+  if (!reference || reference.abiVersion !== PROTOCOL.baseResultAbi) {
+    throw new Error('formal frozen reference must expose ordinary result ABI v' +
+      PROTOCOL.baseResultAbi + ' ' +
       '(got ' + JSON.stringify(reference && reference.abiVersion) + ')');
   }
 }
@@ -328,6 +330,55 @@ function validateWorkflowRun(value) {
   return value || null;
 }
 
+function renderShardOutput(config, result) {
+  const openLimit = config.openbase + SHARD_OPENINGS;
+  const depthPercent = result.telemetry.moves
+    ? 100 * result.telemetry.depthGe5 / result.telemetry.moves
+    : 0;
+  const lines = [
+    'protocol-id: ' + PROTOCOL.id,
+    'acceptance-class: ' + PROTOCOL.acceptanceClass,
+    'lower-bound-threshold: ' + PROTOCOL.lowerBoundThreshold,
+    'candidate-sha: ' + config.candidateSha,
+    'base-sha: ' + config.baseSha,
+    'harness-sha: ' + config.harnessSha,
+    'candidate-wasm-sha256: ' + result.candidateDigest,
+    'base-wasm-sha256: ' + result.referenceDigest,
+    'candidate-result-abi: ' + result.candidateAbiVersion,
+    'base-result-abi: ' + result.referenceAbiVersion,
+    'budget-mode: ' + PROTOCOL.budgetMode,
+    'budget-value: ' + PROTOCOL.budgetValue,
+    'max-plies: ' + PROTOCOL.maxPlies,
+    'openings-manifest-version: ' +
+      MatchProtocol.OPENINGS_MANIFEST_VERSION,
+    'openings-manifest-sha256: ' +
+      MatchProtocol.OPENINGS_MANIFEST_SHA256,
+    'node-runtime: ' + process.version
+  ];
+  if (result.workflowRun) lines.push('workflow-run: ' + result.workflowRun);
+  lines.push(
+    'pair-scores: ' + JSON.stringify(result.pairScores),
+    'records: ' + JSON.stringify(result.records),
+    'openings-total: ' + OPENINGS.length,
+    'shard: openings [' + config.openbase + ',' + openLimit +
+      ') seeds [' + config.seedbase + ',' + (config.seedbase + 1) + ')',
+    'depth-dist: ' + JSON.stringify(result.telemetry.depths),
+    'completed-depth: ' + result.telemetry.depthGe5 + '/' +
+      result.telemetry.moves + ' candidate moves reached depth >= 5 (' +
+      depthPercent.toFixed(1) + '%)',
+    'candidate WASM vs frozen-base WASM: ' + result.games +
+      ' games, ' + NODES + ' nodes/move',
+    'W ' + result.wins + ' / D ' + result.draws + ' / L ' + result.losses +
+      '  score ' + (result.stats.mean * 100).toFixed(2) +
+      '%  one-sided 95% lower bound ' +
+      (result.stats.lo95 * 100).toFixed(2) + '% over ' +
+      result.stats.nClusters + ' openings (' + result.stats.nPairs + ' pairs)',
+    'FORMAL SHARD: no verdict — efficiency non-inferiority verdict ' +
+      'is reserved for the complete 800-game aggregation'
+  );
+  return lines.join('\n');
+}
+
 async function runMatch(config, environment) {
   const candidateBytes = fs.readFileSync(config.candidateWasm);
   const referenceBytes = fs.readFileSync(config.referenceWasm);
@@ -387,46 +438,21 @@ async function runMatch(config, environment) {
 
   const stats = clusterStats(records);
   const workflowRun = validateWorkflowRun(environment.CHESSY_WORKFLOW_RUN);
-  const depthPercent = telemetry.moves
-    ? 100 * telemetry.depthGe5 / telemetry.moves
-    : 0;
-
-  console.log('protocol-id: ' + PROTOCOL.id);
-  console.log('acceptance-class: ' + PROTOCOL.acceptanceClass);
-  console.log('lower-bound-threshold: ' + PROTOCOL.lowerBoundThreshold);
-  console.log('candidate-sha: ' + config.candidateSha);
-  console.log('base-sha: ' + config.baseSha);
-  console.log('harness-sha: ' + config.harnessSha);
-  console.log('candidate-wasm-sha256: ' + candidateDigest);
-  console.log('base-wasm-sha256: ' + referenceDigest);
-  console.log('candidate-result-abi: ' + candidate.abiVersion);
-  console.log('base-result-abi: ' + reference.abiVersion);
-  console.log('budget-mode: ' + PROTOCOL.budgetMode);
-  console.log('budget-value: ' + PROTOCOL.budgetValue);
-  console.log('max-plies: ' + PROTOCOL.maxPlies);
-  console.log('openings-manifest-version: ' +
-    MatchProtocol.OPENINGS_MANIFEST_VERSION);
-  console.log('openings-manifest-sha256: ' +
-    MatchProtocol.OPENINGS_MANIFEST_SHA256);
-  console.log('node-runtime: ' + process.version);
-  if (workflowRun) console.log('workflow-run: ' + workflowRun);
-  console.log('pair-scores: ' + JSON.stringify(pairScores));
-  console.log('records: ' + JSON.stringify(records));
-  console.log('openings-total: ' + OPENINGS.length);
-  console.log('shard: openings [' + config.openbase + ',' + openLimit +
-    ') seeds [' + config.seedbase + ',' + (config.seedbase + 1) + ')');
-  console.log('depth-dist: ' + JSON.stringify(telemetry.depths));
-  console.log('completed-depth: ' + telemetry.depthGe5 + '/' +
-    telemetry.moves + ' candidate moves reached depth >= 5 (' +
-    depthPercent.toFixed(1) + '%)');
-  console.log('candidate WASM vs frozen-base WASM: ' + games +
-    ' games, ' + NODES + ' nodes/move');
-  console.log('W ' + wins + ' / D ' + draws + ' / L ' + losses +
-    '  score ' + (stats.mean * 100).toFixed(2) +
-    '%  one-sided 95% lower bound ' + (stats.lo95 * 100).toFixed(2) +
-    '% over ' + stats.nClusters + ' openings (' + stats.nPairs + ' pairs)');
-  console.log('FORMAL SHARD: no verdict — efficiency non-inferiority verdict ' +
-    'is reserved for the complete 800-game aggregation');
+  console.log(renderShardOutput(config, {
+    candidateDigest,
+    referenceDigest,
+    candidateAbiVersion: candidate.abiVersion,
+    referenceAbiVersion: reference.abiVersion,
+    workflowRun,
+    pairScores,
+    records,
+    telemetry,
+    games,
+    wins,
+    draws,
+    losses,
+    stats
+  }));
 
   return {
     candidateDigest,
@@ -478,6 +504,7 @@ module.exports = {
   assertFixedNodeResult,
   resolveMove,
   playGame,
+  renderShardOutput,
   runMatch,
   main
 };

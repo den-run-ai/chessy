@@ -68,10 +68,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   player's opponent could not possibly checkmate by any series of legal
   moves (a helpmate counts, tested on the full position with both sides'
   pieces on the board). Every move records its think time and both
-  remaining clocks, so replay shows the clocks as they stood, undo rewinds
-  them, and the debug PGN embeds standard `[%clk h:mm:ss]` comments plus a
-  `TimeControl` tag. The live clock is persisted whenever the page is
-  hidden or closed, so reloading never refunds thinking time.
+  remaining clocks. During replay the primary clocks stay live and visibly
+  active, while a separately labelled snapshot shows the clocks after the
+  viewed move; replay exits automatically when the live side reaches 20
+  seconds. Undo rewinds the clocks, and the debug PGN embeds standard
+  `[%clk h:mm:ss]` comments plus a `TimeControl` tag. The live clock is
+  persisted whenever the page is hidden or closed, so reloading never refunds
+  thinking time.
 - **Persistence** — the game is saved to `localStorage` and survives reloads
   and app restarts. Each computer move retains its release, effective search
   config, completed/attempted depth, counters, White-POV score (including
@@ -122,7 +125,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   annotations, and alternative moves remain absent from public scan state
   until a valid structured reflection is submitted. That submission reveals
   only the matching move first; reflecting on every suggestion unlocks the
-  scanned score trail. Scores evaluate the played root line, use a fixed
+  scanned score trail. Each unlock receipt is durably bound to the exact game
+  revision—including clock and time-control evidence—the replayed position,
+  played SAN, and canonical structured answer, so it survives reload without
+  trusting scan caches or lesson cards. Scores
+  evaluate the played root line, use a fixed
   White-POV sign, and mark quick-pass values with `≈`.
   Chessy adds only conservative negative `?!`, `?`, or `??` badges to stable,
   deep-confirmed critical moments; imported move-quality PGN NAGs carry a
@@ -154,8 +161,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   persistence is requested once, after the first durable archive write, and
   reduces eviction exposure without guaranteeing it.
 - **Coaching data controls** — paste or upload one PGN into the archive
-  (legality-validated and deduplicated), back up games/cards to versioned JSON,
-  including release/search provenance, atomically restore a validated backup,
+  (legality-validated and deduplicated), back up games/cards/structured
+  reflections to versioned JSON, including release/search provenance,
+  atomically restore a validated backup,
   or Delete All behind a recovery fence. Bulk/Lichess import and an optional
   language coach remain future work (roadmap
   [#23](https://github.com/den-run-ai/chessy/issues/23), scan tracker
@@ -216,11 +224,28 @@ fixture but intentionally skips the exact r69 search signature; check out the
 recorded commit to reproduce that historical result. Its pinned Stockfish Lite
 comparison covers four forced root moves only, not every legal move.
 
-The engine measurement tools are manual (too slow for PR CI).
-`test/ai-match.js` supports one formal paired-WASM protocol plus diagnostic
-modes. Only `--formal --nodes 10000 --plies 180`
+The engine measurement tools below are **historical v1 infrastructure**.
+Do not dispatch them for a new candidate: Rust/WASM ignores the four seed
+slots, so 800 games repeat only 100 opening pairs. Issue #156 replaces them.
+The [prospective 400-opening CC0 manifest](eval/match-v2/PROVENANCE.md) is
+frozen. The [v2 diagnostic runner](eval/match-v2/EXECUTION.md) registers exact
+commits, raw modules and budgets before executing 20 complete shards with
+both colors. It preserves and replays every move, repetition history and
+terminal result. Easy evaluator (10k nodes, endpoint lower bound >50%) and
+Hard selective-search (230k nodes, >49%) are separate profiles. Every result
+remains diagnostic: 400 unique endpoints do not prove 400 independent
+families, and source reproduction, correctness and device admission remain
+separate. No candidate has been measured on this manifest. The
+[expanded PeSTO pilot](eval/PESTO-PILOT-2026-09.md) changed
+neither the shipped evaluator nor level budgets.
+The [clean natural-game follow-up](eval/NATURAL-PILOT-2026-09.md) records the
+50,000-position experiment, audited admission, frozen selection and mixed
+80-game development result; no evaluator or level change ships.
+
+For historical reproduction, `test/ai-match.js` supports the archived
+paired-WASM protocol plus diagnostic modes. `--formal --nodes 10000 --plies 180`
 aggregated over 100 openings x 4 seeds x both colors (800 games), against a
-distinct base commit, is the formal gate for a pure evaluation/strength
+distinct base commit, was the formal gate for a pure evaluation/strength
 change, and it passes only when the opening-clustered one-sided 95% lower
 bound is strictly above 50%. The looser lower-bound-above-49% non-inferiority
 criterion is not sufficient for such a change; it is reserved for a separately
@@ -245,10 +270,12 @@ A valid statistical miss fails the strict-strength check but is
 informational/green in the equal-time diagnostic;
 malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
-valid statistical miss. Start a fresh complete 20-shard run for a genuinely
-new experiment, because post-selection invalidates the predeclared result.
+valid statistical miss. Historical protocol IDs and artifacts are retained;
+new formal shipping evidence must wait for v2 family/estimator admission
+under #156. Historically exposed openings support only separately registered
+development diagnostics, such as the natural-game pilot above.
 
-Rust/WASM search optimizations use a separate formal efficiency
+Historical Rust/WASM search optimizations used a separate formal efficiency
 non-inferiority protocol after first demonstrating a material efficiency
 benefit. `test/wasm-efficiency-match.js` compares exact candidate and frozen
 base modules across the reviewed ABI-v2/v1 ordinary-search boundary at the
@@ -274,9 +301,12 @@ node test/browser/all.js            # BROWSER=webkit for the WebKit engine
 ```
 
 (With `playwright-core` instead, point `CHROMIUM_PATH` at a Chromium
-binary.) Both test layers run on every pull request via GitHub Actions —
-the browser suites on both Chromium and WebKit — and deploys to Pages are
-gated on the engine *and* browser suites.
+binary.) Every pull request and every `main` deployment runs the same six CI
+checks: hygiene, pinned Rust/WASM reproducibility, release-token enforcement,
+the complete engine/eval job, Chromium, and WebKit. Pages deployment waits for
+all six. A separate **Full evaluation** action runs the complete 117-case
+correctness and 103-case analysis scorecards weekly and on manual pre-release
+dispatch.
 
 ## Structure
 
@@ -291,7 +321,7 @@ gated on the engine *and* browser suites.
 | `assets/ai-worker.js` | WASM-only Play worker |
 | `assets/runtime-update.js` | Release-freshness gate for New game/Rematch |
 | `assets/app.js` | Board UI, game flow, persistence |
-| `assets/store.js` | IndexedDB coaching store (games, lesson cards, bounded LRU analysis cache, resumable scan jobs) |
+| `assets/store.js` | IndexedDB coaching store (games, lesson cards, durable revision-bound reflection receipts, bounded LRU analysis cache, resumable scan jobs) |
 | `assets/storage-health.js` | One-time persistent-storage request (after the first durable archive write) and the Progress storage snapshot |
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |

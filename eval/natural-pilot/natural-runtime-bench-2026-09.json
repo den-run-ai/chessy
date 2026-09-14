@@ -1,0 +1,48 @@
+{
+  "byBudget": {
+    "10000": {
+      "aggregateNpsRatio": 0.988512926501848,
+      "baseline": {
+        "p90ElapsedMs": 9.724232800000165,
+        "totalElapsedMs": 2170.604997000007,
+        "totalNodes": 2880000
+      },
+      "candidate": {
+        "p90ElapsedMs": 9.371548699999972,
+        "totalElapsedMs": 2195.8286420000086,
+        "totalNodes": 2880000
+      },
+      "medianPairedNpsRatio": 0.9829958415594306,
+      "pairs": 288,
+      "pass": true
+    },
+    "100000": {
+      "aggregateNpsRatio": 0.9598332371425898,
+      "baseline": {
+        "p90ElapsedMs": 83.58067509999891,
+        "totalElapsedMs": 19329.37415899998,
+        "totalNodes": 28800000
+      },
+      "candidate": {
+        "p90ElapsedMs": 89.36026570000067,
+        "totalElapsedMs": 20138.26299299997,
+        "totalNodes": 28800000
+      },
+      "medianPairedNpsRatio": 0.9746225781029364,
+      "pairs": 288,
+      "pass": true
+    }
+  },
+  "costGatePassed": true,
+  "independentAudit": {
+    "newSearchesPerformed": false,
+    "records": 1536,
+    "sha256": "d09e69f002d8ca8d9d83c4ef1d8c1a757e6e4c602290832e6a56ad438628fd6a",
+    "status": "PASS",
+    "verifiedFiles": 84
+  },
+  "schema": "chessy.natural-runtime-bench-summary.v1",
+  "scope": "One preregistered local Node22 fixed-node cost experiment; independent audit recorded separately; not physical-device evidence or Elo.",
+  "sourceSummarySha256": "0e17dc92a478bc7f15dd1a6176a1a074c8d32b5b90cb5639cbf50a07ad2ed8b2",
+  "status": "completed"
+}

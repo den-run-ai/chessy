@@ -10,6 +10,7 @@ const childProcess = require('child_process');
 const Corpus = require('./corpus');
 const Prepare = require('./prepare-lichess-evals');
 const AdmissionFixture = require('./selection-admission-fixture');
+const EvidenceFixture = require('./teacher-evidence-fixture');
 
 const ROOT = path.join(__dirname, '..', '..');
 const ARCH_PATH = path.join(ROOT, 'eval', 'training', 'nnue-v1-architecture.json');
@@ -204,7 +205,7 @@ function sidecarFor(filename, body, rows) {
       }
     },
     output: {
-      path: filename,
+      path: path.basename(filename),
       rows,
       sha256: sha256(body)
     },
@@ -256,9 +257,10 @@ function writeShard(directory, name, records, options) {
   const filename = path.join(directory, name);
   const ordered = settings.preserveOrder ?
     records.slice() : records.slice().sort((a, b) => a.id.localeCompare(b.id));
-  const body = ordered.map(record => JSON.stringify(record)).join('\n') + '\n';
+  const body = ordered.map(record => Prepare.stableJson(record)).join('\n') + '\n';
   fs.writeFileSync(filename, body);
   const sidecar = sidecarFor(filename, body, ordered.length);
+  EvidenceFixture.writeEvidence(filename, ordered, sidecar);
   if (settings.mutateSidecar) settings.mutateSidecar(sidecar);
   if (!settings.omitSidecar) {
     fs.writeFileSync(filename + '.manifest.json', JSON.stringify(sidecar) + '\n');
@@ -387,6 +389,59 @@ try {
   assert.strictEqual(
     Object.prototype.hasOwnProperty.call(report, 'fitAllowed'), false);
   checks += 6;
+  // Exercise the HCE consumer itself, so removing its shared evidence
+  // admission cannot leave only the NNUE boundary protected.
+  function hceCommand() {
+    return childProcess.spawnSync(process.execPath, [
+      path.join(ROOT, 'test/training/hce-r3-pack-stream.js'),
+      ...completeInventory.flatMap(filename => ['--input', filename]),
+      '--role', 'shared-train'
+    ], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+  }
+  const hce = hceCommand();
+  assert.strictEqual(hce.status, 0, hce.stderr);
+  assert.strictEqual(hce.stdout.trim().split('\n').length, 2);
+  const hceSummary = JSON.parse(hce.stderr);
+  assert.strictEqual(hceSummary.providedShardInventory[0]
+    .teacherEvidence.acceptedRows, 1);
+  const hceSidecarPath = trainA + '.manifest.json';
+  const hceSidecarText = fs.readFileSync(hceSidecarPath, 'utf8');
+  const hceTranscriptPath = trainA + '.uci.log';
+  const hceTranscriptText = fs.readFileSync(hceTranscriptPath, 'utf8');
+  fs.unlinkSync(hceTranscriptPath);
+  const hceMissing = hceCommand();
+  assert.notStrictEqual(hceMissing.status, 0);
+  assert.match(hceMissing.stderr, /ENOENT|missing/);
+  const contradictedTranscript = hceTranscriptText.replace('score cp 25', 'score cp 26');
+  assert.notStrictEqual(contradictedTranscript, hceTranscriptText);
+  fs.writeFileSync(hceTranscriptPath, contradictedTranscript);
+  const contradictedSidecar = JSON.parse(hceSidecarText);
+  contradictedSidecar.teacher.transcript.sha256 = sha256(contradictedTranscript);
+  fs.writeFileSync(hceSidecarPath, JSON.stringify(contradictedSidecar) + '\n');
+  const hceContradiction = hceCommand();
+  assert.notStrictEqual(hceContradiction.status, 0);
+  assert.match(hceContradiction.stderr, /accepted label binding differs/);
+  fs.writeFileSync(hceTranscriptPath, hceTranscriptText);
+  fs.writeFileSync(hceSidecarPath, hceSidecarText);
+  checks += 8;
+  // The trainer must read the actual evidence bytes, not merely accept a
+  // syntactically plausible hash in its teacher sidecar.
+  for (const [artifact, suffix] of [
+    ['transcript', '.uci.log'], ['exclusions', '.exclusions.ndjson']
+  ]) {
+    const evidencePath = trainA + suffix;
+    const evidenceText = fs.readFileSync(evidencePath, 'utf8');
+    fs.unlinkSync(evidencePath);
+    const absent = spawnValidation(completeInventory, completeInventory);
+    assert.notStrictEqual(absent.status, 0, artifact + ' missing');
+    assert.match(absent.stderr, /missing|cannot read|No such file|ENOENT/i);
+    fs.writeFileSync(evidencePath, evidenceText + 'tampered\n');
+    const changed = spawnValidation(completeInventory, completeInventory);
+    assert.notStrictEqual(changed.status, 0, artifact + ' tampered');
+    assert.match(changed.stderr, /SHA-256|sha256|hash/i);
+    fs.writeFileSync(evidencePath, evidenceText);
+    checks += 4;
+  }
   const incompleteUnion = spawnValidation([trainA], [validation]);
   assert.notStrictEqual(incompleteUnion.status, 0, incompleteUnion.stdout);
   assert.match(
