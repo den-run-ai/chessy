@@ -1,0 +1,36 @@
+{
+  "schema": "chessy.natural-pilot-execution-amendment.v2",
+  "id": "natural-jan2013-50k-output-integrity-v2",
+  "frozenBeforeReplacementLabels": true,
+  "reason": "First complete execution attempt was interrupted as infrastructure-invalid after two transcript paths changed inode and lost live-writer evidence. Cause of path replacement remains unproven. No fitting, model selection or test metrics occurred.",
+  "invalidAttempt": {
+    "launchSha256": "ec570d4a2122e0702400acb4d47f338bda6dcb0c231ce1f67b2a023bf762b477",
+    "failureInventorySha256": "fda1dd7b9e8a147355a5cccf9ac45ff0f52961fc4e21c9d3fde298db5b39810d",
+    "disposition": "preserve every observed artifact; never fit or selectively retry this attempt",
+    "observedPartitionRows": 5593
+  },
+  "unchangedInputs": {
+    "selectionManifestSha256": "eb0cff9bb74555e425146182b05f0708683faa9c993bcf41896e104d63c1c7c1",
+    "selectionRulesSha256": "c3b2407a5fc4bf31cc6b81097689fdf1b3c3f57da0b6b7cfed40fbc178c69c43",
+    "fitRulesSha256": "0b258e14c66562394df4f5cea9e14bc812c85c15a19f72993f7543f206e4ddb9",
+    "teacherRulesSha256": "710172dd66858a0de891aa83232985de57b69200dbfb520de1336b0bc084df02"
+  },
+  "replacementExecution": {
+    "scope": "one full deterministic 50000-row execution under corrected output integrity implementation",
+    "maxCompleteReplacementAttempts": 1,
+    "workers": 8,
+    "selectiveWorkerRetry": false,
+    "scoreBasedRetry": false,
+    "automaticResume": false,
+    "liveOutputDirectory": "local temporary directory outside the synchronized workspace",
+    "publishToWorkspace": "only after writers closed and every output identity/hash verified",
+    "failureAction": "preserve; no fit; no further replacement under this registration"
+  },
+  "integrityRequirements": [
+    "verify output path and open descriptor dev/inode and expected byte size before/after writes",
+    "verify actual persisted bytes against streaming SHA256 at close",
+    "terminate active teachers on any output-integrity failure",
+    "require complete selection = accepted XOR excluded partition and all raw transcripts before fitting"
+  ],
+  "scientificBoundary": "This is an explicitly disclosed infrastructure replacement, not a fresh independent dataset or a formal Elo experiment. Dataset, splits, targets, node budgets, eligibility and selection/transfer thresholds remain frozen."
+}

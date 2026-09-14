@@ -1,0 +1,76 @@
+{
+  "schema": "chessy.natural-pilot-fit-contract.v1",
+  "id": "natural-hce-constrained-2026-09-v1",
+  "status": "frozen-research-only-no-shipping-candidate",
+  "surfaces": [
+    {"id": "baseline", "activeEnd": 0},
+    {"id": "constrained753", "activeEnd": 753},
+    {"id": "constrained753-plus-pawn-attacks", "activeEnd": 759}
+  ],
+  "parameters": 965,
+  "regularization": {
+    "lambdaGrid": [0.02, 0.05, 0.1, 0.2, 0.5, 1],
+    "formula": "0.5 * lambda * sum(((weight-center)/scale)^2) / 965",
+    "center": "shipped baseline for 0..752; zero for 753..964",
+    "scales": "frozen hce-r3-baseline scales"
+  },
+  "bounds": {
+    "auxiliary0To16": "ceil(0.75*center)..floor(1.25*center)",
+    "pst17To752": "center-10..center+10",
+    "pawnAttacks753To758": [0, 20],
+    "allOtherExpanded": [0, 0],
+    "unsupportedInTrain": "fixed at center",
+    "integerRounding": "nearest integer; ties to even; clamp to integer bounds",
+    "coordinatePolish": false
+  },
+  "calibration": {
+    "fitOn": "shared-train baseline only",
+    "formula": "sigmoid(k * cpWhite / 400)",
+    "bounds": [0.05, 4],
+    "freezeBeforeWeightFit": true
+  },
+  "solver": {
+    "method": "L-BFGS-B",
+    "maxIterations": 500,
+    "gradientTolerance": 1e-8,
+    "functionTolerance": 1e-12,
+    "maxLineSearchSteps": 40,
+    "singleThreaded": true
+  },
+  "teacherAdmission": {
+    "maxAbsCp": 2000,
+    "minimumReportedNodes": 100000,
+    "minimumDepth": 1,
+    "requiredLabelType": "cp-exact-wdl-pv-bestmove",
+    "mixedTeacherIdentitiesAllowed": false
+  },
+  "minimumRows": {"shared-train": 2000, "hce-validation": 500, "hce-test": 500},
+  "selection": {
+    "metric": "integer-runtime-rounded validation cross-entropy",
+    "baselineAlwaysEligible": true,
+    "tiePolicy": "baseline, then fewer parameters, then larger lambda",
+    "tieTolerance": 1e-12,
+    "minimumRelativeCeGain": 0.005,
+    "maximumRelativeCpMaeDeterioration": 0.02,
+    "maximumRelativeCpRmseDeterioration": 0.02,
+    "maximumPhaseRelativeCeDeterioration": 0.01,
+    "minimumRowsForPhaseGuard": 100,
+    "testOpenedOnceAfterSelectionFrozen": true
+  },
+  "transfer": {
+    "sameLossAndCpGuardsAsValidation": true,
+    "bootstrapUnit": "position-family cluster; row-weighted mean",
+    "bootstrapIterations": 2000,
+    "bootstrapSeed": 1370915,
+    "maximumCi95UpperCeDifference": 0,
+    "minimumRowsPerPhaseForScaling": 100,
+    "failureAction": "stop; no retuning, larger run, incident access, or shipping candidate"
+  },
+  "runtime": {
+    "score": "floor((integer numerator + 12)/24)",
+    "baselineParity": "zero mismatches against shipped WASM on all admitted rows",
+    "productionIntegrationAllowed": false,
+    "eloOrTimeClaimAllowed": false,
+    "weightsArtifactDisposition": "local research selection only; do not commit or ship"
+  }
+}
