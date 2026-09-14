@@ -1,0 +1,119 @@
+{
+  "schema": "chessy.natural-pilot-preregistration.v1",
+  "id": "natural-jan2013-50k-v1",
+  "status": "research-only-preregistered-before-labels",
+  "productionFitAllowed": false,
+  "source": {
+    "url": "https://database.lichess.org/standard/lichess_db_standard_rated_2013-01.pgn.zst",
+    "sha256": "aa40b3671fa3cf1072eb182892cd90b0e1e003a4a5943492f64b77e7f3fd1635",
+    "games": 121332,
+    "license": "CC0-1.0",
+    "licenseUrl": "https://database.lichess.org/",
+    "checksumUrl": "https://database.lichess.org/standard/sha256sums.txt",
+    "authentication": "complete-compressed-archive-before-parse-and-rehash-before-publication"
+  },
+  "dependencies": {
+    "pythonChess": "1.11.2",
+    "zstandard": "0.25.0"
+  },
+  "selection": {
+    "seed": "natural-jan2013-50k-v1",
+    "maximumRows": 50000,
+    "minimumRowsForFullPilot": 40000,
+    "maximumRowsPerGame": 1,
+    "maximumRowsPerFamily": 4,
+    "minimumGamePlies": 30,
+    "minimumPly": 16,
+    "maximumPly": 160,
+    "minimumRating": 1200,
+    "maximumRating": 3500,
+    "minimumBaseSeconds": 180,
+    "minimumHalfmoveClock": 2,
+    "maximumHalfmoveClock": 79,
+    "requiredMetadata": [
+      "Site",
+      "UTCDate",
+      "WhiteElo",
+      "BlackElo",
+      "TimeControl",
+      "Result"
+    ],
+    "utcDates": [
+      "2012.12.31",
+      "2013.01.31"
+    ],
+    "allowedResults": [
+      "1-0",
+      "0-1",
+      "1/2-1/2"
+    ],
+    "quietness": "root not in check; halfmove 2..79; next recorded move is legal, non-capturing, non-promoting and non-checking; root not insufficient material, current threefold repetition; halfmove ceiling excludes fifty-move claims",
+    "gameCandidate": "smallest SHA256(seed NUL sourceId NUL ply) among quiet candidates; quarantine and dedup then exclude that candidate without substitution",
+    "globalSelection": "ascending candidate priority, reject duplicate model cluster, family cap4, stop admitting at50000 while retaining all source inventory",
+    "roleCell": "int(positionFamily[0:12],16) % 100",
+    "roles": {
+      "shared-train": [
+        0,
+        70
+      ],
+      "hce-validation": [
+        70,
+        80
+      ],
+      "hce-test": [
+        80,
+        90
+      ],
+      "nnue-validation": [
+        90,
+        95
+      ],
+      "nnue-test": [
+        95,
+        100
+      ]
+    },
+    "coverageBeforeLabelling": {
+      "minimumPerHceRole": 2000,
+      "minimumPerNnueRole": 1000,
+      "minimumPerPhasePerHceRole": 150,
+      "minimumUniqueFamiliesPerHceRole": 1500
+    },
+    "shortfallDisposition": "preserve-complete-selection-and-report-fullPilotReady-false; no automatic replacement-source, repeated-selection or relaxed-rule fallback",
+    "parserWorkers": 8
+  },
+  "quarantine": {
+    "exclude": [
+      "exact-or-model-symmetry-cluster",
+      "static-pawn-king-material-family",
+      "known-source-game-id"
+    ],
+    "requiredFiles": [
+      "eval/corpus/eval-v1.ndjson",
+      "eval/corpus/sources/lichess-puzzles-v1.csv",
+      "test/fixtures/master-incident-20260724.json",
+      "test/fixtures/master-e4-regression-20260729.json",
+      "test/fixtures/master-e4-regression-20260729.pgn",
+      "test/ai-match-openings.js",
+      "eval/match-v2/openings.json"
+    ],
+    "includeEveryIncidentAndOpeningPrefix": true,
+    "incidentCrossSourceLineage": "pending-authenticated-source-game-id; do-not-invent"
+  },
+  "teacher": {
+    "contract": "eval/training/natural-teacher-v1.json",
+    "nodes": 100000,
+    "target": "(whiteWin + 0.5*whiteDraw)/1000",
+    "eligibility": "existing frozen exact-cp/WDL/bestmove/PV/depth/seldepth rule; retain all raw transcripts and deterministic exclusions; no mate-to-cp substitution",
+    "maximumExclusionFractionForFitting": 0.1,
+    "fitContract": "eval/training/natural-fit-v1.json",
+    "maximumAbsCpForFit": 2000
+  },
+  "testUse": "HCE test opened only after validation selection artifact is frozen; NNUE test never consumed by this HCE study",
+  "claims": "exploratory natural-game teacher-loss study only; no production admission, Elo/time, release or #137-million-position-study claim",
+  "labeling": {
+    "workers": 8,
+    "positionCommand": "startpos-full-prefix",
+    "failurePolicy": "no-retry-stop-worker-exclude-unattempted-invalidate-run"
+  }
+}
