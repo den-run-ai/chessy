@@ -1,7 +1,8 @@
 /*
  * Loader for the literal, CC0, 400-opening v2 manifest. The exact file bytes
  * are part of the protocol identity; structural and chess-rule validation is
- * covered by ai-match-openings-v2.test.js. Execution is still pending #156.
+ * covered by ai-match-openings-v2.test.js. Diagnostic execution uses this same
+ * identity; family-independent formal admission remains pending #156.
  */
 'use strict';
 
