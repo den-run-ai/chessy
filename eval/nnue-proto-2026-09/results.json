@@ -2179,6 +2179,60 @@
      "reason": "checkmate"
     }
    ]
+  },
+  "hce": {
+   "converted": 5,
+   "total": 8,
+   "rows": [
+    {
+     "name": "KQ vs K",
+     "won": true,
+     "plies": 15,
+     "reason": "checkmate"
+    },
+    {
+     "name": "KR vs K",
+     "won": true,
+     "plies": 29,
+     "reason": "checkmate"
+    },
+    {
+     "name": "KBB vs K",
+     "won": true,
+     "plies": 57,
+     "reason": "checkmate"
+    },
+    {
+     "name": "KBN vs K",
+     "won": false,
+     "plies": 100,
+     "reason": "fifty-move rule"
+    },
+    {
+     "name": "KP vs K (won)",
+     "won": false,
+     "plies": 47,
+     "reason": "stalemate"
+    },
+    {
+     "name": "KQ vs K (black)",
+     "won": true,
+     "plies": 15,
+     "reason": "checkmate"
+    },
+    {
+     "name": "KR vs K (black)",
+     "won": false,
+     "plies": 100,
+     "reason": "fifty-move rule"
+    },
+    {
+     "name": "KRR vs KR",
+     "won": true,
+     "plies": 11,
+     "reason": "checkmate"
+    }
+   ]
   }
  },
  "matches": {
