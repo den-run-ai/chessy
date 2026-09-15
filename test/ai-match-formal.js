@@ -13,7 +13,11 @@ const Chess = globalThis.Chess;
 const REGISTRY = 'eval/match-formal/registry.json';
 const PROFILES = Object.freeze({
   'evaluator-easy': { nodes: 10000, threshold: 0.50, acceptance: 'strict-evaluator-strength' },
-  'selective-hard': { nodes: 230000, threshold: 0.49, acceptance: 'efficiency-conditional-noninferiority' }
+  'selective-hard': { nodes: 230000, threshold: 0.49, acceptance: 'selective-search-conditional-noninferiority' }
+});
+const CHANGE_CLASSES = Object.freeze({
+  'evaluator-easy': 'evaluation-change',
+  'selective-hard': 'selective-search-change'
 });
 const CONTRACT = Object.freeze({ schema: 'chessy.formal-registration.v1',
   protocol: 'chessy-finite-bank-4096-pairs-v1', opportunity: 'initial-formal-opportunity-v1',
@@ -133,6 +137,11 @@ function validatePrerequisites(campaign, candidate, base, read) {
     }
   }
 }
+function validateCampaignScope(campaign) {
+  C.check(campaign && Object.hasOwn(CHANGE_CLASSES, campaign.profile), 'unknown formal campaign/profile');
+  C.check(campaign.changeClass === CHANGE_CLASSES[campaign.profile],
+    'formal profile requires its declared behavior-changing class; pure search-cost admission remains unavailable');
+}
 function loadCampaign(harness) {
   const registryBytes = C.revision(harness, REGISTRY), registry = parse(registryBytes);
   C.same({ schema: registry.schema, alpha: registry.alpha, opportunity: registry.opportunity },
@@ -140,7 +149,8 @@ function loadCampaign(harness) {
   C.same(Object.keys(registry).sort(), ['alpha', 'campaign', 'opportunity', 'schema'], 'registry fields');
   C.check(registry.campaign !== null, 'no reviewed fresh campaign: formal dispatch unavailable');
   const campaign = attachment(harness, registry.campaign).value;
-  C.check(campaign.schema === 'chessy.formal-campaign.v1' && Object.hasOwn(PROFILES, campaign.profile), 'unknown formal campaign/profile');
+  C.check(campaign.schema === 'chessy.formal-campaign.v1', 'unknown formal campaign schema');
+  validateCampaignScope(campaign);
   C.same(campaign.contract, CONTRACT, 'prospective formal contract');
   C.check(campaign.candidate !== campaign.base, 'candidate/base must differ');
   // v2 provides exact Git module/source/build identities; no v2 verdict or
@@ -324,5 +334,5 @@ async function main(argv) {
   } finally { fs.closeSync(fd); }
 }
 if (require.main === module) main(process.argv.slice(2)).catch(error => { console.error('FAIL: ' + error.message); process.exitCode = 2; });
-module.exports = { CONTRACT, PROFILES, TRUSTED, KINDS, parse, buildFormalMap, validateBank, validatePrerequisites, loadCampaign, preflight,
+module.exports = { CONTRACT, PROFILES, CHANGE_CLASSES, TRUSTED, KINDS, parse, validateCampaignScope, buildFormalMap, validateBank, validatePrerequisites, loadCampaign, preflight,
   validateRegistration, validateFormalSearch, replayShard, summarize, aggregateRaw, canonicalBytes, main };
