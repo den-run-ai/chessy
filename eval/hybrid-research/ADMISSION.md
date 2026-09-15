@@ -1,6 +1,6 @@
 # Prospective hybrid admission design — proposal only
 
-This resolves design choices for the next implementation of
+This proposes design choices for a future implementation of
 [#175](https://github.com/den-run-ai/chessy/issues/175). It does not change an
 existing runner, estimator, manifest or acceptance result. No formal dispatch
 is admitted by this document alone. The selected hybrid can be compiled and
@@ -92,7 +92,8 @@ or substitute repeated games for endpoints.
 
 ## Equal-time and physical-device evidence remain distinct
 
-The design above closes a fixed-node statistical question. It does not prove
+The design above would address a fixed-node statistical question once
+implemented and validated. It does not prove
 an Elo/time improvement. Run a separately registered equal-time development
 comparison of the compiled hybrid with shipped and expanded HCE, using the
 same hardware, alternating execution order, identical time allowance, complete

@@ -1,5 +1,12 @@
 # Hybrid evaluator research — 2026-09-15
 
+This document preserves the **pre-experiment rationale**. The subsequent
+[hybrid report](../neural-hybrid-v1/REPORT.md),
+[compiled cost report](../training/hybrid-runtime-results-2026-09.md) and
+[match evidence report](../training/hybrid-match-results-2026-09.md) contain
+the measured findings. The NNUE test was subsequently opened once under its
+separate registration; statements below describe the earlier review stage.
+
 The next useful experiment is a compiled hybrid using the existing frozen H8
 and expanded HCE, followed by development games at equal elapsed budgets.
 Additional training labels and GPU fitting are not prerequisites. This document

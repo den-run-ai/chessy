@@ -278,7 +278,7 @@ jobs:
           node test/training/hybrid-match-optimized-v1.test.js
           node test/training/hybrid-match-capture-v1.test.js
           node test/training/hybrid-match-recovery-v1.test.js
-          python -m py_compile tools/training/audit-hybrid-test-v1.py tools/training/audit-hybrid-matches-v1.py tools/training/audit-hybrid-match-recovery-v1.py
+          python -m py_compile tools/training/audit-hybrid-test-v1.py tools/training/audit-hybrid-matches-v1.py tools/training/audit-hybrid-match-recovery-v1.py tools/training/audit-hybrid-lazy-v1.py
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset

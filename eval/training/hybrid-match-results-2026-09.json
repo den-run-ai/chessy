@@ -62,6 +62,12 @@
   "plannedGames": 400,
   "researchOnly": true,
   "schema": "chessy.hybrid-development-match-public-results.v1",
+  "separateRecovery": {
+    "completedGames": 400,
+    "file": "hybrid-match-recovery-results-2026-09.json",
+    "independentAuditStatus": "PASS",
+    "originalBatchContributesScores": false
+  },
   "shippingOrEloClaimAllowed": false,
   "status": "INVALID_RAW_EVIDENCE",
   "truncatedGameFiles": 62

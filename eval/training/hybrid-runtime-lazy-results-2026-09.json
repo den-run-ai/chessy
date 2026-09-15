@@ -1,0 +1,607 @@
+{
+  "schema": "chessy.hybrid-runtime-lazy-summary.v1",
+  "status": "completed-none-eligible",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "modelSelectionAllowed": false,
+  "prospective": {
+    "planLocalCommit": "b4e4e26",
+    "planPublishedCommit": "8ce1c034a073d3518394dce521b8d23b626a1b10",
+    "sourceLocalCommit": "9d01299",
+    "sourcePublishedCommit": "1f61789e1a21c5be1bf7f9493956f6a2e005ffd7",
+    "sourceFrozenBeforeAnyExecution": true,
+    "sourceChangesAfterExecution": false,
+    "timingAttempts": 1,
+    "timingRetries": 0
+  },
+  "modelSha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+  "expandedWeightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef",
+  "config": {
+    "id": "smooth-6-12",
+    "kind": "smooth",
+    "lo": 6,
+    "hi": 12
+  },
+  "plan": {
+    "pairedRepetitions": 4,
+    "evaluationWarmupCalls": 1000,
+    "evaluationMeasuredCalls": 10000,
+    "nodeBudgets": [
+      4096,
+      16384
+    ],
+    "timeBudgetsMs": [
+      40
+    ],
+    "maxDepth": 111,
+    "quiescence": true,
+    "fixtures": 12,
+    "stageCounts": {
+      "opening": 4,
+      "middlegame": 4,
+      "endgame": 4
+    },
+    "order": "rotate [shipped,original,lazy] by (position+repetition)%3",
+    "selectionByTimingAllowed": true,
+    "formalStrengthAllowed": false,
+    "configurations": [
+      "original",
+      "lazy"
+    ],
+    "expectedRecords": 576,
+    "modelSelectionAllowed": false,
+    "pvEqualityRequired": false,
+    "followupGamesAllowed": false,
+    "selection": {
+      "minimumMedianNpsRatioVsOriginal16384": 1.05,
+      "minimumEachPhaseNpsRatioVsOriginal16384": 0.95,
+      "exactCompiledEvaluations": 501,
+      "exactReturnedNodeBudgetSearchPairs": 96,
+      "allNativeValidationRequired": true,
+      "noEligible": "none"
+    }
+  },
+  "sourceReceiptSha256": "01d43101588e06c77fc8def833d688fb93a748575772edbcfbdba9be4f59d3f0",
+  "priorSourceReceiptSha256": "1095afc9bc9d6155cd8ffbffc8173a22ee88cf0df8f3c8329ebe6c0a3742b48d",
+  "modules": {
+    "shipped": {
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+      "rawBytes": 37172,
+      "brotliBytes": 17690,
+      "memoryBytes": 26542080
+    },
+    "original": {
+      "sha256": "18c69302d9aaecc0078a5b398e68789f24adb66e525c99f8bc9ac9ddc60e9493",
+      "rawBytes": 58085,
+      "brotliBytes": 28857,
+      "memoryBytes": 26607616
+    },
+    "lazy": {
+      "sha256": "39e229d2f3a7774836a98a3fc3cd5bad3bb2ca3beb39b204bd8b9eb9e41eae15",
+      "rawBytes": 60771,
+      "brotliBytes": 30280,
+      "memoryBytes": 26607616
+    }
+  },
+  "layout": {
+    "positionBytes": 74,
+    "undoBytes": 10,
+    "stackBytes": 9216
+  },
+  "toolchain": {
+    "cargo": {
+      "path": "/workspace/scratch/90b8383e2cc0/toolchains/rust/bin/cargo",
+      "sha256": "828980723df339d62434390e9fb8ef8831036583343ae2316b7ab5646b5c1953",
+      "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+    },
+    "rustc": {
+      "path": "/workspace/scratch/90b8383e2cc0/toolchains/rust/bin/rustc",
+      "sha256": "d3a664c970a9fd8361b64194861bebc1ae37b9054e5ee3400dc1c9e691797eea",
+      "version": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6"
+    },
+    "wasmOpt": {
+      "path": "/workspace/scratch/90b8383e2cc0/toolchains/binaryen-version_131/bin/wasm-opt",
+      "sha256": "bad4b6524b2c8e4b27b9aa69bde1a4b9a05ec8887c77ef0d34300f5825acd97c",
+      "version": "wasm-opt version 131 (version_131)"
+    }
+  },
+  "runtime": {
+    "node": "24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "brotli": "1.2.0"
+  },
+  "selection": {
+    "selected": null,
+    "eligible": false,
+    "exactEvaluation": true,
+    "exactSearch": true,
+    "nativeValidationPassed": true,
+    "medianNpsRatioVsOriginal16384": 1.0369636356411724,
+    "phaseNpsRatios": {
+      "opening": 1.0966938332407925,
+      "middlegame": 1.0595376597127888,
+      "endgame": 0.9887038111735047
+    },
+    "criteria": {
+      "minimumMedianNpsRatioVsOriginal16384": 1.05,
+      "minimumEachPhaseNpsRatioVsOriginal16384": 0.95,
+      "exactCompiledEvaluations": 501,
+      "exactReturnedNodeBudgetSearchPairs": 96,
+      "allNativeValidationRequired": true,
+      "noEligible": "none"
+    }
+  },
+  "summary": {
+    "all": {
+      "original": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.6579211117634456,
+            "medianElapsedMs": 7.178187499999694
+          },
+          "nodes4096": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.2355140768400688,
+            "medianElapsedMs": 4.34059600000046,
+            "pairedMedianNpsRatio": 0.8093976712673212,
+            "bothConsumedNodeBudget": 44
+          },
+          "nodes16384": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.2246992945833863,
+            "medianElapsedMs": 18.28535349999993,
+            "pairedMedianNpsRatio": 0.816602675664435,
+            "bothConsumedNodeBudget": 44
+          },
+          "time40": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.0041935272599019,
+            "medianElapsedMs": 40.47921800000006,
+            "pairedMedianNpsRatio": 0.8143131831918611,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      },
+      "lazy": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.9613116065503045,
+            "medianElapsedMs": 7.404274500000156
+          },
+          "nodes4096": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.192500139887182,
+            "medianElapsedMs": 3.895416499999783,
+            "pairedMedianNpsRatio": 0.8385822802363168,
+            "bothConsumedNodeBudget": 44
+          },
+          "nodes16384": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.1565489653075969,
+            "medianElapsedMs": 17.872887499999592,
+            "pairedMedianNpsRatio": 0.86467166071379,
+            "bothConsumedNodeBudget": 44
+          },
+          "time40": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.0052900024310714,
+            "medianElapsedMs": 40.52324799999997,
+            "pairedMedianNpsRatio": 0.8160434513411572,
+            "bothConsumedNodeBudget": null
+          }
+        },
+        "original": {
+          "evaluation": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 1.1886318612630435,
+            "medianElapsedMs": 7.404274500000156
+          },
+          "nodes4096": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 0.9483125783123978,
+            "medianElapsedMs": 3.895416499999783,
+            "pairedMedianNpsRatio": 1.054504912285754,
+            "bothConsumedNodeBudget": 44
+          },
+          "nodes16384": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 0.9643830141002506,
+            "medianElapsedMs": 17.872887499999592,
+            "pairedMedianNpsRatio": 1.0369636356411724,
+            "bothConsumedNodeBudget": 44
+          },
+          "time40": {
+            "pairs": 48,
+            "pairedMedianTimeRatio": 0.9995054205638358,
+            "medianElapsedMs": 40.52324799999997,
+            "pairedMedianNpsRatio": 1.0221892715056935,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      }
+    },
+    "opening": {
+      "original": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.6222093177855088,
+            "medianElapsedMs": 7.577442499999506
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.3018754326312456,
+            "medianElapsedMs": 5.647397499999897,
+            "pairedMedianNpsRatio": 0.7683961485274795,
+            "bothConsumedNodeBudget": 16
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.2593825888943888,
+            "medianElapsedMs": 23.917844499999774,
+            "pairedMedianNpsRatio": 0.7940467956952193,
+            "bothConsumedNodeBudget": 16
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0083392428501505,
+            "medianElapsedMs": 40.72432600000002,
+            "pairedMedianNpsRatio": 0.8409097441909059,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      },
+      "lazy": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.7407792662032788,
+            "medianElapsedMs": 8.685791499999596
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.1984528536492025,
+            "medianElapsedMs": 5.077398999999787,
+            "pairedMedianNpsRatio": 0.8359269203367121,
+            "bothConsumedNodeBudget": 16
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.125790437334268,
+            "medianElapsedMs": 21.182412500000282,
+            "pairedMedianNpsRatio": 0.8917535850323068,
+            "bothConsumedNodeBudget": 16
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0025198829551114,
+            "medianElapsedMs": 40.60233399999993,
+            "pairedMedianNpsRatio": 0.9353021778811985,
+            "bothConsumedNodeBudget": null
+          }
+        },
+        "original": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.1359125132305956,
+            "medianElapsedMs": 8.685791499999596
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 0.9435893324785141,
+            "medianElapsedMs": 5.077398999999787,
+            "pairedMedianNpsRatio": 1.059786030551877,
+            "bothConsumedNodeBudget": 16
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 0.9118315179826052,
+            "medianElapsedMs": 21.182412500000282,
+            "pairedMedianNpsRatio": 1.0966938332407925,
+            "bothConsumedNodeBudget": 16
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 0.9985926908795162,
+            "medianElapsedMs": 40.60233399999993,
+            "pairedMedianNpsRatio": 1.0837964069257864,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      }
+    },
+    "middlegame": {
+      "original": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 2.469113185838726,
+            "medianElapsedMs": 7.759193000000323
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.5791713303813515,
+            "medianElapsedMs": 4.34059600000046,
+            "pairedMedianNpsRatio": 0.6334165357731774,
+            "bothConsumedNodeBudget": 12
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.4739268054902475,
+            "medianElapsedMs": 19.296612000000096,
+            "pairedMedianNpsRatio": 0.678603141453139,
+            "bothConsumedNodeBudget": 12
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0104324581596658,
+            "medianElapsedMs": 40.517453000000046,
+            "pairedMedianNpsRatio": 0.6665627211454449,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      },
+      "lazy": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 2.6008325747551506,
+            "medianElapsedMs": 8.14857300000017
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.4080622039006574,
+            "medianElapsedMs": 3.895416499999783,
+            "pairedMedianNpsRatio": 0.7109020449853196,
+            "bothConsumedNodeBudget": 12
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.2488645675920527,
+            "medianElapsedMs": 18.081281500000046,
+            "pairedMedianNpsRatio": 0.8007274504519926,
+            "bothConsumedNodeBudget": 12
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0145641889742558,
+            "medianElapsedMs": 40.59699899999987,
+            "pairedMedianNpsRatio": 0.6753317275512003,
+            "bothConsumedNodeBudget": null
+          }
+        },
+        "original": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.1525107801247227,
+            "medianElapsedMs": 8.14857300000017
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 0.8863585728032441,
+            "medianElapsedMs": 3.895416499999783,
+            "pairedMedianNpsRatio": 1.1282581446321402,
+            "bothConsumedNodeBudget": 12
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 0.9440220052987565,
+            "medianElapsedMs": 18.081281500000046,
+            "pairedMedianNpsRatio": 1.0595376597127888,
+            "bothConsumedNodeBudget": 12
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0043917356878396,
+            "medianElapsedMs": 40.59699899999987,
+            "pairedMedianNpsRatio": 1.0221892715056935,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      }
+    },
+    "endgame": {
+      "original": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.4716885938492303,
+            "medianElapsedMs": 1.5004559999997582
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.1273566118761722,
+            "medianElapsedMs": 2.8207244999998693,
+            "pairedMedianNpsRatio": 0.8874227354091964,
+            "bothConsumedNodeBudget": 16
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0702225675294372,
+            "medianElapsedMs": 10.815107999999782,
+            "pairedMedianNpsRatio": 0.934724086817923,
+            "bothConsumedNodeBudget": 16
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0006441358079972,
+            "medianElapsedMs": 40.42340050000007,
+            "pairedMedianNpsRatio": 0.8284403778842218,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      },
+      "lazy": {
+        "shipped": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.9147517673987997,
+            "medianElapsedMs": 2.082456000000093
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.1287101495758596,
+            "medianElapsedMs": 2.886438000000453,
+            "pairedMedianNpsRatio": 0.8859823630980266,
+            "bothConsumedNodeBudget": 16
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0751849490873329,
+            "medianElapsedMs": 11.20249849999982,
+            "pairedMedianNpsRatio": 0.9301200258487309,
+            "bothConsumedNodeBudget": 16
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0035209464394195,
+            "medianElapsedMs": 40.42591700000003,
+            "pairedMedianNpsRatio": 0.8037448558421527,
+            "bothConsumedNodeBudget": null
+          }
+        },
+        "original": {
+          "evaluation": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.3695527846475124,
+            "medianElapsedMs": 2.082456000000093
+          },
+          "nodes4096": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0401590006003076,
+            "medianElapsedMs": 2.886438000000453,
+            "pairedMedianNpsRatio": 0.961403523120881,
+            "bothConsumedNodeBudget": 16
+          },
+          "nodes16384": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 1.0114253828714808,
+            "medianElapsedMs": 11.20249849999982,
+            "pairedMedianNpsRatio": 0.9887038111735047,
+            "bothConsumedNodeBudget": 16
+          },
+          "time40": {
+            "pairs": 16,
+            "pairedMedianTimeRatio": 0.9997525908120801,
+            "medianElapsedMs": 40.42591700000003,
+            "pairedMedianNpsRatio": 0.9556098901597292,
+            "bothConsumedNodeBudget": null
+          }
+        }
+      }
+    }
+  },
+  "validation": {
+    "syntheticJsTestsPassed": true,
+    "nativeTests": {
+      "original": 10,
+      "lazy": 19
+    },
+    "nativePathStates": 13919,
+    "requiredMoveClassesCovered": 25,
+    "nativePvsResearches": 469,
+    "nativeQnodes": 32271,
+    "nativeBudgetAborts": 89,
+    "compiledReferencePositions": 501,
+    "compiledReferenceMismatches": 0,
+    "exactReturnedFixedNodePairs": 96,
+    "returnedSearchMismatches": [],
+    "completeTimingRecords": 576,
+    "pvEqualityRequired": false,
+    "pvEqualityClaimed": false,
+    "independentAudit": {
+      "status": "PASS",
+      "sha256": "b0eae96de0f70c0e1524051669aac81bf84ea3f1d418c9cc0ad657a7acdde995",
+      "checks": {
+        "actualCompiledScoresRechecked": 1503,
+        "allPairedStatisticsRecomputed": true,
+        "compiledScoreMismatches": 0,
+        "completeRotatedTimingGrid": 576,
+        "datasetFilesRead": 0,
+        "engineSearchesRunByAuditor": 0,
+        "exactAvailableFixedNodeSearchPairs": 96,
+        "nativeTests": {
+          "lazy": 19,
+          "original": 10
+        },
+        "pvEqualityClaimed": false,
+        "selected": null,
+        "timingRerun": false,
+        "uniqueFens": 501
+      }
+    }
+  },
+  "conditionalMatch": {
+    "triggered": false,
+    "gamesRun": 0,
+    "reason": "The sole candidate fails the frozen overall paired-median16K NPS ratio>=1.05."
+  },
+  "evidence": {
+    "/workspace/scratch/90b8383e2cc0/hybrid-runtime-lazy-cost-v1.json": {
+      "sha256": "d3e795870285a99059a0eeee2de4f8b3ce30061a7b31cc39a0f22830baa557d0",
+      "bytes": 405782
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-runtime-lazy-cost-v1.json.gz": {
+      "sha256": "589ced3f15e97f97977769089a7106df3bc004f490ec18f6c6f164e68ae602d8",
+      "bytes": 29236
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-runtime-lazy-cost-v1.json.integrity.json": {
+      "sha256": "e738b15253f08ad1892ee726a7c3f5765f3f71ee850fd011c1a28445a8f0f1c6",
+      "bytes": 378
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-runtime-lazy-cost-v1.json.preflight.json": {
+      "sha256": "be587a113e95dcec5f6a157136b8f3e732daffbeac98cee3e70d54f9a049a056",
+      "bytes": 114192
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-runtime-lazy-independent-audit.json": {
+      "sha256": "b0eae96de0f70c0e1524051669aac81bf84ea3f1d418c9cc0ad657a7acdde995",
+      "bytes": 23171
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/lazy-source.json": {
+      "sha256": "01d43101588e06c77fc8def833d688fb93a748575772edbcfbdba9be4f59d3f0",
+      "bytes": 5129
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/lazy-native.json": {
+      "sha256": "b0c60c2395f74566abe88dffc79c7286c3838ac0ef2a26f7f971fc0c19175744",
+      "bytes": 1663
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/lazy-compiled.json": {
+      "sha256": "3d66ae3a9701f00e97d24ab860da2f609ec580eb072a919fe51500370560c384",
+      "bytes": 2119
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/original-native.log": {
+      "sha256": "10ea572d5d6dd1782bfa50d32990557639f076ff6a1b130a6cabee19934b0f07",
+      "bytes": 1249
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/lazy-native.log": {
+      "sha256": "33539982e86697c2bab3818028a193062219d8866c6226fd3ba7135f2d1f12e9",
+      "bytes": 2980
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/original-build.log": {
+      "sha256": "0d66bc77f2a390b774b5185ad86f1a51e67f4381982464069c205dcdb525ab11",
+      "bytes": 1189
+    },
+    "/tmp/chessy-hybrid-lazy-v1-20260915/lazy-build.log": {
+      "sha256": "67debc31757f3462ad8acb6b151a7a6c93fb5c2b9553e67092d206c0cea69d3d",
+      "bytes": 2289
+    },
+    "/tmp/chessy-hybrid-fitted-v1-20260915/.hybrid-runtime-lazy-v1.started.json": {
+      "sha256": "2eec141a150fe40300871954327614a2508870b092de157e3634a81143050978",
+      "bytes": 324
+    }
+  },
+  "paidComputeUsd": 0,
+  "limitations": [
+    "One quiet-host diagnostic V8 grid; no physical-device or strength admission.",
+    "Identical frozen fitted evaluator; this changes neither training nor teacher-test evidence.",
+    "Position is unchanged; local per-search accumulator storage and initialization have cost.",
+    "Returned search fields are checked exactly; the API exposes no PV and PV equality is not claimed.",
+    "Any games require a separately prospectively registered protocol and independent audit.",
+    "This single lazy prototype and the earlier two mechanisms close their registered screens; these results do not establish universal runtime saturation.",
+    "Native/test cache instrumentation is absent from release builds; reported cache layout excludes test-only counters.",
+    "Separate timing runs are not pooled and comparative medians need not compose multiplicatively."
+  ]
+}

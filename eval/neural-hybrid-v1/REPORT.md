@@ -86,8 +86,93 @@ An independent audit reconstructed **51,046 outputs** with **zero mismatches**, 
 
 These are only piece-count upper bounds on potential Syzygy coverage. Castling rights and supported material combinations were not adjudicated. Even seven-piece coverage reaches only 56 outer positions overall and 55 of the 332 endgames; exact small tables cannot replace most of this endgame category.
 
+## Compiled runtime and exact-score optimizations
+
+The [compiled runtime study](../training/hybrid-runtime-results-2026-09.md)
+measured all four actual modules on the same authored phase-balanced fixtures.
+The frozen hybrid matched 501 independent complete-evaluation cases and passed
+native move-transition checks before timing.
+
+| Evaluator | Fast WASM bytes | Brotli bytes | Paired median 16K NPS vs shipped |
+| --- | ---: | ---: | ---: |
+| Shipped HCE | 37,172 | 17,690 | baseline |
+| Expanded HCE | 37,470 | 17,808 | −6.07% |
+| Complete H8 evaluator | 50,871 | 27,459 | −6.48% |
+| Frozen hybrid | 58,085 | 28,857 | −17.82% |
+
+The hybrid adds 11,167 compressed module bytes. Research modules allow one
+additional 64 KiB memory page; production memory limits are unchanged. The
+single-host Node timings are diagnostic, and different evaluators can visit
+different search trees. They do not replace physical-device admission.
+
+Two [separately registered optimizations](../training/hybrid-runtime-fused-results-2026-09.md)
+cached raw material phase and shared duplicated HCE work. Their overall paired
+median 16K NPS gains versus the concurrent original hybrid were only 0.402% and
+0.418%, below the unchanged 5% requirement. Shared HCE work improved the
+middlegame stratum 20.90% and reduced raw WASM to 55,047 bytes, but neither
+mechanism was eligible. The conditional 200-game extension was skipped.
+Available returned search fields matched; the separately required PV comparison
+was not performed and is recorded as a protocol limitation. No claim of full
+search/PV equivalence follows.
+
+A review of the earlier eager-accumulator study identified one distinct untested
+mechanism. A [separately registered lazy accumulator](../training/hybrid-runtime-lazy-v1.md)
+updates neural state only along searched paths and materializes it when needed.
+It passed its first native and compiled execution, including 13,919 authored
+states, PVS re-search, quiescence, budget aborts and phase-reactivating promotions.
+The independent cost audit reproduced 1,503 compiled scores, all 96 available
+fixed-node result pairs and the complete 576-record grid.
+
+The lazy implementation improved overall paired median 16K NPS **3.696%** versus
+the concurrent original hybrid: opening +9.669%, middlegame +5.954%, endgame
+−1.130%. It still missed the unchanged **5%** requirement, so its separately
+registered 200-game follow-up was also skipped. Position and Undo stayed at
+74 and 10 bytes, but the search-local cache added 9,216 bytes and the module grew
+to 60,771 raw / 30,280 Brotli bytes. No timing-informed source change or retry
+occurred. Its [full report](../training/hybrid-runtime-lazy-results-2026-09.md)
+preserves the actual benefit and the failed gate; this is not a claim that all
+possible incremental implementations have been exhausted.
+
+## Equal-time development matches
+
+The [initial 400-game batch](../training/hybrid-match-results-2026-09.md)
+failed its complete evidence gate before score analysis: 62 files had become
+truncated after their close-time hashes were verified. No subset score or Elo
+estimate is valid from that batch. Its files and forensic findings remain
+preserved. A separately registered infrastructure recovery uses the same
+400 tasks, evaluator modules and 20 ms limits with exact emitted bytes retained
+in memory and final audit from a complete archive.
+
+The [replacement batch](../training/hybrid-match-recovery-results-2026-09.md)
+completed and passed independent Python-chess replay: **400 games, 48,851
+searched moves, 401 archive members, zero mismatches**. All game outcomes below
+come from that complete authenticated archive.
+
+| Candidate, each in a separate arm against shipped HCE | Wins | Draws | Losses | Candidate score |
+| --- | ---: | ---: | ---: | ---: |
+| Frozen hybrid | 57 | 52 | 91 | **41.5%** |
+| Expanded HCE | 73 | 50 | 77 | **49.0%** |
+
+These are exposed-opening development results at 20 ms requested per move,
+not a direct hybrid-versus-expanded match or a formal Elo estimate. The hybrid's
+mean observed time was 20.642 ms versus 20.500 ms for its shipped opponent;
+its aggregate NPS ratio was 0.83334. Rare overshoots remain in the evidence.
+Descriptive opening-cluster lower bounds were 36.56% and 43.82% respectively.
+The held-out teacher-loss gain did not translate into stronger play in this
+development comparison. **Keep the shipped HCE.**
+
+Both conditional 200-game extensions were skipped under their separately frozen
+speed gates. Their triggers were fixed before the relevant costs and recovery
+game outcomes; no outcome-based retry or extension occurred. The original
+invalid 400-game batch supplies no scores.
+
 ## Limits and remaining gates
 
-Inner and outer results are reused development evidence. The subsequent one-shot test now provides held-out teacher-loss evidence for this frozen hybrid, with both original bootstrap and quality requirements satisfied. It does not establish Elo or justify shipping. The 12,392 neural parameter bytes exclude expanded-HCE coefficients, executable evaluator code and packaged WASM. Runtime size, equal-time search strength, licensing and formal acceptance remain separate gates.
+Inner and outer results are reused development evidence. The subsequent one-shot test now provides held-out teacher-loss evidence for this frozen hybrid, with both original bootstrap and quality requirements satisfied. It does not establish Elo or justify shipping. The 12,392 neural parameter bytes exclude expanded-HCE coefficients and executable evaluator code; measured WASM sizes are above. Equal-time strength, physical-device performance, licensing and formal acceptance remain separate gates.
 
-The six-gate search completed in 31.617 seconds with zero training fits and $0 paid compute. Exhausting this registered grid is not universal model saturation.
+The six-gate search completed in 31.617 seconds. This continuation used zero new
+training fits, zero new teacher labels and **$0 paid compute**; no Modal job was
+launched. The $30 allowance was a ceiling, not a spending target. The registered
+six-gate screen and three runtime implementation candidates are complete. All
+three runtime candidates missed their frozen advancement requirement. This is
+a bounded stopping decision, not universal model or runtime saturation.

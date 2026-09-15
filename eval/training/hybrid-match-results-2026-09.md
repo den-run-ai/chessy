@@ -46,5 +46,10 @@ searches stop it archives the exact retained bytes and audits that archive.
 The recovery result is reported separately; the first batch remains invalid,
 and the independent optimized 200-game follow-up remains skipped.
 
+The [recovery completed and independently passed](hybrid-match-recovery-results-2026-09.md)
+all 400 games and 48,851 searched moves. Its hybrid scored 41.5% and its expanded
+HCE control scored 49.0%, each in a separate comparison with shipped HCE.
+These outcomes belong only to that new registration.
+
 Paid compute for these matches and capture checks: **$0**. The formal holdout
 opening bank was not loaded; all protocols remain research-only.

@@ -1,0 +1,258 @@
+{
+  "byArm": {
+    "expanded": {
+      "aggregateNodesPerSecondRatio": 0.9815839905765861,
+      "candidateScore": 0.49,
+      "descriptiveOpeningClusterLower95": 0.4382468398443098,
+      "draws": 50,
+      "formalPass": false,
+      "games": 200,
+      "losses": 77,
+      "meanObservedTimeRatio": 1.0023379823700986,
+      "openingPairStandardDeviation": 0.3116427636272212,
+      "openingPairs": 100,
+      "shippingOrEloClaimAllowed": false,
+      "terminationReasons": {
+        "checkmate": 150,
+        "insufficient material": 3,
+        "ply-cap": 25,
+        "threefold repetition": 22
+      },
+      "timing": {
+        "baseline": {
+          "depthHistogram": {
+            "1": 173,
+            "10": 35,
+            "11": 24,
+            "12": 11,
+            "13": 2,
+            "14": 3,
+            "16": 3,
+            "17": 2,
+            "19": 1,
+            "2": 302,
+            "21": 1,
+            "22": 1,
+            "23": 1,
+            "24": 2,
+            "25": 1,
+            "26": 1,
+            "3": 4075,
+            "4": 3523,
+            "5": 2553,
+            "6": 1142,
+            "7": 214,
+            "8": 58,
+            "9": 43
+          },
+          "maximumObservedMs": 140.66246300004423,
+          "meanCompletedDepth": 4.1196286254210825,
+          "meanObservedMs": 20.413068649823227,
+          "medianObservedMs": 20.838638000015635,
+          "moves": 12171,
+          "nodesPerSecond": 1078223.1928530973,
+          "overTwoTimesRequested": 5,
+          "p95ObservedMs": 21.80486249999376,
+          "stopReasons": {
+            "mate": 398,
+            "time-limit": 11773
+          },
+          "totalElapsedMs": 248447.45853699849,
+          "totalNodes": 267881812
+        },
+        "candidate": {
+          "depthHistogram": {
+            "0": 1,
+            "1": 182,
+            "10": 31,
+            "11": 31,
+            "12": 10,
+            "13": 3,
+            "14": 4,
+            "15": 2,
+            "16": 2,
+            "17": 3,
+            "18": 1,
+            "2": 343,
+            "21": 1,
+            "22": 1,
+            "23": 2,
+            "24": 1,
+            "25": 1,
+            "3": 4014,
+            "30": 1,
+            "4": 3666,
+            "5": 2449,
+            "6": 1124,
+            "7": 204,
+            "8": 54,
+            "9": 41
+          },
+          "maximumObservedMs": 134.50825799999438,
+          "meanCompletedDepth": 4.104255668747946,
+          "meanObservedMs": 20.46079404444613,
+          "medianObservedMs": 20.85502349998569,
+          "moves": 12172,
+          "nodesPerSecond": 1058366.6243729712,
+          "overTwoTimesRequested": 10,
+          "p95ObservedMs": 21.819174300017767,
+          "stopReasons": {
+            "mate": 386,
+            "max-depth": 1,
+            "time-limit": 11785
+          },
+          "totalElapsedMs": 249048.78510899827,
+          "totalNodes": 263584922
+        }
+      },
+      "wins": 73
+    },
+    "hybrid": {
+      "aggregateNodesPerSecondRatio": 0.8333437418530979,
+      "candidateScore": 0.415,
+      "descriptiveOpeningClusterLower95": 0.3655521231874555,
+      "draws": 52,
+      "formalPass": false,
+      "games": 200,
+      "losses": 91,
+      "meanObservedTimeRatio": 1.0069108862966427,
+      "openingPairStandardDeviation": 0.29776100510579984,
+      "openingPairs": 100,
+      "shippingOrEloClaimAllowed": false,
+      "terminationReasons": {
+        "checkmate": 148,
+        "insufficient material": 2,
+        "ply-cap": 36,
+        "threefold repetition": 14
+      },
+      "timing": {
+        "baseline": {
+          "depthHistogram": {
+            "1": 175,
+            "10": 27,
+            "11": 19,
+            "12": 10,
+            "13": 4,
+            "14": 4,
+            "15": 2,
+            "16": 4,
+            "18": 1,
+            "19": 1,
+            "2": 368,
+            "20": 1,
+            "3": 3966,
+            "4": 3588,
+            "5": 2636,
+            "6": 1135,
+            "7": 217,
+            "8": 63,
+            "9": 38
+          },
+          "maximumObservedMs": 125.88715800002683,
+          "meanCompletedDepth": 4.109144302145363,
+          "meanObservedMs": 20.499979356228632,
+          "medianObservedMs": 20.85118900006637,
+          "moves": 12259,
+          "nodesPerSecond": 1073780.1425878485,
+          "overTwoTimesRequested": 10,
+          "p95ObservedMs": 22.00975099999341,
+          "stopReasons": {
+            "mate": 383,
+            "time-limit": 11876
+          },
+          "totalElapsedMs": 251309.24692800682,
+          "totalNodes": 269850879
+        },
+        "candidate": {
+          "depthHistogram": {
+            "1": 172,
+            "10": 22,
+            "11": 17,
+            "12": 4,
+            "13": 6,
+            "14": 4,
+            "15": 1,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "19": 1,
+            "2": 294,
+            "20": 1,
+            "21": 1,
+            "22": 1,
+            "3": 4463,
+            "4": 3605,
+            "5": 2413,
+            "6": 934,
+            "7": 196,
+            "8": 67,
+            "9": 44
+          },
+          "maximumObservedMs": 171.2054229999776,
+          "meanCompletedDepth": 4.023103926851172,
+          "meanObservedMs": 20.641652382643052,
+          "medianObservedMs": 20.951571999990847,
+          "moves": 12249,
+          "nodesPerSecond": 894827.9619517106,
+          "overTwoTimesRequested": 9,
+          "p95ObservedMs": 22.20931500002407,
+          "stopReasons": {
+            "mate": 370,
+            "time-limit": 11879
+          },
+          "totalElapsedMs": 252839.60003499474,
+          "totalNodes": 226247944
+        }
+      },
+      "wins": 57
+    }
+  },
+  "completedAtUtc": "2026-09-15T04:15:04.718Z",
+  "completedGames": 400,
+  "conditionalCachedFusedFollowupStillSkipped": true,
+  "formalPass": false,
+  "independentPythonAudit": {
+    "archiveMembers": 401,
+    "file": "hybrid-match-recovery-independent-audit.json",
+    "games": 400,
+    "mismatches": 0,
+    "searchedMoves": 48851,
+    "sha256": "d518321ffcc74ae15c281c2d0cce646effedb37069e04cd691641b1e37770f45",
+    "status": "PASS"
+  },
+  "lazyConditionalFollowup": {
+    "gamesExecuted": 0,
+    "receipt": "hybrid-match-lazy-v1-skipped.json",
+    "receiptSha256": "fd16942a2b9a54d1623218322d69bc5267824c7b70fd1fbb304528e006a3e24f",
+    "status": "SKIPPED_SPEED_GATE"
+  },
+  "limitations": [
+    "Exposed development openings and20ms requested time; no formal holdout or shipping admission.",
+    "Each arm played shipped HCE; hybrid and expanded did not play each other.",
+    "Game NPS and mean depth follow different encountered positions; use paired static benchmarks for causal cost comparisons.",
+    "All observed time overruns were retained; none were excluded.",
+    "The original failed400-game registration remains invalid; this was an independently registered infrastructure replacement.",
+    "The lazy implementation trigger was frozen before these outcomes and cannot be changed based on them."
+  ],
+  "liveFileDiscrepancies": 0,
+  "originalBatchStillInvalid": true,
+  "paidSpendUsd": 0,
+  "plannedGames": 400,
+  "rawManifest": {
+    "bytes": 71958,
+    "file": "raw-manifest.json",
+    "sha256": "7c0e22ce8eb0f94bcd24654f6c93ac8efe9c1b12c0dd122b090e5fd8a330d75f"
+  },
+  "registrationSha256": "e3fe4b57b3fa4011f172d60ef8671a09521ebafda805c63f18c619e453e1a451",
+  "researchOnly": true,
+  "retainedArchive": {
+    "bytes": 7215297,
+    "entries": 401,
+    "path": "retained-games.json",
+    "sha256": "2fc4934b52fe60641c91dc77bb6ad2be6ae716ca8a3fb5c81322da7828cff834"
+  },
+  "schema": "chessy.hybrid-match-recovery-public-results.v1",
+  "shippingOrEloClaimAllowed": false,
+  "startedAtUtc": "2026-09-15T03:57:58.667Z",
+  "status": "completed"
+}
