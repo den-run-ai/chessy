@@ -104,3 +104,27 @@ searched edges. If it still loses, that is a real negative for the
 ## Compute
 
 Everything runs in the 4-CPU sandbox; no Modal or GPU is used.
+
+## Addendum A — registered after the H16 and H32 fixed-node results
+
+Observed before writing this addendum: H16 43.5% and H32 43.8% at 10,000
+nodes (both ≈ −45 Elo) although H32's offline loss is clearly lower. That
+pattern suggests the label source, not capacity, limits play: Lichess labels
+are deep (depth ≥ 15, often 40+) evaluations of human-game positions, while
+a leaf evaluator inside a depth-5 search is most useful when it approximates
+what a shallow search can verify.
+
+Diagnostic D1 (HCE student): train the same 768→32 recipe on the shipped
+HCE's own static White-POV evaluation of the same training positions
+(labels via `evaluate_loaded`, target sigmoid(cp/400)), then play it at
+10,000 and 36,000 nodes on the dev bank. Interpretation rule, fixed now:
+
+- if the student scores within the 95% interval of 50%, the architecture can
+  represent an evaluation that plays like HCE and the deficit of the
+  Lichess-trained nets is a label/distribution effect;
+- if the student also loses by a similar margin, the 768→H family at these
+  widths cannot represent the mobility/pawn/king terms well enough, and no
+  relabelling will rescue it.
+
+D1 uses no new positions, no holdout, and the same seed/epochs/batch; it is
+executed after the H64 and H128 runs so it does not disturb their timing.
