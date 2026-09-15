@@ -224,6 +224,11 @@ fixture but intentionally skips the exact r69 search signature; check out the
 recorded commit to reproduce that historical result. Its pinned Stockfish Lite
 comparison covers four forced root moves only, not every legal move.
 
+The [versioned engine-signature mechanism](experiments/wasm/SIGNATURE-ROTATION.md)
+prepares reproducibly rebuilt old/new contracts and a complete 144-case diff.
+Activation requires evidence already present in the trusted base; this mechanism
+retains the r69 behavior and does not authorize a new evaluator or search policy.
+
 The engine measurement tools below are **historical v1 infrastructure**.
 Do not dispatch them for a new candidate: Rust/WASM ignores the four seed
 slots, so 800 games repeat only 100 opening pairs. The v2 execution work
@@ -236,8 +241,13 @@ terminal result. Easy evaluator (10k nodes, endpoint lower bound >50%) and
 Hard selective-search (230k nodes, >49%) are separate profiles. Every result
 remains diagnostic: 400 unique endpoints do not prove 400 independent
 families, and source reproduction, correctness and device admission remain
-separate. Formal admission remains open in
-[#175](https://github.com/den-run-ai/chessy/issues/175); the
+separate. The [fresh finite-bank formal software contract](eval/match-formal/CONTRACT.md)
+adds randomized sampling, conservative uncertainty and authenticated prerequisites
+under a separate protocol. Its conservative selective-search profile cannot
+admit exactly behavior-preserving cost changes; their equivalence/runtime
+policy remains open. Its campaign registry is empty: fresh-bank and
+candidate evidence remain open in
+[#175](https://github.com/den-run-ai/chessy/issues/175). The
 [prospective decision and complete dependency map](eval/match-v2/ADMISSION-PROPOSAL.md)
 explain the current bank's exposure limits and a possible future statistical
 design. No candidate has been measured on this manifest. The
@@ -255,6 +265,15 @@ The [compiled synthetic cost report](eval/training/nnue-phase-runtime-results-20
 separates parameter storage, module growth, memory and per-position overhead.
 The [incremental accumulator comparison](eval/training/nnue-incremental-results-2026-09.md)
 records faster direct evaluation but slower aggregate search.
+The unchanged hybrid scored 41.5% in the earlier 200-game 20 ms development arm,
+then [50.0% in 200 games at 16,384 nodes](eval/training/hybrid-fixed-node-results-2026-09.md)
+and [46.25% in a separately registered 40-game 200 ms follow-up](eval/training/hybrid-equal-time-200ms-results-2026-09.md).
+The longer screen used 20 prospectively selected opening pairs, while the earlier
+runs used 100; it cannot isolate a causal time-budget effect. Equal-node parity
+is consistent with a runtime contribution to the original deficit, but does not
+establish a playing-strength benefit from lower teacher loss. Evaluation/search
+interaction remains unresolved; inspect move ranking and phase transitions before
+new training. HCE remains shipped, with no formal strength or Elo claim.
 These studies preserve the shipped evaluator and the separate admission gates.
 
 For historical reproduction, `test/ai-match.js` supports the archived
@@ -286,8 +305,8 @@ informational/green in the equal-time diagnostic;
 malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
 valid statistical miss. Historical protocol IDs and artifacts are retained;
-new formal shipping evidence must wait for v2 family/estimator admission
-under #175. Historically exposed openings support only separately registered
+new formal shipping evidence requires the fresh-bank campaign and complete
+candidate prerequisites under #175. Historically exposed openings support only separately registered
 development diagnostics, such as the natural-game pilot above.
 
 Historical Rust/WASM search optimizations used a separate formal efficiency

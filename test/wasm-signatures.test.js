@@ -27,6 +27,15 @@ function check(ok, label, detail) {
 }
 
 (async function () {
+  const contracts = require('./engine-signatures-v2.js');
+  const root = path.join(__dirname, '..');
+  const active = JSON.parse(fs.readFileSync(path.join(root, contracts.ACTIVE), 'utf8'));
+  if (active.kind !== 'legacy-r69-behavior') {
+    // The release-gate independently runs the trusted base's verifier. This
+    // invocation replays the active contract for the engine test job.
+    console.log(contracts.verify(root, process.env.CHESSY_SIGNATURE_TRUSTED_BASE));
+    return;
+  }
   const engine = await bench.loadWasmEngine(wasmPath, 'shipped');
   for (const item of fixture.cases) {
     const result = engine.search(positions.get(item.name), item.config);
