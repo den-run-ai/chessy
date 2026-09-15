@@ -194,7 +194,7 @@ fn abs_diff(a: i32, b: i32) -> i32 {
     }
 }
 
-fn mop_up(loser: i8, winner: i8) -> i32 {
+pub fn mop_up(loser: i8, winner: i8) -> i32 {
     let loser_square = loser as i32;
     let winner_square = winner as i32;
     let loser_rank = loser_square / 8;

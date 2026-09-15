@@ -9,6 +9,14 @@ rust-version = "1.97.1"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
 
+[features]
+# Research-only candidate evaluator; see experiments/wasm/src/nnue.rs and
+# tools/nnue/. Never enabled by the pinned production build.
+nnue = []
+# Variant: add the shipped lone-king mop-up term on top of the net output
+# (nnue-v1-architecture.json requires net-only and net-plus-mop-up variants).
+nnue-mopup = ["nnue"]
+
 [profile.release]
 codegen-units = 1
 debug = false
