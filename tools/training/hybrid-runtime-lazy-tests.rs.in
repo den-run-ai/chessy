@@ -1,0 +1,243 @@
+// Independent board reconstruction and accepted-path lifecycle checks.
+#[cfg(test)]
+mod hybrid_lazy_path_tests {
+    use super::*;
+
+    fn board_acc(position: &Position) -> [[i32; NNUE_H]; 2] {
+        let mut expected = [NNUE_B1; 2];
+        for (square, &piece) in position.board.iter().enumerate() {
+            if piece == Piece::Empty { continue; }
+            let kind = engine::piece_type(piece).unwrap() as usize;
+            let color = engine::piece_color(piece).unwrap();
+            let channel = kind + if color == Color::White { 0 } else { 6 };
+            let opposite_channel = kind + if color == Color::White { 6 } else { 0 };
+            let reflected_square = (7 - square / 8) * 8 + square % 8;
+            for unit in 0..NNUE_H {
+                expected[0][unit] += NNUE_W1[channel * 64 + square][unit] as i32;
+                expected[1][unit] += NNUE_W1[opposite_channel * 64 + reflected_square][unit] as i32;
+            }
+        }
+        expected
+    }
+
+    fn assert_active_frames(stack: &HybridLazyStack, path: &[Position]) {
+        for (ply, position) in path.iter().enumerate() {
+            if stack.frames[ply].valid {
+                assert_eq!(stack.frames[ply].acc, board_acc(position), "ancestor cache at ply {}", ply);
+            }
+        }
+    }
+
+    fn verify(position: &Position, stack: &mut HybridLazyStack, path: &[Position]) {
+        let ply = path.len() - 1;
+        assert_eq!(evaluate_lazy(position, stack, ply), evaluate_original(position));
+        assert_eq!(stack.materialize(position, ply), board_acc(position));
+        assert!(stack.frames[..=ply].iter().all(|frame| frame.valid));
+        assert_active_frames(stack, path);
+
+        // Both perspective accumulators are independent of the side to move.
+        // Evaluate the opposite turn without descending from an unauthored FEN.
+        let mut opposite_turn = *position;
+        opposite_turn.turn = engine::opposite(opposite_turn.turn);
+        let before = (stack.materializations, stack.refreshes, stack.delta_applications);
+        assert_eq!(evaluate_lazy(&opposite_turn, stack, ply), evaluate_original(&opposite_turn));
+        assert_eq!(stack.materialize(&opposite_turn, ply), board_acc(&opposite_turn));
+        assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), before);
+        assert_active_frames(stack, path);
+    }
+
+    fn record_move(mv: engine::Move, mover: Color, coverage: &mut [u32; 25]) {
+        let color = mover as usize;
+        coverage[color] += 1;
+        coverage[2] += engine::move_is_capture(mv) as u32;
+        if engine::move_is_en_passant(mv) { coverage[3 + color] += 1; }
+        if let Some(side) = engine::move_castle(mv) {
+            let side_index = if side == engine::CastleSide::KingSide { 0 } else { 1 };
+            coverage[5 + 2 * color + side_index] += 1;
+        }
+        if let Some(kind) = engine::move_promotion(mv) {
+            let slot = match kind {
+                PieceType::Queen => 0, PieceType::Rook => 1,
+                PieceType::Bishop => 2, PieceType::Knight => 3,
+                _ => panic!("invalid promotion"),
+            };
+            coverage[9 + 8 * color + if engine::move_is_capture(mv) { 4 } else { 0 } + slot] += 1;
+        }
+    }
+
+    fn walk(position: &mut Position, stack: &mut HybridLazyStack, path: &mut Vec<Position>,
+        depth: u8, nodes: &mut u32, coverage: &mut [u32; 25]) {
+        *nodes += 1;
+        verify(position, stack, path);
+        let original = *position;
+        let ply = path.len() - 1;
+        let _ = engine::has_legal_en_passant(position);
+        assert!(*position == original);
+        let mut moves = [0; engine::MAX_MOVES];
+        let count = engine::generate_legal(position, &mut moves);
+        assert!(*position == original);
+        assert_active_frames(stack, path);
+        if depth == 0 { return; }
+        for &mv in &moves[..count] {
+            record_move(mv, position.turn, coverage);
+            let undo = engine::make_move(position, mv);
+            stack.enter(ply + 1, mv);
+            assert_eq!(stack.frames[ply + 1].mv, mv);
+            assert!(!stack.frames[ply + 1].valid);
+            path.push(*position);
+            walk(position, stack, path, depth - 1, nodes, coverage);
+
+            // PVS re-search and quiescence handoff reuse this same child.
+            let before = (stack.materializations, stack.refreshes, stack.delta_applications);
+            assert_eq!(evaluate_lazy(position, stack, ply + 1), evaluate_original(position));
+            assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), before);
+            path.pop();
+            engine::unmake_move(position, mv, undo);
+            assert!(*position == original);
+            assert_active_frames(stack, path);
+        }
+    }
+
+    fn legal_move(position: &mut Position, uci: &[u8]) -> engine::Move {
+        assert!(uci.len() == 4 || uci.len() == 5);
+        let from = (b'8' - uci[1]) * 8 + uci[0] - b'a';
+        let to = (b'8' - uci[3]) * 8 + uci[2] - b'a';
+        let promotion = if uci.len() == 5 {
+            Some(match uci[4] {
+                b'q' => PieceType::Queen, b'r' => PieceType::Rook,
+                b'b' => PieceType::Bishop, b'n' => PieceType::Knight,
+                _ => panic!("invalid promotion spelling"),
+            })
+        } else { None };
+        let mut moves = [0; engine::MAX_MOVES];
+        let count = engine::generate_legal(position, &mut moves);
+        moves[..count].iter().copied().find(|&mv| engine::move_from(mv) == from &&
+            engine::move_to(mv) == to && engine::move_promotion(mv) == promotion)
+            .expect("authored path move must be legal")
+    }
+
+    fn push(position: &mut Position, stack: &mut HybridLazyStack, path: &mut Vec<Position>,
+        uci: &[u8]) -> (engine::Move, engine::Undo) {
+        let mv = legal_move(position, uci);
+        let undo = engine::make_move(position, mv);
+        stack.enter(path.len(), mv);
+        path.push(*position);
+        assert_eq!(stack.frames[path.len() - 1].mv, mv);
+        assert!(!stack.frames[path.len() - 1].valid);
+        (mv, undo)
+    }
+
+    #[test]
+    fn independent_accumulators_scores_and_all_special_move_paths() {
+        assert_eq!(NNUE_H, 8);
+        assert_eq!(core::mem::size_of::<Position>(), 74);
+        assert_eq!(core::mem::size_of::<engine::Undo>(), 10);
+        let fixtures: &[&[u8]] = &[
+{{FIXTURES}}
+        ];
+        let mut nodes = 0;
+        let mut coverage = [0_u32; 25];
+        for &fen in fixtures {
+            let mut position = engine::parse_fen(fen).unwrap();
+            let original = position;
+            let mut stack = HybridLazyStack::new();
+            let mut path = vec![position];
+            walk(&mut position, &mut stack, &mut path, 2, &mut nodes, &mut coverage);
+            assert!(position == original);
+            assert_eq!(path.len(), 1);
+            assert_eq!(stack.refreshes, 1);
+        }
+        assert!(nodes > 13900);
+        assert!(coverage.iter().all(|&count| count > 0), "missing move class: {:?}", coverage);
+        println!("lazy path positions {}; move coverage {:?}", nodes, coverage);
+    }
+
+    #[test]
+    fn skipped_expanded_only_ancestors_then_promotion_materialize_once() {
+        for skipped_ancestors in [false, true] {
+            let mut position = engine::parse_fen(b"6k1/1P6/8/8/8/8/8/R3K2R w - - 0 1").unwrap();
+            let mut stack = HybridLazyStack::new();
+            let mut path = vec![position];
+            assert_eq!(hybrid_phase(&position), 4);
+            assert_eq!(evaluate_lazy(&position, &mut stack, 0), evaluate_original(&position));
+            if skipped_ancestors {
+                for uci in [b"e1e2", b"g8f7"] {
+                    let _ = push(&mut position, &mut stack, &mut path, uci);
+                    assert_eq!(hybrid_phase(&position), 4);
+                    assert_eq!(evaluate_lazy(&position, &mut stack, path.len() - 1), evaluate_original(&position));
+                }
+            }
+            assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), (0, 0, 0));
+            assert!(stack.frames[..path.len()].iter().all(|frame| !frame.valid));
+            let (mv, undo) = push(&mut position, &mut stack, &mut path, b"b7b8q");
+            let ply = path.len() - 1;
+            assert_eq!(hybrid_phase(&position), 8);
+            verify(&position, &mut stack, &path);
+            assert_eq!(stack.materializations, 1);
+            assert_eq!(stack.refreshes, 1);
+            assert_eq!(stack.delta_applications, ply);
+            path.pop();
+            engine::unmake_move(&mut position, mv, undo);
+            let before = (stack.materializations, stack.refreshes, stack.delta_applications);
+            assert_eq!(hybrid_phase(&position), 4);
+            assert_eq!(evaluate_lazy(&position, &mut stack, path.len() - 1), evaluate_original(&position));
+            assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), before);
+            assert_active_frames(&stack, &path);
+        }
+    }
+
+    #[test]
+    fn overwritten_sibling_paths_ignore_stale_deeper_frames() {
+        let mut position = engine::parse_fen(b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let mut stack = HybridLazyStack::new();
+        let mut path = vec![position];
+        let mut undos = Vec::new();
+        for uci in [b"e2e4", b"e7e5", b"g1f3", b"b8c6", b"f1b5"] {
+            undos.push(push(&mut position, &mut stack, &mut path, uci));
+        }
+        // No ancestor has been evaluated: first refresh reverses the full path.
+        assert_eq!(stack.materializations, 0);
+        verify(&position, &mut stack, &path);
+        assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), (1, 1, 5));
+        while path.len() > 3 {
+            let (mv, undo) = undos.pop().unwrap();
+            path.pop();
+            engine::unmake_move(&mut position, mv, undo);
+        }
+        assert!(stack.frames[4].valid && stack.frames[5].valid);
+        assert_active_frames(&stack, &path);
+        let _ = push(&mut position, &mut stack, &mut path, b"f1c4");
+        verify(&position, &mut stack, &path);
+        assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), (2, 1, 6));
+        let _ = push(&mut position, &mut stack, &mut path, b"g8f6");
+        let _ = push(&mut position, &mut stack, &mut path, b"g1f3");
+        verify(&position, &mut stack, &path);
+        assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), (3, 1, 8));
+        // Re-entry at the same ply must use the existing cache without deltas.
+        verify(&position, &mut stack, &path);
+        assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), (3, 1, 8));
+    }
+
+    #[test]
+    fn last_frame_supports_a_fully_skipped_path_without_overflow() {
+        let mut position = engine::parse_fen(b"4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
+        let mut stack = HybridLazyStack::new();
+        let mut path = vec![position];
+        let cycle = [b"e1d1", b"e8d8", b"d1e1", b"d8e8"];
+        for index in 0..127 {
+            let _ = push(&mut position, &mut stack, &mut path, cycle[index % cycle.len()]);
+        }
+        assert_eq!(path.len(), 128);
+        assert_eq!(stack.materializations, 0);
+        assert_eq!(stack.materialize(&position, 127), board_acc(&position));
+        assert_eq!((stack.materializations, stack.refreshes, stack.delta_applications), (1, 1, 127));
+        assert!(stack.frames.iter().all(|frame| frame.valid));
+        assert_active_frames(&stack, &path);
+    }
+
+    #[test]
+    #[should_panic]
+    fn child_frame_128_is_rejected_before_access() {
+        HybridLazyStack::new().enter(128, 0);
+    }
+}
