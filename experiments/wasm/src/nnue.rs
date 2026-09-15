@@ -28,7 +28,10 @@ const fn parse_usize(text: &str) -> usize {
     let mut index = 0;
     while index < bytes.len() {
         let digit = bytes[index];
-        assert!(digit >= b'0' && digit <= b'9', "CHESSY_NNUE_HIDDEN must be decimal");
+        assert!(
+            digit >= b'0' && digit <= b'9',
+            "CHESSY_NNUE_HIDDEN must be decimal"
+        );
         value = value * 10 + (digit - b'0') as usize;
         index += 1;
     }
@@ -183,7 +186,11 @@ pub fn push(ply: usize, mv: Move, mover: Color) {
 
     remove_feature(child, moving, from);
     if engine::move_is_en_passant(mv) {
-        let capture_square = if mover == Color::White { to + 8 } else { to - 8 };
+        let capture_square = if mover == Color::White {
+            to + 8
+        } else {
+            to - 8
+        };
         remove_feature(child, engine::move_captured(mv), capture_square);
     } else {
         let captured = engine::move_captured(mv);
@@ -416,7 +423,11 @@ mod tests {
             let expected: i32 = expected.trim().parse().expect("integer score");
             let position = engine::parse_fen(fen.trim().as_bytes()).expect("golden fen");
             refresh(SCRATCH_PLY, &position);
-            assert_eq!(evaluate_net(&position, SCRATCH_PLY), expected, "golden mismatch for {fen}");
+            assert_eq!(
+                evaluate_net(&position, SCRATCH_PLY),
+                expected,
+                "golden mismatch for {fen}"
+            );
             checked += 1;
         }
         assert!(checked > 0, "no goldens checked");
@@ -432,7 +443,8 @@ mod tests {
         let mirrored = engine::parse_fen(b"8/8/8/8/8/8/4K3/r3k3 b - - 0 1").unwrap();
         assert_eq!(mop_up_term(&mirrored), -crate::eval::mop_up(52, 60));
         // Both sides have force: no term.
-        let opening = engine::parse_fen(b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let opening =
+            engine::parse_fen(b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         assert_eq!(mop_up_term(&opening), 0);
         // Pawn-only force does not trigger the term (matches HCE's `pieces` rule).
         let pawn = engine::parse_fen(b"8/8/8/8/8/8/3k1P2/4K3 w - - 0 1").unwrap();
