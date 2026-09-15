@@ -1,0 +1,11 @@
+{
+  "schema": "chessy.hybrid-eval-counts.evidence-preservation.v1",
+  "access": "Private research evidence; fitted source/model bytes and full replay requests are not public.",
+  "filename": "chessy-hybrid-phase-counts-evidence-2026-09-15.zip",
+  "libraryFileId": "libfile_a1c939a920a48191b36bd8eefd794709",
+  "libraryVersion": 0,
+  "bytes": 2782975,
+  "sha256": "f7d665996b5e8cc21e863fc56d3016a023b6c58523bfe4fffe7b36e57c5d04fd",
+  "zipEntries": 38,
+  "contains": "Exact original and observer source files/modules, immutable executing code, full selected requests and source archive, registration, attempt ledger, all raw results, independent audit and pinned build receipts."
+}
