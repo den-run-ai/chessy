@@ -18,6 +18,34 @@ try {
   console.log('hash source isolation, unchanged engine/eval, anchored searched edges and exact snapshot hashes PASS');
 } finally {fs.rmSync(tmp,{recursive:true,force:true});}
 
+// Historical runner bytes are preserved only in an inert data container.
+{
+  const archivePath=path.join(root,'eval/hash-cost-v1/pre-capture-hash-bench.source.json');
+  const archive=JSON.parse(fs.readFileSync(archivePath));
+  assert.deepEqual(Object.keys(archive).sort(),['schema','encoding','sha256','sourceFilename','base64'].sort());
+  assert.equal(archive.schema,'chessy.historical-source.v1');assert.equal(archive.encoding,'base64');
+  assert.equal(archive.sourceFilename,'tools/search/hash-bench.js');
+  const decoded=Buffer.from(archive.base64,'base64');assert.equal(decoded.toString('base64'),archive.base64);
+  const digest=H.sha(decoded);assert.equal(digest,'3eecebaa889eb1037d41e1e7546a212bee3e2fb419a2e7d62fcf391a4dc58c00');
+  assert.equal(archive.sha256,digest);
+  assert.equal(require('../../eval/hash-cost-v1/provenance-hardening.json').measuredRunnerSha256,digest);
+  assert.equal(require('../../eval/hash-cost-v1/execution-snapshot.json').files.find(x=>x.path===archive.sourceFilename).sha256,digest);
+  for(const mode of ['fixed','master'])assert.equal(require('../../eval/hash-cost-v1/'+mode+'-registration.json').dependencies.find(x=>x.path===archive.sourceFilename).sha256,digest);
+  assert.deepEqual(require(archivePath),archive);assert.equal(typeof require(archivePath).run,'undefined');
+  const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hash-inert-archive-'));
+  try{
+    const out=path.join(temporary,'must-not-create-results.json');
+    const direct=require('node:child_process').spawnSync(process.execPath,[archivePath,'run','/absent-retired-registration',out],{encoding:'utf8',timeout:2000});
+    assert.equal(direct.status,0);assert.equal(direct.stderr,'');assert.equal(direct.stdout,'');
+    assert.equal(fs.existsSync(out),false);assert.equal(fs.existsSync(out+'.lock'),false);
+    const renamed=path.join(temporary,'archived-runner.js.txt');fs.copyFileSync(archivePath,renamed);
+    const invocation=require('node:child_process').spawnSync(process.execPath,[renamed,'run','/absent-retired-registration',out],{encoding:'utf8',timeout:2000});
+    assert.notEqual(invocation.status,0);assert.match(invocation.stderr,/SyntaxError/);assert.equal(invocation.stdout,'');
+    assert.equal(fs.existsSync(out),false);assert.equal(fs.existsSync(out+'.lock'),false);
+  }finally{fs.rmSync(temporary,{recursive:true,force:true});}
+  assert.equal(fs.existsSync(path.join(root,'eval/hash-cost-v1/pre-capture-hash-bench.js.txt')),false);
+}
+
 // The source receipt hashes the same generator/template bytes that execute.
 {
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'hash-generator-capture-'));
@@ -54,6 +82,9 @@ try {
     assert.equal(fs.existsSync(path.join(directory,'bad-source')),false);
   }finally{fs.readFileSync=read;fs.rmSync(directory,{recursive:true,force:true});}
 }
+
+// This is the existing CI entrypoint for the arithmetic-only committed evidence gate.
+require('./hash-evidence.test');
 
 // Retained-source tests and first-failure capture use synthetic adapters only.
 (async()=>{

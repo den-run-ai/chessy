@@ -118,8 +118,10 @@ fit, threshold search or timing rerun was performed. Paid compute: **$0**.
 
 The completed measurements executed the retained read-only 21-file snapshot
 listed in `execution-snapshot.json`; their original schema-v1 registrations and
-results remain unchanged. `pre-capture-hash-bench.js.txt` preserves the exact
-measured runner bytes.
+results remain unchanged. `pre-capture-hash-bench.source.json` preserves the exact measured runner bytes
+as base64 data with their original SHA-256. The archive contains no executable
+entrypoint; CI checks direct Node invocation and importing it load only data,
+while interpreting a renamed copy as JavaScript fails. Decoding is for source inspection and hashing, not execution.
 
 The reusable runner now applies the independently reviewed qsearch pattern:
 capture runner, benchmark and eager signature-fixture bytes once; compile the
@@ -153,3 +155,11 @@ future scientific recipe is not automatically retired by these entries. The ledg
 trusted filesystem; another host/account or owner deletion is outside that local
 guarantee. It is not a distributed or adversary-proof strength-admission ledger.
 Original read-only snapshots and reported results remain unchanged.
+
+CI also reads the actual committed 504 observation rows and both original
+registrations. It recomputes the complete summaries, fixed-node parity and
+routing rule, Master depth/move/stop/overshoot totals, and checks their links to
+the independent audits, source receipt and execution snapshot. Mutation tests
+reject changed raw data, summary arithmetic, audit totals and cross-file hashes.
+These are arithmetic and preservation checks; they perform no engine searches,
+new timing measurements or physical-device validation.

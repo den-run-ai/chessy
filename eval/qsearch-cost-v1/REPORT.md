@@ -26,7 +26,7 @@ new formal games, or device-certification claims are involved.
 
 The complete [registration](fixed-registration.json) predates execution;
 [raw results](fixed-results.json) retain all 648 rows. The exact
-[runner snapshot](fixed-benchmark-source.js.txt) preserves the dependency hash
+[runner snapshot](fixed-benchmark-source.archive.json) preserves the dependency hash
 from before the separately registered Master-depth correction. The exposed corpus is
 18 positions from nine mirrored families, each tested at 10k/36k/230k nodes,
 maximum depth 111, quiescence enabled, four repetitions and rotated engine order.
@@ -164,8 +164,8 @@ before publishing a completion receipt. Empty, missing, duplicate, reordered,
 invented and malformed plans/rows are covered by negative tests. Registration
 acknowledgment also uses `registered: true`, without a zero-row completion claim.
 
-Both exact executed runner versions are retained: [fixed](fixed-benchmark-source.js.txt),
-[Master](master-benchmark-source.js.txt), and their [hash mapping](runner-snapshots.json).
+Both exact executed runner versions are retained: [fixed](fixed-benchmark-source.archive.json),
+[Master](master-benchmark-source.archive.json), and their [hash mapping](runner-snapshots.json).
 The hardened live runner has a different source hash and cannot silently replace
 the implementation authenticated by either historical registration.
 
@@ -186,7 +186,7 @@ cached runner, changed fixture bytes, unauthenticated adapter execution, reposit
 imports, and uncaptured file reads. First divergent or invalid-timing rows are
 retained in failure reports, verified using synthetic adapters. All tests use
 JavaScript-only fixtures. The
-[previous reviewed runner](pre-capture-benchmark-source.js.txt) and its
+[previous reviewed runner](pre-capture-benchmark-source.archive.json) and its
 [provenance record](provenance-hardening.json) are retained; that version never ran
 a timing experiment. Every original fixed/Master registration, result, and executed
 runner snapshot remains unchanged. No timings were rerun or relabeled.
@@ -203,16 +203,35 @@ modules, changing timestamps/output names, reordering arm labels, or adding sour
 comments. Failed attempts remain spent, and the two completed historical scientific
 recipes are explicitly retired independently of local ledger initialization.
 
-The [pre-correction generator](pre-generator-capture-source.js.txt),
-[pre-correction runner](pre-ledger-benchmark-source.js.txt), and their
+The [pre-correction generator](pre-generator-capture-source.archive.json),
+[pre-correction runner](pre-ledger-benchmark-source.archive.json), and their
 [hash record](generator-ledger-hardening.json) preserve review provenance. All
 historical generated-source receipts, registrations, results, and executed source
 snapshots remain unchanged. Tests use temporary copied sources and synthetic
 adapters to cover cached generator replacement, mutation during capture and
 publication, copied/relocated/re-registered experiments, comment-only changes,
 concurrent callers, an atomic reservation race, and permanent failure consumption.
-No engine builds, searches, or timings were repeated.
+No diagnostic timings or match games were rerun.
 
 The ledger is shared across repository worktrees/copies for one host and account;
 its local-filesystem trust boundary is stated in PLAN.md. It is not a remote
 admission authority and does not replace formal strength or physical-device gates.
+
+## Inert historical source archives
+
+The five historical JavaScript snapshots are stored as inert JSON containers,
+not files that Node can load as JavaScript. Each archive names the original
+source file and contains its exact bytes as base64 with the original SHA-256.
+Decoding is for inspection and hashing; it does not authorize historical
+execution. The registration and provenance mappings retain the original source
+hashes and point to these containers. No historical registration or result bytes
+were changed.
+
+The Node gate checks all five decoded digests against their existing provenance
+records, binds both executed snapshots to the unchanged registration digests and
+embedded result registrations, and validates all 720 result rows. It pins the frozen raw-result digests,
+independently recomputes every Master summary pair and total, both fixed-node
+and Master report tables, and checks source/build/log/signature hash links.
+Negative cases reject changed row values and summary arithmetic. Direct Node
+invocation and `require` load the containers only as data; renaming them to
+JavaScript causes a syntax error before any benchmark can launch.
