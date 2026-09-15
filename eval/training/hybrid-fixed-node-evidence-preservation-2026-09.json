@@ -1,0 +1,14 @@
+{
+  "access": "Private research evidence; not a public trained-model release. No signed access URLs committed.",
+  "bytes": 2843540,
+  "contains": "Exact executable snapshot, original WASM evaluators and source receipts, complete registration, canonical201-member raw game archive, manifest, independent audit, one-shot ledger, policy/skip receipts and original-path/hash mapping.",
+  "filename": "chessy-hybrid-fixed-node-evidence-2026-09-15.zip",
+  "independentReplay": "PASS200games24467searchedmoves0mismatches",
+  "libraryFileId": "libfile_0aef46214cf8819192a19cee4bf250fb",
+  "libraryVersion": 0,
+  "registrationSha256": "61633ee445f4d4ed6b3e53aac6a828d88d8dadafd7eb90173075bc81f2d8a2aa",
+  "retainedArchiveSha256": "05f6d2059ff492c364d6e28965b165c2b783df7199735b9809713e85e751b516",
+  "schema": "chessy.hybrid-fixed-node-evidence-preservation.v1",
+  "sha256": "508905668ae2c8ea9fc432865542f11fab2bf6dade8b81ab84315575c1535183",
+  "zipEntries": 35
+}
