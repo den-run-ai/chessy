@@ -1,0 +1,13 @@
+{
+  "candidateScore": 0.5,
+  "engineSearchesRun": 0,
+  "executed": false,
+  "failureSamples": 0,
+  "paidComputeUsd": 0,
+  "policySha256": "4ff9c8dc4e6dd89101d8ca98e49c71b21b6054d9c77aedff61851a1ffba70794",
+  "reason": "Exact50%score selected preregistered promising/runtime branch; conditional below50%sampling and root-ranking analysis remain skipped.",
+  "representativeSamples": 0,
+  "requiredScoreBelow": 0.5,
+  "schema": "chessy.hybrid-fixed-node-review-sampling-skipped.v1",
+  "summarySha256": "ef392674f7a081a2dcf714bf7d79fa243e6ac95af5888a975f9a0e625651f6ae"
+}
