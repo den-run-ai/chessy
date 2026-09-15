@@ -1,0 +1,8 @@
+{
+  "schema": "chessy.qsearch-cost.provenance-hardening.v1",
+  "previousPublishedCommit": "81048b5aabf34cbbfb71525127d4a71706b6dc8f",
+  "previousRunnerSnapshot": "pre-capture-benchmark-source.js.txt",
+  "previousRunnerSha256": "482b0b2e31bca7b26ce0659882ee77c4855a03749c353ec9798a85c0e5709603",
+  "previousVersionExecutedForTiming": false,
+  "historicalRunsRerun": false
+}

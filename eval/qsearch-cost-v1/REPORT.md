@@ -166,3 +166,25 @@ Both exact executed runner versions are retained: [fixed](fixed-benchmark-source
 [Master](master-benchmark-source.js.txt), and their [hash mapping](runner-snapshots.json).
 The hardened live runner has a different source hash and cannot silently replace
 the implementation authenticated by either historical registration.
+
+## Post-run implementation-capture correction
+
+A second review found that the earlier runner could execute a cached benchmark
+module and then hash replacement bytes at its pathname. Fresh registrations now
+use schema v2: the built-in-only bootstrap captures the runner, benchmark adapter,
+and adapter's eagerly loaded signature fixture before execution. It executes the
+captured runner and adapter, bypasses the repository require cache, and supplies
+only retained fixture bytes through the adapter's restricted filesystem reader.
+Run authentication checks the registered identities before evaluating the adapter.
+Registration and completion also reject persistent source-path changes.
+
+Mutation tests cover a poisoned require cache, adapter replacement after capture,
+runner replacement between Node's bootstrap read and capture, replacement of a
+cached runner, changed fixture bytes, unauthenticated adapter execution, repository
+imports, and uncaptured file reads. First divergent or invalid-timing rows are
+retained in failure reports, verified using synthetic adapters. All tests use
+JavaScript-only fixtures. The
+[previous reviewed runner](pre-capture-benchmark-source.js.txt) and its
+[provenance record](provenance-hardening.json) are retained; that version never ran
+a timing experiment. Every original fixed/Master registration, result, and executed
+runner snapshot remains unchanged. No timings were rerun or relabeled.

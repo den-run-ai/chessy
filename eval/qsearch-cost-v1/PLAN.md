@@ -69,3 +69,13 @@ settings and corpus before loading engines, authenticates every module first,
 and requires all ordered row identities before completion. The executed
 historical runners and evidence remain separately preserved as documented in
 REPORT.md; this validation correction does not rerun or relabel those results.
+
+## Retained implementation capture
+
+Fresh registrations use benchmark schema v2. A built-in-only bootstrap captures
+the runner, benchmark adapter, and adapter's eagerly loaded frozen-signature
+fixture, then executes the captured runner and adapter bytes. The adapter can
+read only its captured fixture; repository imports and uncaptured file reads
+fail closed. Registration and completion recheck pathnames against retained
+identities, but all execution and parsing use retained bytes. Legacy v1 evidence
+remains validation-only in the current runner, with its original snapshots.

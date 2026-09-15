@@ -1,44 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
-const vm=require('node:vm'),{isBuiltin}=require('node:module');
+const Bench=require('../../experiments/wasm/bench');
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 const ROOT=path.resolve(__dirname,'../..');
 const check=(v,m)=>{if(!v)throw Error(m);};
 const encode=x=>JSON.stringify(x,null,2)+'\n';
-// This built-in-only bootstrap executes the same retained runner bytes that
-// are hashed below. No repository module is loaded through require/cache.
-if(typeof __qsearchCaptured==='undefined'){
-  const captured=[__filename,path.join(ROOT,'experiments/wasm/bench.js'),
-    path.join(ROOT,'test/fixtures/wasm-r69-signatures.json')]
-    .map(file=>({path:file,bytes:Buffer.from(fs.readFileSync(file))}));
-  const compiled=vm.compileFunction(captured[0].bytes.toString('utf8').replace(/^#![^\n]*/,''),
-    ['require','module','exports','__filename','__dirname','__qsearchCaptured'],{filename:__filename});
-  compiled(require,module,module.exports,__filename,__dirname,captured);
-}else{
-const captured=__qsearchCaptured;
-const dependencies=()=>captured.map(x=>({path:path.relative(ROOT,x.path),sha256:sha(x.bytes)}));
-const sourcesUnchanged=()=>captured.every(x=>sha(fs.readFileSync(x.path))===sha(x.bytes));
-let bench;
-function getBench(){
-  if(bench)return bench;
-  const source=captured[1],loaded={exports:{}};
-  const builtinRequire=id=>{
-    check(isBuiltin(id),'benchmark may import only built-in modules');
-    const name=id.replace(/^node:/,'');
-    if(name==='fs')return Object.freeze({readFileSync(file,encoding){
-      check(file===captured[2].path&&encoding==='utf8','benchmark attempted an uncaptured file read');
-      return captured[2].bytes.toString('utf8');
-    }});
-    return require('node:'+name);
-  };
-  vm.compileFunction(source.bytes.toString('utf8'),
-    ['require','module','exports','__filename','__dirname'],{filename:source.path})
-    (builtinRequire,loaded,loaded.exports,source.path,path.dirname(source.path));
-  bench=loaded.exports;return bench;
-}
+const dependencies=()=>[__filename,path.join(ROOT,'experiments/wasm/bench.js')].map(p=>({path:path.relative(ROOT,p),sha256:sha(fs.readFileSync(p))}));
 const fixedFields=['abiVersion','move','score','depth','attemptedDepth','nodes','qnodes','cutoffs','researches','stopReason'];
-const positions=()=>getBench().POSITIONS.map(([name,fen])=>({name,fen}));
+const POSITION_CONTRACT=Bench.POSITIONS.map(([name,fen])=>({name,fen}));
 const WARMUP_CONTRACT={nodeLimit:10000,maxDepth:111,timeMs:0,quiesce:true,rounds:2};
 const ORDER_CONTRACT='rotate engine order by (position index + repetition) modulo engine count';
 const MODE_CONTRACTS={
@@ -51,14 +21,14 @@ const keys=(value,expected,label)=>check(value!==null&&typeof value==='object'&&
 function validatePlan(plan){
   keys(plan,['schema','mode','created','researchOnly','productionIntegrationAllowed','strengthClaimAllowed',
     'selectionAllowed','positions','options','warmup','order','modules','dependencies'],'plan');
-  check(['chessy.qsearch-cost.benchmark.v1','chessy.qsearch-cost.benchmark.v2'].includes(plan.schema)&&plan.researchOnly===true
+  check(plan.schema==='chessy.qsearch-cost.benchmark.v1'&&plan.researchOnly===true
     &&plan.productionIntegrationAllowed===false&&plan.strengthClaimAllowed===false,'invalid plan');
   check(typeof plan.mode==='string'&&Object.hasOwn(MODE_CONTRACTS,plan.mode),'unknown mode');
   const contract=MODE_CONTRACTS[plan.mode];
   check(typeof plan.created==='string'&&Number.isFinite(Date.parse(plan.created))
     &&new Date(plan.created).toISOString()===plan.created,'invalid registration timestamp');
   check(plan.selectionAllowed===(plan.mode==='fixed'),'invalid selection policy');
-  check(equal(plan.positions,positions()),'position inventory differs from supported corpus');
+  check(equal(plan.positions,POSITION_CONTRACT),'position inventory differs from supported corpus');
   check(equal(plan.options,contract.options),'mode-specific options differ');
   check(equal(plan.warmup,WARMUP_CONTRACT),'warmup differs');
   check(plan.order===ORDER_CONTRACT,'engine order differs');
@@ -72,7 +42,6 @@ function validatePlan(plan){
     paths.add(module.path);hashes.add(module.sha256);
   }
   const expectedDependencies=['tools/search/qsearch-bench.js','experiments/wasm/bench.js'];
-  if(plan.schema==='chessy.qsearch-cost.benchmark.v2')expectedDependencies.push('test/fixtures/wasm-r69-signatures.json');
   check(Array.isArray(plan.dependencies)&&plan.dependencies.length===expectedDependencies.length,'dependency inventory differs');
   for(let i=0;i<expectedDependencies.length;i++){
     const dep=plan.dependencies[i];keys(dep,['path','sha256'],'dependency');
@@ -88,7 +57,7 @@ function expectedRows(plan){
   return rows;
 }
 function validateRows(plan,rows){
-  const Bench=getBench(),expected=expectedRows(plan);
+  const expected=expectedRows(plan);
   check(Array.isArray(rows)&&rows.length===expected.length&&rows.length>0,'complete row inventory differs');
   const signatures=new Map();
   for(let i=0;i<expected.length;i++){
@@ -116,19 +85,18 @@ function validateRows(plan,rows){
 function register(file,mode,modules){
   check(typeof mode==='string'&&Object.hasOwn(MODE_CONTRACTS,mode),'unknown mode');
   check(Array.isArray(modules)&&modules.length===MODE_CONTRACTS[mode].modules,'mode-specific module inventory differs');
-  const plan={schema:'chessy.qsearch-cost.benchmark.v2',mode,created:new Date().toISOString(),researchOnly:true,
+  const plan={schema:'chessy.qsearch-cost.benchmark.v1',mode,created:new Date().toISOString(),researchOnly:true,
     productionIntegrationAllowed:false,strengthClaimAllowed:false,selectionAllowed:mode==='fixed',
-    positions:positions(),
+    positions:POSITION_CONTRACT.map(p=>({...p})),
     options:{...MODE_CONTRACTS[mode].options,nodeLimits:[...MODE_CONTRACTS[mode].options.nodeLimits]},
     warmup:{...WARMUP_CONTRACT},order:ORDER_CONTRACT,
     modules:modules.map(p=>({path:fs.realpathSync(p),sha256:sha(fs.readFileSync(p))})),dependencies:dependencies()};
-  validatePlan(plan);check(sourcesUnchanged(),'benchmark dependency changed before registration');
-  fs.writeFileSync(file,encode(plan),{flag:'wx'});return plan;
+  validatePlan(plan);fs.writeFileSync(file,encode(plan),{flag:'wx'});return plan;
 }
 async function run(file,out){
   const planBytes=fs.readFileSync(file),plan=JSON.parse(planBytes);
-  check(plan&&plan.schema==='chessy.qsearch-cost.benchmark.v2'&&equal(plan.dependencies,dependencies()),'benchmark dependency changed after registration');
-  validatePlan(plan);const Bench=getBench();
+  validatePlan(plan);
+  check(equal(plan.dependencies,dependencies()),'benchmark dependency changed after registration');
   // Authenticate the complete inventory before any engine is loaded; execute
   // these retained module bytes instead of reopening mutable paths.
   const retained=plan.modules.map(m=>{
@@ -148,22 +116,21 @@ async function run(file,out){
         for(let offset=0;offset<engines.length;offset++){
           const ei=(pi+rep+offset)%engines.length;
           const result=engines[ei].search(p.fen,{...plan.options,nodeLimit:limit});
-          // Retain the observed failure too, before any result validation.
-          rows.push({position:pi,name:p.name,engine:ei,repetition:rep,nodeLimit:limit,...result});
           if(plan.mode==='fixed'){
             const signature=fixedFields.map(f=>result[f]);
             if(expected===null)expected=signature;else check(JSON.stringify(signature)===JSON.stringify(expected),'fixed-node signature diverged '+p.name+' '+limit+' module '+ei);
           }
           check(result.ms>0&&Number.isFinite(result.ms),'invalid timing');
+          rows.push({position:pi,name:p.name,engine:ei,repetition:rep,nodeLimit:limit,...result});
         }
       }
       process.stdout.write(JSON.stringify({position:pi,nodeLimit:limit,completeRows:rows.length})+'\n');
     }}
     check(sha(fs.readFileSync(file))===sha(planBytes),'registration changed while running');
-    check(sourcesUnchanged(),'benchmark dependency changed while running');
+    check(JSON.stringify(plan.dependencies)===JSON.stringify(dependencies()),'benchmark dependency changed while running');
     check(engines.length===plan.modules.length,'executed module inventory differs');
     validateRows(plan,rows);
-    const report={schema:'chessy.qsearch-cost.benchmark-results.v2',registrationSha256:sha(planBytes),registration:plan,
+    const report={schema:'chessy.qsearch-cost.benchmark-results.v1',registrationSha256:sha(planBytes),registration:plan,
       runtime:{node:process.version,versions:process.versions,platform:os.platform(),arch:os.arch(),cpu:os.cpus()[0].model},
       modules:engines.map(e=>({bytes:e.binaryBytes,brotliBytes:e.brotliBytes,memoryBytes:e.memoryBytes()})),
       complete:true,exactFixedNodeParity:plan.mode==='fixed',rows};
@@ -179,4 +146,3 @@ if(require.main===module){
   }).then(x=>console.log(encode(x.rows?{complete:true,rows:x.rows.length}:{registered:true}))).catch(e=>{console.error(e);process.exitCode=1;});
 }
 module.exports={register,run,validatePlan,expectedRows,validateRows};
-}

@@ -76,6 +76,114 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
   // Mutation of a returned plan cannot rewrite the internal supported contracts.
   const mutable=Bench.register(path.join(temp,'mutable.json'),'fixed',modules);mutable.positions.length=0;mutable.options.nodeLimits.length=0;
   assert.throws(()=>Bench.validatePlan(mutable),/position inventory/);Bench.validatePlan(plan);
+  // Copy only source into temporary repositories: all mutation cases below
+  // authenticate JavaScript bytes and never instantiate a WASM engine.
+  const runnerSource=fs.readFileSync(path.join(ROOT,'tools/search/qsearch-bench.js'));
+  const benchmarkSource=fs.readFileSync(path.join(ROOT,'experiments/wasm/bench.js'));
+  function fixture(name,benchmark=benchmarkSource){
+    const root=path.join(temp,name),runner=path.join(root,'tools/search/qsearch-bench.js'),benchmarkPath=path.join(root,'experiments/wasm/bench.js');
+    fs.mkdirSync(path.dirname(runner),{recursive:true});fs.mkdirSync(path.dirname(benchmarkPath),{recursive:true});
+    fs.writeFileSync(runner,runnerSource);fs.writeFileSync(benchmarkPath,benchmark);
+    const frozen=path.join(root,'test/fixtures/wasm-r69-signatures.json');
+    fs.mkdirSync(path.dirname(frozen),{recursive:true});fs.copyFileSync(path.join(ROOT,'test/fixtures/wasm-r69-signatures.json'),frozen);
+    return {runner,benchmarkPath};
+  }
+  const cached=fixture('cached-benchmark');
+  require.cache[cached.benchmarkPath]={exports:{POSITIONS:[]}};
+  try{
+    const captured=require(cached.runner),registered=captured.register(path.join(temp,'cache-plan.json'),'fixed',modules);
+    assert.deepEqual(registered.positions,plan.positions,'require.cache cannot substitute benchmark code');
+    assert.equal(registered.dependencies[0].sha256,Cost.sha(runnerSource));
+    assert.equal(registered.dependencies[1].sha256,Cost.sha(benchmarkSource));
+    assert.equal(registered.dependencies.length,3);
+  }finally{delete require.cache[cached.benchmarkPath];delete require.cache[cached.runner];}
+
+  const swapped=fixture('swapped-benchmark');
+  const alternate=Buffer.from(benchmarkSource.toString().replace('opening (Ruy Lopez)','replacement corpus'));
+  const read=fs.readFileSync;let benchmarkReads=0,retained;
+  fs.readFileSync=function(file,...args){
+    const bytes=read.call(fs,file,...args);
+    if(String(file)===swapped.benchmarkPath){benchmarkReads++;fs.writeFileSync(file,alternate);}
+    return bytes;
+  };
+  try{retained=require(swapped.runner);}finally{fs.readFileSync=read;}
+  assert.equal(benchmarkReads,1,'capture reads benchmark source exactly once');
+  retained.validatePlan(plan); // Uses captured corpus A although the pathname is B.
+  const substituted=clone(plan);substituted.positions[0].name='replacement corpus';
+  assert.throws(()=>retained.validatePlan(substituted),/position inventory/);
+  const swapOutput=path.join(temp,'swapped-plan.json');
+  assert.throws(()=>retained.register(swapOutput,'fixed',modules),/dependency changed before registration/);
+  assert.equal(fs.existsSync(swapOutput),false);
+  delete require.cache[swapped.runner];
+
+  // Simulate Node receiving runner A, followed immediately by pathname B.
+  // The bootstrap must execute captured B and attest B, not cached A code.
+  const self=fixture('swapped-runner');let runnerReads=0,selfRunner;
+  const newRunner=Buffer.from(runnerSource.toString().replace('quiesce:true,rounds:2','quiesce:true,rounds:3'));
+  assert.notDeepEqual(newRunner,runnerSource);
+  fs.readFileSync=function(file,...args){
+    const bytes=read.call(fs,file,...args);
+    if(String(file)===self.runner&&++runnerReads===1)fs.writeFileSync(file,newRunner);
+    return bytes;
+  };
+  try{selfRunner=require(self.runner);}finally{fs.readFileSync=read;}
+  assert.equal(runnerReads,2,'runner capture follows Node bootstrap read');
+  const selfPlan=selfRunner.register(path.join(temp,'self-plan.json'),'fixed',modules);
+  assert.equal(selfPlan.warmup.rounds,3,'executed implementation comes from captured runner B');
+  assert.equal(selfPlan.dependencies[0].sha256,Cost.sha(newRunner));
+  // A cached exported runner must not attest replacement pathname C.
+  fs.writeFileSync(self.runner,Buffer.concat([newRunner,Buffer.from('// replacement C\n')]));
+  assert.throws(()=>selfRunner.register(path.join(temp,'cached-self-plan.json'),'fixed',modules),/dependency changed before registration/);
+  delete require.cache[self.runner];
+
+  const frozenSwap=fixture('swapped-signature-fixture');
+  const frozenPath=path.resolve(path.dirname(frozenSwap.runner),'../../test/fixtures/wasm-r69-signatures.json');
+  let frozenReads=0,frozenRunner;
+  fs.readFileSync=function(file,...args){
+    const bytes=read.call(fs,file,...args);
+    if(String(file)===frozenPath){frozenReads++;fs.writeFileSync(file,'not JSON');}
+    return bytes;
+  };
+  try{frozenRunner=require(frozenSwap.runner);}finally{fs.readFileSync=read;}
+  frozenRunner.validatePlan(plan); // Eager fixture parse consumes retained valid JSON.
+  assert.equal(frozenReads,1,'signature input is captured once, never reopened for parsing');
+  assert.throws(()=>frozenRunner.register(path.join(temp,'frozen-swap-plan.json'),'fixed',modules),/dependency changed before registration/);
+  delete require.cache[frozenSwap.runner];
+  const unauthenticated=fixture('unauthenticated-benchmark',Buffer.from("throw Error('unauthenticated benchmark executed');"));
+  const isolated=require(unauthenticated.runner),unauthenticatedOut=path.join(temp,'unauthenticated-out.json');
+  await assert.rejects(isolated.run(file,unauthenticatedOut),/dependency changed after registration/);
+  assert.equal(fs.existsSync(unauthenticatedOut+'.lock'),false,'authentication precedes benchmark evaluation');
+  delete require.cache[unauthenticated.runner];
+  const transitive=fixture('transitive-import',Buffer.concat([benchmarkSource,Buffer.from("\nrequire('./untracked');\n")]));
+  const closedImports=require(transitive.runner);
+  assert.throws(()=>closedImports.register(path.join(temp,'transitive-plan.json'),'fixed',modules),/only built-in modules/);
+  delete require.cache[transitive.runner];
+  const untracked=fixture('untracked-input',Buffer.concat([benchmarkSource,Buffer.from("\nrequire('fs').readFileSync(__filename,'utf8');\n")]));
+  const closedInputs=require(untracked.runner);
+  assert.throws(()=>closedInputs.register(path.join(temp,'untracked-plan.json'),'fixed',modules),/uncaptured file read/);
+  delete require.cache[untracked.runner];
+
+  // Synthetic adapters exercise failure retention without any WASM execution.
+  for(const failure of ['timing','divergence']){
+    const source=Buffer.from(`module.exports={
+      POSITIONS:${JSON.stringify(plan.positions.map(p=>[p.name,p.fen]))},
+      STOP_REASONS:['unknown','max-depth','time-limit','node-limit','mate','game-over'],EXPERIMENT_METRIC_SLOTS:16,
+      async loadOrdinaryWasmBytes(bytes,label){return {search(fen,options){return {
+        abiVersion:2,move:'a2a3',score:options.repetitions&&label==='module-1'&&'${failure}'==='divergence'?1:0,
+        depth:1,attemptedDepth:1,nodes:1,qnodes:0,cutoffs:0,researches:0,stopReason:'max-depth',experimentMetrics:null,
+        ms:options.repetitions&&'${failure}'==='timing'?0:1
+      };}};}
+    };`);
+    const failureFixture=fixture('observed-'+failure,source),runner=require(failureFixture.runner);
+    const input=path.join(temp,'observed-'+failure+'-plan.json'),output=path.join(temp,'observed-'+failure+'-out.json');
+    runner.register(input,'fixed',modules);
+    await assert.rejects(runner.run(input,output),failure==='timing'?/invalid timing/:/signature diverged/);
+    const observed=JSON.parse(fs.readFileSync(output+'.failure.json'));
+    assert.equal(observed.rows.length,failure==='timing'?1:2,'first rejected observation is retained');
+    assert.equal(observed.rows.at(-1)[failure==='timing'?'ms':'score'],failure==='timing'?0:1);
+    assert.equal(fs.existsSync(output),false,'rejected observations never certify completion');
+    delete require.cache[failureFixture.runner];
+  }
   const historical=['fixed','master'].map(mode=>JSON.parse(fs.readFileSync(path.join(ROOT,'eval/qsearch-cost-v1',mode+'-results.json'))));
   for(const result of historical){
     Bench.validatePlan(result.registration);
@@ -93,5 +201,5 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
   }
   const divergent=clone(historical[0].rows);divergent[1].score++;
   assert.throws(()=>Bench.validateRows(historical[0].registration,divergent),/signatures differ/);
-  console.log('qsearch source isolation, strict registration, 720 historical row identities and negative completion cases: passed');
+  console.log('qsearch source capture/cache mutation, strict registration, 720 historical rows and negative completion cases: passed');
 }finally{fs.rmSync(temp,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});
