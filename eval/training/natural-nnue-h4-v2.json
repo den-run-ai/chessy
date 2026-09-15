@@ -1,0 +1,117 @@
+{
+  "schema": "chessy.natural-nnue-h4-preregistration.v2",
+  "id": "natural-nnue-h4-recipe-repair-2026-09-v2",
+  "researchBase": "84734797d9dc9c7e4adb2459c42145e0e35c560b",
+  "researchOnly": true,
+  "productionFitAllowed": false,
+  "hypothesis": "An explicitly regularized, quantization-aware residual to shipped HCE generalizes better than the prior almost-unregularized from-scratch H4. A net-only control and non-advancing H8 probe separate training and capacity effects.",
+  "data": {
+    "admission": "Reuse h4_data.authenticate and all exact v1 audit pins/53-file closure, without altering the v1 contract or evidence. Same retained bytes and original role identities.",
+    "sharedTrainRows": 33103,
+    "nnueValidationRows": 2374,
+    "nnueTestRows": 2331,
+    "innerSplit": "sha256(UTF8('chessy-h4-v2-inner-20260915') + one NUL byte 0x00 + UTF8(positionFamily)); integer first16 hex modulo5 ==0 is inner-validation; other families inner-training. Existing one-row-per-source-game admission and explicit group-disjoint assertions apply.",
+    "innerCaveat": "New v2 neural fits do not see inner-validation labels. These rows were previously training data for v1 neural fits and the frozen expanded HCE; this is development selection, not a fresh experiment-wide holdout. Expanded HCE inner score is in-sample for that comparator.",
+    "outerCaveat": "NNUE validation was exposed by v1; v2 reports it once after final model freeze as exploratory transfer, never as fresh confirmatory evidence.",
+    "newLabelsAllowed": false,
+    "forbiddenPerformanceRoles": [
+      "hce-validation",
+      "hce-test"
+    ]
+  },
+  "configurations": [
+    {
+      "id": "h4-net-l001",
+      "hidden": 4,
+      "mode": "net-only",
+      "l2": 0.001,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h4-residual-l001",
+      "hidden": 4,
+      "mode": "residual-shipped-hce",
+      "l2": 0.001,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h4-residual-l010",
+      "hidden": 4,
+      "mode": "residual-shipped-hce",
+      "l2": 0.01,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h8-residual-l010",
+      "hidden": 8,
+      "mode": "residual-shipped-hce",
+      "l2": 0.01,
+      "eligibleForTest": false
+    }
+  ],
+  "training": {
+    "seeds": [
+      10511,
+      10512,
+      10513
+    ],
+    "epochs": 300,
+    "batchSize": 512,
+    "optimizer": "Adam; beta1=.9,beta2=.999,epsilon=1e-8; analytic float64 gradients; deterministic per-seed minibatch permutation; no optimizer restarts",
+    "learningRate": 0.003,
+    "minimumLearningRate": 0.00015,
+    "schedule": "cosine by epoch from epoch1 lr=.003 to epoch300 lr=.00015; refit uses the same 300-epoch schedule prefix",
+    "gradientClipNorm": 2.0,
+    "loss": "mean BCEWithLogits(predicted_white_cp/100, teacher.targetWhite) + .5*lambda*sum((params-anchor)^2); no extra division by parameter count",
+    "anchor": "Initial W1 and b1, zero W2 and b2. W1=N(0,.04),b1=.25; residual starts W2=b2=0; net-only starts W2=N(0,.1),b2=0.",
+    "baseline": "Residual = frozen shipped HCE integer white cp + rounded neural white cp. No fixedCp or mopUpCp additive ablation; no refitting of either HCE comparator.",
+    "projection": "after each update W1,b1 in[-1.9,1.9]; W2 in[-4,4]; b2 in[-2,2]",
+    "quantizationAwareStartEpoch": 201,
+    "quantizationAwareMethod": "Round W1/b1 at Q1,W2 at Q2,b2 at Q1*Q2 in forward; identity STE for rounding and CReLU interior derivative, no final-cp rounding in differentiable objective",
+    "checkpointEveryEpochs": 10,
+    "checkpointEligibility": "Only epochs210,220,...,300 after QAT starts. Choose lowest exact quantized inner-validation CE; exact ties choose earlier epoch. Retain all curves and chosen checkpoints.",
+    "threads": 1,
+    "maximumFits": 13,
+    "maximumElapsedTrainingSeconds": 1800,
+    "paidBudgetUsd": 5,
+    "paidSpendPlannedUsd": 0,
+    "retryPolicy": "Canonical no-replace run marker before role decoding. No score-driven changes/retries; fatal errors preserve evidence and stop. Synthetic fixes before real execution permitted."
+  },
+  "selection": {
+    "recipe": "Among three H4 configurations choose lowest median of three best quantized inner-validation CEs; ties by listed configuration order. H8 is a diagnostic capacity probe only and cannot be selected or open test.",
+    "representativeSeed": "Median best-inner-CE seed of the selected recipe; exact ties by seed. Never choose the luckiest seed.",
+    "refit": "Exactly one fresh full-shared-train fit of that fixed seed and recipe; epoch count is median of its three inner best epochs. Use original 300-epoch cosine prefix and QAT201. Keep final epoch, with no outer-selected checkpoint.",
+    "freezeBeforeOuter": "Publish no-replace recipe/seed/epochs decision and model digest before reading NNUE-validation performance. One outer candidate only, no reselection.",
+    "qualityGuards": "Reuse v1 guard against BOTH frozen comparators: >=0.5% relative CE gain; MAE/RMSE<=1.02x, p99<=1.05x; each phase>=100 rows and CE<=1.01x.",
+    "noEligibleCandidate": "Report all results and stop without test, runtime, new matches, data growth or level changes."
+  },
+  "quantization": {
+    "q1": 16384,
+    "q2": 4096,
+    "cpScale": 400,
+    "weights": "int16 little-endian; biases int32; exact theoretical int32 accumulator/int64 output proofs for<=32pieces",
+    "rounding": "weights nearest ties-even; floor((integer numerator*400+denominator/2)/denominator) then white sign; add shipped integer baseline only in residual mode",
+    "h4ParameterBytes": 6180,
+    "h8ParameterBytes": 12356,
+    "advancementParameterBudgetBytes": 6500,
+    "maximumAbsFloatDifferenceCp": 5,
+    "maximumMeanAbsFloatDifferenceCp": 1,
+    "crossLanguageIntegerMismatchesAllowed": 0,
+    "maximumAbsoluteScoreCp": 10000,
+    "checks": "Train, inner-validation, full-shared-train final, outer validation and seven authored special FENs; independent JavaScript BigInt parity for each selected inner checkpoint and final consumed roles."
+  },
+  "test": {
+    "openOnce": true,
+    "condition": "Only single frozen final H4 candidate passing outer quality, quantization, parity and size gates; same test-quality guards and v1 family-cluster bootstrap 2000 draws seed1050915, upper95 CE delta<0 vs both comparators",
+    "marker": "Canonical no-replace test-opened state, keyed by v2 contract and original label-summary digest; consumed before test role decoding; renamed output cannot reopen",
+    "failure": "No test-driven adjustment or further runs."
+  },
+  "scope": {
+    "runtimeIntegrationAllowed": false,
+    "deviceGate": "#84 remains required before runtime integration; reference timing is not device/search timing",
+    "formalStrengthAllowed": false,
+    "formalAcceptance": "#175 remains unfinished; no Elo or family-estimator acceptance inferred from offline loss",
+    "levelRecalibrationAllowed": false,
+    "publication": "Only code, exact contract, weight-free reports and source research enter Git. Checkpoints/state remain separately preserved; no automatic new license for derived weights."
+  }
+}
