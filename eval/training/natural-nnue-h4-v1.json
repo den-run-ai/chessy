@@ -1,0 +1,102 @@
+{
+  "schema": "chessy.natural-nnue-h4-preregistration.v1",
+  "id": "natural-nnue-h4-2026-09-v1",
+  "status": "research-only-preregistered-before-neural-performance",
+  "researchBase": "c716a4c74a920168a1694f355738edf9921e0d31",
+  "productionFitAllowed": false,
+  "data": {
+    "source": "existing complete CC0 January 2013 natural-pilot archive; no new selection or labels",
+    "sourceSha256": "aa40b3671fa3cf1072eb182892cd90b0e1e003a4a5943492f64b77e7f3fd1635",
+    "labelSummarySha256": "8862475a1c4d22867832b6a7399da91f2a1a14f1aad26994826e98a8975bc26d",
+    "selectionAuditSha256": "97753b24c87378d6fc26b1b6d907563e0458cad00858404ec7891b0a0ded2264",
+    "labelAuditSha256": "5af7e6f2ef9d3f6d0668555ac2c43c7f0e2a35aeeb0b84b19a090c60bdc851d9",
+    "auditedClosureSha256": "5f5deaf0ff2240ce4e507451322af465f67d4b219d1ddb0a030a70f56ab3156f",
+    "auditedFiles": 53,
+    "rows": {"shared-train": 33103, "nnue-validation": 2374, "nnue-test": 2331},
+    "forbiddenPerformanceRoles": ["hce-validation", "hce-test"],
+    "admission": "Authenticate both externally pinned audits, all 53 original closure identities, summary and selected HCE weights. Parse only requested role from the same retained bytes. Mechanical hash checks of test bytes are not performance exposure.",
+    "recovery": "Exact byte copies may be relocated by SHA-256; original audit paths/identities and closure digest remain unchanged. Missing raw evidence stops training."
+  },
+  "comparators": {
+    "shipped": "unchanged Rust/WASM HCE, sha256 57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+    "expanded": "previously selected 753 coefficients plus six pawn-attack terms, lambda 0.02; frozen, never refitted on NNUE roles",
+    "selectionFileSha256": "022c0cd99d61293d8262fd98df06fd4401e462954a24895a855d790ea779db69",
+    "weightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef"
+  },
+  "model": {
+    "inputs": 768,
+    "hidden": 4,
+    "sharedFirstLayer": true,
+    "perspectives": ["side-to-move", "other"],
+    "mapping": "native a8=0; black perspective swaps colors and square XOR 56",
+    "activation": "CReLU clamp 0..1",
+    "output": "side-to-move score in cp/400; multiply by 400 then convert to White POV",
+    "parameters": 3085,
+    "variants": ["net-only", "net-plus-existing-fixed-mop-up"],
+    "mopUp": "explicit inference-only ablation using frozen HCE fixedCp; no retraining or new coefficients",
+    "h8OrLargerAllowed": false
+  },
+  "training": {
+    "implementation": "NumPy 2.3.5 / SciPy 1.17.0, float64 sparse full-batch CPU; no PyTorch/GPU dependency",
+    "seeds": [10501, 10502, 10503],
+    "loss": "mean BCEWithLogits(4 * predicted_cp_white / 400, teacher.targetWhite) + 0.5e-5 * mean(parameter^2)",
+    "calibration": "k=4.0 frozen from preceding shared-train HCE calibration; no NNUE-validation recalibration",
+    "solver": "L-BFGS-B",
+    "maxIterations": 600,
+    "maxFunctionEvaluations": 1200,
+    "maxLineSearchSteps": 40,
+    "gradientTolerance": 1e-7,
+    "functionTolerance": 1e-10,
+    "threads": 1,
+    "optimizerBudgetExhaustion": "retain final finite iterate as fixed-budget result; abnormal line search/nonfinite states disqualify seed; no score-based restart",
+    "paidBudgetUsd": 5,
+    "defaultPaidSpendUsd": 0,
+    "repeatPolicy": "one complete three-seed run; canonical run-start marker prevents renamed-output retries"
+  },
+  "quantization": {
+    "parameterBytes": 6180,
+    "firstLayerScale": 1024,
+    "outputScale": "largest power of two <=4096 fitting all rounded output weights in signed int16",
+    "weights": "int16 little-endian; biases int32 little-endian",
+    "parameterRounding": "nearest ties-to-even",
+    "finalRounding": "floor((integer numerator * 400 + denominator/2)/denominator), then White-POV sign",
+    "overflow": "reject saturation and prove int32 accumulator / int64 output bound with <=32 pieces",
+    "maximumAbsFloatDifferenceCp": 5,
+    "maximumMeanAbsFloatDifferenceCp": 1,
+    "crossLanguageIntegerMismatchesAllowed": 0,
+    "scoreClamp": "no empirical retuning; reject outputs beyond +/-10000 cp on consumed rows or authored fixtures"
+  },
+  "selection": {
+    "seedRule": "median quantized validation CE of all three seeds for each ablation; never select luckiest seed; all seeds must complete without abnormal failure",
+    "variantRule": "among eligible median-seed ablations choose lower quantized validation CE, tie within 1e-12 favors net-only",
+    "guardsAgainst": "both frozen HCE comparators",
+    "minimumRelativeCeGain": 0.005,
+    "maximumRelativeCpMaeDeterioration": 0.02,
+    "maximumRelativeCpRmseDeterioration": 0.02,
+    "maximumPhaseRelativeCeDeterioration": 0.01,
+    "maximumP99AbsoluteCpErrorDeterioration": 0.05,
+    "minimumRowsPerPhase": 100,
+    "noEligibleCandidate": "stop, preserve all results, keep NNUE test unopened"
+  },
+  "test": {
+    "role": "nnue-test",
+    "openOnce": true,
+    "exposureMarker": "canonical experiment-input state keyed by contract, label summary and role, independent of selection filename",
+    "sameQualityAndQuantizationGuards": true,
+    "bootstrap": "2000 family-cluster resamples, row-weighted means, seed 1050915; upper two-sided 95% CE difference endpoint strictly below zero versus each comparator",
+    "failure": "stop without retuning, larger data, H8, runtime integration or new matches"
+  },
+  "feasibility": {
+    "parameterBudgetBytes": 6500,
+    "totalSize": "report actual parameter, metadata and portable reference bytes separately; 6180 excludes code and metadata. Production WASM delta remains unmeasured until #84 admits G3.",
+    "timing": "optional reference-only scalar timing on training/authored rows; not device or production-search timing",
+    "runtimeIntegrationAllowed": false,
+    "formalMatchAllowed": false,
+    "levelRecalibrationAllowed": false
+  },
+  "artifacts": {
+    "publication": "research checkpoints local/private; commit weight-free reports, contracts and code only",
+    "licensing": "CC0 source; preserve teacher provenance and generated-artifact release decision; no automatic MIT grant for labels/parameters",
+    "scope": "separate H4 hypothesis; does not change the frozen H64 production plan or claim an Elo/time gain"
+  }
+}

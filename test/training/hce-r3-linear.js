@@ -205,6 +205,7 @@ function compile(fen) {
   if (pieces.w > 0 && force.b === 0) mop = mopUp(kings.b, kings.w);
   else if (pieces.b > 0 && force.w === 0) mop = -mopUp(kings.w, kings.b);
   const fixedTaperCp = baseMg * mg + baseEg * eg;
+  const fixedTaperNumerator = baseMg * phase + baseEg * (H.PHASE_MAX - phase);
   const sparse = [];
   for (let index = 0; index < dense.length; index++) {
     if (dense[index] !== 0) sparse.push([index, dense[index]]);
@@ -215,6 +216,7 @@ function compile(fen) {
     phase,
     scoreDenominator: H.PHASE_MAX,
     fixedTaperCp,
+    fixedTaperNumerator,
     mopUpCp: mop,
     fixedCp: fixedTaperCp + mop,
     dense,
@@ -236,11 +238,23 @@ function smoothScore(compiled, weights) {
 }
 
 function runtimeRoundedScore(compiled, weights) {
-  let taper = compiled.fixedTaperCp;
-  for (let index = 0; index < weights.length; index++) {
-    taper += compiled.dense[index] * weights[index];
+  // The deployed evaluator accumulates integers before its single /24 taper.
+  // Summing already-divided doubles can turn an exact negative half tie into
+  // e.g. -1138.5000000000002 and incorrectly round down by one centipawn.
+  if (!compiled || !Number.isSafeInteger(compiled.fixedTaperNumerator) ||
+      !weights || weights.length !== H.TOTAL_PARAMETER_COUNT ||
+      !Array.from(weights).every(Number.isSafeInteger)) {
+    throw new Error('runtimeRoundedScore requires compiled integer coefficients and 965 integer weights');
   }
-  return Math.round(taper) + compiled.mopUpCp;
+  let numerator = compiled.fixedTaperNumerator;
+  for (let index = 0; index < weights.length; index++) {
+    const coefficient = Math.round(compiled.dense[index] * H.PHASE_MAX);
+    numerator += coefficient * weights[index];
+  }
+  if (!Number.isSafeInteger(numerator)) {
+    throw new Error('runtimeRoundedScore numerator exceeds exact integer range');
+  }
+  return Math.floor((numerator + H.PHASE_MAX / 2) / H.PHASE_MAX) + compiled.mopUpCp;
 }
 
 module.exports = {

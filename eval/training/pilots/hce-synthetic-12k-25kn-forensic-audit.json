@@ -1,0 +1,256 @@
+{
+  "schema": "chessy.hce-synthetic-pilot-forensic-audit.v1",
+  "status": "forensic-reproduction-only-no-candidate",
+  "date": "2026-09-14",
+  "runtimeFilesChanged": false,
+  "qualityClaimAllowed": false,
+  "strengthClaimAllowed": false,
+  "source": {
+    "implementationCommit": "f769f87903cd8ee026a1aa2472f6e81a58514298",
+    "historicalAnalyzerSha256": "0922b103df889a833d4cc77af890261d33f1cd2676f8b6ef15278cd974b3b33f",
+    "forensicDriverSha256": "69973b93c27da1ed8d2603ebaea1557f30043585bdb65ea6a4f39cc5f1741334",
+    "rawLabelStreamSha256": "77db4b4b4c40b5bb4e14c67aaf98f3e36b590128bc9b02125028f9abe9a413ae",
+    "generatedInputSha256": "a7186f8dce3cbe71d8b481360b36906dabafcf2d7f6d557b6f854fc02dbfcef9",
+    "generatedInputRows": 12000,
+    "generatedInputReproduced": true,
+    "sourceArchiveSha256": "2deeca8664333eb98103fcb2019b898879255cba7e1a9f8940e7c09a8aad2038",
+    "teacherExecutableSha256": "ef2b67169e88bafb47f6f2311fe059c64f26e77344c5d507f05928d7fce25319",
+    "sourceArchiveAndExecutableRehashed": true,
+    "numpy": "2.3.5",
+    "scipy": "1.17.0",
+    "implementationSha256": {
+      "tools/training/analyze-hce-synthetic-pilot.py": "74b3c4c9ac70f8d1be8988c946c803be974a8b7c92f5488d7be9ec515603c9c1",
+      "tools/training/hce-synthetic-pilot-data.js": "69651cfd424a04325972fe88c113a2ad7cde57adb036469cb37a3bf0c38131f2",
+      "test/training/hce-r3-linear.js": "21c469bfefae6b394c028634dfa89f938aa7aeaeb99800610e6bd6bf33ab84f1",
+      "test/training/hce-r3-features.js": "db85ed9990c72d265a45f6f027e55e2e70a57404a551d670bc0956ff8f59be05",
+      "test/training/hce-r3-baseline.js": "2a68323632b3bf254f593cf6b9c86ce9060ba47088039ba56d924374c2661a2c",
+      "test/training/corpus.js": "b21dcbbdef84996c1d308f86f652a08ea00b3d8284a040fa3958c183313b30f0",
+      "assets/chessy-ai-fast.wasm": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+      "experiments/wasm/src/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    }
+  },
+  "originalFitReproduction": {
+    "inventory": {
+      "teacherEligibleRows": 10911,
+      "fitEligibleRows": 10911,
+      "excludedAbsCpAbove2000": {
+        "train": 0,
+        "validation": 0,
+        "test": 0
+      },
+      "fitRows": {
+        "train": 7671,
+        "validation": 1619,
+        "test": 1621
+      },
+      "sourceSeedLicenses": {
+        "CC0-1.0": 7775,
+        "MIT": 3136
+      },
+      "uniqueModelClusters": 10911,
+      "uniquePositionFamilies": 10206,
+      "positionFamiliesCrossSplits": 0
+    },
+    "calibration": {
+      "value": 1.5539784380118946,
+      "trainLoss": 0.4677449352481243,
+      "iterations": 7
+    },
+    "surfaces": {
+      "baseline-retune": {
+        "lambda": 0.02,
+        "validation": 0.4419140615411498,
+        "test": 0.4280548802840077,
+        "roundedVectorHashMatches": true,
+        "maxCeDifference": 0.0
+      },
+      "baseline-plus-pawn-attacks": {
+        "lambda": 0.02,
+        "validation": 0.4354843071195666,
+        "test": 0.4223375422865577,
+        "roundedVectorHashMatches": true,
+        "maxCeDifference": 0.0
+      },
+      "baseline-plus-king-bucket-pawn-pst": {
+        "lambda": 0.02,
+        "validation": 0.44127624132575305,
+        "test": 0.42739815587017604,
+        "roundedVectorHashMatches": true,
+        "maxCeDifference": 0.0
+      },
+      "cheap-r3-combined": {
+        "lambda": 0.02,
+        "validation": 0.43500347477512985,
+        "test": 0.4215298674839762,
+        "roundedVectorHashMatches": true,
+        "maxCeDifference": 0.0
+      },
+      "full-r3": {
+        "lambda": 0.02,
+        "validation": 0.4339833703905215,
+        "test": 0.42006820448339305,
+        "roundedVectorHashMatches": true,
+        "maxCeDifference": 0.0
+      }
+    }
+  },
+  "independentGeometryAudit": {
+    "rows": 10911,
+    "invalidPositions": 0,
+    "illegalPvSequences": 0,
+    "featureVectorMismatches": 0,
+    "clusterKeyMismatches": 0,
+    "positionFamilyKeyMismatches": 0,
+    "runtimeRoundedScoreMismatchesBefore": 153,
+    "runtimeRoundedScoreMismatchesAfter": 0,
+    "largestMismatchCp": 1,
+    "sourceSeeds": 102,
+    "sourceSeedsCrossSplits": 102,
+    "tacticalContext": {
+      "inCheck": 732,
+      "captureAvailable": 6586,
+      "teacherBestMoveIsCapture": 4424
+    },
+    "depthRuleExcludedBySplit": {
+      "train": 154,
+      "validation": 26,
+      "test": 35
+    },
+    "depthRuleExcludedInCheck": 12,
+    "pythonChessVersion": "1.11.2"
+  },
+  "sensitivity": {
+    "originalReproducedRuntimeRoundedCrossEntropy": {
+      "baseline-retune": {
+        "train": 0.44464940766192707,
+        "validation": 0.4419358700850324,
+        "test": 0.42810569137755927
+      },
+      "baseline-plus-pawn-attacks": {
+        "train": 0.43907941437575365,
+        "validation": 0.43553766321654447,
+        "test": 0.4224708707991239
+      },
+      "baseline-plus-king-bucket-pawn-pst": {
+        "train": 0.4414908094703826,
+        "validation": 0.4412790444253215,
+        "test": 0.4273561778372453
+      },
+      "cheap-r3-combined": {
+        "train": 0.4360746905647429,
+        "validation": 0.4350687344298145,
+        "test": 0.42165457382123983
+      },
+      "full-r3": {
+        "train": 0.4347640863256038,
+        "validation": 0.43386863877223325,
+        "test": 0.4200316966236985
+      }
+    },
+    "originalFrozenRuntimeRoundedCrossEntropy": {
+      "train": 0.4677368928762594,
+      "validation": 0.4561864741354846,
+      "test": 0.4408241448832784
+    },
+    "depthRuleSensitivity": {
+      "removedRows": 215,
+      "retained": {
+        "train": 7517,
+        "validation": 1593,
+        "test": 1586
+      },
+      "calibration": {
+        "value": 1.574852751309041,
+        "trainLoss": 0.4653031028388572,
+        "iterations": 8
+      },
+      "frozenBaselineCrossEntropy": {
+        "train": 0.4653031028388572,
+        "validation": 0.4525722769693435,
+        "test": 0.43748533485588115
+      },
+      "surfaces": {
+        "baseline-retune": {
+          "lambda": 0.02,
+          "crossEntropy": {
+            "train": 0.4410884171128674,
+            "validation": 0.4374145246773091,
+            "test": 0.4233575101456212
+          },
+          "zeroedMobility": [
+            0,
+            1,
+            3
+          ],
+          "pawnAttacksAtUpperBound": 0
+        },
+        "baseline-plus-pawn-attacks": {
+          "lambda": 0.02,
+          "crossEntropy": {
+            "train": 0.43529095319499783,
+            "validation": 0.4308360867239804,
+            "test": 0.41745511787401607
+          },
+          "zeroedMobility": [
+            0,
+            1,
+            3
+          ],
+          "pawnAttacksAtUpperBound": 4
+        },
+        "baseline-plus-king-bucket-pawn-pst": {
+          "lambda": 0.02,
+          "crossEntropy": {
+            "train": 0.43780394435583825,
+            "validation": 0.43666217539826463,
+            "test": 0.42254798165920593
+          },
+          "zeroedMobility": [
+            0,
+            1,
+            3
+          ],
+          "pawnAttacksAtUpperBound": 0
+        },
+        "cheap-r3-combined": {
+          "lambda": 0.02,
+          "crossEntropy": {
+            "train": 0.4321805958181426,
+            "validation": 0.43024769034111143,
+            "test": 0.41648626587477594
+          },
+          "zeroedMobility": [
+            0,
+            1,
+            3
+          ],
+          "pawnAttacksAtUpperBound": 4
+        },
+        "full-r3": {
+          "lambda": 0.02,
+          "crossEntropy": {
+            "train": 0.43079434203290057,
+            "validation": 0.4292696129234799,
+            "test": 0.415008633606145
+          },
+          "zeroedMobility": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "pawnAttacksAtUpperBound": 4
+        }
+      },
+      "status": "post-hoc contaminated-data sensitivity only; no new holdout or strength evidence"
+    }
+  },
+  "interpretation": [
+    "All original selected lambdas, metrics and rounded-vector hashes reproduce exactly. This verifies implementation, not generalization.",
+    "215 rows violate the frozen seldepth >= depth rule. Legitimate Stockfish searches can have seldepth below nominal depth; this alone does not imply corrupt labels. The frozen rule remains unchanged.",
+    "Legacy rounded metrics round weights only with a smooth taper. RuntimeRounded separately uses integer numerator and final Rust-compatible rounding.",
+    "Every source seed crosses splits. Position-family bootstrap intervals do not account for this common source dependence.",
+    "Boundary saturation persists after exclusions. This warrants clean-data ablations, not a claim of optimizer failure or Elo harm.",
+    "The sensitivity refits the same surfaces and lambda grid after declared exclusions. It is post-hoc analysis of contaminated data, without a shipping or certified model."
+  ]
+}
