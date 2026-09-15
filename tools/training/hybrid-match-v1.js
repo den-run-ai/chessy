@@ -47,7 +47,7 @@ function register(args) {
   check(new Set(Object.values(modules).map(x => x.sha256)).size === 3, 'all three evaluator modules must differ');
   const offline = identity(args['offline-report']), runtime = identity(args['runtime-receipt']);
   const offlineValue = json(offline.path), runtimeValue = json(runtime.path), source = identity(args['runtime-source']);
-  check(offlineValue.schema === 'chessy.hybrid-screen.v1' && typeof offlineValue.testEligible === 'boolean', 'frozen offline screen receipt required');
+  check(['chessy.hybrid-screen.v1','chessy.hybrid-screen.v1b'].includes(offlineValue.schema) && typeof offlineValue.testEligible === 'boolean', 'frozen offline screen receipt required');
   check(runtimeValue.schema === 'chessy.hybrid-runtime-cost.v1' && runtimeValue.status === 'completed' && runtimeValue.researchOnly === true &&
     runtimeValue.parityMismatches === 0 && runtimeValue.sourceReceiptSha256 === source.sha256 &&
     runtimeValue.modelSha256 === offlineValue.decision.finalBinarySha256, 'bound research runtime parity receipt required');
@@ -190,8 +190,14 @@ async function childMain(registration) {
     emit({schema:'chessy.hybrid-match-warmup.v1',openingIndex:index,...record});
   }
   emit({control:'warmup-complete'});
-  for (const task of r.tasks) N.playGame(task,{baseline:engines.shipped,candidate:engines[task.arm]},taskModules(r,task),r.protocol,emit);
-  emit({control:'complete'}); process.disconnect();
+  for (const task of r.tasks) {
+    N.playGame(task,{baseline:engines.shipped,candidate:engines[task.arm]},taskModules(r,task),r.protocol,emit);
+    // Synchronous searches must yield to the IPC pipe between games. The final
+    // callback also proves preceding raw records have left the child queue.
+    await new Promise((resolve,reject)=>process.send({control:'game-flushed'},error=>error?reject(error):resolve()));
+  }
+  await new Promise((resolve,reject)=>process.send({control:'complete'},error=>error?reject(error):resolve()));
+  process.disconnect();
 }
 async function run(args) {
   const r = preflight(args.registration,args['registration-sha256']);
@@ -211,6 +217,7 @@ async function run(args) {
     try {
       if(row.control==='failed'){stop(row.error);return;}
       if(row.control==='search-start'){armTimer();return;}
+      if(row.control==='game-flushed'){armTimer();return;}
       if(row.control==='warmup-complete'){warmup=N.closeObserved(writer);writer=null;check(warmup.status==='complete','warmup evidence incomplete');armTimer();return;}
       if(row.control==='complete'){completed=true;clearTimeout(timer);return;}
       if(row.schema==='chessy.natural-runtime-game-header.v1') {
@@ -218,7 +225,8 @@ async function run(args) {
         check(row.taskId===currentTask.taskId,'game schedule differs');writer=new N.Writer(path.join(args.output,currentTask.taskId+'.jsonl'));
       }
       check(writer,'record outside a game');writer.append(row);
-      if(row.schema==='chessy.natural-runtime-game-result.v1'){games.push({taskId:currentTask.taskId,...N.closeObserved(writer)});writer=null;}
+      if(row.schema==='chessy.natural-runtime-game-result.v1'){games.push({taskId:currentTask.taskId,...N.closeObserved(writer)});writer=null;
+        if(games.length%20===0)console.log(JSON.stringify({stage:'progress',completedGames:games.length,plannedGames:r.tasks.length}));}
       armTimer();
     } catch(error) { stop(error.message); }
   });
