@@ -158,7 +158,7 @@ identical for candidate and base in every fixed-node run (3.4 plies at 10k,
 | H32 | 43.8% (40.0–47.6), −43 | 38.6% (35.0–42.3), −81 | 42.6% (38.9–46.4), −52 | – |
 | H64 | 52.6% (48.9–56.2), +18 | 51.5% (47.8–55.3), +11 | 51.6% (47.7–55.5), +11 | – |
 | H128 | **58.6% (54.9–62.4), +61** | 52.7% (49.0–56.5), +19 | 51.2% (47.3–55.1), +8 | 49.8% (46.1–53.5), −1 |
-| H128 + mop-up | 58.6% (54.9–62.4), +61 | 52.9% (49.1–56.7), +20 | – | pending |
+| H128 + mop-up | 58.6% (54.9–62.4), +61 | 52.9% (49.1–56.7), +20 | – | 48.9% (45.1–52.7), −8 |
 
 Reading: width matters (H16 ≈ H32 < H64 < H128 at equal nodes); the nets'
 edge shrinks as the search deepens (H128: +61 at 10k, +19 at 36k); and the
@@ -175,9 +175,8 @@ At 200 ms per move H128 reaches mean completed depth 5.50 against the HCE's
 5.86 and scores 49.8% (251–80–253): the 30% throughput deficit costs about a
 third of a ply and the evaluation gain buys it back, no more.
 
-Pending at the time of writing and added below when complete: H128+mop-up
-at 200 ms per move, and diagnostic D3 (H128 at the Hard profile's 230,000
-nodes on half the bank).
+Pending at the time of writing and added below when complete: diagnostic
+D3 (H128 at the Hard profile's 230,000 nodes on half the bank).
 
 ## Diagnostics
 
