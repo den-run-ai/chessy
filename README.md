@@ -236,8 +236,11 @@ terminal result. Easy evaluator (10k nodes, endpoint lower bound >50%) and
 Hard selective-search (230k nodes, >49%) are separate profiles. Every result
 remains diagnostic: 400 unique endpoints do not prove 400 independent
 families, and source reproduction, correctness and device admission remain
-separate. Formal admission remains open in
-[#175](https://github.com/den-run-ai/chessy/issues/175); the
+separate. The [fresh finite-bank formal software contract](eval/match-formal/CONTRACT.md)
+adds randomized sampling, conservative uncertainty and authenticated prerequisites
+under a separate protocol. Its campaign registry is empty: fresh-bank and
+candidate evidence remain open in
+[#175](https://github.com/den-run-ai/chessy/issues/175). The
 [prospective decision and complete dependency map](eval/match-v2/ADMISSION-PROPOSAL.md)
 explain the current bank's exposure limits and a possible future statistical
 design. No candidate has been measured on this manifest. The
@@ -286,8 +289,8 @@ informational/green in the equal-time diagnostic;
 malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
 valid statistical miss. Historical protocol IDs and artifacts are retained;
-new formal shipping evidence must wait for v2 family/estimator admission
-under #175. Historically exposed openings support only separately registered
+new formal shipping evidence requires the fresh-bank campaign and complete
+candidate prerequisites under #175. Historically exposed openings support only separately registered
 development diagnostics, such as the natural-game pilot above.
 
 Historical Rust/WASM search optimizations used a separate formal efficiency

@@ -1,0 +1,162 @@
+name: Fresh finite-bank formal admission
+run-name: Formal initial-formal-opportunity-v1
+
+# Empty trusted-main registry blocks all dispatches until a fresh quarantined
+# campaign and every prerequisite are reviewed. Never run on PR code.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: initial-formal-opportunity-v1
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      harness: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.2
+      - name: Verify complete prospective contract and prerequisites without search
+        env:
+          HARNESS: ${{ github.sha }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          env -u NODE_OPTIONS -u NODE_PATH node test/ai-match-formal.js preflight \
+            --harness "$HARNESS" --run "$RUN" --out preflight.json
+      - name: Authenticate the unused lifetime alpha opportunity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: env -u NODE_OPTIONS -u NODE_PATH node test/ai-match-formal-reservation.js
+      - name: Reserve alpha opportunity before random draw
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: formal-opportunity-reservation
+          path: preflight.json
+          if-no-files-found: error
+
+  draw:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      digest: ${{ steps.freeze.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.preflight.outputs.harness }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: formal-opportunity-reservation
+      - name: Draw once and freeze exact sample before any search
+        id: freeze
+        env:
+          CHESSY_RESERVED_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          digest=$(env -u NODE_OPTIONS -u NODE_PATH node test/ai-match-formal.js draw \
+            --plan preflight.json --out registration.json)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: formal-registration
+          path: registration.json
+          if-no-files-found: error
+
+  shard:
+    needs: [preflight, draw]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        slot: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.preflight.outputs.harness }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: formal-registration
+      - name: Run the complete registered shard
+        env:
+          REGISTRATION_SHA256: ${{ needs.draw.outputs.digest }}
+          SLOT: ${{ matrix.slot }}
+          CHESSY_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          env -u NODE_OPTIONS -u NODE_PATH node test/ai-match-formal.js shard \
+            --registration registration.json --digest "$REGISTRATION_SHA256" \
+            --slot "$SLOT" --out "slot-$SLOT.jsonl"
+      - name: Preserve all raw results and failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: formal-shard-${{ matrix.slot }}
+          path: slot-${{ matrix.slot }}.jsonl
+          if-no-files-found: error
+
+  aggregate:
+    needs: [preflight, draw, shard]
+    if: always() && needs.draw.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.preflight.outputs.harness }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: formal-registration
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: formal-shard-*
+          path: raw
+          merge-multiple: true
+      - name: Authenticate and replay the entire finite-bank sample
+        env:
+          REGISTRATION_SHA256: ${{ needs.draw.outputs.digest }}
+          SHARDS_RESULT: ${{ needs.shard.result }}
+          CHESSY_WORKFLOW_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test "$SHARDS_RESULT" = success
+          env -u NODE_OPTIONS -u NODE_PATH node test/ai-match-formal.js aggregate \
+            --registration registration.json --digest "$REGISTRATION_SHA256" --directory raw | tee summary.json
+      - name: Preserve the verdict including a complete statistical miss
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: formal-summary
+          path: summary.json
+          if-no-files-found: error
