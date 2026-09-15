@@ -88,7 +88,8 @@ def main() -> None:
         if not card:
             continue
         v, t = card["validation"], card["test"]
-        lines.append(f"| {tag} | {card['parameterBytes']:,} | {card['history'][-1]['trainMse']:.5f} | {v['float']['mse']:.5f} | {v['quantised']['mse']:.5f} | "
+        train_mse = [h for h in card["history"] if "trainMse" in h][-1]["trainMse"]
+        lines.append(f"| {tag} | {card['parameterBytes']:,} | {train_mse:.5f} | {v['float']['mse']:.5f} | {v['quantised']['mse']:.5f} | "
                      f"{t['quantised']['mse']:.5f} | {v['quantised']['cpMae']:.1f} | {v['quantisationCpMae']:.2f} / {v['quantisationCpMax']:.0f} | "
                      f"{card['quantisation']['accumulatorBound']} | {card['trainSeconds']:.0f} |")
     if offline:

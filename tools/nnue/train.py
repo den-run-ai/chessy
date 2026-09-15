@@ -111,23 +111,34 @@ def trunc_div(a: np.ndarray, b: int) -> np.ndarray:
     return np.where((a < 0) != (b < 0), -q, q)
 
 
-def quantised_eval(q: dict, feats_w: np.ndarray, feats_b: np.ndarray, stm: np.ndarray) -> np.ndarray:
-    """Exact integer model of nnue.rs `evaluate`; returns White-POV cp."""
+def quantised_eval(q: dict, feats_w: np.ndarray, feats_b: np.ndarray, stm: np.ndarray, batch: int = 32768) -> np.ndarray:
+    """Exact integer model of nnue.rs `evaluate`; returns White-POV cp.
+
+    Processed in batches: the gathered (rows, 32, H) int64 intermediate would
+    otherwise need tens of gigabytes for the full validation set at H=128.
+    """
     hidden = q["b1"].shape[0]
     w1 = np.vstack((q["w1"].astype(np.int64), np.zeros((1, hidden), dtype=np.int64)))  # PAD row
-    acc_w = w1[feats_w].sum(axis=1) + q["b1"].astype(np.int64)
-    acc_b = w1[feats_b].sum(axis=1) + q["b1"].astype(np.int64)
-    assert np.abs(acc_w).max() < 32768 and np.abs(acc_b).max() < 32768
-    white = (stm == 0)[:, None]
-    acc_stm = np.where(white, acc_w, acc_b)
-    acc_nstm = np.where(white, acc_b, acc_w)
-    sq_stm = np.clip(acc_stm, 0, QA) ** 2
-    sq_nstm = np.clip(acc_nstm, 0, QA) ** 2
+    b1 = q["b1"].astype(np.int64)
     w2 = q["w2"].astype(np.int64)
-    total = sq_stm @ w2[:hidden] + sq_nstm @ w2[hidden:]
-    scaled = trunc_div((trunc_div(total, QA) + q["b2"]) * SCALE, QA * QB)
-    stm_cp = np.clip(scaled, -OUTPUT_CLAMP, OUTPUT_CLAMP)
-    return np.where(stm == 0, stm_cp, -stm_cp)
+    out = np.empty(len(stm), dtype=np.int64)
+    for start in range(0, len(stm), batch):
+        fw = feats_w[start:start + batch]
+        fb = feats_b[start:start + batch]
+        s = stm[start:start + batch]
+        acc_w = w1[fw].sum(axis=1) + b1
+        acc_b = w1[fb].sum(axis=1) + b1
+        assert np.abs(acc_w).max() < 32768 and np.abs(acc_b).max() < 32768
+        white = (s == 0)[:, None]
+        acc_stm = np.where(white, acc_w, acc_b)
+        acc_nstm = np.where(white, acc_b, acc_w)
+        sq_stm = np.clip(acc_stm, 0, QA) ** 2
+        sq_nstm = np.clip(acc_nstm, 0, QA) ** 2
+        total = sq_stm @ w2[:hidden] + sq_nstm @ w2[hidden:]
+        scaled = trunc_div((trunc_div(total, QA) + q["b2"]) * SCALE, QA * QB)
+        stm_cp = np.clip(scaled, -OUTPUT_CLAMP, OUTPUT_CLAMP)
+        out[start:start + len(s)] = np.where(s == 0, stm_cp, -stm_cp)
+    return out
 
 
 def sigmoid(x: np.ndarray) -> np.ndarray:
@@ -179,6 +190,8 @@ def main() -> None:
     parser.add_argument("--max-train", type=int, default=0, help="debug: cap training rows")
     parser.add_argument("--goldens", type=int, default=256)
     parser.add_argument("--out", required=True, help="output prefix, e.g. /data/nets/h32")
+    parser.add_argument("--resume-export", default=None, help="skip training: load this .pt state and only export/evaluate")
+    parser.add_argument("--history-log", default=None, help="with --resume-export: original training log whose epoch lines become the card history")
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -219,7 +232,16 @@ def main() -> None:
     print(json.dumps({"stage": "start", "hidden": args.hidden, "train": int(len(train_idx)), "validation": int(len(val_idx)),
                       "test": int(len(test_idx)), "steps": total_steps}), flush=True)
     step = 0
-    for epoch in range(args.epochs):
+    if args.resume_export:
+        net.load_state_dict(torch.load(args.resume_export, map_location="cpu"))
+        if args.history_log:
+            for line in Path(args.history_log).read_text().splitlines():
+                if line.startswith("{") and '"stage": "epoch"' in line:
+                    record = json.loads(line)
+                    record.pop("stage", None)
+                    history.append(record)
+        history.append({"note": f"export-only run from {args.resume_export}: the original process was killed (out of memory) during export after its final epoch; epochs above are from {args.history_log}"})
+    for epoch in range(0 if args.resume_export else args.epochs):
         order = rng.permutation(train_idx)
         running = 0.0
         count = 0
