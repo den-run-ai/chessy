@@ -1,0 +1,39 @@
+#[cfg(test)]
+mod qsearch_candidate_tests {
+    use super::*;
+    #[test]
+    fn geometric_check_prefilter_has_no_false_negatives() {
+        let fens: &[&[u8]] = &[
+            b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            b"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            b"4k3/8/8/8/8/8/4B3/K3R3 w - - 0 1",
+            b"5k2/8/8/8/8/8/8/4K2R w K - 0 1",
+            b"3k4/8/8/8/8/8/8/R3K3 w Q - 0 1",
+            b"8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1",
+            b"k7/8/8/4KPpr/8/8/8/8 w - g6 0 1",
+            b"r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27",
+        ];
+        let mut positions = 0; let mut checked = 0; let mut rejected = 0; let mut quiet_checks = 0;
+        let mut seed = 0x12345678_u32;
+        for &fen in fens { for _game in 0..32 {
+            let mut p=parse_fen(fen).unwrap();
+            for _ply in 0..100 {
+                positions+=1; let before=p; let enemy=opposite(p.turn); let king=p.king_sq[color_index(enemy)];
+                let existing_check=in_check(&p,enemy);
+                let mut moves=[0;MAX_MOVES]; let n=generate_pseudo(&p,&mut moves);
+                for &mv in &moves[..n] {
+                    if move_is_capture(mv)||move_promotion(mv).is_some(){continue;}
+                    let possible=existing_check||quiet_may_give_check(&p,mv,king);
+                    let undo=make_move(&mut p,mv);let actual=in_check(&p,enemy);unmake_move(&mut p,mv,undo);
+                    assert!(!actual||possible,"false negative from {} to {}",move_from(mv),move_to(mv));
+                    assert!(p==before);checked+=1;if !possible{rejected+=1;}if actual{quiet_checks+=1;}
+                }
+                let n=generate_legal(&mut p,&mut moves);if n==0{break;}
+                seed=seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                make_move(&mut p,moves[seed as usize%n]);
+            }
+        }}
+        assert!(checked>100_000&&rejected>10_000&&quiet_checks>1000);
+        println!("positions {} quiet candidates {} rejected {} checks {}",positions,checked,rejected,quiet_checks);
+    }
+}
