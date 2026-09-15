@@ -128,3 +128,21 @@ HCE's own static White-POV evaluation of the same training positions
 
 D1 uses no new positions, no holdout, and the same seed/epochs/batch; it is
 executed after the H64 and H128 runs so it does not disturb their timing.
+
+## Addendum B — conditional D2, registered before D1's result is known
+
+Observed before writing this addendum: H16 42.2% and H32 38.6% at 36,000
+nodes, with identical completed depth for candidate and base at every
+budget (so tree efficiency is not the mechanism).
+
+D2 (shallow-search distillation) runs only if D1 lands inside the 95%
+interval of 50% at 10,000 nodes. Labels: the shipped module's own quiescent
+search at 2,000 nodes (`tools/nnue/relabel-search.js`, White-POV score,
+mate scores clamped to ±3000, terminal roots dropped) on the first
+4,000,000 training rows in dataset order plus every validation/test row;
+train 768→32 with the identical recipe; play 10,000 and 36,000 nodes on the
+dev bank. Interpretation rule: a one-sided lower bound above 50% at either
+budget means shallow-search distillation beats the hand-crafted evaluator
+it was distilled from and is the path to pursue with a stronger shallow
+teacher; otherwise the prototype's negative result stands for this family.
+D2 is executed after the equal-time stage so it cannot disturb timing.
