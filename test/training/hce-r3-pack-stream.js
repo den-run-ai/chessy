@@ -7,12 +7,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline');
-const crypto = require('crypto');
 const Corpus = require('./corpus');
 const Prepare = require('./prepare-lichess-evals');
 const Label = require('./label-stockfish');
 const Linear = require('./hce-r3-linear');
+const Evidence = require('./teacher-evidence');
 
 const ROLES = new Set([
   'shared-train', 'hce-validation', 'hce-test',
@@ -287,6 +286,8 @@ async function authenticateInput(filename, contracts, options) {
   const sidecarPath = input + '.manifest.json';
   const sidecarText = fs.readFileSync(sidecarPath, 'utf8');
   const sidecar = JSON.parse(sidecarText);
+  // Hash, validate, and later compile this same retained byte snapshot.
+  const teacherText = fs.readFileSync(input, 'utf8');
   validateSidecarMode(sidecar, sampleOnly);
   const sideTeacher = sidecar.teacher;
   if (sidecar.schemaVersion !== 1 ||
@@ -294,7 +295,7 @@ async function authenticateInput(filename, contracts, options) {
       path.basename(input) !== sidecar.output.path ||
       !Number.isSafeInteger(sidecar.output.rows) ||
       sidecar.output.rows < 0 ||
-      await Prepare.fileSha256(input) !== sidecar.output.sha256 ||
+      Corpus.sha256(teacherText) !== sidecar.output.sha256 ||
       !sideTeacher || !sideTeacher.manifest ||
       sideTeacher.manifest.sha256 !== contracts.teacherSha256 ||
       sideTeacher.id !== contracts.teacher.id ||
@@ -340,8 +341,8 @@ async function authenticateInput(filename, contracts, options) {
       !Number.isSafeInteger(sideShard.rows) || sideShard.rows < 0) {
     throw new Error(input + ': selection provenance is malformed');
   }
-  const selectionText = fs.readFileSync(selectionPath, 'utf8');
-  if (Corpus.sha256(selectionText) !==
+  const selectionManifestText = fs.readFileSync(selectionPath, 'utf8');
+  if (Corpus.sha256(selectionManifestText) !==
       sideSelection.sha256) {
     throw new Error(input + ': selection manifest hash differs');
   }
@@ -356,8 +357,27 @@ async function authenticateInput(filename, contracts, options) {
   } catch (error) {
     throw new Error(input + ': ' + error.message);
   }
+  const records = Evidence.jsonRows(teacherText, 'teacher output');
+  for (const record of records) validateTeacherRecord(record, context, contracts);
+  const selectionText = fs.readFileSync(selectionShard, 'utf8');
+  const retainedEvidence = Evidence.readEvidence(input, sidecar);
+  const evidence = Evidence.validateEvidence({
+    teacherPath: input, teacherText, selectionText, sidecarText,
+    selectionContext: {
+      sourceSha256: context.sourceSha256, sampleOnly,
+      sourceLicense: context.manifest.source.license,
+      shardCount: context.manifest.adapter.shardCount,
+      shardIndex: context.shardIndex,
+      positionFamilyCap: context.manifest.adapter.positionFamilyCap,
+      certificationClusters: [...context.certification.clusters],
+      certificationFamilies: [...context.certification.positionFamilies]
+    },
+    ...retainedEvidence
+  }, contracts);
   return {
     input,
+    records,
+    evidence,
     inputSha256: sidecar.output.sha256,
     sidecarPath,
     sidecarSha256: Corpus.sha256(sidecarText),
@@ -466,40 +486,9 @@ function selectionInventory(authenticated, sampleOnly) {
   };
 }
 
-function lineIterator(filename) {
-  const lines = readline.createInterface({
-    input: fs.createReadStream(filename),
-    crlfDelay: Infinity
-  });
-  return lines[Symbol.asyncIterator]();
-}
-
-async function advance(state, contracts) {
-  const next = await state.iterator.next();
-  if (next.done) {
-    const observedSha256 = state.hash.digest('hex');
-    state.hash = null;
-    if (observedSha256 !== state.auth.inputSha256) {
-      throw new Error(
-        state.auth.input + ': bytes read differ from authenticated shard hash'
-      );
-    }
-    state.record = null;
-    return;
-  }
-  state.hash.update(next.value + '\n');
-  if (!next.value.trim()) {
-    throw new Error(state.auth.input + ': blank teacher rows are forbidden');
-  }
-  const record = validateTeacherRecord(
-    JSON.parse(next.value), state.auth.context, contracts);
-  if (state.previousId && record.id <= state.previousId) {
-    throw new Error(state.auth.input +
-      ': teacher rows must be strictly sorted by ID');
-  }
-  state.previousId = record.id;
-  state.seen++;
-  state.record = record;
+async function advance(state) {
+  const record = state.auth.records[state.seen++];
+  state.record = record || null;
 }
 
 function heapPush(heap, state) {
@@ -544,13 +533,24 @@ async function streamRows(options, write) {
   }
   const provenance = sharedProvenance(authenticated);
   const completeInventory = selectionInventory(authenticated, sampleOnly);
+  const selectedClusters = new Set(), selectedFamilies = new Map();
+  for (const item of authenticated) {
+    for (const cluster of item.evidence.selectedClusters) {
+      if (selectedClusters.has(cluster)) throw new Error('duplicate selected cluster across shards');
+      selectedClusters.add(cluster);
+    }
+    for (const family of item.evidence.selectedFamilies) {
+      const count = (selectedFamilies.get(family) || 0) + 1;
+      if (count > item.context.manifest.adapter.positionFamilyCap) {
+        throw new Error('selected position-family cap exceeded across shards');
+      }
+      selectedFamilies.set(family, count);
+    }
+  }
   const states = authenticated.map(auth => ({
     auth,
-    iterator: lineIterator(auth.input),
     record: null,
-    previousId: null,
-    seen: 0,
-    hash: crypto.createHash('sha256')
+    seen: 0
   }));
   const heap = [];
   for (const state of states) {
@@ -583,7 +583,7 @@ async function streamRows(options, write) {
     if (selected.record) heapPush(heap, selected);
   }
   for (const state of states) {
-    if (state.seen !== state.auth.rows) {
+    if (state.auth.records.length !== state.auth.rows) {
       throw new Error(state.auth.input + ': sidecar row count differs');
     }
   }
@@ -606,6 +606,14 @@ async function streamRows(options, write) {
       teacherSha256: item.inputSha256,
       teacherSidecarPath: item.sidecarPath,
       teacherSidecarSha256: item.sidecarSha256,
+      teacherEvidence: {
+        schema: item.evidence.schema,
+        transcriptSha256: item.evidence.transcriptSha256,
+        exclusionsSha256: item.evidence.exclusionsSha256,
+        selectedRows: item.evidence.selectedRows,
+        acceptedRows: item.evidence.acceptedRows,
+        excludedRows: item.evidence.excludedRows
+      },
       selectionShardPath: item.selectionShard.path,
       selectionShardIndex: item.selectionShard.index,
       selectionShardRows: item.selectionShard.rows,

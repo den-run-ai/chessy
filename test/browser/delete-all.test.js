@@ -11,8 +11,15 @@ require('./helper').run('delete-all', async function (t) {
 
   async function counts() {
     return page.evaluate(function () {
-      return Promise.all([CoachStore.listGames(), CoachStore.listCards()])
-        .then(function (r) { return { games: r[0].length, cards: r[1].length }; });
+      return Promise.all([
+        CoachStore.listGames(), CoachStore.listCards(), CoachStore.exportAll()
+      ]).then(function (r) {
+        return {
+          games: r[0].length,
+          cards: r[1].length,
+          receipts: r[2].stores.reflectionReceipts.length
+        };
+      });
     });
   }
 
@@ -32,15 +39,23 @@ require('./helper').run('delete-all', async function (t) {
     try { return !!JSON.parse(localStorage.getItem('chessy-game-v1')); } catch (e) { return false; }
   }), 'the finished game is saved locally (a reload would re-archive it)');
 
-  // Seed a recomputable analysis + scan job too, to prove Delete-all clears
-  // every store, not just games/cards.
-  await page.evaluate(function () {
+  // Seed durable reflection evidence and recomputable analysis/job state too,
+  // proving Delete-all clears every store.
+  await page.evaluate(async function () {
+    const game = (await CoachStore.listGames())[0];
+    const reflection = ChessyCalculation.build(Chess.newGameState(), {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
+    await CoachStore.putReflectionReceipt(game, 0, reflection);
     return Promise.all([
       CoachStore.putAnalysis({ key: 'k', gameId: 'g', ply: 0, gameRev: 'x', fingerprint: 'f',
         engineId: 'e', configHash: 'c', complete: true, result: {}, createdAt: 1 }),
       CoachStore.putJob({ gameId: 'g', state: 'paused', cursorPly: 0, moments: [] })
     ]);
   });
+  check((await counts()).receipts === 1,
+    'a durable structured-reflection receipt exists before deletion');
 
   // Delete all — fenced.
   await page.click('#reviewBack');
@@ -56,7 +71,9 @@ require('./helper').run('delete-all', async function (t) {
     return document.getElementById('dataStatus').textContent.indexOf('deleted') !== -1;
   }, { timeout: 5000 });
   const afterDelete = await counts();
-  check(afterDelete.games === 0 && afterDelete.cards === 0, 'delete-all empties games and cards');
+  check(afterDelete.games === 0 && afterDelete.cards === 0 &&
+        afterDelete.receipts === 0,
+    'delete-all empties games, cards and structured-reflection receipts');
   const leftovers = await page.evaluate(function () {
     return Promise.all([CoachStore.listAnalysesForGame('g'), CoachStore.getJob('g')])
       .then(function (r) { return { analyses: r[0].length, job: r[1] ? 1 : 0 }; });
@@ -272,11 +289,20 @@ require('./helper').run('delete-all', async function (t) {
     };
     document.getElementById('deleteAllBtn').click();
     document.getElementById('deleteAllConfirm').click();
+    const receiptGame = {
+      id: 'late-receipt', sans: ['e4'], playerColor: 'w'
+    };
+    const reflection = ChessyCalculation.build(Chess.newGameState(), {
+      threatKind: 'none', candidateStatus: 'none',
+      calculationStatus: 'none', evaluation: 'unclear'
+    }).value;
     return Promise.all([
       CoachStore.addCard({ gameId: 'late', ply: 0, due: 0, step: -1, attempts: [],
         fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' })
         .then(function () { return 'accepted'; }, function () { return 'rejected'; }),
       CoachStore.importGame({ id: 'late', sans: [], result: '*', createdAt: 1 })
+        .then(function () { return 'accepted'; }, function () { return 'rejected'; }),
+      CoachStore.putReflectionReceipt(receiptGame, 0, reflection)
         .then(function () { return 'accepted'; }, function () { return 'rejected'; })
     ]).then(function (outcomes) {
       release(true);

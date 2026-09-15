@@ -3,16 +3,17 @@
  *
  * Static gate: the release token must agree everywhere it appears —
  * index.html's inline CHESSY_RELEASE, every ?r= asset reference, and
- * sw.js's RELEASE — and the service worker must precache exactly the
- * versioned URLs the HTML references.
+ * sw.js's RELEASE — and the service worker must precache the versioned URLs
+ * referenced by both the HTML and the worker-only dependency graph.
  *
  * Dynamic gate: an old service worker receiving a NEW release must never
  * produce mixed execution (new HTML with old cached scripts or the
  * reverse). This suite serves the repo with the release token rewritten
  * on the fly: install release rA, flip the server to rB behind a long-open
  * active game, request New game, and assert B takes over before the old
- * runtime can replace the save. Every loaded executable asset must carry
- * the DOCUMENT's own release token — online and offline.
+ * runtime can replace the save. It then rolls the worker back and proves
+ * B's coherent cache survives as the path forward. Every loaded executable
+ * asset must carry the DOCUMENT's own release token — online and offline.
  */
 'use strict';
 const http = require('http');
@@ -35,6 +36,12 @@ function check(cond, label) {
 // ---- Static coherence ----
 const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const htmlSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const appSrc = fs.readFileSync(path.join(ROOT, 'assets', 'app.js'), 'utf8');
+const analysisServiceSrc = fs.readFileSync(
+  path.join(ROOT, 'assets', 'analysis-service.js'), 'utf8');
+const aiWorkerSrc = fs.readFileSync(path.join(ROOT, 'assets', 'ai-worker.js'), 'utf8');
+const analysisWorkerSrc = fs.readFileSync(
+  path.join(ROOT, 'assets', 'analysis-worker.js'), 'utf8');
 const swToken = (swSrc.match(/const RELEASE = '([^']+)'/) || [])[1];
 const inlineToken = (htmlSrc.match(/window\.CHESSY_RELEASE = '([^']+)'/) || [])[1];
 const displayedToken = (htmlSrc.match(/id="appVersion"[^>]*>Version ([^<]+)</) || [])[1];
@@ -51,8 +58,32 @@ check(refTokens.length > 0 && refTokens.every(function (t) { return t === swToke
   'every ?r= reference in index.html carries the same token (' + refTokens.length + ' refs)');
 check(versionedRefs.every(function (ref) { return swSrc.indexOf(ref.replace('?r=' + swToken, '')) !== -1; }),
   'every versioned index.html reference has a matching sw.js precache entry');
-check(swSrc.indexOf("'./assets/ai-worker.js?r=' + RELEASE") !== -1,
-  'the worker script is precached under the release token');
+const workerOnlyAssets = [
+  {
+    path: 'ai-worker.js',
+    referenced: /new Worker\('assets\/ai-worker\.js'\s*\+\s*\(window\.CHESSY_RELEASE\s*\?\s*'\?r='\s*\+\s*window\.CHESSY_RELEASE\s*:\s*''\)\)/.test(appSrc)
+  },
+  {
+    path: 'analysis-worker.js',
+    referenced: /new Worker\('assets\/analysis-worker\.js'\s*\+\s*\(global\.CHESSY_RELEASE\s*\?\s*'\?r='\s*\+\s*global\.CHESSY_RELEASE\s*:\s*''\)\)/.test(analysisServiceSrc)
+  },
+  {
+    path: 'wasm-engine.js',
+    referenced: aiWorkerSrc.indexOf("importScripts('wasm-engine.js'") !== -1 &&
+      analysisWorkerSrc.indexOf("'wasm-engine.js' + self.location.search") !== -1
+  },
+  {
+    path: 'chessy-ai-fast.wasm',
+    referenced: /wasmUrl:\s*'chessy-ai-fast\.wasm'\s*\+\s*\(window\.CHESSY_RELEASE\s*\?\s*'\?r='\s*\+\s*window\.CHESSY_RELEASE\s*:\s*''\)/.test(appSrc) &&
+      analysisWorkerSrc.indexOf("fetch('chessy-ai-fast.wasm'") !== -1
+  }
+];
+workerOnlyAssets.forEach(function (asset) {
+  check(asset.referenced,
+    asset.path + ' is release-bound in the production worker graph');
+  check(swSrc.indexOf("'./assets/" + asset.path + "?r=' + RELEASE") !== -1,
+    asset.path + ' is precached under the release token');
+});
 
 // ---- Dynamic old-worker → new-release transition ----
 function browserType() {
@@ -67,7 +98,8 @@ function browserType() {
 (async function () {
   // Numeric tokens, like production: the worker ORDERS tokens to refuse
   // refilling a stale release's URL from the current deployment.
-  const RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
+  const ROLLBACK = 'r8999', RA = 'r9000', FAILED = 'r9001', RB = 'r9002';
+  const OTHER_CACHES = ['chessy-sibling-pages-cache', 'chessy-r9000-extra'];
   const phase = { release: RA, failWorker: false, holdProgress: false };
   let releaseHeldProgress = null;
   let resolveProgressHeld = null;
@@ -213,6 +245,16 @@ function browserType() {
   // index.html. The r9002 activation must report the last COMPLETE release
   // (r9000), never this empty cache name.
   await page.evaluate(function (failed) { return caches.open('chessy-' + failed); }, FAILED);
+  // These names share Chessy's prefix but are not exact chessy-rN release
+  // caches. Activation must leave both sibling storage and release-like
+  // malformed names alone on the shared github.io origin.
+  await page.evaluate(function (keys) {
+    return Promise.all(keys.map(function (key) {
+      return caches.open(key).then(function (cache) {
+        return cache.put('./sentinel', new Response(key));
+      });
+    }));
+  }, OTHER_CACHES);
 
   // Leave a real active game in the long-open A tab. New game checks A's
   // worker before replacing the save; with no update yet it starts normally.
@@ -258,12 +300,14 @@ function browserType() {
   // while B installs). Before testing B's OWN cache offline, wait for
   // proof the B worker activated: its activate handler deletes the A
   // cache, so B's cache present + A's gone = takeover complete.
-  await stable(function (s) {
+  const cleaned = await stable(function (s) {
     return s.caches.indexOf('chessy-' + RB) !== -1 &&
       s.caches.indexOf('chessy-' + RA) === -1 &&
       s.caches.indexOf('chessy-' + FAILED) === -1;
   }, 'B worker takeover (old caches cleaned)');
   check(true, 'the B worker activates and cleans up complete and failed old caches');
+  check(OTHER_CACHES.every(function (key) { return cleaned.caches.indexOf(key) !== -1; }),
+    'forward activation preserves non-release chessy-* caches');
   const expectedUpdate = 'Chessy updated from ' + RA + ' to ' + RB +
     '. Your saved games and training data are unchanged.';
   const noticed = await stable(function (s) {
@@ -355,6 +399,36 @@ function browserType() {
     freshState.updateSession === '',
     'a fresh browsing session shows the version without replaying the old update note');
   await fresh.close();
+
+  // A rollback is a byte-distinct service-worker update too. Its activation
+  // may clean exact caches older than itself, but the current B cache is
+  // numerically newer and must survive as the coherent path forward. Prefix
+  // neighbors remain unrelated during rollback just as they do on upgrade.
+  phase.release = ROLLBACK;
+  await page.evaluate(function () {
+    return navigator.serviceWorker.getRegistration().then(function (registration) {
+      return registration.update();
+    });
+  });
+  const rolledBack = await stable(function (s) {
+    return s.token === ROLLBACK && s.build === ROLLBACK && s.ready && s.controlled &&
+      s.caches.indexOf('chessy-' + ROLLBACK) !== -1 &&
+      s.caches.indexOf('chessy-' + RB) !== -1;
+  }, 'rollback worker takeover (newer cache retained)');
+  check(rolledBack.caches.indexOf('chessy-' + RB) !== -1,
+    'rollback activation preserves the numerically newer release cache');
+  check(OTHER_CACHES.every(function (key) { return rolledBack.caches.indexOf(key) !== -1; }),
+    'rollback activation preserves non-release chessy-* caches');
+  const forwardBytes = await page.evaluate(function (rb) {
+    return fetch('assets/app.js?r=' + rb).then(function (response) {
+      return response.text().then(function (body) {
+        return { status: response.status, body: body };
+      });
+    });
+  }, RB);
+  check(forwardBytes.status === 200 &&
+      forwardBytes.body.indexOf("window.CHESSY_BUILD = '" + RB + "'") !== -1,
+    'after rollback, the preserved newer cache still serves coherent forward bytes');
 
   check(errors.length === 0,
     'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));

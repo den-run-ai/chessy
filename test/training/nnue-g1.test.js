@@ -8,6 +8,9 @@ const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
 const Corpus = require('./corpus');
+const Prepare = require('./prepare-lichess-evals');
+const AdmissionFixture = require('./selection-admission-fixture');
+const EvidenceFixture = require('./teacher-evidence-fixture');
 
 const ROOT = path.join(__dirname, '..', '..');
 const ARCH_PATH = path.join(ROOT, 'eval', 'training', 'nnue-v1-architecture.json');
@@ -202,7 +205,7 @@ function sidecarFor(filename, body, rows) {
       }
     },
     output: {
-      path: filename,
+      path: path.basename(filename),
       rows,
       sha256: sha256(body)
     },
@@ -254,9 +257,10 @@ function writeShard(directory, name, records, options) {
   const filename = path.join(directory, name);
   const ordered = settings.preserveOrder ?
     records.slice() : records.slice().sort((a, b) => a.id.localeCompare(b.id));
-  const body = ordered.map(record => JSON.stringify(record)).join('\n') + '\n';
+  const body = ordered.map(record => Prepare.stableJson(record)).join('\n') + '\n';
   fs.writeFileSync(filename, body);
   const sidecar = sidecarFor(filename, body, ordered.length);
+  EvidenceFixture.writeEvidence(filename, ordered, sidecar);
   if (settings.mutateSidecar) settings.mutateSidecar(sidecar);
   if (!settings.omitSidecar) {
     fs.writeFileSync(filename + '.manifest.json', JSON.stringify(sidecar) + '\n');
@@ -266,104 +270,68 @@ function writeShard(directory, name, records, options) {
 
 function materializeSelectionBinding(train, validation, options) {
   const settings = options || {};
-  const mode = settings.sampleOnly ?
-    training.data.trustBoundary.sampleOnlyValidation :
-    training.data.trustBoundary.productionValidation;
   const teacherFiles = Array.from(new Set(train.concat(validation))).sort();
   const bindingDirectory = fs.mkdtempSync(
     path.join(temporary, 'selection-binding-'));
-  const certification = {
-    schema: 'chessy.e4.certification-manifest.v1',
-    protocolId: 'E4-v1',
-    kind: 'certification',
-    status: mode.certificationStatus,
-    openingClusters: (settings.certificationFens || []).map(fen => ({ fen })),
-    assignments: []
-  };
-  const certificationPath = path.join(
-    bindingDirectory, 'certification-manifest.json');
-  fs.writeFileSync(
-    certificationPath, JSON.stringify(certification) + '\n');
-  const certificationClusters = new Set(
-    certification.openingClusters.map(item => Corpus.clusterKey(item.fen)));
-  const certificationFamilies = new Set(
-    certification.openingClusters.map(
-      item => Corpus.positionFamilyKey(item.fen)));
-
-  const listedShards = teacherFiles.map((teacherFile, index) => {
-    const body = fs.readFileSync(teacherFile);
-    const selectionName =
-      'selection-' + String(index).padStart(3, '0') + '.ndjson';
-    const selectionPath = path.join(bindingDirectory, selectionName);
-    fs.writeFileSync(selectionPath, body);
+  const inputs = teacherFiles.map(teacherFile => {
+    const body = fs.readFileSync(teacherFile, 'utf8');
+    const records = body.trim().split('\n').map(line => JSON.parse(line));
     const sidecarPath = teacherFile + '.manifest.json';
-    let rows = body.toString('utf8').split('\n').filter(Boolean).length;
-    if (fs.existsSync(sidecarPath)) {
-      const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
-      rows = sidecar.input.shard.rows;
-    }
     return {
-      teacherFile,
-      selectionPath,
+      teacherFile, records, sidecarPath,
+      sidecar: fs.existsSync(sidecarPath) ?
+        JSON.parse(fs.readFileSync(sidecarPath, 'utf8')) : null
+    };
+  });
+  const sourceSha = SOURCE_SHA;
+  const rowCount = inputs.reduce((sum, input) => sum + input.records.length, 0);
+  const seedPath = path.join(bindingDirectory,
+    path.basename(bindingDirectory) + '-fixture.ndjson');
+  fs.writeFileSync(seedPath,
+    inputs.flatMap(input => input.records).map(record => JSON.stringify(record)).join('\n') + '\n');
+  const binding = AdmissionFixture.writeSelectionFixture({
+    directory: temporary,
+    filename: seedPath,
+    rows: rowCount,
+    snapshotSha256: sourceSha,
+    sampleOnly: settings.sampleOnly === true,
+    certificationFens: settings.certificationFens || []
+  });
+  const selectionPath = binding.path;
+  const selection = JSON.parse(fs.readFileSync(selectionPath, 'utf8'));
+  const listedShards = inputs.map((input, index) => {
+    const selectionName = 'selection-' + String(index).padStart(3, '0') + '.ndjson';
+    const selectionPath = path.join(path.dirname(binding.path), selectionName);
+    const records = input.records.map(record =>
+      AdmissionFixture.selectionRecord(record, sourceSha, settings.sampleOnly))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const body = records.map(record => Prepare.stableJson(record)).join('\n') + '\n';
+    fs.writeFileSync(selectionPath, body);
+    return {
+      input, selectionPath,
       manifest: {
         path: selectionName,
-        rows,
+        rows: input.sidecar ? input.sidecar.input.shard.rows : records.length,
         canonicalNdjsonSha256: sha256(body)
       }
     };
   });
-  const selection = {
-    schemaVersion: 1,
-    state: mode.selectionState,
-    finalFitAllowed: mode.selectionFitAllowed,
-    source: {
-      id: mode.selectionSourceId,
-      url: mode.selectionSourceUrl,
-      retrieved: '2026-07-31',
-      compressedSha256: SOURCE_SHA,
-      license: 'CC0-1.0'
-    },
-    adapter: {
-      selectionContractSha256: SELECTION_CONTRACT_SHA,
-      shardCount: listedShards.length
-    },
-    exclusions: {
-      certificationManifest: certificationPath,
-      certificationManifestSha256: sha256(
-        fs.readFileSync(certificationPath)),
-      certificationStatus: mode.certificationStatus,
-      certificationClusterCount: certificationClusters.size,
-      certificationPositionFamilyCount: certificationFamilies.size,
-      pendingCertificationAllowedForTestOnly:
-        mode.pendingCertificationAllowedForTestOnly
-    },
-    counts: {
-      selected: listedShards.reduce(
-        (sum, shard) => sum + shard.manifest.rows, 0)
-    },
-    shards: listedShards.map(shard => shard.manifest)
-  };
-  if (settings.sampleOnly) {
-    selection.mechanismFixture = clone(mode.mechanismFixture);
-    selection.source.mechanismFixture = clone(mode.mechanismFixture);
-  }
-  const selectionPath = path.join(bindingDirectory, 'manifest.json');
-  fs.writeFileSync(selectionPath, JSON.stringify(selection) + '\n');
+  selection.adapter.shardCount = listedShards.length;
+  selection.shards = listedShards.map(shard => shard.manifest);
+  selection.counts.selected = listedShards.reduce((sum, shard) => sum + shard.manifest.rows, 0);
+  fs.writeFileSync(selectionPath, Prepare.stableJson(selection) + '\n');
   const selectionSha = sha256(fs.readFileSync(selectionPath));
-
   for (const listed of listedShards) {
-    const sidecarPath = listed.teacherFile + '.manifest.json';
-    if (!fs.existsSync(sidecarPath)) continue;
-    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+    const sidecar = listed.input.sidecar;
+    if (!sidecar) continue;
     sidecar.input.selectionManifest.path = selectionPath;
     sidecar.input.selectionManifest.sha256 = selectionSha;
-    sidecar.input.selectionManifest.selectionContractSha256 =
-      SELECTION_CONTRACT_SHA;
+    sidecar.input.selectionManifest.selectionContractSha256 = binding.selectionContractSha256;
     sidecar.input.shard.path = listed.selectionPath;
-    sidecar.input.shard.sha256 =
-      listed.manifest.canonicalNdjsonSha256;
-    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar) + '\n');
+    sidecar.input.shard.sha256 = listed.manifest.canonicalNdjsonSha256;
+    fs.writeFileSync(listed.input.sidecarPath, JSON.stringify(sidecar) + '\n');
   }
+  return binding;
 }
 
 function validateCommand(train, validation, options) {
@@ -415,10 +383,65 @@ try {
   assert.strictEqual(report.status, 'validated-pinned-teacher-inputs');
   assert.strictEqual(report.train.length, 3);
   assert.strictEqual(report.validation.length, 3);
-  assert.strictEqual(report.selectionContractSha256, SELECTION_CONTRACT_SHA);
+  assert.strictEqual(report.selectionContractSha256,
+    JSON.parse(fs.readFileSync(trainA + '.manifest.json', 'utf8'))
+      .input.selectionManifest.selectionContractSha256);
   assert.strictEqual(
     Object.prototype.hasOwnProperty.call(report, 'fitAllowed'), false);
   checks += 6;
+  // Exercise the HCE consumer itself, so removing its shared evidence
+  // admission cannot leave only the NNUE boundary protected.
+  function hceCommand() {
+    return childProcess.spawnSync(process.execPath, [
+      path.join(ROOT, 'test/training/hce-r3-pack-stream.js'),
+      ...completeInventory.flatMap(filename => ['--input', filename]),
+      '--role', 'shared-train'
+    ], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+  }
+  const hce = hceCommand();
+  assert.strictEqual(hce.status, 0, hce.stderr);
+  assert.strictEqual(hce.stdout.trim().split('\n').length, 2);
+  const hceSummary = JSON.parse(hce.stderr);
+  assert.strictEqual(hceSummary.providedShardInventory[0]
+    .teacherEvidence.acceptedRows, 1);
+  const hceSidecarPath = trainA + '.manifest.json';
+  const hceSidecarText = fs.readFileSync(hceSidecarPath, 'utf8');
+  const hceTranscriptPath = trainA + '.uci.log';
+  const hceTranscriptText = fs.readFileSync(hceTranscriptPath, 'utf8');
+  fs.unlinkSync(hceTranscriptPath);
+  const hceMissing = hceCommand();
+  assert.notStrictEqual(hceMissing.status, 0);
+  assert.match(hceMissing.stderr, /ENOENT|missing/);
+  const contradictedTranscript = hceTranscriptText.replace('score cp 25', 'score cp 26');
+  assert.notStrictEqual(contradictedTranscript, hceTranscriptText);
+  fs.writeFileSync(hceTranscriptPath, contradictedTranscript);
+  const contradictedSidecar = JSON.parse(hceSidecarText);
+  contradictedSidecar.teacher.transcript.sha256 = sha256(contradictedTranscript);
+  fs.writeFileSync(hceSidecarPath, JSON.stringify(contradictedSidecar) + '\n');
+  const hceContradiction = hceCommand();
+  assert.notStrictEqual(hceContradiction.status, 0);
+  assert.match(hceContradiction.stderr, /accepted label binding differs/);
+  fs.writeFileSync(hceTranscriptPath, hceTranscriptText);
+  fs.writeFileSync(hceSidecarPath, hceSidecarText);
+  checks += 8;
+  // The trainer must read the actual evidence bytes, not merely accept a
+  // syntactically plausible hash in its teacher sidecar.
+  for (const [artifact, suffix] of [
+    ['transcript', '.uci.log'], ['exclusions', '.exclusions.ndjson']
+  ]) {
+    const evidencePath = trainA + suffix;
+    const evidenceText = fs.readFileSync(evidencePath, 'utf8');
+    fs.unlinkSync(evidencePath);
+    const absent = spawnValidation(completeInventory, completeInventory);
+    assert.notStrictEqual(absent.status, 0, artifact + ' missing');
+    assert.match(absent.stderr, /missing|cannot read|No such file|ENOENT/i);
+    fs.writeFileSync(evidencePath, evidenceText + 'tampered\n');
+    const changed = spawnValidation(completeInventory, completeInventory);
+    assert.notStrictEqual(changed.status, 0, artifact + ' tampered');
+    assert.match(changed.stderr, /SHA-256|sha256|hash/i);
+    fs.writeFileSync(evidencePath, evidenceText);
+    checks += 4;
+  }
   const incompleteUnion = spawnValidation([trainA], [validation]);
   assert.notStrictEqual(incompleteUnion.status, 0, incompleteUnion.stdout);
   assert.match(

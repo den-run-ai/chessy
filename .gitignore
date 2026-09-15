@@ -16,3 +16,7 @@ eval/training/**/*.npz
 eval/training/**/*.npy
 eval/training/**/*.pt
 eval/training/**/*.uci.log
+experiments/wasm/target/
+*.env
+.env
+.env.*
