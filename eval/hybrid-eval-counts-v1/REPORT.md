@@ -64,3 +64,31 @@ results and the independent audit are preserved together in the
 verified against their retained hashes. No fitted source or model bytes are
 published here. Paid compute: **$0**. Shipped evaluation, budgets and ratings
 remain unchanged; this is no strength or admission result.
+
+## Completed-scope retirement and execution review
+
+After this run, PR review identified a reusable-runner gap: the parent could
+hash a mutable checkout and then reopen its script pathname for the child.
+Replacement and restoration between those checks could evade the final rehash.
+The generator and registration entrypoints likewise did not bind the executing
+CommonJS source bytes to the later pathname reads, and a directory-local
+`started.json` alone could not prevent copied studies from creating new attempts.
+
+The actual measured attempt used the retained, read-only execution snapshot
+identified by the selection and evidence receipts. That snapshot, its exact
+[historical runner text](../../tools/training/hybrid-eval-counts-historical-v1.js.txt)
+(SHA-256 `42aa8eddbca4d1597710de4f971339d4f0523ae7f6f1c213468b51072f157aff`),
+module registration, raw results and independent audit remain unchanged. No
+search, build, measurement or statistical rerun was performed for this fix.
+The historical text is evidence only and must never be executed.
+
+This one-attempt v1 scope is now retired. The current module keeps only
+read-only selection and result auditors. Every CLI invocation and every former
+prepare, register, run, child, preflight or module-loading API fails before
+inspecting its arguments or loading an engine. These unconditional guards also
+cover copied runners, copied studies, fresh output paths, symlink aliases and
+cached imports whose on-disk entrypoint is replaced and restored. No generic
+launcher or fresh protocol was introduced. CI checks these boundaries and the
+historical source hash alongside the existing count and parity checks. Any
+future attribution experiment requires a separately reviewed new protocol and
+an implementation that executes the same retained bytes it authenticates.
