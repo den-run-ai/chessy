@@ -2,6 +2,10 @@
 
 Keep the immutable 400-opening bank and its v2 workflow **diagnostic only**.
 Issue [#175](https://github.com/den-run-ai/chessy/issues/175) remains open.
+The later [fresh finite-bank software contract](../match-formal/CONTRACT.md)
+implements prospective sampling/admission under a new identity; its empty
+registry admits no candidate. The proposal and audit below retain their
+original diagnostic-only scope.
 This proposal and the static map below consume opening metadata, legal replay
 and known historical exposure only; they consume no candidate outcomes and do
 not change the runner, schedule, estimator or `formalPass: false` result.

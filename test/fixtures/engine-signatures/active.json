@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "kind": "legacy-r69-behavior",
+  "fixture": "test/fixtures/wasm-r69-signatures.json",
+  "fixtureSha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b",
+  "moduleSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+  "note": "No ABI-v2 candidate has been admitted; retain the immutable r69 ordinary-search behavior."
+}
