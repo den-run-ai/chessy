@@ -250,9 +250,11 @@ The compact neural research continues through the
 [original H4 screen](eval/neural-h4/REPORT.md),
 [residual recipe repair](eval/neural-h4-v2/REPORT.md),
 [phase and width screen](eval/neural-h4-v3/REPORT.md), and
-[registered final factorial](eval/training/natural-nnue-h4-v4.md).
+[matched factorial and budget plateau](eval/neural-h4-v4/REPORT.md).
 The [compiled synthetic cost report](eval/training/nnue-phase-runtime-results-2026-09.md)
 separates parameter storage, module growth, memory and per-position overhead.
+The [incremental accumulator comparison](eval/training/nnue-incremental-results-2026-09.md)
+records faster direct evaluation but slower aggregate search.
 These studies preserve the shipped evaluator and the separate admission gates.
 
 For historical reproduction, `test/ai-match.js` supports the archived
