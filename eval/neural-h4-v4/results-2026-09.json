@@ -1,0 +1,1482 @@
+{
+  "audit": {
+    "finalCheckpointAudited": true,
+    "independentObjectivesAndGradientsAudited": 31,
+    "independentlyDecodedOutputs": 1028784,
+    "mismatches": 0,
+    "nnueTestFilesReadOrHashed": 0,
+    "selectedDevelopmentCheckpoints": 30,
+    "status": "PASS"
+  },
+  "budgetFitCount": 6,
+  "budgetProgression": [
+    {
+      "boundedRecipeOnly": true,
+      "completedBudgets": [
+        300,
+        900,
+        1800
+      ],
+      "convergenceClaimed": false,
+      "endReason": "bounded-budget-plateau",
+      "extendTo": null,
+      "latestRelativeImprovement": 0.0007830019387693454,
+      "saturationReached": true
+    }
+  ],
+  "configurations": [
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 1,
+        "epochs": 300,
+        "hidden": 4,
+        "id": "h4-single-eg1-e300",
+        "l2": 0.01,
+        "mode": "residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.4013109491941379,
+      "parameterBytes": 6180,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31437853187648845,
+            "p99AbsoluteCpError": 618.13,
+            "rows": 988,
+            "signAccuracy": 0.8805668016194332,
+            "teacherCpMae": 158.42712550607288,
+            "teacherCpRmse": 208.98997515813812
+          },
+          "middlegame": {
+            "crossEntropy": 0.2967861508278828,
+            "p99AbsoluteCpError": 687.6399999999976,
+            "rows": 2093,
+            "signAccuracy": 0.8877209746774964,
+            "teacherCpMae": 140.1935021500239,
+            "teacherCpRmse": 196.28358215841763
+          },
+          "opening": {
+            "crossEntropy": 0.4875435082913384,
+            "p99AbsoluteCpError": 515.6799999999998,
+            "rows": 3533,
+            "signAccuracy": 0.8049816020379281,
+            "teacherCpMae": 112.59637701669969,
+            "teacherCpRmse": 160.38181427937084
+          }
+        },
+        "crossEntropy": 0.4013109491941379,
+        "p99AbsoluteCpError": 600.0,
+        "rows": 6614,
+        "signAccuracy": 0.8424553976413668,
+        "teacherCpMae": 128.175687934684,
+        "teacherCpRmse": 180.1568337015334
+      },
+      "representativeSeed": 10512,
+      "seedResults": [
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 15.337745929995435,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4010541070534985,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 290,
+          "fitSeconds": 14.921548054997402,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4013109491941379,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 240,
+          "fitSeconds": 15.2206388850027,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4021407654784727,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 4,
+        "epochs": 300,
+        "hidden": 4,
+        "id": "h4-single-eg4-e300",
+        "l2": 0.01,
+        "mode": "residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.4022930051053183,
+      "parameterBytes": 6180,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.3127149596309744,
+            "p99AbsoluteCpError": 614.39,
+            "rows": 988,
+            "signAccuracy": 0.8825910931174089,
+            "teacherCpMae": 157.8562753036437,
+            "teacherCpRmse": 208.50006553460656
+          },
+          "middlegame": {
+            "crossEntropy": 0.29716394859182493,
+            "p99AbsoluteCpError": 688.6799999999967,
+            "rows": 2093,
+            "signAccuracy": 0.8853320592451027,
+            "teacherCpMae": 140.29049211657906,
+            "teacherCpRmse": 197.24053819948173
+          },
+          "opening": {
+            "crossEntropy": 0.489623382747943,
+            "p99AbsoluteCpError": 524.0,
+            "rows": 3533,
+            "signAccuracy": 0.8055476931786018,
+            "teacherCpMae": 113.45400509482026,
+            "teacherCpRmse": 161.38322010215504
+          }
+        },
+        "crossEntropy": 0.4022930051053183,
+        "p99AbsoluteCpError": 604.6099999999997,
+        "rows": 6614,
+        "signAccuracy": 0.8423042032053221,
+        "teacherCpMae": 128.57922588448744,
+        "teacherCpRmse": 180.8790228165529
+      },
+      "representativeSeed": 10512,
+      "seedResults": [
+        {
+          "bestEpoch": 240,
+          "fitSeconds": 20.935693029001413,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4022477050927774,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 230,
+          "fitSeconds": 19.996448133999365,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4022930051053183,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 210,
+          "fitSeconds": 21.309521281000343,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4024580405908578,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 1,
+        "epochs": 300,
+        "hidden": 4,
+        "id": "h4-phase-eg1-e300",
+        "l2": 0.01,
+        "mode": "phase-residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.4004827934368446,
+      "parameterBytes": 6200,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31639239290233134,
+            "p99AbsoluteCpError": 612.26,
+            "rows": 988,
+            "signAccuracy": 0.8795546558704453,
+            "teacherCpMae": 159.56072874493927,
+            "teacherCpRmse": 211.0097230908244
+          },
+          "middlegame": {
+            "crossEntropy": 0.29516618517805604,
+            "p99AbsoluteCpError": 683.3999999999996,
+            "rows": 2093,
+            "signAccuracy": 0.8896321070234113,
+            "teacherCpMae": 139.60344003822266,
+            "teacherCpRmse": 194.80941965332812
+          },
+          "opening": {
+            "crossEntropy": 0.48638966488143665,
+            "p99AbsoluteCpError": 510.0,
+            "rows": 3533,
+            "signAccuracy": 0.8109255590150014,
+            "teacherCpMae": 111.9668836682706,
+            "teacherCpRmse": 159.44939313946784
+          }
+        },
+        "crossEntropy": 0.4004827934368446,
+        "p99AbsoluteCpError": 599.6099999999997,
+        "rows": 6614,
+        "signAccuracy": 0.8460840641064409,
+        "teacherCpMae": 127.82204414877532,
+        "teacherCpRmse": 179.55907045393172
+      },
+      "representativeSeed": 10511,
+      "seedResults": [
+        {
+          "bestEpoch": 250,
+          "fitSeconds": 13.540476921996742,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4004827934368446,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 13.721586680992914,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.399255690989623,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 240,
+          "fitSeconds": 14.55135241199605,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4014185109282562,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 4,
+        "epochs": 300,
+        "hidden": 4,
+        "id": "h4-phase-eg4-e300",
+        "l2": 0.01,
+        "mode": "phase-residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.4017316610751675,
+      "parameterBytes": 6200,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31481326537094584,
+            "p99AbsoluteCpError": 609.26,
+            "rows": 988,
+            "signAccuracy": 0.8846153846153846,
+            "teacherCpMae": 158.54858299595142,
+            "teacherCpRmse": 209.4024803707566
+          },
+          "middlegame": {
+            "crossEntropy": 0.296719907861737,
+            "p99AbsoluteCpError": 702.8399999999983,
+            "rows": 2093,
+            "signAccuracy": 0.8886765408504539,
+            "teacherCpMae": 140.112756808409,
+            "teacherCpRmse": 197.25967615697272
+          },
+          "opening": {
+            "crossEntropy": 0.48824877809511685,
+            "p99AbsoluteCpError": 522.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8044155108972545,
+            "teacherCpMae": 112.93801302009624,
+            "teacherCpRmse": 160.57142159241968
+          }
+        },
+        "crossEntropy": 0.4017316610751675,
+        "p99AbsoluteCpError": 601.7399999999998,
+        "rows": 6614,
+        "signAccuracy": 0.8430601753855458,
+        "teacherCpMae": 128.35077109162384,
+        "teacherCpRmse": 180.65528674179257
+      },
+      "representativeSeed": 10512,
+      "seedResults": [
+        {
+          "bestEpoch": 250,
+          "fitSeconds": 13.634534675002214,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4015386491133854,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 230,
+          "fitSeconds": 14.044325192997348,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4017316610751675,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 210,
+          "fitSeconds": 14.285699153995665,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4019582297516367,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 1,
+        "epochs": 300,
+        "hidden": 8,
+        "id": "h8-single-eg1-e300",
+        "l2": 0.01,
+        "mode": "residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.39876487962961954,
+      "parameterBytes": 12356,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31451020122153533,
+            "p99AbsoluteCpError": 620.91,
+            "rows": 988,
+            "signAccuracy": 0.8846153846153846,
+            "teacherCpMae": 158.4078947368421,
+            "teacherCpRmse": 209.15602770928098
+          },
+          "middlegame": {
+            "crossEntropy": 0.29466083251138686,
+            "p99AbsoluteCpError": 704.1599999999999,
+            "rows": 2093,
+            "signAccuracy": 0.884854276158624,
+            "teacherCpMae": 139.0850453893932,
+            "teacherCpRmse": 194.6057906644941
+          },
+          "opening": {
+            "crossEntropy": 0.4839993525664008,
+            "p99AbsoluteCpError": 513.0399999999995,
+            "rows": 3533,
+            "signAccuracy": 0.813189923577696,
+            "teacherCpMae": 110.82536088310218,
+            "teacherCpRmse": 158.33688963684298
+          }
+        },
+        "crossEntropy": 0.39876487962961954,
+        "p99AbsoluteCpError": 589.8699999999999,
+        "rows": 6614,
+        "signAccuracy": 0.8465376474145752,
+        "teacherCpMae": 126.8760205624433,
+        "teacherCpRmse": 178.6369806331061
+      },
+      "representativeSeed": 10513,
+      "seedResults": [
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 17.134773341000255,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4010404151129226,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 16.189126954996027,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.3983394692555064,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 240,
+          "fitSeconds": 16.192646506002347,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.39876487962961954,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 4,
+        "epochs": 300,
+        "hidden": 8,
+        "id": "h8-single-eg4-e300",
+        "l2": 0.01,
+        "mode": "residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.40061372201168577,
+      "parameterBytes": 12356,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.3106168506798614,
+            "p99AbsoluteCpError": 616.0,
+            "rows": 988,
+            "signAccuracy": 0.8856275303643725,
+            "teacherCpMae": 156.80263157894737,
+            "teacherCpRmse": 207.1926507731704
+          },
+          "middlegame": {
+            "crossEntropy": 0.2964738118377609,
+            "p99AbsoluteCpError": 698.5599999999995,
+            "rows": 2093,
+            "signAccuracy": 0.8872431915910177,
+            "teacherCpMae": 140.23124701385572,
+            "teacherCpRmse": 196.65427765793908
+          },
+          "opening": {
+            "crossEntropy": 0.48747523938215487,
+            "p99AbsoluteCpError": 517.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8109255590150014,
+            "teacherCpMae": 112.70308519671667,
+            "teacherCpRmse": 160.24979792697224
+          }
+        },
+        "crossEntropy": 0.40061372201168577,
+        "p99AbsoluteCpError": 600.0,
+        "rows": 6614,
+        "signAccuracy": 0.8462352585424856,
+        "teacherCpMae": 128.00196552766857,
+        "teacherCpRmse": 179.911727423057
+      },
+      "representativeSeed": 10511,
+      "seedResults": [
+        {
+          "bestEpoch": 280,
+          "fitSeconds": 21.709850808001647,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.40061372201168577,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 21.886930038999708,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4004377481254972,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 210,
+          "fitSeconds": 22.639051276993996,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4015003430133851,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 1,
+        "epochs": 300,
+        "hidden": 8,
+        "id": "h8-phase-eg1-e300",
+        "l2": 0.01,
+        "mode": "phase-residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.3977011354120892,
+      "parameterBytes": 12392,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31484930419226115,
+            "p99AbsoluteCpError": 610.13,
+            "rows": 988,
+            "signAccuracy": 0.8805668016194332,
+            "teacherCpMae": 158.98481781376518,
+            "teacherCpRmse": 209.86444680409463
+          },
+          "middlegame": {
+            "crossEntropy": 0.2948479855710134,
+            "p99AbsoluteCpError": 694.5999999999985,
+            "rows": 2093,
+            "signAccuracy": 0.8905876731963689,
+            "teacherCpMae": 138.56808408982323,
+            "teacherCpRmse": 194.15496025221682
+          },
+          "opening": {
+            "crossEntropy": 0.48180225396928184,
+            "p99AbsoluteCpError": 505.0,
+            "rows": 3533,
+            "signAccuracy": 0.8143221058590433,
+            "teacherCpMae": 109.63939994339088,
+            "teacherCpRmse": 156.60587274205187
+          }
+        },
+        "crossEntropy": 0.3977011354120892,
+        "p99AbsoluteCpError": 592.4799999999996,
+        "rows": 6614,
+        "signAccuracy": 0.8483519806471121,
+        "teacherCpMae": 126.16510432416086,
+        "teacherCpRmse": 177.78874094728326
+      },
+      "representativeSeed": 10513,
+      "seedResults": [
+        {
+          "bestEpoch": 280,
+          "fitSeconds": 15.292243791001965,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.39954861311082207,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 15.170486907998566,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.3969889808957204,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 290,
+          "fitSeconds": 15.6464465129975,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.3977011354120892,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 4,
+        "epochs": 300,
+        "hidden": 8,
+        "id": "h8-phase-eg4-e300",
+        "l2": 0.01,
+        "mode": "phase-residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.3995308420473929,
+      "parameterBytes": 12392,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31159938581315677,
+            "p99AbsoluteCpError": 603.56,
+            "rows": 988,
+            "signAccuracy": 0.8805668016194332,
+            "teacherCpMae": 157.5161943319838,
+            "teacherCpRmse": 208.04804704332724
+          },
+          "middlegame": {
+            "crossEntropy": 0.29515213964800624,
+            "p99AbsoluteCpError": 697.3599999999988,
+            "rows": 2093,
+            "signAccuracy": 0.8858098423315814,
+            "teacherCpMae": 139.36932632584808,
+            "teacherCpRmse": 195.4793488432367
+          },
+          "opening": {
+            "crossEntropy": 0.4859562320506032,
+            "p99AbsoluteCpError": 516.0399999999995,
+            "rows": 3533,
+            "signAccuracy": 0.8086611944523068,
+            "teacherCpMae": 111.61590716105293,
+            "teacherCpRmse": 159.05525015285974
+          }
+        },
+        "crossEntropy": 0.3995308420473929,
+        "p99AbsoluteCpError": 594.8699999999999,
+        "rows": 6614,
+        "signAccuracy": 0.8438161475657696,
+        "teacherCpMae": 127.2550650136075,
+        "teacherCpRmse": 179.085859959337
+      },
+      "representativeSeed": 10513,
+      "seedResults": [
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 15.941465780997532,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.4006478106543985,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 300,
+          "fitSeconds": 15.434735917995567,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.39911028190191555,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 240,
+          "fitSeconds": 15.539911348001624,
+          "fullBudgetEpochs": 300,
+          "innerCrossEntropy": 0.3995308420473929,
+          "seed": 10513
+        }
+      ],
+      "stage": "factorial"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 1,
+        "epochs": 900,
+        "hidden": 8,
+        "id": "h8-phase-eg1-e900",
+        "l2": 0.01,
+        "mode": "phase-residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.397361995695295,
+      "parameterBytes": 12392,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.3154251911245867,
+            "p99AbsoluteCpError": 610.52,
+            "rows": 988,
+            "signAccuracy": 0.8795546558704453,
+            "teacherCpMae": 159.17004048582996,
+            "teacherCpRmse": 210.12521329711456
+          },
+          "middlegame": {
+            "crossEntropy": 0.294545441063752,
+            "p99AbsoluteCpError": 694.9599999999991,
+            "rows": 2093,
+            "signAccuracy": 0.8877209746774964,
+            "teacherCpMae": 138.4854276158624,
+            "teacherCpRmse": 193.93876514235177
+          },
+          "opening": {
+            "crossEntropy": 0.48118554841527195,
+            "p99AbsoluteCpError": 502.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8163034248514011,
+            "teacherCpMae": 109.43843758845173,
+            "teacherCpRmse": 156.17084963852432
+          }
+        },
+        "crossEntropy": 0.397361995695295,
+        "p99AbsoluteCpError": 589.3499999999995,
+        "rows": 6614,
+        "signAccuracy": 0.8483519806471121,
+        "teacherCpMae": 126.05926821892955,
+        "teacherCpRmse": 177.55552119987033
+      },
+      "representativeSeed": 10513,
+      "seedResults": [
+        {
+          "bestEpoch": 880,
+          "fitSeconds": 46.674399627998355,
+          "fullBudgetEpochs": 900,
+          "innerCrossEntropy": 0.3977003480669456,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 840,
+          "fitSeconds": 45.336495901996386,
+          "fullBudgetEpochs": 900,
+          "innerCrossEntropy": 0.3967658955737757,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 800,
+          "fitSeconds": 45.921719049001695,
+          "fullBudgetEpochs": 900,
+          "innerCrossEntropy": 0.397361995695295,
+          "seed": 10513
+        }
+      ],
+      "stage": "budget"
+    },
+    {
+      "configuration": {
+        "eligibleForTest": true,
+        "endgameWeight": 1,
+        "epochs": 1800,
+        "hidden": 8,
+        "id": "h8-phase-eg1-e1800",
+        "l2": 0.01,
+        "mode": "phase-residual-shipped-hce"
+      },
+      "medianInnerCrossEntropy": 0.39705086048227234,
+      "parameterBytes": 12392,
+      "representativeInnerQuality": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.3153918706077922,
+            "p99AbsoluteCpError": 610.65,
+            "rows": 988,
+            "signAccuracy": 0.8775303643724697,
+            "teacherCpMae": 159.1912955465587,
+            "teacherCpRmse": 210.07453130842262
+          },
+          "middlegame": {
+            "crossEntropy": 0.2942819602675702,
+            "p99AbsoluteCpError": 693.4799999999996,
+            "rows": 2093,
+            "signAccuracy": 0.8872431915910177,
+            "teacherCpMae": 138.40324892498805,
+            "teacherCpRmse": 193.92095266244388
+          },
+          "opening": {
+            "crossEntropy": 0.4807684914319915,
+            "p99AbsoluteCpError": 502.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8146051514293802,
+            "teacherCpMae": 109.35493914520238,
+            "teacherCpRmse": 155.9772957343546
+          }
+        },
+        "crossEntropy": 0.39705086048227234,
+        "p99AbsoluteCpError": 585.6099999999997,
+        "rows": 6614,
+        "signAccuracy": 0.8469912307227094,
+        "teacherCpMae": 125.99183550045359,
+        "teacherCpRmse": 177.44949238174127
+      },
+      "representativeSeed": 10513,
+      "seedResults": [
+        {
+          "bestEpoch": 1670,
+          "fitSeconds": 90.9960233380043,
+          "fullBudgetEpochs": 1800,
+          "innerCrossEntropy": 0.3976979363689668,
+          "seed": 10511
+        },
+        {
+          "bestEpoch": 1770,
+          "fitSeconds": 91.92023840199545,
+          "fullBudgetEpochs": 1800,
+          "innerCrossEntropy": 0.3964798292684308,
+          "seed": 10512
+        },
+        {
+          "bestEpoch": 1650,
+          "fitSeconds": 94.4498388159991,
+          "fullBudgetEpochs": 1800,
+          "innerCrossEntropy": 0.39705086048227234,
+          "seed": 10513
+        }
+      ],
+      "stage": "budget"
+    }
+  ],
+  "contractSha256": "47c6c78c59e70b9a9d21156aff5ece7192bfad563bac360ebe6f0c20728e5cd1",
+  "convergenceClaimed": false,
+  "decision": {
+    "allBudgetPhaseRejected": [],
+    "bestEligibleBudgetMedianCe": 0.39705086048227234,
+    "config": {
+      "eligibleForTest": true,
+      "endgameWeight": 1,
+      "epochs": 900,
+      "hidden": 8,
+      "id": "h8-phase-eg1-e900",
+      "l2": 0.01,
+      "mode": "phase-residual-shipped-hce"
+    },
+    "contractSha256": "47c6c78c59e70b9a9d21156aff5ece7192bfad563bac360ebe6f0c20728e5cd1",
+    "convergenceClaimed": false,
+    "eligibleBudgetMedians": [
+      {
+        "epochs": 300,
+        "medianInnerCe": 0.3977011354120892
+      },
+      {
+        "epochs": 900,
+        "medianInnerCe": 0.397361995695295
+      },
+      {
+        "epochs": 1800,
+        "medianInnerCe": 0.39705086048227234
+      }
+    ],
+    "epochs": 840,
+    "head": "53a8724503dd2567969fc3e12a32ba12e53c8b53",
+    "innerRepresentativeEpoch": 800,
+    "medianInnerCe": 0.397361995695295,
+    "nnueTestDecoded": false,
+    "nnueValidationDecoded": false,
+    "phaseRejected": [],
+    "relativeBudgetTolerance": 0.001,
+    "seed": 10513,
+    "selectionUsesOuter": false
+  },
+  "developmentFitCount": 30,
+  "elapsedSeconds": 1088.993378801002,
+  "endReason": "bounded-budget-plateau",
+  "executionHead": "53a8724503dd2567969fc3e12a32ba12e53c8b53",
+  "factorialAblations": [
+    {
+      "dimension": "hidden",
+      "exploratory": true,
+      "left": [
+        4,
+        "phase-residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.4004827934368446,
+      "leftSeedRange": [
+        0.399255690989623,
+        0.4014185109282562
+      ],
+      "relativeRightMedianImprovement": 0.006945761641552584,
+      "right": [
+        8,
+        "phase-residual-shipped-hce",
+        1
+      ],
+      "rightMedianCe": 0.3977011354120892,
+      "rightSeedRange": [
+        0.3969889808957204,
+        0.39954861311082207
+      ]
+    },
+    {
+      "dimension": "hidden",
+      "exploratory": true,
+      "left": [
+        4,
+        "phase-residual-shipped-hce",
+        4
+      ],
+      "leftMedianCe": 0.4017316610751675,
+      "leftSeedRange": [
+        0.4015386491133854,
+        0.4019582297516367
+      ],
+      "relativeRightMedianImprovement": 0.00547833103789841,
+      "right": [
+        8,
+        "phase-residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.3995308420473929,
+      "rightSeedRange": [
+        0.39911028190191555,
+        0.4006478106543985
+      ]
+    },
+    {
+      "dimension": "hidden",
+      "exploratory": true,
+      "left": [
+        4,
+        "residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.4013109491941379,
+      "leftSeedRange": [
+        0.4010541070534985,
+        0.4021407654784727
+      ],
+      "relativeRightMedianImprovement": 0.0063443810083703145,
+      "right": [
+        8,
+        "residual-shipped-hce",
+        1
+      ],
+      "rightMedianCe": 0.39876487962961954,
+      "rightSeedRange": [
+        0.3983394692555064,
+        0.4010404151129226
+      ]
+    },
+    {
+      "dimension": "hidden",
+      "exploratory": true,
+      "left": [
+        4,
+        "residual-shipped-hce",
+        4
+      ],
+      "leftMedianCe": 0.4022930051053183,
+      "leftSeedRange": [
+        0.4022477050927774,
+        0.4024580405908578
+      ],
+      "relativeRightMedianImprovement": 0.004174278628565453,
+      "right": [
+        8,
+        "residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.40061372201168577,
+      "rightSeedRange": [
+        0.4004377481254972,
+        0.4015003430133851
+      ]
+    },
+    {
+      "dimension": "architecture",
+      "exploratory": true,
+      "left": [
+        4,
+        "phase-residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.4004827934368446,
+      "leftSeedRange": [
+        0.399255690989623,
+        0.4014185109282562
+      ],
+      "relativeRightMedianImprovement": -0.0020678934797329074,
+      "right": [
+        4,
+        "residual-shipped-hce",
+        1
+      ],
+      "rightMedianCe": 0.4013109491941379,
+      "rightSeedRange": [
+        0.4010541070534985,
+        0.4021407654784727
+      ]
+    },
+    {
+      "dimension": "architecture",
+      "exploratory": true,
+      "left": [
+        4,
+        "phase-residual-shipped-hce",
+        4
+      ],
+      "leftMedianCe": 0.4017316610751675,
+      "leftSeedRange": [
+        0.4015386491133854,
+        0.4019582297516367
+      ],
+      "relativeRightMedianImprovement": -0.0013973109031248931,
+      "right": [
+        4,
+        "residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.4022930051053183,
+      "rightSeedRange": [
+        0.4022477050927774,
+        0.4024580405908578
+      ]
+    },
+    {
+      "dimension": "architecture",
+      "exploratory": true,
+      "left": [
+        8,
+        "phase-residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.3977011354120892,
+      "leftSeedRange": [
+        0.3969889808957204,
+        0.39954861311082207
+      ],
+      "relativeRightMedianImprovement": -0.0026747326643363767,
+      "right": [
+        8,
+        "residual-shipped-hce",
+        1
+      ],
+      "rightMedianCe": 0.39876487962961954,
+      "rightSeedRange": [
+        0.3983394692555064,
+        0.4010404151129226
+      ]
+    },
+    {
+      "dimension": "architecture",
+      "exploratory": true,
+      "left": [
+        8,
+        "phase-residual-shipped-hce",
+        4
+      ],
+      "leftMedianCe": 0.3995308420473929,
+      "leftSeedRange": [
+        0.39911028190191555,
+        0.4006478106543985
+      ],
+      "relativeRightMedianImprovement": -0.0027103789002711487,
+      "right": [
+        8,
+        "residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.40061372201168577,
+      "rightSeedRange": [
+        0.4004377481254972,
+        0.4015003430133851
+      ]
+    },
+    {
+      "dimension": "endgameWeight",
+      "exploratory": true,
+      "left": [
+        4,
+        "phase-residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.4004827934368446,
+      "leftSeedRange": [
+        0.399255690989623,
+        0.4014185109282562
+      ],
+      "relativeRightMedianImprovement": -0.0031184052318586897,
+      "right": [
+        4,
+        "phase-residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.4017316610751675,
+      "rightSeedRange": [
+        0.4015386491133854,
+        0.4019582297516367
+      ]
+    },
+    {
+      "dimension": "endgameWeight",
+      "exploratory": true,
+      "left": [
+        4,
+        "residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.4013109491941379,
+      "leftSeedRange": [
+        0.4010541070534985,
+        0.4021407654784727
+      ],
+      "relativeRightMedianImprovement": -0.0024471196541047124,
+      "right": [
+        4,
+        "residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.4022930051053183,
+      "rightSeedRange": [
+        0.4022477050927774,
+        0.4024580405908578
+      ]
+    },
+    {
+      "dimension": "endgameWeight",
+      "exploratory": true,
+      "left": [
+        8,
+        "phase-residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.3977011354120892,
+      "leftSeedRange": [
+        0.3969889808957204,
+        0.39954861311082207
+      ],
+      "relativeRightMedianImprovement": -0.0046007075976985945,
+      "right": [
+        8,
+        "phase-residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.3995308420473929,
+      "rightSeedRange": [
+        0.39911028190191555,
+        0.4006478106543985
+      ]
+    },
+    {
+      "dimension": "endgameWeight",
+      "exploratory": true,
+      "left": [
+        8,
+        "residual-shipped-hce",
+        1
+      ],
+      "leftMedianCe": 0.39876487962961954,
+      "leftSeedRange": [
+        0.3983394692555064,
+        0.4010404151129226
+      ],
+      "relativeRightMedianImprovement": -0.004636422304249654,
+      "right": [
+        8,
+        "residual-shipped-hce",
+        4
+      ],
+      "rightMedianCe": 0.40061372201168577,
+      "rightSeedRange": [
+        0.4004377481254972,
+        0.4015003430133851
+      ]
+    }
+  ],
+  "factorialDecision": {
+    "config": {
+      "eligibleForTest": true,
+      "endgameWeight": 1,
+      "epochs": 300,
+      "hidden": 8,
+      "id": "h8-phase-eg1-e300",
+      "l2": 0.01,
+      "mode": "phase-residual-shipped-hce"
+    },
+    "contractSha256": "47c6c78c59e70b9a9d21156aff5ece7192bfad563bac360ebe6f0c20728e5cd1",
+    "epochs": 290,
+    "head": "53a8724503dd2567969fc3e12a32ba12e53c8b53",
+    "innerRepresentativeEpoch": 290,
+    "medianInnerCe": 0.3977011354120892,
+    "phaseRejected": [],
+    "seed": 10513,
+    "selectionUsesOuter": false
+  },
+  "factorialFitCount": 24,
+  "final": {
+    "epochs": 840,
+    "fitConfiguration": {
+      "eligibleForTest": true,
+      "endgameWeight": 1,
+      "epochs": 900,
+      "hidden": 8,
+      "id": "h8-phase-eg1-e900",
+      "l2": 0.01,
+      "mode": "phase-residual-shipped-hce"
+    },
+    "floatQuality": {
+      "nnue-validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.27470145408862,
+            "p99AbsoluteCpError": 553.9900226845552,
+            "rows": 332,
+            "signAccuracy": 0.8795180722891566,
+            "teacherCpMae": 168.3006742940268,
+            "teacherCpRmse": 221.34690809238427
+          },
+          "middlegame": {
+            "crossEntropy": 0.2915491164691552,
+            "p99AbsoluteCpError": 582.73775408029,
+            "rows": 732,
+            "signAccuracy": 0.8961748633879781,
+            "teacherCpMae": 137.38599330317402,
+            "teacherCpRmse": 185.58692902059175
+          },
+          "opening": {
+            "crossEntropy": 0.4852680387351574,
+            "p99AbsoluteCpError": 499.83042157747127,
+            "rows": 1310,
+            "signAccuracy": 0.8106870229007633,
+            "teacherCpMae": 108.00486125819775,
+            "teacherCpRmse": 152.961634358638
+          }
+        },
+        "crossEntropy": 0.3960892867548019,
+        "p99AbsoluteCpError": 545.0208534331681,
+        "rows": 2374,
+        "signAccuracy": 0.8466722830665543,
+        "teacherCpMae": 125.4965203082474,
+        "teacherCpRmse": 174.30628821523288
+      },
+      "shared-train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2824933348234706,
+            "p99AbsoluteCpError": 613.2552361499557,
+            "rows": 5094,
+            "signAccuracy": 0.8918335296427169,
+            "teacherCpMae": 160.09931689264582,
+            "teacherCpRmse": 210.92470239022927
+          },
+          "middlegame": {
+            "crossEntropy": 0.2792860429199746,
+            "p99AbsoluteCpError": 662.9577789062323,
+            "rows": 10550,
+            "signAccuracy": 0.8982938388625592,
+            "teacherCpMae": 138.88101731663482,
+            "teacherCpRmse": 192.6384960508194
+          },
+          "opening": {
+            "crossEntropy": 0.4738095960074672,
+            "p99AbsoluteCpError": 498.48225721978196,
+            "rows": 17459,
+            "signAccuracy": 0.8157970101380377,
+            "teacherCpMae": 105.07802187846809,
+            "teacherCpRmse": 149.95666169688093
+          }
+        },
+        "crossEntropy": 0.38237412129084564,
+        "p99AbsoluteCpError": 585.8247144720655,
+        "rows": 33103,
+        "signAccuracy": 0.8537896867353412,
+        "teacherCpMae": 124.31797229610035,
+        "teacherCpRmse": 174.73702769772768
+      }
+    },
+    "parameterBytes": 12392,
+    "quality": {
+      "nnue-validation": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2747078662657776,
+            "p99AbsoluteCpError": 554.14,
+            "rows": 332,
+            "signAccuracy": 0.8795180722891566,
+            "teacherCpMae": 168.29819277108433,
+            "teacherCpRmse": 221.33611930917053
+          },
+          "middlegame": {
+            "crossEntropy": 0.29155967051758985,
+            "p99AbsoluteCpError": 582.8699999999986,
+            "rows": 732,
+            "signAccuracy": 0.894808743169399,
+            "teacherCpMae": 137.39754098360655,
+            "teacherCpRmse": 185.58506290585592
+          },
+          "opening": {
+            "crossEntropy": 0.48526458892284113,
+            "p99AbsoluteCpError": 500.28000000000065,
+            "rows": 1310,
+            "signAccuracy": 0.8083969465648855,
+            "teacherCpMae": 108.00916030534351,
+            "teacherCpRmse": 152.9665083335425
+          }
+        },
+        "crossEntropy": 0.39609153408089126,
+        "p99AbsoluteCpError": 544.8899999999999,
+        "rows": 2374,
+        "signAccuracy": 0.8449873631002527,
+        "teacherCpMae": 125.50210614995788,
+        "teacherCpRmse": 174.30611985925088
+      },
+      "shared-train": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2824831515496643,
+            "p99AbsoluteCpError": 613.2099999999991,
+            "rows": 5094,
+            "signAccuracy": 0.8914409108755399,
+            "teacherCpMae": 160.0908912446015,
+            "teacherCpRmse": 210.91278665085903
+          },
+          "middlegame": {
+            "crossEntropy": 0.2792927333682761,
+            "p99AbsoluteCpError": 663.0,
+            "rows": 10550,
+            "signAccuracy": 0.8976303317535546,
+            "teacherCpMae": 138.88303317535545,
+            "teacherCpRmse": 192.64158257368237
+          },
+          "opening": {
+            "crossEntropy": 0.4738074827379047,
+            "p99AbsoluteCpError": 498.41999999999825,
+            "rows": 17459,
+            "signAccuracy": 0.8144223609599633,
+            "teacherCpMae": 105.07600664413769,
+            "teacherCpRmse": 149.95540968102995
+          }
+        },
+        "crossEntropy": 0.3823735719466629,
+        "p99AbsoluteCpError": 585.9800000000032,
+        "rows": 33103,
+        "signAccuracy": 0.8527927982358094,
+        "teacherCpMae": 124.31625532429085,
+        "teacherCpRmse": 174.73533215943084
+      }
+    },
+    "quantization": {
+      "authored": {
+        "integerMismatches": 0,
+        "maximumAbsFloatDifferenceCp": 0.4737460404346052,
+        "maximumAbsoluteScoreCp": 988.0,
+        "meanAbsFloatDifferenceCp": 0.34969577446299027,
+        "reasons": [],
+        "rows": 7
+      },
+      "nnue-validation": {
+        "integerMismatches": 0,
+        "maximumAbsFloatDifferenceCp": 0.5609814016145407,
+        "maximumAbsoluteScoreCp": 1660.3164021305095,
+        "meanAbsFloatDifferenceCp": 0.2505630092738882,
+        "reasons": [],
+        "rows": 2374
+      },
+      "shared-train": {
+        "integerMismatches": 0,
+        "maximumAbsFloatDifferenceCp": 0.5976856334723522,
+        "maximumAbsoluteScoreCp": 2732.172520687037,
+        "meanAbsFloatDifferenceCp": 0.24934835066072392,
+        "reasons": [],
+        "rows": 33103
+      }
+    },
+    "seed": 10513
+  },
+  "fitCount": 31,
+  "globalOrLegacyTestOpeningMarkersAtAudit": 0,
+  "independentAuditSha256": "3510cc8286a9fa23f661aead8c3a2e466dc2e21c52a2061754c68fcbbd6efd17",
+  "innerComparators": {
+    "frozen-expanded-hce": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.30712945397345864,
+          "p99AbsoluteCpError": 607.0,
+          "rows": 988,
+          "signAccuracy": 0.881578947368421,
+          "teacherCpMae": 156.4251012145749,
+          "teacherCpRmse": 207.25840527878344
+        },
+        "middlegame": {
+          "crossEntropy": 0.2948865483005295,
+          "p99AbsoluteCpError": 717.0,
+          "rows": 2093,
+          "signAccuracy": 0.8867654085045389,
+          "teacherCpMae": 139.57142857142858,
+          "teacherCpRmse": 196.3657125675082
+        },
+        "opening": {
+          "crossEntropy": 0.4924521944633617,
+          "p99AbsoluteCpError": 517.3999999999992,
+          "rows": 3533,
+          "signAccuracy": 0.7953580526464761,
+          "teacherCpMae": 114.85791112369091,
+          "teacherCpRmse": 163.0640269194187
+        }
+      },
+      "crossEntropy": 0.402249024668558,
+      "p99AbsoluteCpError": 599.8699999999999,
+      "rows": 6614,
+      "signAccuracy": 0.8371635923798004,
+      "teacherCpMae": 128.8878137284548,
+      "teacherCpRmse": 181.16964836239333
+    },
+    "shipped-hce": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.31843855909141433,
+          "p99AbsoluteCpError": 613.91,
+          "rows": 988,
+          "signAccuracy": 0.8765182186234818,
+          "teacherCpMae": 160.62246963562754,
+          "teacherCpRmse": 212.2669500821218
+        },
+        "middlegame": {
+          "crossEntropy": 0.2989615613643721,
+          "p99AbsoluteCpError": 727.5999999999985,
+          "rows": 2093,
+          "signAccuracy": 0.8824653607262303,
+          "teacherCpMae": 141.0922121356904,
+          "teacherCpRmse": 197.57538432013712
+        },
+        "opening": {
+          "crossEntropy": 0.5014416551913401,
+          "p99AbsoluteCpError": 540.3599999999997,
+          "rows": 3533,
+          "signAccuracy": 0.7854514576846873,
+          "teacherCpMae": 118.04104160769884,
+          "teacherCpRmse": 166.46122737975816
+        }
+      },
+      "crossEntropy": 0.41002981737359423,
+      "p99AbsoluteCpError": 602.8699999999999,
+      "rows": 6614,
+      "signAccuracy": 0.8297550650136075,
+      "teacherCpMae": 131.69640157242213,
+      "teacherCpRmse": 184.07907331179035
+    }
+  },
+  "innerRows": {
+    "train": 26489,
+    "validation": 6614
+  },
+  "outerComparators": {
+    "frozen-expanded-hce": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.27104959331985423,
+          "p99AbsoluteCpError": 549.0699999999999,
+          "rows": 332,
+          "signAccuracy": 0.8885542168674698,
+          "teacherCpMae": 166.84939759036143,
+          "teacherCpRmse": 220.38953739406753
+        },
+        "middlegame": {
+          "crossEntropy": 0.29405126342471494,
+          "p99AbsoluteCpError": 595.2799999999993,
+          "rows": 732,
+          "signAccuracy": 0.8961748633879781,
+          "teacherCpMae": 139.87978142076503,
+          "teacherCpRmse": 188.62360241491027
+        },
+        "opening": {
+          "crossEntropy": 0.49823158146753205,
+          "p99AbsoluteCpError": 525.8200000000002,
+          "rows": 1310,
+          "signAccuracy": 0.7877862595419848,
+          "teacherCpMae": 113.40992366412213,
+          "teacherCpRmse": 159.4024409096013
+        }
+      },
+      "crossEntropy": 0.4035035221278643,
+      "p99AbsoluteCpError": 554.3199999999997,
+      "rows": 2374,
+      "signAccuracy": 0.8352990732940185,
+      "teacherCpMae": 129.04507160909856,
+      "teacherCpRmse": 178.28095756840662
+    },
+    "shipped-hce": {
+      "byPhase": {
+        "endgame": {
+          "crossEntropy": 0.2802126783625678,
+          "p99AbsoluteCpError": 562.0699999999999,
+          "rows": 332,
+          "signAccuracy": 0.8855421686746988,
+          "teacherCpMae": 169.7379518072289,
+          "teacherCpRmse": 224.2460124425528
+        },
+        "middlegame": {
+          "crossEntropy": 0.29465920183199557,
+          "p99AbsoluteCpError": 587.6899999999999,
+          "rows": 732,
+          "signAccuracy": 0.8934426229508197,
+          "teacherCpMae": 141.33333333333334,
+          "teacherCpRmse": 189.77395958799227
+        },
+        "opening": {
+          "crossEntropy": 0.5009634796161798,
+          "p99AbsoluteCpError": 538.5600000000013,
+          "rows": 1310,
+          "signAccuracy": 0.7801526717557252,
+          "teacherCpMae": 114.806106870229,
+          "teacherCpRmse": 160.60187844100275
+        }
+      },
+      "crossEntropy": 0.4064799087003323,
+      "p99AbsoluteCpError": 567.54,
+      "rows": 2374,
+      "signAccuracy": 0.8298230834035384,
+      "teacherCpMae": 130.66764953664702,
+      "teacherCpRmse": 179.91642143676498
+    }
+  },
+  "paidSpendUsd": 0,
+  "privateSelectionSha256": "fe86f118822756cc57813496cee316ff5540bf4d45000420deceb8ec56ab173a",
+  "productionFitAllowed": false,
+  "quantization": {
+    "allChecksPassed": true,
+    "integerMismatches": 0,
+    "integerReferenceComparisons": 1028784,
+    "maximumAbsFloatDifferenceCp": 0.6191462488060324,
+    "maximumAbsoluteScoreCp": 2748.0317623892192,
+    "maximumRoleMeanAbsFloatDifferenceCp": 0.34969577446299027
+  },
+  "refitCount": 1,
+  "researchOnly": true,
+  "runtimeIntegrationPerformed": false,
+  "saturation": {
+    "boundedRecipeOnly": true,
+    "convergenceClaimed": false,
+    "endReason": "bounded-budget-plateau",
+    "extendTo": null,
+    "latestRelativeImprovement": 0.0007830019387693454,
+    "saturationReached": true
+  },
+  "saturationReached": true,
+  "schema": "chessy.h4-v4-public-aggregate.v1",
+  "scopeNotes": [
+    "Inner split is reused development data; outer NNUE validation was exposed in v1/v2/v3.",
+    "Phase output L2 is halved so identical duplicated heads match single-head penalty and tied-direction gradients.",
+    "Architecture is frozen after 24 factorial fits, before budget-stage data are observed.",
+    "Budget fits restart independently with stretched cosine and QAT schedules; they are not continuations.",
+    "The smallest eligible budget within 0.1% of the best eligible median loss is selected.",
+    "Any plateau applies only to the registered budget sequence of the frozen recipe on reused inner data.",
+    "No universal convergence, playing-strength, device-runtime, or production WASM-size claim."
+  ],
+  "stopReasons": [
+    "frozen-expanded-hce:endgame-CE-guard"
+  ],
+  "testEligible": false,
+  "testOpenedDuringScreen": false,
+  "trainingSeconds": 870.062050671957
+}

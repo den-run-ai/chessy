@@ -1,0 +1,99 @@
+{
+  "schema": "chessy.nnue-incremental-protocol.v1",
+  "status": "prospective-freeze-before-first-run",
+  "researchOnly": true,
+  "syntheticOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "trainedModelInputsAllowed": false,
+  "objective": "Last bounded synthetic mechanism study: compare incremental make/unmake accumulators with a concurrent fused-refresh control.",
+  "configurations": {
+    "hiddenWidths": [
+      4,
+      8
+    ],
+    "implementations": [
+      "fused",
+      "incremental"
+    ],
+    "order": [
+      "h4-fused",
+      "h4-incremental",
+      "h8-fused",
+      "h8-incremental"
+    ],
+    "selectionAfterRunAllowed": false
+  },
+  "syntheticParameters": {
+    "source": "same deterministic nonzero fixture as nnue-phase-runtime.js; one fixed fixture per width",
+    "hidden4Sha256": "63431955cf527545aea1d8cd91ae68fa9c25c0748b3d9ed5af528d3c13a69c5c",
+    "hidden8Sha256": "0849a2fe7e02d83683e18e9a1f6edaf5bcfa51bd431ca92a4bbac17324149c45"
+  },
+  "mutation": {
+    "positionPayloadBytes": {
+      "H4": 32,
+      "H8": 64
+    },
+    "actualPositionSize": "Measure size_of exported by each copied module, including padding; do not assume payload equals struct growth.",
+    "undoChangeAllowed": false,
+    "extraMutableGlobalCacheAllowed": false,
+    "boardAssignmentClosure": 16,
+    "cachedPhase": false,
+    "transientAccumulatorClippingAllowed": false
+  },
+  "timing": {
+    "positions": 8,
+    "positionsSha256": "7e60da831ef44fedc992b92e8c26eceadb15ff8f3491beebf191a6896839dda4",
+    "positionSource": "exact original eight legal authored timing fixtures; six are endgames",
+    "pairedRepetitions": 4,
+    "engineOrder": "candidate-first iff (position+repetition) odd; baseline-first otherwise",
+    "evaluationWarmupCalls": 1000,
+    "evaluationMeasuredCalls": 10000,
+    "nodeBudgets": [
+      4096,
+      16384
+    ],
+    "maxDepth": 111,
+    "timeLimitMs": 0,
+    "quiescence": true,
+    "completeRecordsPerConfiguration": 192,
+    "perPositionDisclosureRequired": true
+  },
+  "preflight": {
+    "buildAndNativeTestsForAllFourBeforeTiming": true,
+    "staticWasmParityForAllFourBeforeTiming": true,
+    "staticCasesPerConfiguration": 20,
+    "nativeTransitionRequirements": [
+      "FEN",
+      "both colors",
+      "generate_legal and EP legality restore",
+      "capture",
+      "all four quiet and capture promotions",
+      "both castlings for both colors",
+      "EP and pinned EP for both colors",
+      "nested make/unmake",
+      "Position copies",
+      "turn-only change; engine has no null-move pruning"
+    ]
+  },
+  "validation": {
+    "sameWidthFusedAndIncrementalSearchSignaturesMustMatch": true,
+    "completeGridRequired": true,
+    "incompleteRunCannotBeScored": true,
+    "noSelectiveRetry": true,
+    "failedCompleteGridRetained": true
+  },
+  "build": {
+    "toolchain": "same frozen Rust1.97.1/Binaryen131 and existing build flags; copied research memory allowance only",
+    "productionMemoryBytes": 26542080,
+    "researchInitialAndMaximumMemoryBytes": 26607616,
+    "productionFilesMayChange": false
+  },
+  "reporting": {
+    "separateFromPriorCanonicalRun": 34919106656,
+    "priorRunMustNotBeReplacedOrPooled": true,
+    "concurrentFusedControlIsNewPreregisteredMeasurement": true,
+    "publishSizeMemoryPositionLayoutAndPerPositionMetrics": true,
+    "noStrengthOrEloTimeSaturationClaim": true
+  }
+}

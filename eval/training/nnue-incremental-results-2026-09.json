@@ -1,0 +1,1115 @@
+{
+  "schema": "chessy.nnue-incremental-verified-summary.v1",
+  "researchOnly": true,
+  "syntheticOnly": true,
+  "trainedModelEvaluated": false,
+  "testSplitRead": false,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "provenance": {
+    "sourceCommit": "79eeb212ab1a183a2f0cd971220638e92bf29195",
+    "ciCheckoutMergeCommit": "96cfd98b39b311c5e71bb651537133f506e0e192",
+    "ciRunUrl": "https://github.com/den-run-ai/chessy/actions/runs/34920728813",
+    "ciJobId": 104228062828,
+    "logSha256": "c5215ab9962a25455aa24a8184eac42bf00bd9061e6c43a3daa0f6dff20a5a57",
+    "logBytes": 81800,
+    "contractSha256": "d000ded443f487258a6932411e07cff95ba3b27ece17c6626b6db7173eeb06c5",
+    "rawArtifact": {
+      "id": 10377519260,
+      "url": "https://github.com/den-run-ai/chessy/actions/runs/34920728813/artifacts/10377519260",
+      "verifiedZipSha256": "b9ec25df16d2cbbd5b550539fcc373a5ffc8a2882c99f4ff5ab8fb572a427934",
+      "verifiedZipBytes": 144929,
+      "verifiedFileCount": 9,
+      "digestMatchesHostedArtifactAndLog": true
+    },
+    "canonicalRunCompleted": true,
+    "incrementalOptInLabelRemoved": true,
+    "timingRerunsPerformed": false
+  },
+  "validation": {
+    "baselineNativeTestsPassed": 7,
+    "authoredNativeParityTestsPassed": 4,
+    "incrementalNativeClosureTestsPassed": 2,
+    "allFourBuildsAndNativeTestsBeforeTiming": true,
+    "allFourStaticWasmPreflightsBeforeTiming": true,
+    "nativeTransitionScope": [
+      "all 16 engine board writes",
+      "FEN initialization",
+      "two-ply make/unmake and whole-Position restore",
+      "legal generation and en-passant probe restore",
+      "captures",
+      "both en-passant colors including rejected pinned en-passant",
+      "both castling sides and both colors",
+      "every Q/R/B/N promotion for both colors, quiet and capture",
+      "turn-only change and restore; engine has no null-move pruning"
+    ],
+    "nativeTimingSeconds": {
+      "h4ClosureTest": 0.93,
+      "h8ClosureTest": 1.68
+    },
+    "productionWasmByteReproductionPassed": true
+  },
+  "interpretation": {
+    "finding": "Eager make/unmake accumulators reduce already-loaded evaluation cost but lower aggregate search throughput versus concurrent fused controls at both tested widths. This implementation is not an overall runtime improvement on the registered fixture set.",
+    "initialPosition16K": {
+      "h4FusedNpsChangePercent": -18.13,
+      "h4IncrementalNpsChangePercent": -18.79,
+      "h8FusedNpsChangePercent": -17.64,
+      "h8IncrementalNpsChangePercent": -12.93
+    },
+    "mechanismInference": "The direct evaluation loop omits FEN loading and move transitions. Incremental updates occur for all make/unmake operations, including legality probes, so cheaper repeated evaluation does not establish cheaper search. No profiling attributes the measured regression to a specific component.",
+    "limitations": [
+      "One CI runner, eight exposed authored positions and four paired repetitions; six of eight positions are endgames. No confidence intervals or independent device replication.",
+      "Fixed configuration order was preregistered; only candidate/baseline order alternates within each configuration. Mechanism-to-mechanism timing can retain drift despite concurrent controls.",
+      "Same-width fused and incremental searches have identical complete search signatures; candidate-versus-HCE search trajectories can differ. These are synthetic mechanism costs, not learned evaluator strength or Elo/time saturation.",
+      "Brotli sizes depend on synthetic weights. The extra research memory page does not satisfy the unchanged production memory cap.",
+      "This is a distinct study with concurrent fused controls. Earlier canonical run34919106656 remains separate; no best-result selection across runs.",
+      "One eager incremental implementation was tested. It does not reject all incremental, lazy, vectorized or larger-network designs."
+    ]
+  },
+  "memoryAndGlobals": {
+    "productionMemoryBytes": 26542080,
+    "allCandidateMemoryBytes": 26607616,
+    "additionalResearchBytes": 65536,
+    "productionCapChanged": false,
+    "positionBytes": {
+      "fused": 74,
+      "h4Incremental": 108,
+      "h8Incremental": 140
+    },
+    "positionGrowthBytes": {
+      "h4": 34,
+      "h8": 66
+    },
+    "accumulatorPayloadBytes": {
+      "h4": 32,
+      "h8": 64
+    },
+    "undoBytesAllConfigurations": 10,
+    "additionalMutableGlobalCache": false,
+    "existingState": "Cached arrays are contained in Position, including the existing ROOT_POSITION global and Position copies. Existing search context, transposition table, history and PV globals are unchanged. Stack high-water use was not measured."
+  },
+  "rawVerification": {
+    "status": "PASS",
+    "rawReportSha256": "db861d548a7103f55de1c091b3dd9980e6f93cb0c006bd22799446438ad18c64",
+    "contractSha256": "d000ded443f487258a6932411e07cff95ba3b27ece17c6626b6db7173eeb06c5",
+    "baseline": {
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+      "rawBytes": 37172,
+      "memoryBytes": 26542080,
+      "brotliBytes": 17690,
+      "memoryLimits": {
+        "minimumPages": 405,
+        "maximumPages": 405
+      }
+    },
+    "benchmarkRuntime": {
+      "node": "22.23.2",
+      "v8": "12.4.254.21-node.56",
+      "brotli": "1.1.0"
+    },
+    "verificationRuntime": {
+      "node": "24.19.0",
+      "v8": "13.6.233.17-node.51",
+      "brotli": "1.2.0"
+    },
+    "timingRerunsPerformed": false,
+    "maximumAggregateDifference": 0,
+    "verifiedEvaluationChecksums": 256,
+    "verifiedStaticParityCases": 80,
+    "verifiedRawRecords": 768,
+    "inventory": [
+      {
+        "path": "complete-study.json",
+        "bytes": 398679,
+        "sha256": "db861d548a7103f55de1c091b3dd9980e6f93cb0c006bd22799446438ad18c64"
+      },
+      {
+        "path": "h4-fused-source.json",
+        "bytes": 3954,
+        "sha256": "61ac1b1c71d9eb15134904ef12061d3e2444aa246806d1735addfaf2e7fc9d15"
+      },
+      {
+        "path": "h4-fused.wasm",
+        "bytes": 44053,
+        "sha256": "df54815f85dbfd65e599e3a66d9b8d503155bf7d4a175f23ab728174964b6277"
+      },
+      {
+        "path": "h4-incremental-source.json",
+        "bytes": 3962,
+        "sha256": "836622a88cebfc398362bae8ddaddc4f4c1c0db99d091e2707afeb5b89ed3fb0"
+      },
+      {
+        "path": "h4-incremental.wasm",
+        "bytes": 45704,
+        "sha256": "d066843da84e051e0052c919796acfd6e0773d2534248b6f3306c286233dd7dd"
+      },
+      {
+        "path": "h8-fused-source.json",
+        "bytes": 3955,
+        "sha256": "65033197c940456c1854e2553dde9aab5404f72e1fd4e34ac3f9ea413d544ffe"
+      },
+      {
+        "path": "h8-fused.wasm",
+        "bytes": 50731,
+        "sha256": "f1e8f2a6f380f2f5222ef1fbe0f6fdd779a641514c2d1a49b34c73ad7d68838e"
+      },
+      {
+        "path": "h8-incremental-source.json",
+        "bytes": 3963,
+        "sha256": "814ef5e41fdc5e89805ab7e86ac0544954fe49483a8e5e5a220e350ef566e294"
+      },
+      {
+        "path": "h8-incremental.wasm",
+        "bytes": 59672,
+        "sha256": "b506676961e78dd30697ba80233b0c026c2b60ed4d1210ed0ad1c98652d2a678"
+      }
+    ],
+    "crossMechanism": [
+      {
+        "hidden": 4,
+        "identicalSearchResults": 64,
+        "positionGrowthBytes": 34,
+        "undoGrowthBytes": 0
+      },
+      {
+        "hidden": 8,
+        "identicalSearchResults": 64,
+        "positionGrowthBytes": 66,
+        "undoGrowthBytes": 0
+      }
+    ],
+    "results": [
+      {
+        "hidden": 4,
+        "implementation": "fused",
+        "sourceReceiptSha256": "61ac1b1c71d9eb15134904ef12061d3e2444aa246806d1735addfaf2e7fc9d15",
+        "module": {
+          "sha256": "df54815f85dbfd65e599e3a66d9b8d503155bf7d4a175f23ab728174964b6277",
+          "rawBytes": 44053,
+          "brotliBytes": 22935,
+          "memoryBytes": 26607616
+        },
+        "moduleGrowthBytes": {
+          "raw": 6881,
+          "brotli": 5245
+        },
+        "layout": {
+          "positionBytes": 74,
+          "undoBytes": 10,
+          "accumulatorPayloadBytes": 0
+        },
+        "parameterCount": 3094,
+        "parameterBytes": 6200,
+        "syntheticParametersSha256": "63431955cf527545aea1d8cd91ae68fa9c25c0748b3d9ed5af528d3c13a69c5c",
+        "ratios": {
+          "evaluation": {
+            "pairedMedianTimeRatio": 1.440085670363421,
+            "pairs": 32
+          },
+          "search4096": {
+            "pairedMedianTimeRatio": 1.0653936802074222,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.9386261162865595,
+            "bothConsumedNodeBudget": 32
+          },
+          "search16384": {
+            "pairedMedianTimeRatio": 1.055846211136645,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.9471082353378003,
+            "bothConsumedNodeBudget": 32
+          }
+        },
+        "perPosition": [
+          {
+            "position": 0,
+            "label": "Initial position",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.4459697849628492,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.120505329033454,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8924564150043137,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.2214061319830547,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8187293757312892,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 1,
+            "label": "Kiwipete",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.3969198303902162,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1441768695135477,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8743204222203041,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0846290799716916,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9219741901489491,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 2,
+            "label": "Lucena rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.4731437995310848,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0448917542431855,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9570374843855933,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0389284489067825,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9625802885195303,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 3,
+            "label": "Minor-piece ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.429988231444756,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0466655350663383,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9554165894849371,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0469525077590665,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9551534540303928,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 4,
+            "label": "Promotion race",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.4329825177757107,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0449594822301151,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9569788829575392,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 0.9526838239178126,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 1.0496682024660808,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 5,
+            "label": "Pawn ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.4453016794952909,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0502893447175352,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9522518136922231,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0745885923060108,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9305907974448981,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 6,
+            "label": "Free rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.4325763645248062,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0776069726203885,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9279836308842121,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0570630452064491,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9460242899517362,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 7,
+            "label": "Boxed rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.4873624779303678,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0764448988994761,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9292364538458874,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.055846211136645,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9471082353378003,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          }
+        ],
+        "checks": {
+          "memoryLimits": {
+            "minimumPages": 406,
+            "maximumPages": 406
+          },
+          "abiVersion": 2,
+          "sourceFiles": 8,
+          "implementationDependencies": 7,
+          "emittedSourceFilesRegenerated": 8,
+          "staticParityCases": 20,
+          "evaluationChecksums": 64,
+          "rawRecords": 192
+        }
+      },
+      {
+        "hidden": 4,
+        "implementation": "incremental",
+        "sourceReceiptSha256": "836622a88cebfc398362bae8ddaddc4f4c1c0db99d091e2707afeb5b89ed3fb0",
+        "module": {
+          "sha256": "d066843da84e051e0052c919796acfd6e0773d2534248b6f3306c286233dd7dd",
+          "rawBytes": 45704,
+          "brotliBytes": 23029,
+          "memoryBytes": 26607616
+        },
+        "moduleGrowthBytes": {
+          "raw": 8532,
+          "brotli": 5339
+        },
+        "layout": {
+          "positionBytes": 108,
+          "undoBytes": 10,
+          "accumulatorPayloadBytes": 32,
+          "positionGrowthBytes": 34
+        },
+        "parameterCount": 3094,
+        "parameterBytes": 6200,
+        "syntheticParametersSha256": "63431955cf527545aea1d8cd91ae68fa9c25c0748b3d9ed5af528d3c13a69c5c",
+        "ratios": {
+          "evaluation": {
+            "pairedMedianTimeRatio": 1.1020721716519777,
+            "pairs": 32
+          },
+          "search4096": {
+            "pairedMedianTimeRatio": 1.1508173902751704,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.8689592921307955,
+            "bothConsumedNodeBudget": 32
+          },
+          "search16384": {
+            "pairedMedianTimeRatio": 1.1313067080511816,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.8839388566899282,
+            "bothConsumedNodeBudget": 32
+          }
+        },
+        "perPosition": [
+          {
+            "position": 0,
+            "label": "Initial position",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.0245424019091314,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1507277468921122,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8690274893080889,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.2314090909758508,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8120784598390802,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 1,
+            "label": "Kiwipete",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.0487158343891119,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.2015266031197303,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8322808572297309,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0965619484769367,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9119463208234613,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 2,
+            "label": "Lucena rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1159122035918725,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1635951083970282,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8594062373482381,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1668630335765704,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8570056467440672,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 3,
+            "label": "Minor-piece ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.0904986042359917,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1266612885575036,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8876035308523269,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1198966977643976,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8929652494182267,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 4,
+            "label": "Promotion race",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1486205676821744,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1008074048277248,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9084758178620636,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0425418459492015,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9591941120822534,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 5,
+            "label": "Pawn ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1554049230842294,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1364428699764133,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8800088669831498,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1470722675534142,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8717902164594391,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 6,
+            "label": "Free rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1127342164193017,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.172398224247912,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8529832326700467,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1065872083496255,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9036811998431595,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 7,
+            "label": "Boxed rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.0949883582495479,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1313325666275968,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8839555896568725,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1488818276500403,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8704160583416014,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          }
+        ],
+        "checks": {
+          "memoryLimits": {
+            "minimumPages": 406,
+            "maximumPages": 406
+          },
+          "abiVersion": 2,
+          "sourceFiles": 8,
+          "implementationDependencies": 7,
+          "emittedSourceFilesRegenerated": 8,
+          "staticParityCases": 20,
+          "evaluationChecksums": 64,
+          "rawRecords": 192
+        }
+      },
+      {
+        "hidden": 8,
+        "implementation": "fused",
+        "sourceReceiptSha256": "65033197c940456c1854e2553dde9aab5404f72e1fd4e34ac3f9ea413d544ffe",
+        "module": {
+          "sha256": "f1e8f2a6f380f2f5222ef1fbe0f6fdd779a641514c2d1a49b34c73ad7d68838e",
+          "rawBytes": 50731,
+          "brotliBytes": 27819,
+          "memoryBytes": 26607616
+        },
+        "moduleGrowthBytes": {
+          "raw": 13559,
+          "brotli": 10129
+        },
+        "layout": {
+          "positionBytes": 74,
+          "undoBytes": 10,
+          "accumulatorPayloadBytes": 0
+        },
+        "parameterCount": 6186,
+        "parameterBytes": 12392,
+        "syntheticParametersSha256": "0849a2fe7e02d83683e18e9a1f6edaf5bcfa51bd431ca92a4bbac17324149c45",
+        "ratios": {
+          "evaluation": {
+            "pairedMedianTimeRatio": 1.7377563796998199,
+            "pairs": 32
+          },
+          "search4096": {
+            "pairedMedianTimeRatio": 1.1508037294067213,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.8689663121264204,
+            "bothConsumedNodeBudget": 32
+          },
+          "search16384": {
+            "pairedMedianTimeRatio": 1.1010877527325071,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.9082337257709254,
+            "bothConsumedNodeBudget": 32
+          }
+        },
+        "perPosition": [
+          {
+            "position": 0,
+            "label": "Initial position",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.7594130230429617,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1999282140409475,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8333848325009646,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.2142452521950082,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8235601957286949,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 1,
+            "label": "Kiwipete",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.718221156108195,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.3310060748411598,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.7513120698762359,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.2317812735019436,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8118349188184761,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 2,
+            "label": "Lucena rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.765753370748808,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.162509664397366,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8602499436141224,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 0.9602615344761605,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 1.0413843070957594,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 3,
+            "label": "Minor-piece ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.6784072885578358,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 0.9717449553806419,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 1.0290925436498923,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0097408059932613,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9903551209104171,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 4,
+            "label": "Promotion race",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.702768894402886,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.02777852049608,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9729728793637649,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0253622581808655,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9752850353689753,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 5,
+            "label": "Pawn ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.766768808964283,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0562808831483914,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9467200335671293,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0850606345916813,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9216402355627338,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 6,
+            "label": "Free rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.6660854252804445,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.117498091518701,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8949005980374303,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1145351758890776,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8972389740727417,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 7,
+            "label": "Boxed rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.7519597290156947,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1889585732473087,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8410757522791668,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1168474986461685,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8953805099003249,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          }
+        ],
+        "checks": {
+          "memoryLimits": {
+            "minimumPages": 406,
+            "maximumPages": 406
+          },
+          "abiVersion": 2,
+          "sourceFiles": 8,
+          "implementationDependencies": 7,
+          "emittedSourceFilesRegenerated": 8,
+          "staticParityCases": 20,
+          "evaluationChecksums": 64,
+          "rawRecords": 192
+        }
+      },
+      {
+        "hidden": 8,
+        "implementation": "incremental",
+        "sourceReceiptSha256": "814ef5e41fdc5e89805ab7e86ac0544954fe49483a8e5e5a220e350ef566e294",
+        "module": {
+          "sha256": "b506676961e78dd30697ba80233b0c026c2b60ed4d1210ed0ad1c98652d2a678",
+          "rawBytes": 59672,
+          "brotliBytes": 28637,
+          "memoryBytes": 26607616
+        },
+        "moduleGrowthBytes": {
+          "raw": 22500,
+          "brotli": 10947
+        },
+        "layout": {
+          "positionBytes": 140,
+          "undoBytes": 10,
+          "accumulatorPayloadBytes": 64,
+          "positionGrowthBytes": 66
+        },
+        "parameterCount": 6186,
+        "parameterBytes": 12392,
+        "syntheticParametersSha256": "0849a2fe7e02d83683e18e9a1f6edaf5bcfa51bd431ca92a4bbac17324149c45",
+        "ratios": {
+          "evaluation": {
+            "pairedMedianTimeRatio": 1.1398777874395156,
+            "pairs": 32
+          },
+          "search4096": {
+            "pairedMedianTimeRatio": 1.2520273184897706,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.798705239913527,
+            "bothConsumedNodeBudget": 32
+          },
+          "search16384": {
+            "pairedMedianTimeRatio": 1.172529570817999,
+            "pairs": 32,
+            "pairedMedianNpsRatio": 0.8528652569003605,
+            "bothConsumedNodeBudget": 32
+          }
+        },
+        "perPosition": [
+          {
+            "position": 0,
+            "label": "Initial position",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.0747723548125652,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1638689158857627,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.85920358470416,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1484840265900176,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8707147845645093,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 1,
+            "label": "Kiwipete",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.0737598267162087,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.301783191305868,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.7681773650192054,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.2029100798853984,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8313196318593439,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 2,
+            "label": "Lucena rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1522400677254705,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.3456623466106006,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.7431420679842644,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0846661230218633,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9219427295410493,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 3,
+            "label": "Minor-piece ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1315077766623203,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.0246531271912032,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9759406467334961,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.0878006807327636,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.9193095595952585,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 4,
+            "label": "Promotion race",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.2194678025457513,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1563040790328558,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8648280867230933,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1551812440393916,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.865665207029289,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 5,
+            "label": "Pawn ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1815570595243368,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.1298187018152246,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8851036252938275,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1785539174514048,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8485008756737169,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 6,
+            "label": "Free rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.134976488412799,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.2661061407258536,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.7899061306683073,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.1949978141331246,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8368226860785304,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          },
+          {
+            "position": 7,
+            "label": "Boxed rook ending",
+            "ratios": {
+              "evaluation": {
+                "pairedMedianTimeRatio": 1.1493354699427192,
+                "pairs": 4
+              },
+              "search4096": {
+                "pairedMedianTimeRatio": 1.3055726949655075,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.766398601206967,
+                "bothConsumedNodeBudget": 4
+              },
+              "search16384": {
+                "pairedMedianTimeRatio": 1.244246035141659,
+                "pairs": 4,
+                "pairedMedianNpsRatio": 0.8037001306192479,
+                "bothConsumedNodeBudget": 4
+              }
+            }
+          }
+        ],
+        "checks": {
+          "memoryLimits": {
+            "minimumPages": 406,
+            "maximumPages": 406
+          },
+          "abiVersion": 2,
+          "sourceFiles": 8,
+          "implementationDependencies": 7,
+          "emittedSourceFilesRegenerated": 8,
+          "staticParityCases": 20,
+          "evaluationChecksums": 64,
+          "rawRecords": 192
+        }
+      }
+    ]
+  }
+}

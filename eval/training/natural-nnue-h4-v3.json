@@ -1,0 +1,146 @@
+{
+  "schema": "chessy.natural-nnue-h4-preregistration.v3",
+  "id": "natural-nnue-phase-capacity-schedule-2026-09-v3",
+  "researchBase": "08df91b8f026bdec238b66fe8f74d0d767bc05f8",
+  "researchOnly": true,
+  "productionFitAllowed": false,
+  "hypothesis": "Tapered learned MG/EG correction heads and normalized endgame-weighted training can remove the observed endgame regression; fixed H4/H8 and 300/900/1800 epoch ablations measure bounded returns from capacity and training budget.",
+  "data": {
+    "admission": "Reuse h4_data.authenticate and all exact v1 audit pins/53-file closure, without altering the v1 contract or evidence. Same retained bytes and original role identities.",
+    "sharedTrainRows": 33103,
+    "nnueValidationRows": 2374,
+    "nnueTestRows": 2331,
+    "innerSplit": "sha256(UTF8('chessy-h4-v2-inner-20260915') + one NUL byte 0x00 + UTF8(positionFamily)); integer first16 hex modulo5 ==0 is inner-validation; other families inner-training. Existing one-row-per-source-game admission and explicit group-disjoint assertions apply. Reused unchanged for paired v2-control/v3 ablations; no fresh-holdout claim.",
+    "innerCaveat": "New v3 fits do not train on inner-validation labels, but v2 used these labels for checkpoint/recipe selection. These rows were also prior v1 training data and expanded-HCE fit data. This is reused development selection; expanded-HCE inner CE is in-sample, not independent.",
+    "outerCaveat": "NNUE validation was exposed by v1 and v2; v3 decodes it once after one final model freeze, for exploratory transfer only. No fresh confirmatory claim.",
+    "newLabelsAllowed": false,
+    "forbiddenPerformanceRoles": [
+      "hce-validation",
+      "hce-test"
+    ]
+  },
+  "configurations": [
+    {
+      "id": "h4-single-e300",
+      "hidden": 4,
+      "mode": "residual-shipped-hce",
+      "l2": 0.01,
+      "epochs": 300,
+      "endgameWeight": 1,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h4-phase-e300",
+      "hidden": 4,
+      "mode": "phase-residual-shipped-hce",
+      "l2": 0.01,
+      "epochs": 300,
+      "endgameWeight": 1,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h4-phase-e900",
+      "hidden": 4,
+      "mode": "phase-residual-shipped-hce",
+      "l2": 0.01,
+      "epochs": 900,
+      "endgameWeight": 1,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h4-phase-e900-eg2",
+      "hidden": 4,
+      "mode": "phase-residual-shipped-hce",
+      "l2": 0.01,
+      "epochs": 900,
+      "endgameWeight": 2,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h8-phase-e900-eg2",
+      "hidden": 8,
+      "mode": "phase-residual-shipped-hce",
+      "l2": 0.01,
+      "epochs": 900,
+      "endgameWeight": 2,
+      "eligibleForTest": true
+    },
+    {
+      "id": "h8-phase-e1800-eg2",
+      "hidden": 8,
+      "mode": "phase-residual-shipped-hce",
+      "l2": 0.01,
+      "epochs": 1800,
+      "endgameWeight": 2,
+      "eligibleForTest": true
+    }
+  ],
+  "training": {
+    "seeds": [
+      10511,
+      10512,
+      10513
+    ],
+    "epochs": "per configuration:300,900,1800",
+    "batchSize": 512,
+    "optimizer": "Adam; beta1=.9,beta2=.999,epsilon=1e-8; analytic float64 gradients; deterministic per-seed minibatch permutation; no optimizer restarts",
+    "learningRate": 0.003,
+    "minimumLearningRate": 0.00015,
+    "schedule": "Cosine stretched to each registered configuration epoch budget; refit uses prefix of that exact schedule. The budget ablation changes both duration and learning-rate schedule; not a continuation experiment.",
+    "gradientClipNorm": 2.0,
+    "loss": "Normalized weighted-mean BCEWithLogits(predicted_white_cp/100,teacher.targetWhite), row weight=endgameWeight for admitted coarse endgame rows and1 otherwise, plus .5*lambda*sum((params-anchor)^2). Each minibatch divides by its own positive weight sum.",
+    "anchor": "Shared first-layer anchor and zero output heads/biases, same v2 W1/b1 initialization. For phase model, MG and EG heads independently regularized; no hidden prior fit.",
+    "baseline": "Frozen shipped integer HCE + one rounded residual; phase heads interpolate before rounding. Control uses unchanged v2 implementation.",
+    "projection": "after each update W1,b1 in[-1.9,1.9]; W2 in[-4,4]; b2 in[-2,2]",
+    "quantizationAwareStartEpoch": "floor(2*configuration.epochs/3)+1",
+    "quantizationAwareMethod": "Same v2 parameter STE on both learned phase heads; one final tapered-cp rounding omitted only from differentiable objective.",
+    "checkpointEveryEpochs": 10,
+    "checkpointEligibility": "Checkpoint every10 epochs; only after QAT starts. Min exact quantized unweighted inner CE; ties earlier epoch.",
+    "threads": 1,
+    "maximumFits": 19,
+    "maximumElapsedTrainingSeconds": 3600,
+    "paidBudgetUsd": 30,
+    "paidSpendPlannedUsd": 0,
+    "retryPolicy": "Canonical no-replace run marker before role decoding. No score-driven changes/retries; fatal errors preserve evidence and stop. Synthetic fixes before real execution permitted."
+  },
+  "selection": {
+    "recipe": "Validate all6 configurations x3 seeds complete and finite; any recorded parity/quantization/range reason stops entire selection. For each recipe median-CE representative must have >=100 rows per inner phase and <=1.01x phase CE vs shipped HCE only. Among these choose lowest median inner CE, exact ties listed order. H4 and H8 both eligible; no adaptation after outcomes.",
+    "representativeSeed": "Median of3 best quantized unweighted inner CEs; seed numeric tie-break; not luckiest seed.",
+    "refit": "Exactly1 fresh full-shared-train fit of frozen recipe/median seed; epochs median selected epoch across3 seeds; same schedule prefix and QAT start from recipe full budget, retain final epoch.",
+    "freezeBeforeOuter": "Publish no-replace recipe/seed/epochs decision and final model digest before decoding NNUE-validation. One outer candidate, no reselection; separate test command stays disabled unless full outer guards pass.",
+    "qualityGuards": "Reuse v1 guard against BOTH frozen comparators: >=0.5% relative CE gain; MAE/RMSE<=1.02x, p99<=1.05x; each phase>=100 rows and CE<=1.01x.",
+    "noEligibleCandidate": "Publish complete failure/selection report; no outer or test decoding, runtime, data growth, matches or level changes.",
+    "saturation": "Report matched median-best-CE relative improvements: phase300 vs single300, H4phase900 vs300, EG2 vs1, H8vsH4 at900EG2, H8EG2 1800vs900. A positive gain<0.1% is small within this finite grid; report seed ranges and checkpoints. No universal convergence or saturation claim. The phase-vs-single comparison changes architecture and effective output regularization: identical duplicated heads receive twice the single-head sum-L2 output penalty. It does not isolate phase dependence alone.",
+    "innerComparatorRationale": "Expanded HCE was fitted on current inner-validation labels and therefore has an in-sample advantage; it is reported but cannot veto inner phase eligibility. Both frozen comparators remain mandatory on exposed outer validation and sealed test with unchanged thresholds. This rule is fixed before any v3 measurements."
+  },
+  "quantization": {
+    "q1": 16384,
+    "q2": 4096,
+    "cpScale": 400,
+    "weights": "int16 little-endian; biases int32; exact theoretical int32 accumulator/int64 output proofs for<=32pieces",
+    "rounding": "phase=min(24,N+B+2R+4Q) both colors; numerator=phase*MG+(24-phase)*EG; floor((numerator*400+24*Q1*Q2/2)/(24*Q1*Q2)), then white sign and shipped integer baseline. Control retains v2 rounding.",
+    "h4ParameterBytes": 6200,
+    "h8ParameterBytes": 12392,
+    "advancementParameterBudgetBytes": 13000,
+    "maximumAbsFloatDifferenceCp": 5,
+    "maximumMeanAbsFloatDifferenceCp": 1,
+    "crossLanguageIntegerMismatchesAllowed": 0,
+    "maximumAbsoluteScoreCp": 10000,
+    "checks": "Every chosen development checkpoint: train,inner-validation,authored FENs; final:shared-train,authored,outer. Independent JS scalar BigInt oracle recomputes material phase from FEN. Any numerical failure before selection rejects entire screen.",
+    "sizeCaveat": "13KB permits offline H8 experiment only, not production WASM allowance or integration authority."
+  },
+  "test": {
+    "openOnce": true,
+    "condition": "Separate --open-test-from command after one frozen candidate passes outer and all prior checks, preserving same v1 quality and bootstrap guards; the screen itself never decodes test.",
+    "marker": "Dataset-summary SHA and nnue-test role scoped no-replace registry, independent of contract identity. Refuse if any restored legacy .research-state/*/test-opened.json marker exists. Contract change or renamed output cannot reopen this dataset.",
+    "failure": "Never change candidate after test. Fatal errors consume opening and preserve evidence; no retry."
+  },
+  "scope": {
+    "runtimeIntegrationAllowed": false,
+    "deviceGate": "#84 remains required before runtime integration; reference timing is not device/search timing",
+    "formalStrengthAllowed": false,
+    "formalAcceptance": "#175 remains unfinished; no Elo or family-estimator acceptance inferred from offline loss",
+    "levelRecalibrationAllowed": false,
+    "publication": "Only code, exact contract, weight-free reports and source research enter Git. Checkpoints/state remain separately preserved; no automatic new license for derived weights."
+  }
+}
