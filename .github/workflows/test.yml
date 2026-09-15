@@ -180,6 +180,24 @@ jobs:
           fi
           node test/release-gate.js \
             --changes-base "$changes_base" --token-base "$token_base" --head HEAD
+          # The base supplies verifier code; a candidate cannot authorize its
+          # own new signatures merely by introducing an evidence file.
+          if git cat-file -e "$token_base:test/engine-signatures-v2.js" 2>/dev/null; then
+            signature_verifier="$RUNNER_TEMP/trusted-signature-verifier"
+            mkdir "$signature_verifier"
+            git archive "$token_base" \
+              test/engine-signatures-v2.js test/gen-wasm-signatures.js \
+              test/fixtures/wasm-r69-signatures.json \
+              experiments/wasm/bench.js experiments/wasm/build.sh \
+              experiments/wasm/Cargo.toml experiments/wasm/Cargo.lock \
+              experiments/wasm/rust-toolchain.toml \
+              assets/engine.js assets/wasm-engine.js | tar -x -C "$signature_verifier"
+            node "$signature_verifier/test/engine-signatures-v2.js" verify \
+              "$PWD" "$(git rev-parse "$token_base")"
+          else
+            # Bootstrap only: the first mechanism PR must retain legacy r69.
+            node test/engine-signatures-v2.js verify "$PWD"
+          fi
 
   engine:
     runs-on: ubuntu-latest
@@ -286,7 +304,11 @@ jobs:
       - name: Enforce the production WASM download-size ratchet
         run: node test/wasm-size.test.js
       - name: Verify frozen pre-removal WASM behavior
+        env:
+          CHESSY_SIGNATURE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: node test/wasm-signatures.test.js
+      - name: Validate governed engine-signature mechanism
+        run: node test/engine-signatures-v2.test.js
       - name: Verify recalibrated difficulty presets
         run: node test/level-presets.test.js
       - name: Run fixed-node AI tactics tests
