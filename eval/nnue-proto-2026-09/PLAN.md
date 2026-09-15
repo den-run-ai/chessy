@@ -146,3 +146,17 @@ budget means shallow-search distillation beats the hand-crafted evaluator
 it was distilled from and is the path to pursue with a stronger shallow
 teacher; otherwise the prototype's negative result stands for this family.
 D2 is executed after the equal-time stage so it cannot disturb timing.
+
+## Addendum C — depth-trend diagnostic, registered after the H128 results
+
+Observed before writing this addendum: H128 58.6% at 10,000 nodes and
+52.7% at 36,000 nodes; H64 52.6% and 51.5%. The nets' edge shrinks with
+depth, and the product's Hard/Master levels search far deeper than either
+screen budget.
+
+D3: H128 (net-only) versus the shipped HCE at the Hard profile's 230,000
+nodes per move on the first 146 openings of the dev bank, both colours
+(292 games), three concurrent workers, executed after D2 (or its skip) so
+it cannot disturb the equal-time timings. It is reported as a trend point
+with its own interval; it is not a product-budget certification, and the
+5-second Master budget remains unmeasured here.
