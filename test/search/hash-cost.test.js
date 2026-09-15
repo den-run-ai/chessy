@@ -17,3 +17,30 @@ try {
   assert.throws(()=>H.prepare(path.join(root,'forbidden-research-output')),/outside/);
   console.log('hash source isolation, unchanged engine/eval, anchored searched edges and exact snapshot hashes PASS');
 } finally {fs.rmSync(tmp,{recursive:true,force:true});}
+
+// Exercise failure capture with synthetic observations; this does not search.
+(async()=>{
+  const B=require('../../tools/search/hash-bench'),Bench=require('../../experiments/wasm/bench');
+  const original=Bench.loadOrdinaryWasmBytes,dir=fs.mkdtempSync(path.join(os.tmpdir(),'hash-bench-test-'));
+  try {
+    fs.mkdirSync(path.join(dir,'candidate/dist'),{recursive:true});
+    const base=path.join(dir,'base.wasm'),candidate=path.join(dir,'candidate/dist/candidate.wasm');
+    fs.writeFileSync(base,'base');fs.writeFileSync(candidate,'candidate');
+    fs.writeFileSync(path.join(dir,'candidate/source.json'),'{}');
+    for(const failure of ['signature','timing']){
+      let loaded=0;
+      Bench.loadOrdinaryWasmBytes=async()=>{const engine=loaded++;return {search:()=>({
+        abiVersion:2,move:123,score:failure==='signature'?engine:0,depth:1,attemptedDepth:2,
+        nodes:1,qnodes:0,cutoffs:0,researches:0,stopReason:'node-limit',ms:failure==='timing'?NaN:1
+      })};};
+      const plan=path.join(dir,failure+'.plan.json'),out=path.join(dir,failure+'.json');
+      B.register(plan,'fixed',[base,candidate]);
+      await assert.rejects(B.run(plan,out),failure==='signature'?/signature diverged/:/invalid timing/);
+      assert.equal(fs.existsSync(out),false);
+      const saved=JSON.parse(fs.readFileSync(out+'.failure.json'));
+      assert.equal(saved.rows.length,failure==='signature'?2:1);
+      if(failure==='signature')assert.equal(saved.rows[1].score,1);else assert.equal(saved.rows[0].ms,null);
+    }
+    console.log('hash benchmark retains first divergent and invalid timing observations PASS (synthetic; no search)');
+  } finally {Bench.loadOrdinaryWasmBytes=original;fs.rmSync(dir,{recursive:true,force:true});}
+})().catch(error=>{console.error(error);process.exitCode=1;});
