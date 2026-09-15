@@ -17,7 +17,10 @@ mkdir -p "$OUT"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT"
 
-BIN=$NETS/h$H.bin
+# The weight file defaults to the width's main net; CHESSY_NNUE_BIN_PATH
+# selects a differently trained net of the same width (e.g. the D1 student).
+BIN=${CHESSY_NNUE_BIN_PATH:-$NETS/h$H.bin}
+GOLDENS=${BIN%.bin}.goldens.txt
 WASM=$NETS/$TAG.wasm
 # Weights (2*771*H + 16 bytes) plus the accumulator stack (130*2*H*2 bytes)
 # do not fit the production 405-page module; add whole pages plus one spare.
@@ -25,11 +28,11 @@ PAGES=$((405 + (2062 * H + 65535) / 65536 + 1))
 
 tools/nnue/build-candidate.sh "$BIN" "$H" "$PAGES" "$WASM" "$FEATURES" > "$OUT/$TAG-build.log" 2>&1
 echo "pages=$PAGES bytes=$(wc -c < "$WASM") brotli=$(node -e "const z=require('zlib');process.stdout.write(String(z.brotliCompressSync(require('fs').readFileSync('$WASM'),{params:{[z.constants.BROTLI_PARAM_QUALITY]:11}}).length))")" > "$OUT/$TAG-size.txt"
-(cd experiments/wasm && CHESSY_NNUE_BIN="$BIN" CHESSY_NNUE_HIDDEN="$H" CHESSY_NNUE_GOLDENS="$NETS/h$H.goldens.txt" \
+(cd experiments/wasm && CHESSY_NNUE_BIN="$BIN" CHESSY_NNUE_HIDDEN="$H" CHESSY_NNUE_GOLDENS="$GOLDENS" \
   cargo test --locked --offline --features "$FEATURES") > "$OUT/$TAG-cargo-test.log" 2>&1
 grep -E "test result" "$OUT/$TAG-cargo-test.log"
 if [ "$FEATURES" = nnue ]; then
-  node tools/nnue/check-goldens-wasm.js --wasm "$WASM" --goldens "$NETS/h$H.goldens.txt" > "$OUT/$TAG-wasm-goldens.json"
+  node tools/nnue/check-goldens-wasm.js --wasm "$WASM" --goldens "$GOLDENS" > "$OUT/$TAG-wasm-goldens.json"
 fi
 node tools/nnue/mate-conversion.js --module "$WASM" --nodes 36000 > "$OUT/$TAG-mate.json" 2> /dev/null
 for N in 10000 36000; do
