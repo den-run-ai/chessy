@@ -1,0 +1,56 @@
+{
+  "schema": "chessy.hybrid-eval-counts.registration.v1",
+  "sourceSha256": "98315672324d2643e468d925b7e153167b8b869ac570685fbf827444fb69a57a",
+  "observerSha256": "80531e1269e80e4de6afaf67de1cbdc67c7826c368c53dab41061e119b791292",
+  "originalSha256": "18c69302d9aaecc0078a5b398e68789f24adb66e525c99f8bc9ac9ddc60e9493",
+  "node": "v24.19.0",
+  "versions": {
+    "node": "24.19.0",
+    "acorn": "8.17.0",
+    "ada": "3.4.4",
+    "amaro": "1.1.10",
+    "ares": "1.34.6",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "137",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.69.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.7",
+    "simdjson": "4.6.4",
+    "simdutf": "6.4.0",
+    "sqlite": "3.53.3",
+    "tz": "2026b",
+    "undici": "7.29.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "13.6.233.17-node.51",
+    "zlib": "1.3.2.1-motley-3246f1b",
+    "zstd": "1.5.7"
+  },
+  "dependencies": [
+    {
+      "path": "tools/training/hybrid-eval-counts.js",
+      "sha256": "42aa8eddbca4d1597710de4f971339d4f0523ae7f6f1c213468b51072f157aff"
+    },
+    {
+      "path": "tools/training/hybrid-eval-counts.rs.in",
+      "sha256": "7f135dd33e702c46130835050e9abf6853c35cbaaecb65c1213f2ce962dd9467"
+    },
+    {
+      "path": "assets/wasm-engine.js",
+      "sha256": "50b403038be4dfcde8f524d4c398088b9947066ea61846d0120bba1e0cd97cdc"
+    },
+    {
+      "path": "eval/hybrid-eval-counts-v1/PLAN.md",
+      "sha256": "df899d332483f90adb97be6ce3459ad62c667dc133eb69546a491ec5f9ca970a"
+    }
+  ]
+}

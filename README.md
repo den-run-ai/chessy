@@ -273,7 +273,13 @@ runs used 100; it cannot isolate a causal time-budget effect. Equal-node parity
 is consistent with a runtime contribution to the original deficit, but does not
 establish a playing-strength benefit from lower teacher loss. Evaluation/search
 interaction remains unresolved; inspect move ranking and phase transitions before
-new training. HCE remains shipped, with no formal strength or Elo claim.
+new training. The [retained tactical census](eval/training/hybrid-retained-tactical-results-2026-09.md)
+found no missed mate-in-one or avoidable immediate mating reply across all
+2,628 hybrid decisions;
+it does not exclude deeper tactical or phase errors. HCE remains shipped, with
+no formal strength or Elo claim.
+The separate [hybrid dispatch-count profile](eval/hybrid-eval-counts-v1/REPORT.md)
+records evaluation branch frequencies without claiming CPU time shares.
 These studies preserve the shipped evaluator and the separate admission gates.
 
 For historical reproduction, `test/ai-match.js` supports the archived

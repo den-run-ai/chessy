@@ -1,0 +1,15 @@
+{
+  "access": "Private complete retained evidence; no signed URLs committed.",
+  "bytes": 688780,
+  "contains": "Complete original census folder: read-only implementation/protocol, registration, started receipt, all retained rows, result, stderr and independent identity/aggregation audit; source match archive/registration/audit; report and original-path/hash index.",
+  "filename": "chessy-hybrid-tactical-census-evidence-2026-09-15.zip",
+  "independentAuditScope": "Identity, coverage, phases and retained-list arithmetic; did not repeat tactical enumeration or establish mate-list completeness.",
+  "independentAuditSha256": "875c322fa3e27ccc9497afa9ee904a15b1584600e68a773f514fa8e41d40bd1c",
+  "libraryFileId": "libfile_dc2bd2b9b7c8819181337b27746923fd",
+  "libraryVersion": 0,
+  "registrationSha256": "faf720ff2309c9e6569cc70aed692238becea87fcadd6866661bead0a779467d",
+  "retainedRowsSha256": "b2af28a647f6508f10af7e0cae559216ab6530250019b10b493c0ebdd9ee7d6d",
+  "schema": "chessy.hybrid-retained-tactical-evidence-preservation.v1",
+  "sha256": "7fbd03db377a7b7b8cd5f54e39cc6dcf44bbd06f452d233dd81989cb1c2c04dc",
+  "zipEntries": 14
+}

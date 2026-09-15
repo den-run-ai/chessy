@@ -65,3 +65,14 @@ Full exact sources, raw captured games, frozen modules, original model/runtime
 receipts, precursor evidence and original-path/hash mapping are preserved in the
 private evidence bundle referenced by the separate provenance receipt. No model
 bytes or large raw archive are committed to the public repository.
+
+The subsequent [one-move tactical census](hybrid-retained-tactical-results-2026-09.md)
+checked all 2,628 hybrid decisions and found no missed mate-in-one or avoidable
+immediate mating reply. It did not establish general move-ranking quality or
+phase-transition accuracy, so the evaluation/search explanation remains unresolved.
+
+The separately registered [dispatch-count profile](../hybrid-eval-counts-v1/REPORT.md)
+matched original search signatures on 24 hash-selected requests. It found 36.69%
+of evaluation calls at the expanded-HCE endpoint, 12.78% in the blend and 50.53%
+at the shipped-HCE-plus-H8 endpoint. These frequencies describe executed work;
+they are not CPU time shares or a measured speedup.
