@@ -82,7 +82,42 @@ shrink the sample after results or replace endpoints with repeats.
 | Profile | Nodes/move | Admission condition |
 | --- | ---: | --- |
 | `evaluator-easy` | 10,000 | Lower bound strictly greater than 50% |
-| `selective-hard` | 230,000 | Lower bound strictly greater than 49%, plus reviewed product-budget efficiency evidence |
+| `selective-hard` | 230,000 | Behavior-changing selective search only: lower bound strictly greater than 49%, plus reviewed product-budget efficiency evidence |
+
+### Pure search-cost improvements need a different admission policy
+
+The selective-search profile is **not a usable noninferiority gate for an
+exactly behavior-preserving optimization**. At the same fixed-node budget,
+identical play produces a 50% score in every color pair. The current bound
+then gives `50% - 1.912% = 48.088%`, which cannot exceed 49%. Its observed
+score must instead exceed approximately **50.912%** to pass. This threshold
+also makes it conservative for a behavior-changing search candidate whose
+true bank score is merely equal to the base.
+
+Consequently, campaign preflight now requires `changeClass: "evaluation-change"`
+for `evaluator-easy` or `changeClass: "selective-search-change"` for
+`selective-hard`. Missing, mismatched or `behavior-preserving-search-cost`
+classes are rejected before reservation or sampling. Trusted campaign review
+must verify the class; declaring it is not evidence of changed behavior.
+The selective profile remains available for search changes with credible
+**playing-strength gains as well as measured runtime benefit** in development.
+
+The unchanged bound would require at least 14,979 sampled endpoints for a
+50% mean to exceed the 49% lower-bound threshold. That exceeds this protocol's
+10,000-endpoint bank cap and is a theoretical limitation, **not authorization
+for a larger match**. No estimator, alpha, sample size, old-bank identity or
+already registered result is changed by this clarification. No formal sample
+has been drawn, and the registry remains empty.
+
+Admission of pure search-cost work stays open in #175/#84. A separately
+reviewed equivalence/runtime policy must establish what behavioral equivalence
+is claimed and how it is verified, plus product-budget and physical-device
+benefits. Passing a finite set of signatures or paired development games
+alone does not prove equivalence on every chess position. Until that policy
+exists, preserve such improvements as research and infrastructure rather than
+route them through the unsuitable selective profile. A tighter uncertainty
+method would need its own prospective mathematical review and feasibility
+assessment; none is introduced here to make a current candidate pass.
 
 Both profiles use depth ceiling 30, quiescence, exact repetition history and
 180 searched plies after the opening. Rules-terminal adjudication precedes
@@ -165,8 +200,10 @@ no example campaign with fabricated passing evidence is committed.
 finite-population exhaustive fixtures, independent Python arithmetic,
 uniform-sampler enumeration and adversarial bank/map/evidence/schedule
 mutations. It searches neither the historical holdout nor a fresh bank.
-The ordinary PR CI runs these checks. Existing v2 replay/grouping tests remain
-separate and unchanged.
+The ordinary PR CI runs these checks. The lightweight
+`node test/ai-match-formal-planning.test.js` separately verifies the threshold
+limitation and rejects unsupported campaign classes before engine/prerequisite
+work. Existing v2 replay/grouping tests remain separate and unchanged.
 
 Still outstanding before a formal dispatch: collect/admit the fresh bank,
 finish exposure/source provenance, freeze one development-qualified candidate,
