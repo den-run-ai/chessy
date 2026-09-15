@@ -293,6 +293,7 @@ jobs:
           node test/training/hybrid-match-v1.test.js
           node test/training/hybrid-runtime-fused.test.js
           node test/training/hybrid-runtime-lazy.test.js
+          node test/training/hybrid-eval-counts.test.js
           node test/training/hybrid-match-optimized-v1.test.js
           node test/training/hybrid-match-capture-v1.test.js
           node test/training/hybrid-match-recovery-v1.test.js
