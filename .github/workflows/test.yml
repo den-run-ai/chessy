@@ -334,6 +334,8 @@ jobs:
         run: node test/ai-match-family-map.test.js
       - name: Validate v2 registration, raw replay and complete-shard contracts
         run: node test/ai-match-v2.test.js
+      - name: Validate fresh finite-bank formal admission without holdout search
+        run: node test/ai-match-formal.test.js
       - name: Validate match protocol CLI and equal-time smoke
         run: node test/ai-match-cli.test.js
       - name: Run match cluster-statistics tests
