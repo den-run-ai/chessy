@@ -55,8 +55,8 @@ Paid compute: $0. The remaining $30 is untouched.
 ## Master configuration correction before execution
 
 An independent review identified that the shipped Master preset limits depth to
-30, whereas the initial research plan used the ABI ceiling111. Before Master
-registration or execution, its maximum depth is corrected to30 to match the
+30, whereas the initial research plan used the ABI ceiling of 111. Before Master
+registration or execution, its maximum depth is corrected to 30 to match the
 shipped preset. The completed fixed-node screen retains its originally registered
 111 ceiling; no fixed-node results are rerun or relabeled.
 
@@ -72,10 +72,33 @@ REPORT.md; this validation correction does not rerun or relabel those results.
 
 ## Retained implementation capture
 
-Fresh registrations use benchmark schema v2. A built-in-only bootstrap captures
+The capture correction introduced benchmark schema v2; the one-shot correction
+below advances fresh registrations to v3. A built-in-only bootstrap captures
 the runner, benchmark adapter, and adapter's eagerly loaded frozen-signature
 fixture, then executes the captured runner and adapter bytes. The adapter can
 read only its captured fixture; repository imports and uncaptured file reads
 fail closed. Registration and completion recheck pathnames against retained
 identities, but all execution and parsing use retained bytes. Legacy v1 evidence
 remains validation-only in the current runner, with its original snapshots.
+
+## Generator capture and durable one-shot execution
+
+Fresh generator receipts use source schema v2 and benchmark registrations/results
+use schema v3. Generation executes captured generator bytes and uses retained
+templates/board inputs for emitted files and hashes. It rechecks the entire input
+set before directory creation and before publishing a source receipt.
+
+Every fresh experiment has a stable identity derived from the protocol, mode,
+sorted module byte hashes, ordered FEN corpus, budgets, warmup and engine-order
+contract. Paths, creation timestamps, source/dependency hashes, position labels,
+and output names do not create another opportunity. The canonical ledger is
+`~/.local/state/chessy-research/den-run-ai/chessy`, shared by worktrees and repository
+copies on the same host/account. An exclusive start record and its parent directory
+are fsynced before loading an engine. The record is permanent after success or
+any partial failure; output locking is secondary. Previously completed historical
+scientific recipes are explicitly retired even when this local ledger is empty.
+
+This protects against accidental retries and copied/renamed inputs under trusted
+local filesystem ownership. It does not prevent the filesystem owner from deleting
+or relocating state, editing the protocol implementation, or executing on another
+host/account. There is no runtime option to override the ledger location.

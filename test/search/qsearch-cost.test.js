@@ -9,7 +9,7 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
     const out=path.join(temp,variant),reads=new Map(),read=fs.readFileSync;let receipt;
     fs.readFileSync=function(file,...args){if(String(file).endsWith('.rs.in'))reads.set(String(file),(reads.get(String(file))||0)+1);return read.call(fs,file,...args);};
     try{receipt=Cost.prepare(out,variant);}finally{fs.readFileSync=read;}
-    assert.equal(reads.size,4);for(const count of reads.values())assert.equal(count,1,'templates must be read and hashed from one retained snapshot');
+    assert.equal(reads.size,4);for(const count of reads.values())assert.equal(count,3,'one retained template capture plus two publication rechecks');
     assert.equal(receipt.variant,variant);assert.equal(receipt.productionIntegrationAllowed,false);
     for(const file of receipt.generated)assert.equal(Cost.sha(fs.readFileSync(path.join(out,file.path))),file.sha256);
     assert.throws(()=>Cost.prepare(out,variant),/EEXIST/);
@@ -68,7 +68,7 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
   assert.throws(()=>Bench.validatePlan(policyMaster),/selection policy/);
   const moduleMaster=clone(master);moduleMaster.modules.push(plan.modules[2]);
   assert.throws(()=>Bench.validatePlan(moduleMaster),/module inventory/);
-  const changedFile=clone(plan);changedFile.modules[2].sha256='f'.repeat(64);
+  const changedFile=clone(plan);changedFile.modules[2].sha256='f'.repeat(64);changedFile.experimentId=Bench.experimentId(changedFile);
   const changedInput=path.join(temp,'changed-file.json'),changedOutput=path.join(temp,'changed-output.json');
   fs.writeFileSync(changedInput,JSON.stringify(changedFile));
   await assert.rejects(Bench.run(changedInput,changedOutput),/module changed after registration/);
@@ -78,7 +78,9 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
   assert.throws(()=>Bench.validatePlan(mutable),/position inventory/);Bench.validatePlan(plan);
   // Copy only source into temporary repositories: all mutation cases below
   // authenticate JavaScript bytes and never instantiate a WASM engine.
-  const runnerSource=fs.readFileSync(path.join(ROOT,'tools/search/qsearch-bench.js'));
+  const runnerSource=Buffer.from(fs.readFileSync(path.join(ROOT,'tools/search/qsearch-bench.js'),'utf8').replace(
+    "const LEDGER_ROOT=path.join(fs.realpathSync(os.homedir()),'.local/state/chessy-research/den-run-ai/chessy');",
+    'const LEDGER_ROOT='+JSON.stringify(path.join(temp,'shared-ledger'))+';'));
   const benchmarkSource=fs.readFileSync(path.join(ROOT,'experiments/wasm/bench.js'));
   function fixture(name,benchmark=benchmarkSource){
     const root=path.join(temp,name),runner=path.join(root,'tools/search/qsearch-bench.js'),benchmarkPath=path.join(root,'experiments/wasm/bench.js');
@@ -176,7 +178,8 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
     };`);
     const failureFixture=fixture('observed-'+failure,source),runner=require(failureFixture.runner);
     const input=path.join(temp,'observed-'+failure+'-plan.json'),output=path.join(temp,'observed-'+failure+'-out.json');
-    runner.register(input,'fixed',modules);
+    const failureModule=path.join(temp,'failure-'+failure+'.wasm');fs.writeFileSync(failureModule,'synthetic '+failure);
+    runner.register(input,'fixed',[modules[0],failureModule,modules[2]]);
     await assert.rejects(runner.run(input,output),failure==='timing'?/invalid timing/:/signature diverged/);
     const observed=JSON.parse(fs.readFileSync(output+'.failure.json'));
     assert.equal(observed.rows.length,failure==='timing'?1:2,'first rejected observation is retained');
@@ -184,9 +187,115 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
     assert.equal(fs.existsSync(output),false,'rejected observations never certify completion');
     delete require.cache[failureFixture.runner];
   }
+  // A complete synthetic study has one permanent attempt across copied plans,
+  // outputs, module paths, timestamps and source comments (zero WASM execution).
+  const completeSource=Buffer.from(`module.exports={
+    POSITIONS:${JSON.stringify(plan.positions.map(p=>[p.name,p.fen]))},STOP_REASONS:['max-depth'],EXPERIMENT_METRIC_SLOTS:16,
+    async loadOrdinaryWasmBytes(){return {binaryBytes:1,brotliBytes:1,memoryBytes:()=>1,search(){
+      globalThis.__qsearchSyntheticCalls=(globalThis.__qsearchSyntheticCalls||0)+1;
+      return {abiVersion:2,move:'a2a3',score:0,depth:1,attemptedDepth:1,nodes:1,qnodes:0,
+        cutoffs:0,researches:0,stopReason:'max-depth',experimentMetrics:null,ms:1};
+    }};}
+  };`);
+  const single=fixture('one-shot',completeSource),one=require(single.runner);
+  const unique=path.join(temp,'one-shot.wasm');fs.writeFileSync(unique,'one-shot scientific candidate');
+  const arms=[modules[0],unique,modules[2]],registered=path.join(temp,'one-shot.plan.json');
+  const singlePlan=one.register(registered,'fixed',arms),copied=path.join(temp,'copied.plan.json');
+  fs.copyFileSync(registered,copied);
+  const outputs=[path.join(temp,'one-a.json'),path.join(temp,'one-b.json')];
+  const write=process.stdout.write;let runs;
+  process.stdout.write=()=>true;
+  try{runs=await Promise.allSettled([one.run(registered,outputs[0]),one.run(copied,outputs[1])]);}
+  finally{process.stdout.write=write;}
+  assert.equal(runs.filter(x=>x.status==='fulfilled').length,1,'concurrent callers have one winner');
+  assert.equal(runs.filter(x=>x.status==='rejected').length,1);
+  assert.equal(globalThis.__qsearchSyntheticCalls,756,'only one complete warmup/study executed');
+  delete globalThis.__qsearchSyntheticCalls;
+  const winner=runs.find(x=>x.status==='fulfilled').value;
+  assert.equal(winner.attempt.experimentId,singlePlan.experimentId);
+  assert.equal(JSON.parse(fs.readFileSync(winner.ledgerPath)).rerunAllowed,false);
+  assert.throws(()=>one.register(path.join(temp,'new-time.plan.json'),'fixed',arms),/already reserved/);
+  const changedTime=clone(singlePlan);changedTime.created=new Date(Date.parse(changedTime.created)+1).toISOString();
+  fs.writeFileSync(copied,JSON.stringify(changedTime));
+  await assert.rejects(one.run(copied,path.join(temp,'new-output.json')),/already reserved/);
+  fs.symlinkSync(temp,path.join(temp,'output-alias'),'dir');
+  await assert.rejects(one.run(registered,path.join(temp,'output-alias','alias.json')),/already reserved/);
+  const relocated=arms.map((file,i)=>{const out=path.join(temp,'relocated-'+i+'.wasm');fs.copyFileSync(file,out);return out;});
+  assert.throws(()=>one.register(path.join(temp,'relocated.plan.json'),'fixed',relocated),/already reserved/);
+  assert.throws(()=>one.register(path.join(temp,'reordered.plan.json'),'fixed',[...relocated].reverse()),/already reserved/);
+  const comment=fixture('comment-only',Buffer.concat([completeSource,Buffer.from('\n// adapter comment\n')]));
+  fs.appendFileSync(comment.runner,'\n// runner comment\n');
+  assert.throws(()=>require(comment.runner).register(path.join(temp,'comment.plan.json'),'fixed',relocated),/already reserved/);
+  // Exercise the atomic open race after checkUnused has passed, not just the
+  // sequential exists check: an intervening winner must remain untouched.
+  const raceArm=path.join(temp,'race.wasm');fs.writeFileSync(raceArm,'atomic race candidate');
+  const racePlan=path.join(temp,'race.plan.json');one.register(racePlan,'fixed',[arms[0],raceArm,arms[2]]);
+  const open=fs.openSync;let raced=false,raceLedger;
+  fs.openSync=function(file,flags,...args){
+    if(!raced&&String(file).endsWith('.started.json')&&flags==='wx'){
+      raced=true;raceLedger=String(file);const fd=open.call(fs,file,flags,...args);
+      fs.writeFileSync(fd,'concurrent winner');fs.fsyncSync(fd);fs.closeSync(fd);
+    }
+    return open.call(fs,file,flags,...args);
+  };
+  try{await assert.rejects(one.run(racePlan,path.join(temp,'race-output.json')),/EEXIST/);}
+  finally{fs.openSync=open;}
+  assert.equal(raced,true);assert.equal(fs.readFileSync(raceLedger,'utf8'),'concurrent winner');
+  assert.equal(globalThis.__qsearchSyntheticCalls,undefined,'reservation failure precedes every engine search');
+  // Previously tested partial failures consume the same identity permanently.
+  for(const failure of ['timing','divergence']){
+    const input=path.join(temp,'observed-'+failure+'-plan.json');
+    const runner=require(path.join(temp,'observed-'+failure,'tools/search/qsearch-bench.js'));
+    await assert.rejects(runner.run(input,path.join(temp,'retry-'+failure+'.json')),/already reserved/);
+  }
+
+  // Generator implementation, templates and board inputs are retained together.
+  const generatorSource=fs.readFileSync(path.join(ROOT,'tools/search/qsearch-cost.js'));
+  function generatorFixture(name){
+    const base=path.join(temp,name),generator=path.join(base,'tools/search/qsearch-cost.js');
+    fs.mkdirSync(path.dirname(generator),{recursive:true});fs.writeFileSync(generator,generatorSource);
+    for(const name of ['qsearch-checks.rs.in','qsearch-tactical.rs.in','qsearch-engine-tests.rs.in','qsearch-parity-tests.rs.in'])
+      fs.copyFileSync(path.join(ROOT,'tools/search',name),path.join(base,'tools/search',name));
+    for(const name of ['Cargo.toml','Cargo.lock','rust-toolchain.toml','build.sh','src/engine.rs','src/eval.rs','src/lib.rs','src/search.rs']){
+      const out=path.join(base,'experiments/wasm',name);fs.mkdirSync(path.dirname(out),{recursive:true});
+      fs.copyFileSync(path.join(ROOT,'experiments/wasm',name),out);
+    }
+    return {base,generator};
+  }
+  const cachedGenerator=generatorFixture('cached-generator'),generator=require(cachedGenerator.generator);
+  fs.appendFileSync(cachedGenerator.generator,'\n// replacement implementation\n');
+  assert.throws(()=>generator.prepare(path.join(temp,'cached-generated')),/changed during preparation/);
+  assert.equal(fs.existsSync(path.join(temp,'cached-generated')),false);
+  const selfGenerator=generatorFixture('self-generator');let generatorReads=0,newGenerator;
+  const generatorB=Buffer.from(generatorSource.toString().replace("schema:'chessy.qsearch-cost.source.v2'","schema:'chessy.qsearch-cost.source.test-captured'"));
+  fs.readFileSync=function(file,...args){const bytes=read.call(fs,file,...args);
+    if(String(file)===selfGenerator.generator&&++generatorReads===1)fs.writeFileSync(file,generatorB);return bytes;};
+  try{newGenerator=require(selfGenerator.generator);}finally{fs.readFileSync=read;}
+  const capturedReceipt=newGenerator.prepare(path.join(temp,'captured-generator-output'));
+  assert.equal(capturedReceipt.schema,'chessy.qsearch-cost.source.test-captured');
+  assert.equal(capturedReceipt.dependencies.find(x=>x.path==='qsearch-cost.js').sha256,Cost.sha(generatorB));
+  for(const kind of ['template','input']){
+    const f=generatorFixture('changed-'+kind),g=require(f.generator);
+    const changed=path.join(f.base,kind==='template'?'tools/search/qsearch-checks.rs.in':'experiments/wasm/src/eval.rs');
+    let changedOnce=false;
+    fs.readFileSync=function(file,...args){const bytes=read.call(fs,file,...args);
+      if(String(file)===changed&&!changedOnce){changedOnce=true;fs.appendFileSync(changed,'\n// changed after capture\n');}return bytes;};
+    try{assert.throws(()=>g.prepare(path.join(temp,'changed-'+kind+'-output')),/changed during preparation/);}
+    finally{fs.readFileSync=read;}
+  }
+  const publication=generatorFixture('publication-mutation'),publishing=require(publication.generator),writeFile=fs.writeFileSync;
+  const partial=path.join(temp,'partial-generated');let injected=false;
+  fs.writeFileSync=function(file,...args){const result=writeFile.call(fs,file,...args);
+    if(String(file)===path.join(partial,'src/search.rs')){injected=true;fs.appendFileSync(publication.generator,'\n// late change\n');}return result;};
+  try{assert.throws(()=>publishing.prepare(partial),/before receipt publication/);}
+  finally{fs.writeFileSync=writeFile;}
+  assert.equal(injected,true);assert.equal(fs.existsSync(path.join(partial,'source.json')),false);
   const historical=['fixed','master'].map(mode=>JSON.parse(fs.readFileSync(path.join(ROOT,'eval/qsearch-cost-v1',mode+'-results.json'))));
   for(const result of historical){
-    Bench.validatePlan(result.registration);
+    Bench.validatePlan(result.registration);assert.throws(()=>Bench.assertUnspent(result.registration),/historical experiment is retired/);
+    const differentRecipe=clone(result.registration);differentRecipe.positions[0].fen=differentRecipe.positions[2].fen;
+    assert.notEqual(Bench.experimentId(differentRecipe),Bench.experimentId(result.registration));
+    Bench.assertUnspent(differentRecipe); // Retirement covers only the completed recipe, not every future study of these modules.
     const expectedCount=result.registration.mode==='fixed'?648:72;
     assert.equal(Bench.expectedRows(result.registration).length,expectedCount);
     assert.equal(Bench.validateRows(result.registration,result.rows),expectedCount);
@@ -201,5 +310,5 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
   }
   const divergent=clone(historical[0].rows);divergent[1].score++;
   assert.throws(()=>Bench.validateRows(historical[0].registration,divergent),/signatures differ/);
-  console.log('qsearch source capture/cache mutation, strict registration, 720 historical rows and negative completion cases: passed');
+  console.log('qsearch generator/runner mutation, durable one-shot races/aliases, 720 historical rows: passed');
 }finally{fs.rmSync(temp,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});

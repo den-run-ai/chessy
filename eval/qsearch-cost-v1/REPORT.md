@@ -3,8 +3,8 @@
 The smaller quiet-check prefilter was **2.58% faster** on the frozen fixed-node
 development screen. Adding direct tactical generation increased code size and
 reduced the gain to **2.00%**. Every fixed-node search signature matched.
-At the shipped five-second Master budget, the selected prefilter gains2.41%
-throughput, with one deeper and one shallower result among36 paired trials.
+At the shipped five-second Master budget, the selected prefilter gains 2.41%
+throughput, with one deeper and one shallower result among 36 paired trials.
 Neither variant changes the shipped engine or establishes an Elo gain.
 
 ## Scope and controls
@@ -29,7 +29,7 @@ The complete [registration](fixed-registration.json) predates execution;
 [runner snapshot](fixed-benchmark-source.js.txt) preserves the dependency hash
 from before the separately registered Master-depth correction. The exposed corpus is
 18 positions from nine mirrored families, each tested at 10k/36k/230k nodes,
-maxDepth111, quiescence enabled, four repetitions and rotated engine order.
+maximum depth 111, quiescence enabled, four repetitions and rotated engine order.
 The local CPU was reserved for this screen; the hybrid match began afterward.
 
 | Variant | Geometric mean speed gain | 10k nodes | 36k nodes | 230k nodes |
@@ -41,8 +41,8 @@ These are equal-weight geometric means of paired reference/candidate elapsed
 ratios, not Elo estimates or confidence bounds. All 648 returned signatures
 match within each position/budget, including move, score, completed/attempted
 depth, nodes, qnodes, cutoffs, re-searches and stop reason. The low-budget
-measurements are noisier and show little gain. Completed depth never exceeds13
-in this fixed-node screen, below the shipped ceiling30.
+measurements are noisier and show little gain. Completed depth never exceeds 13
+in this fixed-node screen, below the shipped ceiling of 30.
 
 | Family (both colors; all budgets) | Prefilter speed gain | Prefilter + tactical speed gain |
 | --- | ---: | ---: |
@@ -79,7 +79,7 @@ count was corrected to report these measured totals; the test-only correction
 was rebuilt and its production WASM is byte-identical to the already frozen
 modules. [Both compiled modules also match all 144 immutable r69 signatures](frozen-signatures.json).
 
-The pinned Rust1.97.1/Binaryen131 build reproduces the measured module hashes.
+The pinned Rust 1.97.1 / Binaryen 131 build reproduces the measured module hashes.
 [Source/build evidence](build-evidence.json), per-variant source receipts, native
 logs and build logs are retained here. CI now runs the source-isolation and
 single-read-template contracts plus both native differential suites. Generated
@@ -92,9 +92,9 @@ symlink escapes into the repository, and existing output directories.
 | Quiet-check prefilter | 37,857 B | +685 B | 17,972 B | 26,542,080 B |
 | Prefilter + direct tactical | 40,356 B | +3,184 B | 18,673 B | 26,542,080 B |
 
-Runtime: Node24.19.0/V8 13.6.233.17-node.51, Linux x64, Intel Xeon Platinum8573C.
-Brotli uses this runtime's1.2.0 encoder; it is **diagnostic**, not the repository's
-pinned Node22.23.2/Brotli1.1.0 ratchet. Raw module growth is exact. Both candidates
+Runtime: Node 24.19.0/V8 13.6.233.17-node.51, Linux x64, Intel Xeon Platinum 8573C.
+Brotli uses this runtime's 1.2.0 encoder; it is **diagnostic**, not the repository's
+pinned Node 22.23.2 / Brotli 1.1.0 ratchet. Raw module growth is exact. Both candidates
 would exceed the current production size ceiling, so a reviewed exception or a
 smaller implementation would be required before any production integration.
 
@@ -102,17 +102,17 @@ smaller implementation would be required before any production integration.
 
 The fixed-node selection rule chooses the smaller prefilter. Its
 [separate Master registration](master-registration.json) freezes the exact module
-hashes and uses the shipped maxDepth30, 5,000ms, no node cap, the same18 positions,
+hashes and uses the shipped maximum depth 30, 5,000 ms, no node cap, the same 18 positions,
 and two order-balanced pairs. An independent review corrected the initial
-proposed ABI depth ceiling111 to the actual shipped ceiling30 **before this
+proposed ABI depth ceiling of 111 to the actual shipped ceiling of 30 **before this
 Master registration and execution**. The fixed-node run is preserved unchanged.
 
-All72 searches completed. Relative to shipped HCE, the prefilter's geometric
+All 72 searches completed. Relative to shipped HCE, the prefilter's geometric
 mean paired throughput changes by **+2.41%** and searched nodes by
-**+2.41%**. Across36 paired trials it completes a deeper iteration in
+**+2.41%**. Across 36 paired trials it completes a deeper iteration in
 **1**, the same depth in **34**, and a shallower iteration in **1**.
 Best moves differ in **1/36** pairs. Maximum measured deadline overshoot across
-both engines is **4.51ms**. These position probes do not establish
+both engines is **4.51 ms**. These position probes do not establish
 which differing move is stronger or how match Elo changes.
 
 | Family (both colors; two pairs) | Throughput change | Deeper / same / shallower |
@@ -135,20 +135,22 @@ retain the outcomes, including negative families and move changes.
 
 Retain these tools and negative/positive development findings. Do not ship either
 candidate on this evidence. The direct tactical extension is not worth its
-additional2,499 raw bytes over the prefilter in this implementation. The smaller
+additional 2,499 raw bytes over the prefilter in this implementation. The smaller
 prefilter has a modest desktop gain and no net completed-depth gain in the
-Master screen; physical-device runtime, source/signature
-admission (#155), current size limits and fresh formal strength admission (#175)
-remain separate requirements. See #84 for device evidence. No difficulty values
-or external Elo labels are changed.
+Master screen. The reviewed source/signature mechanism from #155 is implemented,
+but candidate admission remains open. After #185, #175 still needs an equivalence
+and runtime policy for admitting changes that preserve search results while
+reducing cost; the current formal protocol does not admit this cost-only work.
+Physical-device runtime evidence (#84) and current size limits remain separate
+requirements. No difficulty values or external Elo labels are changed.
 
 Paid compute: **$0**; the remaining $30 allowance is untouched.
 
 ## Post-run completion-validator correction
 
-Review of PR#183 found that the original runner could accept a malformed plan
+Review of PR #183 found that the original runner could accept a malformed plan
 with empty execution inventories and label its zero-row output complete. The
-retained actual runs contain all648 fixed-node and72 Master rows; their original
+retained actual runs contain all 648 fixed-node and 72 Master rows; their original
 registration and result bytes are unchanged and now pass an independent complete
 ordered-row check. No timings were rerun.
 
@@ -170,8 +172,8 @@ the implementation authenticated by either historical registration.
 ## Post-run implementation-capture correction
 
 A second review found that the earlier runner could execute a cached benchmark
-module and then hash replacement bytes at its pathname. Fresh registrations now
-use schema v2: the built-in-only bootstrap captures the runner, benchmark adapter,
+module and then hash replacement bytes at its pathname. That correction introduced
+schema v2 (superseded by the one-shot v3 correction below): the built-in-only bootstrap captures the runner, benchmark adapter,
 and adapter's eagerly loaded signature fixture before execution. It executes the
 captured runner and adapter, bypasses the repository require cache, and supplies
 only retained fixture bytes through the adapter's restricted filesystem reader.
@@ -188,3 +190,29 @@ JavaScript-only fixtures. The
 [provenance record](provenance-hardening.json) are retained; that version never ran
 a timing experiment. Every original fixed/Master registration, result, and executed
 runner snapshot remains unchanged. No timings were rerun or relabeled.
+
+## Full-path provenance and one-shot correction
+
+Further review identified the same cached-source race in source generation and a
+retry gap in locks tied only to caller-selected output paths. The generator now
+executes retained implementation bytes and emits/attests the same retained
+templates and eight source inputs, with full publication rechecks. Fresh schema-v3
+benchmarks reserve a durable scientific-experiment identity before engine loading.
+An unchanged comparison cannot be reopened by copying a registration, renaming
+modules, changing timestamps/output names, reordering arm labels, or adding source
+comments. Failed attempts remain spent, and the two completed historical scientific
+recipes are explicitly retired independently of local ledger initialization.
+
+The [pre-correction generator](pre-generator-capture-source.js.txt),
+[pre-correction runner](pre-ledger-benchmark-source.js.txt), and their
+[hash record](generator-ledger-hardening.json) preserve review provenance. All
+historical generated-source receipts, registrations, results, and executed source
+snapshots remain unchanged. Tests use temporary copied sources and synthetic
+adapters to cover cached generator replacement, mutation during capture and
+publication, copied/relocated/re-registered experiments, comment-only changes,
+concurrent callers, an atomic reservation race, and permanent failure consumption.
+No engine builds, searches, or timings were repeated.
+
+The ledger is shared across repository worktrees/copies for one host and account;
+its local-filesystem trust boundary is stated in PLAN.md. It is not a remote
+admission authority and does not replace formal strength or physical-device gates.

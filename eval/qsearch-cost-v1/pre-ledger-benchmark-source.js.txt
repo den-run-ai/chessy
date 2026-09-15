@@ -41,32 +41,6 @@ const fixedFields=['abiVersion','move','score','depth','attemptedDepth','nodes',
 const positions=()=>getBench().POSITIONS.map(([name,fen])=>({name,fen}));
 const WARMUP_CONTRACT={nodeLimit:10000,maxDepth:111,timeMs:0,quiesce:true,rounds:2};
 const ORDER_CONTRACT='rotate engine order by (position index + repetition) modulo engine count';
-// Shared across worktrees/copies on this host/account. No runtime override.
-const LEDGER_ROOT=path.join(fs.realpathSync(os.homedir()),'.local/state/chessy-research/den-run-ai/chessy');
-const PROTOCOL='chessy.qsearch-cost.development';
-// Exact completed recipes, generated from the unchanged historical registrations.
-const RETIRED=new Set(['6eeeabd09ee5d7defc38e3282e8c2a8c691b94b63e551cb53c86cddba90e1f83',
-  'eaafe111b0a172d0eb106112fd270c98e294d405fddcb73f760bac61be9c6a44']);
-function experimentId(plan){
-  return sha(encode({protocol:PROTOCOL,mode:plan.mode,modules:plan.modules.map(m=>m.sha256).sort(),positions:plan.positions.map(p=>p.fen),
-    options:plan.options,warmup:plan.warmup,order:plan.order}));
-}
-function ledgerPath(plan){return path.join(LEDGER_ROOT,experimentId(plan)+'.started.json');}
-function checkUnused(plan){
-  check(!RETIRED.has(experimentId(plan)),'historical experiment is retired; audit only');
-  check(!fs.existsSync(ledgerPath(plan)),'experiment already reserved; reruns are forbidden');
-}
-function reserve(plan,planBytes,out){
-  checkUnused(plan);fs.mkdirSync(LEDGER_ROOT,{recursive:true,mode:0o700});
-  const ledger=ledgerPath(plan),entry={schema:'chessy.qsearch-cost.attempt.v1',protocol:PROTOCOL,
-    experimentId:experimentId(plan),registrationSha256:sha(planBytes),output:out,
-    started:new Date().toISOString(),rerunAllowed:false};
-  const bytes=Buffer.from(encode(entry)),fd=fs.openSync(ledger,'wx',0o600);
-  try{fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
-  const parent=fs.openSync(LEDGER_ROOT,'r');try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}
-  return {path:ledger,bytes,entry}; // Never remove this reservation, including failures.
-}
-
 const MODE_CONTRACTS={
   fixed:{modules:3,options:{maxDepth:111,nodeLimits:[10000,36000,230000],timeMs:0,quiesce:true,repetitions:4}},
   master:{modules:2,options:{maxDepth:30,nodeLimits:[0],timeMs:5000,quiesce:true,repetitions:2}}
@@ -76,9 +50,8 @@ const keys=(value,expected,label)=>check(value!==null&&typeof value==='object'&&
   &&equal(Object.keys(value).sort(),expected.slice().sort()),'invalid '+label+' fields');
 function validatePlan(plan){
   keys(plan,['schema','mode','created','researchOnly','productionIntegrationAllowed','strengthClaimAllowed',
-    'selectionAllowed','positions','options','warmup','order','modules','dependencies',
-    ...(plan&&plan.schema==='chessy.qsearch-cost.benchmark.v3'?['experimentId']:[])],'plan');
-  check(['chessy.qsearch-cost.benchmark.v1','chessy.qsearch-cost.benchmark.v2','chessy.qsearch-cost.benchmark.v3'].includes(plan.schema)&&plan.researchOnly===true
+    'selectionAllowed','positions','options','warmup','order','modules','dependencies'],'plan');
+  check(['chessy.qsearch-cost.benchmark.v1','chessy.qsearch-cost.benchmark.v2'].includes(plan.schema)&&plan.researchOnly===true
     &&plan.productionIntegrationAllowed===false&&plan.strengthClaimAllowed===false,'invalid plan');
   check(typeof plan.mode==='string'&&Object.hasOwn(MODE_CONTRACTS,plan.mode),'unknown mode');
   const contract=MODE_CONTRACTS[plan.mode];
@@ -99,13 +72,12 @@ function validatePlan(plan){
     paths.add(module.path);hashes.add(module.sha256);
   }
   const expectedDependencies=['tools/search/qsearch-bench.js','experiments/wasm/bench.js'];
-  if(plan.schema!=='chessy.qsearch-cost.benchmark.v1')expectedDependencies.push('test/fixtures/wasm-r69-signatures.json');
+  if(plan.schema==='chessy.qsearch-cost.benchmark.v2')expectedDependencies.push('test/fixtures/wasm-r69-signatures.json');
   check(Array.isArray(plan.dependencies)&&plan.dependencies.length===expectedDependencies.length,'dependency inventory differs');
   for(let i=0;i<expectedDependencies.length;i++){
     const dep=plan.dependencies[i];keys(dep,['path','sha256'],'dependency');
     check(dep.path===expectedDependencies[i]&&typeof dep.sha256==='string'&&/^[a-f0-9]{64}$/.test(dep.sha256),'invalid dependency identity');
   }
-  if(plan.schema==='chessy.qsearch-cost.benchmark.v3')check(plan.experimentId===experimentId(plan),'scientific experiment identity differs');
   return true;
 }
 function expectedRows(plan){
@@ -144,18 +116,18 @@ function validateRows(plan,rows){
 function register(file,mode,modules){
   check(typeof mode==='string'&&Object.hasOwn(MODE_CONTRACTS,mode),'unknown mode');
   check(Array.isArray(modules)&&modules.length===MODE_CONTRACTS[mode].modules,'mode-specific module inventory differs');
-  const plan={schema:'chessy.qsearch-cost.benchmark.v3',mode,created:new Date().toISOString(),researchOnly:true,
+  const plan={schema:'chessy.qsearch-cost.benchmark.v2',mode,created:new Date().toISOString(),researchOnly:true,
     productionIntegrationAllowed:false,strengthClaimAllowed:false,selectionAllowed:mode==='fixed',
     positions:positions(),
     options:{...MODE_CONTRACTS[mode].options,nodeLimits:[...MODE_CONTRACTS[mode].options.nodeLimits]},
     warmup:{...WARMUP_CONTRACT},order:ORDER_CONTRACT,
     modules:modules.map(p=>({path:fs.realpathSync(p),sha256:sha(fs.readFileSync(p))})),dependencies:dependencies()};
-  plan.experimentId=experimentId(plan);validatePlan(plan);checkUnused(plan);check(sourcesUnchanged(),'benchmark dependency changed before registration');
+  validatePlan(plan);check(sourcesUnchanged(),'benchmark dependency changed before registration');
   fs.writeFileSync(file,encode(plan),{flag:'wx'});return plan;
 }
 async function run(file,out){
   const planBytes=fs.readFileSync(file),plan=JSON.parse(planBytes);
-  check(plan&&plan.schema==='chessy.qsearch-cost.benchmark.v3'&&equal(plan.dependencies,dependencies()),'benchmark dependency changed after registration');
+  check(plan&&plan.schema==='chessy.qsearch-cost.benchmark.v2'&&equal(plan.dependencies,dependencies()),'benchmark dependency changed after registration');
   validatePlan(plan);const Bench=getBench();
   // Authenticate the complete inventory before any engine is loaded; execute
   // these retained module bytes instead of reopening mutable paths.
@@ -163,10 +135,8 @@ async function run(file,out){
     check(fs.realpathSync(m.path)===m.path,'module path changed after registration');
     const bytes=fs.readFileSync(m.path);check(sha(bytes)===m.sha256,'module changed after registration');return bytes;
   });
-  out=path.join(fs.realpathSync(path.dirname(path.resolve(out))),path.basename(out));
-  const attempt=reserve(plan,planBytes,out);let lock,rows=[];
+  const lock=fs.openSync(out+'.lock','wx');let rows=[];
   try{
-    lock=fs.openSync(out+'.lock','wx');
     const engines=[];
     for(let i=0;i<plan.modules.length;i++){
       const m=plan.modules[i];engines.push(await Bench.loadOrdinaryWasmBytes(retained[i],'module-'+i,m.path));
@@ -191,16 +161,15 @@ async function run(file,out){
     }}
     check(sha(fs.readFileSync(file))===sha(planBytes),'registration changed while running');
     check(sourcesUnchanged(),'benchmark dependency changed while running');
-    check(sha(fs.readFileSync(attempt.path))===sha(attempt.bytes),'experiment reservation changed while running');
     check(engines.length===plan.modules.length,'executed module inventory differs');
     validateRows(plan,rows);
-    const report={schema:'chessy.qsearch-cost.benchmark-results.v3',attempt:attempt.entry,ledgerPath:attempt.path,registrationSha256:sha(planBytes),registration:plan,
+    const report={schema:'chessy.qsearch-cost.benchmark-results.v2',registrationSha256:sha(planBytes),registration:plan,
       runtime:{node:process.version,versions:process.versions,platform:os.platform(),arch:os.arch(),cpu:os.cpus()[0].model},
       modules:engines.map(e=>({bytes:e.binaryBytes,brotliBytes:e.brotliBytes,memoryBytes:e.memoryBytes()})),
       complete:true,exactFixedNodeParity:plan.mode==='fixed',rows};
     fs.writeFileSync(out,encode(report),{flag:'wx'});return report;
-  }catch(error){fs.writeFileSync(out+'.failure.json',encode({error:String(error),attempt:attempt.entry,ledgerPath:attempt.path,rows}),{flag:'wx'});throw error;}
-  finally{if(lock!==undefined)fs.closeSync(lock);}
+  }catch(error){fs.writeFileSync(out+'.failure.json',encode({error:String(error),rows}),{flag:'wx'});throw error;}
+  finally{fs.closeSync(lock);}
 }
 if(require.main===module){
   const [command,...args]=process.argv.slice(2);
@@ -209,5 +178,5 @@ if(require.main===module){
     check(command==='run'&&args.length===2,'run PLAN RESULTS');return run(...args);
   }).then(x=>console.log(encode(x.rows?{complete:true,rows:x.rows.length}:{registered:true}))).catch(e=>{console.error(e);process.exitCode=1;});
 }
-module.exports={register,run,validatePlan,expectedRows,validateRows,experimentId,assertUnspent:checkUnused};
+module.exports={register,run,validatePlan,expectedRows,validateRows};
 }
