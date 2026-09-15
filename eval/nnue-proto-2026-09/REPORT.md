@@ -3,9 +3,10 @@
 **Result: at equal time the best nets reach parity with the shipped tapered
 HCE, not a demonstrated improvement.** In 584-game development matches at
 50 ms per move, H64 scored 51.6% (95% interval 47.7–55.5%) and H128 51.2%
-(47.3–55.1%). At equal nodes H128 is clearly stronger (58.6% at 10,000
-nodes, one-sided lower bound 55.5%), but its scalar inference costs about 30%
-of throughput and that cancels the gain. H16 and H32 lose about 50 Elo under
+(47.3–55.1%); at 200 ms per move H128 scored 49.8% (46.1–53.5%). At equal
+nodes H128 is clearly stronger (58.6% at 10,000 nodes, one-sided lower bound
+55.5%), but its scalar inference costs about 30% of throughput and that
+cancels the gain. H16 and H32 lose about 50 Elo under
 every budget. **Nothing ships**: the production module, release token, level
 budgets and formal holdout are untouched. Every number here is development
 evidence on exposed openings, not a formal admission (#175) and not an Elo
@@ -151,13 +152,13 @@ two-sided 95% intervals, Elo by the logistic formula. Completed depth was
 identical for candidate and base in every fixed-node run (3.4 plies at 10k,
 4.3 at 36k), so differences are evaluation quality, not tree efficiency.
 
-| Net | 10,000 nodes | 36,000 nodes | 50 ms / move |
-| --- | --- | --- | --- |
-| H16 | 43.5% (39.6–47.4), −46 Elo | 42.2% (38.5–45.9), −55 | 42.4% (38.5–46.2), −53 |
-| H32 | 43.8% (40.0–47.6), −43 | 38.6% (35.0–42.3), −81 | 42.6% (38.9–46.4), −52 |
-| H64 | 52.6% (48.9–56.2), +18 | 51.5% (47.8–55.3), +11 | 51.6% (47.7–55.5), +11 |
-| H128 | **58.6% (54.9–62.4), +61** | 52.7% (49.0–56.5), +19 | 51.2% (47.3–55.1), +8 |
-| H128 + mop-up | 58.6% (54.9–62.4), +61 | 52.9% (49.1–56.7), +20 | pending |
+| Net | 10,000 nodes | 36,000 nodes | 50 ms / move | 200 ms / move |
+| --- | --- | --- | --- | --- |
+| H16 | 43.5% (39.6–47.4), −46 Elo | 42.2% (38.5–45.9), −55 | 42.4% (38.5–46.2), −53 | – |
+| H32 | 43.8% (40.0–47.6), −43 | 38.6% (35.0–42.3), −81 | 42.6% (38.9–46.4), −52 | – |
+| H64 | 52.6% (48.9–56.2), +18 | 51.5% (47.8–55.3), +11 | 51.6% (47.7–55.5), +11 | – |
+| H128 | **58.6% (54.9–62.4), +61** | 52.7% (49.0–56.5), +19 | 51.2% (47.3–55.1), +8 | 49.8% (46.1–53.5), −1 |
+| H128 + mop-up | 58.6% (54.9–62.4), +61 | 52.9% (49.1–56.7), +20 | – | pending |
 
 Reading: width matters (H16 ≈ H32 < H64 < H128 at equal nodes); the nets'
 edge shrinks as the search deepens (H128: +61 at 10k, +19 at 36k); and the
@@ -170,9 +171,13 @@ net-only at both fixed budgets: the term is at most 76 cp against outputs
 near ±1700 cp in the positions where it applies. Its paired NPS bench is
 0.618 (0.544–0.780).
 
-Pending at the time of writing and added below when complete: H128 and
-H128+mop-up at 200 ms per move, and diagnostic D3 (H128 at the Hard
-profile's 230,000 nodes on half the bank).
+At 200 ms per move H128 reaches mean completed depth 5.50 against the HCE's
+5.86 and scores 49.8% (251–80–253): the 30% throughput deficit costs about a
+third of a ply and the evaluation gain buys it back, no more.
+
+Pending at the time of writing and added below when complete: H128+mop-up
+at 200 ms per move, and diagnostic D3 (H128 at the Hard profile's 230,000
+nodes on half the bank).
 
 ## Diagnostics
 
