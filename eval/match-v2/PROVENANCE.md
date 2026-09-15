@@ -69,6 +69,11 @@ node test/ai-match-holdout-audit.js --check
 node test/ai-match-holdout-audit.test.js
 ```
 
+The separate [complete dependency map and prospective decision](ADMISSION-PROPOSAL.md)
+joins the declared relationships transitively and propagates known exposure.
+It does not alter this manifest or the original grouping audit, assert
+independent families, or make the diagnostic workflow merge-authoritative.
+
 ## Reproduction
 
 ```sh

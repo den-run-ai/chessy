@@ -1,0 +1,7771 @@
+{
+  "schema": "chessy.match-family-map.v1",
+  "disposition": "prospective-audit-only",
+  "manifestSha256": "bda65b3253951863f2b01187b2a44becb8d36d29a7917780f6d920a92f4d7dab",
+  "implementationSha256": "e13db77286a0c24efc093d054e025124cb94b05be70c9ff9cce55da9075dd328",
+  "helpers": [
+    {
+      "path": "test/ai-match-opening-utils-v2.js",
+      "sha256": "3bca4c2e755d8d235cc2af811322e9740526cfb73922d135367d15b261c41711"
+    },
+    {
+      "path": "test/ai-match-holdout-audit.js",
+      "sha256": "b6d1ceb90a3ee68cf06875c3d64df384210c9433741ebe78aacd7ba08258510f"
+    },
+    {
+      "path": "assets/engine.js",
+      "sha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa"
+    }
+  ],
+  "exposureSources": [
+    {
+      "path": "test/ai-match-openings.js",
+      "sha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27"
+    },
+    {
+      "path": "eval/corpus/sources/openings-v1.tsv",
+      "sha256": "6febbaa43f4c296f88940a567dfd7272b093643a0dafcda94cb8d3bbecbc8ec8"
+    }
+  ],
+  "grouping": "connected-components-of-endpoint-structural-named-or-complete-line-prefix-v1",
+  "exposure": "any-direct-known-exposure-propagates-to-whole-component-v1",
+  "mapSha256": "6cad56349e38c64d7cbac3b56246cf60a91cf2cdb27adf4309099c978c67572a",
+  "map": {
+    "endpoints": [
+      {
+        "id": "A01",
+        "groupId": "e4b48c1d338e3748e377f91bf82a382b084dbc3d1a04201bcd5719318fe0c728"
+      },
+      {
+        "id": "A02",
+        "groupId": "f40f75c1d942889fb44d8278ed5bee04c8d2ce7ad069310771beefd6aa1b22c7"
+      },
+      {
+        "id": "A03",
+        "groupId": "f40f75c1d942889fb44d8278ed5bee04c8d2ce7ad069310771beefd6aa1b22c7"
+      },
+      {
+        "id": "A04",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "A06",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "A07",
+        "groupId": "b78d6f5c83cabac0bee53c6784483698d0de4823be80972faf78759c2bc3b679"
+      },
+      {
+        "id": "A08",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "A09",
+        "groupId": "86a1c752342c5ea158c68b2e83b2052967a4e5bd7e71d16fead8c919f89f3295"
+      },
+      {
+        "id": "A10",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A12",
+        "groupId": "86a1c752342c5ea158c68b2e83b2052967a4e5bd7e71d16fead8c919f89f3295"
+      },
+      {
+        "id": "A13",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A14",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A15",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A16",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A18",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A19",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A20",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A22",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A23",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A24",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A25",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A26",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A28",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A29",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A30",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A32",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A33",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A34",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A35",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A36",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A37",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A38",
+        "groupId": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b"
+      },
+      {
+        "id": "A40",
+        "groupId": "c2048cc1914b49525059b132f4edaa0618110216e77eb693b591c59ef65f6a31"
+      },
+      {
+        "id": "A41",
+        "groupId": "a22343afb03e1b223712491408f1d11eb3dc09ac7d0eed7ba48f89990dbb3aa5"
+      },
+      {
+        "id": "A42",
+        "groupId": "a22343afb03e1b223712491408f1d11eb3dc09ac7d0eed7ba48f89990dbb3aa5"
+      },
+      {
+        "id": "A43",
+        "groupId": "bb9d783b57bad912312165f3698a0ff15ed547a96b7c41f0f01af79e5b777f98"
+      },
+      {
+        "id": "A44",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A45",
+        "groupId": "5204a032fe1f47471e27f6f230a1059f0d3a393387bd7b70fc236f8adbefcb35"
+      },
+      {
+        "id": "A46",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "A48",
+        "groupId": "d97c9fe34b84f89d842db8f286ef6c1a4ffc5bec2335b077648d405d6ba25a5e"
+      },
+      {
+        "id": "A51",
+        "groupId": "bb9d783b57bad912312165f3698a0ff15ed547a96b7c41f0f01af79e5b777f98"
+      },
+      {
+        "id": "A52",
+        "groupId": "bb9d783b57bad912312165f3698a0ff15ed547a96b7c41f0f01af79e5b777f98"
+      },
+      {
+        "id": "A53",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "A54",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "A55",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "A56",
+        "groupId": "94cbecdc635f9fda785f5da0f2df738803c9c852bd6aa71920fba47571cbb0e3"
+      },
+      {
+        "id": "A57",
+        "groupId": "86a1c752342c5ea158c68b2e83b2052967a4e5bd7e71d16fead8c919f89f3295"
+      },
+      {
+        "id": "A59",
+        "groupId": "1f775bdd9911da9f5b6623fe7089e919b7444fec8108b7da752054e06fd3669e"
+      },
+      {
+        "id": "A60",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A61",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A62",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A63",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A65",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A66",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A68",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A69",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A70",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A71",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A72",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A73",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A74",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A76",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A77",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A78",
+        "groupId": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9"
+      },
+      {
+        "id": "A80",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A81",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A83",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A84",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A86",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A87",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A88",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A89",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A90",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A91",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A92",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A93",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A94",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A95",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A97",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "A99",
+        "groupId": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab"
+      },
+      {
+        "id": "B01",
+        "groupId": "27a63f01973efb97c944a8b2c3d79e6f9b27e74779747b23e01d552219e3c0d4"
+      },
+      {
+        "id": "B02",
+        "groupId": "ad6e5aea9876fb703be64300855dc0cd1ec47971c5bd84d757063a5267d234a5"
+      },
+      {
+        "id": "B03",
+        "groupId": "ad6e5aea9876fb703be64300855dc0cd1ec47971c5bd84d757063a5267d234a5"
+      },
+      {
+        "id": "B04",
+        "groupId": "ad6e5aea9876fb703be64300855dc0cd1ec47971c5bd84d757063a5267d234a5"
+      },
+      {
+        "id": "B05",
+        "groupId": "ad6e5aea9876fb703be64300855dc0cd1ec47971c5bd84d757063a5267d234a5"
+      },
+      {
+        "id": "B06",
+        "groupId": "fccdfcd72d7ce6c83762113b42825a95ad9dc85c743abe045aec2c4d2e0e0afa"
+      },
+      {
+        "id": "B07",
+        "groupId": "d8c4c799151566915b9219925ee2d85e2c78ef3107ccb4fe39167684a011f38e"
+      },
+      {
+        "id": "B09",
+        "groupId": "fc500bbd863618d08dffed7832827c5653118830806cafdadbf6aee7c48c1a1b"
+      },
+      {
+        "id": "B10",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B11",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B12",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B13",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B14",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B15",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B16",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B18",
+        "groupId": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e"
+      },
+      {
+        "id": "B20",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B21",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B22",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B23",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B24",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B25",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B27",
+        "groupId": "fccdfcd72d7ce6c83762113b42825a95ad9dc85c743abe045aec2c4d2e0e0afa"
+      },
+      {
+        "id": "B29",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B30",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B31",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B32",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B33",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B34",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B35",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B36",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B37",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B40",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B41",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B42",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B43",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B44",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B45",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B46",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B48",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B50",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B51",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B52",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B54",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B55",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B56",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B57",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B58",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B60",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B61",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B62",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B64",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B65",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B66",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B67",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B68",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B70",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B71",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B72",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B73",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B74",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B75",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B77",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B78",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B81",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B82",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B83",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B85",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B86",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B87",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B88",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B89",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B90",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B91",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B92",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B93",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B94",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B96",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B97",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "B98",
+        "groupId": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5"
+      },
+      {
+        "id": "C01",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C02",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C03",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C04",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C05",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C07",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C08",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C09",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C10",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C12",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C13",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C14",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C16",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C17",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C18",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C19",
+        "groupId": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f"
+      },
+      {
+        "id": "C20",
+        "groupId": "fe2f63b70cc1360af8fd048a076cade7faa225d1461203844b0307979ef26365"
+      },
+      {
+        "id": "C22",
+        "groupId": "c42eb5afaada286843275cd55e53faed0dd79b9268c942b77a12a4364e00aeab"
+      },
+      {
+        "id": "C23",
+        "groupId": "27a63f01973efb97c944a8b2c3d79e6f9b27e74779747b23e01d552219e3c0d4"
+      },
+      {
+        "id": "C25",
+        "groupId": "9cde1feb54d76d4047605acd0c1fa789a211b75798bcb304f10a8d088cd4bdb2"
+      },
+      {
+        "id": "C26",
+        "groupId": "27a63f01973efb97c944a8b2c3d79e6f9b27e74779747b23e01d552219e3c0d4"
+      },
+      {
+        "id": "C27",
+        "groupId": "e16d57cd105219d4572a7d5d43ed9b57ea111928a350629354e8917363f3de0f"
+      },
+      {
+        "id": "C28",
+        "groupId": "e16d57cd105219d4572a7d5d43ed9b57ea111928a350629354e8917363f3de0f"
+      },
+      {
+        "id": "C29",
+        "groupId": "e16d57cd105219d4572a7d5d43ed9b57ea111928a350629354e8917363f3de0f"
+      },
+      {
+        "id": "C31",
+        "groupId": "bbb0f8583c7b162e89f5e862d86e6f7c6ede2d6f29f6b6e02bbaad55e9897b9e"
+      },
+      {
+        "id": "C32",
+        "groupId": "0f6ba222d29416c6b28a78216cd3a113d9109f69713d81db5cb1d347f89ccaa5"
+      },
+      {
+        "id": "C34",
+        "groupId": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935"
+      },
+      {
+        "id": "C35",
+        "groupId": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935"
+      },
+      {
+        "id": "C36",
+        "groupId": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935"
+      },
+      {
+        "id": "C37",
+        "groupId": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935"
+      },
+      {
+        "id": "C38",
+        "groupId": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935"
+      },
+      {
+        "id": "C39",
+        "groupId": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935"
+      },
+      {
+        "id": "C40",
+        "groupId": "3a35e4e33876c14efe3ae739ec7eaabc2799f3ffc61add9e02e452cb30dfb9cd"
+      },
+      {
+        "id": "C41",
+        "groupId": "57dc7c130d2cd59d7a5b0afebb0f6d97bbd66acbb19c9de16f67ae6e77c23332"
+      },
+      {
+        "id": "C42",
+        "groupId": "be47417f8a757866282d27666d351a56a1393228e84e7d648f32d4605a19e8dd"
+      },
+      {
+        "id": "C43",
+        "groupId": "27a63f01973efb97c944a8b2c3d79e6f9b27e74779747b23e01d552219e3c0d4"
+      },
+      {
+        "id": "C44",
+        "groupId": "73735a9cce715c1f029c02c583ad8412d2328a16dcd94116ad60ec8d99185392"
+      },
+      {
+        "id": "C45",
+        "groupId": "fe45ebef697129fa8b5e7b532cd31dfbc1a4b036f67dcfdd97693b6ba029ab1d"
+      },
+      {
+        "id": "C46",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C47",
+        "groupId": "4c825e34a3873d87e28770fe48716865fa43e7ad2334033a3ce7f5d21914bac0"
+      },
+      {
+        "id": "C50",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C51",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C53",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C54",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C56",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C57",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C58",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C59",
+        "groupId": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2"
+      },
+      {
+        "id": "C60",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C61",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C62",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C63",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C64",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C65",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C67",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C68",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C71",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C72",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C73",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C74",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C75",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C76",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C77",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C78",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C80",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C81",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C83",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C84",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C86",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C87",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C88",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C89",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C90",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C91",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C92",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C93",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C94",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C95",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C96",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "C97",
+        "groupId": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8"
+      },
+      {
+        "id": "D00",
+        "groupId": "bca3bb5cad4c779def7bd38853ba5ce6d28f5235485ca8dcc208e44e5d932c8f"
+      },
+      {
+        "id": "D01",
+        "groupId": "cef746ddbe81d79c1fa0f20571b936c8fb12a7cef45b0e8137429b97114ff28e"
+      },
+      {
+        "id": "D02",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D03",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D04",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D05",
+        "groupId": "5919beb75cd8327d9d517d16ea34ae4077f0a0fd1d929887c3965f869ce7e94c"
+      },
+      {
+        "id": "D07",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D08",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D10",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D11",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D13",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D14",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D16",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D17",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D18",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D19",
+        "groupId": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82"
+      },
+      {
+        "id": "D20",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D21",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D22",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D23",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D24",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D25",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D27",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D28",
+        "groupId": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601"
+      },
+      {
+        "id": "D30",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D31",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D32",
+        "groupId": "54ef709efe0bb8b100c89ea52345dd01fde26f93c9c5bc32759f802d59d70716"
+      },
+      {
+        "id": "D33",
+        "groupId": "54ef709efe0bb8b100c89ea52345dd01fde26f93c9c5bc32759f802d59d70716"
+      },
+      {
+        "id": "D34",
+        "groupId": "54ef709efe0bb8b100c89ea52345dd01fde26f93c9c5bc32759f802d59d70716"
+      },
+      {
+        "id": "D35",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D36",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D38",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D40",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D41",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D42",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D43",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D44",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D46",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D47",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D48",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D50",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D51",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D52",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D53",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D54",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D56",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D57",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D58",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D60",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D61",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D62",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D63",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D64",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D65",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D66",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D67",
+        "groupId": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4"
+      },
+      {
+        "id": "D71",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D72",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D73",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D74",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D75",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D77",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D78",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D79",
+        "groupId": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68"
+      },
+      {
+        "id": "D80",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D81",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D82",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D83",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D84",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D85",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D86",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D87",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D90",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D91",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D92",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D93",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D94",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D96",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D97",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "D98",
+        "groupId": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0"
+      },
+      {
+        "id": "E01",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E03",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E04",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E05",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E06",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E07",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E08",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E09",
+        "groupId": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3"
+      },
+      {
+        "id": "E10",
+        "groupId": "67da3aec1f389a3ea70660ae576947d517331dfd3c316dae47d109a3a365762c"
+      },
+      {
+        "id": "E11",
+        "groupId": "2b8075303dc13f86f33ccc7b05a1f3d223a9da03bfce5f5d8e9f53e3ed6f1aaa"
+      },
+      {
+        "id": "E13",
+        "groupId": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791"
+      },
+      {
+        "id": "E15",
+        "groupId": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791"
+      },
+      {
+        "id": "E16",
+        "groupId": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791"
+      },
+      {
+        "id": "E17",
+        "groupId": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791"
+      },
+      {
+        "id": "E18",
+        "groupId": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791"
+      },
+      {
+        "id": "E19",
+        "groupId": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791"
+      },
+      {
+        "id": "E20",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E21",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E22",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E23",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E24",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E25",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E28",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E29",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E30",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E32",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E34",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E35",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E36",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E37",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E38",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E39",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E40",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E42",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E43",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E44",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E45",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E46",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E47",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E48",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E50",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E51",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E52",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E53",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E54",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E57",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E58",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E59",
+        "groupId": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94"
+      },
+      {
+        "id": "E60",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E61",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E64",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E65",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E66",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E67",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E68",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E69",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E71",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E72",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E73",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E74",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E75",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E76",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E78",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E79",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E80",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E81",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E83",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E84",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E85",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E86",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E87",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E89",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E90",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E91",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E92",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E93",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E94",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E95",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E96",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      },
+      {
+        "id": "E97",
+        "groupId": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1"
+      }
+    ],
+    "joiningEdges": [
+      {
+        "a": "A02",
+        "b": "A03",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A04",
+        "b": "A06",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A04",
+        "b": "A08",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A08",
+        "b": "D93",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "A08",
+        "b": "D94",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "A09",
+        "b": "A12",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A09",
+        "b": "A57",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A13",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A14",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A15",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A16",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A18",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A19",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A20",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A22",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A23",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A24",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A25",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A26",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A28",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A29",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A30",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A32",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A33",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A34",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A35",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A36",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A37",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A10",
+        "b": "A38",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A41",
+        "b": "A42",
+        "reasons": [
+          "named-family",
+          "complete-line-prefix-at-least-six-plies"
+        ]
+      },
+      {
+        "a": "A43",
+        "b": "A51",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A43",
+        "b": "A52",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A60",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A61",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A62",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A63",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A65",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A66",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A68",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A69",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A70",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A71",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A72",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A73",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A74",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A76",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A77",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A44",
+        "b": "A78",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A46",
+        "b": "D03",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A46",
+        "b": "D04",
+        "reasons": [
+          "structural-family",
+          "named-family"
+        ]
+      },
+      {
+        "a": "A53",
+        "b": "A54",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A53",
+        "b": "A55",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A55",
+        "b": "C62",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A81",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A83",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A84",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A86",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A87",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A88",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A89",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A90",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A91",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A92",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A93",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A94",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A95",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A97",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "A80",
+        "b": "A99",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B01",
+        "b": "C43",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "B02",
+        "b": "B03",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B02",
+        "b": "B04",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B02",
+        "b": "B05",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B06",
+        "b": "B27",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B11",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B12",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B13",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B14",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B15",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B16",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B10",
+        "b": "B18",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B21",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B22",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B23",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B24",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B25",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B29",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B30",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B31",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B32",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B33",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B34",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B35",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B36",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B37",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B40",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B41",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B42",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B43",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B44",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B45",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B46",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B48",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B50",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B51",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B52",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B54",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B55",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B56",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B57",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B58",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B60",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B61",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B62",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B64",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B65",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B66",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B67",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B68",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B70",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B71",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B72",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B73",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B74",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B75",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B77",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B78",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B81",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B82",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B83",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B85",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B86",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B87",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B88",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B89",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B90",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B91",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B92",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B93",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B94",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B96",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B97",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "B20",
+        "b": "B98",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C02",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C03",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C04",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C05",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C07",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C08",
+        "reasons": [
+          "structural-family",
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C09",
+        "reasons": [
+          "structural-family",
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C10",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C12",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C13",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C14",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C16",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C17",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C18",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C01",
+        "b": "C19",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C23",
+        "b": "C26",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C23",
+        "b": "C43",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C27",
+        "b": "C28",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C27",
+        "b": "C29",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C34",
+        "b": "C35",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C34",
+        "b": "C36",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C34",
+        "b": "C37",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C34",
+        "b": "C38",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C34",
+        "b": "C39",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C46",
+        "b": "C63",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C51",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C53",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C54",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C56",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C57",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C58",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C50",
+        "b": "C59",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C61",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C62",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C63",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C64",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C65",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C67",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C68",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C71",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C72",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C73",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C74",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C75",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C76",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C77",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C78",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C80",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C81",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C83",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C84",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C86",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C87",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C88",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C89",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C90",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C91",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C92",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C93",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C94",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C95",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C96",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "C60",
+        "b": "C97",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D02",
+        "b": "D35",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "D02",
+        "b": "D38",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "D03",
+        "b": "D30",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "D03",
+        "b": "D52",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D08",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D30",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D35",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D36",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D40",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D41",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D42",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D50",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D51",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D53",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D54",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D56",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D57",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D58",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D60",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D61",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D62",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D63",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D64",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D65",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D66",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D07",
+        "b": "D67",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D11",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D13",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D14",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D16",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D17",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D18",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D10",
+        "b": "D19",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D21",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D22",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D23",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D24",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D25",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D27",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D20",
+        "b": "D28",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D31",
+        "b": "D43",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D31",
+        "b": "D44",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D31",
+        "b": "D46",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D31",
+        "b": "D47",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D31",
+        "b": "D48",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D32",
+        "b": "D33",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D32",
+        "b": "D34",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D47",
+        "b": "D53",
+        "reasons": [
+          "structural-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D72",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D73",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D74",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D75",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D77",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D78",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D71",
+        "b": "D79",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D81",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D82",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D83",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D84",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D85",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D86",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D87",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D90",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D91",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D92",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D93",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D96",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D97",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "D80",
+        "b": "D98",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E03",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E04",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E05",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E06",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E07",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E08",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E01",
+        "b": "E09",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E13",
+        "b": "E15",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E13",
+        "b": "E16",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E13",
+        "b": "E17",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E13",
+        "b": "E18",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E13",
+        "b": "E19",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E21",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E22",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E23",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E24",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E25",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E28",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E29",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E30",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E32",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E34",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E35",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E36",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E37",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E38",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E39",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E40",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E42",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E43",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E44",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E45",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E46",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E47",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E48",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E50",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E51",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E52",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E53",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E54",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E57",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E58",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E20",
+        "b": "E59",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E61",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E64",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E65",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E66",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E67",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E68",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E69",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E71",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E72",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E73",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E74",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E75",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E76",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E78",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E79",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E80",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E81",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E83",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E84",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E85",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E86",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E87",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E89",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E90",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E91",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E92",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E93",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E94",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E95",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E96",
+        "reasons": [
+          "named-family"
+        ]
+      },
+      {
+        "a": "E60",
+        "b": "E97",
+        "reasons": [
+          "named-family"
+        ]
+      }
+    ],
+    "groups": [
+      {
+        "id": "e4b48c1d338e3748e377f91bf82a382b084dbc3d1a04201bcd5719318fe0c728",
+        "endpointIds": [
+          "A01"
+        ],
+        "namedFamilies": [
+          "Nimzo-Larsen Attack"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "f40f75c1d942889fb44d8278ed5bee04c8d2ce7ad069310771beefd6aa1b22c7",
+        "endpointIds": [
+          "A02",
+          "A03"
+        ],
+        "namedFamilies": [
+          "Bird Opening"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "01968837c178b5a6d97894c15b1a028ceed96655b01a00e64bafed9c83569ba0",
+        "endpointIds": [
+          "A04",
+          "A06",
+          "A08",
+          "D80",
+          "D81",
+          "D82",
+          "D83",
+          "D84",
+          "D85",
+          "D86",
+          "D87",
+          "D90",
+          "D91",
+          "D92",
+          "D93",
+          "D94",
+          "D96",
+          "D97",
+          "D98"
+        ],
+        "namedFamilies": [
+          "Grünfeld Defense",
+          "Zukertort Opening"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D80",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D81",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D82",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D83",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D84",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D85",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D85",
+            "source": "formal-match-v1",
+            "exposedId": "76",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D86",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D86",
+            "source": "formal-match-v1",
+            "exposedId": "76",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D87",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D87",
+            "source": "formal-match-v1",
+            "exposedId": "76",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D90",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D91",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D92",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D93",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D94",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D96",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D97",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D98",
+            "source": "formal-match-v1",
+            "exposedId": "75",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "b78d6f5c83cabac0bee53c6784483698d0de4823be80972faf78759c2bc3b679",
+        "endpointIds": [
+          "A07"
+        ],
+        "namedFamilies": [
+          "King's Indian Attack, with e6"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "86a1c752342c5ea158c68b2e83b2052967a4e5bd7e71d16fead8c919f89f3295",
+        "endpointIds": [
+          "A09",
+          "A12",
+          "A57"
+        ],
+        "namedFamilies": [
+          "Benko Gambit Declined",
+          "Réti Opening"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "A09",
+            "source": "formal-match-v1",
+            "exposedId": "78",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "A57",
+            "source": "formal-match-v1",
+            "exposedId": "78",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "f66c0625e74260d8e29fd313a508e8884877b0bb8822b399418f9faeb8ed5e7b",
+        "endpointIds": [
+          "A10",
+          "A13",
+          "A14",
+          "A15",
+          "A16",
+          "A18",
+          "A19",
+          "A20",
+          "A22",
+          "A23",
+          "A24",
+          "A25",
+          "A26",
+          "A28",
+          "A29",
+          "A30",
+          "A32",
+          "A33",
+          "A34",
+          "A35",
+          "A36",
+          "A37",
+          "A38"
+        ],
+        "namedFamilies": [
+          "English Opening"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "A24",
+            "source": "formal-match-v1",
+            "exposedId": "31",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "A25",
+            "source": "formal-match-v1",
+            "exposedId": "31",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "A28",
+            "source": "formal-match-v1",
+            "exposedId": "92",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A36",
+            "source": "formal-match-v1",
+            "exposedId": "91",
+            "reasons": [
+              "structural-family"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "c2048cc1914b49525059b132f4edaa0618110216e77eb693b591c59ef65f6a31",
+        "endpointIds": [
+          "A40"
+        ],
+        "namedFamilies": [
+          "Mikenas Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "a22343afb03e1b223712491408f1d11eb3dc09ac7d0eed7ba48f89990dbb3aa5",
+        "endpointIds": [
+          "A41",
+          "A42"
+        ],
+        "namedFamilies": [
+          "Modern Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "A42",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "structural-family"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bb9d783b57bad912312165f3698a0ff15ed547a96b7c41f0f01af79e5b777f98",
+        "endpointIds": [
+          "A43",
+          "A51",
+          "A52"
+        ],
+        "namedFamilies": [
+          "Indian Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "2ed87463b7d5bacdeae596701a5e81c8d3d759cd089b17f132b65100c82ddfb9",
+        "endpointIds": [
+          "A44",
+          "A60",
+          "A61",
+          "A62",
+          "A63",
+          "A65",
+          "A66",
+          "A68",
+          "A69",
+          "A70",
+          "A71",
+          "A72",
+          "A73",
+          "A74",
+          "A76",
+          "A77",
+          "A78"
+        ],
+        "namedFamilies": [
+          "Benoni Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "A60",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A66",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A68",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A69",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A72",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A73",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A74",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A76",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A77",
+            "source": "formal-match-v1",
+            "exposedId": "77",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "5204a032fe1f47471e27f6f230a1059f0d3a393387bd7b70fc236f8adbefcb35",
+        "endpointIds": [
+          "A45"
+        ],
+        "namedFamilies": [
+          "Trompowsky Attack"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "247c192d4b9c889f943dd1f82bf8f875cadfefd70c07ecd899bb533203c866b4",
+        "endpointIds": [
+          "A46",
+          "D02",
+          "D03",
+          "D04",
+          "D07",
+          "D08",
+          "D30",
+          "D31",
+          "D35",
+          "D36",
+          "D38",
+          "D40",
+          "D41",
+          "D42",
+          "D43",
+          "D44",
+          "D46",
+          "D47",
+          "D48",
+          "D50",
+          "D51",
+          "D52",
+          "D53",
+          "D54",
+          "D56",
+          "D57",
+          "D58",
+          "D60",
+          "D61",
+          "D62",
+          "D63",
+          "D64",
+          "D65",
+          "D66",
+          "D67"
+        ],
+        "namedFamilies": [
+          "London System",
+          "Queen's Gambit Declined",
+          "Queen's Pawn Game",
+          "Semi-Slav Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D02",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D02",
+            "source": "formal-match-v1",
+            "exposedId": "59",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D02",
+            "source": "formal-match-v1",
+            "exposedId": "83",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D08",
+            "source": "formal-match-v1",
+            "exposedId": "67",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D35",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D35",
+            "source": "formal-match-v1",
+            "exposedId": "59",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D35",
+            "source": "formal-match-v1",
+            "exposedId": "83",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D38",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D38",
+            "source": "formal-match-v1",
+            "exposedId": "59",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D38",
+            "source": "formal-match-v1",
+            "exposedId": "83",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D40",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D42",
+            "source": "formal-match-v1",
+            "exposedId": "64",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "D43",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D43",
+            "source": "formal-match-v1",
+            "exposedId": "62",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D44",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D44",
+            "source": "formal-match-v1",
+            "exposedId": "62",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D46",
+            "source": "formal-match-v1",
+            "exposedId": "61",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D47",
+            "source": "formal-match-v1",
+            "exposedId": "61",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D48",
+            "source": "formal-match-v1",
+            "exposedId": "61",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D50",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D51",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D52",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D52",
+            "source": "formal-match-v1",
+            "exposedId": "62",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D53",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D61",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D66",
+            "source": "formal-match-v1",
+            "exposedId": "57",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "d97c9fe34b84f89d842db8f286ef6c1a4ffc5bec2335b077648d405d6ba25a5e",
+        "endpointIds": [
+          "A48"
+        ],
+        "namedFamilies": [
+          "London System, with Be2"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "910ec8c5fa2e8163ac207a9c206326a88d59ca2a138e518e966f2014ea2640f8",
+        "endpointIds": [
+          "A53",
+          "A54",
+          "A55",
+          "C46",
+          "C60",
+          "C61",
+          "C62",
+          "C63",
+          "C64",
+          "C65",
+          "C67",
+          "C68",
+          "C71",
+          "C72",
+          "C73",
+          "C74",
+          "C75",
+          "C76",
+          "C77",
+          "C78",
+          "C80",
+          "C81",
+          "C83",
+          "C84",
+          "C86",
+          "C87",
+          "C88",
+          "C89",
+          "C90",
+          "C91",
+          "C92",
+          "C93",
+          "C94",
+          "C95",
+          "C96",
+          "C97"
+        ],
+        "namedFamilies": [
+          "Old Indian Defense",
+          "Ruy Lopez",
+          "Three Knights Opening"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C46",
+            "source": "formal-match-v1",
+            "exposedId": "15",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C62",
+            "source": "formal-match-v1",
+            "exposedId": "6",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C63",
+            "source": "eval-corpus-v1",
+            "exposedId": "23",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C63",
+            "source": "formal-match-v1",
+            "exposedId": "15",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C64",
+            "source": "formal-match-v1",
+            "exposedId": "0",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C64",
+            "source": "formal-match-v1",
+            "exposedId": "1",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C64",
+            "source": "formal-match-v1",
+            "exposedId": "13",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C64",
+            "source": "formal-match-v1",
+            "exposedId": "4",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C64",
+            "source": "formal-match-v1",
+            "exposedId": "9",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C65",
+            "source": "formal-match-v1",
+            "exposedId": "4",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C65",
+            "source": "formal-match-v1",
+            "exposedId": "6",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C67",
+            "source": "formal-match-v1",
+            "exposedId": "4",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C68",
+            "source": "formal-match-v1",
+            "exposedId": "5",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C77",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C78",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C80",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C81",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C83",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C84",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C86",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C87",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C88",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C89",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C90",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C91",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C92",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C93",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C94",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C95",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C96",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C97",
+            "source": "formal-match-v1",
+            "exposedId": "3",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "94cbecdc635f9fda785f5da0f2df738803c9c852bd6aa71920fba47571cbb0e3",
+        "endpointIds": [
+          "A56"
+        ],
+        "namedFamilies": [
+          "Vulture Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "1f775bdd9911da9f5b6623fe7089e919b7444fec8108b7da752054e06fd3669e",
+        "endpointIds": [
+          "A59"
+        ],
+        "namedFamilies": [
+          "Benko Gambit Accepted"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "A59",
+            "source": "formal-match-v1",
+            "exposedId": "78",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "63c889c63b380488caf25df33eb865cc167b3ca4bba8baffec0061ae142063ab",
+        "endpointIds": [
+          "A80",
+          "A81",
+          "A83",
+          "A84",
+          "A86",
+          "A87",
+          "A88",
+          "A89",
+          "A90",
+          "A91",
+          "A92",
+          "A93",
+          "A94",
+          "A95",
+          "A97",
+          "A99"
+        ],
+        "namedFamilies": [
+          "Dutch Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "A88",
+            "source": "formal-match-v1",
+            "exposedId": "81",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "A89",
+            "source": "formal-match-v1",
+            "exposedId": "81",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "27a63f01973efb97c944a8b2c3d79e6f9b27e74779747b23e01d552219e3c0d4",
+        "endpointIds": [
+          "B01",
+          "C23",
+          "C26",
+          "C43"
+        ],
+        "namedFamilies": [
+          "Bishop's Opening",
+          "Scandinavian Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "ad6e5aea9876fb703be64300855dc0cd1ec47971c5bd84d757063a5267d234a5",
+        "endpointIds": [
+          "B02",
+          "B03",
+          "B04",
+          "B05"
+        ],
+        "namedFamilies": [
+          "Alekhine Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "B03",
+            "source": "formal-match-v1",
+            "exposedId": "53",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B04",
+            "source": "formal-match-v1",
+            "exposedId": "53",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B05",
+            "source": "formal-match-v1",
+            "exposedId": "53",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fccdfcd72d7ce6c83762113b42825a95ad9dc85c743abe045aec2c4d2e0e0afa",
+        "endpointIds": [
+          "B06",
+          "B27"
+        ],
+        "namedFamilies": [
+          "Pterodactyl Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "d8c4c799151566915b9219925ee2d85e2c78ef3107ccb4fe39167684a011f38e",
+        "endpointIds": [
+          "B07"
+        ],
+        "namedFamilies": [
+          "Lion Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "fc500bbd863618d08dffed7832827c5653118830806cafdadbf6aee7c48c1a1b",
+        "endpointIds": [
+          "B09"
+        ],
+        "namedFamilies": [
+          "Pirc Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "B09",
+            "source": "formal-match-v1",
+            "exposedId": "50",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B09",
+            "source": "formal-match-v1",
+            "exposedId": "51",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "5b26b0a11f782bed424ec44677eedb50bd4e1ef6177e69219bbf20fb0f0f3f6e",
+        "endpointIds": [
+          "B10",
+          "B11",
+          "B12",
+          "B13",
+          "B14",
+          "B15",
+          "B16",
+          "B18"
+        ],
+        "namedFamilies": [
+          "Caro-Kann Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "B11",
+            "source": "formal-match-v1",
+            "exposedId": "46",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B12",
+            "source": "formal-match-v1",
+            "exposedId": "43",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B13",
+            "source": "formal-match-v1",
+            "exposedId": "44",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B13",
+            "source": "formal-match-v1",
+            "exposedId": "45",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B14",
+            "source": "formal-match-v1",
+            "exposedId": "44",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B14",
+            "source": "formal-match-v1",
+            "exposedId": "45",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B15",
+            "source": "eval-corpus-v1",
+            "exposedId": "12",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B16",
+            "source": "eval-corpus-v1",
+            "exposedId": "12",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "35a9a100312baebb1fc785f21ccf909928f7f1d8fc7f9d4c26babd02a6b972a5",
+        "endpointIds": [
+          "B20",
+          "B21",
+          "B22",
+          "B23",
+          "B24",
+          "B25",
+          "B29",
+          "B30",
+          "B31",
+          "B32",
+          "B33",
+          "B34",
+          "B35",
+          "B36",
+          "B37",
+          "B40",
+          "B41",
+          "B42",
+          "B43",
+          "B44",
+          "B45",
+          "B46",
+          "B48",
+          "B50",
+          "B51",
+          "B52",
+          "B54",
+          "B55",
+          "B56",
+          "B57",
+          "B58",
+          "B60",
+          "B61",
+          "B62",
+          "B64",
+          "B65",
+          "B66",
+          "B67",
+          "B68",
+          "B70",
+          "B71",
+          "B72",
+          "B73",
+          "B74",
+          "B75",
+          "B77",
+          "B78",
+          "B81",
+          "B82",
+          "B83",
+          "B85",
+          "B86",
+          "B87",
+          "B88",
+          "B89",
+          "B90",
+          "B91",
+          "B92",
+          "B93",
+          "B94",
+          "B96",
+          "B97",
+          "B98"
+        ],
+        "namedFamilies": [
+          "Sicilian Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "B22",
+            "source": "formal-match-v1",
+            "exposedId": "29",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B24",
+            "source": "formal-match-v1",
+            "exposedId": "31",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B25",
+            "source": "formal-match-v1",
+            "exposedId": "31",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B31",
+            "source": "formal-match-v1",
+            "exposedId": "27",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B33",
+            "source": "formal-match-v1",
+            "exposedId": "25",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B33",
+            "source": "formal-match-v1",
+            "exposedId": "34",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B34",
+            "source": "formal-match-v1",
+            "exposedId": "26",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B35",
+            "source": "formal-match-v1",
+            "exposedId": "26",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B36",
+            "source": "formal-match-v1",
+            "exposedId": "26",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B37",
+            "source": "formal-match-v1",
+            "exposedId": "26",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B40",
+            "source": "formal-match-v1",
+            "exposedId": "25",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B40",
+            "source": "formal-match-v1",
+            "exposedId": "34",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B41",
+            "source": "formal-match-v1",
+            "exposedId": "24",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B42",
+            "source": "formal-match-v1",
+            "exposedId": "24",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B43",
+            "source": "formal-match-v1",
+            "exposedId": "24",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B44",
+            "source": "formal-match-v1",
+            "exposedId": "23",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B45",
+            "source": "formal-match-v1",
+            "exposedId": "23",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B46",
+            "source": "formal-match-v1",
+            "exposedId": "23",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B46",
+            "source": "formal-match-v1",
+            "exposedId": "24",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B48",
+            "source": "formal-match-v1",
+            "exposedId": "23",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B52",
+            "source": "formal-match-v1",
+            "exposedId": "28",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B54",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B54",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B54",
+            "source": "formal-match-v1",
+            "exposedId": "21",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B54",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B56",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B57",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B58",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B60",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B61",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B62",
+            "source": "formal-match-v1",
+            "exposedId": "21",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B62",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B65",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B66",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B70",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B71",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B72",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B73",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B74",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B75",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B77",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B78",
+            "source": "formal-match-v1",
+            "exposedId": "20",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B85",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B86",
+            "source": "formal-match-v1",
+            "exposedId": "21",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "B87",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B89",
+            "source": "formal-match-v1",
+            "exposedId": "22",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B90",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B91",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B92",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B93",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B94",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B96",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B97",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "B98",
+            "source": "formal-match-v1",
+            "exposedId": "19",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "420a7f81f79d29e15a8f2a0adcca864cb2be16a7d96b3d4c5ca76fc93762ce2f",
+        "endpointIds": [
+          "C01",
+          "C02",
+          "C03",
+          "C04",
+          "C05",
+          "C07",
+          "C08",
+          "C09",
+          "C10",
+          "C12",
+          "C13",
+          "C14",
+          "C16",
+          "C17",
+          "C18",
+          "C19"
+        ],
+        "namedFamilies": [
+          "French Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C01",
+            "source": "formal-match-v1",
+            "exposedId": "40",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C02",
+            "source": "formal-match-v1",
+            "exposedId": "39",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C03",
+            "source": "formal-match-v1",
+            "exposedId": "36",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C03",
+            "source": "formal-match-v1",
+            "exposedId": "37",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C03",
+            "source": "formal-match-v1",
+            "exposedId": "38",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C04",
+            "source": "formal-match-v1",
+            "exposedId": "36",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C04",
+            "source": "formal-match-v1",
+            "exposedId": "37",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C04",
+            "source": "formal-match-v1",
+            "exposedId": "38",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C05",
+            "source": "formal-match-v1",
+            "exposedId": "38",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C10",
+            "source": "formal-match-v1",
+            "exposedId": "41",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C12",
+            "source": "formal-match-v1",
+            "exposedId": "37",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C13",
+            "source": "formal-match-v1",
+            "exposedId": "37",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C14",
+            "source": "formal-match-v1",
+            "exposedId": "37",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C16",
+            "source": "eval-corpus-v1",
+            "exposedId": "17",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C16",
+            "source": "formal-match-v1",
+            "exposedId": "36",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C17",
+            "source": "formal-match-v1",
+            "exposedId": "36",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C18",
+            "source": "formal-match-v1",
+            "exposedId": "36",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C19",
+            "source": "formal-match-v1",
+            "exposedId": "36",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fe2f63b70cc1360af8fd048a076cade7faa225d1461203844b0307979ef26365",
+        "endpointIds": [
+          "C20"
+        ],
+        "namedFamilies": [
+          "King's Pawn Opening"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "c42eb5afaada286843275cd55e53faed0dd79b9268c942b77a12a4364e00aeab",
+        "endpointIds": [
+          "C22"
+        ],
+        "namedFamilies": [
+          "Center Game"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C22",
+            "source": "formal-match-v1",
+            "exposedId": "17",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "9cde1feb54d76d4047605acd0c1fa789a211b75798bcb304f10a8d088cd4bdb2",
+        "endpointIds": [
+          "C25"
+        ],
+        "namedFamilies": [
+          "Vienna Gambit, with Max Lange Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "e16d57cd105219d4572a7d5d43ed9b57ea111928a350629354e8917363f3de0f",
+        "endpointIds": [
+          "C27",
+          "C28",
+          "C29"
+        ],
+        "namedFamilies": [
+          "Vienna Game"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C29",
+            "source": "formal-match-v1",
+            "exposedId": "12",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bbb0f8583c7b162e89f5e862d86e6f7c6ede2d6f29f6b6e02bbaad55e9897b9e",
+        "endpointIds": [
+          "C31"
+        ],
+        "namedFamilies": [
+          "Van Geet Opening"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "0f6ba222d29416c6b28a78216cd3a113d9109f69713d81db5cb1d347f89ccaa5",
+        "endpointIds": [
+          "C32"
+        ],
+        "namedFamilies": [
+          "King's Gambit Declined"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "1cab31f54726390bb62d535d154c4b0a61cb4ecd407d66da557a2b9afc536935",
+        "endpointIds": [
+          "C34",
+          "C35",
+          "C36",
+          "C37",
+          "C38",
+          "C39"
+        ],
+        "namedFamilies": [
+          "King's Gambit Accepted"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C34",
+            "source": "eval-corpus-v1",
+            "exposedId": "19",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C37",
+            "source": "formal-match-v1",
+            "exposedId": "14",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C39",
+            "source": "formal-match-v1",
+            "exposedId": "14",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "3a35e4e33876c14efe3ae739ec7eaabc2799f3ffc61add9e02e452cb30dfb9cd",
+        "endpointIds": [
+          "C40"
+        ],
+        "namedFamilies": [
+          "Elephant Gambit"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C40",
+            "source": "formal-match-v1",
+            "exposedId": "2",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C40",
+            "source": "formal-match-v1",
+            "exposedId": "8",
+            "reasons": [
+              "structural-family"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "57dc7c130d2cd59d7a5b0afebb0f6d97bbd66acbb19c9de16f67ae6e77c23332",
+        "endpointIds": [
+          "C41"
+        ],
+        "namedFamilies": [
+          "Philidor Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "be47417f8a757866282d27666d351a56a1393228e84e7d648f32d4605a19e8dd",
+        "endpointIds": [
+          "C42"
+        ],
+        "namedFamilies": [
+          "Petrov's Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C42",
+            "source": "formal-match-v1",
+            "exposedId": "10",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "73735a9cce715c1f029c02c583ad8412d2328a16dcd94116ad60ec8d99185392",
+        "endpointIds": [
+          "C44"
+        ],
+        "namedFamilies": [
+          "King's Pawn Game"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "fe45ebef697129fa8b5e7b532cd31dfbc1a4b036f67dcfdd97693b6ba029ab1d",
+        "endpointIds": [
+          "C45"
+        ],
+        "namedFamilies": [
+          "Scotch Game"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C45",
+            "source": "eval-corpus-v1",
+            "exposedId": "21",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C45",
+            "source": "formal-match-v1",
+            "exposedId": "17",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "C45",
+            "source": "formal-match-v1",
+            "exposedId": "7",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "4c825e34a3873d87e28770fe48716865fa43e7ad2334033a3ce7f5d21914bac0",
+        "endpointIds": [
+          "C47"
+        ],
+        "namedFamilies": [
+          "Four Knights Game"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C47",
+            "source": "formal-match-v1",
+            "exposedId": "9",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "87af59f01b648474862f76b0065872ccd1ea6ad367223cd879a7cb6a5488d4b2",
+        "endpointIds": [
+          "C50",
+          "C51",
+          "C53",
+          "C54",
+          "C56",
+          "C57",
+          "C58",
+          "C59"
+        ],
+        "namedFamilies": [
+          "Italian Game"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "C50",
+            "source": "formal-match-v1",
+            "exposedId": "0",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C51",
+            "source": "formal-match-v1",
+            "exposedId": "0",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C53",
+            "source": "formal-match-v1",
+            "exposedId": "0",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C54",
+            "source": "formal-match-v1",
+            "exposedId": "0",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C56",
+            "source": "formal-match-v1",
+            "exposedId": "0",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C57",
+            "source": "formal-match-v1",
+            "exposedId": "1",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C58",
+            "source": "formal-match-v1",
+            "exposedId": "1",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C58",
+            "source": "formal-match-v1",
+            "exposedId": "2",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C59",
+            "source": "formal-match-v1",
+            "exposedId": "1",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "C59",
+            "source": "formal-match-v1",
+            "exposedId": "2",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bca3bb5cad4c779def7bd38853ba5ce6d28f5235485ca8dcc208e44e5d932c8f",
+        "endpointIds": [
+          "D00"
+        ],
+        "namedFamilies": [
+          "Blackmar-Diemer Gambit Declined"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D00",
+            "source": "eval-corpus-v1",
+            "exposedId": "24",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cef746ddbe81d79c1fa0f20571b936c8fb12a7cef45b0e8137429b97114ff28e",
+        "endpointIds": [
+          "D01"
+        ],
+        "namedFamilies": [
+          "Richter-Veresov Attack"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D01",
+            "source": "formal-match-v1",
+            "exposedId": "90",
+            "reasons": [
+              "structural-family"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "5919beb75cd8327d9d517d16ea34ae4077f0a0fd1d929887c3965f869ce7e94c",
+        "endpointIds": [
+          "D05"
+        ],
+        "namedFamilies": [
+          "Rubinstein Opening"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D05",
+            "source": "formal-match-v1",
+            "exposedId": "86",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "50a36f3e817e857fea5af61b542ad5dd3274b6c422ffe0befb154a0bd28c4a82",
+        "endpointIds": [
+          "D10",
+          "D11",
+          "D13",
+          "D14",
+          "D16",
+          "D17",
+          "D18",
+          "D19"
+        ],
+        "namedFamilies": [
+          "Slav Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D13",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D14",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D16",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D17",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D18",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D19",
+            "source": "formal-match-v1",
+            "exposedId": "60",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "625e1c54c65d1a2cd3c936021bf6371144d2f23adbd646790391541921145601",
+        "endpointIds": [
+          "D20",
+          "D21",
+          "D22",
+          "D23",
+          "D24",
+          "D25",
+          "D27",
+          "D28"
+        ],
+        "namedFamilies": [
+          "Queen's Gambit Accepted"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D23",
+            "source": "formal-match-v1",
+            "exposedId": "63",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D23",
+            "source": "formal-match-v1",
+            "exposedId": "64",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D28",
+            "source": "formal-match-v1",
+            "exposedId": "63",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D28",
+            "source": "formal-match-v1",
+            "exposedId": "64",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "54ef709efe0bb8b100c89ea52345dd01fde26f93c9c5bc32759f802d59d70716",
+        "endpointIds": [
+          "D32",
+          "D33",
+          "D34"
+        ],
+        "namedFamilies": [
+          "Tarrasch Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D32",
+            "source": "formal-match-v1",
+            "exposedId": "65",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D33",
+            "source": "formal-match-v1",
+            "exposedId": "65",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D34",
+            "source": "formal-match-v1",
+            "exposedId": "65",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "c4e4b7012cda7958dbd0a64343d80d9e73a7753df2da62c0855cd46d286c1b68",
+        "endpointIds": [
+          "D71",
+          "D72",
+          "D73",
+          "D74",
+          "D75",
+          "D77",
+          "D78",
+          "D79"
+        ],
+        "namedFamilies": [
+          "Neo-Grünfeld Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "D74",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D78",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "D79",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ac2f83ef85e52c5aa716847ee09b31d09fb93582ac42fdd26d015907735e4ab3",
+        "endpointIds": [
+          "E01",
+          "E03",
+          "E04",
+          "E05",
+          "E06",
+          "E07",
+          "E08",
+          "E09"
+        ],
+        "namedFamilies": [
+          "Catalan Opening"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "E01",
+            "source": "eval-corpus-v1",
+            "exposedId": "32",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E01",
+            "source": "formal-match-v1",
+            "exposedId": "87",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E03",
+            "source": "eval-corpus-v1",
+            "exposedId": "32",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E03",
+            "source": "formal-match-v1",
+            "exposedId": "87",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E03",
+            "source": "formal-match-v1",
+            "exposedId": "88",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E04",
+            "source": "eval-corpus-v1",
+            "exposedId": "32",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E04",
+            "source": "formal-match-v1",
+            "exposedId": "87",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E04",
+            "source": "formal-match-v1",
+            "exposedId": "88",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E06",
+            "source": "eval-corpus-v1",
+            "exposedId": "32",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E06",
+            "source": "formal-match-v1",
+            "exposedId": "87",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E07",
+            "source": "eval-corpus-v1",
+            "exposedId": "32",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E07",
+            "source": "formal-match-v1",
+            "exposedId": "87",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E08",
+            "source": "eval-corpus-v1",
+            "exposedId": "32",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E08",
+            "source": "formal-match-v1",
+            "exposedId": "87",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "67da3aec1f389a3ea70660ae576947d517331dfd3c316dae47d109a3a365762c",
+        "endpointIds": [
+          "E10"
+        ],
+        "namedFamilies": [
+          "Blumenfeld Countergambit"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "2b8075303dc13f86f33ccc7b05a1f3d223a9da03bfce5f5d8e9f53e3ed6f1aaa",
+        "endpointIds": [
+          "E11"
+        ],
+        "namedFamilies": [
+          "Bogo-Indian Defense"
+        ],
+        "exposed": false,
+        "directExposures": []
+      },
+      {
+        "id": "773affaae57a96fa79bf577f0eda39c4309a91fb771e04eb24c1cc2b3f0e9791",
+        "endpointIds": [
+          "E13",
+          "E15",
+          "E16",
+          "E17",
+          "E18",
+          "E19"
+        ],
+        "namedFamilies": [
+          "Queen's Indian Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "E13",
+            "source": "formal-match-v1",
+            "exposedId": "70",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E15",
+            "source": "eval-corpus-v1",
+            "exposedId": "35",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E15",
+            "source": "formal-match-v1",
+            "exposedId": "70",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E16",
+            "source": "eval-corpus-v1",
+            "exposedId": "35",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E16",
+            "source": "formal-match-v1",
+            "exposedId": "70",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E17",
+            "source": "eval-corpus-v1",
+            "exposedId": "35",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E17",
+            "source": "formal-match-v1",
+            "exposedId": "70",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E18",
+            "source": "eval-corpus-v1",
+            "exposedId": "35",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E18",
+            "source": "formal-match-v1",
+            "exposedId": "70",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E19",
+            "source": "eval-corpus-v1",
+            "exposedId": "35",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E19",
+            "source": "formal-match-v1",
+            "exposedId": "70",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e5127cff8b3bc5b6f3b4936e781ea8e2df7cb3f760c6181f7fd1c81bc96d8e94",
+        "endpointIds": [
+          "E20",
+          "E21",
+          "E22",
+          "E23",
+          "E24",
+          "E25",
+          "E28",
+          "E29",
+          "E30",
+          "E32",
+          "E34",
+          "E35",
+          "E36",
+          "E37",
+          "E38",
+          "E39",
+          "E40",
+          "E42",
+          "E43",
+          "E44",
+          "E45",
+          "E46",
+          "E47",
+          "E48",
+          "E50",
+          "E51",
+          "E52",
+          "E53",
+          "E54",
+          "E57",
+          "E58",
+          "E59"
+        ],
+        "namedFamilies": [
+          "Nimzo-Indian Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "E20",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E21",
+            "source": "formal-match-v1",
+            "exposedId": "71",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E22",
+            "source": "eval-corpus-v1",
+            "exposedId": "33",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E22",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E22",
+            "source": "formal-match-v1",
+            "exposedId": "71",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E23",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E24",
+            "source": "eval-corpus-v1",
+            "exposedId": "36",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E24",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E25",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E28",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E28",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E29",
+            "source": "eval-corpus-v1",
+            "exposedId": "37",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E29",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E30",
+            "source": "eval-corpus-v1",
+            "exposedId": "33",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E30",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E30",
+            "source": "formal-match-v1",
+            "exposedId": "71",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E32",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E34",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E35",
+            "source": "formal-match-v1",
+            "exposedId": "44",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E35",
+            "source": "formal-match-v1",
+            "exposedId": "58",
+            "reasons": [
+              "structural-family"
+            ]
+          },
+          {
+            "endpointId": "E35",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E36",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E37",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E38",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E39",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E40",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E42",
+            "source": "eval-corpus-v1",
+            "exposedId": "37",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E42",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E43",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E44",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E45",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E46",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E46",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E47",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E47",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E48",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E48",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E50",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E50",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E51",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E51",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E52",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E52",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E53",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E53",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E54",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E54",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E57",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E57",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E58",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E58",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E59",
+            "source": "formal-match-v1",
+            "exposedId": "68",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E59",
+            "source": "formal-match-v1",
+            "exposedId": "69",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "f8b0d3db1a38160fa5437a4e681e44dead157ce922777a476d44593c2a5baab1",
+        "endpointIds": [
+          "E60",
+          "E61",
+          "E64",
+          "E65",
+          "E66",
+          "E67",
+          "E68",
+          "E69",
+          "E71",
+          "E72",
+          "E73",
+          "E74",
+          "E75",
+          "E76",
+          "E78",
+          "E79",
+          "E80",
+          "E81",
+          "E83",
+          "E84",
+          "E85",
+          "E86",
+          "E87",
+          "E89",
+          "E90",
+          "E91",
+          "E92",
+          "E93",
+          "E94",
+          "E95",
+          "E96",
+          "E97"
+        ],
+        "namedFamilies": [
+          "King's Indian Defense"
+        ],
+        "exposed": true,
+        "directExposures": [
+          {
+            "endpointId": "E65",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E66",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E68",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E69",
+            "source": "formal-match-v1",
+            "exposedId": "74",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E71",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E72",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E73",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E74",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E75",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E76",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E78",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E79",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E80",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E81",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E83",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E84",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E85",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E86",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E87",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E89",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E90",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E90",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E91",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E91",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "structural-family",
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E92",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E92",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E93",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E93",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E94",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E94",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E95",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E95",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E96",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E96",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E97",
+            "source": "formal-match-v1",
+            "exposedId": "72",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          },
+          {
+            "endpointId": "E97",
+            "source": "formal-match-v1",
+            "exposedId": "73",
+            "reasons": [
+              "complete-line-prefix-at-least-six-plies"
+            ]
+          }
+        ]
+      }
+    ],
+    "counts": {
+      "endpoints": 400,
+      "components": 52,
+      "largestComponent": 63,
+      "directlyExposedEndpoints": 253,
+      "endpointsInExposedComponents": 374,
+      "componentsWithoutKnownExposure": 19
+    },
+    "independenceEstablished": false,
+    "effectiveSampleSize": null
+  },
+  "limitations": [
+    "Connected components encode declared dependencies, not independent experimental units.",
+    "No-known-exposure is relative to the two authenticated historical sources, not all model training or later development data.",
+    "This map does not select or remove endpoints from the frozen diagnostic schedule.",
+    "Formal admission remains unavailable; no candidate outcomes are consumed."
+  ]
+}

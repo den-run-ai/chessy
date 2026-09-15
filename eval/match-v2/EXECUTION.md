@@ -25,7 +25,10 @@ Mate and maximum-depth completion may legitimately stop before the node cap.
 bound over 400 color-pair endpoint means. It is **descriptive**, because
 named/structural opening correlations and absent source-game lineage need a
 reviewed family policy before formal inference. The summary always emits
-`formalPass: false`. A >49% Hard endpoint bound is never a strength claim or
+`formalPass: false`. The [prospective admission proposal](ADMISSION-PROPOSAL.md)
+records a complete static dependency map, the current bank's exposure limits
+and a possible future randomized finite-population design; it does not change
+this protocol. A >49% Hard endpoint bound is never a strength claim or
 an evaluator gate. Even after a family policy is admitted, selective-search
 admission needs correctness/tactics and a demonstrated product-budget
 wall-time/depth benefit. Separate source/build reproduction, WASM size,

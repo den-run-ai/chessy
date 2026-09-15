@@ -226,7 +226,8 @@ comparison covers four forced root moves only, not every legal move.
 
 The engine measurement tools below are **historical v1 infrastructure**.
 Do not dispatch them for a new candidate: Rust/WASM ignores the four seed
-slots, so 800 games repeat only 100 opening pairs. Issue #156 replaces them.
+slots, so 800 games repeat only 100 opening pairs. The v2 execution work
+from issue #156 replaces them.
 The [prospective 400-opening CC0 manifest](eval/match-v2/PROVENANCE.md) is
 frozen. The [v2 diagnostic runner](eval/match-v2/EXECUTION.md) registers exact
 commits, raw modules and budgets before executing 20 complete shards with
@@ -235,7 +236,11 @@ terminal result. Easy evaluator (10k nodes, endpoint lower bound >50%) and
 Hard selective-search (230k nodes, >49%) are separate profiles. Every result
 remains diagnostic: 400 unique endpoints do not prove 400 independent
 families, and source reproduction, correctness and device admission remain
-separate. No candidate has been measured on this manifest. The
+separate. Formal admission remains open in
+[#175](https://github.com/den-run-ai/chessy/issues/175); the
+[prospective decision and complete dependency map](eval/match-v2/ADMISSION-PROPOSAL.md)
+explain the current bank's exposure limits and a possible future statistical
+design. No candidate has been measured on this manifest. The
 [expanded PeSTO pilot](eval/PESTO-PILOT-2026-09.md) changed
 neither the shipped evaluator nor level budgets.
 The [clean natural-game follow-up](eval/NATURAL-PILOT-2026-09.md) records the
@@ -272,7 +277,7 @@ malformed, mixed or incomplete diagnostic artifacts still fail. Never
 selectively rerun shards, combine artifacts across dispatches, or retry a
 valid statistical miss. Historical protocol IDs and artifacts are retained;
 new formal shipping evidence must wait for v2 family/estimator admission
-under #156. Historically exposed openings support only separately registered
+under #175. Historically exposed openings support only separately registered
 development diagnostics, such as the natural-game pilot above.
 
 Historical Rust/WASM search optimizations used a separate formal efficiency

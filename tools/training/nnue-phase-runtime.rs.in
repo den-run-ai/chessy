@@ -1,0 +1,81 @@
+// Synthetic/private research template; never copied into production assets.
+const NNUE_H: usize = {{HIDDEN}};
+const NNUE_W1: [[i16; NNUE_H]; 768] = {{W1}};
+const NNUE_B1: [i32; NNUE_H] = {{B1}};
+const NNUE_W2: [[i16; 2 * NNUE_H]; 2] = {{W2}};
+const NNUE_B2: [i32; 2] = {{B2}};
+
+#[inline]
+fn nnue_add_piece(acc: &mut [[i32; NNUE_H]; 2], piece: Piece, square: usize) {
+    // Piece discriminants 1..12 match the registered PNBRQKpnbrqk channels.
+    let channel = piece as usize - 1;
+    let white = &NNUE_W1[channel * 64 + square];
+    let black = &NNUE_W1[((channel + 6) % 12) * 64 + (square ^ 56)];
+    let mut unit = 0;
+    while unit < NNUE_H {
+        acc[0][unit] += white[unit] as i32;
+        acc[1][unit] += black[unit] as i32;
+        unit += 1;
+    }
+}
+
+#[inline]
+fn nnue_finish(acc: [[i32; NNUE_H]; 2], turn: Color, phase: i32) -> i32 {
+    let us = turn as usize;
+    let them = 1 - us;
+    let mut heads = [NNUE_B2[0] as i64, NNUE_B2[1] as i64];
+    let mut unit = 0;
+    while unit < NNUE_H {
+        let our = acc[us][unit].clamp(0, 16384) as i64;
+        let other = acc[them][unit].clamp(0, 16384) as i64;
+        let mut head = 0;
+        while head < 2 {
+            heads[head] += our * NNUE_W2[head][unit] as i64
+                + other * NNUE_W2[head][NNUE_H + unit] as i64;
+            head += 1;
+        }
+        unit += 1;
+    }
+    let p = core::cmp::min(24, phase) as i64;
+    let numerator = p * heads[0] + (24 - p) * heads[1];
+    let denominator: i64 = 24 * 16384 * 4096;
+    let adjusted = numerator * 400 + denominator / 2;
+    // Match floor(x + 0.5), then apply White sign (negative ties matter).
+    let mut rounded = adjusted / denominator;
+    if adjusted < 0 && adjusted % denominator != 0 {
+        rounded -= 1;
+    }
+    if turn == Color::White { rounded as i32 } else { -(rounded as i32) }
+}
+
+#[inline]
+fn nnue_refresh(position: &Position) -> i32 {
+    let mut acc = [NNUE_B1; 2];
+    let mut phase = 0;
+    let mut square = 0;
+    while square < 64 {
+        let piece = position.board[square];
+        if piece != Piece::Empty {
+            nnue_add_piece(&mut acc, piece, square);
+            phase += PHASE[engine::piece_type(piece).unwrap() as usize];
+        }
+        square += 1;
+    }
+    nnue_finish(acc, position.turn, phase)
+}
+
+#[cfg(test)]
+mod nnue_research_parity {
+    use super::*;
+
+    #[test]
+    fn authored_independent_bigint_oracle() {
+        let cases: &[(&[u8], i32)] = &[
+{{FIXTURES}}
+        ];
+        for &(fen, expected_residual) in cases {
+            let position = engine::parse_fen(fen).unwrap();
+            assert_eq!(nnue_refresh(&position), expected_residual);
+        }
+    }
+}
