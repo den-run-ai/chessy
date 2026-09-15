@@ -40,6 +40,11 @@ const PROTOCOLS = Object.freeze({
     acceptanceClass: 'efficiency-noninferiority',
     lowerBoundThreshold: 0.49,
     engineKind: 'wasm',
+    // Pre-cutover artifacts reused this ID for ABI1/ABI1 and omitted ABI
+    // metadata. They are not equivalent evidence: current aggregation requires
+    // the explicit cross-ABI contract below and deliberately does not backfill.
+    candidateResultAbi: 2,
+    baseResultAbi: 1,
     formal: true
   }),
   nodeDiagnostic: Object.freeze({

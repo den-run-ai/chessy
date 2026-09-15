@@ -376,6 +376,43 @@ checks each shard's byte hash and row count, the frozen Stockfish manifest and
 both embedded networks, exact role membership, sorted/unique record IDs,
 recomputed corpus keys, and the locked incident quarantine.
 
+NNUE selection admission invokes the existing JavaScript
+`Label.validateSelectionManifest()` and `E4.validateCertificationManifest()`
+through `test/training/validate-selection-admission.js`; Node is therefore
+required even for Python-only input validation. Python sends the same retained
+selection and certification bytes it authenticated, compares the returned
+identities and quarantine keys, and retains the validator/dependency hashes
+for the final publication check. A supplied aggregate hash, an empty frozen
+certification, or a rehashed change to its source, schedules, or controls cannot
+replace the canonical contracts. The explicit sample mode continues to require
+the complete pending certification template and remains non-fit-eligible.
+
+HCE and NNUE also require the actual exclusion ledger and complete UCI
+transcript beside every teacher shard. The shared `teacher-evidence.js`
+admission hashes and consumes the same retained bytes, validates all selected
+records, and requires each selected ID exactly once in accepted labels or
+exclusions. It replays the frozen UCI options, per-position resets, FENs and
+node budgets through the labeler's score reducer, then reconstructs the exact
+label or exclusion and its reason inventory. Missing files, substituted source
+fields, rehashed omissions, and labels inconsistent with the recorded search
+fail before fitting. HCE compiles only the retained authenticated teacher rows;
+NNUE trains from its retained snapshot and rechecks evidence at publication.
+
+This authenticates retained evidence and internal consistency in the trusted
+runner below; a wholly fabricated, coherently rehashed transcript is not a
+cryptographic attestation that Stockfish executed. Input licensing, frozen
+selection, experiment registration, device timing, and strength gates remain
+separate requirements. These changes do not integrate a learned evaluator.
+
+Training and labelling tools run in an isolated, trusted OS account with a
+fixed checkout and trusted Node/Python executables. Retained descriptors and
+private snapshots defend against pathname replacement and ordinary concurrent
+writers; they are not a sandbox against a hostile process with the same user
+ID, a debugger, or root access. Such a process can rewrite retained inodes or
+interpreter memory and restore files before a final hash check. No same-user
+hostile-process immutability guarantee is claimed by these tools. Use a fresh
+isolated runner for admission, labelling, fitting, and publication.
+
 Selection shards normally contain all five roles. A physical mixed-role
 teacher shard may be supplied under both `--train` and `--validation`: it is
 authenticated and fully validated once, then only `shared-train` records enter
@@ -399,7 +436,7 @@ descriptors only through report generation, and then closes them.
 The trainer also captures the configuration, architecture, trainer source,
 teacher, held-out, and corpus-contract hashes before fitting. The model card
 uses those captured hashes, and the files, all input sidecars, selection
-manifests/shards, and immutable teacher snapshots are checked again under the
+manifests/shards, and retained teacher snapshots are checked again under the
 output lock immediately before atomic checkpoint/model-card publication.
 
 The G1 head is an expected-score logit, not a falsely labelled centipawn score.

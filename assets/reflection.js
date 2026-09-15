@@ -524,14 +524,13 @@
     }
     const reflection = JSON.parse(JSON.stringify(built.value));
     // Gate 0 is crossed by the player's valid structured self-report, not by
-    // engine completion or by saving a lesson card. The scan job stores only a
-    // minimal ply receipt (never these answers) so Review can reveal this
-    // move's score and, after every suggestion is reflected on, the complete
-    // score ledger. A failed cache checkpoint stays fail-closed.
+    // engine completion or by saving a lesson card. A durable receipt binds
+    // this canonical Calculation value to the exact archived revision and ply;
+    // only a committed, replay-validated receipt can reveal score history.
     if (typeof ChessyMomentScan !== 'undefined' &&
         typeof ChessyMomentScan.recordReflection === 'function') {
       try {
-        Promise.resolve(ChessyMomentScan.recordReflection(r, r.ply))
+        Promise.resolve(ChessyMomentScan.recordReflection(r, r.ply, reflection))
           .catch(function () {});
       } catch (e) { /* score history remains locked */ }
     }

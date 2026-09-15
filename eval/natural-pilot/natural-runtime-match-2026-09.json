@@ -1,0 +1,283 @@
+{
+  "buildReceiptSha256": "72a91ff22d729caf4552f72a09509340c489b8c6d9a0f49a2475eefd9797532b",
+  "contractSha256": "4a2d6069140d35ba22a21e9cafffa9e3ca478cd0835fe3e1ff183a3bc6e00e45",
+  "counts": {
+    "fullOpeningHistoryReplays": 80,
+    "fullRepetitionMapChecks": 9882,
+    "games": 80,
+    "legalMoveChecks": 9882,
+    "mismatches": 0,
+    "openingPairsPerBudget": 20,
+    "searchedPlies": 9882,
+    "terminalChecks": 80
+  },
+  "decision": "Stop this candidate after the completed development screen: mixed point estimates, both diagnostic intervals include 50%, no established Elo/time gain; no retuning, larger match dispatch, production integration or level change.",
+  "diagnosticStatistics": [
+    {
+      "bootstrap": {
+        "percentile": "linear interpolation at (replicates-1)*p",
+        "replicates": 2000,
+        "rng": "Python random.Random (MT19937), reset per budget; ascending opening-index order",
+        "seed": 1370915,
+        "unit": "historical opening pair; not proven independent family"
+      },
+      "candidateMeanPoints": 0.425,
+      "candidateToBaselineMeanElapsedRatio": 1.0003056964398616,
+      "draws": 10,
+      "games": 40,
+      "losses": 18,
+      "openingPairBootstrap95PercentileInterval": [
+        0.2875,
+        0.5625
+      ],
+      "openingPairs": [
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 4
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 6
+        },
+        {
+          "candidateMeanPoints": 1.0,
+          "openingIndex": 7
+        },
+        {
+          "candidateMeanPoints": 0.0,
+          "openingIndex": 12
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 14
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 25
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 26
+        },
+        {
+          "candidateMeanPoints": 0.0,
+          "openingIndex": 28
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 29
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 32
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 33
+        },
+        {
+          "candidateMeanPoints": 0.0,
+          "openingIndex": 43
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 52
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 58
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 74
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 75
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 76
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 77
+        },
+        {
+          "candidateMeanPoints": 0.0,
+          "openingIndex": 91
+        },
+        {
+          "candidateMeanPoints": 1.0,
+          "openingIndex": 97
+        }
+      ],
+      "plyCapDraws": 7,
+      "terminalReasons": {
+        "checkmate": 30,
+        "ply-cap": 7,
+        "threefold repetition": 3
+      },
+      "timeMs": 50,
+      "timing": {
+        "baseline": {
+          "meanElapsedMs": 49.18094097732993,
+          "moves": 2382,
+          "totalElapsedMs": 117149.0014079999,
+          "totalNodes": 160350097,
+          "totalRequestedMs": 119100
+        },
+        "candidate": {
+          "meanElapsedMs": 49.195975415895745,
+          "moves": 2378,
+          "totalElapsedMs": 116988.02953900008,
+          "totalNodes": 156986763,
+          "totalRequestedMs": 118900
+        }
+      },
+      "wins": 12
+    },
+    {
+      "bootstrap": {
+        "percentile": "linear interpolation at (replicates-1)*p",
+        "replicates": 2000,
+        "rng": "Python random.Random (MT19937), reset per budget; ascending opening-index order",
+        "seed": 1370915,
+        "unit": "historical opening pair; not proven independent family"
+      },
+      "candidateMeanPoints": 0.5875,
+      "candidateToBaselineMeanElapsedRatio": 0.9977924343970301,
+      "draws": 17,
+      "games": 40,
+      "losses": 8,
+      "openingPairBootstrap95PercentileInterval": [
+        0.4875,
+        0.6875
+      ],
+      "openingPairs": [
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 4
+        },
+        {
+          "candidateMeanPoints": 1.0,
+          "openingIndex": 6
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 7
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 12
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 14
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 25
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 26
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 28
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 29
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 32
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 33
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 43
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 52
+        },
+        {
+          "candidateMeanPoints": 0.75,
+          "openingIndex": 58
+        },
+        {
+          "candidateMeanPoints": 1.0,
+          "openingIndex": 74
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 75
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 76
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 77
+        },
+        {
+          "candidateMeanPoints": 0.25,
+          "openingIndex": 91
+        },
+        {
+          "candidateMeanPoints": 0.5,
+          "openingIndex": 97
+        }
+      ],
+      "plyCapDraws": 10,
+      "terminalReasons": {
+        "checkmate": 23,
+        "insufficient material": 1,
+        "ply-cap": 10,
+        "threefold repetition": 6
+      },
+      "timeMs": 200,
+      "timing": {
+        "baseline": {
+          "meanElapsedMs": 195.1163071238764,
+          "moves": 2559,
+          "totalElapsedMs": 499302.6299299997,
+          "totalNodes": 700166857,
+          "totalRequestedMs": 511800
+        },
+        "candidate": {
+          "meanElapsedMs": 194.68557507569122,
+          "moves": 2563,
+          "totalElapsedMs": 498979.1289189966,
+          "totalNodes": 695020836,
+          "totalRequestedMs": 512600
+        }
+      },
+      "wins": 15
+    }
+  ],
+  "independentAuditMethod": "Python legal replay of all 80 histories and 9,882 searched plies, repetition/terminal checks and actual input hashes; closed original/archive files verified identical. Timing is authenticated recorded elapsed search time, not independently certified engine internals or exact CPU time.",
+  "independentAuditSha256": "3fc8b20037144669e50cf07752a71ae5eec5b71401a5a0237afbcebbbf6e36b8",
+  "limitations": [
+    "Historical exposed opening pairs are diagnostic clusters, not proven independent position families.",
+    "Python replays moves and authenticates recorded search metadata; it does not rerun or certify engine searches.",
+    "Build, parity and compressed sizes are authenticated producer attestations; the fixed-node gate is independently recomputed.",
+    "Frozen registration selects benchmark rows; source artifacts are rehashed, without repeating the prior independent selection audit.",
+    "Search time is requested per move; actual side costs and imbalance are reported without exact wall-time equality.",
+    "No production admission or Elo claim follows from this completed diagnostic batch."
+  ],
+  "productionIntegrationAllowed": false,
+  "registrationSha256": "19a9a4cf15671bf48067120570def920c16a16c0775843ab9548c937fd6f178e",
+  "researchOnly": true,
+  "schema": "chessy.natural-runtime-public-match-summary.v1",
+  "shippingOrEloClaimAllowed": false,
+  "status": "PASS",
+  "summarySha256": "95f6afd4674a39371482c2311a5fce80da5e3afb24f749639bab5c32d62fa7a2"
+}
