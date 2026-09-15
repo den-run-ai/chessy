@@ -1853,6 +1853,151 @@
      "baseDepth": 6
     }
    ]
+  },
+  "h128-mopup": {
+   "nodes": 16384,
+   "reps": 8,
+   "medianNpsRatio": 0.6176683424826238,
+   "p25": 0.5442737034324914,
+   "p75": 0.780363277094824,
+   "modules": {
+    "base": {
+     "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+     "bytes": 37172
+    },
+    "candidate": {
+     "sha256": "7ef2ae52004762c35d7385dc122f1dfdaddaa5cfe93086b39693858078aaaa49",
+     "bytes": 230393
+    }
+   },
+   "perPosition": [
+    {
+     "name": "opening (Ruy Lopez)",
+     "fen": "r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 5",
+     "medianNpsRatio": 0.7522667383367531,
+     "candidateDepth": 4,
+     "baseDepth": 4
+    },
+    {
+     "name": "opening (Ruy Lopez) (mirror)",
+     "fen": "rnbq1rk1/pppp1ppp/5n2/b3p3/4P3/P1N2N2/1PPP1PPP/R1BQKB1R w KQ - 3 5",
+     "medianNpsRatio": 0.7685291547583147,
+     "candidateDepth": 4,
+     "baseDepth": 4
+    },
+    {
+     "name": "open middlegame (Dragon)",
+     "fen": "r2q1rk1/pp1bppbp/2np1np1/8/3NP3/2N1B3/PPPQBPPP/R4RK1 w - - 0 1",
+     "medianNpsRatio": 0.8300761887652014,
+     "candidateDepth": 3,
+     "baseDepth": 3
+    },
+    {
+     "name": "open middlegame (Dragon) (mirror)",
+     "fen": "r4rk1/pppqbppp/2n1b3/3np3/8/2NP1NP1/PP1BPPBP/R2Q1RK1 b - - 0 1",
+     "medianNpsRatio": 0.7742296172517054,
+     "candidateDepth": 3,
+     "baseDepth": 3
+    },
+    {
+     "name": "closed middlegame (KID)",
+     "fen": "r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1",
+     "medianNpsRatio": 0.7904688974303007,
+     "candidateDepth": 3,
+     "baseDepth": 3
+    },
+    {
+     "name": "closed middlegame (KID) (mirror)",
+     "fen": "r1bq1rk1/pp3ppp/2n2n2/2p1p3/3pP3/3P2P1/PPP1N1BP/R1BQ1RK1 b - - 0 1",
+     "medianNpsRatio": 0.7725912665529062,
+     "candidateDepth": 3,
+     "baseDepth": 3
+    },
+    {
+     "name": "tactical middlegame (Kiwipete)",
+     "fen": "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+     "medianNpsRatio": 0.8541701621134381,
+     "candidateDepth": 3,
+     "baseDepth": 1
+    },
+    {
+     "name": "tactical middlegame (Kiwipete) (mirror)",
+     "fen": "r3k2r/pppbbppp/2n2q1P/1P2p3/3pn3/BN2PNP1/P1PPQPB1/R3K2R b KQkq - 0 1",
+     "medianNpsRatio": 0.860563644321377,
+     "candidateDepth": 3,
+     "baseDepth": 1
+    },
+    {
+     "name": "rook ending (Lucena)",
+     "fen": "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1",
+     "medianNpsRatio": 0.5369130189144395,
+     "candidateDepth": 5,
+     "baseDepth": 6
+    },
+    {
+     "name": "rook ending (Lucena) (mirror)",
+     "fen": "2r5/R7/8/8/8/8/1p6/1k1K4 b - - 0 1",
+     "medianNpsRatio": 0.5811445062731431,
+     "candidateDepth": 5,
+     "baseDepth": 6
+    },
+    {
+     "name": "minor-piece ending",
+     "fen": "8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1",
+     "medianNpsRatio": 0.5970679480046239,
+     "candidateDepth": 5,
+     "baseDepth": 5
+    },
+    {
+     "name": "minor-piece ending (mirror)",
+     "fen": "8/4k1p1/2b2p2/8/4N3/4P1P1/3K1P2/8 b - - 0 1",
+     "medianNpsRatio": 0.6162256072777721,
+     "candidateDepth": 5,
+     "baseDepth": 5
+    },
+    {
+     "name": "promotion race",
+     "fen": "8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1",
+     "medianNpsRatio": 0.5390963758669955,
+     "candidateDepth": 6,
+     "baseDepth": 6
+    },
+    {
+     "name": "promotion race (mirror)",
+     "fen": "8/1P3k2/8/8/8/8/1p3K2/8 b - - 0 1",
+     "medianNpsRatio": 0.6119289900215914,
+     "candidateDepth": 6,
+     "baseDepth": 6
+    },
+    {
+     "name": "pawn ending",
+     "fen": "8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1",
+     "medianNpsRatio": 0.45411540519109866,
+     "candidateDepth": 8,
+     "baseDepth": 8
+    },
+    {
+     "name": "pawn ending (mirror)",
+     "fen": "8/8/4k3/4p3/4P3/4K3/8/8 b - - 0 1",
+     "medianNpsRatio": 0.45035678315072414,
+     "candidateDepth": 8,
+     "baseDepth": 8
+    },
+    {
+     "name": "queen vs rook",
+     "fen": "8/8/8/8/8/8/3k4/R3K3 w - - 0 1",
+     "medianNpsRatio": 0.5220783000762049,
+     "candidateDepth": 6,
+     "baseDepth": 6
+    },
+    {
+     "name": "queen vs rook (mirror)",
+     "fen": "r3k3/3K4/8/8/8/8/8/8 b - - 0 1",
+     "medianNpsRatio": 0.5564702913227988,
+     "candidateDepth": 6,
+     "baseDepth": 6
+    }
+   ]
   }
  },
  "mateConversion": {
@@ -2236,6 +2381,196 @@
   }
  },
  "matches": {
+  "h128-mopup-n10000": {
+   "modules": {
+    "base": {
+     "path": "/home/user/chessy/assets/chessy-ai-fast.wasm",
+     "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+     "bytes": 37172
+    },
+    "candidate": {
+     "path": "/home/user/data/nets/h128-mopup.wasm",
+     "sha256": "7ef2ae52004762c35d7385dc122f1dfdaddaa5cfe93086b39693858078aaaa49",
+     "bytes": 230393
+    }
+   },
+   "openingBank": {
+    "path": "/home/user/chessy/eval/nnue-proto-2026-09/dev-openings.json",
+    "sha256": "db9a04fb0a12029a0a1db1065a9fa942abf6e0fbb0441ae140338a40ead7f9c1",
+    "schema": "chessy.nnue-proto-dev-openings.v1",
+    "note": "development-only bank generated by tools/nnue/gen-dev-openings.py; disjoint from the frozen quarantine boundary",
+    "pairs": 292
+   },
+   "protocol": {
+    "budget": {
+     "timeMs": 0,
+     "nodes": 10000
+    },
+    "maxPlies": 180,
+    "workers": 2,
+    "quiesce": true,
+    "maxDepth": 30,
+    "node": "v22.22.2",
+    "cpus": 4
+   },
+   "elapsedSeconds": 339.955,
+   "summary": {
+    "games": 584,
+    "openings": 292,
+    "wins": 305,
+    "draws": 75,
+    "losses": 204,
+    "score": 0.586472602739726,
+    "openingClustered": {
+     "mean": 0.586472602739726,
+     "sd": 0.32575087344352005,
+     "se": 0.019063127963985568,
+     "ci95": [
+      0.5489516502563845,
+      0.6239935552230675
+     ],
+     "clusterStats": {
+      "nClusters": 292,
+      "nPairs": 292,
+      "mean": 0.586472602739726,
+      "sd": 0.32575087344352005,
+      "lo95": 0.5550122182412235,
+      "pass": true,
+      "verdict": "PASS \u2014 stronger (one-sided 95% lower bound above 50%)"
+     }
+    },
+    "eloEstimate": {
+     "point": 60.7,
+     "ci95": [
+      34.1,
+      88
+     ]
+    },
+    "reasons": {
+     "checkmate": 509,
+     "ply-cap": 54,
+     "threefold repetition": 18,
+     "insufficient material": 3
+    },
+    "timing": {
+     "candidate": {
+      "moves": 27639,
+      "meanMs": 13.847434856543291,
+      "meanNodes": 9625.815839936322,
+      "meanDepth": 3.440500741705561,
+      "nps": 695133.4987062864
+     },
+     "base": {
+      "moves": 27579,
+      "meanMs": 9.959788244678819,
+      "meanNodes": 9638.070597193517,
+      "meanDepth": 3.4859131948221473,
+      "nps": 967698.3446252298
+     }
+    },
+    "npsRatio": 0.7183369720194135,
+    "budget": {
+     "timeMs": 0,
+     "nodes": 10000
+    }
+   }
+  },
+  "h128-mopup-n36000": {
+   "modules": {
+    "base": {
+     "path": "/home/user/chessy/assets/chessy-ai-fast.wasm",
+     "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+     "bytes": 37172
+    },
+    "candidate": {
+     "path": "/home/user/data/nets/h128-mopup.wasm",
+     "sha256": "7ef2ae52004762c35d7385dc122f1dfdaddaa5cfe93086b39693858078aaaa49",
+     "bytes": 230393
+    }
+   },
+   "openingBank": {
+    "path": "/home/user/chessy/eval/nnue-proto-2026-09/dev-openings.json",
+    "sha256": "db9a04fb0a12029a0a1db1065a9fa942abf6e0fbb0441ae140338a40ead7f9c1",
+    "schema": "chessy.nnue-proto-dev-openings.v1",
+    "note": "development-only bank generated by tools/nnue/gen-dev-openings.py; disjoint from the frozen quarantine boundary",
+    "pairs": 292
+   },
+   "protocol": {
+    "budget": {
+     "timeMs": 0,
+     "nodes": 36000
+    },
+    "maxPlies": 180,
+    "workers": 2,
+    "quiesce": true,
+    "maxDepth": 30,
+    "node": "v22.22.2",
+    "cpus": 4
+   },
+   "elapsedSeconds": 1167.082,
+   "summary": {
+    "games": 584,
+    "openings": 292,
+    "wins": 274,
+    "draws": 70,
+    "losses": 240,
+    "score": 0.5291095890410958,
+    "openingClustered": {
+     "mean": 0.5291095890410958,
+     "sd": 0.32705899975928193,
+     "se": 0.019139680266322675,
+     "ci95": [
+      0.49143796268597906,
+      0.5667812153962126
+     ],
+     "oneSidedLower95": 0.4975228682524356,
+     "clusterStats": {
+      "nClusters": 292,
+      "nPairs": 292,
+      "mean": 0.5291095890410958,
+      "sd": 0.32705899975928193,
+      "lo95": 0.4975228682524356,
+      "pass": true,
+      "verdict": "PASS \u2014 non-inferior (one-sided 95% lower bound above 49%)"
+     }
+    },
+    "eloEstimate": {
+     "point": 20.3,
+     "ci95": [
+      -6,
+      46.7
+     ]
+    },
+    "reasons": {
+     "checkmate": 514,
+     "threefold repetition": 24,
+     "ply-cap": 40,
+     "insufficient material": 5,
+     "fifty-move rule": 1
+    },
+    "timing": {
+     "candidate": {
+      "moves": 27086,
+      "meanMs": 48.53120730266553,
+      "meanNodes": 34298.415122203354,
+      "meanDepth": 4.35586649929853,
+      "nps": 706729.0724564263
+     },
+     "base": {
+      "moves": 27064,
+      "meanMs": 34.685442580549946,
+      "meanNodes": 34316.03975761159,
+      "meanDepth": 4.437924918711203,
+      "nps": 989349.917560357
+     }
+    },
+    "npsRatio": 0.7143368184627267,
+    "budget": {
+     "timeMs": 0,
+     "nodes": 36000
+    }
+   }
+  },
   "h128-n10000": {
    "modules": {
     "base": {

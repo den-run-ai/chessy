@@ -135,6 +135,7 @@ equal nodes.
 | H32 | 408 | 82,388 | 42,107 | 1.029 (0.889–1.323) | 1.15 / 1.13 |
 | H64 | 409 | 131,556 | 66,725 | 0.850 (0.770–1.076) | 0.96 / 0.93 |
 | H128 | 411 | 230,245 | 111,466 | 0.643 (0.560–0.799) | 0.73 / 0.70 |
+| H128 + mop-up | 411 | 230,393 | 110,617 | 0.618 (0.544–0.780) | 0.72 / – |
 
 The bench corpus is endgame-heavy, where the HCE is cheapest, so it reports
 lower ratios than the games do. Research modules need 2–6 extra 64 KiB
@@ -156,6 +157,7 @@ identical for candidate and base in every fixed-node run (3.4 plies at 10k,
 | H32 | 43.8% (40.0–47.6), −43 | 38.6% (35.0–42.3), −81 | 42.6% (38.9–46.4), −52 |
 | H64 | 52.6% (48.9–56.2), +18 | 51.5% (47.8–55.3), +11 | 51.6% (47.7–55.5), +11 |
 | H128 | **58.6% (54.9–62.4), +61** | 52.7% (49.0–56.5), +19 | 51.2% (47.3–55.1), +8 |
+| H128 + mop-up | 58.6% (54.9–62.4), +61 | 52.9% (49.1–56.7), +20 | pending |
 
 Reading: width matters (H16 ≈ H32 < H64 < H128 at equal nodes); the nets'
 edge shrinks as the search deepens (H128: +61 at 10k, +19 at 36k); and the
@@ -163,10 +165,14 @@ scalar inference cost converts H128's fixed-node lead into equal-time
 parity. The product's Hard and Master levels search far deeper than either
 screen budget, so the trend is the more important number.
 
-Pending at the time of writing and added below when complete: H128 with the
-shipped lone-king mop-up term at 10k/36k nodes, H128 and H128+mop-up at
-200 ms per move, and diagnostic D3 (H128 at the Hard profile's 230,000
-nodes on half the bank).
+The mop-up variant (rule R1 selected H128) is indistinguishable from
+net-only at both fixed budgets: the term is at most 76 cp against outputs
+near ±1700 cp in the positions where it applies. Its paired NPS bench is
+0.618 (0.544–0.780).
+
+Pending at the time of writing and added below when complete: H128 and
+H128+mop-up at 200 ms per move, and diagnostic D3 (H128 at the Hard
+profile's 230,000 nodes on half the bank).
 
 ## Diagnostics
 
@@ -220,6 +226,19 @@ scaled to the net's output, or endgame-specific training data.
   certification-grade options; D1 shows that a net can imitate a static
   evaluator closely without matching it in search, so play must be measured
   directly whatever the labels.
+
+## Execution notes
+
+- The H16 candidate run was repeated once after a bug in the runner's
+  opening-replay sanity check (python-chess omits the en-passant square
+  unless a capture is legal; Chessy prints it after every double push); the
+  first attempt played no games.
+- The log line `CANDIDATE_FAILED h128-mopup` is an artifact: the running
+  shell re-read `run-candidate.sh` after it had been edited for the
+  copied-crate layout and reported a syntax error after every output of
+  that run had already been written; all its results are complete.
+- The equal-time stage ran alone on the CPU; fixed-node runs overlapped
+  with training, which is harmless for node-limited searches.
 
 ## Reproduction
 
