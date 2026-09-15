@@ -1,0 +1,19 @@
+#[inline]
+fn append_tactical_move(
+    output: &mut [Move; MAX_MOVES], count: &mut usize,
+    from: u8, to: u8, piece: Piece, captured: Piece,
+    promotion: Option<PieceType>, en_passant: bool,
+    castle: Option<CastleSide>, double_push: bool,
+) {
+    if captured == Piece::Empty && promotion.is_none() { return; }
+    append_move(output,count,from,to,piece,captured,promotion,en_passant,castle,double_push);
+}
+
+#[cfg(test)]
+fn assert_tactical_candidates(position: &Position) {
+    let mut all=[0;MAX_MOVES];let count=generate_pseudo(position,&mut all);
+    let expected: std::vec::Vec<Move>=all[..count].iter().copied()
+        .filter(|&mv|move_is_capture(mv)||move_promotion(mv).is_some()).collect();
+    let mut tactical=[0;MAX_MOVES];let n=generate_tactical(position,&mut tactical);
+    assert_eq!(&tactical[..n],expected.as_slice());
+}

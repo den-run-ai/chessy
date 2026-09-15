@@ -1,0 +1,18 @@
+{
+  "schema": "chessy.qsearch-cost.runner-snapshots.v1",
+  "executedRunsUnchanged": true,
+  "runs": {
+    "fixed": {
+      "registration": "fixed-registration.json",
+      "registrationSha256": "e795eeee7359e8aa1f8db384fad0700f263cc01a8cc3abaed7b57414af569691",
+      "runnerSnapshot": "fixed-benchmark-source.js.txt",
+      "runnerSha256": "e50773d343f390586f82b4555c09abb076f8339279131f2577a9d504d52ae00e"
+    },
+    "master": {
+      "registration": "master-registration.json",
+      "registrationSha256": "bbc58ff48f629642922578ad45fb2feea5c90cadde43d624c0a9f6f23697b516",
+      "runnerSnapshot": "master-benchmark-source.js.txt",
+      "runnerSha256": "a07d86c6a5d771205f05890efb2a9399036be931cca7c591a1683a2b030e57a8"
+    }
+  }
+}

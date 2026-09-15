@@ -37,3 +37,16 @@ host uses Node 24.19.0; it is an exploratory CPU measurement, not the Node
 
 Time metadata from tests under concurrent work cannot establish a speedup.
 The runtime grid must wait for the ongoing quiescence/hybrid exclusive sessions.
+
+## Post-measurement infrastructure clarification
+
+The measured snapshot and both completed registrations remain immutable. The
+reusable generator/runner now capture and execute their authenticated bytes,
+and fresh runs reserve a persistent per-account experiment ledger before engine
+instantiation. Its identity ignores output, registration and module paths,
+timestamps and comment-only implementation changes. An attempted run remains
+spent after failure; the two exact historical scientific recipes are explicitly
+retired. Other future recipes are not automatically retired by those entries.
+This is a local host/account protection under a trusted filesystem, not a
+cross-host guarantee. These later infrastructure changes authorize no rerun or
+reinterpretation of the completed fixed-node or Master measurements.

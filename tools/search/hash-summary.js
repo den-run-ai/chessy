@@ -8,7 +8,7 @@ const median=xs=>{const a=[...xs].sort((x,y)=>x-y),n=a.length;check(n>0,'empty m
 const fields=['abiVersion','move','score','depth','attemptedDepth','nodes','qnodes','cutoffs','researches','stopReason'];
 function summarize(bytes){
   const r=JSON.parse(bytes),p=r.registration;
-  check(r.complete===true&&r.schema==='chessy.searched-board-hash.benchmark-results.v1','incomplete benchmark');
+  check(r.complete===true&&['chessy.searched-board-hash.benchmark-results.v1','chessy.searched-board-hash.benchmark-results.v2'].includes(r.schema),'incomplete benchmark');
   check(['fixed','master'].includes(p.mode)&&p.modules.length===2,'invalid mode/module inventory');
   check(r.registrationSha256===sha(Buffer.from(JSON.stringify(p,null,2)+'\n')),'embedded registration mismatch');
   check(JSON.stringify(p.positions.map(x=>[x.name,x.fen]))===JSON.stringify(Bench.POSITIONS),'position inventory differs');

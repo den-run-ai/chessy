@@ -1,0 +1,25 @@
+{
+  "schema": "chessy.qsearch-cost.build-evidence.v1",
+  "rows": [
+    {
+      "variant": "checks",
+      "sourceReceiptSha256": "3d174ec58f96e432f1ebad9f33297a340106c9df52d8d49c657630c882f67c65",
+      "moduleSha256": "54c29d8592a1deefc49618fa99bc3dda496b08100ab16fa8d437241967d79dc0",
+      "matchesRegisteredModule": true,
+      "logs": {
+        "native.log": "6b3c704b4be0a8c958fbc5afcabee4abb631a527e967bc25a504cc7587fb0de6",
+        "build.log": "c919c537ac79cad93dbb1de49c1b491a0bf9a1c247168ad05593972f59f7f4a2"
+      }
+    },
+    {
+      "variant": "tactical",
+      "sourceReceiptSha256": "0d32c6a1e6913dc6149af1e536bdc150363e63a957c9ea1678e729e875dfad4b",
+      "moduleSha256": "1a8b8bffe0bc07179829a24d5520828bfb8643da4a9e3ba40cb17b862de0b3c5",
+      "matchesRegisteredModule": true,
+      "logs": {
+        "native.log": "8c397cffc4bd4b238135c2b683e6f5db7939ca9d3e510da85c3fb9904e3f9e7b",
+        "build.log": "e19452148231777d413b09823187b34eeb0384f4e8d9c82df3f0d425a95d8960"
+      }
+    }
+  ]
+}

@@ -2,6 +2,15 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const ROOT=path.resolve(__dirname,'../..');
+// Capture and execute one generator/template dependency closure.
+if(typeof __hashGeneratorCaptured==='undefined'){
+  const captured=['hash-cost.js','hash-board.rs.in','hash-parity.rs.in']
+    .map(name=>({name,path:path.join(__dirname,name),bytes:Buffer.from(fs.readFileSync(path.join(__dirname,name)))}));
+  require('node:vm').compileFunction(captured[0].bytes.toString('utf8').replace(/^#![^\n]*/,''),
+    ['require','module','exports','__filename','__dirname','__hashGeneratorCaptured'],{filename:__filename})
+    (require,module,module.exports,__filename,__dirname,captured);
+}else{
+const captured=__hashGeneratorCaptured;
 const FILES=['Cargo.toml','Cargo.lock','rust-toolchain.toml','build.sh','src/engine.rs','src/eval.rs','src/lib.rs','src/search.rs'];
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const check=(v,m)=>{if(!v)throw Error(m);};
@@ -36,15 +45,21 @@ function prepare(destination){
   destination=path.resolve(destination);destination=path.join(fs.realpathSync(path.dirname(destination)),path.basename(destination));
   check(destination!==ROOT&&!destination.startsWith(ROOT+path.sep),'research output must be outside repository');
   const files=Object.fromEntries(FILES.map(p=>[p,fs.readFileSync(path.join(ROOT,'experiments/wasm',p))]));
-  const deps=['hash-cost.js','hash-board.rs.in','hash-parity.rs.in'];
-  const retained=Object.fromEntries(deps.map(p=>[p,fs.readFileSync(path.join(__dirname,p))]));
+  const deps=captured.map(x=>x.name);
+  const retained=Object.fromEntries(captured.map(x=>[x.name,x.bytes]));
   const templates=Object.fromEntries(Object.entries(retained).map(([p,b])=>[p,b.toString()]));
   const generated={...files,'src/search.rs':Buffer.from(patchSearch(files['src/search.rs'].toString(),templates))};
+  const unchanged=()=>captured.every(x=>sha(fs.readFileSync(x.path))===sha(x.bytes))
+    &&FILES.every(p=>sha(fs.readFileSync(path.join(ROOT,'experiments/wasm',p)))===sha(files[p]));
+  check(unchanged(),'generator dependency changed after capture');
   fs.mkdirSync(destination);fs.mkdirSync(path.join(destination,'src'));
   for(const p of FILES)fs.writeFileSync(path.join(destination,p),generated[p],{flag:'wx'});
   const manifest={schema:'chessy.searched-board-hash.source.v1',researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
     source:FILES.map(p=>({path:p,sha256:sha(files[p])})),generated:FILES.map(p=>({path:p,sha256:sha(generated[p])})),dependencies:deps.map(p=>({path:p,sha256:sha(retained[p])}))};
+  check(unchanged(),'generator dependency changed before receipt publication');
   fs.writeFileSync(path.join(destination,'source.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});return manifest;
 }
 if(require.main===module){check(process.argv.length===4&&process.argv[2]==='prepare','usage: hash-cost.js prepare /outside/research-directory');console.log(JSON.stringify(prepare(process.argv[3]),null,2));}
 module.exports={prepare,patchSearch,sha};
+
+}
