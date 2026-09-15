@@ -47,3 +47,52 @@ test('CLI rejects duplicates and unknown parameters',()=>{
   assert.throws(()=>H.args(['run','--registration','x','--registration','y']));
   assert.throws(()=>H.args(['run','--time-ms','100']));
 });
+
+function registrationFixture(dir){
+  const path=require('path');
+  const put=(name,value)=>{const file=path.join(dir,name);fs.writeFileSync(file,typeof value==='string'?value:JSON.stringify(value));return file;};
+  const args={shipped:put('shipped.wasm','shipped fixture'),hybrid:put('hybrid.wasm','hybrid fixture'),expanded:put('expanded.wasm','expanded fixture'),
+    'runtime-source':put('source.json',{}),output:path.join(dir,'registration.json')};
+  const offline={schema:'chessy.hybrid-screen.v1',testEligible:true,decision:{finalBinarySha256:'a'.repeat(64),config:{kind:'smooth',lo:6,hi:12}}};
+  const runtime={schema:'chessy.hybrid-runtime-cost.v1',status:'completed',researchOnly:true,parityMismatches:0,sourceReceiptSha256:N.sha(fs.readFileSync(args['runtime-source'])),
+    modelSha256:offline.decision.finalBinarySha256,config:offline.decision.config,modules:Object.fromEntries(['shipped','hybrid','expanded'].map(side=>[side,{sha256:N.sha(fs.readFileSync(args[side]))}])),parity:[{fixture:true}]};
+  args['offline-report']=put('offline.json',offline);args['runtime-receipt']=put('runtime.json',runtime);
+  return {args,offline,runtime};
+}
+for(const role of ['offline-report','runtime-receipt'])test('registration validates the retained '+role+' snapshot during replacement',()=>{
+  const dir=fs.mkdtempSync(require('path').join(require('os').tmpdir(),'chessy-receipt-race-'));
+  const originalRead=fs.readFileSync;
+  try{const {args}=registrationFixture(dir),valid=originalRead(args[role]);let reads=0;
+    const invalid=JSON.parse(valid);if(role==='offline-report')invalid.schema='invalid';else invalid.parityMismatches=1;
+    fs.readFileSync=function(file,...rest){if(String(file)===args[role])return ++reads===1?Buffer.from(JSON.stringify(invalid)):valid;return originalRead.call(this,file,...rest);};
+    // The old registrar hashed the invalid first snapshot but parsed the valid
+    // second read and published an apparently eligible registration.
+    assert.throws(()=>H.register(args),/receipt required/);assert.equal(reads,1);assert.equal(fs.existsSync(args.output),false);
+  }finally{fs.readFileSync=originalRead;fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('preflight rechecks receipt semantics even when every supplied digest is consistent',()=>{
+  const path=require('path'),dir=fs.mkdtempSync(path.join(require('os').tmpdir(),'chessy-receipt-preflight-'));
+  try{const {args,runtime}=registrationFixture(dir),receipt=H.register(args);assert.equal(H.preflight(receipt.path,receipt.sha256).offlineTestEligible,true);
+    const registration=JSON.parse(fs.readFileSync(args.output));runtime.modules.hybrid.sha256='f'.repeat(64);
+    const bytes=Buffer.from(JSON.stringify(runtime));fs.writeFileSync(args['runtime-receipt'],bytes);
+    registration.runtime.sha256=N.sha(bytes);registration.runtime.bytes=bytes.length;
+    fs.writeFileSync(args.output,JSON.stringify(registration));
+    assert.throws(()=>H.preflight(args.output,N.sha(fs.readFileSync(args.output))),/runtime receipt module differs/);
+    assert.equal(fs.existsSync(registration.noRerunLedger),false);
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('rehashed registration cannot redirect the no-rerun ledger',()=>{
+  const path=require('path'),dir=fs.mkdtempSync(path.join(require('os').tmpdir(),'chessy-ledger-preflight-'));
+  try{const {args}=registrationFixture(dir);H.register(args);const r=JSON.parse(fs.readFileSync(args.output));
+    r.noRerunLedger=path.join(dir,'fresh-unused-ledger.json');fs.writeFileSync(args.output,JSON.stringify(r));
+    assert.throws(()=>H.preflight(args.output,N.sha(fs.readFileSync(args.output))),/canonical one-shot ledger/);
+    assert.equal(fs.existsSync(r.noRerunLedger),false);
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+for(const runner of ['hybrid-match-v1','hybrid-match-optimized-v1','hybrid-match-recovery-v1'])for(const mode of ['run','--internal-child'])test(runner+' retires '+mode+' before touching any ledger or spawning search',()=>{
+  const cp=require('child_process'),path=require('path');
+  const result=cp.spawnSync(process.execPath,[path.join(__dirname,'../../tools/training',runner+'.js'),mode],{encoding:'utf8',timeout:5000});
+  assert.equal(result.status,2);assert.match(result.stderr,/protocol is retired; execution is disabled/);
+  assert.equal(result.stdout,'');
+});

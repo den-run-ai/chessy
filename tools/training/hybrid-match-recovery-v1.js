@@ -10,14 +10,19 @@ const read=file=>JSON.parse(fs.readFileSync(file));
 function identity(file){const bytes=fs.readFileSync(file);return {path:path.resolve(file),sha256:N.sha(bytes),bytes:bytes.length};}
 function verify(info){const snap=N.snapshot(info.path,info.sha256);check(snap.bytes.length===info.bytes,'bound byte size differs');return snap;}
 function write(file,value){return {...C.atomic(file,Buffer.from(N.stable(value)+'\n')),path:path.resolve(file)};}
+function validateRecoveryReceipts(recovery,failedManifest,failed,forensic,skip){
+  check(failedManifest.sha256===recovery.failedOriginalManifestSha256&&failed.status==='failed','original failed manifest differs');
+  check(forensic.formalPass===false&&forensic.scoresCalculated===false&&forensic.fullyAuthenticatedGames===338,'independent unscored forensic failure required');
+  check(skip.schema==='chessy.hybrid-optimized-development-match-skipped.v1'&&skip.decision.selected===null,'conditional optimized extension must remain skipped');
+}
 function register(a){
   const recovery=read(CONTRACT),original=H.preflight(a['original-registration'],a['original-registration-sha256']);
   check(a['original-registration-sha256']===recovery.originalRegistrationSha256,'wrong invalid original registration');
-  const failedManifest=identity(a['failed-manifest']),forensicAudit=identity(a['forensic-audit']),conditionalSkip=identity(a['conditional-skip']);
-  check(failedManifest.sha256===recovery.failedOriginalManifestSha256&&read(failedManifest.path).status==='failed','original failed manifest differs');
-  const forensic=read(forensicAudit.path);check(forensic.formalPass===false&&forensic.scoresCalculated===false&&forensic.fullyAuthenticatedGames===338,'independent unscored forensic failure required');
-  const skip=read(conditionalSkip.path);check(skip.schema==='chessy.hybrid-optimized-development-match-skipped.v1'&&skip.decision.selected===null,'conditional optimized extension must remain skipped');
+  const failed=H.receipt(a['failed-manifest']),forensic=H.receipt(a['forensic-audit']),skip=H.receipt(a['conditional-skip']);
+  const failedManifest=failed.info,forensicAudit=forensic.info,conditionalSkip=skip.info;
+  validateRecoveryReceipts(recovery,failedManifest,failed.value,forensic.value,skip.value);
   const originalRegistration=identity(a['original-registration']);
+  check(originalRegistration.sha256===a['original-registration-sha256'],'original registration changed');
   const r={schema:'chessy.hybrid-match-infrastructure-recovery-registration.v1',createdAtUtc:new Date().toISOString(),researchOnly:true,formalPass:false,
     shippingOrEloClaimAllowed:false,candidateAdvancementAllowed:false,protocol:original.protocol,recovery,modules:original.modules,
     openings:original.openings,tasks:original.tasks,environment:original.environment,offlineTestEligible:original.offlineTestEligible,
@@ -30,10 +35,14 @@ function preflight(file,digest){
     r.shippingOrEloClaimAllowed===false&&r.candidateAdvancementAllowed===false,'research-only recovery registration required');
   same(r.recovery,read(CONTRACT),'technical recovery amendment');
   const original=H.preflight(r.originalRegistration.path,r.recovery.originalRegistrationSha256);
+  same(r.implementation.map(info=>info.path),[...original.implementation.map(info=>info.path),__filename,CONTRACT,path.join(__dirname,'hybrid-match-capture-v1.js')],'implementation inventory');
   check(r.noRerunLedger===path.join(path.dirname(original.offline.path),'.hybrid-match-recovery-v1.started.json'),'canonical one-shot recovery ledger differs');
   same(r.modules,original.modules,'identical original modules');same(r.protocol,original.protocol,'identical original rules');same(r.tasks,original.tasks,'identical original400task schedule');
   same(r.openings,original.openings,'original exposed opening bank');check(r.tasks.length===400,'complete400task schedule required');
-  for(const info of [...r.implementation,...Object.values(r.modules),r.originalRegistration,r.failedManifest,r.forensicAudit,r.conditionalSkip])verify(info);return r;
+  for(const info of [...r.implementation,...Object.values(r.modules),r.originalRegistration,r.failedManifest,r.forensicAudit,r.conditionalSkip])verify(info);
+  validateRecoveryReceipts(r.recovery,r.failedManifest,JSON.parse(verify(r.failedManifest).bytes),JSON.parse(verify(r.forensicAudit).bytes),JSON.parse(verify(r.conditionalSkip).bytes));
+  check(r.originalRegistration.sha256===r.recovery.originalRegistrationSha256,'original registration identity differs');
+  check(r.offlineTestEligible===original.offlineTestEligible,'offline eligibility differs');return r;
 }
 function taskModules(r,task){return {baseline:r.modules.shipped,candidate:r.modules[task.arm]};}
 function awaitCaptured(taskId,channel=process){return new Promise((resolve,reject)=>{
@@ -109,6 +118,12 @@ function args(argv){const command=argv[0],names=command==='register'?['original-
   command==='run'||command==='audit'?['registration','registration-sha256','output']:null;check(names,'expected register/run/audit');const a={command};
   for(let i=1;i<argv.length;i+=2){const name=argv[i].replace(/^--/,'');check(argv[i].startsWith('--')&&names.includes(name)&&!Object.hasOwn(a,name)&&argv[i+1],'unknown/repeated/missing option');
     a[name]=name.endsWith('sha256')?argv[i+1]:path.resolve(argv[i+1]);}check(names.every(name=>Object.hasOwn(a,name)),'all inputs required');return a;}
+// Completed one-shot studies are audit-only. A moved/rehashed registration
+// cannot authorize another execution, including direct child entry.
+if(require.main===module && (process.argv[2]==='run' || process.argv[2]==='--internal-child')) {
+  console.error('This historical one-shot protocol is retired; execution is disabled. Use its frozen audit artifacts or a new prospectively registered protocol.');
+  process.exit(2);
+}
 if(require.main===module){if(process.argv[2]==='--internal-child')process.once('message',r=>child(r).catch(error=>{process.send({control:'failed',error:error.message},()=>process.disconnect());process.exitCode=1;}));
   else(async()=>{const a=args(process.argv.slice(2));if(a.command==='register')return register(a);if(a.command==='run')return run(a);
     return audit(preflight(a.registration,a['registration-sha256']),a.output,read(path.join(a.output,'raw-manifest.json')));})().then(value=>{
