@@ -1,0 +1,773 @@
+{
+  "schema": "chessy.hybrid-runtime-results.v1",
+  "status": "completed",
+  "sourceCommit": "5098859",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "config": {
+    "id": "smooth-6-12",
+    "kind": "smooth",
+    "lo": 6,
+    "hi": 12
+  },
+  "modelSha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+  "expandedWeightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef",
+  "sourceReceiptSha256": "1095afc9bc9d6155cd8ffbffc8173a22ee88cf0df8f3c8329ebe6c0a3742b48d",
+  "rawReportSha256": "5c77665ed36070e8f763e9200a3ce04226ba2b5ee42d8c91511deb5fbf6f122c",
+  "rawReportBytes": 480445,
+  "runtime": {
+    "node": "24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "brotli": "1.2.0"
+  },
+  "modules": {
+    "shipped": {
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+      "rawBytes": 37172,
+      "brotliBytes": 17690,
+      "memoryBytes": 26542080
+    },
+    "expanded": {
+      "sha256": "1d42329167b097ca8cf7527ce3143cd084924c19ff3b25e1107b528642307a9b",
+      "rawBytes": 37470,
+      "brotliBytes": 17808,
+      "memoryBytes": 26607616
+    },
+    "neural": {
+      "sha256": "d96d2f086b086fc6373d21f5def79786c8615e952f349f08c69c40c0cb7fd603",
+      "rawBytes": 50871,
+      "brotliBytes": 27459,
+      "memoryBytes": 26607616
+    },
+    "hybrid": {
+      "sha256": "18c69302d9aaecc0078a5b398e68789f24adb66e525c99f8bc9ac9ddc60e9493",
+      "rawBytes": 58085,
+      "brotliBytes": 28857,
+      "memoryBytes": 26607616
+    }
+  },
+  "parity": {
+    "rows": 501,
+    "mismatches": 0,
+    "oracles": [
+      "shipped pinned WASM",
+      "independent affine expanded HCE",
+      "independent BigInt H8 phase residual",
+      "independent BigInt White-POV hybrid mix"
+    ],
+    "native": [
+      {
+        "variant": "expanded",
+        "sha256": "2d91560bd013c892dd1af73e8430fbc3b89894b285ea69a8ab122a8f9ba326bb",
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "phaseCrossings": 97,
+        "moveCoverage": [
+          2697,
+          11201,
+          1154,
+          1,
+          2,
+          25,
+          24,
+          97,
+          95,
+          13,
+          13,
+          13,
+          13,
+          1,
+          1,
+          1,
+          1,
+          13,
+          13,
+          13,
+          13,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "variant": "neural",
+        "sha256": "97ca59fa211e8607e6921c28030e2f17649837d532489191a4bfa92e672242e8",
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "phaseCrossings": 97,
+        "moveCoverage": [
+          2697,
+          11201,
+          1154,
+          1,
+          2,
+          25,
+          24,
+          97,
+          95,
+          13,
+          13,
+          13,
+          13,
+          1,
+          1,
+          1,
+          1,
+          13,
+          13,
+          13,
+          13,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "variant": "hybrid",
+        "sha256": "c10004ee792d3386cbe03388ebdeeb11eccca1fa00717d8473939686a6596950",
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "phaseCrossings": 97,
+        "moveCoverage": [
+          2697,
+          11201,
+          1154,
+          1,
+          2,
+          25,
+          24,
+          97,
+          95,
+          13,
+          13,
+          13,
+          13,
+          1,
+          1,
+          1,
+          1,
+          13,
+          13,
+          13,
+          13,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    ]
+  },
+  "measurements": {
+    "rows": 768,
+    "plan": {
+      "pairedRepetitions": 4,
+      "evaluationWarmupCalls": 1000,
+      "evaluationMeasuredCalls": 10000,
+      "nodeBudgets": [
+        4096,
+        16384
+      ],
+      "timeBudgetsMs": [
+        40
+      ],
+      "maxDepth": 111,
+      "quiescence": true,
+      "fixtures": 12,
+      "stageCounts": {
+        "opening": 4,
+        "middlegame": 4,
+        "endgame": 4
+      },
+      "order": "rotate [shipped,expanded,neural,hybrid] by (position+repetition)%4",
+      "selectionByTimingAllowed": false,
+      "formalStrengthAllowed": false
+    },
+    "summary": {
+      "all": {
+        "expanded": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0296345420315922
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0422899649160597,
+              "pairedMedianNpsRatio": 0.9594262967196382,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0646642183922683,
+              "pairedMedianNpsRatio": 0.9392769717900198,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "time40": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0007590141568359,
+              "pairedMedianNpsRatio": 0.9458383165607844,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "neural": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.5354545246447593
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.1046718209266908,
+              "pairedMedianNpsRatio": 0.905246377534169,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.069256215190041,
+              "pairedMedianNpsRatio": 0.9352365413351058,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "time40": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.000673964053473,
+              "pairedMedianNpsRatio": 0.8986298891666523,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.4594904983884511
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0774319424688903,
+              "pairedMedianNpsRatio": 0.9281484376176803,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0770715086564462,
+              "pairedMedianNpsRatio": 0.9285741841780959,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "time40": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 0.9994145733222624,
+              "pairedMedianNpsRatio": 0.9500183775834417,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "hybrid": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.6613812974121207
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.2265263506409962,
+              "pairedMedianNpsRatio": 0.8153122802455406,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.2168273101777247,
+              "pairedMedianNpsRatio": 0.8218093000274802,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "time40": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0064428607940257,
+              "pairedMedianNpsRatio": 0.8301956724087616,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.5558666541127195
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.1687656437466574,
+              "pairedMedianNpsRatio": 0.8556623799951317,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.158010545674022,
+              "pairedMedianNpsRatio": 0.8635775330441116,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 44
+            },
+            "time40": {
+              "pairs": 48,
+              "pairedMedianTimeRatio": 1.0034496286259968,
+              "pairedMedianNpsRatio": 0.8949015027643313,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        }
+      },
+      "opening": {
+        "expanded": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 0.9948031176855188
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1097189272202688,
+              "pairedMedianNpsRatio": 0.9011630789888887,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0967746128955986,
+              "pairedMedianNpsRatio": 0.9117661796736798,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0057115020257994,
+              "pairedMedianNpsRatio": 0.9282805886991146,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "neural": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.503850824868064
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1649471281814452,
+              "pairedMedianNpsRatio": 0.8584085690963957,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1509752449049266,
+              "pairedMedianNpsRatio": 0.868835446054679,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0060826222052515,
+              "pairedMedianNpsRatio": 0.899688817307938,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.4321266618346353
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0853838772631426,
+              "pairedMedianNpsRatio": 0.9213358605984088,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.038179187114931,
+              "pairedMedianNpsRatio": 0.9633698890976381,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 0.9987408611266335,
+              "pairedMedianNpsRatio": 0.9700403935481673,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "hybrid": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.6515760876293712
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.2503672705949254,
+              "pairedMedianNpsRatio": 0.8000997143565896,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.215212555791127,
+              "pairedMedianNpsRatio": 0.8229027719181969,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.008237983822764,
+              "pairedMedianNpsRatio": 0.8455641070121497,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.5843265703115867
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1687656437466574,
+              "pairedMedianNpsRatio": 0.8556623799951317,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0773645606960935,
+              "pairedMedianNpsRatio": 0.9281986787946759,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 0.9976422868038254,
+              "pairedMedianNpsRatio": 0.8973580398129601,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        }
+      },
+      "middlegame": {
+        "expanded": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0402301231641633
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0343737198838105,
+              "pairedMedianNpsRatio": 0.9668161448518837,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0071533812084414,
+              "pairedMedianNpsRatio": 0.9928974302918337,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.000176588117308,
+              "pairedMedianNpsRatio": 0.9486009740799466,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "neural": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.5348917088649863
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0533504518120305,
+              "pairedMedianNpsRatio": 0.9514857002419368,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.058877766385922,
+              "pairedMedianNpsRatio": 0.9444428607796227,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.000673964053473,
+              "pairedMedianNpsRatio": 0.8771975485372794,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.4959063943399382
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0739375224094714,
+              "pairedMedianNpsRatio": 0.9312033447634372,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.063526440777928,
+              "pairedMedianNpsRatio": 0.9402686006909258,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0020735528633304,
+              "pairedMedianNpsRatio": 0.907725576101949,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "hybrid": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 2.20544429808416
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.4417689929785624,
+              "pairedMedianNpsRatio": 0.693648812197923,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.3507189418738963,
+              "pairedMedianNpsRatio": 0.7403630074131105,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.011259873500617,
+              "pairedMedianNpsRatio": 0.6601114609551779,
+              "medianCompletedDepthDifference": -0.5,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 2.214023022141535
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.406849161259551,
+              "pairedMedianNpsRatio": 0.710840771081052,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.2682991929459646,
+              "pairedMedianNpsRatio": 0.7884590275903287,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 12
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0090881500864448,
+              "pairedMedianNpsRatio": 0.7252233415722161,
+              "medianCompletedDepthDifference": -0.5,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        }
+      },
+      "endgame": {
+        "expanded": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.023847456938025
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0263407102844893,
+              "pairedMedianNpsRatio": 0.9744210155950839,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.023101409822012,
+              "pairedMedianNpsRatio": 0.9777583267654004,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0006051501464874,
+              "pairedMedianNpsRatio": 0.9442961864207593,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "neural": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.626021436374466
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0784835887601396,
+              "pairedMedianNpsRatio": 0.9272321809259712,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0441527904144,
+              "pairedMedianNpsRatio": 0.9577264125524998,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 0.9999742258399167,
+              "pairedMedianNpsRatio": 0.9092874990841109,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.477899130073041
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0654310585811952,
+              "pairedMedianNpsRatio": 0.9386274800192123,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0931253084500605,
+              "pairedMedianNpsRatio": 0.9148103459496932,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 0.9986712981583814,
+              "pairedMedianNpsRatio": 0.9939551890095223,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        },
+        "hybrid": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.4744304843774447
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1361323983244782,
+              "pairedMedianNpsRatio": 0.8803126217960027,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1051157262921705,
+              "pairedMedianNpsRatio": 0.9048950568124441,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0036194096487756,
+              "pairedMedianNpsRatio": 0.8692928704286633,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          },
+          "expanded": {
+            "evaluation": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.3873929931542994
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.0735436391473416,
+              "pairedMedianNpsRatio": 0.9315696088513634,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.1230725019747267,
+              "pairedMedianNpsRatio": 0.8904476301535145,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": 16
+            },
+            "time40": {
+              "pairs": 16,
+              "pairedMedianTimeRatio": 1.002244618489842,
+              "pairedMedianNpsRatio": 0.9385240618354854,
+              "medianCompletedDepthDifference": 0,
+              "bothConsumedNodeBudget": null
+            }
+          }
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Exposed authored fixture costs, not formal strength games; no Elo/time acceptance.",
+    "All three research modules allow one extra memory page; production memory cap unchanged.",
+    "One host V8 run cannot satisfy physical-device admission or establish hardware-independent cost.",
+    "Material-phase prepass adds work; H8 accumulation is fused into shipped HCE pass, not incrementally updated.",
+    "Smooth transition computes both rounded HCE evaluators; endpoint branches skip the unused evaluator.",
+    "Timed searches may visit different trees; actual node counts and completed depths are reported.",
+    "Reported WASM sizes are full modules containing each fitted evaluator and shared search; fitted weights stay private."
+  ]
+}
