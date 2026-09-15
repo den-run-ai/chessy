@@ -43,3 +43,10 @@ sh /tmp/chessy-hash-candidate/build.sh
 Use the repository-pinned Rust and Binaryen paths when running the build. CI
 runs the generated native oracle and differential search tests; it does not
 run this optional timing experiment or alter the committed production module.
+
+Pre-execution evidence hardening: the first registration and snapshot, retained
+as `*-unexecuted-v1.json`, were never executed. The replacement adds one explicit
+final observation-count assertion and freezes an independent summary that checks
+raw signatures, the complete position/budget inventory and registration hash.
+The candidate and experiment rules are unchanged. The active fixed registration
+SHA-256 is `7501340b2a0d8e82e43999ab572aefbdf418d5d7cc6c69f3b789899150aaa39a`.

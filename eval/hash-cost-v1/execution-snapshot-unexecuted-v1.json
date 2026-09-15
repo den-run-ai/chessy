@@ -1,7 +1,7 @@
 {
   "schema": "chessy.searched-board-hash.execution-snapshot.v1",
-  "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v2",
-  "registrationSha256": "7501340b2a0d8e82e43999ab572aefbdf418d5d7cc6c69f3b789899150aaa39a",
+  "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v1",
+  "registrationSha256": "890a6f18944df4b39f1c6234fc195cb4540fe6f4ee64e32a070fe914b3ffc2c4",
   "files": [
     {
       "path": "assets/chessy-ai-fast.wasm",
@@ -69,7 +69,7 @@
     },
     {
       "path": "tools/search/hash-bench.js",
-      "sha256": "3eecebaa889eb1037d41e1e7546a212bee3e2fb419a2e7d62fcf391a4dc58c00"
+      "sha256": "1cf2e333492bf7cf686f13ee8dad47209505aaab37f11104014f46376084d2a2"
     },
     {
       "path": "tools/search/hash-board.rs.in",
@@ -82,10 +82,6 @@
     {
       "path": "tools/search/hash-parity.rs.in",
       "sha256": "43e18fbe293b5a4930d64bf7d7857f52de336598890d3a774fe83dfa88a80b10"
-    },
-    {
-      "path": "tools/search/hash-summary.js",
-      "sha256": "f3e4ef92a9511dd7cdc5ccc6b139982550e3b8c69c8da4767c8b21cc0935ea73"
     }
   ]
 }

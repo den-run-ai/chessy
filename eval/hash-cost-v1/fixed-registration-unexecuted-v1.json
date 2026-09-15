@@ -1,7 +1,7 @@
 {
   "schema": "chessy.searched-board-hash.benchmark.v1",
   "mode": "fixed",
-  "created": "2026-09-15T09:15:14.539Z",
+  "created": "2026-09-15T09:09:14.100Z",
   "researchOnly": true,
   "productionIntegrationAllowed": false,
   "strengthClaimAllowed": false,
@@ -155,23 +155,23 @@
   },
   "order": "rotate engine order by (position index + repetition) modulo engine count",
   "sourceReceipt": {
-    "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v2/candidate/source.json",
+    "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v1/candidate/source.json",
     "sha256": "90e20b7593956db90ad6eb20058da338e2f4103a2509787e2c4917c5740fad58"
   },
   "modules": [
     {
-      "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v2/assets/chessy-ai-fast.wasm",
+      "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v1/assets/chessy-ai-fast.wasm",
       "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
     },
     {
-      "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v2/candidate/dist/chessy-ai-fast.wasm",
+      "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v1/candidate/dist/chessy-ai-fast.wasm",
       "sha256": "509a1d8e1c3fe1c05c31e57923c8127d35094bd68a704fc241cc4e8444b8fa9e"
     }
   ],
   "dependencies": [
     {
       "path": "tools/search/hash-bench.js",
-      "sha256": "3eecebaa889eb1037d41e1e7546a212bee3e2fb419a2e7d62fcf391a4dc58c00"
+      "sha256": "1cf2e333492bf7cf686f13ee8dad47209505aaab37f11104014f46376084d2a2"
     },
     {
       "path": "tools/search/hash-cost.js",

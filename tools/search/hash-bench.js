@@ -57,6 +57,7 @@ async function run(file,out){
       process.stdout.write(JSON.stringify({position:pi,nodeLimit:limit,completeRows:rows.length})+'\n');
     }}
     check(sha(fs.readFileSync(file))===sha(planBytes),'registration changed while running');
+    check(rows.length===plan.positions.length*plan.options.nodeLimits.length*plan.options.repetitions*engines.length,'incomplete observation inventory');
     check(JSON.stringify(plan.dependencies)===JSON.stringify(dependencies()),'benchmark dependency changed while running');
     check(sha(fs.readFileSync(plan.sourceReceipt.path))===plan.sourceReceipt.sha256,'generated source receipt changed while running');
     const report={schema:'chessy.searched-board-hash.benchmark-results.v1',registrationSha256:sha(planBytes),registration:plan,
