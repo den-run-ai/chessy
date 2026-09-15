@@ -89,3 +89,10 @@ test('rehashed registration cannot redirect the no-rerun ledger',()=>{
     assert.equal(fs.existsSync(r.noRerunLedger),false);
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+for(const runner of ['hybrid-match-v1','hybrid-match-optimized-v1','hybrid-match-recovery-v1'])for(const mode of ['run','--internal-child'])test(runner+' retires '+mode+' before touching any ledger or spawning search',()=>{
+  const cp=require('child_process'),path=require('path');
+  const result=cp.spawnSync(process.execPath,[path.join(__dirname,'../../tools/training',runner+'.js'),mode],{encoding:'utf8',timeout:5000});
+  assert.equal(result.status,2);assert.match(result.stderr,/protocol is retired; execution is disabled/);
+  assert.equal(result.stdout,'');
+});

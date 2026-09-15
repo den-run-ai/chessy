@@ -267,6 +267,12 @@ function args(argv) {
   for(let i=1;i<argv.length;i+=2){const name=argv[i].replace(/^--/,'');check(argv[i].startsWith('--')&&names.includes(name)&&!Object.hasOwn(parsed,name)&&argv[i+1],'unknown/repeated/missing CLI option');parsed[name]=name.endsWith('sha256')?argv[i+1]:path.resolve(argv[i+1]);}
   check(names.every(name=>Object.hasOwn(parsed,name)),'all registered inputs required');return parsed;
 }
+// Completed one-shot studies are audit-only. A moved/rehashed registration
+// cannot authorize another execution, including direct child entry.
+if(require.main===module && (process.argv[2]==='run' || process.argv[2]==='--internal-child')) {
+  console.error('This historical one-shot protocol is retired; execution is disabled. Use its frozen audit artifacts or a new prospectively registered protocol.');
+  process.exit(2);
+}
 if(require.main===module){
   if(process.argv[2]==='--internal-child')process.once('message',r=>childMain(r).catch(error=>{process.send({control:'failed',error:error.message});process.disconnect();process.exitCode=1;}));
   else (async()=>{const a=args(process.argv.slice(2));if(a.command==='register')return register(a);if(a.command==='run')return run(a);

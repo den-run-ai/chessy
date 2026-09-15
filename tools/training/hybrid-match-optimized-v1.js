@@ -126,6 +126,12 @@ function args(argv){const command=argv[0],names=command==='register'?['original-
   command==='run'||command==='audit'?['registration','registration-sha256','output']:null;check(names,'expected register/run/audit');const a={command};
   for(let i=1;i<argv.length;i+=2){const name=argv[i].replace(/^--/,'');check(argv[i].startsWith('--')&&names.includes(name)&&!Object.hasOwn(a,name)&&argv[i+1],'unknown/repeated/missing option');
     a[name]=name.endsWith('sha256')?argv[i+1]:path.resolve(argv[i+1]);}check(names.every(name=>Object.hasOwn(a,name)),'all inputs required');return a;}
+// Completed one-shot studies are audit-only. A moved/rehashed registration
+// cannot authorize another execution, including direct child entry.
+if(require.main===module && (process.argv[2]==='run' || process.argv[2]==='--internal-child')) {
+  console.error('This historical one-shot protocol is retired; execution is disabled. Use its frozen audit artifacts or a new prospectively registered protocol.');
+  process.exit(2);
+}
 if(require.main===module)(async()=>{const a=args(process.argv.slice(2));if(a.command==='register')return register(a);if(a.command==='run')return run(a);
   return audit(preflight(a.registration,a['registration-sha256']),a.output,read(path.join(a.output,'raw-manifest.json')));})().then(value=>{
     console.log(JSON.stringify(value));if(value.status==='failed')process.exitCode=1;}).catch(error=>{console.error('hybrid-match-optimized-v1: '+error.message);process.exitCode=1;});

@@ -9,7 +9,13 @@ The repair hashes and parses a single retained snapshot. Preflight independently
 repeats the semantic and cross-receipt checks on authenticated bytes before any
 no-rerun ledger is consumed. Original-registration digests, exact implementation
 inventories and canonical ledger paths are also checked; rehashing an edited
-registration cannot redirect the ledger to an unused filename.
+registration cannot redirect the ledger to an unrelated filename. These local
+path checks alone cannot prevent relocation of both the receipt and ledger.
+Because all three historical protocols are complete, their `run` and direct
+`--internal-child` entry points now reject unconditionally, before ledger writes
+or child launch. Registration/preflight/audit helpers remain available for
+provenance and fixture checks. New experiments require a new prospective
+protocol; the separately registered fixed-node diagnostic is unaffected.
 
 The original retained offline/runtime/source receipts and their module bindings
 passed revalidation; the machine-readable receipt records the exact original
@@ -23,4 +29,5 @@ Fault-injection tests give the registrar an invalid first read and a valid later
 read. The old implementation publishes a registration; the repaired version
 rejects the first retained receipt and publishes nothing. Additional tests reject
 internally rehashed but semantically inconsistent model/module bindings and
-redirected ledgers. These tests run in the existing CI match suite.
+redirected ledgers. Six subprocess regressions also verify retirement of all
+three normal and direct-child execution entry points. These tests run in the existing CI match suite.
