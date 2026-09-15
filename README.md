@@ -243,7 +243,9 @@ remains diagnostic: 400 unique endpoints do not prove 400 independent
 families, and source reproduction, correctness and device admission remain
 separate. The [fresh finite-bank formal software contract](eval/match-formal/CONTRACT.md)
 adds randomized sampling, conservative uncertainty and authenticated prerequisites
-under a separate protocol. Its campaign registry is empty: fresh-bank and
+under a separate protocol. Its conservative selective-search profile cannot
+admit exactly behavior-preserving cost changes; their equivalence/runtime
+policy remains open. Its campaign registry is empty: fresh-bank and
 candidate evidence remain open in
 [#175](https://github.com/den-run-ai/chessy/issues/175). The
 [prospective decision and complete dependency map](eval/match-v2/ADMISSION-PROPOSAL.md)
