@@ -172,7 +172,11 @@ async function main() {
     const entries = args.pairs ? manifest.openings.slice(0, args.pairs) : manifest.openings;
     entries.forEach(entry => {
       const state = replay(entry.uci);
-      check(Chess.toFen(state) === entry.fen, 'dev opening replay mismatch at index ' + entry.index);
+      // python-chess omits the en-passant square unless a capture is legal;
+      // Chessy always prints it after a double push. Compare the other fields.
+      const got = Chess.toFen(state).split(' ');
+      const want = entry.fen.split(' ');
+      check([0, 1, 2, 4, 5].every(i => got[i] === want[i]), 'dev opening replay mismatch at index ' + entry.index);
       for (const candidateColor of ['w', 'b']) tasks.push({ opening: entry.index, name: entry.name, prefix: entry.uci, candidateColor });
     });
   } else {
