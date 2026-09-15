@@ -312,6 +312,18 @@ pub fn evaluate_fresh(position: &Position) -> i32 {
     evaluate(position, SCRATCH_PLY)
 }
 
+/// Test-only: the incremental slot for `ply` must equal a fresh rebuild.
+#[cfg(test)]
+pub fn assert_slot_matches_refresh(position: &Position, ply: usize) {
+    refresh(SCRATCH_PLY, position);
+    let fresh = *acc(SCRATCH_PLY);
+    let incremental = *acc(ply);
+    assert_eq!(
+        incremental, fresh,
+        "accumulator slot {ply} diverged from refresh"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,6 +443,41 @@ mod tests {
             checked += 1;
         }
         assert!(checked > 0, "no goldens checked");
+    }
+
+    #[test]
+    fn search_plumbing_keeps_every_evaluated_slot_exact() {
+        // static_eval asserts slot == refresh at every evaluated node under
+        // cfg(test); drive real quiescent searches through run(), run_fixed()
+        // and analyse_root() so the root, PVS, quiescence and analysis paths
+        // are all exercised with the embedded weights.
+        let _guard = crate::TEST_LOCK.lock().unwrap();
+        let fens: [&[u8]; 4] = [
+            b"r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 5",
+            b"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            b"8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1",
+            b"rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1",
+        ];
+        for fen in fens.iter() {
+            let mut position = engine::parse_fen(fen).unwrap();
+            unsafe {
+                crate::search::clear_game_history();
+                let result = crate::search::run(&mut position, 4, 0, 0, true);
+                assert!(result.nodes > 100);
+                let fixed = crate::search::run_fixed(&mut position, 3, 0, true);
+                assert!(fixed.nodes > 10);
+                let mut moves = [0_u32; MAX_MOVES];
+                let count = engine::generate_legal(&mut position, &mut moves);
+                crate::search::begin_analysis(0, true);
+                let outcome = crate::search::analyse_root(
+                    &mut position,
+                    crate::search::abi_move(moves[count / 2]),
+                    3,
+                    4,
+                );
+                assert_eq!(outcome.status, crate::search::AnalysisStatus::Complete);
+            }
+        }
     }
 
     #[cfg(feature = "nnue-mopup")]
