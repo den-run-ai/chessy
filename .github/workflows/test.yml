@@ -83,6 +83,14 @@ jobs:
           sha256sum experiments/wasm/dist/*.wasm
       - name: Verify the committed production asset
         run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - name: Verify isolated searched-edge hash oracle and exact search parity
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          node test/search/hash-cost.test.js
+          node tools/search/hash-cost.js prepare "$RUNNER_TEMP/hash-cost-study"
+          (cd "$RUNNER_TEMP/hash-cost-study" && cargo test --locked --offline searched_hash_tests)
       - name: Build all optional incremental study variants before timing
         if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
         env:
