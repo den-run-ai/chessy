@@ -1,10 +1,10 @@
 //! Allocation-free scalar port of the shipped Chessy Play search.
 
-#[cfg(feature = "nnue")]
-use crate::nnue;
 #[cfg_attr(feature = "nnue", allow(unused_imports))]
 use crate::{engine, eval};
 use engine::{Color, Move, Piece, PieceType, Position, MAX_MOVES};
+#[cfg(feature = "nnue")]
+use crate::nnue;
 
 /// Static White-POV leaf evaluation. The research `nnue` feature reads the
 /// per-ply accumulator stack; the production build calls the tapered HCE.
@@ -1343,13 +1343,25 @@ pub unsafe fn analyse_root(
     if total_depth == 0 || total_depth > MAX_SEARCH_DEPTH {
         return AnalysisOutcome {
             status: AnalysisStatus::Invalid,
-            result: context_result(None, 0, 0, None, StopReason::Unknown),
+            result: context_result(
+                None,
+                0,
+                0,
+                None,
+                StopReason::Unknown,
+            ),
         };
     }
     let Some(root_move) = legal_move_from_abi(position, packed_move) else {
         return AnalysisOutcome {
             status: AnalysisStatus::Invalid,
-            result: context_result(None, 0, 0, None, StopReason::Unknown),
+            result: context_result(
+                None,
+                0,
+                0,
+                None,
+                StopReason::Unknown,
+            ),
         };
     };
 
@@ -1358,7 +1370,13 @@ pub unsafe fn analyse_root(
     let mut child = *position;
     engine::make_move(&mut child, root_move);
     eval_refresh(1, &child);
-    let score = search_node(&mut child, total_depth as i32 - 1, -SCORE_INF, SCORE_INF, 1);
+    let score = search_node(
+        &mut child,
+        total_depth as i32 - 1,
+        -SCORE_INF,
+        SCORE_INF,
+        1,
+    );
     pop_path();
 
     if score == ABORT_SCORE {
@@ -1378,7 +1396,13 @@ pub unsafe fn analyse_root(
         };
         return AnalysisOutcome {
             status,
-            result: context_result(Some(root_move), 0, 0, Some(total_depth), stop_reason),
+            result: context_result(
+                Some(root_move),
+                0,
+                0,
+                Some(total_depth),
+                stop_reason,
+            ),
         };
     }
 
@@ -1682,7 +1706,8 @@ mod tests {
             add_history_hash(repeated_hash.r1, repeated_hash.r2).unwrap();
 
             begin_analysis(0, false);
-            let repeated = analyse_root(&mut root, abi_move(repeated_move), 1, 4);
+            let repeated =
+                analyse_root(&mut root, abi_move(repeated_move), 1, 4);
             assert_eq!(repeated.status, AnalysisStatus::Complete);
             assert_eq!(repeated.result.score, 0);
             assert_eq!(repeated.result.nodes, 1);
