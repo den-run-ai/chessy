@@ -151,7 +151,7 @@ function summarize(games, budget) {
   }
   return {
     games: games.length, openings: n, wins, draws, losses, score: (wins + 0.5 * draws) / games.length,
-    openingClustered: { mean, sd, se, ci95: [mean - t * se, mean + t * se], oneSidedLower95: stats.lower, clusterStats: stats },
+    openingClustered: { mean, sd, se, ci95: [mean - t * se, mean + t * se], oneSidedLower95: stats.lo95, clusterStats: stats },
     eloEstimate: { point: elo(mean), ci95: [elo(mean - t * se), elo(mean + t * se)] },
     reasons, timing, npsRatio: timing.candidate.nps / timing.base.nps, budget,
   };

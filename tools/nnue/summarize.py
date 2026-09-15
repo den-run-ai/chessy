@@ -14,7 +14,10 @@ from pathlib import Path
 
 
 def load(path: Path):
-    return json.loads(path.read_text()) if path.exists() else None
+    if not path.exists():
+        return None
+    text = path.read_text().strip()
+    return json.loads(text) if text else None
 
 
 def pct(x):
@@ -33,6 +36,8 @@ def main() -> None:
 
     manifest = load(data / args.dataset / "manifest.json")
     tags = ["h16", "h32", "h64", "h128"]
+    diagnostics = [tag for tag in ("h32-hce", "h32-search") if (nets / f"{tag}.json").exists()]
+    tags = tags + diagnostics
     extra = sorted(p.stem.replace("-size", "") for p in matches.glob("*-mopup-size.txt"))
     cards = {tag: load(nets / f"{tag}.json") for tag in tags}
     sizes = {}
@@ -125,7 +130,7 @@ def main() -> None:
         ci = s["openingClustered"]["ci95"]
         elo = s["eloEstimate"]
         lines.append(f"| {name} | {budget} | {s['games']} | {s['wins']}–{s['draws']}–{s['losses']} | {pct(s['score'])} | "
-                     f"{pct(ci[0])}–{pct(ci[1])} | {pct(s['openingClustered']['oneSidedLower95'])} | "
+                     f"{pct(ci[0])}–{pct(ci[1])} | {pct(s['openingClustered']['clusterStats']['lo95'])} | "
                      f"{elo['point']} ({elo['ci95'][0]} … {elo['ci95'][1]}) | {s['npsRatio']:.3f} | {s['reasons'].get('ply-cap', 0)} |")
     print("\n".join(lines))
 
