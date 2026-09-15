@@ -102,3 +102,7 @@ This protects against accidental retries and copied/renamed inputs under trusted
 local filesystem ownership. It does not prevent the filesystem owner from deleting
 or relocating state, editing the protocol implementation, or executing on another
 host/account. There is no runtime option to override the ledger location.
+
+Historical JavaScript is retained only in base64 JSON source archives. Original
+source hashes refer to the decoded bytes, not the JSON container. The audit gate
+checks this mapping and verifies that loading an archive does not execute it.

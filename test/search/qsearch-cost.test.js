@@ -290,7 +290,56 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
   try{assert.throws(()=>publishing.prepare(partial),/before receipt publication/);}
   finally{fs.writeFileSync=writeFile;}
   assert.equal(injected,true);assert.equal(fs.existsSync(path.join(partial,'source.json')),false);
-  const historical=['fixed','master'].map(mode=>JSON.parse(fs.readFileSync(path.join(ROOT,'eval/qsearch-cost-v1',mode+'-results.json'))));
+  // Archives remain inert data; source hashes authenticate decoded bytes.
+  const evidence=path.join(ROOT,'eval/qsearch-cost-v1');
+  const mappings=JSON.parse(fs.readFileSync(path.join(evidence,'runner-snapshots.json')));
+  const captureRecord=JSON.parse(fs.readFileSync(path.join(evidence,'provenance-hardening.json')));
+  const generatorRecord=JSON.parse(fs.readFileSync(path.join(evidence,'generator-ledger-hardening.json')));
+  const archiveRecords=[
+    ...Object.values(mappings.runs).map(r=>({file:r.runnerSnapshot,sha256:r.runnerSha256,source:'tools/search/qsearch-bench.js'})),
+    {file:captureRecord.previousRunnerSnapshot,sha256:captureRecord.previousRunnerSha256,source:'tools/search/qsearch-bench.js'},
+    ...Object.entries(generatorRecord.sources).map(([name,r])=>({file:r.snapshot,sha256:r.sha256,source:'tools/search/'+name}))
+  ];
+  assert.equal(archiveRecords.length,5);
+  assert.deepEqual(fs.readdirSync(evidence).filter(p=>p.endsWith('.archive.json')).sort(),archiveRecords.map(x=>x.file).sort());
+  assert.equal(fs.readdirSync(evidence).some(p=>p.endsWith('.js')||p.endsWith('.js.txt')),false,'no executable historical JS copies');
+  for(const record of archiveRecords){
+    const file=path.join(evidence,record.file),archive=JSON.parse(fs.readFileSync(file));
+    assert.deepEqual(Object.keys(archive).sort(),['base64','encoding','schema','sha256','sourceFilename'].sort());
+    assert.equal(archive.schema,'chessy.source-archive.v1');assert.equal(archive.encoding,'base64');
+    const bytes=Buffer.from(archive.base64,'base64');
+    assert.equal(bytes.toString('base64'),archive.base64,'archive base64 must be canonical');
+    assert.equal(archive.sourceFilename,record.source);assert.equal(archive.sha256,record.sha256);
+    assert.equal(Cost.sha(bytes),record.sha256,'decoded bytes retain original authenticated digest');
+    const imported=require(file);assert.deepEqual(imported,archive);
+    for(const key of ['run','register','prepare'])assert.equal(imported[key],undefined,'archive exposes no executable API');
+    const out=path.join(temp,record.file+'.forbidden-result');
+    const cli=require('node:child_process').spawnSync(process.execPath,[file,'run',path.join(evidence,'fixed-registration.json'),out],{encoding:'utf8',timeout:3000});
+    assert.equal(cli.status,0,'Node loads a JSON archive as data only');
+    assert.equal(cli.stdout,'');assert.equal(cli.stderr,'');
+    for(const suffix of ['','.lock','.failure.json'])assert.equal(fs.existsSync(out+suffix),false,'archive cannot launch a historical recipe');
+    for(const extension of ['.js','.js.txt']){
+      const renamed=path.join(temp,record.file+extension);fs.copyFileSync(file,renamed);
+      assert.throws(()=>require(renamed),SyntaxError,'encoded data cannot become an executable historical runner by renaming');
+      const forced=require('node:child_process').spawnSync(process.execPath,[renamed,'run',path.join(evidence,'fixed-registration.json'),out],{encoding:'utf8',timeout:3000});
+      assert.notEqual(forced.status,0);assert.match(forced.stderr,/SyntaxError/);
+      for(const suffix of ['','.lock','.failure.json'])assert.equal(fs.existsSync(out+suffix),false);
+    }
+
+  }
+  for(const [mode,mapping] of Object.entries(mappings.runs)){
+    const registrationBytes=fs.readFileSync(path.join(evidence,mapping.registration));
+    const registration=JSON.parse(registrationBytes),result=JSON.parse(fs.readFileSync(path.join(evidence,mode+'-results.json')));
+    assert.equal(Cost.sha(registrationBytes),mapping.registrationSha256);
+    assert.equal(result.registrationSha256,mapping.registrationSha256);assert.deepEqual(result.registration,registration);
+    assert.equal(registration.dependencies.find(x=>x.path==='tools/search/qsearch-bench.js').sha256,mapping.runnerSha256);
+  }
+  const frozenResultHashes={fixed:'c0e7cdf4aed98808984bce255b03834c46eaf29ac9354487d110805716bc56c1',
+    master:'e751d613c86cbb75656669141f51d71694211d47c905ad34e602b5a2f91f8ee9'};
+  const historical=['fixed','master'].map(mode=>{
+    const bytes=fs.readFileSync(path.join(evidence,mode+'-results.json'));
+    assert.equal(Cost.sha(bytes),frozenResultHashes[mode],'frozen measured result bytes changed');return JSON.parse(bytes);
+  });
   for(const result of historical){
     Bench.validatePlan(result.registration);assert.throws(()=>Bench.assertUnspent(result.registration),/historical experiment is retired/);
     const differentRecipe=clone(result.registration);differentRecipe.positions[0].fen=differentRecipe.positions[2].fen;
@@ -308,7 +357,75 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-qsearch-test-'));
       ['zero elapsed',rows=>rows[0].ms=0],['zero nodes',rows=>rows[0].nodes=0],['infinite elapsed',rows=>rows[0].ms=Infinity]
     ]){const rows=clone(result.rows);mutate(rows);assert.throws(()=>Bench.validateRows(result.registration,rows),undefined,label);}
   }
+  // Independently derive the published measurements from the committed rows.
+  const [fixedRun,masterRun]=historical,report=fs.readFileSync(path.join(evidence,'REPORT.md'),'utf8');
+  const geomean=values=>Math.exp(values.reduce((sum,value)=>sum+Math.log(value),0)/values.length);
+  const gain=values=>(geomean(values)-1)*100,pct=value=>(value>=0?'+':'')+value.toFixed(2)+'%';
+  const rowKey=row=>[row.position,row.repetition,row.nodeLimit].join(':');
+  const fixedReference=new Map(fixedRun.rows.filter(r=>r.engine===0).map(r=>[rowKey(r),r]));
+  const fixedRatios=(engine,predicate=()=>true)=>fixedRun.rows.filter(r=>r.engine===engine&&predicate(r)).map(r=>fixedReference.get(rowKey(r)).ms/r.ms);
+  for(const [engine,label] of [[1,'Quiet-check prefilter'],[2,'Prefilter + direct tactical generation']]){
+    const values=[gain(fixedRatios(engine)),...fixedRun.registration.options.nodeLimits.map(limit=>gain(fixedRatios(engine,r=>r.nodeLimit===limit)))];
+    assert.ok(report.includes('| '+label+' | '+values.map(pct).join(' | ')+' |'),'fixed aggregate and per-budget published values recompute');
+  }
+  function masterSummary(rows){
+    const reference=new Map(rows.filter(r=>r.engine===0).map(r=>[rowKey(r),r]));
+    const pairs=rows.filter(r=>r.engine===1).map(row=>{const base=reference.get(rowKey(row));return {
+      position:row.position,repetition:row.repetition,npsRatio:(row.nodes/row.ms)/(base.nodes/base.ms),
+      nodeRatio:row.nodes/base.nodes,depthDelta:row.depth-base.depth,sameMove:row.move===base.move
+    };});
+    const stopsByEngine={0:{},1:{}};
+    for(const row of rows)stopsByEngine[row.engine][row.stopReason]=(stopsByEngine[row.engine][row.stopReason]||0)+1;
+    return {geomeanNpsGainPct:gain(pairs.map(p=>p.npsRatio)),geomeanNodeGainPct:gain(pairs.map(p=>p.nodeRatio)),
+      deeper:pairs.filter(p=>p.depthDelta>0).length,sameDepth:pairs.filter(p=>p.depthDelta===0).length,shallower:pairs.filter(p=>p.depthDelta<0).length,
+      sameMove:pairs.filter(p=>p.sameMove).length,changedMove:pairs.filter(p=>!p.sameMove).length,
+      maxDeadlineOvershootMs:Math.max(...rows.map(r=>Math.max(0,r.ms-masterRun.registration.options.timeMs))),stopsByEngine,pairs};
+  }
+  function sameNumbers(actual,expected){
+    if(typeof expected==='number'){assert.equal(typeof actual,'number');assert.ok(Math.abs(actual-expected)<=1e-10*Math.max(1,Math.abs(expected)),'published numeric summary differs');return;}
+    if(expected&&typeof expected==='object'){
+      assert.equal(Array.isArray(actual),Array.isArray(expected));assert.deepEqual(Object.keys(actual).sort(),Object.keys(expected).sort());
+      for(const key of Object.keys(expected))sameNumbers(actual[key],expected[key]);
+    }else assert.equal(actual,expected);
+  }
+  const computed=masterSummary(masterRun.rows),published=JSON.parse(fs.readFileSync(path.join(evidence,'master-summary.json')));
+  sameNumbers(published,computed);
+  const badSummary=clone(published);badSummary.geomeanNpsGainPct+=0.1;assert.throws(()=>sameNumbers(badSummary,computed));
+  const changedRows=clone(masterRun.rows);changedRows[0].nodes+=10000;assert.throws(()=>sameNumbers(published,masterSummary(changedRows)));
+  for(let family=0;family<9;family++){
+    const name=fixedRun.registration.positions[family*2].name;
+    const values=[1,2].map(engine=>gain(fixedRatios(engine,r=>Math.floor(r.position/2)===family)));
+    assert.ok(report.includes('| '+name+' | '+values.map(pct).join(' | ')+' |'),'fixed family table recomputes');
+    const pairs=computed.pairs.filter(p=>Math.floor(p.position/2)===family);
+    const counts=[pairs.filter(p=>p.depthDelta>0).length,pairs.filter(p=>p.depthDelta===0).length,pairs.filter(p=>p.depthDelta<0).length];
+    assert.ok(report.includes('| '+name+' | '+pct(gain(pairs.map(p=>p.npsRatio)))+' | '+counts.join(' / ')+' |'),'Master family table recomputes');
+  }
+  assert.ok(report.includes('**'+gain(fixedRatios(1)).toFixed(2)+'% faster**'));
+  assert.ok(report.includes('gain to **'+gain(fixedRatios(2)).toFixed(2)+'%**'));
+  assert.ok(report.includes('gains '+computed.geomeanNpsGainPct.toFixed(2)+'%'));
+  assert.ok(report.includes('**'+computed.maxDeadlineOvershootMs.toFixed(2)+' ms**'));
+  assert.ok(report.includes('never exceeds '+Math.max(...fixedRun.rows.map(r=>r.depth))));
+  const comma=value=>String(value).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  for(const [i,label] of ['Shipped HCE','Quiet-check prefilter','Prefilter + direct tactical'].entries()){
+    const m=fixedRun.modules[i];assert.ok(report.includes('| '+label+' | '+comma(m.bytes)+' B | +'+comma(m.bytes-fixedRun.modules[0].bytes)+' B | '+comma(m.brotliBytes)+' B | '+comma(m.memoryBytes)+' B |'));
+  }
+  assert.deepEqual(masterRun.modules,fixedRun.modules.slice(0,2));
+  const builds=JSON.parse(fs.readFileSync(path.join(evidence,'build-evidence.json')));
+  const signatures=JSON.parse(fs.readFileSync(path.join(evidence,'frozen-signatures.json')));
+  assert.deepEqual(builds.rows.map(r=>r.variant),['checks','tactical']);assert.deepEqual(signatures.rows.map(r=>r.variant),['checks','tactical']);
+  const frozenBytes=fs.readFileSync(path.join(ROOT,'test/fixtures/wasm-r69-signatures.json'));
+  for(const [i,b] of builds.rows.entries()){
+    const sourceBytes=fs.readFileSync(path.join(evidence,b.variant+'-source.json')),source=JSON.parse(sourceBytes);
+    assert.equal(Cost.sha(sourceBytes),b.sourceReceiptSha256);assert.equal(b.moduleSha256,fixedRun.registration.modules[i+1].sha256);
+    assert.equal(b.matchesRegisteredModule,true);
+    assert.equal(source.dependencies.find(x=>x.path==='qsearch-cost.js').sha256,generatorRecord.sources['qsearch-cost.js'].sha256);
+    for(const [kind,file] of [['native.log','native'],['build.log','build']])assert.equal(Cost.sha(fs.readFileSync(path.join(evidence,b.variant+'-'+file+'.txt'))),b.logs[kind]);
+    const frozen=signatures.rows[i];assert.equal(frozen.moduleSha256,b.moduleSha256);assert.equal(frozen.r69FixtureSha256,Cost.sha(frozenBytes));
+    assert.equal(frozen.cases,JSON.parse(frozenBytes).cases.length);assert.equal(frozen.matched,true);
+  }
+  assert.equal(masterRun.registration.modules[1].sha256,builds.rows[0].moduleSha256,'selected Master module is the winning fixed candidate');
+  assert.ok(gain(fixedRatios(1))>gain(fixedRatios(2)),'frozen selection rule agrees with the retained choice');
   const divergent=clone(historical[0].rows);divergent[1].score++;
   assert.throws(()=>Bench.validateRows(historical[0].registration,divergent),/signatures differ/);
-  console.log('qsearch generator/runner mutation, durable one-shot races/aliases, 720 historical rows: passed');
+  console.log('qsearch generator/ledger mutation, 5 inert archives, 720 bound rows and recomputed published evidence: passed');
 }finally{fs.rmSync(temp,{recursive:true,force:true});}})().catch(error=>{console.error(error);process.exitCode=1;});
