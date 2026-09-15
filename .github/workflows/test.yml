@@ -224,6 +224,8 @@ jobs:
           python test/training/h4-v3-model.test.py
           python test/training/h4-v3-screen.test.py
           python test/training/h4-v3-audit.test.py
+          python test/training/h4-v4-model.test.py
+          python test/training/h4-v4-screen.test.py
           python tools/training/audit-h4-v2.py --self-test
           node test/training/nnue-phase-runtime.test.js
       - name: Verify behavior-neutral AI telemetry

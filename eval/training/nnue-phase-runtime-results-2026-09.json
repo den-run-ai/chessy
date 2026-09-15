@@ -1,0 +1,261 @@
+{
+  "schema": "chessy.nnue-phase-synthetic-cost-log-summary.v1",
+  "researchOnly": true,
+  "syntheticOnly": true,
+  "trainedModelEvaluated": false,
+  "testSplitRead": false,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "provenance": {
+    "evidenceSource": "Complete CI job log; four logged source receipts and four logged measurement summaries independently parsed and cross-checked",
+    "sourceCommit": "d14a0ba8a97868fd25889d2c8bd5544ff4a90902",
+    "ciRunUrl": "https://github.com/den-run-ai/chessy/actions/runs/34919106656",
+    "logSha256": "8975622a27ad0e1f3774676eb6510a2e35d2215bcaa76bdf26be8da6bf0bf220",
+    "logBytes": 78559,
+    "probeImplementationSha256": "edef83287017339a74b41f031d371258ea79b5349ff51a73cb9828bbc1466867",
+    "templateSha256": "61bb711711213bd14b64f7180e15739fa482cf48ee93366ea9707c007e9d48e9",
+    "rawArtifact": {
+      "url": "https://github.com/den-run-ai/chessy/actions/runs/34919106656/artifacts/10377705946",
+      "id": 10377705946,
+      "uploadedZipSha256ReportedByCI": "f110f8c4aadf3e86b04ed00e685343deb5336131aecda806f69b8a4cdd508ca9",
+      "uploadedZipBytesReportedByCI": 143817,
+      "locallyDownloadedOrVerified": false,
+      "rawTimingRecordsLocallyReaggregated": false,
+      "limitation": "Actions upload completed; local download returned HTTP 403. No raw-archive verification claim."
+    }
+  },
+  "checkedAggregateInvariants": {
+    "configurations": 4,
+    "sameSyntheticParametersWithinEachWidth": true,
+    "baselineByteReproductionReportedPass": true,
+    "baselineNativeTestsPassed": 7,
+    "nativeNeuralParityTestsPassed": 4,
+    "compiledParityCasesPerConfiguration": 20,
+    "compiledParityMismatches": 0,
+    "pairedRepetitionsPerMetricPerConfiguration": 32,
+    "allSearchPairsConsumedBothRequestedBudgets": true
+  },
+  "memoryPolicy": {
+    "baselineBytes": 26542080,
+    "candidateBytes": 26607616,
+    "additionalBytes": 65536,
+    "productionCapChanged": false,
+    "scope": "copied synthetic research crate only",
+    "priorFailedRun": "https://github.com/den-run-ai/chessy/actions/runs/34918841047/job/104222223638",
+    "priorLinkerRequiredBytes": 26542892,
+    "priorFailureBeforeTimings": true
+  },
+  "results": [
+    {
+      "hidden": 4,
+      "implementation": "refresh",
+      "modules": {
+        "baseline": {
+          "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+          "rawBytes": 37172,
+          "brotliBytes": 17690
+        },
+        "candidate": {
+          "sha256": "1a8c8be8999088882b9208127e2d238d12f2542930cefc6b4f235c58f03d63a2",
+          "rawBytes": 44030,
+          "brotliBytes": 22893
+        }
+      },
+      "memory": {
+        "baselineBytes": 26542080,
+        "candidateBytes": 26607616,
+        "additionalBytes": 65536
+      },
+      "ratios": {
+        "evaluation": {
+          "pairedMedianTimeRatio": 2.354201683374055,
+          "pairs": 32
+        },
+        "search4096": {
+          "pairedMedianTimeRatio": 1.155363255597064,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.86552869180617,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        },
+        "search16384": {
+          "pairedMedianTimeRatio": 1.1586094079448515,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.8631039691947597,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        }
+      },
+      "parityRows": 20,
+      "parityMismatches": 0,
+      "parameterCount": 3094,
+      "parameterBytes": 6200,
+      "syntheticParametersSha256": "63431955cf527545aea1d8cd91ae68fa9c25c0748b3d9ed5af528d3c13a69c5c",
+      "moduleGrowthBytes": {
+        "rawBytes": 6858,
+        "brotliBytes": 5203
+      }
+    },
+    {
+      "hidden": 4,
+      "implementation": "fused",
+      "modules": {
+        "baseline": {
+          "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+          "rawBytes": 37172,
+          "brotliBytes": 17690
+        },
+        "candidate": {
+          "sha256": "4e452631d01158d8a50a49c2bf6f663e8dd2409940ef5cc9c70520376a20724d",
+          "rawBytes": 43992,
+          "brotliBytes": 22964
+        }
+      },
+      "memory": {
+        "baselineBytes": 26542080,
+        "candidateBytes": 26607616,
+        "additionalBytes": 65536
+      },
+      "ratios": {
+        "evaluation": {
+          "pairedMedianTimeRatio": 1.3919609195728015,
+          "pairs": 32
+        },
+        "search4096": {
+          "pairedMedianTimeRatio": 1.0393805415153508,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.9621116470811865,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        },
+        "search16384": {
+          "pairedMedianTimeRatio": 1.0285266872014565,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.972267410799319,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        }
+      },
+      "parityRows": 20,
+      "parityMismatches": 0,
+      "parameterCount": 3094,
+      "parameterBytes": 6200,
+      "syntheticParametersSha256": "63431955cf527545aea1d8cd91ae68fa9c25c0748b3d9ed5af528d3c13a69c5c",
+      "moduleGrowthBytes": {
+        "rawBytes": 6820,
+        "brotliBytes": 5274
+      }
+    },
+    {
+      "hidden": 8,
+      "implementation": "refresh",
+      "modules": {
+        "baseline": {
+          "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+          "rawBytes": 37172,
+          "brotliBytes": 17690
+        },
+        "candidate": {
+          "sha256": "d5dcff04ffb9106d59bdabd48599304dcfad8af46f787156f0404929764dab15",
+          "rawBytes": 50672,
+          "brotliBytes": 27740
+        }
+      },
+      "memory": {
+        "baselineBytes": 26542080,
+        "candidateBytes": 26607616,
+        "additionalBytes": 65536
+      },
+      "ratios": {
+        "evaluation": {
+          "pairedMedianTimeRatio": 3.9089721875577363,
+          "pairs": 32
+        },
+        "search4096": {
+          "pairedMedianTimeRatio": 1.3206532809225913,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.7572029131736715,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        },
+        "search16384": {
+          "pairedMedianTimeRatio": 1.3084299411655986,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.7643209558955076,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        }
+      },
+      "parityRows": 20,
+      "parityMismatches": 0,
+      "parameterCount": 6186,
+      "parameterBytes": 12392,
+      "syntheticParametersSha256": "0849a2fe7e02d83683e18e9a1f6edaf5bcfa51bd431ca92a4bbac17324149c45",
+      "moduleGrowthBytes": {
+        "rawBytes": 13500,
+        "brotliBytes": 10050
+      }
+    },
+    {
+      "hidden": 8,
+      "implementation": "fused",
+      "modules": {
+        "baseline": {
+          "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+          "rawBytes": 37172,
+          "brotliBytes": 17690
+        },
+        "candidate": {
+          "sha256": "0289dc3238b58d0a69108f1160d3dcb213ceda31728ff3adb3b841f8fbaac60e",
+          "rawBytes": 50670,
+          "brotliBytes": 27801
+        }
+      },
+      "memory": {
+        "baselineBytes": 26542080,
+        "candidateBytes": 26607616,
+        "additionalBytes": 65536
+      },
+      "ratios": {
+        "evaluation": {
+          "pairedMedianTimeRatio": 1.672855171087751,
+          "pairs": 32
+        },
+        "search4096": {
+          "pairedMedianTimeRatio": 1.1147049793979935,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.8971124410103701,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        },
+        "search16384": {
+          "pairedMedianTimeRatio": 1.0725872853548504,
+          "pairs": 32,
+          "pairedMedianNpsRatio": 0.9323366285350435,
+          "bothConsumedNodeBudget": 32,
+          "note": "NPS uses actual visited nodes, including searches ending before the requested budget."
+        }
+      },
+      "parityRows": 20,
+      "parityMismatches": 0,
+      "parameterCount": 6186,
+      "parameterBytes": 12392,
+      "syntheticParametersSha256": "0849a2fe7e02d83683e18e9a1f6edaf5bcfa51bd431ca92a4bbac17324149c45",
+      "moduleGrowthBytes": {
+        "rawBytes": 13498,
+        "brotliBytes": 10111
+      }
+    }
+  ],
+  "interpretation": {
+    "finding": "Fused HCE-pass accumulation has the lowest observed synthetic cost at both widths. H4 fused lost 2.77% NPS at 16384 nodes versus shipped HCE; H8 fused lost 6.77%.",
+    "limitations": [
+      "One CI runner, eight exposed legal authored timing positions, four paired repetitions per position; no confidence intervals or independent device replication.",
+      "Synthetic parameters change search trajectories; these are mechanism costs, not trained-candidate performance, playing strength or Elo/time saturation.",
+      "Full refresh and fused accumulation both rebuild neural state at each evaluation; incremental make/unmake accumulation is untested.",
+      "Brotli sizes depend on these synthetic parameter values; trained-weight compression can differ.",
+      "Candidate copies require one additional 65536-byte page; production memory cap is unchanged and is not satisfied by this allowance.",
+      "Only CI aggregate summaries were independently parsed locally. Original per-position records, runtime versions and module files remain in the uploaded Actions artifact and were not locally verified."
+    ]
+  }
+}
