@@ -52,3 +52,27 @@ that every recorded mate list was complete. The reviewed enumerator and its
 synthetic legal/mate tests support that part of the result. Complete retained
 rows and audit receipts are preserved through the
 [private evidence receipt](hybrid-retained-tactical-evidence-preservation-2026-09.json).
+
+## Completed-scope retirement
+
+Later review found that the reusable launcher could reopen its script pathname
+after checking it: a writable ancestor could replace the read-only implementation
+directory before child startup. Copying a study without its local started receipt
+could also reopen this consumed attempt. These are reusable-launcher defects;
+the actual audit used the unchanged copied read-only snapshot, whose source and
+retained outputs passed the independent evidence audit. No tactical enumeration
+was rerun to address this review.
+
+The census is complete. Its current freeze, preflight, run and child APIs now
+reject before accessing arguments, paths or ledgers, and every CLI invocation
+fails. Copied runners, aliases, fabricated studies and cached modules whose
+pathnames change cannot reopen these APIs. Only the pure synthetic mate and
+phase helpers remain. Tests cover those entrypoints and the exact historical
+source hash. There is no new general executor.
+
+The exact executed [historical source](../../tools/training/hybrid-retained-tactical-historical-v1.py.txt)
+is preserved as non-executable text with SHA-256
+`15a9b6b4fc34cb804783d5ae171c0ba514eeeba0bc086d3d62a637dbf4e4984f`.
+It is evidence only and must not be executed. The frozen protocol, registration,
+raw rows, results and independent audit remain unchanged. A future tactical
+study requires a separate reviewed protocol and execution boundary.

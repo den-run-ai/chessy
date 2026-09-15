@@ -21,6 +21,26 @@ spec=importlib.util.spec_from_file_location('_independent_natural_runtime',HERE.
 old=importlib.util.module_from_spec(spec);spec.loader.exec_module(old)
 require=old.require
 
+def require_retained_auditor(repo, registration=None):
+    repo=Path(repo).absolute()
+    require(repo==repo.resolve() and Path(__file__).absolute()==HERE
+            and HERE==repo/'tools/training'/HERE.name,'audit must execute the registered retained auditor path')
+    own=[HERE,HERE.with_name('audit-natural-runtime.py')]
+    files=own if registration is None else [Path(item['path']) for item in registration['implementation']]
+    require(len(files)==len(set(files)) and set(own)<=set(files),'registered auditor/helper inventory differs')
+    directories={repo}
+    for file in files:
+        require(file.is_absolute() and file==file.resolve() and repo in file.parents
+                and file.is_file() and not file.is_symlink() and file.stat().st_mode&0o222==0,
+                'audit implementation must be read-only regular files inside the retained root')
+        for directory in file.parents:
+            directories.add(directory)
+            if directory==repo:break
+    for directory in directories:
+        require(directory.is_dir() and not directory.is_symlink() and directory==directory.resolve()
+                and directory.stat().st_mode&0o222==0,'audit snapshot directories must be read-only without symlinks')
+
+
 
 def close(a,b,label):
     if isinstance(b,dict):
@@ -123,10 +143,12 @@ def audit_game(rows, task, modules):
 
 def audit(repo,registration,digest,run,output):
     repo,registration,run,output=map(lambda p:Path(p).absolute(),(repo,registration,run,output))
+    require_retained_auditor(repo)
     require(not output.exists(),'refusing to replace match audit')
     inputs=old.Inputs();r=inputs.json(registration,{'sha256':digest})
     require(r['schema']=='chessy.hybrid-equal-time-200ms-diagnostic-registration.v1' and r['researchOnly'] is True and r['formalPass'] is False and r['shippingOrEloClaimAllowed'] is False,'foreign match registration')
     require(r['candidateAdvancementAllowed'] is False,'development evidence cannot admit production')
+    require_retained_auditor(repo,r)
     for item in [*r['implementation'],*r['modules'].values(),r['originalRegistration']]:inputs.read(item['path'],item)
     original=inputs.json(r['originalRegistration']['path'],r['originalRegistration'])
     for item in [*original['modules'].values(),original['offline'],original['runtime'],*original['evidence']]:inputs.read(item['path'],item)

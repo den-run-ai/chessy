@@ -40,22 +40,26 @@ opening means, df 19 and the reviewed JS table value 1.729; no test verdict is i
 from that bound. The 20-opening subset differs from previous 200-game populations,
 so cross-study score changes cannot be interpreted as a causal budget effect.
 
+Post-completion review found that permission checks alone leave ancestor-path
+replacement and copied-ledger gaps. The consumed recipe's registration, run and
+internal child entrypoints now reject before reading arguments or creating
+state. The [exact executed source](../../tools/training/hybrid-equal-time-200ms-v1.executed.js.txt)
+is preserved as non-executable historical text. The actual measured snapshot,
+registration, raw evidence and audits remain unchanged; there is no rerun.
+
+Read-only replay and statistics helpers remain available. The independent Python
+auditor binds its executing file/helper to the registered read-only root. Audit
+original evidence using its exact preserved auditor version:
+
 ```sh
 node test/training/hybrid-equal-time-200ms-v1.test.js
 python3 test/training/hybrid-equal-time-200ms-audit.test.py
-node tools/training/hybrid-equal-time-200ms-v1.js register \
-  --original-registration ORIGINAL.json --original-registration-sha256 ORIGINAL_SHA \
-  --precursor-summary FIXED_NODE_SUMMARY.json --precursor-audit FIXED_NODE_AUDIT.json \
-  --output NEW_ROOT/registration.json
-node tools/training/hybrid-equal-time-200ms-v1.js run \
-  --registration NEW_ROOT/registration.json --registration-sha256 REGISTRATION_SHA \
-  --output NEW_ROOT/run
-python3 tools/training/audit-hybrid-equal-time-200ms-v1.py \
-  --execution-repo FROZEN_REPO --registration NEW_ROOT/registration.json \
-  --registration-sha256 REGISTRATION_SHA --run-dir NEW_ROOT/run \
-  --output NEW_ROOT/independent-audit.json
+python3 FROZEN_REPO/tools/training/audit-hybrid-equal-time-200ms-v1.py \
+  --execution-repo FROZEN_REPO --registration ORIGINAL_ROOT/registration.json \
+  --registration-sha256 REGISTRATION_SHA --run-dir ORIGINAL_ROOT/run \
+  --output NEW_INDEPENDENT_AUDIT.json
 ```
 
 Paid compute is $0. No model fitting, new data labels, holdout access, evaluator
 changes, formal strength testing or subsequent experiment is authorized by this
-protocol. The existing$30 ceiling is not consumed by this CPU diagnostic.
+protocol. The existing $30 ceiling is not consumed by this CPU diagnostic.

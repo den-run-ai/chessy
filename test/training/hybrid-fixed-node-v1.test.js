@@ -2,6 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('fs');
+const path=require('path'),os=require('os'),cp=require('child_process');
 const H=require('../../tools/training/hybrid-fixed-node-v1');
 const Opening=require('../../tools/training/hybrid-match-v1');
 const N=require('../../tools/training/natural-runtime-run');
@@ -61,3 +62,52 @@ test('invalid search evidence is emitted before a hard failure',()=>{
  assert.throws(()=>H.timedSearch({search:()=>invalid},'candidate','b'.repeat(64),state,{maxDepth:30,nodeLimit:16384,timeMs:0,quiesce:true},row=>rows.push(row)));
  assert.equal(rows[1].schema,'chessy.hybrid-fixed-node-invalid-search.v1');assert.deepEqual(rows[1].rawResult,invalid);
 });
+
+test('retained execution rejects writable files/directories, aliases and changed bytes',()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-retained-execution-'));
+  const directory=path.join(root,'tools'),file=path.join(directory,'runner.js');
+  fs.mkdirSync(directory);fs.writeFileSync(file,'frozen implementation');
+  const registration={implementation:[{path:file,bytes:21,sha256:N.sha(Buffer.from('frozen implementation'))}]};
+  try{
+    fs.chmodSync(file,0o444);fs.chmodSync(directory,0o555);fs.chmodSync(root,0o555);
+    H.requireRetainedExecution(root,[file],registration);
+    fs.chmodSync(file,0o644);
+    assert.throws(()=>H.requireRetainedExecution(root,[file],registration),/read-only regular/);
+    fs.chmodSync(file,0o444);fs.chmodSync(directory,0o755);
+    assert.throws(()=>H.requireRetainedExecution(root,[file],registration),/directories must be read-only/);
+    fs.chmodSync(directory,0o555);fs.chmodSync(root,0o755);
+    assert.throws(()=>H.requireRetainedExecution(root,[file],registration),/directories must be read-only/);
+    const alias=path.join(root,'alias.js');fs.symlinkSync(file,alias);fs.chmodSync(root,0o555);
+    assert.throws(()=>H.requireRetainedExecution(root,[alias]),/without symlinks/);
+    assert.throws(()=>H.requireRetainedExecution(root,[file],{implementation:[{...registration.implementation[0],path:alias}]}),/implementation paths/);
+    fs.chmodSync(file,0o644);fs.writeFileSync(file,'changed implementation');fs.chmodSync(file,0o444);
+    assert.throws(()=>H.requireRetainedExecution(root,[file],registration),/SHA|sha|hash|snapshot|identity/i);
+  }finally{
+    fs.chmodSync(root,0o755);fs.chmodSync(directory,0o755);fs.rmSync(root,{recursive:true,force:true});
+  }
+});
+
+for(const [name,receipt,digest] of [
+  ['hybrid-fixed-node-v1','hybrid-fixed-node','b3e3f5be084f325da2a4bdb263f1c20cc415f5516dc010cd1565685e3d017962'],
+  ['hybrid-equal-time-200ms-v1','hybrid-equal-time-200ms','0025243225792e557b6d57f4bde7064248ef4b8550f2664b6e2ea2f9885b8ba6']]){
+  const root=path.resolve(__dirname,'../..'),entry=path.join(root,'tools/training/'+name+'.js');
+  test(name+' preserves exact measured source and retires the registration API before arguments',()=>{
+    assert.equal(N.sha(fs.readFileSync(path.join(root,'tools/training/'+name+'.executed.js.txt'))),digest);
+    const poisoned=new Proxy({},{get(){throw Error('must not read arguments');}});
+    assert.throws(()=>require(entry).register(poisoned),/completed diagnostic recipe is retired/);
+  });
+  test(name+' refuses original and copied producer CLI paths without a ledger',()=>{
+    const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-retired-cli-'));
+    const copied=path.join(temporary,'copy'),output=path.join(temporary,'output');fs.mkdirSync(output);
+    try{
+      const inventory=JSON.parse(fs.readFileSync(path.join(root,'eval/training/'+receipt+'-execution-snapshot-2026-09.json'))).files;
+      for(const item of inventory){const target=path.join(copied,item.relativePath);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(root,item.relativePath),target);}
+      const copiedEntry=path.join(copied,'tools/training/'+name+'.js');
+      for(const file of [entry,copiedEntry])for(const command of ['register','run','--internal-child']){
+        const result=cp.spawnSync(process.execPath,[file,command],{encoding:'utf8',cwd:output});
+        assert.equal(result.status,1);assert.match(result.stderr,/completed diagnostic recipe is retired/);
+        assert.deepEqual(fs.readdirSync(output),[]);
+      }
+    }finally{fs.rmSync(temporary,{recursive:true,force:true});}
+  });
+}

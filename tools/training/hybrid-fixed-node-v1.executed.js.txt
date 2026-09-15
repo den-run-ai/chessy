@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-const fs=require('fs'),path=require('path'),os=require('os');
+const fs=require('fs'),path=require('path'),os=require('os'),cp=require('child_process');
 const N=require('./natural-runtime-run'),H=require('./hybrid-match-v1'),C=require('./hybrid-match-capture-v1'),R=require('./hybrid-match-recovery-v1');
 const Wasm=require('../../assets/wasm-engine');
 const Chess=globalThis.Chess;
@@ -16,24 +16,6 @@ const IMPLEMENTATION=[__filename,CONTRACT,'tools/training/hybrid-match-recovery-
   'tools/training/hybrid-match-v1.js','tools/training/natural-runtime-run.js','assets/engine.js','assets/wasm-engine.js',
   'test/ai-match-openings.js','test/ai-match-protocol.js','test/match-stats.js','tools/training/audit-hybrid-fixed-node-v1.py',
   'tools/training/audit-natural-runtime.py'].map(p=>path.isAbsolute(p)?p:path.join(ROOT,p));
-function requireRetainedExecution(root,files,registration){
-  check(path.resolve(root)===root,'absolute retained execution root required');
-  const directories=new Set([root]);
-  for(const file of files){
-    check(path.resolve(file)===file&&file.startsWith(root+path.sep),'implementation escaped retained execution root');
-    const stat=fs.lstatSync(file);
-    check(stat.isFile()&&!(stat.mode&0o222)&&fs.realpathSync(file)===file,'execution snapshot files must be read-only regular files without symlinks');
-    for(let directory=path.dirname(file);directory!==root;directory=path.dirname(directory))directories.add(directory);
-  }
-  for(const directory of directories){
-    const stat=fs.lstatSync(directory);
-    check(stat.isDirectory()&&!(stat.mode&0o222)&&fs.realpathSync(directory)===directory,'execution snapshot directories must be read-only without symlinks');
-  }
-  if(registration){
-    same(registration.implementation.map(info=>info.path),files,'registered retained implementation paths');
-    for(const info of registration.implementation)verify(info);
-  }
-}
 function originalSnapshot(file,digest){
   check(digest===read(CONTRACT).originalRegistrationSha256,'wrong original registration');
   const captured=N.snapshot(file,digest),r=JSON.parse(captured.bytes);
@@ -51,10 +33,19 @@ function originalSnapshot(file,digest){
 }
 function makeTasks(rows,protocol){return rows.flatMap(opening=>(opening.index%2?['b','w']:['w','b']).map(candidateColor=>({
   taskId:`hybrid-n${protocol.nodeLimit}-o${opening.index}-${candidateColor}`,arm:'hybrid',opening,candidateColor,timeMs:0,nodeLimit:protocol.nodeLimit})));}
-function retired(){throw Error('This completed diagnostic recipe is retired; preserve its original evidence and do not rerun it.');}
-function register(){return retired();}
+function register(a){
+  const contract=jsonSnapshot(CONTRACT),protocol=contract.value,source=originalSnapshot(a['original-registration'],a['original-registration-sha256']),original=source.value;
+  const openings=H.openings();same(openings,original.openings,'unchanged exposed openings');
+  const tasks=makeTasks(openings,protocol),modules={shipped:original.modules.shipped,hybrid:original.modules.hybrid};
+  const environment={node:process.versions.node,v8:process.versions.v8,platform:process.platform,arch:process.arch,cpus:os.cpus().map(cpu=>cpu.model)};
+  for(const key of ['node','v8','platform','arch'])same(environment[key],original.environment[key],'original runtime '+key);
+  const r={schema:'chessy.hybrid-fixed-node-diagnostic-registration.v1',createdAtUtc:new Date().toISOString(),researchOnly:true,formalPass:false,
+    shippingOrEloClaimAllowed:false,candidateAdvancementAllowed:false,protocol,modules,openings,tasks,environment,
+    originalRegistration:source.identity,implementation:IMPLEMENTATION.map(file=>file===CONTRACT?contract.identity:identity(file)),
+    executionRoot:path.dirname(a.output),noRerunLedger:path.join(path.dirname(original.offline.path),'.hybrid-fixed-node-v1.started.json')};
+  return write(a.output,r);
+}
 function preflight(file,digest){
-  requireRetainedExecution(ROOT,IMPLEMENTATION);
   const r=JSON.parse(N.snapshot(file,digest).bytes);check(r.schema==='chessy.hybrid-fixed-node-diagnostic-registration.v1'&&r.researchOnly===true&&r.formalPass===false&&
     r.shippingOrEloClaimAllowed===false&&r.candidateAdvancementAllowed===false,'research-only fixed-node registration required');
   same(r.protocol,read(CONTRACT),'fixed-node protocol');
@@ -65,7 +56,7 @@ function preflight(file,digest){
   same(r.modules,{shipped:original.modules.shipped,hybrid:original.modules.hybrid},'identical original modules');
   same(r.openings,original.openings,'original exposed opening bank');same(r.openings,H.openings(),'opening replay');
   same(r.tasks,makeTasks(r.openings,r.protocol),'complete paired fixed-node schedule');check(r.tasks.length===200,'complete 200-game schedule required');
-  requireRetainedExecution(ROOT,IMPLEMENTATION,r);
+  same(r.implementation.map(info=>info.path),IMPLEMENTATION,'complete implementation inventory');
   for(const info of [...r.implementation,...Object.values(r.modules),r.originalRegistration])verify(info);
   for(const [key,value] of Object.entries({node:process.versions.node,v8:process.versions.v8,platform:process.platform,arch:process.arch}))same(r.environment[key],value,'registered runtime '+key);
   return r;
@@ -145,6 +136,17 @@ function timedSearch(engine,moduleId,moduleSha256,state,requested,emit){
   }catch(error){emit({schema:'chessy.hybrid-fixed-node-invalid-search.v1',moduleId,moduleSha256,fenBefore,positions,requested,
     rawResult:result,elapsedMs:performance.now()-start,error:error.message});throw error;}
 }
+async function child(r){
+  const engines={},emit=row=>process.send(row);
+  for(const side of ['shipped','hybrid'])engines[side]=await Wasm.load(verify(r.modules[side]).bytes);
+  for(const index of r.protocol.warmup.openingIndices)for(const side of r.protocol.warmup.moduleOrder){
+    const requested={maxDepth:r.protocol.maxDepth,timeMs:0,nodeLimit:r.protocol.warmup.nodesPerSearch,quiesce:true};
+    const record=timedSearch(engines[side],side,r.modules[side].sha256,N.replay(r.openings[index].prefixUci),requested,emit);
+    emit({schema:'chessy.hybrid-match-warmup.v1',openingIndex:index,...record});}
+  emit({control:'warmup-complete'});await awaitCaptured('warmup');
+  for(const task of r.tasks){playGame(task,{baseline:engines.shipped,candidate:engines[task.arm]},taskModules(r,task),r.protocol,emit);await awaitCaptured(task.taskId);}
+  await new Promise((resolve,reject)=>process.send({control:'complete'},error=>error?reject(error):resolve()));process.disconnect();
+}
 function audit(r,output,manifest){
   check(manifest.status==='completed'&&manifest.formalPass===false,'completed research fixed-node manifest required');
   same(manifest.games.map(g=>g.taskId),r.tasks.map(t=>t.taskId),'complete 200-game capture inventory');
@@ -162,12 +164,50 @@ function liveDiscrepancies(output,receipts){return receipts.flatMap(receipt=>{
     [{path:receipt.path,observedBytes:bytes.length,observedSha256:sha256,expectedBytes:receipt.bytes,expectedSha256:receipt.sha256}];}
   catch(error){return [{path:receipt.path,error:error.message}];}
 });}
+async function run(a){
+  const r=preflight(a.registration,a['registration-sha256']);check(path.dirname(a.output)===r.executionRoot&&!fs.existsSync(a.output),'new output must use registered fixed-node root');
+  write(r.noRerunLedger,{registrationSha256:a['registration-sha256'],startedAtUtc:new Date().toISOString(),output:a.output,scoreRerunAllowed:false});fs.mkdirSync(a.output);
+  const retained=new Map(),games=[],startedAtUtc=new Date().toISOString();let writer=new C.AtomicRetainedWriter(path.join(a.output,'warmup.jsonl'),retained);
+  let warmup,currentTask,capturedId=null,failure=null,completed=false,timer;
+  const worker=cp.fork(__filename,['--internal-child'],{stdio:['ignore','ignore','pipe','ipc']});let stderr='';worker.stderr.on('data',bytes=>{stderr+=bytes.toString();});
+  const stop=message=>{failure ||= message;worker.kill('SIGKILL');};
+  const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>stop('search/startup watchdog expired'),r.protocol.searchWatchdogMs);};
+  const total=setTimeout(()=>stop('registered total workload watchdog expired'),r.protocol.workloadWatchdogMs);arm();worker.send(r);
+  worker.on('message',row=>{try{
+    if(row.control==='failed'){stop(row.error);return;}
+    if(row.control==='search-start'){arm();return;}
+    if(row.control==='warmup-complete'){warmup={status:'complete',...writer.close()};writer=null;capturedId='warmup';arm();return;}
+    if(row.control==='game-ready'){check(!writer&&capturedId===row.taskId,'child advanced before exact capture');worker.send({control:'game-captured',taskId:row.taskId});arm();return;}
+    if(row.control==='complete'){completed=true;clearTimeout(timer);return;}
+    if(row.schema==='chessy.natural-runtime-game-header.v1'){check(!writer&&games.length<r.tasks.length,'unexpected game header');currentTask=r.tasks[games.length];
+      check(row.taskId===currentTask.taskId,'frozen schedule differs');writer=new C.AtomicRetainedWriter(path.join(a.output,currentTask.taskId+'.jsonl'),retained);}
+    check(writer,'record outside captured game');writer.append(row);
+    if(row.schema==='chessy.natural-runtime-game-result.v1'){games.push({taskId:currentTask.taskId,status:'complete',...writer.close()});writer=null;capturedId=currentTask.taskId;
+      if(games.length%20===0)console.log(JSON.stringify({stage:'progress',completedGames:games.length,plannedGames:r.tasks.length}));}arm();
+  }catch(error){stop(error.message);}});
+  await new Promise(resolve=>{worker.on('error',error=>{failure ||= error.message;});worker.on('exit',code=>{clearTimeout(timer);clearTimeout(total);
+    if(code!==0||!completed)failure ||= 'child incomplete: '+stderr.slice(-1000);resolve();});});
+  if(writer)try{const receipt={status:'partial',...writer.close()};if(currentTask)games.push({taskId:currentTask.taskId,...receipt});else warmup=receipt;}catch(error){failure ||= error.message;}
+  // No compression, archive writing or score audit can precede timed-child exit.
+  console.log(JSON.stringify({stage:'timed-searches-stopped',completedGames:games.length,plannedGames:r.tasks.length}));
+  let retainedArchive=null,byArm=null;
+  try{if(retained.size)retainedArchive=C.archive(path.join(a.output,'retained-games.json'),retained,[...(warmup?[warmup]:[]),...games]);}catch(error){failure ||= error.message;}
+  const manifest={schema:'chessy.hybrid-fixed-node-diagnostic-raw-manifest.v1',registration:identity(a.registration),startedAtUtc,completedAtUtc:new Date().toISOString(),
+    status:failure?'failed':'completed',failure,warmup:warmup||null,games,retainedArchive,liveFileDiscrepancies:liveDiscrepancies(a.output,[...(warmup?[warmup]:[]),...games]),
+    researchOnly:true,formalPass:false,shippingOrEloClaimAllowed:false,archiveSource:'Exact bytes retained in parent as originally emitted; never reconstructed from live files.'};
+  if(!failure)try{preflight(a.registration,a['registration-sha256']);byArm=audit(r,a.output,manifest);}catch(error){failure=error.message;manifest.failure=failure;manifest.status='failed';}
+  const rawManifest=write(path.join(a.output,'raw-manifest.json'),manifest),summary={schema:'chessy.hybrid-fixed-node-diagnostic-summary.v1',status:failure?'failed':'completed',failure,
+    registrationSha256:a['registration-sha256'],rawManifest,retainedArchive,completedGames:games.length,plannedGames:r.tasks.length,
+    liveFileDiscrepancies:manifest.liveFileDiscrepancies.length,byArm:failure?null:byArm,researchOnly:true,formalPass:false,shippingOrEloClaimAllowed:false,
+    decision:failure?null:{promising:byArm.hybrid.candidateScore>=r.protocol.decisionRule.promisingCandidateScoreAtLeast,
+      next:byArm.hybrid.candidateScore>=r.protocol.decisionRule.promisingCandidateScoreAtLeast?r.protocol.decisionRule.promisingNext:r.protocol.decisionRule.otherwiseNext},paidComputeUsd:0};write(path.join(a.output,'summary.json'),summary);return summary;
+}
 function args(argv){const command=argv[0],names=command==='register'?['original-registration','original-registration-sha256','output']:
   command==='run'||command==='audit'?['registration','registration-sha256','output']:null;check(names,'expected register/run/audit');const a={command};
   for(let i=1;i<argv.length;i+=2){const name=argv[i].replace(/^--/,'');check(argv[i].startsWith('--')&&names.includes(name)&&!Object.hasOwn(a,name)&&argv[i+1],'unknown/repeated/missing option');
     a[name]=name.endsWith('sha256')?argv[i+1]:path.resolve(argv[i+1]);}check(names.every(name=>Object.hasOwn(a,name)),'all inputs required');return a;}
-if(require.main===module)(async()=>{
-  if(['register','run','--internal-child'].includes(process.argv[2]))retired();
-  const a=args(process.argv.slice(2));return audit(preflight(a.registration,a['registration-sha256']),a.output,read(path.join(a.output,'raw-manifest.json')));
-})().then(value=>console.log(JSON.stringify(value))).catch(error=>{console.error('hybrid-fixed-node-v1: '+error.message);process.exitCode=1;});
-module.exports={register,preflight,audit,liveDiscrepancies,args,awaitCaptured,makeTasks,playGame,auditGame,analyzeAudited,timedSearch,requireRetainedExecution};
+if(require.main===module){if(process.argv[2]==='--internal-child')process.once('message',r=>child(r).catch(error=>{process.send({control:'failed',error:error.message},()=>process.disconnect());process.exitCode=1;}));
+  else(async()=>{const a=args(process.argv.slice(2));if(a.command==='register')return register(a);if(a.command==='run')return run(a);
+    return audit(preflight(a.registration,a['registration-sha256']),a.output,read(path.join(a.output,'raw-manifest.json')));})().then(value=>{
+      console.log(JSON.stringify(value));if(value.status==='failed')process.exitCode=1;}).catch(error=>{console.error('hybrid-fixed-node-v1: '+error.message);process.exitCode=1;});}
+module.exports={register,preflight,audit,liveDiscrepancies,args,awaitCaptured,makeTasks,playGame,auditGame,analyzeAudited,timedSearch};

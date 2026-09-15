@@ -13,6 +13,36 @@ spec=importlib.util.spec_from_file_location('fixed',ROOT/'tools/training/audit-h
 audit=importlib.util.module_from_spec(spec);spec.loader.exec_module(audit)
 
 
+class RetainedAuditExecution(unittest.TestCase):
+    def test_both_audit_clis_require_their_read_only_snapshot(self):
+        for name in ('audit-hybrid-fixed-node-v1.py','audit-hybrid-equal-time-200ms-v1.py'):
+            with self.subTest(auditor=name), tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary); directory=root/'tools/training'; directory.mkdir(parents=True)
+                files=[directory/name,directory/'audit-natural-runtime.py']
+                for file in files:file.write_bytes((ROOT/'tools/training'/file.name).read_bytes());file.chmod(0o444)
+                for d in (directory,directory.parent,root):d.chmod(0o555)
+                try:
+                    spec=importlib.util.spec_from_file_location('retained_fixture',files[0])
+                    frozen=importlib.util.module_from_spec(spec);spec.loader.exec_module(frozen)
+                    registration={'implementation':[{'path':str(file)} for file in files]}
+                    frozen.require_retained_auditor(root,registration)
+                    files[0].chmod(0o644)
+                    with self.assertRaises(frozen.old.AuditError):frozen.require_retained_auditor(root,registration)
+                    files[0].chmod(0o444);directory.chmod(0o755)
+                    with self.assertRaises(frozen.old.AuditError):frozen.require_retained_auditor(root,registration)
+                    directory.chmod(0o555)
+                    with self.assertRaises(frozen.old.AuditError):frozen.require_retained_auditor(ROOT,registration)
+                    with self.assertRaises(frozen.old.AuditError):frozen.require_retained_auditor(root,{'implementation':registration['implementation'][:1]})
+                finally:
+                    for d in (root,directory.parent,directory):d.chmod(0o755)
+                absent=root/'absent.json';output=root/'must-not-exist.json'
+                result=subprocess.run([os.sys.executable,str(ROOT/'tools/training'/name),'--execution-repo',str(ROOT),
+                    '--registration',str(absent),'--registration-sha256','a'*64,'--run-dir',str(root/'run'),
+                    '--output',str(output)],capture_output=True,text=True)
+                self.assertNotEqual(result.returncode,0);self.assertIn('read-only',result.stderr)
+                self.assertFalse(output.exists())
+
+
 class IndependentReplay(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

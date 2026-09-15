@@ -46,17 +46,24 @@ Other CPU development may run on the host. Observed per-move times are diagnosti
 metadata, not evidence of a causal speedup; isolated paired profiles are needed
 for runtime claims. No shipped asset, evaluator, difficulty or rating changes.
 
-Commands (all paths and SHA-256 values are supplied explicitly):
+Post-completion review identified that permission checks alone cannot protect a
+retained directory from ancestor-path replacement or stop a copied study with
+its local ledger omitted. The completed recipe's registration, run and internal
+child entrypoints are therefore retired before reading arguments or writing
+state. No current producer API can reopen this consumed experiment.
+
+The [exact executed source](../../tools/training/hybrid-fixed-node-v1.executed.js.txt)
+is preserved as non-executable historical text. The actual run used the unchanged
+reviewed read-only snapshot; its registration, raw bytes and audits remain intact.
+This correction changes no result and authorizes no rerun. Read-only game replay,
+statistics and audit helpers remain available. Independent Python audit entrypoints
+also require the executing auditor/helper to match the registered read-only root.
+Audit original evidence with its exact preserved auditor version:
 
 ```sh
-node tools/training/hybrid-fixed-node-v1.js register \
-  --original-registration ORIGINAL --original-registration-sha256 ORIGINAL_SHA \
-  --output REGISTRATION
-node tools/training/hybrid-fixed-node-v1.js run \
-  --registration REGISTRATION --registration-sha256 SHA --output NEW_RUN_DIRECTORY
-python tools/training/audit-hybrid-fixed-node-v1.py \
+python SNAPSHOT/tools/training/audit-hybrid-fixed-node-v1.py \
   --execution-repo SNAPSHOT --registration REGISTRATION --registration-sha256 SHA \
-  --run-dir NEW_RUN_DIRECTORY --output NEW_AUDIT
+  --run-dir ORIGINAL_RUN_DIRECTORY --output NEW_AUDIT
 ```
 
 Focused verification:
