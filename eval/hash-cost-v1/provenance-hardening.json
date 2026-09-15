@@ -1,0 +1,15 @@
+{
+  "schema": "chessy.searched-board-hash.provenance-hardening.v1",
+  "measuredSourceCommit": "2918ecdc60c53e1eda4bc75043b03fecf34549ab",
+  "measuredRunnerSha256": "3eecebaa889eb1037d41e1e7546a212bee3e2fb419a2e7d62fcf391a4dc58c00",
+  "executionSnapshotFilesRechecked": 21,
+  "fixedResultSha256": "18673ea21fd3abaa5422c02215c2aee2b5d9c6655522dba1b3c5e37c1915a265",
+  "masterResultSha256": "1ea8608264401a20e6a4e1316345d0bda0795933fa7bb4575fadf562928e8afa",
+  "postMeasurementRunnerSchema": "chessy.searched-board-hash.benchmark.v2",
+  "completedTimingReruns": 0,
+  "historicalResultsUnchanged": true,
+  "generatorRetainedByteCapture": true,
+  "experimentLedger": "per-account atomic wx + fsync, no runtime override",
+  "exactCompletedScientificRecipesRetired": 2,
+  "ledgerBoundary": "same host/account with trusted filesystem; not cross-host or owner-deletion protection"
+}

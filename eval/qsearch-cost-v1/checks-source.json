@@ -1,0 +1,97 @@
+{
+  "schema": "chessy.qsearch-cost.source.v1",
+  "variant": "checks",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "source": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+    },
+    {
+      "path": "build.sh",
+      "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+    },
+    {
+      "path": "src/engine.rs",
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "path": "src/eval.rs",
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc"
+    },
+    {
+      "path": "src/search.rs",
+      "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    }
+  ],
+  "generated": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+    },
+    {
+      "path": "build.sh",
+      "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+    },
+    {
+      "path": "src/engine.rs",
+      "sha256": "f3976a1cac70cad780484c9d0cf4f5532c14085b543ee78a76a3e1b0c7b86b97"
+    },
+    {
+      "path": "src/eval.rs",
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc"
+    },
+    {
+      "path": "src/search.rs",
+      "sha256": "118ccdaaca802baac268145553ef7fdd52cb0eccc04d04df83075346c62bcd33"
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "qsearch-cost.js",
+      "sha256": "21946ab18484717a32456d7edf03a3e3a20566c2295eadbc62d46fd67a3495da"
+    },
+    {
+      "path": "qsearch-checks.rs.in",
+      "sha256": "a31412df81d9944480ae0336141504677a0428d1aa677629084bfd142657947f"
+    },
+    {
+      "path": "qsearch-engine-tests.rs.in",
+      "sha256": "ab2c54e1905dccaefb8d26f6274b1f212bad1d1eb538a4aca76cc2ba1a28cd03"
+    },
+    {
+      "path": "qsearch-parity-tests.rs.in",
+      "sha256": "4e96898c7c75d548b34b2931abc97a1c7b4686fc6dcbdd9d44ef1849da39f578"
+    },
+    {
+      "path": "qsearch-tactical.rs.in",
+      "sha256": "d688467c89890bedc4da6db6c104b03bca05b39740e2ee1cbe2c91415961a2b3"
+    }
+  ]
+}

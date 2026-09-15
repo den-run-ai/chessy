@@ -1,0 +1,25 @@
+/// Conservative geometric filter. Every accepted quiet move still passes the
+/// original make/check/unmake test. Aligned origins retain discovered checks;
+/// castling and absent/stale king metadata deliberately take the slow path.
+pub fn quiet_may_give_check(position: &Position, mv: Move, king: u8) -> bool {
+    if king == NO_SQUARE || position.board[king as usize] != make_piece(opposite(position.turn), PieceType::King) || move_castle(mv).is_some() {
+        return true;
+    }
+    let from = move_from(mv);
+    let fr = row_of(from) as i8 - row_of(king) as i8;
+    let fc = col_of(from) as i8 - col_of(king) as i8;
+    if fr == 0 || fc == 0 || fr.abs() == fc.abs() {
+        return true;
+    }
+    let to = move_to(mv);
+    let dr = row_of(to) as i8 - row_of(king) as i8;
+    let dc = col_of(to) as i8 - col_of(king) as i8;
+    match piece_type(position.board[from as usize]).unwrap() {
+        PieceType::Pawn => dr == (if position.turn == Color::White { 1 } else { -1 }) && dc.abs() == 1,
+        PieceType::Knight => dr.abs() * dc.abs() == 2,
+        PieceType::Bishop => dr.abs() == dc.abs(),
+        PieceType::Rook => dr == 0 || dc == 0,
+        PieceType::Queen => dr == 0 || dc == 0 || dr.abs() == dc.abs(),
+        PieceType::King => dr.abs() <= 1 && dc.abs() <= 1,
+    }
+}
