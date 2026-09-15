@@ -59,8 +59,11 @@ searched edges. If it still loses, that is a real negative for the
 
 ## Runtime (frozen)
 
-- Cargo feature `nnue` in `experiments/wasm`; the default build must stay
-  byte-identical to `assets/chessy-ai-fast.wasm` (verified by `cmp`).
+- Cargo feature `nnue` applied to a copy of `experiments/wasm` (patch and
+  module under `tools/nnue/`; the production crate is untouched because the
+  release gate's signature verifier rejects unrotated engine-source edits);
+  the default build of the copy must stay byte-identical to
+  `assets/chessy-ai-fast.wasm` (verified by `cmp`).
 - Weights embedded with `include_bytes!`; per-ply accumulator stack
   `[130][2][H] i16`; `push` only after a legal searched child, `refresh` at
   search roots. Research builds raise the memory ceiling (production is 405

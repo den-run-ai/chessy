@@ -3,10 +3,12 @@
 # experiments/wasm/build.sh plus the `nnue` Cargo feature, an embedded weight
 # file, and an explicit memory ceiling (weights + accumulator stack do not fit
 # in the production 405-page module; production limits are unchanged).
+# Builds from the patched research copy prepared by tools/nnue/prepare-crate.sh
+# (prepared automatically when absent); experiments/wasm is never modified.
 #
 # Usage:
 #   CHESSY_WASM_OPT_BIN=/path/wasm-opt \
-#   tools/nnue/build-candidate.sh <weights.bin> <hidden> <memory-pages> <out.wasm>
+#   tools/nnue/build-candidate.sh <weights.bin> <hidden> <memory-pages> <out.wasm> [features]
 set -eu
 
 WEIGHTS=$1
@@ -17,7 +19,10 @@ OUT=$4
 FEATURES=${5:-nnue}
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-CRATE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../../experiments/wasm" && pwd)
+CRATE_DIR=${CHESSY_NNUE_CRATE:-/tmp/chessy-nnue-crate}
+if [ ! -f "$CRATE_DIR/src/nnue.rs" ]; then
+  "$SCRIPT_DIR/prepare-crate.sh" "$CRATE_DIR" > /dev/null
+fi
 WASM_OPT_BIN=${CHESSY_WASM_OPT_BIN:-wasm-opt}
 TARGET_DIR=${CHESSY_NNUE_TARGET_DIR:-/tmp/chessy-nnue-target-$HIDDEN}
 MEMORY_BYTES=$((PAGES * 65536))

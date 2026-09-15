@@ -39,17 +39,23 @@ formal family-clustered admission, and physical-device timing.
 
 ## What was built
 
-- `experiments/wasm/src/nnue.rs`: 768→H two-perspective SCReLU evaluator
-  behind the Cargo feature `nnue` (plus `nnue-mopup`), weights embedded with
-  `include_bytes!`, a per-ply `[130][2][H] i16` accumulator stack pushed only
-  after a legal searched child and refreshed at every search root. Tests:
-  incremental equals refresh over random playouts covering promotions,
-  castling and en passant; colour-mirror antisymmetry; exporter goldens; and
-  an in-search assertion that every evaluated slot equals a fresh rebuild
-  through `run()`, `run_fixed()` and `analyse_root()`.
-- `search.rs`/`lib.rs`: `static_eval`/`eval_push`/`eval_refresh` shims. With
-  the feature off, `experiments/wasm/build.sh` reproduces
+- `tools/nnue/nnue.rs` plus `tools/nnue/engine-nnue.patch`: a 768→H
+  two-perspective SCReLU evaluator behind the Cargo feature `nnue` (plus
+  `nnue-mopup`), weights embedded with `include_bytes!`, a per-ply
+  `[130][2][H] i16` accumulator stack pushed only after a legal searched
+  child and refreshed at every search root, and the
+  `static_eval`/`eval_push`/`eval_refresh` shims in `search.rs`/`lib.rs`.
+  The production crate under `experiments/wasm` is not modified: the
+  release gate's engine-signature verifier rejects any source change there
+  without a reviewed rotation, so `tools/nnue/prepare-crate.sh` applies the
+  patch to a copy (the repository's established research-runtime pattern).
+  With the feature off, the patched copy reproduces
   `assets/chessy-ai-fast.wasm` byte for byte (verified after every change).
+  Tests in the patched copy: incremental equals refresh over random playouts
+  covering promotions, castling and en passant; colour-mirror antisymmetry;
+  exporter goldens; and an in-search assertion that every evaluated slot
+  equals a fresh rebuild through `run()`, `run_fixed()` and
+  `analyse_root()`.
 - `tools/nnue/`: dataset builder (deepest session, best line, depth ≥ 15,
   quiet filter, quarantine through the repository's own cluster/family key
   functions, SHA-256 hash split), PyTorch trainer/exporter with an exact
@@ -223,6 +229,8 @@ python3 tools/nnue/build-dataset.py --shard data_0000.parquet --shard data_0001.
 python3 tools/nnue/filter-dataset.py --dataset ds --extra-quarantine eval/nnue-proto-2026-09/dev-openings.json --output dsq
 # nets
 python3 tools/nnue/train.py --dataset dsq/dataset.npz --hidden 64 --epochs 10 --batch 16384 --lr 1e-3 --seed 10601 --out nets/h64
+# patched research copy of the engine crate (experiments/wasm stays untouched)
+tools/nnue/prepare-crate.sh /tmp/chessy-nnue-crate
 # candidate module (pinned Rust 1.97.1 + Binaryen 131), tests, goldens, matches
 CHESSY_WASM_OPT_BIN=…/wasm-opt tools/nnue/run-candidate.sh 64
 node tools/nnue/match.js --base assets/chessy-ai-fast.wasm --candidate nets/h64.wasm \

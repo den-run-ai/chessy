@@ -1,55 +1,7 @@
 //! Allocation-free scalar port of the shipped Chessy Play search.
 
-#[cfg_attr(feature = "nnue", allow(unused_imports))]
 use crate::{engine, eval};
 use engine::{Color, Move, Piece, PieceType, Position, MAX_MOVES};
-#[cfg(feature = "nnue")]
-use crate::nnue;
-
-/// Static White-POV leaf evaluation. The research `nnue` feature reads the
-/// per-ply accumulator stack; the production build calls the tapered HCE.
-#[inline]
-unsafe fn static_eval(position: &Position, ply: usize) -> i32 {
-    #[cfg(feature = "nnue")]
-    {
-        // Under test, prove the search-level accumulator plumbing at every
-        // evaluated node: the incremental slot must equal a fresh rebuild.
-        #[cfg(test)]
-        nnue::assert_slot_matches_refresh(position, ply);
-        nnue::evaluate(position, ply)
-    }
-    #[cfg(not(feature = "nnue"))]
-    {
-        let _ = ply;
-        eval::evaluate(position)
-    }
-}
-
-/// Rebuilds the accumulator slot for a freshly entered search root.
-#[inline]
-unsafe fn eval_refresh(ply: usize, position: &Position) {
-    #[cfg(feature = "nnue")]
-    {
-        nnue::refresh(ply, position);
-    }
-    #[cfg(not(feature = "nnue"))]
-    {
-        let _ = (ply, position);
-    }
-}
-
-/// Derives the child accumulator slot for a move that will be searched.
-#[inline]
-unsafe fn eval_push(ply: usize, mv: Move, mover: Color) {
-    #[cfg(feature = "nnue")]
-    {
-        nnue::push(ply, mv, mover);
-    }
-    #[cfg(not(feature = "nnue"))]
-    {
-        let _ = (ply, mv, mover);
-    }
-}
 
 #[cfg(not(test))]
 #[link(wasm_import_module = "env")]
@@ -825,7 +777,7 @@ unsafe fn quiesce_node(
         return 0;
     }
     if qply >= QMAX {
-        return static_eval(position, ply);
+        return eval::evaluate(position);
     }
 
     let mut alpha = alpha_initial;
@@ -834,7 +786,7 @@ unsafe fn quiesce_node(
     if in_check {
         best = if maximizing { -SCORE_INF } else { SCORE_INF };
     } else {
-        best = static_eval(position, ply);
+        best = eval::evaluate(position);
         if maximizing {
             if best >= beta {
                 return best;
@@ -888,7 +840,6 @@ unsafe fn quiesce_node(
             index += 1;
             continue;
         }
-        eval_push(ply, mv, turn);
         let score = quiesce_node(position, alpha, beta, ply + 1, qply + 1);
         let child_rep = context().rep_ply;
         engine::unmake_move(position, mv, undo);
@@ -976,7 +927,7 @@ unsafe fn search_node(
         if fifty {
             return 0;
         }
-        return static_eval(position, ply);
+        return eval::evaluate(position);
     }
 
     let mut alpha = alpha_initial;
@@ -1044,7 +995,6 @@ unsafe fn search_node(
             index += 1;
             continue;
         }
-        eval_push(ply, mv, turn);
 
         let mut score;
         let mut child_rep;
@@ -1369,7 +1319,6 @@ pub unsafe fn analyse_root(
     push_path(root_hash.r1, root_hash.r2);
     let mut child = *position;
     engine::make_move(&mut child, root_move);
-    eval_refresh(1, &child);
     let score = search_node(
         &mut child,
         total_depth as i32 - 1,
@@ -1429,7 +1378,6 @@ pub unsafe fn run_fixed(
     if root_completed_threefold(position) {
         return context_result(None, 0, 0, None, StopReason::GameOver);
     }
-    eval_refresh(0, position);
     let score = search_node(position, depth as i32, -SCORE_INF, SCORE_INF, 0);
     if score == ABORT_SCORE {
         return context_result(
@@ -1492,9 +1440,7 @@ pub unsafe fn run(
 
     let root_hash = hash_position(position);
     push_path(root_hash.r1, root_hash.r2);
-    eval_refresh(0, position);
 
-    let root_turn = position.turn;
     let maximizing = position.turn == Color::White;
     let mut best_move = None;
     let mut best_score = 0;
@@ -1525,7 +1471,6 @@ pub unsafe fn run(
             while index < root_count {
                 let mv = (*root_item(index)).mv;
                 let undo = engine::make_move(position, mv);
-                eval_push(0, mv, root_turn);
                 let mut score;
                 if iteration_best.is_none() {
                     score = search_node(position, depth as i32 - 1, alpha, beta, 1);
@@ -1690,8 +1635,7 @@ mod tests {
             add_history_hash(root_hash.r1, root_hash.r2).unwrap();
             let direct = run_fixed(&mut root, 0, 0, false);
             assert_eq!(direct.stop_reason, StopReason::MaxDepth);
-            eval_refresh(0, &root);
-            assert_eq!(direct.score, static_eval(&root, 0));
+            assert_eq!(direct.score, eval::evaluate(&root));
             assert_ne!(direct.score, 0);
 
             clear_game_history();

@@ -2,12 +2,7 @@
 #![allow(static_mut_refs)]
 
 mod engine;
-// The tapered HCE stays compiled under the research `nnue` feature (tests and
-// reference comparisons use it) but is not the search evaluator there.
-#[cfg_attr(feature = "nnue", allow(dead_code))]
 mod eval;
-#[cfg(feature = "nnue")]
-mod nnue;
 mod search;
 
 use engine::Position;
@@ -238,14 +233,7 @@ pub unsafe extern "C" fn evaluate_loaded() -> i32 {
     if !POSITION_LOADED || SEARCH_ACTIVE {
         return 0;
     }
-    #[cfg(feature = "nnue")]
-    {
-        nnue::evaluate_fresh(&ROOT_POSITION)
-    }
-    #[cfg(not(feature = "nnue"))]
-    {
-        eval::evaluate(&ROOT_POSITION)
-    }
+    eval::evaluate(&ROOT_POSITION)
 }
 
 /// Deterministic full-window score of the loaded root. Depth zero is allowed.

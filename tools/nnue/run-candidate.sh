@@ -1,5 +1,6 @@
 #!/bin/sh
-# Build one candidate module from a trained net and run the timing-insensitive
+# Build one candidate module from a trained net (in the patched research copy
+# of the engine crate, see prepare-crate.sh) and run the timing-insensitive
 # evidence: Rust tests with the exporter goldens, WASM-level golden parity,
 # lone-king conversion, and fixed-node development matches.
 #
@@ -28,7 +29,8 @@ PAGES=$((405 + (2062 * H + 65535) / 65536 + 1))
 
 tools/nnue/build-candidate.sh "$BIN" "$H" "$PAGES" "$WASM" "$FEATURES" > "$OUT/$TAG-build.log" 2>&1
 echo "pages=$PAGES bytes=$(wc -c < "$WASM") brotli=$(node -e "const z=require('zlib');process.stdout.write(String(z.brotliCompressSync(require('fs').readFileSync('$WASM'),{params:{[z.constants.BROTLI_PARAM_QUALITY]:11}}).length))")" > "$OUT/$TAG-size.txt"
-(cd experiments/wasm && CHESSY_NNUE_BIN="$BIN" CHESSY_NNUE_HIDDEN="$H" CHESSY_NNUE_GOLDENS="$GOLDENS" \
+CRATE_DIR=${CHESSY_NNUE_CRATE:-/tmp/chessy-nnue-crate}
+(cd "$CRATE_DIR" && CHESSY_NNUE_BIN="$BIN" CHESSY_NNUE_HIDDEN="$H" CHESSY_NNUE_GOLDENS="$GOLDENS" \
   cargo test --locked --offline --features "$FEATURES") > "$OUT/$TAG-cargo-test.log" 2>&1
 grep -E "test result" "$OUT/$TAG-cargo-test.log"
 if [ "$FEATURES" = nnue ]; then
