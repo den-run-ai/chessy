@@ -370,6 +370,8 @@ jobs:
         run: node test/ai-match-v2.test.js
       - name: Validate fresh finite-bank formal admission without holdout search
         run: node test/ai-match-formal.test.js
+      - name: Validate prospective formal threshold planning and campaign scope
+        run: node test/ai-match-formal-planning.test.js
       - name: Validate match protocol CLI and equal-time smoke
         run: node test/ai-match-cli.test.js
       - name: Run match cluster-statistics tests

@@ -59,3 +59,13 @@ An independent review identified that the shipped Master preset limits depth to
 registration or execution, its maximum depth is corrected to30 to match the
 shipped preset. The completed fixed-node screen retains its originally registered
 111 ceiling; no fixed-node results are rerun or relabeled.
+
+## Completion validation
+
+The current runner accepts exactly three distinct modules in fixed mode
+(reference, prefilter, prefilter+tactical), and exactly two in Master mode
+(reference, selected candidate). It validates the complete immutable mode
+settings and corpus before loading engines, authenticates every module first,
+and requires all ordered row identities before completion. The executed
+historical runners and evidence remain separately preserved as documented in
+REPORT.md; this validation correction does not rerun or relabel those results.

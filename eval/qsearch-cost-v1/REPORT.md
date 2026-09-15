@@ -143,3 +143,26 @@ remain separate requirements. See #84 for device evidence. No difficulty values
 or external Elo labels are changed.
 
 Paid compute: **$0**; the remaining $30 allowance is untouched.
+
+## Post-run completion-validator correction
+
+Review of PR#183 found that the original runner could accept a malformed plan
+with empty execution inventories and label its zero-row output complete. The
+retained actual runs contain all648 fixed-node and72 Master rows; their original
+registration and result bytes are unchanged and now pass an independent complete
+ordered-row check. No timings were rerun.
+
+The current runner validates the exact mode-specific corpus, budgets, depth,
+time, warmup, repetition count, engine order, policy flags, distinct module
+identities and dependency inventory before loading any engine. Fixed mode
+requires the reference and both candidates; Master requires the reference and
+one candidate. It authenticates all retained module bytes before loading any,
+and checks the complete ordered result inventory and fixed-node signatures
+before publishing a completion receipt. Empty, missing, duplicate, reordered,
+invented and malformed plans/rows are covered by negative tests. Registration
+acknowledgment also uses `registered: true`, without a zero-row completion claim.
+
+Both exact executed runner versions are retained: [fixed](fixed-benchmark-source.js.txt),
+[Master](master-benchmark-source.js.txt), and their [hash mapping](runner-snapshots.json).
+The hardened live runner has a different source hash and cannot silently replace
+the implementation authenticated by either historical registration.
