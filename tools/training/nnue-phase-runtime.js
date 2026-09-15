@@ -17,6 +17,14 @@ const IMPLEMENTATION = [__filename, TEMPLATE,
   path.join(ROOT, 'test/training/h4-v3-reference.js'), path.join(ROOT, 'assets/wasm-engine.js')];
 const CRATE_FILES = ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'build.sh',
   'src/engine.rs', 'src/eval.rs', 'src/lib.rs', 'src/search.rs'];
+const BASELINE_MEMORY_BYTES = 26542080;
+const RESEARCH_MEMORY_BYTES = BASELINE_MEMORY_BYTES + 65536;
+const MEMORY_POLICY = Object.freeze({
+  baselineBytes: BASELINE_MEMORY_BYTES, candidateBytes: RESEARCH_MEMORY_BYTES, additionalBytes: 65536,
+  productionCapChanged: false, scope: 'copied synthetic research crate only',
+  priorFailedRun: 'https://github.com/den-run-ai/chessy/actions/runs/34918841047/job/104222223638',
+  priorLinkerRequiredBytes: 26542892, priorFailureBeforeTimings: true,
+});
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const check = (ok, message) => {if (!ok) throw new Error(message);};
 const encode = value => JSON.stringify(value, null, 2) + '\n';
@@ -103,6 +111,17 @@ function render(source, template, model, implementation) {
     tests.replace('assert_eq!(evaluate(&position), expected)', 'assert_eq!(evaluate_hce(&position), expected)');
 }
 
+function researchBuild(source) {
+  return once(source, '\nMEMORY_BYTES=' + BASELINE_MEMORY_BYTES + '\n',
+    '\n# Synthetic research only: one extra page; production build remains unchanged.\nMEMORY_BYTES=' + RESEARCH_MEMORY_BYTES + '\n');
+}
+
+function emittedBytes(name, original, template, model, implementation) {
+  if (name === 'src/eval.rs') return Buffer.from(render(original.toString('utf8'), template.toString('utf8'), model, implementation));
+  if (name === 'build.sh') return Buffer.from(researchBuild(original.toString('utf8')));
+  return original;
+}
+
 function outsideRepository(output) {
   const resolved = path.resolve(output);
   const parent = fs.realpathSync(path.dirname(resolved));
@@ -123,27 +142,28 @@ function prepare(output, hidden, implementation) {
     JSON.stringify(CRATE_FILES.filter(name => name.startsWith('src/')).map(name => name.slice(4))), 'Rust source inventory differs');
   const captured = CRATE_FILES.map(name => ({name, bytes: fs.readFileSync(path.join(ROOT, 'experiments/wasm', name))}));
   const template = fs.readFileSync(TEMPLATE);
-  const source = captured.find(item => item.name === 'src/eval.rs');
-  const patched = render(source.bytes.toString('utf8'), template.toString('utf8'), fixture.model, implementation);
+  // Render/validate the complete copied source before creating the output.
+  const rendered = captured.map(item => emittedBytes(item.name, item.bytes, template, fixture.model, implementation));
   fs.mkdirSync(output); // exclusive no-replace directory; no existing-file writes
   fs.mkdirSync(path.join(output, 'src'));
   const emitted = [];
-  for (const item of captured) {
-    const bytes = item.name === 'src/eval.rs' ? Buffer.from(patched) : item.bytes;
+  for (const [index, item] of captured.entries()) {
+    const bytes = rendered[index];
     fs.writeFileSync(path.join(output, item.name), bytes, {flag: 'wx'});
     emitted.push({path: item.name, sha256: sha(bytes), bytes: bytes.length});
   }
   fs.writeFileSync(path.join(output, 'synthetic.bin'), fixture.bytes, {flag: 'wx'});
   fs.writeFileSync(path.join(output, 'synthetic.json'), encode(fixture.metadata), {flag: 'wx'});
   const receipt = {
-    schema: 'chessy.nnue-phase-synthetic-build.v1', researchOnly: true, syntheticOnly: true,
+    schema: 'chessy.nnue-phase-synthetic-build.v2', researchOnly: true, syntheticOnly: true,
     fitEligible: false, productionIntegrationAllowed: false, strengthClaimAllowed: false,
-    hidden, implementation, parameters: fixture.metadata.parameterBytes,
+    hidden, implementation, parameterCount: fixture.metadata.parameters, parameterBytes: fixture.metadata.parameterBytes,
     fixtureSha256: sha(fixture.bytes), metadataSha256: sha(encode(fixture.metadata)),
     baselineWasmSha256,
     sourceInputs: captured.map(item => ({path: item.name, sha256: sha(item.bytes)})),
     implementationSha256: sha(fs.readFileSync(__filename)), templateSha256: sha(template),
     implementationInputs,
+    memoryPolicy: MEMORY_POLICY,
     emitted, parityFixtures: PARITY_FENS.length, dataScope: 'exposed authored evaluator fixtures only',
   };
   for (const item of implementationInputs) check(sha(fs.readFileSync(path.join(ROOT, item.path))) === item.sha256, 'probe implementation changed during preparation');
@@ -178,8 +198,9 @@ function measure(directory, output) {
   check(!fs.existsSync(output), 'measurement output already exists');
   const receiptBytes = fs.readFileSync(path.join(directory, 'synthetic-receipt.json'));
   const receipt = JSON.parse(receiptBytes);
-  check(receipt.schema === 'chessy.nnue-phase-synthetic-build.v1' && receipt.syntheticOnly === true &&
+  check(receipt.schema === 'chessy.nnue-phase-synthetic-build.v2' && receipt.syntheticOnly === true &&
     receipt.productionIntegrationAllowed === false && receipt.strengthClaimAllowed === false, 'synthetic receipt required');
+  check(JSON.stringify(receipt.memoryPolicy) === JSON.stringify(MEMORY_POLICY), 'registered research memory policy differs');
   const expected = synthetic(receipt.hidden);
   check(sha(expected.bytes) === receipt.fixtureSha256 && sha(encode(expected.metadata)) === receipt.metadataSha256, 'fixture identity differs');
   check(sha(fs.readFileSync(__filename)) === receipt.implementationSha256 && sha(fs.readFileSync(TEMPLATE)) === receipt.templateSha256,
@@ -195,18 +216,21 @@ function measure(directory, output) {
     JSON.stringify(receipt.emitted.map(item => item.path)) === JSON.stringify(CRATE_FILES) &&
     JSON.stringify(receipt.sourceInputs.map(item => item.path)) === JSON.stringify(CRATE_FILES), 'complete source inventory required');
   for (const [index, item] of receipt.emitted.entries()) {
-    const emittedBytes = fs.readFileSync(path.join(directory, item.path));
-    check(sha(emittedBytes) === item.sha256 && emittedBytes.length === item.bytes, 'generated source changed');
+    const actualBytes = fs.readFileSync(path.join(directory, item.path));
+    check(sha(actualBytes) === item.sha256 && actualBytes.length === item.bytes, 'generated source changed');
     const originalBytes = fs.readFileSync(path.join(ROOT, 'experiments/wasm', item.path));
     check(sha(originalBytes) === receipt.sourceInputs[index].sha256, 'baseline source changed');
-    const wantedBytes = item.path === 'src/eval.rs' ? Buffer.from(render(originalBytes.toString('utf8'),
-      fs.readFileSync(TEMPLATE, 'utf8'), expected.model, receipt.implementation)) : originalBytes;
-    check(emittedBytes.equals(wantedBytes), 'generated source does not reproduce from fixed synthetic parameters');
+    const wantedBytes = emittedBytes(item.path, originalBytes, fs.readFileSync(TEMPLATE), expected.model, receipt.implementation);
+    check(actualBytes.equals(wantedBytes), 'generated source does not reproduce from fixed synthetic parameters');
   }
   const baselineBytes = fs.readFileSync(path.join(ROOT, 'assets/chessy-ai-fast.wasm'));
   const candidateBytes = fs.readFileSync(path.join(directory, 'dist/chessy-ai-fast.wasm'));
   check(sha(baselineBytes) === receipt.baselineWasmSha256, 'shipped baseline changed');
   const baseline = Wasm.loadSync(baselineBytes), candidate = Wasm.loadSync(candidateBytes);
+  const memory = {baselineBytes: baseline.memoryBytes(), candidateBytes: candidate.memoryBytes()};
+  memory.additionalBytes = memory.candidateBytes - memory.baselineBytes;
+  check(memory.baselineBytes === BASELINE_MEMORY_BYTES && memory.candidateBytes === RESEARCH_MEMORY_BYTES &&
+    memory.additionalBytes === MEMORY_POLICY.additionalBytes, 'compiled memory differs from registered synthetic allowance');
   const parity = PARITY_FENS.map(fen => {
     const baselineCp = baseline.evaluate(fen), actual = candidate.evaluate(fen);
     const wanted = Reference.infer(expected.model, fen, baselineCp);
@@ -259,23 +283,25 @@ function measure(directory, output) {
   const size = bytes => ({sha256: sha(bytes), rawBytes: bytes.length,
     brotliBytes: zlib.brotliCompressSync(bytes, {params: {[zlib.constants.BROTLI_PARAM_QUALITY]: 11}}).length});
   const result = {
-    schema: 'chessy.nnue-phase-synthetic-cost.v1', status: 'completed', researchOnly: true,
+    schema: 'chessy.nnue-phase-synthetic-cost.v2', status: 'completed', researchOnly: true,
     syntheticOnly: true, strengthClaimAllowed: false, productionIntegrationAllowed: false,
     sourceReceiptSha256: sha(receiptBytes), hidden: receipt.hidden, implementation: receipt.implementation,
     runtime: {node: process.versions.node, v8: process.versions.v8, brotli: process.versions.brotli},
-    modules: {baseline: size(baselineBytes), candidate: size(candidateBytes)},
+    modules: {baseline: size(baselineBytes), candidate: size(candidateBytes)}, memory, memoryPolicy: MEMORY_POLICY,
     parity, ratios, records,
     limitations: ['Synthetic parameters cannot establish fitted-model strength or saturation.',
       'Full refresh/fused accumulation is not an incremental make/unmake NNUE implementation.',
       'Fixed-node search follows different synthetic evaluation trajectories; no Elo/time gain is inferred.',
+      'Synthetic copied crates use one extra 65536-byte memory page; the production memory cap remains unchanged.',
       'Desktop V8 timing does not satisfy the physical-device runtime gate.'],
   };
+  check(baseline.memoryBytes() === memory.baselineBytes && candidate.memoryBytes() === memory.candidateBytes, 'linear memory changed during measurements');
   fs.writeFileSync(output, encode(result), {flag: 'wx'});
   return {hidden: result.hidden, implementation: result.implementation, modules: result.modules,
-    ratios, parityRows: parity.length, parityMismatches: parity.filter(row => row.mismatch).length};
+    memory, ratios, parityRows: parity.length, parityMismatches: parity.filter(row => row.mismatch).length};
 }
 
-module.exports = {synthetic, render, prepare, measure, outsideRepository, median, FENS, PARITY_FENS, sha};
+module.exports = {synthetic, render, researchBuild, prepare, measure, outsideRepository, median, FENS, PARITY_FENS, sha};
 if (require.main === module) {
   const [command, ...args] = process.argv.slice(2);
   if (command === 'prepare' && args.length === 3) console.log(encode(prepare(args[0], Number(args[1]), args[2])));

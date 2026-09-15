@@ -24,11 +24,27 @@ independent BigInt reference used for training generates authored Rust test
 expectations and checks the complete compiled evaluator against shipped WASM.
 
 Preparation creates a fresh directory outside all Git checkouts, copies the
-captured engine source and pinned build configuration, and emits the synthetic
+captured engine source and build configuration, and emits the synthetic
 source plus a no-replace receipt. Trained parameters and generated modules are
 never written to tracked production paths. The probe records source, template,
 reference, loader, parameter, baseline and compiled-module hashes. This is a
 trusted isolated-runner diagnostic, not hostile same-account attestation.
+
+The first compiled attempt established a real memory constraint. In
+[run 34918841047, job 104222223638](https://github.com/den-run-ai/chessy/actions/runs/34918841047/job/104222223638),
+the pinned baseline reproduced and native authored neural parity passed, but
+the H4 refresh link required **26,542,892 bytes**, exceeding the production
+**26,542,080-byte** ceiling by **812 bytes**. It failed before any neural timing
+measurements. This is retained failure evidence, not a successful size/cost run.
+
+Before collecting timings, the v2 synthetic build/measurement receipts register
+one extra 65,536-byte page in the **copied research build only**: initial and
+maximum memory are both **26,607,616 bytes (406 pages)**. All four diagnostic
+configurations use the same allowance. Rust, Binaryen, optimization, stack,
+target features and other link settings remain pinned. The production build's
+**405-page** ceiling and loader are unchanged. Measurement verifies and reports
+the actual baseline/candidate memory and the full **65,536-byte** difference;
+this research allowance does not make a candidate eligible for production.
 
 Run the existing **Tests** workflow manually with `nnue_synthetic_probe=true`
 to build all four H4/H8 × refresh/fused configurations using the existing pinned

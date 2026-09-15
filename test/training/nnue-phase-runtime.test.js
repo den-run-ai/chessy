@@ -8,6 +8,7 @@ const Reference = require('./h4-v3-reference');
 const ROOT = path.resolve(__dirname, '../..');
 const source = fs.readFileSync(path.join(ROOT, 'experiments/wasm/src/eval.rs'), 'utf8');
 const template = fs.readFileSync(path.join(ROOT, 'tools/training/nnue-phase-runtime.rs.in'), 'utf8');
+const originalBuild = fs.readFileSync(path.join(ROOT, 'experiments/wasm/build.sh'), 'utf8');
 const before = Probe.sha(source);
 // Timing fixtures must support game search; raw static parity also deliberately
 // retains the historical adjacent-king mop-up probes separately.
@@ -36,6 +37,17 @@ try {
       assert.equal(receipt.fitEligible, false);
       assert.equal(receipt.productionIntegrationAllowed, false);
       assert.equal(receipt.strengthClaimAllowed, false);
+      assert.equal(receipt.parameterCount, fixture.metadata.parameters);
+      assert.equal(receipt.parameterBytes, fixture.bytes.length);
+      assert.equal(receipt.schema, 'chessy.nnue-phase-synthetic-build.v2');
+      assert.equal(receipt.memoryPolicy.baselineBytes, 26542080);
+      assert.equal(receipt.memoryPolicy.candidateBytes, 26607616);
+      assert.equal(receipt.memoryPolicy.additionalBytes, 65536);
+      assert.equal(receipt.memoryPolicy.productionCapChanged, false);
+      const researchBuild = fs.readFileSync(path.join(output, 'build.sh'), 'utf8');
+      assert(researchBuild.includes('\nMEMORY_BYTES=26607616\n'));
+      assert(!researchBuild.includes('\nMEMORY_BYTES=26542080\n'));
+      assert.equal(researchBuild, Probe.researchBuild(originalBuild));
       const rust = fs.readFileSync(path.join(output, 'src/eval.rs'), 'utf8');
       assert(!rust.includes('{{'));
       assert.equal((rust.match(/pub fn evaluate\(/g) || []).length, 1);
@@ -50,6 +62,8 @@ try {
       const receiptPath = path.join(output, 'synthetic-receipt.json');
       fs.writeFileSync(receiptPath, JSON.stringify({...receipt, emitted: []}));
       assert.throws(() => Probe.measure(output, path.join(tmp, 'result.json')), /complete source inventory/);
+      fs.writeFileSync(receiptPath, JSON.stringify({...receipt, memoryPolicy: {...receipt.memoryPolicy, candidateBytes: 26542080}}));
+      assert.throws(() => Probe.measure(output, path.join(tmp, 'result.json')), /research memory policy differs/);
       fs.writeFileSync(receiptPath, JSON.stringify(receipt));
       const file = path.join(output, receipt.emitted[0].path);
       fs.appendFileSync(file, '\n');
@@ -60,11 +74,14 @@ try {
     assert.throws(() => Probe.render(source + '\nconst NNUE_X: i32 = 0;', template, fixture.model, 'refresh'), /already contains/);
   }
   assert.throws(() => Probe.synthetic(16), /hidden/);
+  assert.throws(() => Probe.researchBuild(originalBuild.replace('MEMORY_BYTES=26542080', 'MEMORY_BYTES=26542892')), /anchor/);
+  assert.throws(() => Probe.researchBuild(originalBuild + '\nMEMORY_BYTES=26542080\n'), /anchor/);
   assert.throws(() => Probe.outsideRepository(path.join(ROOT, 'unsafe-output')), /outside a Git checkout/);
   const symlink = path.join(tmp, 'linked');
   fs.symlinkSync(ROOT, symlink);
   assert.throws(() => Probe.outsideRepository(path.join(symlink, 'unsafe-output')), /canonical/);
   assert.equal(Probe.sha(fs.readFileSync(path.join(ROOT, 'experiments/wasm/src/eval.rs'))), before);
+  assert.equal(fs.readFileSync(path.join(ROOT, 'experiments/wasm/build.sh'), 'utf8'), originalBuild);
   assert.equal(Probe.median([5, 1, 3, 7]), 4);
   assert.throws(() => Probe.median([]), /empty/);
 } finally {
