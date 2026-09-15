@@ -1,0 +1,97 @@
+// Added only to a copied synthetic research evaluator.
+#[inline]
+pub(crate) fn nnue_adjust_piece(acc: &mut [[i32; NNUE_H]; 2], piece: Piece, square: usize, delta: i32) {
+    let channel = piece as usize - 1;
+    let white = &NNUE_W1[channel * 64 + square];
+    let black = &NNUE_W1[((channel + 6) % 12) * 64 + (square ^ 56)];
+    for unit in 0..NNUE_H {
+        acc[0][unit] += delta * white[unit] as i32;
+        acc[1][unit] += delta * black[unit] as i32;
+    }
+}
+
+#[cfg(test)]
+mod nnue_incremental_transitions {
+    use super::*;
+
+    fn verify(position: &Position) {
+        // Independent full board reconstruction uses piece type/color accessors,
+        // not the incremental helper or its piece discriminant calculation.
+        let mut expected = [NNUE_B1; 2];
+        for (square, &piece) in position.board.iter().enumerate() {
+            if piece == Piece::Empty { continue; }
+            let color = engine::piece_color(piece).unwrap();
+            let kind = engine::piece_type(piece).unwrap() as usize;
+            let channel = kind + if color == Color::White { 0 } else { 6 };
+            for unit in 0..NNUE_H {
+                expected[0][unit] += NNUE_W1[channel * 64 + square][unit] as i32;
+                expected[1][unit] += NNUE_W1[((channel + 6) % 12) * 64 + (square ^ 56)][unit] as i32;
+            }
+        }
+        assert_eq!(position.nnue_acc, expected);
+        assert_eq!(evaluate(position) - evaluate_hce(position), nnue_refresh(position));
+    }
+
+    fn walk(position: &mut Position, depth: u8, coverage: &mut [u32; 25]) {
+        verify(position);
+        let original = *position;
+        let _ = engine::has_legal_en_passant(position);
+        assert!(*position == original);
+        let mut moves = [0; engine::MAX_MOVES];
+        let count = engine::generate_legal(position, &mut moves);
+        assert!(*position == original);
+        if depth == 0 { return; }
+        for &mv in &moves[..count] {
+            let color = position.turn as usize;
+            coverage[color] += 1;
+            coverage[2] += engine::move_is_capture(mv) as u32;
+            if engine::move_is_en_passant(mv) { coverage[3 + color] += 1; }
+            if let Some(side) = engine::move_castle(mv) {
+                coverage[5 + 2 * color + if side == engine::CastleSide::KingSide { 0 } else { 1 }] += 1;
+            }
+            if let Some(kind) = engine::move_promotion(mv) {
+                let slot = match kind { PieceType::Queen => 0, PieceType::Rook => 1,
+                    PieceType::Bishop => 2, PieceType::Knight => 3, _ => panic!("invalid promotion") };
+                coverage[9 + 8 * color + if engine::move_is_capture(mv) { 4 } else { 0 } + slot] += 1;
+            }
+            let undo = engine::make_move(position, mv);
+            verify(position);
+            walk(position, depth - 1, coverage);
+            engine::unmake_move(position, mv, undo);
+            assert!(*position == original);
+            verify(position);
+        }
+    }
+
+    #[test]
+    fn complete_board_write_closure_matches_refresh() {
+        let fixtures: &[&[u8]] = &[
+            b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            b"r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            b"r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+            b"4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 1",
+            b"4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1",
+            b"4r1k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+            b"4k3/8/8/8/3Pp3/8/8/4R1K1 b - d3 0 1",
+            b"8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1",
+            b"8/1P3k2/8/8/8/8/1p3K2/8 b - - 0 1",
+            b"rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+            b"rnbqk2r/ppp1nNpp/8/2b5/8/2P5/PP1pBPPP/RNBQ1K1R b kq - 1 8",
+        ];
+        let mut coverage = [0_u32; 25];
+        for &fen in fixtures {
+            let mut position = engine::parse_fen(fen).unwrap();
+            let original = position;
+            verify(&position);
+            // Engine has no null-move implementation. A turn-only test proves
+            // that cached features do not depend on side-to-move ordering.
+            position.turn = engine::opposite(position.turn);
+            verify(&position);
+            position.turn = engine::opposite(position.turn);
+            assert!(position == original);
+            walk(&mut position, 2, &mut coverage);
+            assert!(position == original);
+        }
+        assert!(coverage.iter().all(|&count| count > 0));
+    }
+}

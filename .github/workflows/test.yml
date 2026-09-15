@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      nnue_incremental_probe:
+        description: 'Run the separately registered H4/H8 fused/incremental synthetic study'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,6 +83,37 @@ jobs:
           sha256sum experiments/wasm/dist/*.wasm
       - name: Verify the committed production asset
         run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - name: Build all optional incremental study variants before timing
+        if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          mkdir "$RUNNER_TEMP/nnue-incremental-study" "$RUNNER_TEMP/nnue-incremental-results"
+          for hidden in 4 8; do
+            for mode in fused incremental; do
+              probe="$RUNNER_TEMP/nnue-incremental-study/h$hidden-$mode"
+              node tools/training/nnue-incremental.js prepare "$probe" "$hidden" "$mode"
+              cp "$probe/incremental-source.json" "$RUNNER_TEMP/nnue-incremental-results/h$hidden-$mode-source.json"
+              (cd "$probe" && cargo test --locked --offline nnue_)
+              CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/nnue-incremental-target" \
+                CHESSY_CARGO_BIN="$(command -v cargo)" \
+                CHESSY_RUSTC_BIN="$(command -v rustc)" \
+                CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+                sh "$probe/build.sh"
+              cp "$probe/dist/chessy-ai-fast.wasm" "$RUNNER_TEMP/nnue-incremental-results/h$hidden-$mode.wasm"
+            done
+          done
+      - name: Measure complete incremental study grid
+        if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
+        run: |
+          node tools/training/nnue-incremental.js measure-all "$RUNNER_TEMP/nnue-incremental-study" \
+            "$RUNNER_TEMP/nnue-incremental-results/complete-study.json"
+      - uses: actions/upload-artifact@v4
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe')))
+        with:
+          name: nnue-incremental-study
+          path: ${{ runner.temp }}/nnue-incremental-results/
       - name: Measure optional synthetic NNUE mechanisms
         if: (github.event_name == 'workflow_dispatch' && inputs.nnue_synthetic_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-synthetic-probe'))
         env:
@@ -226,8 +262,11 @@ jobs:
           python test/training/h4-v3-audit.test.py
           python test/training/h4-v4-model.test.py
           python test/training/h4-v4-screen.test.py
+          python test/training/h4-v4-audit.test.py
+          python test/training/h4-v4-audit-stages.test.py
           python tools/training/audit-h4-v2.py --self-test
           node test/training/nnue-phase-runtime.test.js
+          node test/training/nnue-incremental.test.js
       - name: Verify behavior-neutral AI telemetry
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset

@@ -246,6 +246,14 @@ neither the shipped evaluator nor level budgets.
 The [clean natural-game follow-up](eval/NATURAL-PILOT-2026-09.md) records the
 50,000-position experiment, audited admission, frozen selection and mixed
 80-game development result; no evaluator or level change ships.
+The compact neural research continues through the
+[original H4 screen](eval/neural-h4/REPORT.md),
+[residual recipe repair](eval/neural-h4-v2/REPORT.md),
+[phase and width screen](eval/neural-h4-v3/REPORT.md), and
+[registered final factorial](eval/training/natural-nnue-h4-v4.md).
+The [compiled synthetic cost report](eval/training/nnue-phase-runtime-results-2026-09.md)
+separates parameter storage, module growth, memory and per-position overhead.
+These studies preserve the shipped evaluator and the separate admission gates.
 
 For historical reproduction, `test/ai-match.js` supports the archived
 paired-WASM protocol plus diagnostic modes. `--formal --nodes 10000 --plies 180`

@@ -10,7 +10,8 @@ The complete four-configuration diagnostic ran at commit
 `d14a0ba8a97868fd25889d2c8bd5544ff4a90902` in
 [Actions run 34919106656](https://github.com/den-run-ai/chessy/actions/runs/34919106656).
 The corresponding [machine-readable aggregate summary](nnue-phase-runtime-results-2026-09.json)
-retains exact values, module hashes, implementation identities and evidence limits.
+retains exact values, module hashes, implementation identities, per-position
+metrics and the verified 12-file artifact inventory.
 
 ## Observed cost
 
@@ -30,6 +31,25 @@ authored positions and four alternating-order repetitions. Every search pair
 consumed its complete requested node budget. The standalone evaluation pass
 used 10,000 calls after 1,000 warm-up calls per sample. Configurations completed
 the complete fixed plan; no runs or positions were selected afterward.
+
+The small overall median does not mean uniformly small overhead. **Six of the
+eight positions are endgames**; opening and tactical positions cost more in this
+sample. The raw records reproduce these per-position medians at 16,384 nodes:
+
+| Authored position | H4 fused NPS change | H8 fused NPS change |
+| --- | ---: | ---: |
+| Initial position | −18.97% | −17.44% |
+| Kiwipete | −11.92% | −19.77% |
+| Lucena rook ending | −0.94% | +5.42% |
+| Minor-piece ending | −2.72% | +1.33% |
+| Promotion race | +6.77% | +0.77% |
+| Pawn ending | −3.48% | −5.26% |
+| Free rook ending | −2.29% | −8.16% |
+| Boxed rook ending | −2.60% | −8.10% |
+
+Positive cells do not mean neural evaluation is free or improves strength:
+synthetic scores change search trajectories. This endgame-heavy median is not
+a phase-balanced estimate of expected game performance.
 
 | Module | Parameter bytes | WASM bytes | Growth | Brotli bytes | Growth |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -66,18 +86,41 @@ evidence that this implementation does not fit the existing production cap.
 
 ## Provenance and limits
 
-This summary independently parses and checks the **complete CI job log**,
-including all four source receipts and all four final measurement summaries.
+This summary independently checks the **complete CI job log and recovered raw
+artifact**, including all four source receipts and measurement reports.
 The log SHA-256 is
 `8975622a27ad0e1f3774676eb6510a2e35d2215bcaa76bdf26be8da6bf0bf220`.
 
-Actions reports a completed [raw artifact upload](https://github.com/den-run-ai/chessy/actions/runs/34919106656/artifacts/10377705946)
-of 143,817 bytes with ZIP SHA-256
+The recovered [raw artifact](https://github.com/den-run-ai/chessy/actions/runs/34919106656/artifacts/10377705946)
+is exactly 143,817 bytes with independently verified ZIP SHA-256
 `f110f8c4aadf3e86b04ed00e685343deb5336131aecda806f69b8a4cdd508ca9`.
-It contains original per-position reports, source receipts and the four modules.
-Local download returned HTTP 403, so the archive bytes, individual timing records
-and recorded runtime versions have **not** been independently inspected or
-reaggregated locally. The aggregate checks do not claim that stronger evidence.
+The first HTTP download returned 403; subsequent authorized file materialization
+recovered the exact uploaded archive. All 12 extracted files match their ZIP
+payloads. Independent reaggregation of **768 timing records**, 192 per
+configuration, reproduces every reported median and pair count **exactly**.
+The alternating-order inventory is complete, and every search consumes its
+requested budget.
+
+The local verification also checks all four WASM hashes and byte sizes, source
+receipt hashes, the complete declared source/implementation inventories, and
+exact regeneration of every emitted source file. It parses the actual WASM
+memory minimum/maximum and ABI-v2 record, rechecks all **80 static parity
+comparisons**, and validates every evaluation checksum. Local Brotli
+recompression reproduces all reported compressed sizes, including the baseline.
+Candidate source was regenerated for hash comparison; compilation and timing
+were not repeated.
+
+The later v4 source update automatically triggered a complete CI repeat in
+[run 34919677932](https://github.com/den-run-ai/chessy/actions/runs/34919677932).
+The first complete run above had already been selected and reported before
+that update. The repeat's 143,884-byte archive is retained separately with
+SHA-256 `116ab66d5c322f9bc701be4f6cfce84ba9da4cd885d6b86f9a72559de3d8147f`;
+its timing records are not pooled with or substituted for the original study.
+The trigger label was then removed to prevent further automatic repeats.
+
+The measured CI runtime was **Node 22.23.2, V8 12.4.254.21-node.56, Brotli 1.1.0**.
+The independent local verification used Node 24.19.0 and Brotli 1.2.0; this
+runtime difference does not replace or extend the original timing measurements.
 
 This single-run diagnostic supports using fused accumulation for a future
 separately admitted candidate. It does not establish confidence intervals,
