@@ -1,0 +1,129 @@
+
+// Private fitted hybrid wrapper. The neural correction was trained on shipped
+// HCE: blending with expanded HCE must retain that original baseline.
+const HYBRID_LOW: i32 = {{LOW}};
+const HYBRID_HIGH: i32 = {{HIGH}};
+const HYBRID_HARD: bool = {{HARD}};
+
+#[inline]
+fn hybrid_phase(position: &Position) -> i32 {
+    let mut phase = 0;
+    for &piece in &position.board {
+        if let Some(kind) = engine::piece_type(piece) { phase += PHASE[kind as usize]; }
+    }
+    core::cmp::min(24, phase)
+}
+
+#[inline]
+fn hybrid_mix(phase: i32, expanded: i32, neural: i32) -> i32 {
+    if HYBRID_HARD { return if phase <= HYBRID_LOW { expanded } else { neural }; }
+    let den = (HYBRID_HIGH - HYBRID_LOW) as i64;
+    let weight = (phase - HYBRID_LOW).clamp(0, den as i32) as i64;
+    let adjusted = weight * neural as i64 + (den - weight) * expanded as i64 + den / 2;
+    let mut score = adjusted / den;
+    if adjusted < 0 && adjusted % den != 0 { score -= 1; }
+    score as i32
+}
+
+fn evaluate_hybrid(position: &Position) -> i32 {
+    let phase = hybrid_phase(position);
+    if phase <= HYBRID_LOW { return hybrid_expanded::evaluate(position); }
+    if phase >= HYBRID_HIGH { return evaluate_neural(position); }
+    hybrid_mix(phase, hybrid_expanded::evaluate(position), evaluate_neural(position))
+}
+
+pub fn evaluate(position: &Position) -> i32 { {{ENTRY}} }
+
+#[cfg(test)]
+mod hybrid_transition_tests {
+    use super::*;
+
+    fn verify(position: &Position) {
+        // Refresh is distinct from the fused accumulation in evaluate_neural.
+        let neural = evaluate_hce(position) + nnue_refresh(position);
+        assert_eq!(evaluate_neural(position), neural);
+        let expanded = hybrid_expanded::evaluate(position);
+        let p = hybrid_phase(position);
+        let wanted = if HYBRID_HARD {
+            if p <= HYBRID_LOW { expanded } else { neural }
+        } else {
+            // Independent exact rational rounding oracle; all numbers are small
+            // enough to be exactly represented by f64 on these fixtures.
+            let weight = (p - HYBRID_LOW).clamp(0, HYBRID_HIGH - HYBRID_LOW) as f64;
+            let den = (HYBRID_HIGH - HYBRID_LOW) as f64;
+            ((weight * neural as f64 + (den - weight) * expanded as f64) / den + 0.5).floor() as i32
+        };
+        assert_eq!(evaluate_hybrid(position), wanted);
+    }
+
+    fn walk(position: &mut Position, depth: u8, coverage: &mut [u32; 25], crossings: &mut u32) {
+        verify(position);
+        let original = *position;
+        let before_phase = hybrid_phase(position);
+        let _ = engine::has_legal_en_passant(position);
+        assert!(*position == original);
+        let mut moves = [0; engine::MAX_MOVES];
+        let count = engine::generate_legal(position, &mut moves);
+        assert!(*position == original);
+        if depth == 0 { return; }
+        for &mv in &moves[..count] {
+            let color = position.turn as usize;
+            coverage[color] += 1;
+            coverage[2] += engine::move_is_capture(mv) as u32;
+            if engine::move_is_en_passant(mv) { coverage[3 + color] += 1; }
+            if let Some(side) = engine::move_castle(mv) {
+                coverage[5 + 2 * color + if side == engine::CastleSide::KingSide { 0 } else { 1 }] += 1;
+            }
+            if let Some(kind) = engine::move_promotion(mv) {
+                let slot = match kind { PieceType::Queen => 0, PieceType::Rook => 1,
+                    PieceType::Bishop => 2, PieceType::Knight => 3, _ => panic!("invalid promotion") };
+                coverage[9 + 8 * color + if engine::move_is_capture(mv) { 4 } else { 0 } + slot] += 1;
+            }
+            let undo = engine::make_move(position, mv);
+            let after_phase = hybrid_phase(position);
+            if (before_phase <= HYBRID_LOW) != (after_phase <= HYBRID_LOW) ||
+                (before_phase >= HYBRID_HIGH) != (after_phase >= HYBRID_HIGH) { *crossings += 1; }
+            walk(position, depth - 1, coverage, crossings);
+            engine::unmake_move(position, mv, undo);
+            assert!(*position == original);
+            verify(position);
+        }
+    }
+
+    #[test]
+    fn fused_full_refresh_make_unmake_and_all_special_moves() {
+        let fixtures: &[&[u8]] = &[
+{{FIXTURES}}
+        ];
+        let mut coverage = [0_u32; 25];
+        let mut crossings = 0;
+        for &fen in fixtures {
+            let mut position = engine::parse_fen(fen).unwrap();
+            let original = position;
+            verify(&position);
+            position.turn = engine::opposite(position.turn);
+            verify(&position);
+            position.turn = engine::opposite(position.turn);
+            assert!(position == original);
+            walk(&mut position, 2, &mut coverage, &mut crossings);
+            assert!(position == original);
+        }
+        assert!(coverage.iter().all(|&count| count > 0), "uncovered move class: {:?}", coverage);
+        assert!(crossings > 0, "phase-boundary crossing not exercised");
+        println!("hybrid move coverage {:?}; phase crossings {}", coverage, crossings);
+    }
+
+    #[test]
+    fn all_phases_and_negative_half_ties() {
+        for phase in 0..=24 {
+            for &(expanded, neural) in &[(-4, 3), (-3, -2), (3, -4), (-1, 0), (0, -1), (700, -120)] {
+                let expected = if HYBRID_HARD { if phase <= HYBRID_LOW { expanded } else { neural } } else {
+                    let den = (HYBRID_HIGH - HYBRID_LOW) as f64;
+                    let weight = (phase - HYBRID_LOW).clamp(0, den as i32) as f64;
+                    ((weight * neural as f64 + (den - weight) * expanded as f64) / den + 0.5).floor() as i32
+                };
+                assert_eq!(hybrid_mix(phase, expanded, neural), expected);
+            }
+        }
+    }
+}

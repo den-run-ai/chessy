@@ -1,0 +1,138 @@
+// Search-owned, exact additive accumulator. No production global or Position field.
+const HYBRID_LAZY_PLIES: usize = 128;
+
+#[derive(Clone, Copy)]
+struct HybridLazyFrame {
+    acc: [[i32; NNUE_H]; 2],
+    mv: engine::Move,
+    valid: bool,
+}
+
+impl HybridLazyFrame {
+    const EMPTY: Self = Self { acc: [[0; NNUE_H]; 2], mv: 0, valid: false };
+}
+
+pub(crate) struct HybridLazyStack {
+    frames: [HybridLazyFrame; HYBRID_LAZY_PLIES],
+    #[cfg(test)] materializations: usize,
+    #[cfg(test)] refreshes: usize,
+    #[cfg(test)] delta_applications: usize,
+}
+
+impl HybridLazyStack {
+    pub(crate) fn new() -> Self {
+        Self { frames: [HybridLazyFrame::EMPTY; HYBRID_LAZY_PLIES],
+            #[cfg(test)] materializations: 0,
+            #[cfg(test)] refreshes: 0,
+            #[cfg(test)] delta_applications: 0,
+        }
+    }
+
+    // Call exactly once for a new accepted child, never for its PVS re-search
+    // or same-ply quiescence handoff. Descendants are overwritten on descent.
+    #[inline]
+    pub(crate) fn enter(&mut self, ply: usize, mv: engine::Move) {
+        assert!(ply > 0 && ply < HYBRID_LAZY_PLIES);
+        self.frames[ply].mv = mv;
+        self.frames[ply].valid = false;
+    }
+
+    fn materialize(&mut self, position: &Position, ply: usize) -> [[i32; NNUE_H]; 2] {
+        assert!(ply < HYBRID_LAZY_PLIES);
+        if self.frames[ply].valid { return self.frames[ply].acc; }
+        #[cfg(test)] { self.materializations += 1; }
+        let mut ancestor = ply;
+        while ancestor > 0 && !self.frames[ancestor].valid { ancestor -= 1; }
+        if self.frames[ancestor].valid {
+            let mut acc = self.frames[ancestor].acc;
+            for next in ancestor + 1..=ply {
+                hybrid_lazy_delta(&mut acc, self.frames[next].mv, 1);
+                self.frames[next].acc = acc;
+                self.frames[next].valid = true;
+                #[cfg(test)] { self.delta_applications += 1; }
+            }
+        } else {
+            // First neural leaf can be below unevaluated or expanded-only
+            // ancestors. Refresh it, then reconstruct its actual path upward.
+            let mut acc = [NNUE_B1; 2];
+            for (square, &piece) in position.board.iter().enumerate() {
+                if piece != Piece::Empty { nnue_add_piece(&mut acc, piece, square); }
+            }
+            self.frames[ply].acc = acc;
+            self.frames[ply].valid = true;
+            #[cfg(test)] { self.refreshes += 1; }
+            for next in (1..=ply).rev() {
+                hybrid_lazy_delta(&mut acc, self.frames[next].mv, -1);
+                self.frames[next - 1].acc = acc;
+                self.frames[next - 1].valid = true;
+                #[cfg(test)] { self.delta_applications += 1; }
+            }
+        }
+        self.frames[ply].acc
+    }
+}
+
+#[inline]
+fn hybrid_lazy_adjust(acc: &mut [[i32; NNUE_H]; 2], piece: Piece, square: usize, sign: i32) {
+    if piece == Piece::Empty { return; }
+    let channel = piece as usize - 1;
+    let white = &NNUE_W1[channel * 64 + square];
+    let black = &NNUE_W1[((channel + 6) % 12) * 64 + (square ^ 56)];
+    for unit in 0..NNUE_H {
+        acc[0][unit] += sign * white[unit] as i32;
+        acc[1][unit] += sign * black[unit] as i32;
+    }
+}
+
+fn hybrid_lazy_delta(acc: &mut [[i32; NNUE_H]; 2], mv: engine::Move, direction: i32) {
+    let moving = engine::move_piece(mv);
+    let mover = engine::piece_color(moving).unwrap();
+    let from = engine::move_from(mv) as usize;
+    let to = engine::move_to(mv) as usize;
+    let placed = match engine::move_promotion(mv) {
+        Some(kind) => engine::make_piece(mover, kind), None => moving,
+    };
+    hybrid_lazy_adjust(acc, moving, from, -direction);
+    hybrid_lazy_adjust(acc, placed, to, direction);
+    let capture_square = if engine::move_is_en_passant(mv) {
+        if mover == Color::White { to + 8 } else { to - 8 }
+    } else { to };
+    hybrid_lazy_adjust(acc, engine::move_captured(mv), capture_square, -direction);
+    if let Some(side) = engine::move_castle(mv) {
+        let home = if mover == Color::White { 56 } else { 0 };
+        let (rook_from, rook_to) = match side {
+            engine::CastleSide::KingSide => (home + 7, home + 5),
+            engine::CastleSide::QueenSide => (home, home + 3),
+        };
+        let rook = engine::make_piece(mover, PieceType::Rook);
+        hybrid_lazy_adjust(acc, rook, rook_from, -direction);
+        hybrid_lazy_adjust(acc, rook, rook_to, direction);
+    }
+}
+
+pub(crate) fn evaluate_lazy(position: &Position, stack: &mut HybridLazyStack, ply: usize) -> i32 {
+    let phase = hybrid_phase(position);
+    if phase <= HYBRID_LOW { return hybrid_expanded::evaluate(position); }
+    let acc = stack.materialize(position, ply);
+    let neural = evaluate_neural_cached(position, acc);
+    let score = if phase >= HYBRID_HIGH { neural }
+        else { hybrid_mix(phase, hybrid_expanded::evaluate(position), neural) };
+    #[cfg(test)] assert_eq!(score, evaluate_original(position));
+    score
+}
+
+pub fn evaluate(position: &Position) -> i32 {
+    let mut stack = HybridLazyStack::new();
+    evaluate_lazy(position, &mut stack, 0)
+}
+
+#[no_mangle]
+pub extern "C" fn hybrid_lazy_stack_bytes() -> u32 {
+    core::mem::size_of::<[HybridLazyFrame; HYBRID_LAZY_PLIES]>() as u32
+}
+
+#[no_mangle]
+pub extern "C" fn hybrid_lazy_position_bytes() -> u32 { core::mem::size_of::<Position>() as u32 }
+
+#[no_mangle]
+pub extern "C" fn hybrid_lazy_undo_bytes() -> u32 { core::mem::size_of::<engine::Undo>() as u32 }

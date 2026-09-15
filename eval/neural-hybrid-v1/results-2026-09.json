@@ -1,0 +1,1987 @@
+{
+  "schema": "chessy.hybrid-screen.v1b",
+  "contractSha256": "6dba25fed6adbcc056e00b3d78b15606857a4b69c118ee57ef67168f9c11c8d0",
+  "researchOnly": true,
+  "productionFitAllowed": false,
+  "paidSpendUsd": 0,
+  "trainingFits": 0,
+  "newLabels": 0,
+  "testOpened": true,
+  "runtimeIntegrationPerformed": false,
+  "inherited": {
+    "contractSha256": "47c6c78c59e70b9a9d21156aff5ece7192bfad563bac360ebe6f0c20728e5cd1",
+    "development": {
+      "binary": "819853b49284d00de4e70065481591ccea4573f84897fc1c8323e29a861e8e8f",
+      "float": "cdcf9baea324b395a0bd2bf6683e916d840fb63620601fe8f9af3898b972429e",
+      "metadata": "396912669d0cf47390ed4c508a9316f56dff1ba1c16b3d30386717420ae64918"
+    },
+    "developmentPrefix": "h8-phase-eg1-e900-10513",
+    "final": {
+      "binary": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+      "float": "943c94ed57faf7fb5ae6314c519fb68384b2eae5a05015b922f3cdd8b821a6e2",
+      "metadata": "396912669d0cf47390ed4c508a9316f56dff1ba1c16b3d30386717420ae64918"
+    },
+    "selectionSha256": "fe86f118822756cc57813496cee316ff5540bf4d45000420deceb8ec56ab173a"
+  },
+  "development": {
+    "comparators": {
+      "frozen-expanded-hce": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.30712945397345864,
+            "p99AbsoluteCpError": 607.0,
+            "rows": 988,
+            "signAccuracy": 0.881578947368421,
+            "teacherCpMae": 156.4251012145749,
+            "teacherCpRmse": 207.25840527878344
+          },
+          "middlegame": {
+            "crossEntropy": 0.2948865483005295,
+            "p99AbsoluteCpError": 717.0,
+            "rows": 2093,
+            "signAccuracy": 0.8867654085045389,
+            "teacherCpMae": 139.57142857142858,
+            "teacherCpRmse": 196.3657125675082
+          },
+          "opening": {
+            "crossEntropy": 0.4924521944633617,
+            "p99AbsoluteCpError": 517.3999999999992,
+            "rows": 3533,
+            "signAccuracy": 0.7953580526464761,
+            "teacherCpMae": 114.85791112369091,
+            "teacherCpRmse": 163.0640269194187
+          }
+        },
+        "crossEntropy": 0.402249024668558,
+        "p99AbsoluteCpError": 599.8699999999999,
+        "rows": 6614,
+        "signAccuracy": 0.8371635923798004,
+        "teacherCpMae": 128.8878137284548,
+        "teacherCpRmse": 181.16964836239333
+      },
+      "pure-neural": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.3154251911245867,
+            "p99AbsoluteCpError": 610.52,
+            "rows": 988,
+            "signAccuracy": 0.8795546558704453,
+            "teacherCpMae": 159.17004048582996,
+            "teacherCpRmse": 210.12521329711456
+          },
+          "middlegame": {
+            "crossEntropy": 0.294545441063752,
+            "p99AbsoluteCpError": 694.9599999999991,
+            "rows": 2093,
+            "signAccuracy": 0.8877209746774964,
+            "teacherCpMae": 138.4854276158624,
+            "teacherCpRmse": 193.93876514235177
+          },
+          "opening": {
+            "crossEntropy": 0.48118554841527195,
+            "p99AbsoluteCpError": 502.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8163034248514011,
+            "teacherCpMae": 109.43843758845173,
+            "teacherCpRmse": 156.17084963852432
+          }
+        },
+        "crossEntropy": 0.397361995695295,
+        "p99AbsoluteCpError": 589.3499999999995,
+        "rows": 6614,
+        "signAccuracy": 0.8483519806471121,
+        "teacherCpMae": 126.05926821892955,
+        "teacherCpRmse": 177.55552119987033
+      },
+      "shipped-hce": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31843855909141433,
+            "p99AbsoluteCpError": 613.91,
+            "rows": 988,
+            "signAccuracy": 0.8765182186234818,
+            "teacherCpMae": 160.62246963562754,
+            "teacherCpRmse": 212.2669500821218
+          },
+          "middlegame": {
+            "crossEntropy": 0.2989615613643721,
+            "p99AbsoluteCpError": 727.5999999999985,
+            "rows": 2093,
+            "signAccuracy": 0.8824653607262303,
+            "teacherCpMae": 141.0922121356904,
+            "teacherCpRmse": 197.57538432013712
+          },
+          "opening": {
+            "crossEntropy": 0.5014416551913401,
+            "p99AbsoluteCpError": 540.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.7854514576846873,
+            "teacherCpMae": 118.04104160769884,
+            "teacherCpRmse": 166.46122737975816
+          }
+        },
+        "crossEntropy": 0.41002981737359423,
+        "p99AbsoluteCpError": 602.8699999999999,
+        "rows": 6614,
+        "signAccuracy": 0.8297550650136075,
+        "teacherCpMae": 131.69640157242213,
+        "teacherCpRmse": 184.07907331179035
+      }
+    },
+    "coverage": {
+      "materialPhaseCounts": {
+        "0": 55,
+        "1": 61,
+        "10": 228,
+        "11": 131,
+        "12": 252,
+        "13": 150,
+        "14": 272,
+        "15": 143,
+        "16": 246,
+        "17": 179,
+        "18": 423,
+        "19": 220,
+        "2": 151,
+        "20": 695,
+        "21": 228,
+        "22": 1036,
+        "23": 130,
+        "24": 801,
+        "3": 95,
+        "4": 231,
+        "5": 175,
+        "6": 220,
+        "7": 131,
+        "8": 215,
+        "9": 146
+      },
+      "pieceCountPotentialSyzygyCoverage": {
+        "all": {
+          "3": 8,
+          "4": 31,
+          "5": 72,
+          "6": 121,
+          "7": 184,
+          "rows": 6614
+        },
+        "endgame": {
+          "3": 8,
+          "4": 31,
+          "5": 71,
+          "6": 119,
+          "7": 178,
+          "rows": 988
+        },
+        "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+      }
+    },
+    "models": {
+      "hard-4": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.5797952214995803,
+          "maximumAbsoluteScoreCp": 2104.0831464883036,
+          "meanAbsFloatDifferenceCp": 0.2280122778936965,
+          "rows": 6614
+        },
+        "config": {
+          "id": "hard-4",
+          "kind": "hard",
+          "threshold": 4
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 0,
+            "expandedOnly": 593,
+            "neuralOnly": 6021
+          },
+          "materialPhaseCounts": {
+            "0": 55,
+            "1": 61,
+            "10": 228,
+            "11": 131,
+            "12": 252,
+            "13": 150,
+            "14": 272,
+            "15": 143,
+            "16": 246,
+            "17": 179,
+            "18": 423,
+            "19": 220,
+            "2": 151,
+            "20": 695,
+            "21": 228,
+            "22": 1036,
+            "23": 130,
+            "24": 801,
+            "3": 95,
+            "4": 231,
+            "5": 175,
+            "6": 220,
+            "7": 131,
+            "8": 215,
+            "9": 146
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 8,
+              "4": 31,
+              "5": 72,
+              "6": 121,
+              "7": 184,
+              "rows": 6614
+            },
+            "endgame": {
+              "3": 8,
+              "4": 31,
+              "5": 71,
+              "6": 119,
+              "7": 178,
+              "rows": 988
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30832268977228844,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.88420638075564,
+              "teacherCpRmse": 207.71380062746928
+            },
+            "middlegame": {
+              "crossEntropy": 0.29453243110056154,
+              "p99AbsoluteCpError": 694.7640955725601,
+              "rows": 2093,
+              "signAccuracy": 0.8886765408504539,
+              "teacherCpMae": 138.47535105199856,
+              "teacherCpRmse": 193.92968200385087
+            },
+            "opening": {
+              "crossEntropy": 0.48120187192603986,
+              "p99AbsoluteCpError": 502.55654510042564,
+              "rows": 3533,
+              "signAccuracy": 0.8182847438437588,
+              "teacherCpMae": 109.44040156583213,
+              "teacherCpRmse": 156.17440429439426
+            }
+          },
+          "crossEntropy": 0.39630562583961215,
+          "p99AbsoluteCpError": 589.3844458037631,
+          "rows": 6614,
+          "signAccuracy": 0.8500151194436045,
+          "teacherCpMae": 125.71567045480866,
+          "teacherCpRmse": 177.12969419962684
+        },
+        "innerPhaseStopReasons": [],
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30832351363792515,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.88663967611336,
+              "teacherCpRmse": 207.71592833143802
+            },
+            "middlegame": {
+              "crossEntropy": 0.294545441063752,
+              "p99AbsoluteCpError": 694.9599999999991,
+              "rows": 2093,
+              "signAccuracy": 0.8877209746774964,
+              "teacherCpMae": 138.4854276158624,
+              "teacherCpRmse": 193.93876514235177
+            },
+            "opening": {
+              "crossEntropy": 0.48118554841527195,
+              "p99AbsoluteCpError": 502.3599999999997,
+              "rows": 3533,
+              "signAccuracy": 0.8163034248514011,
+              "teacherCpMae": 109.43843758845173,
+              "teacherCpRmse": 156.17084963852432
+            }
+          },
+          "crossEntropy": 0.3963011463821982,
+          "p99AbsoluteCpError": 589.3499999999995,
+          "rows": 6614,
+          "signAccuracy": 0.8486543695192017,
+          "teacherCpMae": 125.71817357121257,
+          "teacherCpRmse": 177.1315398255422
+        },
+        "transitionDiagnostic": {
+          "maximumCp": 170,
+          "method": "max phase-adjacent gate-only cp difference per row with both evaluator outputs frozen; not legal-move discontinuity",
+          "p95Cp": 73.0,
+          "p99Cp": 95.0
+        }
+      },
+      "hard-6": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.5797952214995803,
+          "maximumAbsoluteScoreCp": 2104.0831464883036,
+          "meanAbsFloatDifferenceCp": 0.21257846023440372,
+          "rows": 6614
+        },
+        "config": {
+          "id": "hard-6",
+          "kind": "hard",
+          "threshold": 6
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 0,
+            "expandedOnly": 988,
+            "neuralOnly": 5626
+          },
+          "materialPhaseCounts": {
+            "0": 55,
+            "1": 61,
+            "10": 228,
+            "11": 131,
+            "12": 252,
+            "13": 150,
+            "14": 272,
+            "15": 143,
+            "16": 246,
+            "17": 179,
+            "18": 423,
+            "19": 220,
+            "2": 151,
+            "20": 695,
+            "21": 228,
+            "22": 1036,
+            "23": 130,
+            "24": 801,
+            "3": 95,
+            "4": 231,
+            "5": 175,
+            "6": 220,
+            "7": 131,
+            "8": 215,
+            "9": 146
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 8,
+              "4": 31,
+              "5": 72,
+              "6": 121,
+              "7": 184,
+              "rows": 6614
+            },
+            "endgame": {
+              "3": 8,
+              "4": 31,
+              "5": 71,
+              "6": 119,
+              "7": 178,
+              "rows": 988
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30712945397345864,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.4251012145749,
+              "teacherCpRmse": 207.25840527878344
+            },
+            "middlegame": {
+              "crossEntropy": 0.29453243110056154,
+              "p99AbsoluteCpError": 694.7640955725601,
+              "rows": 2093,
+              "signAccuracy": 0.8886765408504539,
+              "teacherCpMae": 138.47535105199856,
+              "teacherCpRmse": 193.92968200385087
+            },
+            "opening": {
+              "crossEntropy": 0.48120187192603986,
+              "p99AbsoluteCpError": 502.55654510042564,
+              "rows": 3533,
+              "signAccuracy": 0.8182847438437588,
+              "teacherCpMae": 109.44040156583213,
+              "teacherCpRmse": 156.17440429439426
+            }
+          },
+          "crossEntropy": 0.39612738015330373,
+          "p99AbsoluteCpError": 589.3844458037631,
+          "rows": 6614,
+          "signAccuracy": 0.8500151194436045,
+          "teacherCpMae": 125.64708927788296,
+          "teacherCpRmse": 177.04999082558402
+        },
+        "innerPhaseStopReasons": [],
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30712945397345864,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.4251012145749,
+              "teacherCpRmse": 207.25840527878344
+            },
+            "middlegame": {
+              "crossEntropy": 0.294545441063752,
+              "p99AbsoluteCpError": 694.9599999999991,
+              "rows": 2093,
+              "signAccuracy": 0.8877209746774964,
+              "teacherCpMae": 138.4854276158624,
+              "teacherCpRmse": 193.93876514235177
+            },
+            "opening": {
+              "crossEntropy": 0.48118554841527195,
+              "p99AbsoluteCpError": 502.3599999999997,
+              "rows": 3533,
+              "signAccuracy": 0.8163034248514011,
+              "teacherCpMae": 109.43843758845173,
+              "teacherCpRmse": 156.17084963852432
+            }
+          },
+          "crossEntropy": 0.3961227776267563,
+          "p99AbsoluteCpError": 589.3499999999995,
+          "rows": 6614,
+          "signAccuracy": 0.8486543695192017,
+          "teacherCpMae": 125.64922890837617,
+          "teacherCpRmse": 177.05146440022884
+        },
+        "transitionDiagnostic": {
+          "maximumCp": 170,
+          "method": "max phase-adjacent gate-only cp difference per row with both evaluator outputs frozen; not legal-move discontinuity",
+          "p95Cp": 73.0,
+          "p99Cp": 95.0
+        }
+      },
+      "hard-8": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.5797952214995803,
+          "maximumAbsoluteScoreCp": 2104.0831464883036,
+          "meanAbsFloatDifferenceCp": 0.19963983965273144,
+          "rows": 6614
+        },
+        "config": {
+          "id": "hard-8",
+          "kind": "hard",
+          "threshold": 8
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 0,
+            "expandedOnly": 1334,
+            "neuralOnly": 5280
+          },
+          "materialPhaseCounts": {
+            "0": 55,
+            "1": 61,
+            "10": 228,
+            "11": 131,
+            "12": 252,
+            "13": 150,
+            "14": 272,
+            "15": 143,
+            "16": 246,
+            "17": 179,
+            "18": 423,
+            "19": 220,
+            "2": 151,
+            "20": 695,
+            "21": 228,
+            "22": 1036,
+            "23": 130,
+            "24": 801,
+            "3": 95,
+            "4": 231,
+            "5": 175,
+            "6": 220,
+            "7": 131,
+            "8": 215,
+            "9": 146
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 8,
+              "4": 31,
+              "5": 72,
+              "6": 121,
+              "7": 184,
+              "rows": 6614
+            },
+            "endgame": {
+              "3": 8,
+              "4": 31,
+              "5": 71,
+              "6": 119,
+              "7": 178,
+              "rows": 988
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30712945397345864,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.4251012145749,
+              "teacherCpRmse": 207.25840527878344
+            },
+            "middlegame": {
+              "crossEntropy": 0.2937905855524645,
+              "p99AbsoluteCpError": 701.4100080859893,
+              "rows": 2093,
+              "signAccuracy": 0.8896321070234113,
+              "teacherCpMae": 138.08587113081057,
+              "teacherCpRmse": 194.03567054057243
+            },
+            "opening": {
+              "crossEntropy": 0.48120187192603986,
+              "p99AbsoluteCpError": 502.55654510042564,
+              "rows": 3533,
+              "signAccuracy": 0.8182847438437588,
+              "teacherCpMae": 109.44040156583213,
+              "teacherCpRmse": 156.17440429439426
+            }
+          },
+          "crossEntropy": 0.39589262316325735,
+          "p99AbsoluteCpError": 589.3844458037631,
+          "rows": 6614,
+          "signAccuracy": 0.850317508315694,
+          "teacherCpMae": 125.52383837448916,
+          "teacherCpRmse": 177.08673478130697
+        },
+        "innerPhaseStopReasons": [],
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30712945397345864,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.4251012145749,
+              "teacherCpRmse": 207.25840527878344
+            },
+            "middlegame": {
+              "crossEntropy": 0.2938002647426298,
+              "p99AbsoluteCpError": 701.3999999999996,
+              "rows": 2093,
+              "signAccuracy": 0.8886765408504539,
+              "teacherCpMae": 138.0946010511228,
+              "teacherCpRmse": 194.04195910168764
+            },
+            "opening": {
+              "crossEntropy": 0.48118554841527195,
+              "p99AbsoluteCpError": 502.3599999999997,
+              "rows": 3533,
+              "signAccuracy": 0.8163034248514011,
+              "teacherCpMae": 109.43843758845173,
+              "teacherCpRmse": 156.17084963852432
+            }
+          },
+          "crossEntropy": 0.3958869666137371,
+          "p99AbsoluteCpError": 589.3499999999995,
+          "rows": 6614,
+          "signAccuracy": 0.8489567583912913,
+          "teacherCpMae": 125.52555185969156,
+          "teacherCpRmse": 177.08724075329982
+        },
+        "transitionDiagnostic": {
+          "maximumCp": 170,
+          "method": "max phase-adjacent gate-only cp difference per row with both evaluator outputs frozen; not legal-move discontinuity",
+          "p95Cp": 73.0,
+          "p99Cp": 95.0
+        }
+      },
+      "smooth-2-8": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.8601631365082198,
+          "maximumAbsoluteScoreCp": 2104.0831464883036,
+          "meanAbsFloatDifferenceCp": 0.24320002808217642,
+          "rows": 6614
+        },
+        "config": {
+          "hi": 8,
+          "id": "smooth-2-8",
+          "kind": "smooth",
+          "lo": 2
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 852,
+            "expandedOnly": 267,
+            "neuralOnly": 5495
+          },
+          "materialPhaseCounts": {
+            "0": 55,
+            "1": 61,
+            "10": 228,
+            "11": 131,
+            "12": 252,
+            "13": 150,
+            "14": 272,
+            "15": 143,
+            "16": 246,
+            "17": 179,
+            "18": 423,
+            "19": 220,
+            "2": 151,
+            "20": 695,
+            "21": 228,
+            "22": 1036,
+            "23": 130,
+            "24": 801,
+            "3": 95,
+            "4": 231,
+            "5": 175,
+            "6": 220,
+            "7": 131,
+            "8": 215,
+            "9": 146
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 8,
+              "4": 31,
+              "5": 72,
+              "6": 121,
+              "7": 184,
+              "rows": 6614
+            },
+            "endgame": {
+              "3": 8,
+              "4": 31,
+              "5": 71,
+              "6": 119,
+              "7": 178,
+              "rows": 988
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.3086157984603124,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.84470506099186,
+              "teacherCpRmse": 207.50825529120732
+            },
+            "middlegame": {
+              "crossEntropy": 0.29441715347168396,
+              "p99AbsoluteCpError": 694.7640955725601,
+              "rows": 2093,
+              "signAccuracy": 0.8886765408504539,
+              "teacherCpMae": 138.41999758500646,
+              "teacherCpRmse": 193.87789558197315
+            },
+            "opening": {
+              "crossEntropy": 0.48120187192603986,
+              "p99AbsoluteCpError": 502.55654510042564,
+              "rows": 3533,
+              "signAccuracy": 0.8182847438437588,
+              "teacherCpMae": 109.44040156583213,
+              "teacherCpRmse": 156.17440429439426
+            }
+          },
+          "crossEntropy": 0.39631293084513486,
+          "p99AbsoluteCpError": 589.3844458037631,
+          "rows": 6614,
+          "signAccuracy": 0.8500151194436045,
+          "teacherCpMae": 125.69225314148221,
+          "teacherCpRmse": 177.07575811724377
+        },
+        "innerPhaseStopReasons": [],
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30863789343461856,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.86133603238866,
+              "teacherCpRmse": 207.52331462599648
+            },
+            "middlegame": {
+              "crossEntropy": 0.2944343555299777,
+              "p99AbsoluteCpError": 694.9599999999991,
+              "rows": 2093,
+              "signAccuracy": 0.8877209746774964,
+              "teacherCpMae": 138.43334925943623,
+              "teacherCpRmse": 193.8886359572638
+            },
+            "opening": {
+              "crossEntropy": 0.48118554841527195,
+              "p99AbsoluteCpError": 502.3599999999997,
+              "rows": 3533,
+              "signAccuracy": 0.8163034248514011,
+              "teacherCpMae": 109.43843758845173,
+              "teacherCpRmse": 156.17084963852432
+            }
+          },
+          "crossEntropy": 0.39631295545642614,
+          "p99AbsoluteCpError": 589.3499999999995,
+          "rows": 6614,
+          "signAccuracy": 0.8486543695192017,
+          "teacherCpMae": 125.69791351678258,
+          "teacherCpRmse": 177.08044107873647
+        },
+        "transitionDiagnostic": {
+          "maximumCp": 29,
+          "method": "max phase-adjacent gate-only cp difference per row with both evaluator outputs frozen; not legal-move discontinuity",
+          "p95Cp": 13.0,
+          "p99Cp": 16.0
+        }
+      },
+      "smooth-4-10": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.8902714921329888,
+          "maximumAbsoluteScoreCp": 2104.0831464883036,
+          "meanAbsFloatDifferenceCp": 0.23154368819728607,
+          "rows": 6614
+        },
+        "config": {
+          "hi": 10,
+          "id": "smooth-4-10",
+          "kind": "smooth",
+          "lo": 4
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 887,
+            "expandedOnly": 593,
+            "neuralOnly": 5134
+          },
+          "materialPhaseCounts": {
+            "0": 55,
+            "1": 61,
+            "10": 228,
+            "11": 131,
+            "12": 252,
+            "13": 150,
+            "14": 272,
+            "15": 143,
+            "16": 246,
+            "17": 179,
+            "18": 423,
+            "19": 220,
+            "2": 151,
+            "20": 695,
+            "21": 228,
+            "22": 1036,
+            "23": 130,
+            "24": 801,
+            "3": 95,
+            "4": 231,
+            "5": 175,
+            "6": 220,
+            "7": 131,
+            "8": 215,
+            "9": 146
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 8,
+              "4": 31,
+              "5": 72,
+              "6": 121,
+              "7": 184,
+              "rows": 6614
+            },
+            "endgame": {
+              "3": 8,
+              "4": 31,
+              "5": 71,
+              "6": 119,
+              "7": 178,
+              "rows": 988
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.3073332167918713,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.8805668016194332,
+              "teacherCpMae": 156.43341263715115,
+              "teacherCpRmse": 207.2783338920368
+            },
+            "middlegame": {
+              "crossEntropy": 0.293990775471852,
+              "p99AbsoluteCpError": 694.7640955725601,
+              "rows": 2093,
+              "signAccuracy": 0.8896321070234113,
+              "teacherCpMae": 138.2207083225954,
+              "teacherCpRmse": 193.8443661301051
+            },
+            "opening": {
+              "crossEntropy": 0.48120187192603986,
+              "p99AbsoluteCpError": 502.55654510042564,
+              "rows": 3533,
+              "signAccuracy": 0.8182847438437588,
+              "teacherCpMae": 109.44040156583213,
+              "teacherCpRmse": 156.17440429439426
+            }
+          },
+          "crossEntropy": 0.395986411364931,
+          "p99AbsoluteCpError": 589.1386418006465,
+          "rows": 6614,
+          "signAccuracy": 0.8501663138796492,
+          "teacherCpMae": 125.56774915887246,
+          "teacherCpRmse": 177.02390826843126
+        },
+        "innerPhaseStopReasons": [],
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.3073326785280801,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.8805668016194332,
+              "teacherCpMae": 156.42914979757086,
+              "teacherCpRmse": 207.27774790683137
+            },
+            "middlegame": {
+              "crossEntropy": 0.29400666883692617,
+              "p99AbsoluteCpError": 694.9599999999991,
+              "rows": 2093,
+              "signAccuracy": 0.8886765408504539,
+              "teacherCpMae": 138.23076923076923,
+              "teacherCpRmse": 193.85362863738587
+            },
+            "opening": {
+              "crossEntropy": 0.48118554841527195,
+              "p99AbsoluteCpError": 502.3599999999997,
+              "rows": 3533,
+              "signAccuracy": 0.8163034248514011,
+              "teacherCpMae": 109.43843758845173,
+              "teacherCpRmse": 156.17084963852432
+            }
+          },
+          "crossEntropy": 0.39598264088487845,
+          "p99AbsoluteCpError": 589.0899999999992,
+          "rows": 6614,
+          "signAccuracy": 0.8488055639552464,
+          "teacherCpMae": 125.5692470517085,
+          "teacherCpRmse": 177.02534033822027
+        },
+        "transitionDiagnostic": {
+          "maximumCp": 29,
+          "method": "max phase-adjacent gate-only cp difference per row with both evaluator outputs frozen; not legal-move discontinuity",
+          "p95Cp": 13.0,
+          "p99Cp": 16.0
+        }
+      },
+      "smooth-6-12": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.8411721452245047,
+          "maximumAbsoluteScoreCp": 2104.0831464883036,
+          "meanAbsFloatDifferenceCp": 0.2163564376638947,
+          "rows": 6614
+        },
+        "config": {
+          "hi": 12,
+          "id": "smooth-6-12",
+          "kind": "smooth",
+          "lo": 6
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 851,
+            "expandedOnly": 988,
+            "neuralOnly": 4775
+          },
+          "materialPhaseCounts": {
+            "0": 55,
+            "1": 61,
+            "10": 228,
+            "11": 131,
+            "12": 252,
+            "13": 150,
+            "14": 272,
+            "15": 143,
+            "16": 246,
+            "17": 179,
+            "18": 423,
+            "19": 220,
+            "2": 151,
+            "20": 695,
+            "21": 228,
+            "22": 1036,
+            "23": 130,
+            "24": 801,
+            "3": 95,
+            "4": 231,
+            "5": 175,
+            "6": 220,
+            "7": 131,
+            "8": 215,
+            "9": 146
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 8,
+              "4": 31,
+              "5": 72,
+              "6": 121,
+              "7": 184,
+              "rows": 6614
+            },
+            "endgame": {
+              "3": 8,
+              "4": 31,
+              "5": 71,
+              "6": 119,
+              "7": 178,
+              "rows": 988
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30712945397345864,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.4251012145749,
+              "teacherCpRmse": 207.25840527878344
+            },
+            "middlegame": {
+              "crossEntropy": 0.2934933272410813,
+              "p99AbsoluteCpError": 694.7640955725601,
+              "rows": 2093,
+              "signAccuracy": 0.8905876731963689,
+              "teacherCpMae": 138.0126664365144,
+              "teacherCpRmse": 193.84572146794716
+            },
+            "opening": {
+              "crossEntropy": 0.48120187192603986,
+              "p99AbsoluteCpError": 502.55654510042564,
+              "rows": 3533,
+              "signAccuracy": 0.8182847438437588,
+              "teacherCpMae": 109.44040156583213,
+              "teacherCpRmse": 156.17440429439426
+            }
+          },
+          "crossEntropy": 0.3957985557841033,
+          "p99AbsoluteCpError": 589.0608935573147,
+          "rows": 6614,
+          "signAccuracy": 0.8506198971877835,
+          "teacherCpMae": 125.50067275229961,
+          "teacherCpRmse": 177.02089234690814
+        },
+        "innerPhaseStopReasons": [],
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.30712945397345864,
+              "p99AbsoluteCpError": 607.0,
+              "rows": 988,
+              "signAccuracy": 0.881578947368421,
+              "teacherCpMae": 156.4251012145749,
+              "teacherCpRmse": 207.25840527878344
+            },
+            "middlegame": {
+              "crossEntropy": 0.2934963083604294,
+              "p99AbsoluteCpError": 694.9599999999991,
+              "rows": 2093,
+              "signAccuracy": 0.8896321070234113,
+              "teacherCpMae": 138.0224558050645,
+              "teacherCpRmse": 193.84977387241648
+            },
+            "opening": {
+              "crossEntropy": 0.48118554841527195,
+              "p99AbsoluteCpError": 502.3599999999997,
+              "rows": 3533,
+              "signAccuracy": 0.8163034248514011,
+              "teacherCpMae": 109.43843758845173,
+              "teacherCpRmse": 156.17084963852432
+            }
+          },
+          "crossEntropy": 0.39579077963037673,
+          "p99AbsoluteCpError": 589.0899999999992,
+          "rows": 6614,
+          "signAccuracy": 0.8492591472633807,
+          "teacherCpMae": 125.5027214998488,
+          "teacherCpRmse": 177.02062146355837
+        },
+        "transitionDiagnostic": {
+          "maximumCp": 29,
+          "method": "max phase-adjacent gate-only cp difference per row with both evaluator outputs frozen; not legal-move discontinuity",
+          "p95Cp": 13.0,
+          "p99Cp": 16.0
+        }
+      }
+    },
+    "numericalStopReasons": []
+  },
+  "decision": {
+    "config": {
+      "hi": 12,
+      "id": "smooth-6-12",
+      "kind": "smooth",
+      "lo": 6
+    },
+    "contractSha256": "6dba25fed6adbcc056e00b3d78b15606857a4b69c118ee57ef67168f9c11c8d0",
+    "developmentStopReasons": [],
+    "finalBinarySha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+    "head": "cd39d447e65c0f43aab8d08555b81f194a36e040",
+    "schema": "chessy.hybrid-frozen-candidate.v1",
+    "selectionUsesOuter": false,
+    "testDecoded": false
+  },
+  "dataCaveat": "Both inner and outer NNUE validation are repeatedly exposed development data. Expanded HCE was fitted on inner labels; development selection is exploratory, not fresh validation. No new labels. The sealed 2331-row NNUE test is not decoded by this screen.",
+  "recovery": {
+    "change": "Verify comparator arrays are finite, exact integral, shape matches role rows and absolute cp<=10000; convert to int64. Keep same six gates, inherited models, selection and guards. New run is separately registered; no score-driven change.",
+    "failedContractSha256": "b5bd9d7509a5bf504d8c26b211c340939a914f7fac9480b765353ace1e159b36",
+    "failedExecutionHead": "d94e95b",
+    "failure": "Integral-valued float64 frozen expanded-HCE comparator was rejected by integer-only blend input validation before any gate metric, selection or outer decode. Shared-train labels were decoded. Original contract and run marker remain consumed and unmodified."
+  },
+  "stopReasons": [],
+  "testEligible": true,
+  "outer": {
+    "comparators": {
+      "frozen-expanded-hce": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.27104959331985423,
+            "p99AbsoluteCpError": 549.0699999999999,
+            "rows": 332,
+            "signAccuracy": 0.8885542168674698,
+            "teacherCpMae": 166.84939759036143,
+            "teacherCpRmse": 220.38953739406753
+          },
+          "middlegame": {
+            "crossEntropy": 0.29405126342471494,
+            "p99AbsoluteCpError": 595.2799999999993,
+            "rows": 732,
+            "signAccuracy": 0.8961748633879781,
+            "teacherCpMae": 139.87978142076503,
+            "teacherCpRmse": 188.62360241491027
+          },
+          "opening": {
+            "crossEntropy": 0.49823158146753205,
+            "p99AbsoluteCpError": 525.8200000000002,
+            "rows": 1310,
+            "signAccuracy": 0.7877862595419848,
+            "teacherCpMae": 113.40992366412213,
+            "teacherCpRmse": 159.4024409096013
+          }
+        },
+        "crossEntropy": 0.4035035221278643,
+        "p99AbsoluteCpError": 554.3199999999997,
+        "rows": 2374,
+        "signAccuracy": 0.8352990732940185,
+        "teacherCpMae": 129.04507160909856,
+        "teacherCpRmse": 178.28095756840662
+      },
+      "pure-neural": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2747078662657776,
+            "p99AbsoluteCpError": 554.14,
+            "rows": 332,
+            "signAccuracy": 0.8795180722891566,
+            "teacherCpMae": 168.29819277108433,
+            "teacherCpRmse": 221.33611930917053
+          },
+          "middlegame": {
+            "crossEntropy": 0.29155967051758985,
+            "p99AbsoluteCpError": 582.8699999999986,
+            "rows": 732,
+            "signAccuracy": 0.894808743169399,
+            "teacherCpMae": 137.39754098360655,
+            "teacherCpRmse": 185.58506290585592
+          },
+          "opening": {
+            "crossEntropy": 0.48526458892284113,
+            "p99AbsoluteCpError": 500.28000000000065,
+            "rows": 1310,
+            "signAccuracy": 0.8083969465648855,
+            "teacherCpMae": 108.00916030534351,
+            "teacherCpRmse": 152.9665083335425
+          }
+        },
+        "crossEntropy": 0.39609153408089126,
+        "p99AbsoluteCpError": 544.8899999999999,
+        "rows": 2374,
+        "signAccuracy": 0.8449873631002527,
+        "teacherCpMae": 125.50210614995788,
+        "teacherCpRmse": 174.30611985925088
+      },
+      "shipped-hce": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.2802126783625678,
+            "p99AbsoluteCpError": 562.0699999999999,
+            "rows": 332,
+            "signAccuracy": 0.8855421686746988,
+            "teacherCpMae": 169.7379518072289,
+            "teacherCpRmse": 224.2460124425528
+          },
+          "middlegame": {
+            "crossEntropy": 0.29465920183199557,
+            "p99AbsoluteCpError": 587.6899999999999,
+            "rows": 732,
+            "signAccuracy": 0.8934426229508197,
+            "teacherCpMae": 141.33333333333334,
+            "teacherCpRmse": 189.77395958799227
+          },
+          "opening": {
+            "crossEntropy": 0.5009634796161798,
+            "p99AbsoluteCpError": 538.5600000000013,
+            "rows": 1310,
+            "signAccuracy": 0.7801526717557252,
+            "teacherCpMae": 114.806106870229,
+            "teacherCpRmse": 160.60187844100275
+          }
+        },
+        "crossEntropy": 0.4064799087003323,
+        "p99AbsoluteCpError": 567.54,
+        "rows": 2374,
+        "signAccuracy": 0.8298230834035384,
+        "teacherCpMae": 130.66764953664702,
+        "teacherCpRmse": 179.91642143676498
+      }
+    },
+    "coverage": {
+      "materialPhaseCounts": {
+        "0": 25,
+        "1": 23,
+        "10": 92,
+        "11": 59,
+        "12": 91,
+        "13": 45,
+        "14": 87,
+        "15": 36,
+        "16": 84,
+        "17": 79,
+        "18": 146,
+        "19": 90,
+        "2": 43,
+        "20": 298,
+        "21": 68,
+        "22": 390,
+        "23": 46,
+        "24": 272,
+        "3": 29,
+        "4": 80,
+        "5": 61,
+        "6": 71,
+        "7": 43,
+        "8": 55,
+        "9": 61
+      },
+      "pieceCountPotentialSyzygyCoverage": {
+        "all": {
+          "3": 1,
+          "4": 6,
+          "5": 13,
+          "6": 32,
+          "7": 56,
+          "rows": 2374
+        },
+        "endgame": {
+          "3": 1,
+          "4": 6,
+          "5": 13,
+          "6": 32,
+          "7": 55,
+          "rows": 332
+        },
+        "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+      }
+    },
+    "models": {
+      "smooth-6-12": {
+        "checks": {
+          "integerMismatches": 0,
+          "maximumAbsFloatDifferenceCp": 0.8196733200698532,
+          "maximumAbsoluteScoreCp": 1660.3164021305095,
+          "meanAbsFloatDifferenceCp": 0.22024560152483003,
+          "rows": 2374
+        },
+        "config": {
+          "hi": 12,
+          "id": "smooth-6-12",
+          "kind": "smooth",
+          "lo": 6
+        },
+        "coverage": {
+          "gateCoverage": {
+            "blend": 310,
+            "expandedOnly": 332,
+            "neuralOnly": 1732
+          },
+          "materialPhaseCounts": {
+            "0": 25,
+            "1": 23,
+            "10": 92,
+            "11": 59,
+            "12": 91,
+            "13": 45,
+            "14": 87,
+            "15": 36,
+            "16": 84,
+            "17": 79,
+            "18": 146,
+            "19": 90,
+            "2": 43,
+            "20": 298,
+            "21": 68,
+            "22": 390,
+            "23": 46,
+            "24": 272,
+            "3": 29,
+            "4": 80,
+            "5": 61,
+            "6": 71,
+            "7": 43,
+            "8": 55,
+            "9": 61
+          },
+          "pieceCountPotentialSyzygyCoverage": {
+            "all": {
+              "3": 1,
+              "4": 6,
+              "5": 13,
+              "6": 32,
+              "7": 56,
+              "rows": 2374
+            },
+            "endgame": {
+              "3": 1,
+              "4": 6,
+              "5": 13,
+              "6": 32,
+              "7": 55,
+              "rows": 332
+            },
+            "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+          }
+        },
+        "floatQuality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.27104959331985423,
+              "p99AbsoluteCpError": 549.0699999999999,
+              "rows": 332,
+              "signAccuracy": 0.8885542168674698,
+              "teacherCpMae": 166.84939759036143,
+              "teacherCpRmse": 220.38953739406753
+            },
+            "middlegame": {
+              "crossEntropy": 0.2914902108459124,
+              "p99AbsoluteCpError": 583.7814696659239,
+              "rows": 732,
+              "signAccuracy": 0.894808743169399,
+              "teacherCpMae": 137.83445913629689,
+              "teacherCpRmse": 186.02452716064641
+            },
+            "opening": {
+              "crossEntropy": 0.4852680387351574,
+              "p99AbsoluteCpError": 499.8304215774712,
+              "rows": 1310,
+              "signAccuracy": 0.8106870229007633,
+              "teacherCpMae": 108.00486125819775,
+              "teacherCpRmse": 152.961634358638
+            }
+          },
+          "crossEntropy": 0.3955604170448423,
+          "p99AbsoluteCpError": 544.2495141616891,
+          "rows": 2374,
+          "signAccuracy": 0.8475147430497051,
+          "teacherCpMae": 125.43184175905999,
+          "teacherCpRmse": 174.2804656049056
+        },
+        "quality": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.27104959331985423,
+              "p99AbsoluteCpError": 549.0699999999999,
+              "rows": 332,
+              "signAccuracy": 0.8885542168674698,
+              "teacherCpMae": 166.84939759036143,
+              "teacherCpRmse": 220.38953739406753
+            },
+            "middlegame": {
+              "crossEntropy": 0.29150108699642185,
+              "p99AbsoluteCpError": 584.2499999999985,
+              "rows": 732,
+              "signAccuracy": 0.894808743169399,
+              "teacherCpMae": 137.83743169398906,
+              "teacherCpRmse": 186.0203107483937
+            },
+            "opening": {
+              "crossEntropy": 0.48526458892284113,
+              "p99AbsoluteCpError": 500.28000000000065,
+              "rows": 1310,
+              "signAccuracy": 0.8083969465648855,
+              "teacherCpMae": 108.00916030534351,
+              "teacherCpRmse": 152.9665083335425
+            }
+          },
+          "crossEntropy": 0.3955618669555578,
+          "p99AbsoluteCpError": 544.0799999999999,
+          "rows": 2374,
+          "signAccuracy": 0.8462510530749789,
+          "teacherCpMae": 125.43513058129739,
+          "teacherCpRmse": 174.28143847756596
+        }
+      }
+    },
+    "numericalStopReasons": []
+  },
+  "componentAblations": {
+    "interpretation": "exploratory component isolation on reused inner-validation only; baseline swap may be distribution-shifted and is never eligible",
+    "models": {
+      "expanded": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.30712945397345864,
+            "p99AbsoluteCpError": 607.0,
+            "rows": 988,
+            "signAccuracy": 0.881578947368421,
+            "teacherCpMae": 156.4251012145749,
+            "teacherCpRmse": 207.25840527878344
+          },
+          "middlegame": {
+            "crossEntropy": 0.2948865483005295,
+            "p99AbsoluteCpError": 717.0,
+            "rows": 2093,
+            "signAccuracy": 0.8867654085045389,
+            "teacherCpMae": 139.57142857142858,
+            "teacherCpRmse": 196.3657125675082
+          },
+          "opening": {
+            "crossEntropy": 0.4924521944633617,
+            "p99AbsoluteCpError": 517.3999999999992,
+            "rows": 3533,
+            "signAccuracy": 0.7953580526464761,
+            "teacherCpMae": 114.85791112369091,
+            "teacherCpRmse": 163.0640269194187
+          }
+        },
+        "crossEntropy": 0.402249024668558,
+        "p99AbsoluteCpError": 599.8699999999999,
+        "rows": 6614,
+        "signAccuracy": 0.8371635923798004,
+        "teacherCpMae": 128.8878137284548,
+        "teacherCpRmse": 181.16964836239333
+      },
+      "expanded-base-plus-gated-residual": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.30712945397345864,
+            "p99AbsoluteCpError": 607.0,
+            "rows": 988,
+            "signAccuracy": 0.881578947368421,
+            "teacherCpMae": 156.4251012145749,
+            "teacherCpRmse": 207.25840527878344
+          },
+          "middlegame": {
+            "crossEntropy": 0.29290374612209025,
+            "p99AbsoluteCpError": 708.3199999999997,
+            "rows": 2093,
+            "signAccuracy": 0.8924988055422838,
+            "teacherCpMae": 138.11514572384138,
+            "teacherCpRmse": 194.07299226282896
+          },
+          "opening": {
+            "crossEntropy": 0.48000159401709824,
+            "p99AbsoluteCpError": 495.4399999999987,
+            "rows": 3533,
+            "signAccuracy": 0.8078120577412964,
+            "teacherCpMae": 109.86300594395698,
+            "teacherCpRmse": 155.7839501261212
+          }
+        },
+        "crossEntropy": 0.3949708304840823,
+        "p99AbsoluteCpError": 580.6099999999997,
+        "rows": 6614,
+        "signAccuracy": 0.8456304807983066,
+        "teacherCpMae": 125.75884487450861,
+        "teacherCpRmse": 176.9158855827112
+      },
+      "gated-neural-shipped-fallback": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31843855909141433,
+            "p99AbsoluteCpError": 613.91,
+            "rows": 988,
+            "signAccuracy": 0.8765182186234818,
+            "teacherCpMae": 160.62246963562754,
+            "teacherCpRmse": 212.2669500821218
+          },
+          "middlegame": {
+            "crossEntropy": 0.29419960710564075,
+            "p99AbsoluteCpError": 694.9599999999991,
+            "rows": 2093,
+            "signAccuracy": 0.8891543239369326,
+            "teacherCpMae": 138.2140468227425,
+            "teacherCpRmse": 193.88064804311628
+          },
+          "opening": {
+            "crossEntropy": 0.48118554841527195,
+            "p99AbsoluteCpError": 502.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8163034248514011,
+            "teacherCpMae": 109.43843758845173,
+            "teacherCpRmse": 156.17084963852432
+          }
+        },
+        "crossEntropy": 0.3977026937716328,
+        "p99AbsoluteCpError": 596.0899999999992,
+        "rows": 6614,
+        "signAccuracy": 0.8483519806471121,
+        "teacherCpMae": 126.19035379498034,
+        "teacherCpRmse": 177.91561987522377
+      },
+      "hybrid": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.30712945397345864,
+            "p99AbsoluteCpError": 607.0,
+            "rows": 988,
+            "signAccuracy": 0.881578947368421,
+            "teacherCpMae": 156.4251012145749,
+            "teacherCpRmse": 207.25840527878344
+          },
+          "middlegame": {
+            "crossEntropy": 0.2934963083604294,
+            "p99AbsoluteCpError": 694.9599999999991,
+            "rows": 2093,
+            "signAccuracy": 0.8896321070234113,
+            "teacherCpMae": 138.0224558050645,
+            "teacherCpRmse": 193.84977387241648
+          },
+          "opening": {
+            "crossEntropy": 0.48118554841527195,
+            "p99AbsoluteCpError": 502.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8163034248514011,
+            "teacherCpMae": 109.43843758845173,
+            "teacherCpRmse": 156.17084963852432
+          }
+        },
+        "crossEntropy": 0.39579077963037673,
+        "p99AbsoluteCpError": 589.0899999999992,
+        "rows": 6614,
+        "signAccuracy": 0.8492591472633807,
+        "teacherCpMae": 125.5027214998488,
+        "teacherCpRmse": 177.02062146355837
+      },
+      "pure-neural": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.3154251911245867,
+            "p99AbsoluteCpError": 610.52,
+            "rows": 988,
+            "signAccuracy": 0.8795546558704453,
+            "teacherCpMae": 159.17004048582996,
+            "teacherCpRmse": 210.12521329711456
+          },
+          "middlegame": {
+            "crossEntropy": 0.294545441063752,
+            "p99AbsoluteCpError": 694.9599999999991,
+            "rows": 2093,
+            "signAccuracy": 0.8877209746774964,
+            "teacherCpMae": 138.4854276158624,
+            "teacherCpRmse": 193.93876514235177
+          },
+          "opening": {
+            "crossEntropy": 0.48118554841527195,
+            "p99AbsoluteCpError": 502.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.8163034248514011,
+            "teacherCpMae": 109.43843758845173,
+            "teacherCpRmse": 156.17084963852432
+          }
+        },
+        "crossEntropy": 0.397361995695295,
+        "p99AbsoluteCpError": 589.3499999999995,
+        "rows": 6614,
+        "signAccuracy": 0.8483519806471121,
+        "teacherCpMae": 126.05926821892955,
+        "teacherCpRmse": 177.55552119987033
+      },
+      "shipped": {
+        "byPhase": {
+          "endgame": {
+            "crossEntropy": 0.31843855909141433,
+            "p99AbsoluteCpError": 613.91,
+            "rows": 988,
+            "signAccuracy": 0.8765182186234818,
+            "teacherCpMae": 160.62246963562754,
+            "teacherCpRmse": 212.2669500821218
+          },
+          "middlegame": {
+            "crossEntropy": 0.2989615613643721,
+            "p99AbsoluteCpError": 727.5999999999985,
+            "rows": 2093,
+            "signAccuracy": 0.8824653607262303,
+            "teacherCpMae": 141.0922121356904,
+            "teacherCpRmse": 197.57538432013712
+          },
+          "opening": {
+            "crossEntropy": 0.5014416551913401,
+            "p99AbsoluteCpError": 540.3599999999997,
+            "rows": 3533,
+            "signAccuracy": 0.7854514576846873,
+            "teacherCpMae": 118.04104160769884,
+            "teacherCpRmse": 166.46122737975816
+          }
+        },
+        "crossEntropy": 0.41002981737359423,
+        "p99AbsoluteCpError": 602.8699999999999,
+        "rows": 6614,
+        "signAccuracy": 0.8297550650136075,
+        "teacherCpMae": 131.69640157242213,
+        "teacherCpRmse": 184.07907331179035
+      }
+    }
+  },
+  "elapsedSeconds": 31.61651177700014,
+  "privateSelectionSha256": "5c871d29debd20bf7d5ff867f7f1a0ba442dd154c3324f690cd7665f7d280702",
+  "executionHead": "cd39d447e65c0f43aab8d08555b81f194a36e040",
+  "executionTree": "6c6d4c642b12a88ac7883b392c0601f405428e5d",
+  "publishedExecutionCommit": "7e61901bdfcaf89d477aa7f85bc27f2aa5bdbcce",
+  "mirrorMeaning": "Local execution and published commit differ because connector mirror reconstructs the commit; exact repository tree matches.",
+  "independentAuditSha256": "52d767ca7b34c3322e0accd5dedf291d3f7d0ac4ed54a1d8b914db79d8e27706",
+  "independentAudit": {
+    "contractSha256": "6dba25fed6adbcc056e00b3d78b15606857a4b69c118ee57ef67168f9c11c8d0",
+    "decision": {
+      "config": {
+        "hi": 12,
+        "id": "smooth-6-12",
+        "kind": "smooth",
+        "lo": 6
+      },
+      "contractSha256": "6dba25fed6adbcc056e00b3d78b15606857a4b69c118ee57ef67168f9c11c8d0",
+      "developmentStopReasons": [],
+      "finalBinarySha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+      "head": "cd39d447e65c0f43aab8d08555b81f194a36e040",
+      "schema": "chessy.hybrid-frozen-candidate.v1",
+      "selectionUsesOuter": false,
+      "testDecoded": false
+    },
+    "developmentGates": 6,
+    "executionHead": "cd39d447e65c0f43aab8d08555b81f194a36e040",
+    "independentlyDecodedOutputs": 51046,
+    "limitations": [
+      "Source/teacher admission inherits the pinned 53-file audit; sealed rows are never read or hashed.",
+      "Historical optimizer trajectories are not replayed; inherited exact checkpoint bytes and all hybrid predictions are checked.",
+      "Repeatedly exposed inner/outer validation remains exploratory. No playing-strength inference is made."
+    ],
+    "mismatches": 0,
+    "nnueTestFilesReadOrHashed": 0,
+    "outerCandidates": 1,
+    "schema": "chessy.hybrid-independent-audit.v1",
+    "selectionSha256": "5c871d29debd20bf7d5ff867f7f1a0ba442dd154c3324f690cd7665f7d280702",
+    "status": "PASS",
+    "stopReasons": [],
+    "testEligible": true
+  },
+  "testOpenedDuringScreen": false,
+  "sealedTest": {
+    "binarySha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+    "bootstrap": {
+      "frozen-expanded-hce": {
+        "candidateMinusBaselineMean": -0.009074163004282649,
+        "ci95": [
+          -0.011976511366022055,
+          -0.006219101460964563
+        ],
+        "families": 2299,
+        "iterations": 2000,
+        "seed": 1050915
+      },
+      "shipped-hce": {
+        "candidateMinusBaselineMean": -0.014067753749473694,
+        "ci95": [
+          -0.0175538024335216,
+          -0.010558250278543551
+        ],
+        "families": 2299,
+        "iterations": 2000,
+        "seed": 1050915
+      }
+    },
+    "contractSha256": "4af21daf6ed8015ddfa5ff8cc0636f9e3d997f43a5c56c24d564587f8485eb60",
+    "decisionSha256": "49a1d32c1d22f0375a66b9d74f3a77e4b021c71a3e0a363ecbb403dbf9db61aa",
+    "formalPass": false,
+    "head": "2a4afed6b6afd00333b0e27d2e4e8b0231991c6c",
+    "offlinePass": true,
+    "paidSpendUsd": 0,
+    "result": {
+      "comparators": {
+        "frozen-expanded-hce": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.2885416852157742,
+              "p99AbsoluteCpError": 616.04,
+              "rows": 349,
+              "signAccuracy": 0.9197707736389685,
+              "teacherCpMae": 154.9942693409742,
+              "teacherCpRmse": 208.43006426747655
+            },
+            "middlegame": {
+              "crossEntropy": 0.28671814028428333,
+              "p99AbsoluteCpError": 661.4899999999989,
+              "rows": 722,
+              "signAccuracy": 0.8947368421052632,
+              "teacherCpMae": 146.38919667590028,
+              "teacherCpRmse": 201.35661436760523
+            },
+            "opening": {
+              "crossEntropy": 0.484320168173176,
+              "p99AbsoluteCpError": 509.4100000000001,
+              "rows": 1260,
+              "signAccuracy": 0.7976190476190477,
+              "teacherCpMae": 112.88095238095238,
+              "teacherCpRmse": 156.51200065556108
+            }
+          },
+          "crossEntropy": 0.3938030704949633,
+          "p99AbsoluteCpError": 599.4999999999991,
+          "rows": 2331,
+          "signAccuracy": 0.8459888459888459,
+          "teacherCpMae": 129.56499356499356,
+          "teacherCpRmse": 179.73206379946444
+        },
+        "pure-neural": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.29676134486142547,
+              "p99AbsoluteCpError": 628.04,
+              "rows": 349,
+              "signAccuracy": 0.9140401146131805,
+              "teacherCpMae": 157.1375358166189,
+              "teacherCpRmse": 209.63649122402822
+            },
+            "middlegame": {
+              "crossEntropy": 0.28311089106368914,
+              "p99AbsoluteCpError": 680.2099999999964,
+              "rows": 722,
+              "signAccuracy": 0.8988919667590027,
+              "teacherCpMae": 144.42382271468145,
+              "teacherCpRmse": 198.28266848239312
+            },
+            "opening": {
+              "crossEntropy": 0.46975966316824563,
+              "p99AbsoluteCpError": 491.4100000000001,
+              "rows": 1260,
+              "signAccuracy": 0.8206349206349206,
+              "teacherCpMae": 105.05,
+              "teacherCpRmse": 148.70446081630055
+            }
+          },
+          "crossEntropy": 0.38604588086512676,
+          "p99AbsoluteCpError": 574.699999999998,
+          "rows": 2331,
+          "signAccuracy": 0.8588588588588588,
+          "teacherCpMae": 125.04418704418704,
+          "teacherCpRmse": 175.2441797108324
+        },
+        "shipped-hce": {
+          "byPhase": {
+            "endgame": {
+              "crossEntropy": 0.29795063580613657,
+              "p99AbsoluteCpError": 613.7599999999998,
+              "rows": 349,
+              "signAccuracy": 0.9111747851002865,
+              "teacherCpMae": 158.11747851002866,
+              "teacherCpRmse": 211.42203071494995
+            },
+            "middlegame": {
+              "crossEntropy": 0.287254218069057,
+              "p99AbsoluteCpError": 674.449999999998,
+              "rows": 722,
+              "signAccuracy": 0.8988919667590027,
+              "teacherCpMae": 146.63296398891967,
+              "teacherCpRmse": 201.31725145667974
+            },
+            "opening": {
+              "crossEntropy": 0.49064500000682465,
+              "p99AbsoluteCpError": 522.7900000000016,
+              "rows": 1260,
+              "signAccuracy": 0.7793650793650794,
+              "teacherCpMae": 115.75714285714285,
+              "teacherCpRmse": 160.08937979706687
+            }
+          },
+          "crossEntropy": 0.3987966612401544,
+          "p99AbsoluteCpError": 604.0,
+          "rows": 2331,
+          "signAccuracy": 0.8361218361218361,
+          "teacherCpMae": 131.66280566280565,
+          "teacherCpRmse": 181.931306896313
+        }
+      },
+      "coverage": {
+        "materialPhaseCounts": {
+          "0": 21,
+          "1": 19,
+          "10": 88,
+          "11": 46,
+          "12": 98,
+          "13": 61,
+          "14": 75,
+          "15": 49,
+          "16": 73,
+          "17": 69,
+          "18": 131,
+          "19": 94,
+          "2": 47,
+          "20": 261,
+          "21": 85,
+          "22": 363,
+          "23": 33,
+          "24": 293,
+          "3": 35,
+          "4": 95,
+          "5": 47,
+          "6": 85,
+          "7": 52,
+          "8": 67,
+          "9": 44
+        },
+        "pieceCountPotentialSyzygyCoverage": {
+          "all": {
+            "3": 2,
+            "4": 8,
+            "5": 19,
+            "6": 36,
+            "7": 62,
+            "rows": 2331
+          },
+          "endgame": {
+            "3": 2,
+            "4": 8,
+            "5": 19,
+            "6": 36,
+            "7": 62,
+            "rows": 349
+          },
+          "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+        }
+      },
+      "models": {
+        "smooth-6-12": {
+          "checks": {
+            "integerMismatches": 0,
+            "maximumAbsFloatDifferenceCp": 0.7471641195076018,
+            "maximumAbsoluteScoreCp": 2071.0,
+            "meanAbsFloatDifferenceCp": 0.21767676827540192,
+            "rows": 2331
+          },
+          "config": {
+            "hi": 12,
+            "id": "smooth-6-12",
+            "kind": "smooth",
+            "lo": 6
+          },
+          "coverage": {
+            "gateCoverage": {
+              "blend": 297,
+              "expandedOnly": 349,
+              "neuralOnly": 1685
+            },
+            "materialPhaseCounts": {
+              "0": 21,
+              "1": 19,
+              "10": 88,
+              "11": 46,
+              "12": 98,
+              "13": 61,
+              "14": 75,
+              "15": 49,
+              "16": 73,
+              "17": 69,
+              "18": 131,
+              "19": 94,
+              "2": 47,
+              "20": 261,
+              "21": 85,
+              "22": 363,
+              "23": 33,
+              "24": 293,
+              "3": 35,
+              "4": 95,
+              "5": 47,
+              "6": 85,
+              "7": 52,
+              "8": 67,
+              "9": 44
+            },
+            "pieceCountPotentialSyzygyCoverage": {
+              "all": {
+                "3": 2,
+                "4": 8,
+                "5": 19,
+                "6": 36,
+                "7": 62,
+                "rows": 2331
+              },
+              "endgame": {
+                "3": 2,
+                "4": 8,
+                "5": 19,
+                "6": 36,
+                "7": 62,
+                "rows": 349
+              },
+              "meaning": "piece count only; castling rights and exact supported material are not adjudicated"
+            }
+          },
+          "floatQuality": {
+            "byPhase": {
+              "endgame": {
+                "crossEntropy": 0.2885416852157742,
+                "p99AbsoluteCpError": 616.04,
+                "rows": 349,
+                "signAccuracy": 0.9197707736389685,
+                "teacherCpMae": 154.9942693409742,
+                "teacherCpRmse": 208.43006426747655
+              },
+              "middlegame": {
+                "crossEntropy": 0.2828668073106411,
+                "p99AbsoluteCpError": 680.1197905437118,
+                "rows": 722,
+                "signAccuracy": 0.9002770083102493,
+                "teacherCpMae": 144.71555934154193,
+                "teacherCpRmse": 198.89844661282694
+              },
+              "opening": {
+                "crossEntropy": 0.4697800684632286,
+                "p99AbsoluteCpError": 491.7416851252044,
+                "rows": 1260,
+                "signAccuracy": 0.8238095238095238,
+                "teacherCpMae": 105.04798011124944,
+                "teacherCpRmse": 148.714372310966
+              }
+            },
+            "crossEntropy": 0.3847506517727397,
+            "p99AbsoluteCpError": 574.9567004284271,
+            "rows": 2331,
+            "signAccuracy": 0.8618618618618619,
+            "teacherCpMae": 124.8125649012302,
+            "teacherCpRmse": 175.24941077340847
+          },
+          "quality": {
+            "byPhase": {
+              "endgame": {
+                "crossEntropy": 0.2885416852157742,
+                "p99AbsoluteCpError": 616.04,
+                "rows": 349,
+                "signAccuracy": 0.9197707736389685,
+                "teacherCpMae": 154.9942693409742,
+                "teacherCpRmse": 208.43006426747655
+              },
+              "middlegame": {
+                "crossEntropy": 0.2828322155519143,
+                "p99AbsoluteCpError": 680.2099999999964,
+                "rows": 722,
+                "signAccuracy": 0.9002770083102493,
+                "teacherCpMae": 144.69529085872577,
+                "teacherCpRmse": 198.89882448690207
+              },
+              "opening": {
+                "crossEntropy": 0.46975966316824563,
+                "p99AbsoluteCpError": 491.4100000000001,
+                "rows": 1260,
+                "signAccuracy": 0.8206349206349206,
+                "teacherCpMae": 105.05,
+                "teacherCpRmse": 148.70446081630055
+              }
+            },
+            "crossEntropy": 0.3847289074906807,
+            "p99AbsoluteCpError": 574.8999999999987,
+            "rows": 2331,
+            "signAccuracy": 0.8601458601458601,
+            "teacherCpMae": 124.80737880737881,
+            "teacherCpRmse": 175.24499734602725
+          }
+        }
+      },
+      "numericalStopReasons": []
+    },
+    "role": "nnue-test",
+    "runtimeIntegrationAllowed": false,
+    "schema": "chessy.hybrid-test.v1",
+    "selectionSha256": "5c871d29debd20bf7d5ff867f7f1a0ba442dd154c3324f690cd7665f7d280702",
+    "stopReasons": [],
+    "summarySha256": "8862475a1c4d22867832b6a7399da91f2a1a14f1aad26994826e98a8975bc26d",
+    "testOpened": true,
+    "testRows": 2331,
+    "trainingFits": 0,
+    "privateReceiptSha256": "2006086e8a42333dc7c36d15a09b1e6fdcb027adce32756bfbcd0b78145a2991",
+    "independentAuditSha256": "8cfae1236fb003cc2b58cc1db9cf91b90ef50d59912880a3a7e97d8f5aba27e7",
+    "independentAudit": {
+      "bootstrap": {
+        "frozen-expanded-hce": {
+          "candidateMinusBaselineMean": -0.009074163004282652,
+          "ci95": [
+            -0.011976511366022057,
+            -0.006219101460964563
+          ],
+          "families": 2299,
+          "iterations": 2000,
+          "seed": 1050915
+        },
+        "shipped-hce": {
+          "candidateMinusBaselineMean": -0.014067753749473697,
+          "ci95": [
+            -0.017553802433521608,
+            -0.010558250278543554
+          ],
+          "families": 2299,
+          "iterations": 2000,
+          "seed": 1050915
+        }
+      },
+      "candidateConfig": {
+        "hi": 12,
+        "id": "smooth-6-12",
+        "kind": "smooth",
+        "lo": 6
+      },
+      "contractSha256": "4af21daf6ed8015ddfa5ff8cc0636f9e3d997f43a5c56c24d564587f8485eb60",
+      "independentlyDecodedOutputs": 4662,
+      "initialTestOpeningPerformed": false,
+      "limitations": [
+        "This audits the already consumed offline test and cannot authorize initial test access or reselection.",
+        "Source/teacher admission and outer-role isolation are inherited authenticated checks; all test predictions and loss intervals are independently recomputed.",
+        "Playing strength, production licensing, device cost and formal evaluator admission remain separate."
+      ],
+      "mismatches": 0,
+      "offlinePass": true,
+      "schema": "chessy.hybrid-test-independent-audit.v1",
+      "status": "PASS",
+      "stopReasons": [],
+      "testAlreadyOpened": true,
+      "testReceiptSha256": "2006086e8a42333dc7c36d15a09b1e6fdcb027adce32756bfbcd0b78145a2991",
+      "testRows": 2331
+    }
+  }
+}

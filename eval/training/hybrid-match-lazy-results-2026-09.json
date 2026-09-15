@@ -1,0 +1,56 @@
+{
+  "evidence": {
+    "contract": {
+      "bytes": 3780,
+      "file": "hybrid-match-lazy-v1.json",
+      "sha256": "c0249bc5bfde7e7a1df5a827b18c3726d40619e7aa9c9242fee999985d63f09d"
+    },
+    "cost": {
+      "bytes": 405782,
+      "file": "hybrid-runtime-lazy-cost-v1.json",
+      "sha256": "d3e795870285a99059a0eeee2de4f8b3ce30061a7b31cc39a0f22830baa557d0"
+    },
+    "costGzip": {
+      "bytes": 29236,
+      "file": "hybrid-runtime-lazy-cost-v1.json.gz",
+      "sha256": "589ced3f15e97f97977769089a7106df3bc004f490ec18f6c6f164e68ae602d8"
+    },
+    "costIntegrity": {
+      "bytes": 378,
+      "file": "hybrid-runtime-lazy-cost-v1.json.integrity.json",
+      "sha256": "e738b15253f08ad1892ee726a7c3f5765f3f71ee850fd011c1a28445a8f0f1c6"
+    },
+    "independentAudit": {
+      "bytes": 23171,
+      "file": "hybrid-runtime-lazy-independent-audit.json",
+      "sha256": "b0eae96de0f70c0e1524051669aac81bf84ea3f1d418c9cc0ad657a7acdde995"
+    },
+    "sourceReceipt": {
+      "bytes": 5129,
+      "file": "lazy-source.json",
+      "sha256": "01d43101588e06c77fc8def833d688fb93a748575772edbcfbdba9be4f59d3f0"
+    }
+  },
+  "formalPass": false,
+  "gameOutcomesUsed": false,
+  "gamesExecuted": 0,
+  "independentAuditStatus": "PASS",
+  "medianPairedNpsRatioAt16384": 1.0369636356411724,
+  "minimumOverallRatio": 1.05,
+  "minimumPhaseRatio": 0.95,
+  "paidSpendUsd": 0,
+  "phaseMedianPairedNpsRatiosAt16384": {
+    "endgame": 0.9887038111735047,
+    "middlegame": 1.0595376597127888,
+    "opening": 1.0966938332407925
+  },
+  "pvEqualityClaimed": false,
+  "reason": "Overall paired median16384-node NPS improvement3.69636356411724percent is below the frozen5percent threshold.",
+  "researchOnly": true,
+  "returnedFixedNodeSignaturePairs": 96,
+  "schema": "chessy.hybrid-lazy-match-skipped.v1",
+  "selected": null,
+  "shippingOrEloClaimAllowed": false,
+  "staticParityCases": 501,
+  "status": "SKIPPED_SPEED_GATE"
+}

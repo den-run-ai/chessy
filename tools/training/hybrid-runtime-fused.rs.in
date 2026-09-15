@@ -1,0 +1,154 @@
+// One shared HCE feature walk. The primary lane is expanded in late endgames,
+// shipped elsewhere. The second lane exists only inside the exact blend band.
+pub fn evaluate(position: &Position) -> i32 {
+    let phase = core::cmp::min(24, position.hybrid_material_phase as i32);
+    let neural_active = phase > 6;
+    let blend = phase > 6 && phase < 12;
+    let pst_mg = if neural_active { &PST_MG } else { &X_PST_MG };
+    let pst_eg = if neural_active { &PST_EG } else { &X_PST_EG };
+    let mobility_weights = if neural_active { &MOBILITY } else { &X_MOBILITY };
+    let passed_mg = if neural_active { &PASSED_MG } else { &X_PASSED_MG };
+    let passed_eg = if neural_active { &PASSED_EG } else { &X_PASSED_EG };
+    let doubled = if neural_active { DOUBLED } else { X_DOUBLED };
+    let isolated = if neural_active { ISOLATED } else { X_ISOLATED };
+    let shield = if neural_active { SHIELD } else { X_SHIELD };
+    let mut acc = [NNUE_B1; 2];
+    let board = &position.board;
+    let (mut midgame, mut endgame) = (0_i32, 0_i32);
+    let (mut x_midgame, mut x_endgame) = (0_i32, 0_i32);
+    let mut pawn_files = [[0_u8; 8]; 2];
+    let mut pawn_squares = [[0_u8; 64]; 2];
+    let mut pawn_counts = [0_usize; 2];
+    let mut kings = [-1_i8; 2];
+    let mut force = [0_u8; 2];
+    let mut pieces = [0_u8; 2];
+    let mut square = 0;
+    while square < 64 {
+        let piece = board[square];
+        if piece == Piece::Empty { square += 1; continue; }
+        if neural_active { nnue_add_piece(&mut acc, piece, square); }
+        let color = engine::piece_color(piece).unwrap();
+        let piece_type = engine::piece_type(piece).unwrap();
+        let color_index = color as usize;
+        let kind = piece_type as usize;
+        let table_square = if color == Color::White { square } else { square ^ 56 };
+        let sign = if color == Color::White { 1 } else { -1 };
+        let mut mg = VALUES_MG[kind] + pst_mg[kind][table_square] as i32;
+        let mut eg = VALUES_EG[kind] + pst_eg[kind][table_square] as i32;
+        let mut x_mg = if blend { VALUES_MG[kind] + X_PST_MG[kind][table_square] as i32 } else { 0 };
+        let mut x_eg = if blend { VALUES_EG[kind] + X_PST_EG[kind][table_square] as i32 } else { 0 };
+        if piece_type != PieceType::King { force[color_index] += 1; }
+        if piece_type == PieceType::Pawn {
+            pawn_files[color_index][square % 8] += 1;
+            pawn_squares[color_index][pawn_counts[color_index]] = square as u8;
+            pawn_counts[color_index] += 1;
+        } else if piece_type == PieceType::King { kings[color_index] = square as i8; }
+        else {
+            pieces[color_index] += 1;
+            let count = mobility(board, square, piece_type, color);
+            let value = count * mobility_weights[kind];
+            mg += value; eg += value;
+            if blend { let extra = count * X_MOBILITY[kind]; x_mg += extra; x_eg += extra; }
+        }
+        midgame += sign * mg; endgame += sign * eg;
+        if blend { x_midgame += sign * x_mg; x_endgame += sign * x_eg; }
+        square += 1;
+    }
+    for color in [Color::White, Color::Black] {
+        let color_index = color as usize;
+        let enemy_index = engine::opposite(color) as usize;
+        let sign = if color == Color::White { 1 } else { -1 };
+        for file in 0..8 {
+            let count = pawn_files[color_index][file];
+            if count > 1 {
+                let extra = sign * (count - 1) as i32;
+                midgame -= extra * doubled; endgame -= extra * doubled;
+                if blend { x_midgame -= extra * X_DOUBLED; x_endgame -= extra * X_DOUBLED; }
+            }
+        }
+        for pawn_index in 0..pawn_counts[color_index] {
+            let square = pawn_squares[color_index][pawn_index] as usize;
+            let file = square % 8;
+            let rank = square / 8;
+            // Expanded HCE's geometric pawn edges are counted once and routed
+            // to the expanded lane. Shipped-only positions skip this work.
+            if !neural_active || blend {
+                let attack_rank = rank as i32 + if color == Color::White { -1 } else { 1 };
+                if attack_rank >= 0 && attack_rank < 8 {
+                    for file_delta in [-1_i32, 1] {
+                        let attack_file = file as i32 + file_delta;
+                        if attack_file >= 0 && attack_file < 8 {
+                            let target = board[(attack_rank * 8 + attack_file) as usize];
+                            if engine::piece_color(target) == Some(engine::opposite(color)) {
+                                let class = match engine::piece_type(target) {
+                                    Some(PieceType::Knight | PieceType::Bishop) => Some(0),
+                                    Some(PieceType::Rook) => Some(1), Some(PieceType::Queen) => Some(2), _ => None,
+                                };
+                                if let Some(class) = class {
+                                    let mg = sign * X_PAWN_ATTACK_MG[class];
+                                    let eg = sign * X_PAWN_ATTACK_EG[class];
+                                    if blend { x_midgame += mg; x_endgame += eg; }
+                                    else { midgame += mg; endgame += eg; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !(file > 0 && pawn_files[color_index][file - 1] != 0) &&
+                !(file < 7 && pawn_files[color_index][file + 1] != 0) {
+                midgame -= sign * isolated; endgame -= sign * isolated;
+                if blend { x_midgame -= sign * X_ISOLATED; x_endgame -= sign * X_ISOLATED; }
+            }
+            let mut passed = true;
+            for enemy_pawn_index in 0..pawn_counts[enemy_index] {
+                let enemy_square = pawn_squares[enemy_index][enemy_pawn_index] as usize;
+                let enemy_file = enemy_square % 8;
+                let enemy_rank = enemy_square / 8;
+                let is_ahead = if color == Color::White { enemy_rank < rank } else { enemy_rank > rank };
+                if enemy_file.abs_diff(file) <= 1 && is_ahead { passed = false; break; }
+            }
+            if passed {
+                let relative_rank = clamp_passed_rank(if color == Color::White { 6 - rank as i32 } else { rank as i32 - 1 });
+                midgame += sign * passed_mg[relative_rank]; endgame += sign * passed_eg[relative_rank];
+                if blend { x_midgame += sign * X_PASSED_MG[relative_rank]; x_endgame += sign * X_PASSED_EG[relative_rank]; }
+            }
+        }
+        let king_square = kings[color_index];
+        if king_square >= 0 {
+            let king_rank = king_square as i32 / 8 + if color == Color::White { -1 } else { 1 };
+            let king_file = king_square as i32 % 8;
+            if king_rank >= 0 && king_rank < 8 {
+                for file_delta in -1..=1 {
+                    let shield_file = king_file + file_delta;
+                    if shield_file >= 0 && shield_file < 8 {
+                        let target = board[(king_rank * 8 + shield_file) as usize];
+                        let pawn = if color == Color::White { Piece::WhitePawn } else { Piece::BlackPawn };
+                        if target == pawn { midgame += sign * shield; if blend { x_midgame += sign * X_SHIELD; } }
+                    }
+                }
+            }
+        }
+    }
+    let mut mop = 0;
+    if kings[0] >= 0 && kings[1] >= 0 {
+        if pieces[0] > 0 && force[1] == 0 { mop = mop_up(kings[1], kings[0]); }
+        else if pieces[1] > 0 && force[0] == 0 { mop = -mop_up(kings[0], kings[1]); }
+    }
+    let primary = hybrid_round(midgame * phase + endgame * (24 - phase), 24);
+    if !neural_active { return primary + mop; }
+    let neural = primary + nnue_finish(acc, position.turn, phase);
+    if !blend { return neural + mop; }
+    let expanded = hybrid_round(x_midgame * phase + x_endgame * (24 - phase), 24);
+    // Both complete HCE tapers round before this second White-POV rounding.
+    // The common integer mop-up can be added after blending without changing it.
+    hybrid_round((phase - 6) * neural + (12 - phase) * expanded, 6) + mop
+}
+
+#[inline]
+fn hybrid_round(numerator: i32, denominator: i32) -> i32 {
+    let adjusted = numerator + denominator / 2;
+    let mut score = adjusted / denominator;
+    if adjusted < 0 && adjusted % denominator != 0 { score -= 1; }
+    score
+}

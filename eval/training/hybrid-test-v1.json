@@ -1,0 +1,51 @@
+{
+  "schema": "chessy.hybrid-test-preregistration.v1",
+  "id": "frozen-smooth6-12-h8-sealed-test-2026-09-v1",
+  "researchOnly": true,
+  "productionFitAllowed": false,
+  "screenContractSha256": "6dba25fed6adbcc056e00b3d78b15606857a4b69c118ee57ef67168f9c11c8d0",
+  "screenArtifacts": {
+    "selection.json": "5c871d29debd20bf7d5ff867f7f1a0ba442dd154c3324f690cd7665f7d280702",
+    "decision.json": "49a1d32c1d22f0375a66b9d74f3a77e4b021c71a3e0a363ecbb403dbf9db61aa",
+    "split-identities.json": "c6588330aaa91117f19d57aa4e3a298d01c5070893e896695e1d522f2efe7684"
+  },
+  "screenStateSha256": {
+    "selection-frozen.json": "7f3fb499e07b7cc5f8c6a8f586fbd67a243f7df87fd006848ee03b29ed87808c",
+    "candidate-frozen.json": "f08a577ce0ac445008f494a304027030a72a2539d5a7cdaf5f39aec5ad321ad3",
+    "validation-opened.json": "842c595e70b5a4f91d7051ee39f428b753fdd234b35f89253efc73de0c6db9cc",
+    "run-started.json": "1004a7be867a4060286cc419e11b15b5fae64851239a4ea929323a62d84db7a5"
+  },
+  "config": {
+    "id": "smooth-6-12",
+    "kind": "smooth",
+    "lo": 6,
+    "hi": 12
+  },
+  "modelBinarySha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+  "priorStateRoots": [
+    "/workspace/scratch/f56d5aee99e3/chessy-v4-execution/.research-state",
+    "/workspace/scratch/f56d5aee99e3/chessy/.research-state",
+    "/workspace/scratch/f56d5aee99e3/recovered/chessy-nnue-v2-checkpoints-2026-09/chessy-nnue-v2-checkpoints-2026-09/chessy-neural-v2/.research-state"
+  ],
+  "admission": "Before test role load, authenticate exact screen+decision+split identities+persistent state, semantic outer guards, every screen input hash, unchanged h4_data v1 full53-file closure, both inherited checkpoints and integer serialization. Require current and every registered prior-state root exists and has zero test-opened.json descendants. No-replace dataset-summary SHA/nnue-test global marker consumes opening before role decode, unchanged shared reserve_test.",
+  "test": "Exactly original2331-row nnue-test, no additional labels. Restore authenticated shared-train identities without labels, and load already-exposed nnue-validation before opening to authenticate its full lineage (no candidate performance/reselection). Require test disjointness against both shared-train and exposed outer family/source/row/cluster. One frozen candidate only; no reselection or opening retry.",
+  "guards": "Same two-comparator util.guard: >=0.5% aggregate relative CE gain; MAE/RMSE<=1.02baseline; p99<=1.05baseline; every phase>=100 and CE<=1.01baseline. Exact JS BigInt hybrid/NNUE parity0mismatches; max float delta<=5cp,mean<=1cp,scoreabs<=10000.",
+  "bootstrap": {
+    "method": "Unchanged util.bootstrap; family cluster resampling of candidate-minus-comparator BCE; independently compare both shipped and expanded HCE. Upper end of95% CI must be strictly negative for BOTH.",
+    "iterations": 2000,
+    "seed": 1050915,
+    "percentiles": [
+      0.025,
+      0.975
+    ]
+  },
+  "execution": "Test tooling+contract committed before opening. Root invokes only after independent screen audit. Errors before opening marker cannot decode test; errors after marker consume opening, preserve evidence, prohibit retry. $0 planned, no model training. All opened metrics reported regardless of pass/fail.",
+  "scope": "Offline sealed teacher-loss result only. Does not establish Elo, runtime cost, parameter licensing, family/estimator acceptance or production readiness. Ship gate still requires independent search/runtime/size evidence.",
+  "independentAudit": {
+    "path": "/workspace/scratch/90b8383e2cc0/hybrid-v1b-independent-audit.json",
+    "sha256": "52d767ca7b34c3322e0accd5dedf291d3f7d0ac4ed54a1d8b914db79d8e27706",
+    "requiredStatus": "PASS",
+    "mismatches": 0,
+    "testFilesReadOrHashed": 0
+  }
+}

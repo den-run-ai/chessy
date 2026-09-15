@@ -1,0 +1,787 @@
+{
+  "schema": "chessy.hybrid-runtime-mechanism-results.v1",
+  "status": "completed",
+  "sourceCommit": "2a4afed",
+  "preregistrationCommit": "e4154da",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "modelSelectionAllowed": false,
+  "config": {
+    "id": "smooth-6-12",
+    "kind": "smooth",
+    "lo": 6,
+    "hi": 12
+  },
+  "modelSha256": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+  "expandedWeightsSha256": "dcd343d60a85dc59fd9641a1b53d877e8dea359096e85fa611aa1cbd724225ef",
+  "sourceReceiptSha256": "b7ac7491544ce739a00b6cfa117d99ed308fb0adfb964f9be27c14ea8f6dfe46",
+  "priorSourceReceiptSha256": "1095afc9bc9d6155cd8ffbffc8173a22ee88cf0df8f3c8329ebe6c0a3742b48d",
+  "rawReportSha256": "467188467b6a7e73a0e801bd247b9444723b70df2eb07a417f6611957602bc01",
+  "rawReportBytes": 462582,
+  "runtime": {
+    "node": "24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "brotli": "1.2.0"
+  },
+  "modules": {
+    "shipped": {
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+      "rawBytes": 37172,
+      "brotliBytes": 17690,
+      "memoryBytes": 26542080
+    },
+    "original": {
+      "sha256": "18c69302d9aaecc0078a5b398e68789f24adb66e525c99f8bc9ac9ddc60e9493",
+      "rawBytes": 58085,
+      "brotliBytes": 28857,
+      "memoryBytes": 26607616
+    },
+    "cached": {
+      "sha256": "81710dad913cde3c1e0daff49dcc35347a8a23e5681ff1d19165c80c72649b97",
+      "rawBytes": 59769,
+      "brotliBytes": 29185,
+      "memoryBytes": 26607616
+    },
+    "fused": {
+      "sha256": "3d8a9a5fcfb9bd348409a534250ce9939270ac5c716b4b4a84913cb7be290384",
+      "rawBytes": 55047,
+      "brotliBytes": 28766,
+      "memoryBytes": 26607616
+    }
+  },
+  "native": [
+    {
+      "variant": "original",
+      "sha256": "b941ba4dc4eb2e2bd89a6a09e8f483d5237c934b72a867fcea499ae97882fc80",
+      "testsPassed": 11,
+      "testsFailed": 0,
+      "positionBytes": 74,
+      "undoBytes": 10,
+      "completeScoreAndRawPhaseTreeStates": null
+    },
+    {
+      "variant": "cached",
+      "sha256": "8d851e57b64583686249992518cdb28512105376b8c378c7fce72e9b90caac2b",
+      "testsPassed": 16,
+      "testsFailed": 0,
+      "positionBytes": 76,
+      "undoBytes": 10,
+      "completeScoreAndRawPhaseTreeStates": 13919
+    },
+    {
+      "variant": "fused",
+      "sha256": "65f5c1f7af281f80ac61aff3c0cc4c5c41e6bb3ac4ba4f26c4230b57ff592172",
+      "testsPassed": 13,
+      "testsFailed": 0,
+      "positionBytes": 76,
+      "undoBytes": 10,
+      "completeScoreAndRawPhaseTreeStates": 13919
+    }
+  ],
+  "parity": {
+    "completeEvaluationCases": 501,
+    "mismatches": 0,
+    "fixedNodeSearchSignaturesPerMechanism": 96,
+    "exact": true,
+    "searchMismatches": [],
+    "scope": "Complete static evaluations and all fields actually returned by engine.search; PV was not returned or separately fetched."
+  },
+  "measurements": {
+    "records": 768,
+    "plan": {
+      "pairedRepetitions": 4,
+      "evaluationWarmupCalls": 1000,
+      "evaluationMeasuredCalls": 10000,
+      "nodeBudgets": [
+        4096,
+        16384
+      ],
+      "timeBudgetsMs": [
+        40
+      ],
+      "maxDepth": 111,
+      "quiescence": true,
+      "fixtures": 12,
+      "stageCounts": {
+        "opening": 4,
+        "middlegame": 4,
+        "endgame": 4
+      },
+      "order": "rotate [shipped,original,cached,fused] by (position+repetition)%4",
+      "selectionByTimingAllowed": true,
+      "formalStrengthAllowed": false,
+      "configurations": [
+        "original",
+        "cached",
+        "fused"
+      ],
+      "modelSelectionAllowed": false,
+      "requiredExactSearchSignatures": [
+        "nodes4096",
+        "nodes16384"
+      ],
+      "mechanismSelection": {
+        "minimumMedianNpsRatioVsOriginal16384": 1.05,
+        "minimumEachPhaseNpsRatioVsOriginal16384": 0.95,
+        "rankBy": "smallest absolute median elapsedMs across48 candidate16384-node records",
+        "tieBreak": "cached",
+        "requiresAll501ExactEvaluations": true,
+        "requiresAll96ExactNodeBudgetSearchResultsPerMechanism": true,
+        "noEligible": "none",
+        "followup": "one separately registered200-game20ms diagnostic arm versus shipped for selected mechanism only"
+      }
+    },
+    "summary": {
+      "all": {
+        "original": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 48,
+              "medianElapsedMs": 7.110994500000743,
+              "pairedMedianTimeRatio": 1.6512059719552217
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "medianElapsedMs": 4.3255979999999,
+              "pairedMedianTimeRatio": 1.211638130927395,
+              "pairedMedianNpsRatio": 0.8253292195041262,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "medianElapsedMs": 18.682718000000023,
+              "pairedMedianTimeRatio": 1.162117516640746,
+              "pairedMedianNpsRatio": 0.8606252954905771,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 48,
+              "medianElapsedMs": 40.47878000000037,
+              "pairedMedianTimeRatio": 1.0040603830192016,
+              "pairedMedianNpsRatio": 0.8324050854473104,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "cached": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 48,
+              "medianElapsedMs": 6.713453999999501,
+              "pairedMedianTimeRatio": 1.5296429622171055
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "medianElapsedMs": 4.241082500000175,
+              "pairedMedianTimeRatio": 1.1767226095136727,
+              "pairedMedianNpsRatio": 0.8498194242472231,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "medianElapsedMs": 18.864276500000415,
+              "pairedMedianTimeRatio": 1.155796128940319,
+              "pairedMedianNpsRatio": 0.8652056138801175,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 48,
+              "medianElapsedMs": 40.52241449999974,
+              "pairedMedianTimeRatio": 1.0024498490563074,
+              "pairedMedianNpsRatio": 0.812512701664801,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 48,
+              "medianElapsedMs": 6.713453999999501,
+              "pairedMedianTimeRatio": 0.8933841164711389
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "medianElapsedMs": 4.241082500000175,
+              "pairedMedianTimeRatio": 0.9670122158366782,
+              "pairedMedianNpsRatio": 1.0341173305603495,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "medianElapsedMs": 18.864276500000415,
+              "pairedMedianTimeRatio": 0.9959978419984487,
+              "pairedMedianNpsRatio": 1.0040186358399916,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 48,
+              "medianElapsedMs": 40.52241449999974,
+              "pairedMedianTimeRatio": 1.0009525405088726,
+              "pairedMedianNpsRatio": 0.9834421853375848,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "fused": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 48,
+              "medianElapsedMs": 5.110949500000061,
+              "pairedMedianTimeRatio": 1.5317598538997497
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "medianElapsedMs": 3.614896499999759,
+              "pairedMedianTimeRatio": 1.191598264665597,
+              "pairedMedianNpsRatio": 0.8392183837884994,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "medianElapsedMs": 17.1070950000003,
+              "pairedMedianTimeRatio": 1.1781086055241734,
+              "pairedMedianNpsRatio": 0.8488243774904093,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 48,
+              "medianElapsedMs": 40.55643699999928,
+              "pairedMedianTimeRatio": 1.002293575884112,
+              "pairedMedianNpsRatio": 0.8183038711770294,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 48,
+              "medianElapsedMs": 5.110949500000061,
+              "pairedMedianTimeRatio": 0.9019680217960722
+            },
+            "nodes4096": {
+              "pairs": 48,
+              "medianElapsedMs": 3.614896499999759,
+              "pairedMedianTimeRatio": 0.9539331724009996,
+              "pairedMedianNpsRatio": 1.0483963212488812,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 48,
+              "medianElapsedMs": 17.1070950000003,
+              "pairedMedianTimeRatio": 0.9958376443157855,
+              "pairedMedianNpsRatio": 1.0041797588244454,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 48,
+              "medianElapsedMs": 40.55643699999928,
+              "pairedMedianTimeRatio": 1.0003077322974374,
+              "pairedMedianNpsRatio": 1.002560450388978,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        }
+      },
+      "opening": {
+        "original": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.665968499999963,
+              "pairedMedianTimeRatio": 1.6025201928803385
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 5.917413499999611,
+              "pairedMedianTimeRatio": 1.2308752851381302,
+              "pairedMedianNpsRatio": 0.8125328294465382,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 23.01886650000006,
+              "pairedMedianTimeRatio": 1.2046259411585967,
+              "pairedMedianNpsRatio": 0.8302017871805949,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 41.151604500000076,
+              "pairedMedianTimeRatio": 1.0049077993905815,
+              "pairedMedianNpsRatio": 0.8609613951336343,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "cached": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.344378000000233,
+              "pairedMedianTimeRatio": 1.5432423659497614
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 5.6136445000008734,
+              "pairedMedianTimeRatio": 1.2218938889013478,
+              "pairedMedianNpsRatio": 0.8185238259174057,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 22.300752499999362,
+              "pairedMedianTimeRatio": 1.1668145733336117,
+              "pairedMedianNpsRatio": 0.8570616123675661,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.793163500000105,
+              "pairedMedianTimeRatio": 0.9996631200832817,
+              "pairedMedianNpsRatio": 0.8269323832766959,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.344378000000233,
+              "pairedMedianTimeRatio": 0.9663195222196654
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 5.6136445000008734,
+              "pairedMedianTimeRatio": 0.9845966073821255,
+              "pairedMedianNpsRatio": 1.0156456383462018,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 22.300752499999362,
+              "pairedMedianTimeRatio": 1.0025219330013984,
+              "pairedMedianNpsRatio": 0.9974852159313272,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.793163500000105,
+              "pairedMedianTimeRatio": 0.9937240229092086,
+              "pairedMedianNpsRatio": 0.9797983400392245,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "fused": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.557911500000046,
+              "pairedMedianTimeRatio": 1.5756362241448805
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 5.701254500000232,
+              "pairedMedianTimeRatio": 1.2148739655652732,
+              "pairedMedianNpsRatio": 0.8233383000557102,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 23.824021499999844,
+              "pairedMedianTimeRatio": 1.209946513362901,
+              "pairedMedianNpsRatio": 0.8264849063254232,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 41.05536650000067,
+              "pairedMedianTimeRatio": 1.0014202677997566,
+              "pairedMedianNpsRatio": 0.8334044937150384,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.557911500000046,
+              "pairedMedianTimeRatio": 0.9922271946467033
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 5.701254500000232,
+              "pairedMedianTimeRatio": 0.9430420346660052,
+              "pairedMedianNpsRatio": 1.0604002953486864,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 23.824021499999844,
+              "pairedMedianTimeRatio": 1.0128056048388112,
+              "pairedMedianNpsRatio": 0.9874236237603131,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 41.05536650000067,
+              "pairedMedianTimeRatio": 0.9971739797925514,
+              "pairedMedianNpsRatio": 0.9801521461114171,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        }
+      },
+      "middlegame": {
+        "original": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 8.513026000000536,
+              "pairedMedianTimeRatio": 2.36309781118831
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 4.399160999999367,
+              "pairedMedianTimeRatio": 1.323124436716883,
+              "pairedMedianNpsRatio": 0.7557880566417893,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 19.727231000000074,
+              "pairedMedianTimeRatio": 1.253597708841444,
+              "pairedMedianNpsRatio": 0.7977281351087848,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.585989999999924,
+              "pairedMedianTimeRatio": 1.0060631356808258,
+              "pairedMedianNpsRatio": 0.6917457315432335,
+              "medianCompletedDepthDifference": -0.5
+            }
+          }
+        },
+        "cached": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.764447999999675,
+              "pairedMedianTimeRatio": 2.20099035120983
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 4.241082500000175,
+              "pairedMedianTimeRatio": 1.2591000533021566,
+              "pairedMedianNpsRatio": 0.7944018207772946,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 18.793652000000293,
+              "pairedMedianTimeRatio": 1.2868720364995685,
+              "pairedMedianNpsRatio": 0.777866793020358,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.57553350000035,
+              "pairedMedianTimeRatio": 1.006713669304979,
+              "pairedMedianNpsRatio": 0.654610690264738,
+              "medianCompletedDepthDifference": -0.5
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 7.764447999999675,
+              "pairedMedianTimeRatio": 0.9100819786804701
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 4.241082500000175,
+              "pairedMedianTimeRatio": 0.9259076812861453,
+              "pairedMedianNpsRatio": 1.0801480113250732,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 18.793652000000293,
+              "pairedMedianTimeRatio": 0.9686632463700453,
+              "pairedMedianNpsRatio": 1.032383004763229,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.57553350000035,
+              "pairedMedianTimeRatio": 1.0019324190859082,
+              "pairedMedianNpsRatio": 0.9834421853375848,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "fused": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 5.110949500000061,
+              "pairedMedianTimeRatio": 1.590082745626018
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 3.485483999999815,
+              "pairedMedianTimeRatio": 1.1804178435204733,
+              "pairedMedianNpsRatio": 0.8471891459944145,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 17.1070950000003,
+              "pairedMedianTimeRatio": 1.1869833123428206,
+              "pairedMedianNpsRatio": 0.8424898107492556,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.52768449999962,
+              "pairedMedianTimeRatio": 1.0022341726564208,
+              "pairedMedianNpsRatio": 0.7691679761934069,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 5.110949500000061,
+              "pairedMedianTimeRatio": 0.6550011714987547
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 3.485483999999815,
+              "pairedMedianTimeRatio": 0.8161594883443367,
+              "pairedMedianNpsRatio": 1.2254996067693467,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 17.1070950000003,
+              "pairedMedianTimeRatio": 0.8278757388218739,
+              "pairedMedianNpsRatio": 1.2090255927360398,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.52768449999962,
+              "pairedMedianTimeRatio": 0.99733629258692,
+              "pairedMedianNpsRatio": 1.1807842501719374,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        }
+      },
+      "endgame": {
+        "original": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 1.5653679999995802,
+              "pairedMedianTimeRatio": 1.5304829334206964
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 2.7556479999998373,
+              "pairedMedianTimeRatio": 1.0945901356754373,
+              "pairedMedianNpsRatio": 0.9135840539408324,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 10.703065500000776,
+              "pairedMedianTimeRatio": 1.0849209505584194,
+              "pairedMedianNpsRatio": 0.921816958790441,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.19889950000038,
+              "pairedMedianTimeRatio": 0.99926410110392,
+              "pairedMedianNpsRatio": 0.8601559382003858,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "cached": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 1.0620110000008935,
+              "pairedMedianTimeRatio": 1.0843213909142086
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 2.7349055000001954,
+              "pairedMedianTimeRatio": 1.0906294677641717,
+              "pairedMedianNpsRatio": 0.9169189847147954,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 11.032896500000106,
+              "pairedMedianTimeRatio": 1.0708726438327487,
+              "pairedMedianNpsRatio": 0.933860108818897,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.35540800000035,
+              "pairedMedianTimeRatio": 1.0018254711738277,
+              "pairedMedianNpsRatio": 0.8374029473054823,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 1.0620110000008935,
+              "pairedMedianTimeRatio": 0.7142211270091718
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 2.7349055000001954,
+              "pairedMedianTimeRatio": 0.977523664096478,
+              "pairedMedianNpsRatio": 1.0230715058199054,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 11.032896500000106,
+              "pairedMedianTimeRatio": 1.015839309424392,
+              "pairedMedianNpsRatio": 0.9844403789859553,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.35540800000035,
+              "pairedMedianTimeRatio": 1.0032331118992552,
+              "pairedMedianNpsRatio": 0.9894515135602753,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        },
+        "fused": {
+          "shipped": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 1.3563925000000836,
+              "pairedMedianTimeRatio": 1.3282410989050526
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 2.9019409999991694,
+              "pairedMedianTimeRatio": 1.1958088834040108,
+              "pairedMedianNpsRatio": 0.836335860317033,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 10.484877500000039,
+              "pairedMedianTimeRatio": 1.0734284805984362,
+              "pairedMedianNpsRatio": 0.9315969484472341,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.398236500000166,
+              "pairedMedianTimeRatio": 1.0029322022725737,
+              "pairedMedianNpsRatio": 0.8406564707304474,
+              "medianCompletedDepthDifference": 0
+            }
+          },
+          "original": {
+            "evaluation": {
+              "pairs": 16,
+              "medianElapsedMs": 1.3563925000000836,
+              "pairedMedianTimeRatio": 0.8778811353224127
+            },
+            "nodes4096": {
+              "pairs": 16,
+              "medianElapsedMs": 2.9019409999991694,
+              "pairedMedianTimeRatio": 1.012595903635531,
+              "pairedMedianNpsRatio": 0.9875959428966918,
+              "medianCompletedDepthDifference": 0
+            },
+            "nodes16384": {
+              "pairs": 16,
+              "medianElapsedMs": 10.484877500000039,
+              "pairedMedianTimeRatio": 0.9967244464860746,
+              "pairedMedianNpsRatio": 1.0032872499778307,
+              "medianCompletedDepthDifference": 0
+            },
+            "time40": {
+              "pairs": 16,
+              "medianElapsedMs": 40.398236500000166,
+              "pairedMedianTimeRatio": 1.0035718710384045,
+              "pairedMedianNpsRatio": 0.9904597391627566,
+              "medianCompletedDepthDifference": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "selection": {
+    "selected": null,
+    "candidates": [
+      {
+        "variant": "cached",
+        "eligible": false,
+        "exactEvaluation": true,
+        "exactSearch": true,
+        "medianNpsRatioVsOriginal16384": 1.0040186358399916,
+        "medianTimeRatioVsOriginal16384": 0.9959978419984487,
+        "medianElapsedMs16384": 18.864276500000415,
+        "phaseNpsRatios": {
+          "opening": 0.9974852159313272,
+          "middlegame": 1.032383004763229,
+          "endgame": 0.9844403789859553
+        }
+      },
+      {
+        "variant": "fused",
+        "eligible": false,
+        "exactEvaluation": true,
+        "exactSearch": true,
+        "medianNpsRatioVsOriginal16384": 1.0041797588244454,
+        "medianTimeRatioVsOriginal16384": 0.9958376443157855,
+        "medianElapsedMs16384": 17.1070950000003,
+        "phaseNpsRatios": {
+          "opening": 0.9874236237603131,
+          "middlegame": 1.2090255927360398,
+          "endgame": 1.0032872499778307
+        }
+      }
+    ],
+    "criteria": {
+      "minimumMedianNpsRatioVsOriginal16384": 1.05,
+      "minimumEachPhaseNpsRatioVsOriginal16384": 0.95,
+      "rankBy": "smallest absolute median elapsedMs across48 candidate16384-node records",
+      "tieBreak": "cached",
+      "requiresAll501ExactEvaluations": true,
+      "requiresAll96ExactNodeBudgetSearchResultsPerMechanism": true,
+      "noEligible": "none",
+      "followup": "one separately registered200-game20ms diagnostic arm versus shipped for selected mechanism only"
+    },
+    "followupGamesAllowed": false
+  },
+  "limitations": [
+    "One concurrent diagnostic V8 run; no hardware-independent cost or physical-device admission.",
+    "Same selected model/gate; optimized mechanisms cannot change offline scores or claim further training saturation.",
+    "A separate registered200-game arm may test the prospectively selected eligible mechanism; original game scores do not transfer automatically.",
+    "Cached phase adds two bytes to Position and work to all board mutations; no neural accumulator cache or Undo growth.",
+    "Research copies retain the extra memory page; production cap remains unchanged."
+  ],
+  "validationDeviation": {
+    "requiredPvEqualityVerified": false,
+    "completeProspectiveSearchValidationPassed": false,
+    "reason": "The preregistration required PV comparison, but engine.search result objects contain no PV field. Exact returned-object equality does not verify PV equality.",
+    "selectionImpact": "Neither mechanism passed the independent >=5% throughput guard; no selection or conditional games were permitted."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "chessy.hybrid-match-infrastructure-recovery-protocol.v1",
+  "researchOnly": true,
+  "formalPass": false,
+  "purpose": "Separately registered replacement of an invalid infrastructure batch; no original game scores were analyzed or used.",
+  "originalRegistrationSha256": "db7f95f1cfe2b69dd53aeeb0a7faf0d66e8ac1a26d03ee7cdf5560fd346c0fbc",
+  "failedOriginalManifestSha256": "0bbb1541661338b65b337ce57be44897e2a428ff1f3fa237254db7ca103feaac",
+  "sameOriginalModulesRequired": true,
+  "sameOriginal400TaskScheduleRequired": true,
+  "sameOriginalTimeAndTerminationRulesRequired": true,
+  "originalBatchRemainsInvalid": true,
+  "conditionalOptimized200GameFollowupRemainsSkipped": true,
+  "recoveryAttemptCount": 1,
+  "scoreRerunAllowed": false,
+  "interimStoppingAllowed": false,
+  "postHocExtensionAllowed": false,
+  "capture": {
+    "retainExactCanonicalBytesInParent": true,
+    "atomicPerGamePublication": true,
+    "parentAcknowledgementRequiredBeforeNextGame": true,
+    "compressOnlyAfterAllTimedSearchesStop": true,
+    "finalImmutableArchiveRequired": true,
+    "archiveEveryGameMustMatchItsCaptureReceipt": true,
+    "auditGamesFromRetainedArchiveOnly": true,
+    "recoverFromMutableLiveFilesAllowed": false,
+    "inventMissingTailsAllowed": false
+  },
+  "limits": "One serial400-game batch at original20ms per move and180searched plies; approximately18-20minutes local CPU, $0 paid.",
+  "scoreInterpretation": "The same two separate exposed-opening development arms versus shipped HCE; no direct hybrid-versus-expanded result, formalPass, fresh-test override or Elo claim."
+}

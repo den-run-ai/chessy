@@ -1,0 +1,114 @@
+{
+  "schema": "chessy.hybrid-preregistration.v1b",
+  "id": "phase-hce-neural-frozen-h8-hybrid-2026-09-v1b",
+  "researchOnly": true,
+  "productionFitAllowed": false,
+  "hypothesis": "Use frozen expanded HCE in late endgames and the frozen phase H8 evaluator elsewhere to preserve the stronger endgame comparator while retaining neural gains.",
+  "inherited": {
+    "contractSha256": "47c6c78c59e70b9a9d21156aff5ece7192bfad563bac360ebe6f0c20728e5cd1",
+    "selectionSha256": "fe86f118822756cc57813496cee316ff5540bf4d45000420deceb8ec56ab173a",
+    "developmentPrefix": "h8-phase-eg1-e900-10513",
+    "development": {
+      "binary": "819853b49284d00de4e70065481591ccea4573f84897fc1c8323e29a861e8e8f",
+      "float": "cdcf9baea324b395a0bd2bf6683e916d840fb63620601fe8f9af3898b972429e",
+      "metadata": "396912669d0cf47390ed4c508a9316f56dff1ba1c16b3d30386717420ae64918"
+    },
+    "final": {
+      "binary": "3a759a37d3af0beed0dda352a05294686d286176a4dcbdfa85a3fabef0083f25",
+      "float": "943c94ed57faf7fb5ae6314c519fb68384b2eae5a05015b922f3cdd8b821a6e2",
+      "metadata": "396912669d0cf47390ed4c508a9316f56dff1ba1c16b3d30386717420ae64918"
+    }
+  },
+  "data": {
+    "authentication": "Unchanged h4_data.authenticate v1 pins and full 53-file closure; inherited checkpoints bound to exact prior selection SHA and published v4 aggregate receipt. All roles are lineage checked, and independent JS/WASM comparator parity is required.",
+    "allowedRoles": [
+      "shared-train",
+      "nnue-validation"
+    ],
+    "forbiddenRoles": [
+      "nnue-test",
+      "hce-validation",
+      "hce-test"
+    ],
+    "innerSplit": "Existing unchanged sha256 chessy-h4-v2-inner-20260915 NUL positionFamily modulo5 ==0; source/family disjoint assertions. 6614 reused inner-validation rows. Frozen development checkpoint trained on only inner-training; final checkpoint is prior v4 full shared-train refit840.",
+    "caveat": "Both inner and outer NNUE validation are repeatedly exposed development data. Expanded HCE was fitted on inner labels; development selection is exploratory, not fresh validation. No new labels. The sealed 2331-row NNUE test is not decoded by this screen."
+  },
+  "configurations": [
+    {
+      "id": "hard-4",
+      "kind": "hard",
+      "threshold": 4
+    },
+    {
+      "id": "hard-6",
+      "kind": "hard",
+      "threshold": 6
+    },
+    {
+      "id": "hard-8",
+      "kind": "hard",
+      "threshold": 8
+    },
+    {
+      "id": "smooth-2-8",
+      "kind": "smooth",
+      "lo": 2,
+      "hi": 8
+    },
+    {
+      "id": "smooth-4-10",
+      "kind": "smooth",
+      "lo": 4,
+      "hi": 10
+    },
+    {
+      "id": "smooth-6-12",
+      "kind": "smooth",
+      "lo": 6,
+      "hi": 12
+    }
+  ],
+  "inference": {
+    "phase": "p=min(24,N+B+2R+4Q), both colors. Existing phase bucket endgame is p<=6; opening p>=18.",
+    "hard": "expanded if p<=threshold; pure neural otherwise.",
+    "smooth": "w=clamp(p-lo,0,hi-lo), d=hi-lo; float=(w*neural+(d-w)*expanded)/d; integer=floor((2*(w*neural+(d-w)*expanded)+d)/(2*d)). Signed white-perspective ties toward positive infinity; neural evaluator retains own existing STM rounding before blend.",
+    "overflow": "All integer components abs<=10000; d<=24, so twice weighted numerator plus d has abs<=480024 and fits signed int32. Neural preexisting int32/int64 bounds remain checked by independent BigInt model decoder.",
+    "parameterBytes": 12392,
+    "expandedCoefficients": 965,
+    "sizeCaveat": "Neural parameter bytes alone exclude HCE coefficients, evaluator code and packaged WASM. Actual runtime size and cost are separate gates; no production integration authorized by an offline loss result."
+  },
+  "selection": {
+    "eligibility": "All six models must pass numerical parity/float/score guards or reject screen. Candidate needs same shipped-only inner phase guard (>=100 per phase and CE<=1.01 comparator); expanded HCE inner loss diagnostic only because fitted in-sample.",
+    "objective": "Minimum exact integer inner cross entropy among phase-eligible six; ties in listed order. No threshold extension, fitting, retraining or model seed/budget selection.",
+    "freeze": "Freeze chosen config and inherited final binary SHA in immutable decision before decoding nnue-validation; one outer candidate only, no reselection.",
+    "outerGuards": "Unchanged util.guard against both shipped and expanded HCE: >=0.5% relative aggregate CE improvement; MAE/RMSE<=1.02 baseline; p99 absolute cp error<=1.05 baseline; each coarse phase >=100 rows and CE<=1.01 baseline.",
+    "stop": "Any outer failure keeps test sealed. Success marks eligibility for separately invoked dataset-scoped one-shot test with unchanged v1 bootstrap guards. This executable contains no test decoder; root restores legacy state before any future opening."
+  },
+  "ablations": {
+    "where": "All six gate variants plus shipped, expanded and pure neural on reused inner; sole selected hybrid on outer with baselines for its mandatory guards. No alternate gate scored on outer.",
+    "components": "For selected gate on inner: hybrid, shipped-only, expanded-only, pure-neural, gated-neural with shipped fallback, expanded-base-plus-gated neural residual. Last component ablation changes residual baseline semantics and is diagnostic only, never eligible.",
+    "coverage": "Publish counts for every material phase and potential <=3/4/5/6/7-piece coverage overall/endgame on allowed scored roles. Piece count is upper bound on Syzygy coverage; castling/material constraints not adjudicated.",
+    "gateTransition": "For each inner row freeze both component cp and scan adjacent phase0..24. Report max/p95/p99 gate-only jump. Separately synthetic exhaustive signed rounding, endpoints, monotonicity, hard boundary and bound tests; no claim that synthetic jumps equal legal-move transitions."
+  },
+  "numericalGuards": {
+    "maximumAbsFloatDifferenceCp": 5,
+    "maximumMeanAbsFloatDifferenceCp": 1,
+    "maximumAbsoluteScoreCp": 10000,
+    "integerMismatches": 0,
+    "parity": "All six hybrid predictions and pure-neural reference on every inner-validation row; one selected model on every outer row; independent JS BigInt blend and neural arithmetic, independent FEN phase."
+  },
+  "execution": {
+    "trainingFits": 0,
+    "paidSpendPlannedUsd": 0,
+    "newLabels": 0,
+    "noReplace": "Contract-scoped run-started and selection/validation state plus no-replace artifacts. Fatal error after admission consumes screen; no score-driven retries. Input hashes rechecked before every publication. Scope implementation must be committed/unchanged; unrelated research files may proceed concurrently.",
+    "publication": "Only code, exact preregistration, weight-free aggregate JSON/Markdown in Git; no raw source rows or weights. Checkpoints and state separately preserved.",
+    "acceptance": "This is offline development research. Formal family/estimator acceptance #175, runtime/device gate #84, equal-time search strength, licensing, production size and shipping review remain separate. Plateau of six gates is finite grid exhaustion, not universal saturation."
+  },
+  "recovery": {
+    "failedExecutionHead": "d94e95b",
+    "failedContractSha256": "b5bd9d7509a5bf504d8c26b211c340939a914f7fac9480b765353ace1e159b36",
+    "failure": "Integral-valued float64 frozen expanded-HCE comparator was rejected by integer-only blend input validation before any gate metric, selection or outer decode. Shared-train labels were decoded. Original contract and run marker remain consumed and unmodified.",
+    "change": "Verify comparator arrays are finite, exact integral, shape matches role rows and absolute cp<=10000; convert to int64. Keep same six gates, inherited models, selection and guards. New run is separately registered; no score-driven change."
+  }
+}

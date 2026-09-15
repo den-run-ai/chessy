@@ -1,0 +1,74 @@
+{
+  "authenticatedCompleteGameFiles": 338,
+  "causeEstablished": false,
+  "engineSearchesRerun": 0,
+  "evidence": {
+    "hybrid-match-optimized-v1-decision.json": {
+      "bytes": 3195,
+      "sha256": "d8f6f06a7ce6d5e27811f40919604c7027935cff97282903925312e890556b75"
+    },
+    "hybrid-match-v1-registration.json": {
+      "bytes": 139775,
+      "sha256": "db7f95f1cfe2b69dd53aeeb0a7faf0d66e8ac1a26d03ee7cdf5560fd346c0fbc"
+    },
+    "hybrid-match-v1-run/raw-manifest.json": {
+      "bytes": 71664,
+      "sha256": "0bbb1541661338b65b337ce57be44897e2a428ff1f3fa237254db7ca103feaac"
+    },
+    "hybrid-match-v1-run/summary.json": {
+      "bytes": 534,
+      "sha256": "2e5937731e5bc33edf7a99f23adbbf083e3bffcd7d3411386cfd39f9753ee155"
+    },
+    "hybrid-matches-independent-audit.json": {
+      "bytes": 115973,
+      "sha256": "09842dcc47a71445a6c7fbd3302b087f8bd0b4b58611957c62676e5b9090559e"
+    }
+  },
+  "executionReceiptsCompletedGames": 400,
+  "formalPass": false,
+  "gameScores": null,
+  "gamesScored": 0,
+  "optimizedFollowup": {
+    "decision": {
+      "gameOutcomesUsed": false,
+      "selected": null,
+      "variants": {
+        "cached": {
+          "eligible": false,
+          "medianElapsedMs": 18.864276500000415,
+          "medianPairedNpsRatio": 1.0040186358399916,
+          "phaseMedianPairedNpsRatios": {
+            "endgame": 0.9844403789859553,
+            "middlegame": 1.032383004763229,
+            "opening": 0.9974852159313272
+          }
+        },
+        "fused": {
+          "eligible": false,
+          "medianElapsedMs": 17.1070950000003,
+          "medianPairedNpsRatio": 1.0041797588244454,
+          "phaseMedianPairedNpsRatios": {
+            "endgame": 1.0032872499778307,
+            "middlegame": 1.2090255927360398,
+            "opening": 0.9874236237603131
+          }
+        }
+      }
+    },
+    "gamesExecuted": 0,
+    "status": "SKIPPED_NO_ELIGIBLE_IMPLEMENTATION"
+  },
+  "paidSpendUsd": 0,
+  "plannedGames": 400,
+  "researchOnly": true,
+  "schema": "chessy.hybrid-development-match-public-results.v1",
+  "separateRecovery": {
+    "completedGames": 400,
+    "file": "hybrid-match-recovery-results-2026-09.json",
+    "independentAuditStatus": "PASS",
+    "originalBatchContributesScores": false
+  },
+  "shippingOrEloClaimAllowed": false,
+  "status": "INVALID_RAW_EVIDENCE",
+  "truncatedGameFiles": 62
+}
