@@ -7,6 +7,29 @@ const assert = require('assert/strict');
 const m = require('./engine-signatures-v2.js');
 const ROOT = path.resolve(__dirname, '..');
 const BASE = 'd56a745c3bdb373e9fa23fca0d48b2b6e9f21114';
+// Mechanism fixtures belong to the immutable source baseline, regardless of
+// whichever reviewed runtime the consuming checkout currently ships.
+const BASE_BYTES = cp.execFileSync('git', ['--no-replace-objects', '-C', ROOT, 'show', BASE + ':assets/chessy-ai-fast.wasm']);
+const LEGACY_MANIFEST = Buffer.from(m.json({
+  schema: 1, kind: 'legacy-r69-behavior', fixture: m.LEGACY,
+  fixtureSha256: 'd500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b',
+  moduleSha256: '57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f'
+}));
+// Mutation regression: the entire suite must work when the runtime pointer
+// selects v2 and current module bytes differ. Only reads are substituted;
+// neither the actual active pointer nor the production file is modified.
+const originalRead = fs.readFileSync;
+const rotatedPointer = Buffer.from(m.json({ schema: 1, kind: 'reviewed-abi-v2', evidenceSha256: 'a'.repeat(64) }));
+const rotatedModule = Buffer.concat([BASE_BYTES, Buffer.from([0, 1, 0])]); // valid empty custom section
+fs.readFileSync = function (filename, options) {
+  const resolved = typeof filename === 'string' ? path.resolve(filename) : null;
+  const replacement = resolved === path.join(ROOT, m.ACTIVE) ? rotatedPointer :
+    resolved === path.join(ROOT, 'assets/chessy-ai-fast.wasm') ? rotatedModule : null;
+  if (!replacement) return originalRead.apply(this, arguments);
+  const encoding = typeof options === 'string' ? options : options && options.encoding;
+  return encoding ? replacement.toString(encoding) : Buffer.from(replacement);
+};
+
 let count = 0;
 function test(name, fn) { fn(); count++; console.log('ok ' + name); }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-signature-tests-'));
@@ -16,6 +39,11 @@ try {
   git('checkout', '--quiet', '--detach', BASE);
   git('config', 'user.name', 'Signature mechanism test');
   git('config', 'user.email', 'signature-test@invalid.example');
+  test('simulated current runtime is rotated without changing fixed mechanism fixtures', () => {
+    assert.equal(JSON.parse(fs.readFileSync(path.join(ROOT, m.ACTIVE))).kind, 'reviewed-abi-v2');
+    assert.notEqual(m.sha(fs.readFileSync(path.join(ROOT, 'assets/chessy-ai-fast.wasm'))), m.sha(BASE_BYTES));
+    assert.equal(JSON.parse(LEGACY_MANIFEST).kind, 'legacy-r69-behavior');
+  });
   test('immutable historical fixture and generator', () => m.historical(ROOT));
   test('complete corpus and unique IDs', () => {
     const cases = m.corpus(); assert.equal(cases.length, 144);
@@ -29,8 +57,8 @@ try {
       assert.equal(m.sha(fs.readFileSync(path.join(tmp, m.LEGACY))), m.sha(fs.readFileSync(path.join(ROOT, m.LEGACY))));
     } finally { fs.unlinkSync(wasmPath); }
   });
-  test('legacy generator still rejects current non-r69 bytes', () => {
-    const result = cp.spawnSync(process.execPath, ['test/gen-wasm-signatures.js', '--wasm', 'assets/chessy-ai-fast.wasm'], { cwd: ROOT, encoding: 'utf8' });
+  test('legacy generator still rejects frozen ABI-v2 non-r69 bytes', () => {
+    const result = cp.spawnSync(process.execPath, ['test/gen-wasm-signatures.js', '--wasm', 'assets/chessy-ai-fast.wasm'], { cwd: tmp, encoding: 'utf8' });
     assert.equal(result.status, 1); assert.match(result.stderr, /refusing to label non-r69 bytes/);
   });
   test('commit aliases and abbreviated references rejected', () => {
@@ -62,7 +90,7 @@ try {
     try { assert.throws(() => m.pinnedEnvironment(), /clear ambient RUSTC_WRAPPER/); }
     finally { if (old === undefined) delete process.env.RUSTC_WRAPPER; else process.env.RUSTC_WRAPPER = old; }
   });
-  const bytes = fs.readFileSync(path.join(ROOT, 'assets/chessy-ai-fast.wasm'));
+  const bytes = BASE_BYTES;
   const cases = m.signatures(bytes);
   test('mate tagging follows the shipped million-point score encoding', () => {
     for (const score of [0, 29997, -40000, 998999]) assert.equal(m.mate(score), null);
@@ -97,7 +125,7 @@ try {
     for (const value of ['../x', m.LEGACY, 'test/fixtures/engine-signatures/wasm-v2-abc.json']) assert.throws(() => m.evidencePath(value));
   });
   fs.mkdirSync(path.join(tmp, path.dirname(m.ACTIVE)), { recursive: true });
-  const manifest = fs.readFileSync(path.join(ROOT, m.ACTIVE));
+  const manifest = LEGACY_MANIFEST;
   fs.writeFileSync(path.join(tmp, m.ACTIVE), manifest);
   test('legacy active contract verifies exact shipped module and 144 cases', () => assert.equal(m.verify(tmp).cases, 144));
   test('candidate cannot claim its own approval in a JSON field', () => {
@@ -152,4 +180,4 @@ try {
     assert.throws(() => m.verify(tmp), /immutable r69 fixture changed/);
   });
   console.log(count + ' mechanism tests passed; no candidate activated');
-} finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+} finally { fs.readFileSync = originalRead; fs.rmSync(tmp, { recursive: true, force: true }); }
