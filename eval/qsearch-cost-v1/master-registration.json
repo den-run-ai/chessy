@@ -1,0 +1,120 @@
+{
+  "schema": "chessy.qsearch-cost.benchmark.v1",
+  "mode": "master",
+  "created": "2026-09-15T08:49:12.450Z",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "selectionAllowed": false,
+  "positions": [
+    {
+      "name": "opening (Ruy Lopez)",
+      "fen": "r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 5"
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "fen": "rnbq1rk1/pppp1ppp/5n2/b3p3/4P3/P1N2N2/1PPP1PPP/R1BQKB1R w KQ - 3 5"
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "fen": "r2q1rk1/pp1bppbp/2np1np1/8/3NP3/2N1B3/PPPQBPPP/R4RK1 w - - 0 1"
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "fen": "r4rk1/pppqbppp/2n1b3/3np3/8/2NP1NP1/PP1BPPBP/R2Q1RK1 b - - 0 1"
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "fen": "r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1"
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "fen": "r1bq1rk1/pp3ppp/2n2n2/2p1p3/3pP3/3P2P1/PPP1N1BP/R1BQ1RK1 b - - 0 1"
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "fen": "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "fen": "r3k2r/pppbbppp/2n2q1P/1P2p3/3pn3/BN2PNP1/P1PPQPB1/R3K2R b KQkq - 0 1"
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "fen": "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1"
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "fen": "2r5/R7/8/8/8/8/1p6/1k1K4 b - - 0 1"
+    },
+    {
+      "name": "minor-piece ending",
+      "fen": "8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1"
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "fen": "8/4k1p1/2b2p2/8/4N3/4P1P1/3K1P2/8 b - - 0 1"
+    },
+    {
+      "name": "promotion race",
+      "fen": "8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1"
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "fen": "8/1P3k2/8/8/8/8/1p3K2/8 b - - 0 1"
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "fen": "8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1"
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "fen": "8/8/4k3/4p3/4P3/4K3/8/8 b - - 0 1"
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "fen": "r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27"
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "fen": "2r4k/p5p1/3b3p/1p5b/3Ppn1q/1B2N3/1PPQ1PP1/R3R1K1 w - - 0 27"
+    }
+  ],
+  "options": {
+    "maxDepth": 30,
+    "nodeLimits": [
+      0
+    ],
+    "timeMs": 5000,
+    "quiesce": true,
+    "repetitions": 2
+  },
+  "warmup": {
+    "nodeLimit": 10000,
+    "maxDepth": 111,
+    "timeMs": 0,
+    "quiesce": true,
+    "rounds": 2
+  },
+  "order": "rotate engine order by (position index + repetition) modulo engine count",
+  "modules": [
+    {
+      "path": "/workspace/scratch/ec6584e1ca6d/chessy-qsearch/assets/chessy-ai-fast.wasm",
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+    },
+    {
+      "path": "/workspace/scratch/ec6584e1ca6d/qsearch-checks-frozen/dist/chessy-ai-fast.wasm",
+      "sha256": "54c29d8592a1deefc49618fa99bc3dda496b08100ab16fa8d437241967d79dc0"
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "tools/search/qsearch-bench.js",
+      "sha256": "a07d86c6a5d771205f05890efb2a9399036be931cca7c591a1683a2b030e57a8"
+    },
+    {
+      "path": "experiments/wasm/bench.js",
+      "sha256": "4a6fe7b8c48dc4c4f710c944ab096edbe79f50c2e67c6642b0b34822177a1292"
+    }
+  ]
+}
