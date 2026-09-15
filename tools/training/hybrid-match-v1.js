@@ -23,6 +23,24 @@ function same(a, b, label) { check(N.stable(a) === N.stable(b), label + ' differ
 function identity(file) { const bytes = fs.readFileSync(file); return { path: path.resolve(file), sha256: N.sha(bytes), bytes: bytes.length }; }
 function verified(info) { const s = N.snapshot(info.path, info.sha256); check(s.bytes.length === info.bytes, 'artifact byte size differs'); return s; }
 function json(file) { return JSON.parse(fs.readFileSync(file)); }
+// Hash and parse one retained snapshot; never reopen a receipt for its value.
+function receipt(file) { const bytes = fs.readFileSync(file); return { info: { path: path.resolve(file), sha256: N.sha(bytes), bytes: bytes.length }, value: JSON.parse(bytes) }; }
+function validateReceipts(r) {
+  const offlineValue = JSON.parse(verified(r.offline).bytes), runtimeValue = JSON.parse(verified(r.runtime).bytes);
+  check(r.evidence.length === 1, 'exact runtime source receipt required');
+  verified(r.evidence[0]);
+  validateReceiptValues(offlineValue, runtimeValue, r.evidence[0], r.modules);
+  check(r.offlineTestEligible === offlineValue.testEligible, 'offline eligibility differs');
+}
+function validateReceiptValues(offlineValue, runtimeValue, source, modules) {
+  check(['chessy.hybrid-screen.v1','chessy.hybrid-screen.v1b'].includes(offlineValue.schema) && typeof offlineValue.testEligible === 'boolean', 'frozen offline screen receipt required');
+  check(runtimeValue.schema === 'chessy.hybrid-runtime-cost.v1' && runtimeValue.status === 'completed' && runtimeValue.researchOnly === true &&
+    runtimeValue.parityMismatches === 0 && runtimeValue.sourceReceiptSha256 === source.sha256 &&
+    runtimeValue.modelSha256 === offlineValue.decision.finalBinarySha256, 'bound research runtime parity receipt required');
+  same(runtimeValue.config, offlineValue.decision.config, 'runtime/frozen hybrid gate');
+  for (const side of ['shipped', 'hybrid', 'expanded']) check(runtimeValue.modules[side].sha256 === modules[side].sha256, 'runtime receipt module differs: ' + side);
+  check(Array.isArray(runtimeValue.parity) && runtimeValue.parity.length > 0, 'raw runtime parity evidence required');
+}
 function newJson(file, value) { fs.writeFileSync(file, N.stable(value) + '\n', { flag: 'wx' }); return identity(file); }
 function openings() {
   check(Openings.length === 100, 'development opening count changed');
@@ -45,15 +63,10 @@ function register(args) {
   const protocol = json(PROTOCOL_PATH), modules = {};
   for (const side of ['shipped', 'hybrid', 'expanded']) modules[side] = identity(args[side]);
   check(new Set(Object.values(modules).map(x => x.sha256)).size === 3, 'all three evaluator modules must differ');
-  const offline = identity(args['offline-report']), runtime = identity(args['runtime-receipt']);
-  const offlineValue = json(offline.path), runtimeValue = json(runtime.path), source = identity(args['runtime-source']);
-  check(['chessy.hybrid-screen.v1','chessy.hybrid-screen.v1b'].includes(offlineValue.schema) && typeof offlineValue.testEligible === 'boolean', 'frozen offline screen receipt required');
-  check(runtimeValue.schema === 'chessy.hybrid-runtime-cost.v1' && runtimeValue.status === 'completed' && runtimeValue.researchOnly === true &&
-    runtimeValue.parityMismatches === 0 && runtimeValue.sourceReceiptSha256 === source.sha256 &&
-    runtimeValue.modelSha256 === offlineValue.decision.finalBinarySha256, 'bound research runtime parity receipt required');
-  same(runtimeValue.config, offlineValue.decision.config, 'runtime/frozen hybrid gate');
-  for (const side of ['shipped', 'hybrid', 'expanded']) check(runtimeValue.modules[side].sha256 === modules[side].sha256, 'runtime receipt module differs: ' + side);
-  check(Array.isArray(runtimeValue.parity) && runtimeValue.parity.length > 0, 'raw runtime parity evidence required');
+  const offlineSnapshot = receipt(args['offline-report']), runtimeSnapshot = receipt(args['runtime-receipt']);
+  const offline = offlineSnapshot.info, runtime = runtimeSnapshot.info;
+  const offlineValue = offlineSnapshot.value, runtimeValue = runtimeSnapshot.value, source = identity(args['runtime-source']);
+  validateReceiptValues(offlineValue, runtimeValue, source, modules);
   const evidence = [source];
   const rows = openings(), tasks = makeTasks(rows, protocol);
   check(tasks.length === protocol.totalGames, 'planned count differs');
@@ -77,6 +90,8 @@ function preflight(file, digest) {
   check(r.tasks.length === 400, 'complete 400-game schedule required');
   same(r.implementation.map(x => x.path), IMPLEMENTATION, 'implementation inventory');
   for (const info of [...r.implementation, ...Object.values(r.modules), r.offline, r.runtime, ...r.evidence]) verified(info);
+  validateReceipts(r);
+  check(r.noRerunLedger === path.join(path.dirname(r.offline.path), '.hybrid-match-v1.started.json'), 'canonical one-shot ledger differs');
   check(process.versions.node === r.environment.node && process.versions.v8 === r.environment.v8 && process.platform === r.environment.platform && process.arch === r.environment.arch, 'registered runtime changed');
   return r;
 }
@@ -259,4 +274,4 @@ if(require.main===module){
     .then(result=>{console.log(JSON.stringify(result));if(result.status==='failed')process.exitCode=1;})
     .catch(error=>{console.error('hybrid-match-v1: '+error.message);process.exitCode=1;});
 }
-module.exports={openings,makeTasks,auditGame,analyzeAudited,parseLines,register,preflight,args,auditWarmup};
+module.exports={receipt,validateReceipts,openings,makeTasks,auditGame,analyzeAudited,parseLines,register,preflight,args,auditWarmup};

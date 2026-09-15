@@ -1,0 +1,11 @@
+{
+  "schema": "chessy.hybrid-receipt-snapshot-review.v1",
+  "status": "PASS",
+  "originalRegistrationSha256": "db7f95f1cfe2b69dd53aeeb0a7faf0d66e8ac1a26d03ee7cdf5560fd346c0fbc",
+  "validatedPinnedOfflineRuntimeSourceAndModuleCrossBindings": true,
+  "observedReceiptBindingMismatch": false,
+  "gameSearchesExecuted": 0,
+  "paidComputeUsd": 0,
+  "historicalSourceAndArtifactsModified": false,
+  "limits": "Revalidates retained receipt bytes and semantic cross-bindings; cannot establish absence of a historical file-replacement race. No game rerun or strength reclassification."
+}

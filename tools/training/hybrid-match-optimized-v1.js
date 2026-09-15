@@ -45,10 +45,11 @@ function decision(report,protocol){
 function tasks(openings,protocol){return H.makeTasks(openings,protocol).filter(t=>t.arm==='hybrid');}
 function register(a){
   const protocol=read(CONTRACT),original=H.preflight(a['original-registration'],a['original-registration-sha256']);
-  const originalRegistration=identity(a['original-registration']),runtime=identity(a['mechanism-report']),source=identity(a['mechanism-source']);
-  const report=read(runtime.path),picked=decision(report,protocol);
+  const originalRegistration=identity(a['original-registration']),runtimeSnapshot=H.receipt(a['mechanism-report']),source=identity(a['mechanism-source']);
+  check(originalRegistration.sha256===a['original-registration-sha256'],'original registration changed');
+  const runtime=runtimeSnapshot.info,report=runtimeSnapshot.value,picked=decision(report,protocol);
   check(report.sourceReceiptSha256===source.sha256,'mechanism source receipt differs');
-  const originalRuntime=read(original.runtime.path);
+  const originalRuntime=JSON.parse(verify(original.runtime).bytes);
   check(report.priorSourceReceiptSha256===originalRuntime.sourceReceiptSha256&&report.modelSha256===originalRuntime.modelSha256&&
     report.expandedWeightsSha256===originalRuntime.expandedWeightsSha256,'frozen evaluator ancestry differs');
   same(report.config,originalRuntime.config,'frozen model gate');
@@ -68,8 +69,19 @@ function preflight(file,digest){
   const r=JSON.parse(N.snapshot(file,digest).bytes);check(r.schema==='chessy.hybrid-optimized-development-match-registration.v1'&&r.researchOnly===true&&r.formalPass===false&&
     r.shippingOrEloClaimAllowed===false,'research extension registration required');same(r.protocol,read(CONTRACT),'prospective protocol');
   const original=H.preflight(r.originalRegistration.path,r.originalRegistrationSha256);
+  check(r.originalRegistration.sha256===r.originalRegistrationSha256,'original registration identity differs');
+  check(r.noRerunLedger===path.join(path.dirname(original.offline.path),'.hybrid-match-optimized-v1.started.json'),'canonical one-shot extension ledger differs');
+  same(r.implementation.map(info=>info.path),[...original.implementation.map(info=>info.path),__filename,CONTRACT],'implementation inventory');
   same(r.openings,original.openings,'original exposed openings');same(r.tasks,tasks(r.openings,r.protocol),'complete200game schedule');
-  same(r.decision,decision(read(r.runtime.path),r.protocol),'prospective mechanism selection');check(r.decision.selected,'no eligible implementation');
+  const report=JSON.parse(verify(r.runtime).bytes),source=verify(r.source),originalRuntime=JSON.parse(verify(original.runtime).bytes);
+  same(r.decision,decision(report,r.protocol),'prospective mechanism selection');check(r.decision.selected,'no eligible implementation');
+  check(report.sourceReceiptSha256===source.sha256&&report.priorSourceReceiptSha256===originalRuntime.sourceReceiptSha256&&
+    report.modelSha256===originalRuntime.modelSha256&&report.expandedWeightsSha256===originalRuntime.expandedWeightsSha256,'frozen evaluator ancestry differs');
+  same(report.config,originalRuntime.config,'frozen model gate');
+  check(report.modules.original.sha256===original.modules.hybrid.sha256&&report.modules.shipped.sha256===original.modules.shipped.sha256&&
+    report.modules[r.decision.selected].sha256===r.modules.hybrid.sha256,'mechanism module identity differs');
+  same(r.modules.shipped,original.modules.shipped,'original shipped module');
+  check(r.candidateAdvancementAllowed===false&&r.offlineTestEligible===original.offlineTestEligible,'research eligibility differs');
   for(const info of [...r.implementation,...Object.values(r.modules),r.runtime,r.source,r.originalRegistration])verify(info);
   return r;
 }
@@ -117,4 +129,4 @@ function args(argv){const command=argv[0],names=command==='register'?['original-
 if(require.main===module)(async()=>{const a=args(process.argv.slice(2));if(a.command==='register')return register(a);if(a.command==='run')return run(a);
   return audit(preflight(a.registration,a['registration-sha256']),a.output,read(path.join(a.output,'raw-manifest.json')));})().then(value=>{
     console.log(JSON.stringify(value));if(value.status==='failed')process.exitCode=1;}).catch(error=>{console.error('hybrid-match-optimized-v1: '+error.message);process.exitCode=1;});
-module.exports={decision,tasks,median,preflight,audit};
+module.exports={register,decision,tasks,median,preflight,audit};
