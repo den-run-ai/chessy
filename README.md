@@ -224,6 +224,11 @@ fixture but intentionally skips the exact r69 search signature; check out the
 recorded commit to reproduce that historical result. Its pinned Stockfish Lite
 comparison covers four forced root moves only, not every legal move.
 
+The [versioned engine-signature mechanism](experiments/wasm/SIGNATURE-ROTATION.md)
+prepares reproducibly rebuilt old/new contracts and a complete 144-case diff.
+Activation requires evidence already present in the trusted base; this mechanism
+retains the r69 behavior and does not authorize a new evaluator or search policy.
+
 The engine measurement tools below are **historical v1 infrastructure**.
 Do not dispatch them for a new candidate: Rust/WASM ignores the four seed
 slots, so 800 games repeat only 100 opening pairs. The v2 execution work
