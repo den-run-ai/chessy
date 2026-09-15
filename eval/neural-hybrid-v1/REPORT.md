@@ -1,6 +1,6 @@
 # Frozen H8 / expanded HCE hybrid — 2026-09-15
 
-**The smooth hybrid passes every unchanged guard on reused outer validation. The sealed test remains unopened at this screen stage.**
+**The frozen smooth hybrid passes the one-shot sealed test and every unchanged numerical, error and phase guard.** It improves test teacher loss by **3.528% versus shipped HCE** and **2.304% versus expanded HCE**; this is offline evidence, not an Elo result.
 
 The selected evaluator uses expanded HCE when material phase is 6 or lower, the frozen H8 evaluator at phase 12 or higher, and a linear blend between them. This keeps the expanded-HCE score exactly in the registered endgame category. No model was retrained, no new labels were collected for this screen, and paid compute was **$0**.
 
@@ -38,6 +38,27 @@ The hybrid improves aggregate CE **2.686% versus shipped** and **1.968% versus e
 
 Outer coverage: 332 positions use expanded HCE only, 310 use the blend, and 1,732 use H8 only. On the 332 endgames, hybrid and expanded-HCE scores are identical by construction.
 
+## One-shot sealed test
+
+After the development gate and independent screen audit passed, the exact selected gate and final H8 digest were bound in a [separate test preregistration](../training/hybrid-test-v1.json). The 2,331-row test was opened once after the shared dataset marker was reserved. No model, threshold or guard changed after opening.
+
+| Evaluator | Test teacher CE | Gain vs shipped | Test endgame CE |
+| --- | ---: | ---: | ---: |
+| shipped-hce | 0.398796661 | 0.000% | 0.297950636 |
+| frozen-expanded-hce | 0.393803070 | 1.252% | 0.288541685 |
+| smooth-6-12 hybrid | 0.384728907 | 3.528% | 0.288541685 |
+
+| Comparator | Hybrid − comparator mean CE | Family-bootstrap 95% CI |
+| --- | ---: | ---: |
+| frozen-expanded-hce | -0.009074163 | [-0.011976511, -0.006219101] |
+| shipped-hce | -0.014067754 | [-0.017553802, -0.010558250] |
+
+Both confidence intervals are strictly below zero using the original 2,000 family-bootstrap draws, fixed seed 1050915 and 2,299 test families. Every original aggregate CE, MAE, RMSE, p99, phase coverage and phase CE guard passes against both comparators. Endgame scores remain exactly the expanded comparator across all 349 test endgames.
+
+Independent JavaScript integer parity found **zero mismatches** on all 2,331 test rows. Maximum float/integer difference was **0.747 cp**; mean difference was 0.218 cp. Test receipt SHA-256: `2006086e8a42333dc7c36d15a09b1e6fdcb027adce32756bfbcd0b78145a2991`. The test opening is consumed and cannot be reused for another selected candidate.
+
+The test used zero training fits and $0 paid compute. A separate completed-test audit **passed**, independently reconstructing test predictions, every metric and original guard, and both bootstrap intervals. The consumed opening and completion markers and exact source/model/data inputs were authenticated. Its SHA-256 is `8cfae1236fb003cc2b58cc1db9cf91b90ef50d59912880a3a7e97d8f5aba27e7`; counts and audit findings are preserved in the aggregate evidence.
+
 ## Component ablations on reused inner data
 
 | Evaluator / component change | Inner CE | Endgame CE |
@@ -65,8 +86,8 @@ An independent audit reconstructed **51,046 outputs** with **zero mismatches**, 
 
 These are only piece-count upper bounds on potential Syzygy coverage. Castling rights and supported material combinations were not adjudicated. Even seven-piece coverage reaches only 56 outer positions overall and 55 of the 332 endgames; exact small tables cannot replace most of this endgame category.
 
-## Limits and next gate
+## Limits and remaining gates
 
-Both inner and outer results are reused development evidence. Passing their guards qualifies the fixed candidate for a separately registered one-shot sealed test with the original two-comparator bootstrap and quality requirements; it does not establish Elo or justify shipping. The 12,392 neural parameter bytes exclude expanded-HCE coefficients, executable evaluator code and packaged WASM. Runtime size, equal-time search strength, licensing and formal acceptance remain separate gates.
+Inner and outer results are reused development evidence. The subsequent one-shot test now provides held-out teacher-loss evidence for this frozen hybrid, with both original bootstrap and quality requirements satisfied. It does not establish Elo or justify shipping. The 12,392 neural parameter bytes exclude expanded-HCE coefficients, executable evaluator code and packaged WASM. Runtime size, equal-time search strength, licensing and formal acceptance remain separate gates.
 
 The six-gate search completed in 31.617 seconds with zero training fits and $0 paid compute. Exhausting this registered grid is not universal model saturation.
