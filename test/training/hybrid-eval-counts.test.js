@@ -63,11 +63,80 @@ try {
   assert.throws(()=>cached.child(study),/completed and retired/);
 } finally {fs.rmSync(temporary,{recursive:true,force:true});}
 
-// Exact historical text remains bound to the public pre-execution registration.
-const historical=path.resolve(__dirname,'../../tools/training/hybrid-eval-counts-historical-v1.js.txt');
-const digest=crypto.createHash('sha256').update(fs.readFileSync(historical)).digest('hex');
+// The archived source is inert JSON data, including when Node accepts the
+// JSON entrypoint. Its decoded bytes are never compiled, required or evaluated.
+const historical=path.resolve(__dirname,'../../tools/training/hybrid-eval-counts-historical-v1.source.json');
+const historicalBytes=fs.readFileSync(historical),archive=JSON.parse(historicalBytes);
+const decoded=Buffer.from(archive.sourceBase64,'base64');
+const digest=crypto.createHash('sha256').update(decoded).digest('hex');
 assert.equal(digest,'42aa8eddbca4d1597710de4f971339d4f0523ae7f6f1c213468b51072f157aff');
-assert.equal(fs.statSync(historical).mode&0o111,0);
-const registration=require('../../eval/hybrid-eval-counts-v1/registration.json');
-assert.equal(registration.dependencies.find(x=>x.path==='tools/training/hybrid-eval-counts.js').sha256,digest);
-console.log('Counts-only inventory, parity, phase sums, archived-arm boundary and retired entrypoints PASS');
+assert.equal(archive.sha256,digest);assert.equal(archive.bytes,decoded.length);
+assert.deepEqual(require(historical),archive);
+assert(Object.values(require(historical)).every(value=>typeof value!=='function'));
+for(const key of disabled)assert.equal(Object.hasOwn(require(historical),key),false);
+const inactive=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-counts-inert-'));
+try {
+  // Unknown source extensions used to execute the preserved runner. The new
+  // JSON either loads as data or fails parsing; both outcomes must be inert.
+  for(const suffix of ['.source.json','.js','.txt']) {
+    const copied=path.join(inactive,'archive'+suffix);fs.writeFileSync(copied,historicalBytes);
+    const destination=path.join(inactive,'unwanted-study');
+    const output=spawnSync(process.execPath,[copied,'prepare',destination,'missing','missing'],{encoding:'utf8',timeout:2000,cwd:inactive});
+    assert([0,1].includes(output.status),output.stderr);assert.equal(output.stdout,'');
+    if(output.status===1)assert.match(output.stderr,/SyntaxError/);
+    assert.equal(fs.existsSync(destination),false);
+  }
+} finally {fs.rmSync(inactive,{recursive:true,force:true});}
+assert.equal(fs.existsSync(path.resolve(__dirname,'../../tools/training/hybrid-eval-counts-historical-v1.js.txt')),false);
+
+// Read each committed evidence file once; validate the exact same retained
+// bytes and public arithmetic that CI will protect, before mutation fixtures.
+const {validatePublishedEvidence}=require('../../tools/training/hybrid-eval-counts-evidence');
+const evidenceDirectory=path.resolve(__dirname,'../../eval/hybrid-eval-counts-v1');
+const evidenceNames=['results.json','selection-receipt.json','independent-audit.json','registration.json','evidence-preservation.json'];
+const evidence=Object.fromEntries(evidenceNames.map(name=>[name,fs.readFileSync(path.join(evidenceDirectory,name))]));
+const verified=validatePublishedEvidence(evidence,historicalBytes);
+assert.equal(verified.totalEvaluationDispatches,224201);assert.equal(verified.totalNodes,786432);
+assert.equal(verified.archivedHybridComparisons,17);assert.equal(verified.phaseCounts.length,25);
+function mutated(name,change,pattern){
+  const copy={...evidence},value=JSON.parse(copy[name]);change(value);
+  copy[name]=Buffer.from(JSON.stringify(value,null,2)+'\n');
+  assert.throws(()=>validatePublishedEvidence(copy,historicalBytes),pattern);
+}
+mutated('results.json',r=>r.perRoot.pop(),/24-root inventory/);
+mutated('results.json',r=>r.perRoot[0].ply++,/selected identity/);
+mutated('results.json',r=>r.perRoot[0].nodes--,/node counters/);
+mutated('results.json',r=>r.perRoot[0].qnodes=17000,/node counters/);
+mutated('results.json',r=>r.perRoot[0].phaseCounts[0]=-1,/phase bins/);
+mutated('results.json',r=>r.perRoot[0].phaseCounts[24]++,/recomputed phase totals/);
+mutated('results.json',r=>r.phaseCounts[24]++,/recomputed phase totals/);
+mutated('results.json',r=>r.dispatchBranches[0].calls++,/branch counts/);
+mutated('results.json',r=>r.dispatchBranches[2].fraction=0.5,/branch counts/);
+mutated('results.json',r=>r.actualNodes--,/actual nodes/);
+mutated('results.json',r=>r.exactArchivedHybridComparisons=24,/parity audit coverage/);
+mutated('results.json',r=>r.complete=false,/complete independent audit/);
+mutated('results.json',r=>r.wallTimeSharesAllowed=true,/research-only claims/);
+mutated('results.json',r=>r.rawResultsSha256='0'.repeat(64),/raw result identity/);
+mutated('results.json',r=>r.unreviewed='extra field',/frozen evidence bytes/);
+mutated('selection-receipt.json',s=>s.selected[1]=s.selected[0],/unique selected identity/);
+mutated('selection-receipt.json',s=>s.selected[0].selectionDigest='0'.repeat(64),/selection digest/);
+mutated('selection-receipt.json',s=>s.selected.reverse(),/selected identity|digest\/order/);
+mutated('selection-receipt.json',s=>s.selected[0].member='wrong.jsonl',/member identity/);
+mutated('selection-receipt.json',s=>s.selected[0].archivedModuleId='candidate',/module role/);
+mutated('selection-receipt.json',s=>s.selected[0].rowSha256='0'.repeat(64),/frozen evidence bytes/);
+mutated('selection-receipt.json',s=>s.options.nodeLimit=8192,/request contract/);
+mutated('selection-receipt.json',s=>s.executionSnapshot.files.pop(),/execution inventory/);
+mutated('independent-audit.json',a=>a.pass=false,/complete independent audit/);
+mutated('independent-audit.json',a=>a.totalEvaluations++,/audit cross-file hash/);
+mutated('registration.json',r=>r.observerSha256='0'.repeat(64),/registration cross-file hash/);
+mutated('evidence-preservation.json',e=>e.zipEntries--,/private archive identity/);
+const coordinated={...evidence},changedAudit=JSON.parse(coordinated['independent-audit.json']),changedResults=JSON.parse(coordinated['results.json']);
+changedAudit.totalEvaluations++;coordinated['independent-audit.json']=Buffer.from(JSON.stringify(changedAudit,null,2)+'\n');
+changedResults.independentAuditSha256=crypto.createHash('sha256').update(coordinated['independent-audit.json']).digest('hex');
+coordinated['results.json']=Buffer.from(JSON.stringify(changedResults,null,2)+'\n');
+assert.throws(()=>validatePublishedEvidence(coordinated,historicalBytes),/audit cross-file hash/);
+const changedArchive={...archive,sourceBase64:archive.sourceBase64.slice(4)};
+assert.throws(()=>validatePublishedEvidence(evidence,Buffer.from(JSON.stringify(changedArchive))),/historical source identity/);
+const omitted={...evidence};delete omitted['results.json'];
+assert.throws(()=>validatePublishedEvidence(omitted,historicalBytes),/complete public evidence inventory/);
+console.log('Counts inventory/parity, retired entrypoints, inert source and committed evidence mutations PASS');

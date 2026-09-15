@@ -76,11 +76,14 @@ CommonJS source bytes to the later pathname reads, and a directory-local
 
 The actual measured attempt used the retained, read-only execution snapshot
 identified by the selection and evidence receipts. That snapshot, its exact
-[historical runner text](../../tools/training/hybrid-eval-counts-historical-v1.js.txt)
+[inert historical source archive](../../tools/training/hybrid-eval-counts-historical-v1.source.json)
 (SHA-256 `42aa8eddbca4d1597710de4f971339d4f0523ae7f6f1c213468b51072f157aff`),
 module registration, raw results and independent audit remain unchanged. No
 search, build, measurement or statistical rerun was performed for this fix.
-The historical text is evidence only and must never be executed.
+The historical source is stored as base64 inside JSON, which Node can only load
+as data or reject. Its decoded byte length and original registration hash are
+verified without evaluating the source. Clearing executable bits or renaming
+JavaScript to `.txt` was insufficient; the initial text copy has been removed.
 
 This one-attempt v1 scope is now retired. The current module keeps only
 read-only selection and result auditors. Every CLI invocation and every former
@@ -89,6 +92,16 @@ inspecting its arguments or loading an engine. These unconditional guards also
 cover copied runners, copied studies, fresh output paths, symlink aliases and
 cached imports whose on-disk entrypoint is replaced and restored. No generic
 launcher or fresh protocol was introduced. CI checks these boundaries and the
-historical source hash alongside the existing count and parity checks. Any
+decoded historical source hash alongside the existing count and parity checks. Any
 future attribution experiment requires a separately reviewed new protocol and
 an implementation that executes the same retained bytes it authenticates.
+
+The CI gate also reads the five committed public evidence JSON files as retained
+bytes. It checks their frozen identities and cross-file hashes, the 24 unique
+ordered salted selection IDs and module roles, all per-root phase bins, doubled
+node totals, endpoint totals/fractions and the preserved independent-audit
+coverage. Mutation tests exercise changed bins, identities, receipt hashes,
+counts, claims and missing files. These public checks do not independently
+replay private search signatures or prove selection from all 24,467 source
+moves; those checks remain in the original preserved private audit. No private
+fitted source or model bytes are needed by CI.

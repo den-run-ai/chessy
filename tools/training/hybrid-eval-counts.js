@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // Read-only auditors for the completed, single-attempt v1 study.
-// The exact executed runner is preserved as historical text; never execute it.
+// The exact executed runner is preserved as inert encoded JSON; never evaluate the decoded bytes.
 const crypto=require('node:crypto'),zlib=require('node:zlib');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const check=(v,m)=>{if(!v)throw Error(m);};
