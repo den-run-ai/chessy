@@ -20,8 +20,11 @@ try {
 
 // Exercise failure capture with synthetic observations; this does not search.
 (async()=>{
-  const B=require('../../tools/search/hash-bench'),Bench=require('../../experiments/wasm/bench');
-  const original=Bench.loadOrdinaryWasmBytes,dir=fs.mkdtempSync(path.join(os.tmpdir(),'hash-bench-test-'));
+  const benchPath=require.resolve('../../experiments/wasm/bench'),originalBench=require(benchPath);
+  const Bench={...originalBench},runnerPath=require.resolve('../../tools/search/hash-bench');
+  const previousRunner=require.cache[runnerPath];
+  require.cache[benchPath].exports=Bench;delete require.cache[runnerPath];
+  const B=require(runnerPath),dir=fs.mkdtempSync(path.join(os.tmpdir(),'hash-bench-test-'));
   try {
     fs.mkdirSync(path.join(dir,'candidate/dist'),{recursive:true});
     const base=path.join(dir,'base.wasm'),candidate=path.join(dir,'candidate/dist/candidate.wasm');
@@ -42,5 +45,9 @@ try {
       if(failure==='signature')assert.equal(saved.rows[1].score,1);else assert.equal(saved.rows[0].ms,null);
     }
     console.log('hash benchmark retains first divergent and invalid timing observations PASS (synthetic; no search)');
-  } finally {Bench.loadOrdinaryWasmBytes=original;fs.rmSync(dir,{recursive:true,force:true});}
+  } finally {
+    require.cache[benchPath].exports=originalBench;
+    if(previousRunner)require.cache[runnerPath]=previousRunner;else delete require.cache[runnerPath];
+    fs.rmSync(dir,{recursive:true,force:true});
+  }
 })().catch(error=>{console.error(error);process.exitCode=1;});
