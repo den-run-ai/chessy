@@ -9,6 +9,16 @@ const ROOT = path.resolve(__dirname, '../..');
 const source = fs.readFileSync(path.join(ROOT, 'experiments/wasm/src/eval.rs'), 'utf8');
 const template = fs.readFileSync(path.join(ROOT, 'tools/training/nnue-phase-runtime.rs.in'), 'utf8');
 const before = Probe.sha(source);
+// Timing fixtures must support game search; raw static parity also deliberately
+// retains the historical adjacent-king mop-up probes separately.
+for (const fen of Probe.FENS) {
+  const features = Reference.parseFen(fen).white;
+  const kingSquares = [5, 11].map(channel => features.filter(index => Math.floor(index / 64) === channel));
+  assert(kingSquares.every(squares => squares.length === 1));
+  const [white, black] = kingSquares.map(squares => squares[0] % 64);
+  assert(Math.max(Math.abs(Math.floor(white / 8) - Math.floor(black / 8)), Math.abs(white % 8 - black % 8)) > 1,
+    'adjacent kings cannot be a search timing fixture');
+}
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-nnue-mechanism-'));
 try {
   for (const hidden of [4, 8]) {

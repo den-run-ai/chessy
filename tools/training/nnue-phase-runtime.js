@@ -30,10 +30,16 @@ const FENS = [
   '8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1',
   '8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1',
   '8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1',
+  '4k3/8/8/8/3R4/8/PP6/4K3 w - - 0 1',
+  '4k3/8/8/8/8/8/PP6/R3K3 w - - 0 1',
+];
+// Historical raw-evaluator fixtures have adjacent kings. Keep them only for
+// static parity of the exact mop-up convention; never use them for search.
+const STATIC_ONLY_FENS = [
   '8/8/8/8/8/8/3k4/R3K3 w - - 0 1',
   '8/8/8/8/8/8/4K3/r3k3 b - - 0 1',
 ];
-const PARITY_FENS = FENS.flatMap(fen => [fen, fen.replace(/ ([wb]) /, (_, t) => t === 'w' ? ' b ' : ' w ')]);
+const PARITY_FENS = [...FENS, ...STATIC_ONLY_FENS].flatMap(fen => [fen, fen.replace(/ ([wb]) /, (_, t) => t === 'w' ? ' b ' : ' w ')]);
 
 function synthetic(hidden) {
   check([4, 8].includes(hidden), 'hidden must be 4 or 8');

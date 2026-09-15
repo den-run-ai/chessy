@@ -76,6 +76,7 @@ mod nnue_research_parity {
         for &(fen, expected_residual) in cases {
             let position = engine::parse_fen(fen).unwrap();
             assert_eq!(nnue_refresh(&position), expected_residual);
+            assert_eq!(evaluate(&position) - evaluate_hce(&position), expected_residual);
         }
     }
 }

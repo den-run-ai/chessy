@@ -52,7 +52,7 @@ sh "$probe_parent/h4-fused/build.sh"
 node tools/training/nnue-phase-runtime.js measure "$probe_parent/h4-fused" "$probe_parent/h4-fused.json"
 ```
 
-The fixed diagnostic plan uses eight already exposed authored evaluator
+The fixed diagnostic plan uses eight already exposed authored legal evaluator
 positions, four alternating-order paired repetitions, 10,000 direct WASM
 evaluation calls per measurement after warm-up, and search budgets of 4,096 and
 16,384 nodes. Complete raw records are retained. Search NPS divides by actual
@@ -60,6 +60,10 @@ visited nodes; reports also count pairs consuming the complete requested
 budget, because mates can stop earlier. Synthetic scores change search paths,
 so fixed-node NPS is not a strength or matched-trajectory result. Desktop V8
 measurements do not satisfy the physical-device admission requirement in #84.
+Two historical adjacent-king mop-up fixtures remain in static parity only;
+their invalid game positions never enter timing or search. Native Rust parity
+checks the complete exported evaluator as well as the neural refresh function,
+so it covers fused accumulation before the WASM comparison runs.
 
 No compiled results are claimed before the optional workflow succeeds. A real
 candidate needs its separately registered quality, quantization, parity, size,
