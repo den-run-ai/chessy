@@ -1,0 +1,212 @@
+diff --git a/experiments/wasm/Cargo.toml b/experiments/wasm/Cargo.toml
+index d43192a..9b123c2 100644
+--- a/experiments/wasm/Cargo.toml
++++ b/experiments/wasm/Cargo.toml
+@@ -9,6 +9,14 @@ rust-version = "1.97.1"
+ crate-type = ["cdylib"]
+ path = "src/lib.rs"
+ 
++[features]
++# Research-only candidate evaluator; see experiments/wasm/src/nnue.rs and
++# tools/nnue/. Never enabled by the pinned production build.
++nnue = []
++# Variant: add the shipped lone-king mop-up term on top of the net output
++# (nnue-v1-architecture.json requires net-only and net-plus-mop-up variants).
++nnue-mopup = ["nnue"]
++
+ [profile.release]
+ codegen-units = 1
+ debug = false
+diff --git a/experiments/wasm/src/eval.rs b/experiments/wasm/src/eval.rs
+index 2175d25..813cd29 100644
+--- a/experiments/wasm/src/eval.rs
++++ b/experiments/wasm/src/eval.rs
+@@ -194,7 +194,7 @@ fn abs_diff(a: i32, b: i32) -> i32 {
+     }
+ }
+ 
+-fn mop_up(loser: i8, winner: i8) -> i32 {
++pub fn mop_up(loser: i8, winner: i8) -> i32 {
+     let loser_square = loser as i32;
+     let winner_square = winner as i32;
+     let loser_rank = loser_square / 8;
+diff --git a/experiments/wasm/src/lib.rs b/experiments/wasm/src/lib.rs
+index 8b923f2..6501d85 100644
+--- a/experiments/wasm/src/lib.rs
++++ b/experiments/wasm/src/lib.rs
+@@ -2,7 +2,12 @@
+ #![allow(static_mut_refs)]
+ 
+ mod engine;
++// The tapered HCE stays compiled under the research `nnue` feature (tests and
++// reference comparisons use it) but is not the search evaluator there.
++#[cfg_attr(feature = "nnue", allow(dead_code))]
+ mod eval;
++#[cfg(feature = "nnue")]
++mod nnue;
+ mod search;
+ 
+ use engine::Position;
+@@ -233,7 +238,14 @@ pub unsafe extern "C" fn evaluate_loaded() -> i32 {
+     if !POSITION_LOADED || SEARCH_ACTIVE {
+         return 0;
+     }
+-    eval::evaluate(&ROOT_POSITION)
++    #[cfg(feature = "nnue")]
++    {
++        nnue::evaluate_fresh(&ROOT_POSITION)
++    }
++    #[cfg(not(feature = "nnue"))]
++    {
++        eval::evaluate(&ROOT_POSITION)
++    }
+ }
+ 
+ /// Deterministic full-window score of the loaded root. Depth zero is allowed.
+diff --git a/experiments/wasm/src/search.rs b/experiments/wasm/src/search.rs
+index ebc8958..5b32e76 100644
+--- a/experiments/wasm/src/search.rs
++++ b/experiments/wasm/src/search.rs
+@@ -1,7 +1,55 @@
+ //! Allocation-free scalar port of the shipped Chessy Play search.
+ 
++#[cfg_attr(feature = "nnue", allow(unused_imports))]
+ use crate::{engine, eval};
+ use engine::{Color, Move, Piece, PieceType, Position, MAX_MOVES};
++#[cfg(feature = "nnue")]
++use crate::nnue;
++
++/// Static White-POV leaf evaluation. The research `nnue` feature reads the
++/// per-ply accumulator stack; the production build calls the tapered HCE.
++#[inline]
++unsafe fn static_eval(position: &Position, ply: usize) -> i32 {
++    #[cfg(feature = "nnue")]
++    {
++        // Under test, prove the search-level accumulator plumbing at every
++        // evaluated node: the incremental slot must equal a fresh rebuild.
++        #[cfg(test)]
++        nnue::assert_slot_matches_refresh(position, ply);
++        nnue::evaluate(position, ply)
++    }
++    #[cfg(not(feature = "nnue"))]
++    {
++        let _ = ply;
++        eval::evaluate(position)
++    }
++}
++
++/// Rebuilds the accumulator slot for a freshly entered search root.
++#[inline]
++unsafe fn eval_refresh(ply: usize, position: &Position) {
++    #[cfg(feature = "nnue")]
++    {
++        nnue::refresh(ply, position);
++    }
++    #[cfg(not(feature = "nnue"))]
++    {
++        let _ = (ply, position);
++    }
++}
++
++/// Derives the child accumulator slot for a move that will be searched.
++#[inline]
++unsafe fn eval_push(ply: usize, mv: Move, mover: Color) {
++    #[cfg(feature = "nnue")]
++    {
++        nnue::push(ply, mv, mover);
++    }
++    #[cfg(not(feature = "nnue"))]
++    {
++        let _ = (ply, mv, mover);
++    }
++}
+ 
+ #[cfg(not(test))]
+ #[link(wasm_import_module = "env")]
+@@ -777,7 +825,7 @@ unsafe fn quiesce_node(
+         return 0;
+     }
+     if qply >= QMAX {
+-        return eval::evaluate(position);
++        return static_eval(position, ply);
+     }
+ 
+     let mut alpha = alpha_initial;
+@@ -786,7 +834,7 @@ unsafe fn quiesce_node(
+     if in_check {
+         best = if maximizing { -SCORE_INF } else { SCORE_INF };
+     } else {
+-        best = eval::evaluate(position);
++        best = static_eval(position, ply);
+         if maximizing {
+             if best >= beta {
+                 return best;
+@@ -840,6 +888,7 @@ unsafe fn quiesce_node(
+             index += 1;
+             continue;
+         }
++        eval_push(ply, mv, turn);
+         let score = quiesce_node(position, alpha, beta, ply + 1, qply + 1);
+         let child_rep = context().rep_ply;
+         engine::unmake_move(position, mv, undo);
+@@ -927,7 +976,7 @@ unsafe fn search_node(
+         if fifty {
+             return 0;
+         }
+-        return eval::evaluate(position);
++        return static_eval(position, ply);
+     }
+ 
+     let mut alpha = alpha_initial;
+@@ -995,6 +1044,7 @@ unsafe fn search_node(
+             index += 1;
+             continue;
+         }
++        eval_push(ply, mv, turn);
+ 
+         let mut score;
+         let mut child_rep;
+@@ -1319,6 +1369,7 @@ pub unsafe fn analyse_root(
+     push_path(root_hash.r1, root_hash.r2);
+     let mut child = *position;
+     engine::make_move(&mut child, root_move);
++    eval_refresh(1, &child);
+     let score = search_node(
+         &mut child,
+         total_depth as i32 - 1,
+@@ -1378,6 +1429,7 @@ pub unsafe fn run_fixed(
+     if root_completed_threefold(position) {
+         return context_result(None, 0, 0, None, StopReason::GameOver);
+     }
++    eval_refresh(0, position);
+     let score = search_node(position, depth as i32, -SCORE_INF, SCORE_INF, 0);
+     if score == ABORT_SCORE {
+         return context_result(
+@@ -1440,7 +1492,9 @@ pub unsafe fn run(
+ 
+     let root_hash = hash_position(position);
+     push_path(root_hash.r1, root_hash.r2);
++    eval_refresh(0, position);
+ 
++    let root_turn = position.turn;
+     let maximizing = position.turn == Color::White;
+     let mut best_move = None;
+     let mut best_score = 0;
+@@ -1471,6 +1525,7 @@ pub unsafe fn run(
+             while index < root_count {
+                 let mv = (*root_item(index)).mv;
+                 let undo = engine::make_move(position, mv);
++                eval_push(0, mv, root_turn);
+                 let mut score;
+                 if iteration_best.is_none() {
+                     score = search_node(position, depth as i32 - 1, alpha, beta, 1);
+@@ -1635,7 +1690,8 @@ mod tests {
+             add_history_hash(root_hash.r1, root_hash.r2).unwrap();
+             let direct = run_fixed(&mut root, 0, 0, false);
+             assert_eq!(direct.stop_reason, StopReason::MaxDepth);
+-            assert_eq!(direct.score, eval::evaluate(&root));
++            eval_refresh(0, &root);
++            assert_eq!(direct.score, static_eval(&root, 0));
+             assert_ne!(direct.score, 0);
+ 
+             clear_game_history();
