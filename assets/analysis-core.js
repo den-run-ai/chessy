@@ -34,6 +34,39 @@
   const MATE_NEAR = MATE - 1000;
   let injectedEngine = null;
 
+  // Quick screening remains cheap. Only the two selected moments and manual
+  // verification use DEEP. Its scan gets twice Master's maximum thinking time;
+  // full-window verification has separate finite node budgets, not more Play
+  // strength throttling. Bigger budgets are not a certified Elo claim.
+  const PROFILES = Object.freeze({
+    quick: Object.freeze({
+      maxDepth: 5, nodeLimit: 5000, nodeBudget: 150000, multiPV: 1, pvLen: 3
+    }),
+    quickFallback: Object.freeze({
+      maxDepth: 5, nodeLimit: 12000, nodeBudget: 300000, multiPV: 1, pvLen: 3
+    }),
+    deep: Object.freeze({
+      maxDepth: 111, nodeLimit: 0, scanTimeMs: 16000,
+      nodeBudget: 16000000, multiPV: 3, pvLen: 6
+    })
+  });
+
+  function scanConfig(opts) {
+    opts = opts || {};
+    const timeMs = opts.scanTimeMs == null ? 0 : opts.scanTimeMs;
+    if (!Number.isInteger(timeMs) || timeMs < 0 || timeMs > 60000) {
+      throw new RangeError('scanTimeMs must be an integer from 0 to 60000');
+    }
+    // Preserve the historical zero/default behavior for untimed callers;
+    // unlimited nodes are permitted only with an explicit positive deadline.
+    const nodeLimit = opts.nodeLimit === 0 && timeMs > 0
+      ? 0 : (opts.nodeLimit || 150000);
+    if (!Number.isInteger(nodeLimit) || nodeLimit < 0 || nodeLimit > 0xffffffff) {
+      throw new RangeError('analysis scan nodeLimit must be an unsigned integer');
+    }
+    return { nodeLimit: nodeLimit, timeMs: timeMs };
+  }
+
   function now() {
     return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
   }
@@ -80,18 +113,22 @@
   // observation/injection (`onProgress`, the WASM instance) is excluded.
   function configHashOf(opts) {
     opts = opts || {};
-    return hash(JSON.stringify({
+    const scan = scanConfig(opts);
+    const config = {
       v: opts.engineVersion || ENGINE_VERSION,
       provider: PROVIDER_ID,
       quiesce: opts.quiesce !== false,
-      scanNodes: opts.nodeLimit || 150000,
+      scanNodes: scan.nodeLimit,
       maxDepth: opts.maxDepth || 30,
       multiPV: Math.max(1, opts.multiPV || 3),
       pvLen: opts.pvLen || 6,
       nodeBudget: opts.nodeBudget || 8000000,
       played: playedKey(opts.playedMove),
       noDelta: true
-    }));
+    };
+    // Keep fixed-node cache identities stable; a timed scan is a new contract.
+    if (scan.timeMs) config.scanTimeMs = scan.timeMs;
+    return hash(JSON.stringify(config));
   }
 
   function identity(state, opts) {
@@ -185,7 +222,7 @@
   function analyse(state, opts, wasmEngine) {
     opts = opts || {};
     const quiesce = opts.quiesce !== false;
-    const scanNodes = opts.nodeLimit || 150000;
+    const scanOptions = scanConfig(opts);
     const maxDepth = opts.maxDepth || 30;
     const multiPV = Math.max(1, opts.multiPV || 3);
     const pvLen = opts.pvLen || 6;
@@ -249,19 +286,29 @@
       }
     }
 
-    // 1) Repetition-aware deterministic scan: choose the deepest fully
-    // completed iterative draft under the scan budget.
+    // 1) Repetition-aware scan: choose the deepest completed draft. Quick
+    // and legacy requests are fixed-node; deep requests have a time ceiling.
     progress('initial-scan', 0, 1);
     const scan = wasmEngine.search(fen, {
       maxDepth: maxDepth,
-      nodeLimit: scanNodes,
-      timeMs: 0,
+      nodeLimit: scanOptions.nodeLimit,
+      timeMs: scanOptions.timeMs,
       quiesce: quiesce,
       positions: positions
     });
     const depth = Math.max(1, scan.depth);
     out.depth = depth;
     progress('initial-scan', 1, 1);
+
+    // A bounded deep verification must not spend everything on the first
+    // arbitrary board-square root while omitting the scan winner or played
+    // move. Keep the original order for legacy fixed-node analysis contracts.
+    if (scanOptions.timeMs) {
+      function priority(move) {
+        return same(move, scan.move) ? 0 : (same(move, played) ? 1 : 2);
+      }
+      legal.sort(function (a, b) { return priority(a) - priority(b); });
+    }
 
     // 2) Exact deep phase. One beginAnalysis call gives every legal root a
     // shared TT/heuristics and one cumulative safety budget. Each returned PV
@@ -325,6 +372,15 @@
     if (shallowAborted) {
       scored = deepLines.slice(0, Math.min(deepLines.length, shallowCompleted + 1));
     }
+    // The completed iterative scan itself supplies an exact best root, but
+    // NOT a verified MultiPV or a continuation. If the very first full-window
+    // root exhausts the budget, retain that one legal move as PARTIAL evidence
+    // rather than discard the stronger scan or fabricate a verified line.
+    if (!scored.length && scanOptions.timeMs && scan.depth > 0 && scan.move) {
+      scored = [lineOf(state, scan.move,
+        { score: scan.score, pv: [scan.move] }, 1, maximizing)];
+      out.complete = false;
+    }
     scored.sort(function (a, b) { return b._sort - a._sort; });
 
     out.nodes = scan.nodes + deepCounters.nodes + shallowCounters.nodes;
@@ -381,6 +437,8 @@
     ENGINE_ID: ENGINE_ID,
     ENGINE_VERSION: ENGINE_VERSION,
     PROVIDER_ID: PROVIDER_ID,
+    PROFILES: PROFILES,
+    scanConfig: scanConfig,
     MATE_NEAR: MATE_NEAR
   };
 })(typeof window !== 'undefined' ? window : globalThis);

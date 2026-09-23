@@ -688,10 +688,12 @@
   }
 
   // Every level uses the same quiescent Rust/WASM engine. Easy through Expert
-  // stop on a deterministic node budget; their five-second clock is a safety
-  // ceiling for a slow device. Master spends the full product time budget.
+  // stop on deterministic node targets; Master has no artificial node cap.
+  // Timed games reserve clock for move delivery and an identical-request retry.
   function aiConfig() {
-    return AI_LEVELS[settings.difficulty] || AI_LEVELS[2];
+    const tc = tcParts();
+    return ChessyLevelPresets.forClock(settings.difficulty,
+      liveRemaining(state.turn), tc ? tc.incMs : 0);
   }
 
   function maybeAiMove() {
@@ -699,6 +701,8 @@
         state.turn !== aiColor() || fullStatus().over) return;
     clearAiFailure(true);
     aiThinking = true;
+    const remaining = liveRemaining(state.turn);
+    if (remaining !== null && remaining <= 0) { flag(state.turn); return; }
     const cfg = aiConfig();
     aiPending = {
       id: ++aiRequestId,
@@ -1785,7 +1789,7 @@
       state = s;
       manualEnding = restoredManualEnding ? Object.assign({}, data.manualEnding) : null;
       settings.mode = MODE_LABELS[data.mode] ? data.mode : 'ai-b';
-      settings.difficulty = DIFF_LABELS[data.difficulty] ? String(data.difficulty) : '2';
+      settings.difficulty = ChessyLevelPresets.get(data.difficulty) ? String(data.difficulty) : '2';
       settings.timeControl = TIME_CONTROLS[data.timeControl] ? data.timeControl : 'none';
       const tc = tcParts();
       if (tc) {

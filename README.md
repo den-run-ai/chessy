@@ -30,14 +30,30 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   deepening. Easy/Medium/Hard/Expert target
   reproducible 10k/36k/230k/1.44M-node caps; each also has a five-second
   safety ceiling, so slower devices can stop earlier. **Master** thinks for
-  five seconds and deepens as far as the device allows. Search is WASM-only
+  up to eight seconds, with uncapped nodes and the full supported 111-ply
+  ceiling. In timed games, every level reserves time for move delivery and
+  one identical-request worker retry; the effective limit decreases as the
+  clock runs down (and is retained in move telemetry). Search is WASM-only
   and Worker-only: a failed worker is retried once against the exact unchanged
   position, then Play stops visibly with a manual Retry action rather than
   substituting another engine. The displayed 1500/1700/1900/2100/2300+ bands
   are provisional
   calibration targets on an external engine-rating scale—not certified FIDE,
   Chess.com, or Lichess ratings; absolute and adjacent-level certification
-  remains tracked in #87/#113.
+  remains tracked in #87/#113. The r80 budget policy is **not** an E4-v1
+  certification or evidence for higher Elo; those historical artifacts stay
+  unchanged. A fresh protocol/holdout and supported-device measurements are
+  required before certifying this policy.
+- **Analysis headroom** — quick whole-game screening stays inexpensive.
+  Selected moments and manual verification share one immutable deep profile:
+  an uncapped-node, up-to-16-second scan followed by at most 16M nodes for
+  each exact-root/stability phase. This allocates more search than Master,
+  not a guarantee of a better move in every position. Verification searches
+  the scan winner and played move first. Budget-limited results remain
+  explicitly partial; an exhausted first root retains only the completed
+  scan's single best move, never an invented PV or full-MultiPV claim.
+  Deep work remains worker-only and cancellable; node budgets are work caps,
+  not wall-clock promises, and slow devices can reach the service watchdog.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,

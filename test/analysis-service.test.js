@@ -993,13 +993,16 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const budgeted = seamCalls.length >= 3 && seamCalls.every(function (call) {
     const declared = seamProfiles.some(function (prof) {
       return call.opts.nodeLimit === prof.nodeLimit && call.opts.nodeBudget === prof.nodeBudget &&
-        call.opts.maxDepth === prof.maxDepth && call.opts.multiPV === prof.multiPV;
+        call.opts.maxDepth === prof.maxDepth && call.opts.multiPV === prof.multiPV &&
+        call.opts.scanTimeMs === prof.scanTimeMs;
     });
     return declared && call.owner === 'moment-scan' && !!call.res &&
-      call.res.depth >= 1 && call.res.nodes <= call.opts.nodeLimit + 2 * call.opts.nodeBudget;
+      call.res.depth >= 1 && Number.isSafeInteger(call.res.nodes) && call.res.nodes > 0 &&
+      (call.opts.scanTimeMs > 0 ||
+        call.res.nodes <= call.opts.nodeLimit + 2 * call.opts.nodeBudget);
   });
   check(budgeted && sanitized,
-    'every scan request declares a shipped profile, every reply fits its budget, and public moments stay sanitized');
+    'every scan request declares a shipped node/time profile and public moments stay sanitized');
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);

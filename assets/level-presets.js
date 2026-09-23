@@ -28,19 +28,42 @@
       nodeLimit: 1440000, timeMs: 5000, quiesce: true
     }),
     master: Object.freeze({
-      label: 'Master', target: '2300+', maxDepth: 30,
-      nodeLimit: null, timeMs: 5000, quiesce: true
+      label: 'Master', target: '2300+', maxDepth: 111,
+      nodeLimit: null, timeMs: 8000, quiesce: true
     })
   });
   const ORDER = Object.freeze(['1', '2', '3', '5', 'master']);
 
   function get(id) {
-    return LEVELS[String(id)] || null;
+    if (typeof id !== 'string' && typeof id !== 'number') return null;
+    return Object.prototype.hasOwnProperty.call(LEVELS, id) ? LEVELS[id] : null;
+  }
+
+  // Preserve the provisional node targets, but never spend a fixed eight
+  // seconds with less than that left on the clock. Budget for BOTH attempts:
+  // a worker failure retries the identical request, not a new/easier preset.
+  // Zero means unlimited to WASM, so even an exhausted clock must never turn
+  // into a zero-ms request. The page handles a flag before dispatch.
+  function forClock(id, remainingMs, incrementMs) {
+    const preset = get(id);
+    if (!preset) return null;
+    if (remainingMs == null) return preset;
+    if (!Number.isFinite(remainingMs) || remainingMs < 0 ||
+        !Number.isFinite(incrementMs) || incrementMs < 0) {
+      throw new RangeError('clock budgets must be finite non-negative milliseconds');
+    }
+    const reserve = Math.min(1000, remainingMs / 2);
+    const retrySafe = (remainingMs - reserve) / 2;
+    const sustainable = remainingMs / 30 + incrementMs * 0.8;
+    const timeMs = Math.max(1, Math.floor(Math.min(
+      preset.timeMs, retrySafe, sustainable)));
+    return Object.freeze(Object.assign({}, preset, { timeMs: timeMs }));
   }
 
   return Object.freeze({
     LEVELS: LEVELS,
     ORDER: ORDER,
-    get: get
+    get: get,
+    forClock: forClock
   });
 });

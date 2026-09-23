@@ -36,7 +36,8 @@ require('./helper').run('level-presets', async function (t) {
         result.copy.includes('target ' + level.target),
       level.name + ' presents its rating as a target');
     check(ai.engine === 'wasm' && ai.engineFallback === null &&
-        ai.maxDepth === 30 && ai.timeMs === 5000 &&
+        ai.maxDepth === (level.id === 'master' ? 111 : 30) &&
+        ai.timeMs === (level.id === 'master' ? 8000 : 5000) &&
         ai.quiesce === true && ai.nodeLimit === level.nodeLimit,
       level.name + ' executes the declared default-WASM preset');
     if (level.nodeLimit === null) {
@@ -54,6 +55,39 @@ require('./helper').run('level-presets', async function (t) {
         level.name + ' respects its node target and time safety ceiling');
     }
   }
+
+  // Seed on the app-less page: pagehide would overwrite an in-app edit.
+  // A fixed eight-second request here loses on time before returning.
+  await t.newGame({ mode: 'pvp', difficulty: 'master', timeControl: '5+3' });
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.mode = 'ai-w';
+    saved.clocks = { wMs: 2000, bMs: 300000 };
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  await page.waitForFunction(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return saved.history[0] && saved.history[0].ai;
+  }, null, { timeout: 10000 });
+  const timed = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(timed.history[0].ai.timeMs > 0 && timed.history[0].ai.timeMs <= 500 &&
+      timed.history[0].ai.maxDepth === 111 && timed.history[0].ai.nodeLimit === null &&
+      !timed.timeForfeit && timed.clocks.wMs > 0,
+    'near-expired Master clock dispatches a bounded real WASM search without flagging');
+
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.mode = 'pvp';
+    saved.difficulty = 'constructor';
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  const restored = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(restored.difficulty === '2' && restored.history.length === 1,
+    'prototype-property difficulty falls back to Medium without losing the game');
 
   const setupCopy = (await page.textContent('#newGameDialog'))
     .replace(/\s+/g, ' ').trim();

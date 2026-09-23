@@ -36,8 +36,10 @@ function check(ok, label, detail) {
     const preset = Presets.get(row[0]);
     return preset && Object.isFrozen(preset) &&
       preset.label === row[1] && preset.target === row[2] &&
-      preset.nodeLimit === row[3] && preset.maxDepth === 30 &&
-      preset.timeMs === 5000 && preset.quiesce === true;
+      preset.nodeLimit === row[3] &&
+      preset.maxDepth === (row[0] === 'master' ? 111 : 30) &&
+      preset.timeMs === (row[0] === 'master' ? 8000 : 5000) &&
+      preset.quiesce === true;
   }), 'all five target bands map to the declared immutable search presets');
   check(Presets.get('unknown') === null && Object.isFrozen(Presets.LEVELS),
     'unknown IDs fail closed and the preset table is immutable');

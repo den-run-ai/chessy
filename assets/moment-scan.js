@@ -39,17 +39,9 @@
   var QUICK_RESULT_POLICY = 'critical-quick-result-v1';
   var DEEP_RESULT_SCHEMA = 1;
   var DEEP_RESULT_POLICY = 'critical-deep-result-v1';
-  var QUICK = {
-    maxDepth: 5, nodeLimit: 5000, nodeBudget: 150000, multiPV: 1, pvLen: 3
-  };
-  var QUICK_FALLBACK = {
-    maxDepth: 5, nodeLimit: 12000, nodeBudget: 300000, multiPV: 1, pvLen: 3
-  };
-  // Kept byte-for-byte aligned with reflection.js. A suggestion click can
-  // therefore reuse the already validated deep result from the analysis cache.
-  var DEEP = {
-    maxDepth: 10, nodeLimit: 80000, nodeBudget: 1200000, multiPV: 3, pvLen: 6
-  };
+  var QUICK = ChessyAnalysisCore.PROFILES.quick;
+  var QUICK_FALLBACK = ChessyAnalysisCore.PROFILES.quickFallback;
+  var DEEP = ChessyAnalysisCore.PROFILES.deep;
 
   var generation = 0;
   var current = null;
@@ -863,14 +855,7 @@
       fen: review.fens[ply],
       positions: state.positions,
       fresh: !!fresh,
-      opts: {
-        playedMove: entry.move,
-        maxDepth: profile.maxDepth,
-        nodeLimit: profile.nodeLimit,
-        nodeBudget: profile.nodeBudget,
-        multiPV: profile.multiPV,
-        pvLen: profile.pvLen
-      }
+      opts: Object.assign({}, profile, { playedMove: entry.move })
     };
   }
 

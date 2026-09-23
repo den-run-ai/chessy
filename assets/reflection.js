@@ -44,10 +44,9 @@
     match: 'Good move (matched Chessy)'
   };
 
-  // Interactive Review budget: deterministic (fixed nodes, no root shuffle),
-  // deep enough to rank a few candidates, small enough to stay responsive. The
-  // service derives its watchdog from exactly these numbers.
-  const CFG = { maxDepth: 10, multiPV: 3, nodeLimit: 80000, nodeBudget: 1200000, pvLen: 6 };
+  // One immutable profile shared with selected-moment verification. Quick
+  // whole-game screening is intentionally not promoted to this larger budget.
+  const CFG = ChessyAnalysisCore.PROFILES.deep;
   const PV_TAIL = 3; // continuation plies shown after each candidate move
   const ANALYSIS_OWNER = 'reflection';
 
@@ -562,8 +561,7 @@
     const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
       fen: fenBefore, positions: sourceState.positions, fresh: wantFresh,
-      opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
-        nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
+      opts: Object.assign({}, CFG, { playedMove: entry.move })
     };
     startVerifyRun(token, analysisReq);
     let pendingAnalysis;

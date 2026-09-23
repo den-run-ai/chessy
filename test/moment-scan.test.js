@@ -10,6 +10,7 @@
 require('../assets/engine.js');
 require('../assets/calculation.js');
 require('../assets/analysis-result.js');
+require('../assets/analysis-core.js');
 
 const Chess = globalThis.Chess;
 const ChessyAnalysisResult = globalThis.ChessyAnalysisResult;
@@ -106,6 +107,7 @@ globalThis.CoachStore = {
 };
 
 globalThis.ChessyAnalysisCore = {
+  PROFILES: globalThis.ChessyAnalysisCore.PROFILES,
   identity: function (state, opts) {
     return {
       engineId: 'test',
@@ -222,7 +224,7 @@ function completeResult(req, supplied) {
     loss: loss,
     turn: turn,
     wdl: null,
-    depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+    depth: req.opts.nodeLimit === 0 ? 4 : 2,
     nodes: 100,
     qnodes: 20,
     elapsedMs: 1,
@@ -258,7 +260,7 @@ function completeResult(req, supplied) {
       amongCandidates: false
     },
     classification: 'unknown-equivalence',
-    stability: req.opts.nodeLimit === 80000
+    stability: req.opts.nodeLimit === 0
       ? { depths: [3, 4], bestMoveStable: true } : null
   };
   return Object.assign(base, supplied);
@@ -359,6 +361,7 @@ function manualDeepResult(review, ply, supplied) {
     opts: {
       playedMove: review.gs.history[ply].move,
       maxDepth: profile.maxDepth,
+      scanTimeMs: profile.scanTimeMs,
       nodeLimit: profile.nodeLimit,
       nodeBudget: profile.nodeBudget,
       multiPV: profile.multiPV,
@@ -378,10 +381,10 @@ function manualDeepResult(review, ply, supplied) {
   const black = autoReview('black-first', 4, 'b', blackStart);
   const done = await Scan.start(black, { restart: true });
   const quickPlies = requests.filter(function (r) {
-    return r.opts.nodeLimit !== 80000;
+    return r.opts.nodeLimit !== 0;
   }).map(function (r) { return r.ply; });
   const deepPlies = requests.filter(function (r) {
-    return r.opts.nodeLimit === 80000;
+    return r.opts.nodeLimit === 0;
   }).map(function (r) { return r.ply; });
   check(quickPlies.join(',') === '0,1,2,3',
     'the quick pass scores every nonterminal move in game order',
@@ -390,9 +393,10 @@ function manualDeepResult(review, ply, supplied) {
     'only shortlisted chosen-side decisions receive the exact deep profile');
   check(done.state === 'done' && done.checked === 4 && done.total === 4,
     'a finished two-pass scan persists exact all-move progress');
-  check(requests.filter(function (r) { return r.opts.nodeLimit === 80000; })
+  check(requests.filter(function (r) { return r.opts.nodeLimit === 0; })
     .every(function (r) {
-      return r.opts.maxDepth === 10 && r.opts.nodeBudget === 1200000 &&
+      return r.opts.maxDepth === 111 && r.opts.nodeBudget === 16000000 &&
+        r.opts.scanTimeMs === 16000 &&
         r.opts.multiPV === 3 && r.opts.pvLen === 6;
     }), 'deep verification is byte-aligned with the manual reflection profile');
   const pub = Scan.state();
@@ -730,7 +734,7 @@ function manualDeepResult(review, ply, supplied) {
   replies = [];
   const genuineResumed = await Scan.resume(genuineReview);
   const resumedQuickPlies = requests.filter(function (req) {
-    return req.opts.nodeLimit !== 80000;
+    return req.opts.nodeLimit !== 0;
   }).map(function (req) { return req.ply; });
   check(resumedQuickPlies.join(',') === '1,2,3' &&
       genuineResumed.state === 'done' &&
@@ -994,7 +998,7 @@ function manualDeepResult(review, ply, supplied) {
   requests = [];
   replies = [];
   const passTwoResumed = await Scan.resume(passTwoResumeReview);
-  check(requests.length === 1 && requests[0].opts.nodeLimit === 80000 &&
+  check(requests.length === 1 && requests[0].opts.nodeLimit === 0 &&
       requests[0].ply === remainingDeepPly &&
       passTwoResumed.state === 'done' && passTwoResumed.moments.length === 2,
     'pass-two reload dispatches only the remaining canonical shortlist slot');
@@ -1065,7 +1069,7 @@ function manualDeepResult(review, ply, supplied) {
   replies = [];
   const deepUnresolvedResumed = await Scan.resume(deepUnresolvedReview);
   check(requests.length === 2 && requests.every(function (request) {
-        return request.opts.nodeLimit === 80000;
+        return request.opts.nodeLimit === 0;
       }) &&
       requests[0].ply === deepUnresolvedCheckpoint.shortlist[0].ply &&
       requests[1].ply === deepUnresolvedCheckpoint.shortlist[1].ply &&
