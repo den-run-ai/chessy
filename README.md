@@ -32,8 +32,13 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   safety ceiling, so slower devices can stop earlier. **Master** thinks for
   up to eight seconds, with uncapped nodes and the full supported 111-ply
   ceiling. In timed games, every level reserves time for move delivery and
-  one identical-request worker retry; the effective limit decreases as the
-  clock runs down (and is retained in move telemetry). Search is WASM-only
+  one identical-request retry after a reported worker failure (a silent worker
+  is only detected by a watchdog three seconds past the limit, which a very low
+  clock may not cover); the effective limit decreases as the clock runs down
+  (and is retained in move telemetry). An AI clock that is already empty flags
+  before any search starts. If the engine's fixed transposition table fills
+  during an uncapped Master search, the deepest completed iteration's move is
+  played. Search is WASM-only
   and Worker-only: a failed worker is retried once against the exact unchanged
   position, then Play stops visibly with a manual Retry action rather than
   substituting another engine. The displayed 1500/1700/1900/2100/2300+ bands

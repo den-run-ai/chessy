@@ -89,6 +89,41 @@ require('./helper').run('level-presets', async function (t) {
   check(restored.difficulty === '2' && restored.history.length === 1,
     'prototype-property difficulty falls back to Medium without losing the game');
 
+  // An AI clock that is already empty flags before any search is sized or
+  // dispatched: a 1 ms "budget" must not race the ticker for a free move.
+  await t.newGame({ mode: 'pvp', difficulty: 'master', timeControl: '300+3' });
+  await page.addInitScript(function () {
+    const NativeWorker = window.Worker;
+    window.__aiWorkers = 0;
+    window.Worker = function (url, options) {
+      if (String(url).indexOf('ai-worker') >= 0) window.__aiWorkers++;
+      return new NativeWorker(url, options);
+    };
+    window.Worker.prototype = NativeWorker.prototype;
+  });
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.mode = 'ai-w';
+    saved.clocks = { wMs: 0, bMs: 300000 };
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('gameOverDialog') &&
+      document.getElementById('gameOverDialog').open;
+  }, null, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const flagged = await page.evaluate(function () {
+    return {
+      saved: JSON.parse(localStorage.getItem('chessy-game-v1')),
+      workers: window.__aiWorkers,
+      title: document.getElementById('gameOverTitle').textContent
+    };
+  });
+  check(flagged.workers === 0 && flagged.saved.history.length === 0 &&
+      flagged.saved.timeForfeit && flagged.saved.timeForfeit.color === 'w' &&
+      flagged.title === 'Black wins!',
+    'an AI clock already at zero flags without dispatching a search');
+
   const setupCopy = (await page.textContent('#newGameDialog'))
     .replace(/\s+/g, ' ').trim();
   check(setupCopy.includes('Rust/WASM backend') &&

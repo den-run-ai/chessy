@@ -41,7 +41,9 @@
 
   // Preserve the provisional node targets, but never spend a fixed eight
   // seconds with less than that left on the clock. Budget for BOTH attempts:
-  // a worker failure retries the identical request, not a new/easier preset.
+  // a reported worker failure retries the identical request, not a new or
+  // easier preset. (A silent worker is caught only by the page watchdog at
+  // timeMs + 3 s, which a nearly empty clock cannot always cover.)
   // Zero means unlimited to WASM, so even an exhausted clock must never turn
   // into a zero-ms request. The page handles a flag before dispatch.
   function forClock(id, remainingMs, incrementMs) {
