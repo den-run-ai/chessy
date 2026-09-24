@@ -222,11 +222,13 @@
       if (nextOrder === prevOrder) {
         if (event.totalRoots !== published.totalRoots) {
           // A fresh attempt of a timed request may plan another schedule
-          // (its wall-clock scan can stop at a different depth). Resume once
-          // its completed FRACTION passes the published one, so the public
-          // meter never moves backwards and never freezes for the retry.
-          if (event.completedRoots * published.totalRoots <=
-              published.completedRoots * event.totalRoots) return null;
+          // (its wall-clock scan can stop at a different depth). Its raw
+          // counts are not comparable with the published ones, and Reflection
+          // and Train derive the verified depth from them, so publishing them
+          // (or projecting them onto the old scale) could move the meter or
+          // the announced depth backwards. Hold public progress until the
+          // result instead.
+          return null;
         } else {
           if (event.completedRoots < published.completedRoots) return null;
           if (event.completedRoots === published.completedRoots &&

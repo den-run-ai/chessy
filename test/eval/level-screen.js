@@ -22,11 +22,15 @@
  * A run holds an exclusive <out>.lock from its resume read to its last append.
  * Its games execute a private read-only snapshot of the runner, rules, loader,
  * WASM, presets, opening list and Stockfish, whose hashes head its .runs line.
- * A resume must match the block's recorded inputs, or it is refused.
+ * A resume must match the block's recorded inputs, or it is refused. After
+ * the last game it writes <out>.complete.json, a no-replace receipt binding
+ * the exact NDJSON and .runs bytes to the complete schedule; --summarize
+ * requires it, and a sealed block cannot be resumed.
  *
  *   node test/eval/level-screen.js --stockfish <exe> --level easy \
  *     --anchor 1500 --openings even --out <file.ndjson> [--concurrency 4]
  *   node test/eval/level-screen.js --summarize <file.ndjson> [...]
+ *   node test/eval/level-screen.js --seal <file.ndjson> [...]
  */
 'use strict';
 
@@ -398,16 +402,20 @@ function arg(argv, name, dflt) {
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : dflt;
 }
 
-function readRecords(file) {
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8').split('\n').map(function (l, i) {
+function parseRecords(text, label) {
+  return text.split('\n').map(function (l, i) {
     if (!l) return null;
     try {
       return JSON.parse(l);
     } catch (error) {
-      throw new Error(file + ' line ' + (i + 1) + ' is not JSON (truncated append?)');
+      throw new Error(label + ' line ' + (i + 1) + ' is not JSON (truncated append?)');
     }
   }).filter(Boolean);
+}
+
+function readRecords(file) {
+  if (!fs.existsSync(file)) return [];
+  return parseRecords(fs.readFileSync(file, 'utf8'), file);
 }
 
 function slotOf(r) {
@@ -543,6 +551,106 @@ function validateBlock(records, headers) {
   });
 }
 
+// ---- Completion receipt: written once, after the last game ----
+
+const RECEIPT_SCHEMA = SCHEMA + '.complete';
+
+function receiptPath(out) {
+  return out + '.complete.json';
+}
+
+function sha256Bytes(bytes) {
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+// The receipt a complete block must carry, computed from the exact bytes it
+// binds: every scheduled slot played once, each record naming its scheduled
+// opening, and headers from one run identity. `openings` is the opening list
+// and the hash of its source file.
+function completionOf(dataBytes, runsBytes, openings, label) {
+  const records = parseRecords(dataBytes.toString('utf8'), label);
+  const headers = parseRecords(runsBytes.toString('utf8'), label + '.runs');
+  if (!records.length || !headers.length) throw new Error(label + ' is incomplete: no games');
+  validateBlock(records, headers);
+  const header = headers[0];
+  if (header.openingsSha256 !== undefined && header.openingsSha256 !== openings.sha256) {
+    throw new Error(label + ' was played from another opening list');
+  }
+  const expected = [];
+  selectOpenings(header.openings, openings.list.length).forEach(function (id) {
+    expected.push(id + ':white', id + ':black');
+  });
+  const played = new Set(records.map(slotOf));
+  const missing = expected.filter(function (slot) { return !played.has(slot); });
+  if (missing.length || records.length !== expected.length ||
+      header.scheduledGames !== expected.length) {
+    throw new Error(label + ' is incomplete: ' + records.length + ' of ' + expected.length +
+      ' scheduled games');
+  }
+  records.forEach(function (r, i) {
+    if (r.openingName !== openings.list[r.openingId][0]) {
+      throw new Error(label + ' record ' + (i + 1) + ' does not name its scheduled opening');
+    }
+  });
+  const identity = {};
+  RUN_IDENTITY_KEYS.forEach(function (k) {
+    if (header[k] !== undefined) identity[k] = header[k];
+  });
+  return {
+    records: records,
+    headers: headers,
+    receipt: {
+      schema: RECEIPT_SCHEMA,
+      identity: identity,
+      scheduledGames: expected.length,
+      games: records.length,
+      ndjsonSha256: sha256Bytes(dataBytes),
+      runsSha256: sha256Bytes(runsBytes)
+    }
+  };
+}
+
+// Write the receipt with no-replace semantics. The caller holds the lock.
+function sealBlock(out, openings, sealedBy) {
+  const done = completionOf(fs.readFileSync(out), fs.readFileSync(out + '.runs'),
+    openings, out);
+  const receipt = Object.assign({}, done.receipt, { sealedBy: sealedBy });
+  try {
+    fs.writeFileSync(receiptPath(out), JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx' });
+  } catch (error) {
+    if (error.code === 'EEXIST') throw new Error(out + ' is already sealed');
+    throw error;
+  }
+  return receipt;
+}
+
+// Publication requires a receipt that still binds the exact bytes present.
+function verifySealed(out, openings) {
+  let receipt;
+  try {
+    receipt = JSON.parse(fs.readFileSync(receiptPath(out), 'utf8'));
+  } catch (error) {
+    throw new Error(out + ' is not sealed: missing or unreadable ' + receiptPath(out));
+  }
+  const done = completionOf(fs.readFileSync(out), fs.readFileSync(out + '.runs'),
+    openings, out);
+  const stored = Object.assign({}, receipt);
+  delete stored.sealedBy;
+  const diff = Object.keys(done.receipt).filter(function (k) {
+    return !util.isDeepStrictEqual(stored[k], done.receipt[k]);
+  });
+  if (diff.length || Object.keys(stored).length !== Object.keys(done.receipt).length) {
+    throw new Error(out + ' does not match its completion receipt (' +
+      (diff.join(', ') || 'fields') + ')');
+  }
+  return { records: done.records, headers: done.headers, receipt: receipt };
+}
+
+function sourceOpenings() {
+  const file = path.join(ROOT, SNAPSHOT_FILES.openingsSha256);
+  return { list: require(file), sha256: sha256File(file) };
+}
+
 // One exclusive, no-replace lock covers the NDJSON and its .runs sidecar from
 // the resume read until the last append, so two runs cannot fill the same
 // slots. A lock left by a killed run is never broken automatically.
@@ -611,6 +719,10 @@ async function runSchedule(argv) {
   }
   const out = canonicalOut(outArg);
   const lock = acquireLock(out);
+  if (fs.existsSync(receiptPath(out))) {
+    lock.release();
+    throw new Error(out + ' is already sealed as complete; use a fresh --out');
+  }
   const children = new Set();
   let snapshot = null;
   const killChildren = function () {
@@ -693,8 +805,10 @@ async function runSchedule(argv) {
     for (let i = 0; i < concurrency; i++) pool.push(worker().catch(fail));
     await Promise.all(pool);
     if (failed) throw failed;
-    const records = readRecords(out);
-    validateBlock(records, readRecords(out + '.runs'));
+    // Data first, then the completion receipt last.
+    const openingsNow = { list: OPENINGS, sha256: identity.openingsSha256 };
+    sealBlock(out, openingsNow, 'runner');
+    const records = verifySealed(out, openingsNow).records;
     console.log(JSON.stringify(summarize(records, { anchor: anchor }), null, 2));
   } finally {
     killChildren();
@@ -713,12 +827,25 @@ if (require.main === module) {
       process.send({ ok: false, error: String(error && error.stack || error) },
         function () { process.exit(1); });
     });
+  } else if (argv[0] === '--seal') {
+    // Seal an already complete block (for example one recorded before
+    // receipts existed). Refuses incomplete blocks and existing receipts.
+    const openings = sourceOpenings();
+    argv.slice(1).forEach(function (file) {
+      const out = canonicalOut(file);
+      const lock = acquireLock(out);
+      try {
+        const receipt = sealBlock(out, openings, 'seal-command');
+        console.log(out + ': sealed ' + receipt.games + ' games');
+      } finally {
+        lock.release();
+      }
+    });
   } else if (argv[0] === '--summarize') {
+    const openings = sourceOpenings();
     const files = argv.slice(1);
     files.forEach(function (file) {
-      const records = readRecords(file);
-      if (!records.length) return;
-      validateBlock(records, readRecords(file + '.runs'));
+      const records = verifySealed(file, openings).records;
       const summary = summarize(records, { anchor: records[0].anchor });
       const reasons = {};
       records.forEach(function (r) { reasons[r.reason] = (reasons[r.reason] || 0) + 1; });
@@ -754,6 +881,10 @@ module.exports = {
   makeSnapshot: makeSnapshot,
   canonicalOut: canonicalOut,
   readRecords: readRecords,
+  completionOf: completionOf,
+  sealBlock: sealBlock,
+  verifySealed: verifySealed,
+  receiptPath: receiptPath,
   checkResume: checkResume,
   validateBlock: validateBlock,
   acquireLock: acquireLock

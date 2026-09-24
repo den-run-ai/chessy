@@ -1,0 +1,20 @@
+{
+  "schema": "chessy.level-screen.exploratory.v1.complete",
+  "identity": {
+    "schema": "chessy.level-screen.exploratory.v1.run",
+    "level": "master",
+    "anchor": 2300,
+    "openings": "even",
+    "stockfishSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
+    "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+    "loaderSha256": "ce338ed49aef859aebb930e5895681b77dfa588d710f8b7131b4220ef903cf01",
+    "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+    "presetsSha256": "2cf0171f7edbf63dba690482d7b1fb85ff4fe0d7fa8bc8195be4f0ce56e342a3",
+    "runnerSha256": "eeaf56706784365d3b57effd318ef7b6ff4be37a63941f0371ce97cc923c4a97"
+  },
+  "scheduledGames": 100,
+  "games": 100,
+  "ndjsonSha256": "1003b5fe83d313c8ff2dc5f44d514ba378a04a68a0f0829a639407434566cbe5",
+  "runsSha256": "723e1f034937d175d8b8f32e835a9b91999edbc96d4f0dc9b89a772651b819d5",
+  "sealedBy": "seal-command"
+}

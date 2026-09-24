@@ -117,12 +117,19 @@ while the host was heavily loaded.
 - `*.ndjson.runs` — one header per block start or resume, with the runner,
   preset, WASM, Stockfish and (for Master and the r80 Easy block) loader and
   rules hashes, commit and host load.
+- `*.ndjson.complete.json` — the completion receipt. It binds the SHA-256
+  of the exact `.ndjson` and `.runs` bytes to the block's run identity and its
+  complete schedule: every scheduled slot played once, each record naming its
+  scheduled opening. These seven blocks predate receipts. They were sealed
+  after the fact with `--seal` (`"sealedBy": "seal-command"`), which refuses
+  an incomplete block and never replaces an existing receipt. The runner now
+  writes its own receipt (`"sealedBy": "runner"`) after the last game.
 - Summaries: `node test/eval/level-screen.js --summarize <file.ndjson>`.
-  The summary refuses a file that mixes levels, anchors or presets, repeats a
-  schedule slot, or whose `.runs` headers disagree on any input hash. Every
-  committed block passes that check. That includes both resumed blocks, whose
-  start and resume headers carry identical runner, preset, WASM and Stockfish
-  hashes.
+  The summary requires a receipt that still matches the bytes. It also
+  refuses a file that mixes levels, anchors or presets, repeats a schedule
+  slot, or whose `.runs` headers disagree on any input hash. Every committed
+  block passes. That includes both resumed blocks, whose start and resume
+  headers carry identical runner, preset, WASM and Stockfish hashes.
 - The runner and the presets file were changed after these games, so their
   current hashes differ from the hashes those headers record. The presets
   change is a comment correction; the preset values each record carries are
@@ -133,4 +140,6 @@ while the host was heavily loaded.
   - A resume must match the block's recorded inputs, preset and schedule.
   - An exclusive `<out>.lock` stops two runs from writing the same output.
   - A game is not recorded if the snapshot changes.
+  - The completion receipt is written last, and a sealed block is never
+    resumed.
   None of this changes how a game is played or scored.

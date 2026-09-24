@@ -142,6 +142,11 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+const OPENINGS_NOW = {
+  list: require('../ai-match-openings.js'),
+  sha256: sha(path.join(ROOT, 'test', 'ai-match-openings.js'))
+};
+
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-screen-test-'));
 }
@@ -280,7 +285,62 @@ check('the committed r80 screen blocks each pass the block check', function () {
     assert.deepStrictEqual(headers.map(function (h) { return h.alreadyRecorded; }),
       expected[f], f);
     Screen.validateBlock(records, headers);
+    // Each carries a completion receipt binding these exact bytes.
+    const sealed = Screen.verifySealed(path.join(dir, f), OPENINGS_NOW);
+    assert.strictEqual(sealed.receipt.ndjsonSha256, sha(path.join(dir, f)), f);
+    assert.strictEqual(sealed.receipt.runsSha256, sha(path.join(dir, f + '.runs')), f);
+    assert.strictEqual(sealed.receipt.games, 100, f);
   });
+});
+
+check('a completion receipt binds complete data and refuses anything else', function () {
+  const dir = tempDir();
+  try {
+    const src = path.join(ROOT, 'eval', 'level-screen-r80', 'stage2-expert-2300.ndjson');
+    const out = path.join(dir, 'block.ndjson');
+    const copy = function () {
+      fs.copyFileSync(src, out);
+      fs.copyFileSync(src + '.runs', out + '.runs');
+      fs.rmSync(Screen.receiptPath(out), { force: true });
+    };
+    copy();
+    assert.throws(function () { Screen.verifySealed(out, OPENINGS_NOW); }, /is not sealed/);
+    Screen.sealBlock(out, OPENINGS_NOW, 'test');
+    assert.strictEqual(Screen.verifySealed(out, OPENINGS_NOW).records.length, 100);
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); }, /already sealed/);
+    // One changed game result: same shape, different bytes.
+    const text = fs.readFileSync(out, 'utf8');
+    fs.writeFileSync(out, text.replace('"score":1,', '"score":0,'));
+    assert.notStrictEqual(fs.readFileSync(out, 'utf8'), text);
+    assert.throws(function () { Screen.verifySealed(out, OPENINGS_NOW); }, /ndjsonSha256/);
+    fs.writeFileSync(out, text);
+    fs.appendFileSync(out + '.runs', fs.readFileSync(src + '.runs', 'utf8').split('\n')[0] + '\n');
+    assert.throws(function () { Screen.verifySealed(out, OPENINGS_NOW); }, /runsSha256/);
+    // An interrupted block cannot be sealed.
+    copy();
+    const lines = fs.readFileSync(out, 'utf8').split('\n').filter(Boolean);
+    fs.writeFileSync(out, lines.slice(0, -1).join('\n') + '\n');
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+      /incomplete: 99 of 100/);
+    assert.ok(!fs.existsSync(Screen.receiptPath(out)));
+    // A record naming another opening than its slot's cannot be sealed.
+    copy();
+    const renamed = lines.map(JSON.parse);
+    renamed[0].openingName = 'Not ' + renamed[0].openingName;
+    fs.writeFileSync(out, renamed.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+      /does not name its scheduled opening/);
+    // A header bound to another opening list cannot be sealed.
+    copy();
+    const headers = Screen.readRecords(out + '.runs').map(function (h) {
+      return JSON.stringify(Object.assign({}, h, { openingsSha256: 'another-list' }));
+    });
+    fs.writeFileSync(out + '.runs', headers.join('\n') + '\n');
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+      /another opening list/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 check('one exclusive lock guards an output until its owner releases it', function () {
@@ -379,10 +439,14 @@ function fakeStockfish(dir, name) {
   return file;
 }
 
+// Runs get a private TMPDIR, so their snapshots are checked in isolation from
+// any other process on the host.
+let runTmp = null;
+
 function runCli(args, env) {
   return new Promise(function (resolve) {
     const child = cp.spawn(process.execPath, [RUNNER].concat(args), {
-      env: Object.assign({}, process.env, env || {}),
+      env: Object.assign({}, process.env, runTmp ? { TMPDIR: runTmp } : {}, env || {}),
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let output = '';
@@ -393,7 +457,7 @@ function runCli(args, env) {
 }
 
 function snapshotsLeft() {
-  return fs.readdirSync(os.tmpdir()).filter(function (f) {
+  return fs.readdirSync(runTmp).filter(function (f) {
     return f.indexOf('chessy-level-screen-') === 0;
   });
 }
@@ -406,7 +470,8 @@ async function checkAsync(name, fn) {
 
 async function endToEnd() {
   const dir = fs.realpathSync(tempDir());
-  const before = snapshotsLeft();
+  runTmp = path.join(dir, 'tmp');
+  fs.mkdirSync(runTmp);
   const readText = function (f) { return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null; };
   try {
     const sf = fakeStockfish(dir);
@@ -432,12 +497,35 @@ async function endToEnd() {
       assert.strictEqual(headers[0].stockfishSha256, sha(sf));
       assert.strictEqual(headers[0].alreadyRecorded, 0);
       assert.ok(!fs.existsSync(out + '.lock'));
+      // The receipt comes last and binds the final bytes.
+      const sealed = Screen.verifySealed(out, OPENINGS_NOW);
+      assert.strictEqual(sealed.receipt.sealedBy, 'runner');
+      assert.strictEqual(sealed.receipt.ndjsonSha256, sha(out));
+      const summary = await runCli(['--summarize', out]);
+      assert.strictEqual(summary.code, 0, summary.output);
+      assert.strictEqual(JSON.parse(summary.output).games, 2);
+    });
+
+    await checkAsync('a sealed block is never resumed', async function () {
+      const games = readText(out);
+      const runs = readText(out + '.runs');
+      const r = await runCli(base);
+      assert.strictEqual(r.code, 1, r.output);
+      assert.ok(/already sealed/.test(r.output), r.output);
+      assert.strictEqual(readText(out), games);
+      assert.strictEqual(readText(out + '.runs'), runs);
+      assert.ok(!fs.existsSync(out + '.lock'));
     });
 
     await checkAsync('a resume of the same block refills only its missing slot', async function () {
+      // An interrupted run: its last game and the receipt were never written.
       const lines = fs.readFileSync(out, 'utf8').split('\n').filter(Boolean);
       const dropped = JSON.parse(lines.pop());
       fs.writeFileSync(out, lines.join('\n') + '\n');
+      fs.unlinkSync(Screen.receiptPath(out));
+      const partial = await runCli(['--summarize', out]);
+      assert.strictEqual(partial.code, 1, partial.output);
+      assert.ok(/is not sealed/.test(partial.output), partial.output);
       const r = await runCli(base);
       assert.strictEqual(r.code, 0, r.output);
       const records = Screen.readRecords(out);
@@ -447,9 +535,13 @@ async function endToEnd() {
       assert.deepStrictEqual(Screen.readRecords(out + '.runs').map(function (h) {
         return h.alreadyRecorded;
       }), [0, 1]);
+      assert.strictEqual(Screen.verifySealed(out, OPENINGS_NOW).receipt.runsSha256,
+        sha(out + '.runs'));
     });
 
     await checkAsync('a resume with a changed anchor, engine, openings or concurrency writes nothing', async function () {
+      // Unsealed again, so each refusal comes from the identity check.
+      fs.unlinkSync(Screen.receiptPath(out));
       const games = readText(out);
       const runs = readText(out + '.runs');
       const other = fakeStockfish(dir, 'otherfish');
@@ -513,6 +605,7 @@ async function endToEnd() {
       assert.strictEqual(r.code, 1, r.output);
       assert.ok(/snapshot changed \(stockfishSha256\)/.test(r.output), r.output);
       assert.deepStrictEqual(Screen.readRecords(tampered), []);
+      assert.ok(!fs.existsSync(Screen.receiptPath(tampered)));
       assert.ok(!fs.existsSync(tampered + '.lock'));
     });
 
@@ -525,9 +618,7 @@ async function endToEnd() {
       assert.ok(!fs.existsSync(link + '.lock') && !fs.existsSync(link + '.runs'));
     });
 
-    assert.deepStrictEqual(snapshotsLeft().filter(function (f) {
-      return before.indexOf(f) < 0;
-    }), [], 'every run removed its snapshot');
+    assert.deepStrictEqual(snapshotsLeft(), [], 'every run removed its snapshot');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

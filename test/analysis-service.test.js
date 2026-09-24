@@ -630,9 +630,9 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   stopRetry();
 
   // --- A timed retry may plan a different roots × depths schedule (its
-  //     wall-clock scan stopped at another depth). Public progress resumes
-  //     once the retry's completed fraction passes the published one, and it
-  //     never moves backwards. ---
+  //     wall-clock scan stopped at another depth). Its raw counts cannot be
+  //     published without moving the meter or derived depth backwards, so
+  //     public progress holds at the published high-water until the result. ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }), watchdog: 25 });
   const replanned = [];
   const stopReplanned = Svc.subscribe('reflection', function (p) {
@@ -655,29 +655,31 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     replanW2.deliver(progressReply(replanId, 'initial-scan', 1, 1, offset + 1));
     replanW2.deliver(progressReply(replanId, 'root-verification', 0, 48, offset + 2));
     replanW2.deliver(progressReply(replanId, 'root-verification', 24, 48, offset + 3));
-    const heldBack = replanned.length === before;
+    // 36/48 passes the published 30/60 by fraction; 12/16 would too, with
+    // smaller raw counts. Neither may be published.
     replanW2.deliver(progressReply(replanId, 'root-verification', 36, 48, offset + 120));
     replanW2.deliver(progressReply(replanId, 'root-verification', 48, 48, offset + 240));
-    const tail = replanned.slice(before);
-    replanResumed = heldBack && tail.length === 2 &&
-      tail[0].completedRoots === 36 && tail[0].totalRoots === 48 &&
-      tail[1].completedRoots === 48 && tail[1].totalRoots === 48;
+    const heldBack = replanned.length === before;
     replanW2.deliver({ v: PROTOCOL, jobId: replanId, result: goodResult });
-    replanResumed = replanResumed && (await replanRun) !== null;
+    replanResumed = heldBack && (await replanRun) !== null;
   } else {
     Svc.cancel('reflection');
     await replanRun;
   }
-  let replanMonotone = replanned.length >= 5;
+  // Every published event is on one scale per phase, with raw counts that
+  // never decrease, so derived depth labels cannot move backwards.
+  let replanMonotone = replanned.length >= 4;
   for (let i = 1; i < replanned.length; i++) {
     const p = replanned[i - 1], n = replanned[i];
     if (n.elapsedMs < p.elapsedMs || n.phase === 'initial-scan' &&
         p.phase === 'root-verification' ||
-        n.phase === p.phase &&
-        n.completedRoots * p.totalRoots < p.completedRoots * n.totalRoots) replanMonotone = false;
+        n.phase === p.phase && (n.totalRoots !== p.totalRoots ||
+          n.completedRoots < p.completedRoots)) replanMonotone = false;
   }
-  check(replanResumed && replanMonotone,
-    'a retry with a re-planned schedule resumes public progress by completed fraction, never backwards');
+  const lastPublished = replanned[replanned.length - 1];
+  check(replanResumed && replanMonotone && lastPublished &&
+      lastPublished.completedRoots === 30 && lastPublished.totalRoots === 60,
+    'a retry with a re-planned schedule holds public progress until its result, never backwards');
   stopReplanned();
 
   // --- Watchdog: a wedged worker is retried once in a fresh worker ---

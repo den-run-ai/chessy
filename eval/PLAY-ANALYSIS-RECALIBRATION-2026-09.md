@@ -84,8 +84,9 @@ path at depths 4–6).
 - Progress counts root searches over the planned roots × depths schedule, so
   it stays monotonic with a fixed total; Verify names the depth being
   verified and Train's live region announces only depth transitions. A
-  fresh-worker retry may plan a different schedule; public progress resumes
-  once its completed fraction passes the published one.
+  fresh-worker retry may plan a different schedule. Its counts are not
+  comparable with the published ones, so public progress holds at its last
+  value until the result rather than moving the meter or depth backwards.
 - Timed deep results depend on the wall clock and are cached, so resuming a
   Review slot whose deep result was unusable recomputes it instead of
   re-serving the cached row.
