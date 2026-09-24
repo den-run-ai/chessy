@@ -115,3 +115,22 @@ Disclosures fixed before any Master game:
   registered estimator. No Davidson/E4 fit is computed for this screen.
 - A crashed game worker aborts a block; resuming only fills empty slots. Every
   resume is visible as another `.runs` header line.
+
+## Addendum after stage 1: maintainer relabel and new Easy (before any new-Easy game)
+
+Stage 1 placed every node budget roughly one label above its target on this
+scale (10k ≈ 1686, 36k ≈ 1915, 230k ≈ 2115, 1.44M ≈ 2401–2435). The maintainer
+therefore decided to shift the budgets up one label, drop the 1.44M-node preset
+(already Master strength; Master keeps its eight-second uncapped search) and
+add an easier Easy. Stable IDs are kept: `1` Easy (new), `2` Medium = 10k,
+`3` Hard = 36k, `5` Expert = 230k, `master` unchanged. This is a result-driven
+product decision informed by exploratory evidence, not an E4 result; any
+certification still needs a fresh preregistered protocol and holdout.
+
+New Easy budget, fixed before any game: 3,500 nodes (depth 30, 5 s ceiling,
+quiescence), from log-linear interpolation between the measured 10k and 36k
+blocks (about 124 Elo per doubling) toward 1500. Confirmation block, fixed
+before any game: 100 games against the 1500 anchor on the 50 odd-indexed
+openings (disjoint from the stage-1 even openings), same anchor settings and
+adjudication, one game at a time beside the running Master block. No further
+budget search follows in this PR; the result is reported as measured.
