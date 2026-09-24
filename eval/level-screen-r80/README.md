@@ -4,15 +4,18 @@
 not a FIDE/Chess.com/Lichess rating, and not pooled with any E4 artifact.**
 The plan, its two pre-Master addenda and every disclosure were committed before
 the games they govern: see [`PLAN.md`](PLAN.md). The 1500/1700/1900/2100/2300+
-labels remain provisional targets, and no shipped budget was retuned from this
-screen.
+labels remain provisional targets. After stage 1 the maintainer used this
+screen to move the shipped budgets up one label and to add a depth-2 Easy.
+That was a result-driven product decision, recorded in a PLAN.md addendum
+before any new-Easy game; this screen certifies none of the levels.
 
 ## Setup
 
-- Chessy: the r80 candidate presets, driven exactly like the product worker
-  request for an untimed game (Easy–Expert 10k/36k/230k/1.44M nodes, depth 30,
-  5 s ceiling; Master uncapped nodes, depth 111, 8 s). Rust/WASM bytes are
-  unchanged (`57166b29…5c5baec5f`).
+- Chessy: the draft r80 presets, driven exactly like the product worker
+  request for an untimed game (draft Easy–Expert 10k/36k/230k/1.44M nodes,
+  depth 30, 5 s ceiling; Master uncapped nodes, depth 111, 8 s), plus the
+  shipped r80 Easy (10k nodes, depth 2, 5 s ceiling) for its confirmation
+  block. Rust/WASM bytes are unchanged (`57166b29…5c5baec5f`).
 - Anchor: pinned Stockfish 18 (`6b087694…b9f9`) with `UCI_LimitStrength`,
   `UCI_Elo` = anchor, Threads 1, Hash 64, MultiPV 1, Move Overhead 10,
   `go movetime 1000`, new game + Clear Hash before every game, no book.
@@ -24,7 +27,10 @@ screen.
   lines.
 - Adjudication: rules terminals, draw at 180 total plies.
 - Host: one Linux x86-64 container, 4 logical CPUs (Intel Xeon 2.8 GHz),
-  Node.js 22.22.2, three games at a time.
+  Node.js 22.22.2, three games at a time. The exception is the r80 Easy block,
+  which ran one game at a time beside the Master block, so up to four games
+  shared the host during the overlap. Its `.runs` header records concurrency
+  1 and a load average of 3.35.
 - Estimate: logistic Elo from the score against the fixed anchor; 95%
   percentile interval from 10,000 opening-cluster bootstrap replicates
   (seed 20260924). Clusters are opening indices, some of which share a family,
@@ -79,8 +85,11 @@ while the host was heavily loaded.
   it has not been measured and is not part of this PR.
 - **Master** (8 s, uncapped nodes) measured about 2510 (2451–2575; one-sided
   95% lower bound 2464) against the 2300 anchor, averaging depth 8.5 with no
-  transposition-table saturation and no retries. On this host it is well
-  above the dropped 1.44M-node preset, so dropping that preset leaves no gap.
+  transposition-table saturation and no retries. On this host its estimate is
+  about 75–110 above the dropped 1.44M-node preset (2435 against 2300, 2401
+  against 2100). The 95% intervals overlap, so the size of that gap is
+  uncertain. Either way the 1.44M preset measured at Master strength, so
+  dropping it leaves no gap in the ladder.
 - **Only the node-capped levels transfer across devices.** Their results
   depend on node counts, not speed (apart from rare 5 s safety-ceiling stops).
   Master is wall-clock limited, and here it ran about 0.84M nodes per second
@@ -88,8 +97,9 @@ while the host was heavily loaded.
   plays a stronger Master, and a slower one a weaker Master.
 - **A 10k-node search very occasionally fails to finish depth 1** in extreme
   quiescence positions: one move in 4,131 at the old Easy/new Medium budget,
-  and one in 4,428 for the new Easy. It then plays its first ordered root move.
-  This is not new in r80. The frozen-family contract test still passes.
+  and one in 4,428 for the new Easy. It then plays the best root move it
+  finished scoring in the unfinished depth-1 pass (in both cases a move other
+  than its first ordered root). This is not new in r80. The frozen-family contract test still passes.
 - **What this is not.** These are one host's descriptive numbers against
   Stockfish's own UCI_Elo scale at one second per move, on a development
   opening list. They are not FIDE, Chess.com or Lichess ratings, not E4-v1
@@ -105,17 +115,22 @@ while the host was heavily loaded.
   for the r80 Easy confirmation block. Each record carries the exact preset it
   played, its moves in UCI, result, termination and Chessy search statistics.
 - `*.ndjson.runs` — one header per block start or resume, with the runner,
-  preset, WASM, Stockfish and (for Master) loader/rules hashes, commit and
-  host load.
+  preset, WASM, Stockfish and (for Master and the r80 Easy block) loader and
+  rules hashes, commit and host load.
 - Summaries: `node test/eval/level-screen.js --summarize <file.ndjson>`.
   The summary refuses a file that mixes levels, anchors or presets, repeats a
   schedule slot, or whose `.runs` headers disagree on any input hash. Every
   committed block passes that check. That includes both resumed blocks, whose
   start and resume headers carry identical runner, preset, WASM and Stockfish
   hashes.
-- The runner was hardened after these games, so its current hash differs from
-  the hashes those headers record. A resume must now match the block's recorded
-  inputs, preset and schedule. An exclusive `<out>.lock` stops two runs from
-  writing the same output, and a game is not recorded if any hashed input
-  changed during the run. None of this changes how a game is played or
-  scored.
+- The runner and the presets file were changed after these games, so their
+  current hashes differ from the hashes those headers record. The presets
+  change is a comment correction; the preset values each record carries are
+  unchanged. Runner changes:
+  - Each run executes a private, read-only snapshot of the runner, rules,
+    loader, WASM, presets, opening list and Stockfish. Its header records the
+    hashes of that snapshot, including the opening list.
+  - A resume must match the block's recorded inputs, preset and schedule.
+  - An exclusive `<out>.lock` stops two runs from writing the same output.
+  - A game is not recorded if the snapshot changes.
+  None of this changes how a game is played or scored.

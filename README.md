@@ -274,8 +274,10 @@ The [prospective 400-opening CC0 manifest](eval/match-v2/PROVENANCE.md) is
 frozen. The [v2 diagnostic runner](eval/match-v2/EXECUTION.md) registers exact
 commits, raw modules and budgets before executing 20 complete shards with
 both colors. It preserves and replays every move, repetition history and
-terminal result. Easy evaluator (10k nodes, endpoint lower bound >50%) and
-Hard selective-search (230k nodes, >49%) are separate profiles. Every result
+terminal result. The fixed-node `evaluator-easy` (10k nodes, endpoint lower
+bound >50%) and `selective-hard` (230k nodes, >49%) profiles are separate.
+Their IDs predate r80 and do not track the Play presets (230k nodes is now
+Expert). Every result
 remains diagnostic: 400 unique endpoints do not prove 400 independent
 families, and source reproduction, correctness and device admission remain
 separate. The [fresh finite-bank formal software contract](eval/match-formal/CONTRACT.md)

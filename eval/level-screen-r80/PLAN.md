@@ -148,3 +148,18 @@ on this scale (10k nodes averaged depth 3.2 ≈ 1686), which puts a depth-2 cap
 near 1450–1500. The confirmation block is unchanged: 100 games against the 1500
 anchor on the odd openings, one game at a time beside the Master block, and no
 further budget search in this PR.
+
+## Note after the screen (2026-09-24)
+
+This note corrects two statements above without changing them.
+
+- "Use of the results" said this PR would not retune any shipped budget from
+  this screen. The maintainer relabel addendum superseded that: the shipped
+  budgets did move from this screen. Medium, Hard and Expert rest on the
+  stage-1 blocks, not on fresh disjoint evidence. Only the new Easy has a
+  disjoint (odd-opening) confirmation block.
+- The depth-cap amendment said depth 1 "always completes". It does not quite:
+  in rare extreme quiescence positions a 10k-node search stops before
+  finishing depth 1. That happened once in 4,131 moves at the 10k draft budget
+  and once in 4,428 for the new Easy. The engine then plays the best root move
+  it finished scoring. The frozen-family depth-1 contract still passes.

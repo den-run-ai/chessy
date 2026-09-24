@@ -19,6 +19,11 @@
  * watchdog (timeMs + 3000 ms) loses the game for Chessy. An illegal, missing
  * or late Stockfish move loses for Stockfish.
  *
+ * A run holds an exclusive <out>.lock from its resume read to its last append.
+ * Its games execute a private read-only snapshot of the runner, rules, loader,
+ * WASM, presets, opening list and Stockfish, whose hashes head its .runs line.
+ * A resume must match the block's recorded inputs, or it is refused.
+ *
  *   node test/eval/level-screen.js --stockfish <exe> --level easy \
  *     --anchor 1500 --openings even --out <file.ndjson> [--concurrency 4]
  *   node test/eval/level-screen.js --summarize <file.ndjson> [...]
@@ -409,25 +414,65 @@ function slotOf(r) {
   return r.openingId + ':' + r.chessyColor;
 }
 
+// Every file a game process loads, relative to the repository root, keyed by
+// its identity field. A run copies them (and Stockfish) into a private
+// read-only snapshot and executes only that, so the bytes it hashes are the
+// bytes its games run.
+const SNAPSHOT_FILES = Object.freeze({
+  wasmSha256: 'assets/chessy-ai-fast.wasm',
+  loaderSha256: 'assets/wasm-engine.js',
+  rulesSha256: 'assets/engine.js',
+  presetsSha256: 'assets/level-presets.js',
+  bridgeSha256: 'test/wasm-test-engine.js',
+  openingsSha256: 'test/ai-match-openings.js',
+  openingProtocolSha256: 'test/ai-match-protocol.js',
+  runnerSha256: 'test/eval/level-screen.js'
+});
+const SNAPSHOT_STOCKFISH = 'stockfish';
+
 // Every input that changes what a block's games measure. A block's .runs
 // headers and records must agree on all of them; commit, host and load are
 // descriptive only.
 const RUN_IDENTITY_KEYS = Object.freeze(['schema', 'level', 'anchor', 'openings',
-  'wasmSha256', 'loaderSha256', 'rulesSha256', 'stockfishSha256', 'presetsSha256',
-  'runnerSha256']);
+  'stockfishSha256'].concat(Object.keys(SNAPSHOT_FILES)));
 
-function runIdentity(exe, level, anchor, openings) {
-  return {
+// `root` holds SNAPSHOT_FILES at their relative paths; `exe` is Stockfish.
+function runIdentity(root, exe, level, anchor, openings) {
+  const identity = {
     schema: SCHEMA + '.run',
     level: level,
     anchor: anchor,
     openings: openings,
-    wasmSha256: sha256File(path.join(ROOT, 'assets', 'chessy-ai-fast.wasm')),
-    loaderSha256: sha256File(path.join(ROOT, 'assets', 'wasm-engine.js')),
-    rulesSha256: sha256File(path.join(ROOT, 'assets', 'engine.js')),
-    stockfishSha256: sha256File(exe),
-    presetsSha256: sha256File(path.join(ROOT, 'assets', 'level-presets.js')),
-    runnerSha256: sha256File(__filename)
+    stockfishSha256: sha256File(exe)
+  };
+  Object.keys(SNAPSHOT_FILES).forEach(function (key) {
+    identity[key] = sha256File(path.join(root, SNAPSHOT_FILES[key]));
+  });
+  return identity;
+}
+
+function makeSnapshot(exe) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-level-screen-'));
+  try {
+    Object.keys(SNAPSHOT_FILES).forEach(function (key) {
+      const rel = SNAPSHOT_FILES[key];
+      const target = path.join(dir, rel);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(path.join(ROOT, rel), target, fs.constants.COPYFILE_EXCL);
+      fs.chmodSync(target, 0o444);
+    });
+    const stockfish = path.join(dir, SNAPSHOT_STOCKFISH);
+    fs.copyFileSync(exe, stockfish, fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(stockfish, 0o555);
+  } catch (error) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+  return {
+    dir: dir,
+    runner: path.join(dir, SNAPSHOT_FILES.runnerSha256),
+    stockfish: path.join(dir, SNAPSHOT_STOCKFISH),
+    remove: function () { fs.rmSync(dir, { recursive: true, force: true }); }
   };
 }
 
@@ -476,18 +521,20 @@ function checkResume(identity, preset, jobs, headers, records) {
 // A summary covers exactly one block: one level, anchor and preset, each
 // schedule slot at most once, and (when present) consistent .runs headers.
 function validateBlock(records, headers) {
-  const first = records[0];
+  headers = headers || [];
+  const first = records[0] || headers[0];
+  if (!first) return;
   const slots = new Set();
   records.forEach(function (r, i) {
     if (r.schema !== SCHEMA || r.level !== first.level || r.anchor !== first.anchor ||
-        !util.isDeepStrictEqual(r.preset, first.preset)) {
+        !util.isDeepStrictEqual(r.preset, records[0].preset)) {
       throw new Error('record ' + (i + 1) + ' mixes levels, anchors or presets');
     }
     const slot = slotOf(r);
     if (slots.has(slot)) throw new Error('record ' + (i + 1) + ' repeats slot ' + slot);
     slots.add(slot);
   });
-  (headers || []).forEach(function (h, i) {
+  headers.forEach(function (h, i) {
     const diff = identityDiff(h, headers[0]);
     if (diff.length || h.level !== first.level || h.anchor !== first.anchor) {
       throw new Error('.runs header ' + (i + 1) + ' does not match this block' +
@@ -513,9 +560,12 @@ function acquireLock(out) {
   }
   try {
     fs.writeSync(fd, token);
-  } finally {
+  } catch (error) {
     fs.closeSync(fd);
+    fs.unlinkSync(lockPath);
+    throw error;
   }
+  fs.closeSync(fd);
   return {
     path: lockPath,
     release: function () {
@@ -526,11 +576,26 @@ function acquireLock(out) {
   };
 }
 
+// One output has one lock path however it is spelled. A symbolic link that
+// points nowhere is refused: its lock and sidecar would not follow its target.
 function canonicalOut(out) {
   const resolved = path.resolve(out);
-  if (fs.existsSync(resolved)) return fs.realpathSync(resolved);
+  let link = null;
+  try {
+    link = fs.lstatSync(resolved);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (link) {
+    if (link.isSymbolicLink() && !fs.existsSync(resolved)) {
+      throw new Error('--out ' + out + ' is a dangling symbolic link');
+    }
+    return fs.realpathSync(resolved);
+  }
   return path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
 }
+
+const STOP_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
 
 async function runSchedule(argv) {
   const exe = arg(argv, 'stockfish');
@@ -539,29 +604,37 @@ async function runSchedule(argv) {
   const outArg = arg(argv, 'out');
   const openings = arg(argv, 'openings', 'even');
   const concurrency = Number(arg(argv, 'concurrency', String(Math.max(1, os.cpus().length))));
-  if (!exe || !LEVEL_IDS[level] || !Number.isInteger(anchor) || !outArg) {
-    throw new Error('usage: --stockfish <exe> --level <name> --anchor <elo> --openings <spec> --out <file>');
+  if (!exe || !LEVEL_IDS[level] || !Number.isInteger(anchor) || !outArg ||
+      !Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error('usage: --stockfish <exe> --level <name> --anchor <elo> ' +
+      '--openings <spec> --out <file> [--concurrency <n >= 1>]');
   }
-  const OPENINGS = require(path.join(ROOT, 'test', 'ai-match-openings.js'));
-  const ids = selectOpenings(openings, OPENINGS.length);
-  const jobs = [];
-  ids.forEach(function (id) {
-    jobs.push({ openingId: id, chessyColor: 'white' });
-    jobs.push({ openingId: id, chessyColor: 'black' });
-  });
   const out = canonicalOut(outArg);
   const lock = acquireLock(out);
   const children = new Set();
-  const onSignal = function () {
+  let snapshot = null;
+  const killChildren = function () {
     children.forEach(function (c) { try { c.kill('SIGKILL'); } catch (e) { /* gone */ } });
+  };
+  const onSignal = function () {
+    killChildren();
+    if (snapshot) snapshot.remove();
     lock.release();
     process.exit(130);
   };
-  process.once('SIGINT', onSignal);
-  process.once('SIGTERM', onSignal);
+  STOP_SIGNALS.forEach(function (s) { process.once(s, onSignal); });
   try {
-    const identity = runIdentity(exe, level, anchor, openings);
-    const preset = Presets.get(LEVEL_IDS[level]);
+    snapshot = makeSnapshot(exe);
+    const identity = runIdentity(snapshot.dir, snapshot.stockfish, level, anchor, openings);
+    // The schedule and preset come from the snapshot the games will load.
+    const OPENINGS = require(path.join(snapshot.dir, SNAPSHOT_FILES.openingsSha256));
+    const preset = require(path.join(snapshot.dir, SNAPSHOT_FILES.presetsSha256))
+      .get(LEVEL_IDS[level]);
+    const jobs = [];
+    selectOpenings(openings, OPENINGS.length).forEach(function (id) {
+      jobs.push({ openingId: id, chessyColor: 'white' });
+      jobs.push({ openingId: id, chessyColor: 'black' });
+    });
     const pending = checkResume(identity, preset, jobs, readRecords(out + '.runs'),
       readRecords(out));
     const meta = Object.assign({}, identity, {
@@ -579,30 +652,35 @@ async function runSchedule(argv) {
     let next = 0;
     let finished = 0;
     let failed = null;
+    const fail = function (error) {
+      failed = failed || error;
+      killChildren();
+    };
     async function worker() {
       while (next < pending.length && !failed) {
         const job = pending[next++];
-        const spec = Object.assign({ level: level, anchor: anchor, stockfish: exe }, job);
+        const spec = Object.assign({ level: level, anchor: anchor,
+          stockfish: snapshot.stockfish }, job);
         const record = await new Promise(function (resolve, reject) {
-          const child = cp.fork(__filename, ['--game', JSON.stringify(spec)],
+          const child = cp.fork(snapshot.runner, ['--game', JSON.stringify(spec)],
             { stdio: ['ignore', 'pipe', 'inherit', 'ipc'] });
           children.add(child);
           let reply = null;
           child.on('message', function (m) { reply = m; });
-          child.on('exit', function (code) {
+          child.on('exit', function (code, signal) {
             children.delete(child);
             if (reply && reply.ok) resolve(reply.record);
-            else reject(new Error('game worker failed: ' + (reply && reply.error) + ' code ' + code));
+            else reject(new Error('game worker failed: ' + (reply && reply.error) +
+              ' code ' + code + (signal ? ' signal ' + signal : '')));
           });
         });
         if (failed) return;
-        // The inputs are read again by every game process: refuse to record a
-        // game once any of them has changed since the header was written.
-        const diff = identityDiff(runIdentity(exe, level, anchor, openings), identity);
+        // The snapshot is private and read-only; refuse to record a game if it
+        // was altered anyway.
+        const diff = identityDiff(
+          runIdentity(snapshot.dir, snapshot.stockfish, level, anchor, openings), identity);
         if (diff.length) {
-          failed = new Error('inputs changed during the run (' + diff.join(', ') +
-            '); game not recorded');
-          throw failed;
+          throw new Error('the run snapshot changed (' + diff.join(', ') + '); game not recorded');
         }
         fs.appendFileSync(out, JSON.stringify(record) + '\n');
         finished++;
@@ -612,18 +690,16 @@ async function runSchedule(argv) {
       }
     }
     const pool = [];
-    for (let i = 0; i < concurrency; i++) {
-      pool.push(worker().catch(function (error) { failed = failed || error; }));
-    }
+    for (let i = 0; i < concurrency; i++) pool.push(worker().catch(fail));
     await Promise.all(pool);
     if (failed) throw failed;
     const records = readRecords(out);
     validateBlock(records, readRecords(out + '.runs'));
     console.log(JSON.stringify(summarize(records, { anchor: anchor }), null, 2));
   } finally {
-    children.forEach(function (c) { try { c.kill('SIGKILL'); } catch (e) { /* gone */ } });
-    process.removeListener('SIGINT', onSignal);
-    process.removeListener('SIGTERM', onSignal);
+    killChildren();
+    STOP_SIGNALS.forEach(function (s) { process.removeListener(s, onSignal); });
+    if (snapshot) snapshot.remove();
     lock.release();
   }
 }
@@ -672,8 +748,11 @@ module.exports = {
   selectOpenings: selectOpenings,
   eloFromScore: eloFromScore,
   summarize: summarize,
+  SNAPSHOT_FILES: SNAPSHOT_FILES,
   RUN_IDENTITY_KEYS: RUN_IDENTITY_KEYS,
   runIdentity: runIdentity,
+  makeSnapshot: makeSnapshot,
+  canonicalOut: canonicalOut,
   readRecords: readRecords,
   checkResume: checkResume,
   validateBlock: validateBlock,

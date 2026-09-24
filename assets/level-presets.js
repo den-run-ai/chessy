@@ -9,8 +9,10 @@
  * Stockfish 18 (eval/level-screen-r80) placed each one about a label above
  * its target, so 10k/36k/230k nodes now serve Medium/Hard/Expert, the
  * 1.44M-node preset (already Master strength there) is dropped, and Easy is
- * Medium's 10k work cap limited to depth 2. Depth 1 always completes (it can
- * cost ~9k nodes in tactical positions), so no level plays an unsearched move.
+ * Medium's 10k work cap limited to depth 2. Depth 1 fits in 10k nodes almost
+ * always (about 9k in the tactical frozen family). In rare extreme quiescence
+ * positions (about 1 move in 4,100-4,400 in the screen) it does not; the
+ * engine then plays the best root it finished scoring.
  */
 'use strict';
 (function (global, factory) {
