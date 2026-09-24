@@ -30,6 +30,7 @@ const path = require('path');
 const os = require('os');
 const cp = require('child_process');
 const crypto = require('crypto');
+const util = require('util');
 
 const ROOT = path.join(__dirname, '..', '..');
 require(path.join(ROOT, 'assets', 'engine.js'));
@@ -394,47 +395,33 @@ function arg(argv, name, dflt) {
 
 function readRecords(file) {
   if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(function (l) {
-    return JSON.parse(l);
-  });
+  return fs.readFileSync(file, 'utf8').split('\n').map(function (l, i) {
+    if (!l) return null;
+    try {
+      return JSON.parse(l);
+    } catch (error) {
+      throw new Error(file + ' line ' + (i + 1) + ' is not JSON (truncated append?)');
+    }
+  }).filter(Boolean);
 }
 
-async function runSchedule(argv) {
-  const exe = arg(argv, 'stockfish');
-  const level = arg(argv, 'level');
-  const anchor = Number(arg(argv, 'anchor'));
-  const out = arg(argv, 'out');
-  const concurrency = Number(arg(argv, 'concurrency', String(Math.max(1, os.cpus().length))));
-  if (!exe || !LEVEL_IDS[level] || !Number.isInteger(anchor) || !out) {
-    throw new Error('usage: --stockfish <exe> --level <name> --anchor <elo> --openings <spec> --out <file>');
-  }
-  const OPENINGS = require(path.join(ROOT, 'test', 'ai-match-openings.js'));
-  const ids = selectOpenings(arg(argv, 'openings', 'even'), OPENINGS.length);
-  const jobs = [];
-  ids.forEach(function (id) {
-    jobs.push({ openingId: id, chessyColor: 'white' });
-    jobs.push({ openingId: id, chessyColor: 'black' });
-  });
-  // Resume after a host interruption only fills missing schedule slots; a
-  // completed game is never replayed or replaced.
-  const done = new Set(readRecords(out).map(function (r) {
-    return r.openingId + ':' + r.chessyColor;
-  }));
-  const pending = jobs.filter(function (j) { return !done.has(j.openingId + ':' + j.chessyColor); });
-  const meta = {
+function slotOf(r) {
+  return r.openingId + ':' + r.chessyColor;
+}
+
+// Every input that changes what a block's games measure. A block's .runs
+// headers and records must agree on all of them; commit, host and load are
+// descriptive only.
+const RUN_IDENTITY_KEYS = Object.freeze(['schema', 'level', 'anchor', 'openings',
+  'wasmSha256', 'loaderSha256', 'rulesSha256', 'stockfishSha256', 'presetsSha256',
+  'runnerSha256']);
+
+function runIdentity(exe, level, anchor, openings) {
+  return {
     schema: SCHEMA + '.run',
     level: level,
     anchor: anchor,
-    openings: arg(argv, 'openings', 'even'),
-    scheduledGames: jobs.length,
-    alreadyRecorded: jobs.length - pending.length,
-    concurrency: concurrency,
-    node: process.version,
-    cpu: (os.cpus()[0] || {}).model,
-    commit: gitOutput(['rev-parse', 'HEAD']),
-    dirty: gitOutput(['status', '--porcelain']) !== '',
-    os: os.type() + ' ' + os.release() + ' ' + os.arch(),
-    loadavg: os.loadavg(),
+    openings: openings,
     wasmSha256: sha256File(path.join(ROOT, 'assets', 'chessy-ai-fast.wasm')),
     loaderSha256: sha256File(path.join(ROOT, 'assets', 'wasm-engine.js')),
     rulesSha256: sha256File(path.join(ROOT, 'assets', 'engine.js')),
@@ -442,35 +429,203 @@ async function runSchedule(argv) {
     presetsSha256: sha256File(path.join(ROOT, 'assets', 'level-presets.js')),
     runnerSha256: sha256File(__filename)
   };
-  fs.appendFileSync(out + '.runs', JSON.stringify(meta) + '\n');
-  let next = 0;
-  let finished = 0;
-  async function worker() {
-    while (next < pending.length) {
-      const job = pending[next++];
-      const spec = Object.assign({ level: level, anchor: anchor, stockfish: exe }, job);
-      const record = await new Promise(function (resolve, reject) {
-        const child = cp.fork(__filename, ['--game', JSON.stringify(spec)],
-          { stdio: ['ignore', 'pipe', 'inherit', 'ipc'] });
-        let reply = null;
-        child.on('message', function (m) { reply = m; });
-        child.on('exit', function (code) {
-          if (reply && reply.ok) resolve(reply.record);
-          else reject(new Error('game worker failed: ' + (reply && reply.error) + ' code ' + code));
-        });
-      });
-      fs.appendFileSync(out, JSON.stringify(record) + '\n');
-      finished++;
-      process.stdout.write(level + '@' + anchor + ' ' + (meta.alreadyRecorded + finished) + '/' +
-        jobs.length + ' op' + record.openingId + ' ' + record.chessyColor + ' ' +
-        record.score + ' ' + record.reason + ' ' + record.plies + 'p\n');
-    }
+}
+
+function identityDiff(a, b) {
+  return RUN_IDENTITY_KEYS.filter(function (k) {
+    return !util.isDeepStrictEqual(a[k], b[k]);
+  });
+}
+
+function plain(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+// Resume after a host interruption only fills the missing slots of the SAME
+// block: every earlier header must carry this invocation's identity and every
+// earlier record its level, anchor, preset and a distinct scheduled slot.
+// Anything else is refused, so a changed candidate needs a fresh --out.
+function checkResume(identity, preset, jobs, headers, records) {
+  if (records.length && !headers.length) {
+    throw new Error('existing games have no .runs header; use a fresh --out');
   }
-  const pool = [];
-  for (let i = 0; i < concurrency; i++) pool.push(worker());
-  await Promise.all(pool);
-  const records = readRecords(out);
-  console.log(JSON.stringify(summarize(records, { anchor: anchor }), null, 2));
+  headers.forEach(function (h, i) {
+    const diff = identityDiff(h, identity);
+    if (diff.length) {
+      throw new Error('.runs header ' + (i + 1) + ' differs in ' + diff.join(', ') +
+        '; a changed screen needs a fresh --out');
+    }
+  });
+  const scheduled = new Set(jobs.map(slotOf));
+  const expected = plain(preset);
+  const done = new Set();
+  records.forEach(function (r, i) {
+    if (r.schema !== SCHEMA || r.level !== identity.level || r.anchor !== identity.anchor ||
+        !util.isDeepStrictEqual(r.preset, expected)) {
+      throw new Error('record ' + (i + 1) + ' was played by a different level, anchor or ' +
+        'preset; a changed screen needs a fresh --out');
+    }
+    const slot = slotOf(r);
+    if (!scheduled.has(slot)) throw new Error('record ' + (i + 1) + ' is outside this schedule');
+    if (done.has(slot)) throw new Error('record ' + (i + 1) + ' repeats slot ' + slot);
+    done.add(slot);
+  });
+  return jobs.filter(function (j) { return !done.has(slotOf(j)); });
+}
+
+// A summary covers exactly one block: one level, anchor and preset, each
+// schedule slot at most once, and (when present) consistent .runs headers.
+function validateBlock(records, headers) {
+  const first = records[0];
+  const slots = new Set();
+  records.forEach(function (r, i) {
+    if (r.schema !== SCHEMA || r.level !== first.level || r.anchor !== first.anchor ||
+        !util.isDeepStrictEqual(r.preset, first.preset)) {
+      throw new Error('record ' + (i + 1) + ' mixes levels, anchors or presets');
+    }
+    const slot = slotOf(r);
+    if (slots.has(slot)) throw new Error('record ' + (i + 1) + ' repeats slot ' + slot);
+    slots.add(slot);
+  });
+  (headers || []).forEach(function (h, i) {
+    const diff = identityDiff(h, headers[0]);
+    if (diff.length || h.level !== first.level || h.anchor !== first.anchor) {
+      throw new Error('.runs header ' + (i + 1) + ' does not match this block' +
+        (diff.length ? ' (' + diff.join(', ') + ')' : ''));
+    }
+  });
+}
+
+// One exclusive, no-replace lock covers the NDJSON and its .runs sidecar from
+// the resume read until the last append, so two runs cannot fill the same
+// slots. A lock left by a killed run is never broken automatically.
+function acquireLock(out) {
+  const lockPath = out + '.lock';
+  const token = process.pid + '@' + os.hostname() + ' ' +
+    crypto.randomBytes(8).toString('hex') + '\n';
+  let fd;
+  try {
+    fd = fs.openSync(lockPath, 'wx');
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    throw new Error(out + ' is locked (' + lockPath + '); delete that file only after ' +
+      'confirming no runner is using this --out');
+  }
+  try {
+    fs.writeSync(fd, token);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return {
+    path: lockPath,
+    release: function () {
+      try {
+        if (fs.readFileSync(lockPath, 'utf8') === token) fs.unlinkSync(lockPath);
+      } catch (error) { /* already gone */ }
+    }
+  };
+}
+
+function canonicalOut(out) {
+  const resolved = path.resolve(out);
+  if (fs.existsSync(resolved)) return fs.realpathSync(resolved);
+  return path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
+}
+
+async function runSchedule(argv) {
+  const exe = arg(argv, 'stockfish');
+  const level = arg(argv, 'level');
+  const anchor = Number(arg(argv, 'anchor'));
+  const outArg = arg(argv, 'out');
+  const openings = arg(argv, 'openings', 'even');
+  const concurrency = Number(arg(argv, 'concurrency', String(Math.max(1, os.cpus().length))));
+  if (!exe || !LEVEL_IDS[level] || !Number.isInteger(anchor) || !outArg) {
+    throw new Error('usage: --stockfish <exe> --level <name> --anchor <elo> --openings <spec> --out <file>');
+  }
+  const OPENINGS = require(path.join(ROOT, 'test', 'ai-match-openings.js'));
+  const ids = selectOpenings(openings, OPENINGS.length);
+  const jobs = [];
+  ids.forEach(function (id) {
+    jobs.push({ openingId: id, chessyColor: 'white' });
+    jobs.push({ openingId: id, chessyColor: 'black' });
+  });
+  const out = canonicalOut(outArg);
+  const lock = acquireLock(out);
+  const children = new Set();
+  const onSignal = function () {
+    children.forEach(function (c) { try { c.kill('SIGKILL'); } catch (e) { /* gone */ } });
+    lock.release();
+    process.exit(130);
+  };
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
+  try {
+    const identity = runIdentity(exe, level, anchor, openings);
+    const preset = Presets.get(LEVEL_IDS[level]);
+    const pending = checkResume(identity, preset, jobs, readRecords(out + '.runs'),
+      readRecords(out));
+    const meta = Object.assign({}, identity, {
+      scheduledGames: jobs.length,
+      alreadyRecorded: jobs.length - pending.length,
+      concurrency: concurrency,
+      node: process.version,
+      cpu: (os.cpus()[0] || {}).model,
+      commit: gitOutput(['rev-parse', 'HEAD']),
+      dirty: gitOutput(['status', '--porcelain']) !== '',
+      os: os.type() + ' ' + os.release() + ' ' + os.arch(),
+      loadavg: os.loadavg()
+    });
+    fs.appendFileSync(out + '.runs', JSON.stringify(meta) + '\n');
+    let next = 0;
+    let finished = 0;
+    let failed = null;
+    async function worker() {
+      while (next < pending.length && !failed) {
+        const job = pending[next++];
+        const spec = Object.assign({ level: level, anchor: anchor, stockfish: exe }, job);
+        const record = await new Promise(function (resolve, reject) {
+          const child = cp.fork(__filename, ['--game', JSON.stringify(spec)],
+            { stdio: ['ignore', 'pipe', 'inherit', 'ipc'] });
+          children.add(child);
+          let reply = null;
+          child.on('message', function (m) { reply = m; });
+          child.on('exit', function (code) {
+            children.delete(child);
+            if (reply && reply.ok) resolve(reply.record);
+            else reject(new Error('game worker failed: ' + (reply && reply.error) + ' code ' + code));
+          });
+        });
+        if (failed) return;
+        // The inputs are read again by every game process: refuse to record a
+        // game once any of them has changed since the header was written.
+        const diff = identityDiff(runIdentity(exe, level, anchor, openings), identity);
+        if (diff.length) {
+          failed = new Error('inputs changed during the run (' + diff.join(', ') +
+            '); game not recorded');
+          throw failed;
+        }
+        fs.appendFileSync(out, JSON.stringify(record) + '\n');
+        finished++;
+        process.stdout.write(level + '@' + anchor + ' ' + (meta.alreadyRecorded + finished) + '/' +
+          jobs.length + ' op' + record.openingId + ' ' + record.chessyColor + ' ' +
+          record.score + ' ' + record.reason + ' ' + record.plies + 'p\n');
+      }
+    }
+    const pool = [];
+    for (let i = 0; i < concurrency; i++) {
+      pool.push(worker().catch(function (error) { failed = failed || error; }));
+    }
+    await Promise.all(pool);
+    if (failed) throw failed;
+    const records = readRecords(out);
+    validateBlock(records, readRecords(out + '.runs'));
+    console.log(JSON.stringify(summarize(records, { anchor: anchor }), null, 2));
+  } finally {
+    children.forEach(function (c) { try { c.kill('SIGKILL'); } catch (e) { /* gone */ } });
+    process.removeListener('SIGINT', onSignal);
+    process.removeListener('SIGTERM', onSignal);
+    lock.release();
+  }
 }
 
 if (require.main === module) {
@@ -487,8 +642,7 @@ if (require.main === module) {
     files.forEach(function (file) {
       const records = readRecords(file);
       if (!records.length) return;
-      const anchors = new Set(records.map(function (r) { return r.anchor; }));
-      if (anchors.size !== 1) throw new Error(file + ' mixes anchors');
+      validateBlock(records, readRecords(file + '.runs'));
       const summary = summarize(records, { anchor: records[0].anchor });
       const reasons = {};
       records.forEach(function (r) { reasons[r.reason] = (reasons[r.reason] || 0) + 1; });
@@ -517,5 +671,11 @@ module.exports = {
   chessyScore: chessyScore,
   selectOpenings: selectOpenings,
   eloFromScore: eloFromScore,
-  summarize: summarize
+  summarize: summarize,
+  RUN_IDENTITY_KEYS: RUN_IDENTITY_KEYS,
+  runIdentity: runIdentity,
+  readRecords: readRecords,
+  checkResume: checkResume,
+  validateBlock: validateBlock,
+  acquireLock: acquireLock
 };

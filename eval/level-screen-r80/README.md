@@ -108,3 +108,14 @@ while the host was heavily loaded.
   preset, WASM, Stockfish and (for Master) loader/rules hashes, commit and
   host load.
 - Summaries: `node test/eval/level-screen.js --summarize <file.ndjson>`.
+  The summary refuses a file that mixes levels, anchors or presets, repeats a
+  schedule slot, or whose `.runs` headers disagree on any input hash. Every
+  committed block passes that check. That includes both resumed blocks, whose
+  start and resume headers carry identical runner, preset, WASM and Stockfish
+  hashes.
+- The runner was hardened after these games, so its current hash differs from
+  the hashes those headers record. A resume must now match the block's recorded
+  inputs, preset and schedule. An exclusive `<out>.lock` stops two runs from
+  writing the same output, and a game is not recorded if any hashed input
+  changed during the run. None of this changes how a game is played or
+  scored.

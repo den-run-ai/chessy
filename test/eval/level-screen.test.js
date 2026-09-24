@@ -108,4 +108,143 @@ check('summaries count W-D-L, colors and a reproducible clustered interval', fun
   assert.ok(a.bootstrap.oneSidedLower95Rating > a.bootstrap.rating95[0]);
 });
 
+// ---- Resume and output-lock contract (no game is played) ----
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const Presets = require('../../assets/level-presets.js');
+
+function block(level, anchor) {
+  const identity = Screen.runIdentity(__filename, level, anchor, '0-1');
+  const preset = Presets.get(Screen.LEVEL_IDS[level]);
+  const jobs = [0, 1].flatMap(function (id) {
+    return [{ openingId: id, chessyColor: 'white' }, { openingId: id, chessyColor: 'black' }];
+  });
+  const record = function (id, color) {
+    return JSON.parse(JSON.stringify({ schema: Screen.SCHEMA, level: level, preset: preset,
+      anchor: anchor, openingId: id, chessyColor: color, score: 1 }));
+  };
+  const header = JSON.parse(JSON.stringify(Object.assign({ commit: 'x', loadavg: [1] }, identity)));
+  return { identity: identity, preset: preset, jobs: jobs, record: record, header: header };
+}
+
+check('a resume fills only the missing slots of the same block', function () {
+  const b = block('medium', 1700);
+  assert.deepStrictEqual(Screen.RUN_IDENTITY_KEYS.filter(function (k) {
+    return b.identity[k] === undefined;
+  }), []);
+  assert.deepStrictEqual(Screen.checkResume(b.identity, b.preset, b.jobs, [], []), b.jobs);
+  // Descriptive fields (commit, load) may differ between a start and a resume.
+  const pending = Screen.checkResume(b.identity, b.preset, b.jobs,
+    [b.header, Object.assign({}, b.header, { commit: 'y', loadavg: [3] })],
+    [b.record(0, 'white'), b.record(1, 'black')]);
+  assert.deepStrictEqual(pending,
+    [{ openingId: 0, chessyColor: 'black' }, { openingId: 1, chessyColor: 'white' }]);
+});
+
+check('a resume with a changed candidate, anchor or schedule is refused', function () {
+  const b = block('medium', 1700);
+  const games = [b.record(0, 'white')];
+  Screen.RUN_IDENTITY_KEYS.forEach(function (k) {
+    const header = Object.assign({}, b.header);
+    header[k] = k === 'anchor' ? 1900 : 'changed';
+    assert.throws(function () {
+      Screen.checkResume(b.identity, b.preset, b.jobs, [header], games);
+    }, new RegExp('differs in ' + k), k + ' change must be refused');
+  });
+  // A header without the newer identity fields (an older runner) is refused.
+  const legacy = Object.assign({}, b.header);
+  delete legacy.loaderSha256;
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [legacy], games);
+  }, /loaderSha256/);
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [], games);
+  }, /no \.runs header/);
+  const hard = block('hard', 1700);
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [b.header], [hard.record(0, 'white')]);
+  }, /different level, anchor or preset/);
+  const retuned = b.record(0, 'white');
+  retuned.preset.nodeLimit += 1;
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [b.header], [retuned]);
+  }, /different level, anchor or preset/);
+  const otherAnchor = b.record(0, 'white');
+  otherAnchor.anchor = 1500;
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [b.header], [otherAnchor]);
+  }, /different level, anchor or preset/);
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [b.header], [b.record(7, 'white')]);
+  }, /outside this schedule/);
+  assert.throws(function () {
+    Screen.checkResume(b.identity, b.preset, b.jobs, [b.header],
+      [b.record(0, 'white'), b.record(0, 'white')]);
+  }, /repeats slot 0:white/);
+});
+
+check('a summary refuses mixed blocks and duplicate slots', function () {
+  const b = block('medium', 1700);
+  Screen.validateBlock([b.record(0, 'white'), b.record(0, 'black')], [b.header, b.header]);
+  Screen.validateBlock([b.record(0, 'white')], []);
+  assert.throws(function () {
+    Screen.validateBlock([b.record(0, 'white'), b.record(0, 'white')], []);
+  }, /repeats slot/);
+  assert.throws(function () {
+    Screen.validateBlock([b.record(0, 'white'), block('hard', 1700).record(0, 'black')], []);
+  }, /mixes/);
+  assert.throws(function () {
+    Screen.validateBlock([b.record(0, 'white')],
+      [b.header, Object.assign({}, b.header, { presetsSha256: 'changed' })]);
+  }, /presetsSha256/);
+  assert.throws(function () {
+    Screen.validateBlock([b.record(0, 'white')], [block('medium', 1900).header]);
+  }, /does not match this block/);
+});
+
+check('the committed r80 screen blocks each pass the block check', function () {
+  const dir = path.join(__dirname, '..', '..', 'eval', 'level-screen-r80');
+  const files = fs.readdirSync(dir).filter(function (f) { return /\.ndjson$/.test(f); });
+  assert.ok(files.length >= 7);
+  files.forEach(function (f) {
+    const records = Screen.readRecords(path.join(dir, f));
+    assert.strictEqual(records.length, 100, f);
+    Screen.validateBlock(records, Screen.readRecords(path.join(dir, f + '.runs')));
+  });
+});
+
+check('one exclusive lock guards an output until its owner releases it', function () {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-screen-'));
+  try {
+    const out = path.join(dir, 'block.ndjson');
+    const first = Screen.acquireLock(out);
+    assert.throws(function () { Screen.acquireLock(out); }, /is locked/);
+    // A lock this owner did not write (a replacement) is left in place.
+    fs.writeFileSync(first.path, 'someone else\n');
+    first.release();
+    assert.ok(fs.existsSync(first.path));
+    fs.unlinkSync(first.path);
+    const second = Screen.acquireLock(out);
+    second.release();
+    assert.ok(!fs.existsSync(second.path));
+    Screen.acquireLock(out).release();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+check('a truncated NDJSON line is reported, not skipped', function () {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-screen-'));
+  try {
+    const file = path.join(dir, 'block.ndjson');
+    fs.writeFileSync(file, '{"a":1}\n{"a":');
+    assert.throws(function () { Screen.readRecords(file); }, /line 2 is not JSON/);
+    assert.deepStrictEqual(Screen.readRecords(path.join(dir, 'missing.ndjson')), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 console.log('\nlevel-screen: ' + passed + ' passed');
