@@ -99,7 +99,9 @@ while the host was heavily loaded.
   quiescence positions: one move in 4,131 at the old Easy/new Medium budget,
   and one in 4,428 for the new Easy. It then plays the best root move it
   finished scoring in the unfinished depth-1 pass (in both cases a move other
-  than its first ordered root). This is not new in r80. The frozen-family contract test still passes.
+  than its first ordered root; with no root scored it would play that first
+  root). This is not new in r80. The frozen-family contract test still
+  passes.
 - **What this is not.** These are one host's descriptive numbers against
   Stockfish's own UCI_Elo scale at one second per move, on a development
   opening list. They are not FIDE, Chess.com or Lichess ratings, not E4-v1
@@ -131,9 +133,11 @@ while the host was heavily loaded.
   block passes. That includes both resumed blocks, whose start and resume
   headers carry identical runner, preset, WASM and Stockfish hashes.
 - The runner and the presets file were changed after these games, so their
-  current hashes differ from the hashes those headers record. The presets
-  change is a comment correction; the preset values each record carries are
-  unchanged. Runner changes:
+  current hashes differ from the hashes those headers record. For the r80
+  Easy block the only later presets change is a comment correction. The
+  draft blocks and Master predate the r80 relabel, which also changed the
+  Easy–Expert values in that file. Every record still carries the exact preset
+  it played. Runner changes:
   - Each run executes a private, read-only snapshot of the runner, rules,
     loader, WASM, presets, opening list and Stockfish. Its header records the
     hashes of that snapshot, including the opening list.

@@ -162,4 +162,5 @@ This note corrects two statements above without changing them.
   in rare extreme quiescence positions a 10k-node search stops before
   finishing depth 1. That happened once in 4,131 moves at the 10k draft budget
   and once in 4,428 for the new Easy. The engine then plays the best root move
-  it finished scoring. The frozen-family depth-1 contract still passes.
+  it finished scoring, or its first ordered root if none finished. The
+  frozen-family depth-1 contract still passes.

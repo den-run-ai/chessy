@@ -12,7 +12,8 @@
  * Medium's 10k work cap limited to depth 2. Depth 1 fits in 10k nodes almost
  * always (about 9k in the tactical frozen family). In rare extreme quiescence
  * positions (about 1 move in 4,100-4,400 in the screen) it does not; the
- * engine then plays the best root it finished scoring.
+ * engine then plays the best root it finished scoring, or its first ordered
+ * root if none finished.
  */
 'use strict';
 (function (global, factory) {
