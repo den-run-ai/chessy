@@ -40,7 +40,9 @@
   // fallback keeps Train usable in an intentionally partial release.
   const CHECK_PROFILE = (typeof ChessyMomentScan !== 'undefined' && ChessyMomentScan.profiles)
     ? ChessyMomentScan.profiles.deep
-    : { maxDepth: 10, nodeLimit: 80000, nodeBudget: 1200000, multiPV: 3, pvLen: 6 };
+    : (typeof ChessyAnalysisCore !== 'undefined' && ChessyAnalysisCore.PROFILES)
+      ? ChessyAnalysisCore.PROFILES.deep
+      : { maxDepth: 10, nodeLimit: 80000, nodeBudget: 1200000, multiPV: 3, pvLen: 6 };
   const CHECK_OWNER = 'train';
   let checkSeq = 0;
   // A result can satisfy the service's cache identity yet fail the stricter
@@ -404,11 +406,12 @@
       const req = {
         gameId: card.gameId, ply: card.ply, gameRev: gameRevOf(game),
         fen: card.fenBefore, positions: replay.state.positions,
-        opts: { playedMove: { from: attemptMove.from, to: attemptMove.to,
-            promotion: attemptMove.promotion || null },
-          maxDepth: CHECK_PROFILE.maxDepth, multiPV: CHECK_PROFILE.multiPV,
-          nodeLimit: CHECK_PROFILE.nodeLimit, nodeBudget: CHECK_PROFILE.nodeBudget,
-          pvLen: CHECK_PROFILE.pvLen }
+        // Forward the WHOLE profile (including the deep scan deadline) so
+        // the request, its watchdog and its cache identity match Review.
+        opts: Object.assign({}, CHECK_PROFILE, {
+          playedMove: { from: attemptMove.from, to: attemptMove.to,
+            promotion: attemptMove.promotion || null }
+        })
       };
       const retryKey =
         [req.gameId, req.ply, req.gameRev, attemptUci].join('|');
@@ -416,13 +419,26 @@
         req.fresh = true;
         retryFresh = null;
       }
+      const rootCount = Chess.legalMoves(replay.state).length;
       unsub = ChessyAnalysisService.subscribe(CHECK_OWNER, function (p) {
         if (checkStale(t, token)) return;
-        if (p && Number.isInteger(p.completedRoots) && Number.isInteger(p.totalRoots) &&
-            p.totalRoots > 0) {
-          setCheckNote('Checking ' + attemptSan + ' with Chessy… ' +
-            p.completedRoots + ' of ' + p.totalRoots + ' moves checked.');
+        if (!p || !Number.isInteger(p.completedRoots) || !Number.isInteger(p.totalRoots) ||
+            p.totalRoots <= 0) return;
+        let detail;
+        if (p.phase === 'initial-scan') {
+          detail = p.completedRoots === 1 ? 'initial scan complete.' : 'initial scan…';
+        } else {
+          // Deep checks verify every move at depth 1, 2, ...; name the depth.
+          const view = ChessyAnalysisCore.progressView(p.completedRoots, p.totalRoots,
+            rootCount);
+          detail = !view || view.cap === 1
+            ? p.completedRoots + ' of ' + p.totalRoots + ' moves checked.'
+            : view.done
+              ? 'all ' + view.roots + ' moves checked through depth ' + view.cap + '.'
+              : 'depth ' + view.depth + ' of up to ' + view.cap + ': ' + view.verified +
+                ' of ' + view.roots + ' moves checked.';
         }
+        setCheckNote('Checking ' + attemptSan + ' with Chessy… ' + detail);
       });
       let pending;
       try { pending = ChessyAnalysisService.analyse(req, CHECK_OWNER); }

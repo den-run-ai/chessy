@@ -71,10 +71,12 @@
   function nowMs() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
 
   // The watchdog rescues only a genuinely WEDGED worker, so it sits above
-  // realistic completion. A timed scan has its own ceiling; the deep and
-  // shallow verification phases each have a node ceiling. Divide bounded node
-  // work by a conservative slow-device rate and add any scan time allowance. Overridable to a tiny value so
-  // a test can exercise the timeout path without a multi-second wait.
+  // realistic completion. A timed scan has its own ceiling. Fixed-node
+  // requests verify in two node-capped phases; a timed request's single
+  // iterative phase is capped by one budget, so counting two over-approximates
+  // it in the safe direction. Divide bounded node work by a conservative
+  // slow-device rate and add any scan time allowance. Overridable to a tiny
+  // value so a test can exercise the timeout path without a multi-second wait.
   //
   // The 18k-NPS floor is deliberately far below the hosted Rust/WASM
   // measurements and retained as a conservative slow-device allowance, not a
@@ -88,7 +90,7 @@
     var scan = ChessyAnalysisCore.scanConfig(opts || {});
     var scanNodes = scan.nodeLimit;
     var nodeBudget = (opts && opts.nodeBudget) || 8000000;
-    var workNodes = scanNodes + 2 * nodeBudget; // scan + deep-verify + shallow-verify
+    var workNodes = scanNodes + 2 * nodeBudget; // scan + at most two verify phases
     var SLOW_NPS = 18000;                         // conservative Rust/WASM floor
     var ms = scan.timeMs + Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
     return Math.min(Math.max(ms, DEFAULT_WATCHDOG_MS), 300000);

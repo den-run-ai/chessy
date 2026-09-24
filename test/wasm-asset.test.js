@@ -186,6 +186,31 @@ async function main() {
       ' (' + bench.POSITIONS.length + ' positions)');
   }
 
+  // A full fixed TT (ABI status 2) is a deterministic node-count event, so an
+  // identical retry would fail forever. The loader keeps the completed
+  // iteration (never the aborted one) and does not call it a time limit.
+  {
+    // The production loader, not the bench harness's reference loader.
+    const production = require('./wasm-test-engine.js').engine;
+    const castles = 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1';
+    const full = production.search(castles,
+      { maxDepth: 111, quiesce: true, nodeLimit: 11000000, timeMs: 0 });
+    const state = globalThis.Chess.parseFen(castles);
+    const legal = globalThis.Chess.legalMoves(state).some(function (m) {
+      return full.move && m.from === full.move.from && m.to === full.move.to &&
+        (m.promotion || null) === (full.move.promotion || null);
+    });
+    check(full.ttSaturated === true && full.stopReason === 'unknown' &&
+        full.depth === 9 && full.attemptedDepth === 10 &&
+        full.nodes === 10355862 && legal,
+      'a TT-saturated search keeps its completed depth-9 move as an early stop',
+      JSON.stringify({ depth: full.depth, nodes: full.nodes, stop: full.stopReason }));
+    const ordinary = production.search(castles,
+      { maxDepth: 111, quiesce: true, nodeLimit: 100000, timeMs: 0 });
+    check(ordinary.ttSaturated === undefined && ordinary.stopReason === 'node-limit',
+      'an unsaturated search is unchanged and carries no saturation flag');
+  }
+
   console.log(passed + ' passed, ' + failed + ' failed');
   process.exitCode = failed ? 1 : 0;
 }

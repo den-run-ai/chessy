@@ -58,7 +58,7 @@ require('./helper').run('level-presets', async function (t) {
 
   // Seed on the app-less page: pagehide would overwrite an in-app edit.
   // A fixed eight-second request here loses on time before returning.
-  await t.newGame({ mode: 'pvp', difficulty: 'master', timeControl: '5+3' });
+  await t.newGame({ mode: 'pvp', difficulty: 'master', timeControl: '300+3' });
   await t.inject(function () {
     const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
     saved.mode = 'ai-w';

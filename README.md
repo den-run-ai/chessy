@@ -45,13 +45,18 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   unchanged. A fresh protocol/holdout and supported-device measurements are
   required before certifying this policy.
 - **Analysis headroom** — quick whole-game screening stays inexpensive.
-  Selected moments and manual verification share one immutable deep profile:
-  an uncapped-node, up-to-16-second scan followed by at most 16M nodes for
-  each exact-root/stability phase. This allocates more search than Master,
-  not a guarantee of a better move in every position. Verification searches
-  the scan winner and played move first. Budget-limited results remain
-  explicitly partial; an exhausted first root retains only the completed
-  scan's single best move, never an invented PV or full-MultiPV claim.
+  Selected moments, manual verification and Train's live check share one
+  immutable deep profile: an uncapped-node, up-to-16-second scan (twice
+  Master's time), then one exact phase of at most 16M nodes that scores
+  **every** legal move under a full window at depth 1, 2, 3, … up to the
+  scan's depth. The reported depth is the deepest depth at which every move
+  was verified — usually a few plies below the scan, and shown as such — and
+  the previous depth supplies stability. If the deeper scan prefers a move
+  that the verified depth ranks strictly lower, the best move is marked
+  unstable, so no mistake mark or lesson is built on it. This allocates more
+  search than Master, not a guarantee of a better move in every position.
+  A result is partial only if not even depth 1 completes; it then keeps only
+  the scan's single best move, never an invented PV or full-MultiPV claim.
   Deep work remains worker-only and cancellable; node budgets are work caps,
   not wall-clock promises, and slow devices can reach the service watchdog.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and

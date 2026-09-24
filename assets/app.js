@@ -690,10 +690,10 @@
   // Every level uses the same quiescent Rust/WASM engine. Easy through Expert
   // stop on deterministic node targets; Master has no artificial node cap.
   // Timed games reserve clock for move delivery and an identical-request retry.
-  function aiConfig() {
+  function aiConfig(remaining) {
     const tc = tcParts();
     return ChessyLevelPresets.forClock(settings.difficulty,
-      liveRemaining(state.turn), tc ? tc.incMs : 0);
+      remaining, tc ? tc.incMs : 0);
   }
 
   function maybeAiMove() {
@@ -701,9 +701,11 @@
         state.turn !== aiColor() || fullStatus().over) return;
     clearAiFailure(true);
     aiThinking = true;
+    // Read the clock once: a second read could cross zero and hand the
+    // budget a negative remainder after this check passed.
     const remaining = liveRemaining(state.turn);
     if (remaining !== null && remaining <= 0) { flag(state.turn); return; }
-    const cfg = aiConfig();
+    const cfg = aiConfig(remaining);
     aiPending = {
       id: ++aiRequestId,
       fen: Chess.toFen(state),

@@ -81,7 +81,7 @@ require('./helper').run('moment-review', async function (t) {
         complete: true,
         turn: state.turn,
         wdl: null,
-        depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+        depth: req.opts.scanTimeMs === ChessyMomentScan.profiles.deep.scanTimeMs ? 4 : 2,
         nodes: 100,
         qnodes: 20,
         elapsedMs: 1,
@@ -98,7 +98,7 @@ require('./helper').run('moment-review', async function (t) {
         playedLine: line(played, 100 - loss, 2, false),
         classification: 'unknown-equivalence',
         internalScore: 999,
-        stability: req.opts.nodeLimit === 80000
+        stability: req.opts.scanTimeMs === ChessyMomentScan.profiles.deep.scanTimeMs
           ? { depths: [3, 4], bestMoveStable: true } : null
       });
     };
@@ -391,7 +391,7 @@ require('./helper').run('moment-review', async function (t) {
       return Promise.resolve({
         complete: true, turn: state.turn,
         wdl: null,
-        depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+        depth: req.opts.scanTimeMs === ChessyMomentScan.profiles.deep.scanTimeMs ? 4 : 2,
         nodes: 100, qnodes: 20, elapsedMs: 1,
         engine: { id: identity.engineId, version: identity.version,
           configHash: identity.configHash },
@@ -400,7 +400,7 @@ require('./helper').run('moment-review', async function (t) {
         bestLines: [line(different, 100, 1, true)],
         playedLine: line(played, 100 - loss, 2, false),
         classification: 'unknown-equivalence',
-        stability: req.opts.nodeLimit === 80000
+        stability: req.opts.scanTimeMs === ChessyMomentScan.profiles.deep.scanTimeMs
           ? { depths: [3, 4], bestMoveStable: true } : null
       });
     };
