@@ -122,16 +122,18 @@ while the host was heavily loaded.
 - `*.ndjson.complete.json` — the completion receipt. It binds the SHA-256
   of the exact `.ndjson` and `.runs` bytes to the block's run identity and its
   complete schedule: every scheduled slot played once. Every record is
-  replayed through the rules from its scheduled opening line, and the hashes
-  of the opening list and protocol it was checked against are recorded.
+  replayed through the rules from its scheduled opening line. Its recorded
+  score and reason must match the final position: the rules result, a draw at
+  the 180-ply cap, or a loss for the side to move that failed. The hashes of
+  the opening list and protocol it was checked against are recorded.
   - These seven blocks predate receipts. They were sealed after the fact with
     `--seal` (`"sealedBy": "seal-command"`), which refuses an incomplete block
     and never replaces an existing receipt.
   - Their headers also predate the full run identity (no opening-list,
     protocol or bridge hashes), so their receipts say
     `"identityComplete": false`. The replay is what ties them to their
-    openings: all 700 games start with their scheduled line and are legal
-    throughout.
+    openings: all 700 games start with their scheduled line, are legal
+    throughout, and record the outcome their final position shows.
   - The opening list and its protocol module are byte-identical at every
     commit that played these games and at the PR head. They last changed on
     `main` before this PR's base.

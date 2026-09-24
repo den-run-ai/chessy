@@ -565,6 +565,24 @@ function sha256Bytes(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
+// Outcomes playOne can record: the rules result at a terminal position, a
+// draw at the ply cap, or a loss for the side that failed to move.
+const CHESSY_FAILURES = Object.freeze(['chessy-search-failure', 'chessy-watchdog',
+  'chessy-illegal']);
+
+function outcomeMatches(r, state, plies) {
+  const status = Chess.gameStatus(state);
+  if (status.over) {
+    return r.score === chessyScore(status.result, r.chessyColor) &&
+      r.reason === (status.reason || 'rules');
+  }
+  if (plies >= DRAW_AT_PLIES) return r.score === 0.5 && r.reason === 'ply-cap';
+  const chessyToMove = state.turn === (r.chessyColor === 'white' ? 'w' : 'b');
+  if (chessyToMove) return r.score === 0 && CHESSY_FAILURES.indexOf(r.reason) >= 0;
+  return r.score === 1 && typeof r.reason === 'string' &&
+    /^anchor-(failure|illegal):/.test(r.reason);
+}
+
 // The receipt a complete block must carry, computed from the exact bytes it
 // binds: every scheduled slot played once, headers from one run identity, and
 // every record replayed through the rules from its scheduled opening line.
@@ -609,6 +627,10 @@ function completionOf(dataBytes, runsBytes, openings, label) {
       if (!move) throw new Error(where + ' ply ' + (k + 1) + ' is not a legal move');
       state = Chess.playMove(state, move);
     });
+    if (!outcomeMatches(r, state, moves.length)) {
+      throw new Error(where + ' outcome (' + r.score + ', ' + r.reason +
+        ') does not match its final position');
+    }
   });
   const identity = {};
   RUN_IDENTITY_KEYS.forEach(function (k) {

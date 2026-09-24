@@ -313,9 +313,10 @@ check('a completion receipt binds complete data and refuses anything else', func
     Screen.sealBlock(out, OPENINGS_NOW, 'test');
     assert.strictEqual(Screen.verifySealed(out, OPENINGS_NOW).records.length, 100);
     assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); }, /already sealed/);
-    // One changed game result: same shape, different bytes.
+    // One changed byte outside any validated field.
     const text = fs.readFileSync(out, 'utf8');
-    fs.writeFileSync(out, text.replace('"score":1,', '"score":0,'));
+    fs.writeFileSync(out, text.replace('"anchorEngine":"Stockfish 18"',
+      '"anchorEngine":"Stockfish 18 "'));
     assert.notStrictEqual(fs.readFileSync(out, 'utf8'), text);
     assert.throws(function () { Screen.verifySealed(out, OPENINGS_NOW); }, /ndjsonSha256/);
     fs.writeFileSync(out, text);
@@ -352,6 +353,52 @@ check('a completion receipt binds complete data and refuses anything else', func
     fs.writeFileSync(out, illegal.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
     assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
       /is not a legal move/);
+    // Every recorded outcome must match its replayed final position.
+    const withRecord = function (index, patch) {
+      copy();
+      const recs = lines.map(JSON.parse);
+      patch(recs[index]);
+      fs.writeFileSync(out, recs.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
+    };
+    const mateIndex = lines.findIndex(function (l) { return JSON.parse(l).reason === 'checkmate'; });
+    const capIndex = lines.findIndex(function (l) { return JSON.parse(l).reason === 'ply-cap'; });
+    assert.ok(mateIndex >= 0 && capIndex >= 0);
+    const edits = [
+      [mateIndex, function (r) { r.score = 1 - r.score; }],
+      [mateIndex, function (r) { r.reason = 'ply-cap'; r.score = 0.5; }],
+      [capIndex, function (r) { r.score = 1; }],
+      [capIndex, function (r) { r.reason = 'checkmate'; }]
+    ];
+    edits.forEach(function (e, i) {
+      withRecord(e[0], e[1]);
+      assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+        /does not match its final position/, 'edit ' + i);
+    });
+    // An unfinished game may only carry a failure of the side to move.
+    const unfinished = function (r, keep) {
+      const m = r.moves.split(' ').slice(0, keep);
+      r.moves = m.join(' ');
+      r.plies = m.length;
+    };
+    const cut = function (r) {
+      // Stop with Chessy to move, past the opening line.
+      let keep = r.openingPlies + 2;
+      if ((keep % 2 === 0) !== (r.chessyColor === 'white')) keep++;
+      return keep;
+    };
+    withRecord(mateIndex, function (r) { unfinished(r, cut(r)); r.reason = 'chessy-watchdog'; r.score = 0; });
+    Screen.sealBlock(out, OPENINGS_NOW, 'test');
+    withRecord(mateIndex, function (r) { unfinished(r, cut(r) + 1); r.reason = 'anchor-illegal:(none)'; r.score = 1; });
+    Screen.sealBlock(out, OPENINGS_NOW, 'test');
+    [
+      function (r) { unfinished(r, cut(r)); r.reason = 'anchor-illegal:(none)'; r.score = 1; },
+      function (r) { unfinished(r, cut(r) + 1); r.reason = 'chessy-watchdog'; r.score = 0; },
+      function (r) { unfinished(r, cut(r)); r.reason = 'chessy-watchdog'; r.score = 0.5; }
+    ].forEach(function (patch, i) {
+      withRecord(mateIndex, patch);
+      assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+        /does not match its final position/, 'failure ' + i);
+    });
     // The runner's own seal requires the full identity these legacy headers lack.
     copy();
     assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'runner'); },
