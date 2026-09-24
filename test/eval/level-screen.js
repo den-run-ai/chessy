@@ -282,7 +282,7 @@ async function playOne(spec) {
   await anchor.newGame();
   const chessyTurn = spec.chessyColor === 'white' ? 'w' : 'b';
   const stats = { moves: 0, depthSum: 0, nodesSum: 0, msSum: 0, maxMs: 0,
-    retries: 0, depths: {} };
+    retries: 0, depths: {}, stops: {}, ttSaturated: 0 };
   let result = null;
   let reason = null;
   const watchdogMs = preset.timeMs + PRODUCT_WATCHDOG_SLACK_MS;
@@ -333,6 +333,8 @@ async function playOne(spec) {
         stats.msSum += ms;
         stats.maxMs = Math.max(stats.maxMs, ms);
         stats.depths[r.depth] = (stats.depths[r.depth] || 0) + 1;
+        stats.stops[r.stopReason] = (stats.stops[r.stopReason] || 0) + 1;
+        if (r.ttSaturated === true) stats.ttSaturated++;
         moves.push(uciOf(move));
         state = Chess.playMove(state, move);
       } else {
@@ -375,6 +377,14 @@ async function playOne(spec) {
 
 function sha256File(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+function gitOutput(args) {
+  try {
+    return cp.execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
+  } catch (e) {
+    return null;
+  }
 }
 
 function arg(argv, name, dflt) {
@@ -421,7 +431,13 @@ async function runSchedule(argv) {
     concurrency: concurrency,
     node: process.version,
     cpu: (os.cpus()[0] || {}).model,
+    commit: gitOutput(['rev-parse', 'HEAD']),
+    dirty: gitOutput(['status', '--porcelain']) !== '',
+    os: os.type() + ' ' + os.release() + ' ' + os.arch(),
+    loadavg: os.loadavg(),
     wasmSha256: sha256File(path.join(ROOT, 'assets', 'chessy-ai-fast.wasm')),
+    loaderSha256: sha256File(path.join(ROOT, 'assets', 'wasm-engine.js')),
+    rulesSha256: sha256File(path.join(ROOT, 'assets', 'engine.js')),
     stockfishSha256: sha256File(exe),
     presetsSha256: sha256File(path.join(ROOT, 'assets', 'level-presets.js')),
     runnerSha256: sha256File(__filename)

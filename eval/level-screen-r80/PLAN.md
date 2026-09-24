@@ -84,7 +84,34 @@ transposition table. The loader then threw, and the product's identical retry
 failed the same way (a deterministic node count), so the draft could not move
 in such positions. Commit `6a99dad` keeps the completed iteration instead. That
 is a candidate defect fix, not a result-driven change: no Master game had been
-played. Master therefore runs from a snapshot of `6a99dad`. Easy–Expert keep
+played. Master therefore runs from a later snapshot that contains it (see the
+next addendum). Easy–Expert keep
 their original snapshot (`246f6bf`): their node caps (at most 1.44M) cannot
 fill the table, and their search requests and presets are unchanged. The
 screen's rules, openings, anchors, counts and adjudication are unchanged.
+
+## Addendum before any Master game (instrumentation and disclosures)
+
+The Master block runs from the commit that adds this addendum. Its runner
+differs from the Easy–Expert runner only in recorded fields: the run header
+adds the git commit, a dirty-tree flag, OS and load average, and hashes of
+`assets/wasm-engine.js` and `assets/engine.js`; each game adds per-move
+Chessy stop reasons and a count of TT-saturated searches. Game play,
+adjudication, openings, anchors, counts and statistics are unchanged.
+
+Disclosures fixed before any Master game:
+
+- The 180-ply draw counts total game plies, including the 4–10 opening plies.
+  Repository match runners count plies after the opening; E4-v1 does not say.
+- A stage-2 anchor at target ± 200 is outside E4-v1's nearest-anchor rule and
+  is chosen from the stage-1 score; that is allowed only because this screen is
+  not E4, and it is reported as adaptive.
+- The runner retries a thrown search once, as the product does; a search slower
+  than the watchdog or an illegal move loses immediately, whereas the product
+  would retry those once too. No such event is expected for node-capped levels.
+- Opening indices are the bootstrap clusters, but several development lines
+  share a family, so the intervals are somewhat optimistic.
+- The logistic estimate with percentile bootstrap intervals is the only
+  registered estimator. No Davidson/E4 fit is computed for this screen.
+- A crashed game worker aborts a block; resuming only fills empty slots. Every
+  resume is visible as another `.runs` header line.
