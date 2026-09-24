@@ -30,28 +30,31 @@ screen.
 
 ## Results
 
-| Level | Anchor | Games | W-D-L | Score (W / B) | Estimate | 95% interval | One-sided 95% lower |
-| --- | ---: | ---: | --- | --- | ---: | --- | ---: |
-| easy | 1500 | 100 | 69-11-20 | 0.745 (0.84 / 0.65) | 1686 | 1615–1763 | 1627 |
-| medium | 1700 | 100 | 71-13-16 | 0.775 (0.78 / 0.77) | 1915 | 1847–2001 | 1856 |
-| hard | 1900 | 100 | 71-13-16 | 0.775 (0.80 / 0.75) | 2115 | 2047–2195 | 2056 |
-| expert | 2100 | 100 | 79-12-9 | 0.850 (0.88 / 0.82) | 2401 | 2330–2492 | 2341 |
-| expert | 2300 | 100 | 59-19-22 | 0.685 (0.73 / 0.64) | 2435 | 2381–2496 | 2389 |
+| Preset | Draft label | r80 label | Anchor | Openings | Games | W-D-L | Score (W / B) | Estimate | 95% interval | One-sided 95% lower |
+| --- | --- | --- | ---: | --- | ---: | --- | --- | ---: | --- | ---: |
+| 10k nodes, depth 2 | — | Easy | 1500 | odd | 100 | 58-10-32 | 0.630 (0.66 / 0.60) | 1592 | 1524–1664 | 1535 |
+| 10k nodes | easy | Medium | 1500 | even | 100 | 69-11-20 | 0.745 (0.84 / 0.65) | 1686 | 1615–1763 | 1627 |
+| 36k nodes | medium | Hard | 1700 | even | 100 | 71-13-16 | 0.775 (0.78 / 0.77) | 1915 | 1847–2001 | 1856 |
+| 230k nodes | hard | Expert | 1900 | even | 100 | 71-13-16 | 0.775 (0.80 / 0.75) | 2115 | 2047–2195 | 2056 |
+| 1440k nodes | expert | — (dropped) | 2100 | even | 100 | 79-12-9 | 0.850 (0.88 / 0.82) | 2401 | 2330–2492 | 2341 |
+| 1440k nodes | expert | — (dropped) | 2300 | odd | 100 | 59-19-22 | 0.685 (0.73 / 0.64) | 2435 | 2381–2496 | 2389 |
 
 **Master: stage 1 (100 games against 2300) is running; its rows and the reading below will be completed before this PR leaves draft.**
 
 ## Chessy search on this host
 
-| Level | Terminations | Chessy moves | Mean depth | Mean nodes | Mean / max ms | Retries | TT-saturated | Stop reasons |
-| --- | --- | ---: | ---: | ---: | --- | ---: | ---: | --- |
-| easy | checkmate 89, ply-cap 11 | 4131 | 3.2 | 9,525 | 17 / 151 | 0 | n/r | not recorded |
-| medium | checkmate 87, ply-cap 13 | 4605 | 4.3 | 34,248 | 40 / 154 | 0 | n/r | not recorded |
-| hard | checkmate 87, threefold repetition 3, ply-cap 10 | 4513 | 5.6 | 215,834 | 222 / 761 | 0 | n/r | not recorded |
-| expert | checkmate 88, ply-cap 9, threefold repetition 3 | 4340 | 6.9 | 1,332,444 | 1361 / 5001 | 0 | n/r | not recorded |
-| expert | checkmate 81, ply-cap 18, insufficient material 1 | 5224 | 7.2 | 1,340,451 | 1275 / 2228 | 0 | n/r | not recorded |
+| Preset | Anchor | Terminations | Chessy moves | Mean depth | Mean nodes | Mean / max ms | Retries | TT-saturated | Stop reasons |
+| --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: | --- |
+| 10k nodes, depth 2 | 1500 | checkmate 90, ply-cap 10 | 4428 | 2.0 | 1,077 | 3 / 41 | 0 | 0 | max-depth 4264, mate 156, node-limit 8 |
+| 10k nodes | 1500 | checkmate 89, ply-cap 11 | 4131 | 3.2 | 9,525 | 17 / 151 | 0 | n/r | not recorded |
+| 36k nodes | 1700 | checkmate 87, ply-cap 13 | 4605 | 4.3 | 34,248 | 40 / 154 | 0 | n/r | not recorded |
+| 230k nodes | 1900 | checkmate 87, threefold repetition 3, ply-cap 10 | 4513 | 5.6 | 215,834 | 222 / 761 | 0 | n/r | not recorded |
+| 1440k nodes | 2100 | checkmate 88, ply-cap 9, threefold repetition 3 | 4340 | 6.9 | 1,332,444 | 1361 / 5001 | 0 | n/r | not recorded |
+| 1440k nodes | 2300 | checkmate 81, ply-cap 18, insufficient material 1 | 5224 | 7.2 | 1,340,451 | 1275 / 2228 | 0 | n/r | not recorded |
 
-`n/r` / `not recorded`: the Easy–Expert runner predates the per-move stop-reason
-instrumentation added before Master (PLAN.md). The Expert stage-1 maximum of
+`n/r` / `not recorded`: the draft-preset runner predates the per-move
+stop-reason instrumentation added before Master (PLAN.md); the r80 Easy block
+used the instrumented runner. The Expert stage-1 maximum of
 5001 ms shows that at least one Expert search reached its 5 s safety ceiling
 while the host was heavily loaded.
 
