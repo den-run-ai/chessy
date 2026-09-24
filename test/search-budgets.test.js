@@ -111,7 +111,8 @@ function mockEngine(options) {
         throw error;
       }
       if (options.throwAt && options.throwAt(depth, index)) throw new Error('corrupt ABI');
-      if (options.stopAt && options.stopAt(depth, index)) {
+      if ((options.stopAt && options.stopAt(depth, index)) ||
+          (options.stopWhenSpent && spent > options.stopWhenSpent)) {
         return { complete: false, score: 0, pv: [], nodes: nodes(), qnodes: roots * 2 };
       }
       const score = options.scores ? options.scores(move, depth)
@@ -184,28 +185,47 @@ test('a cut-off deeper iteration is discarded whole; the last full depth is repo
   assert.equal(out.nodes, 123 + (legal.length * 3 + 4) * 11);
 });
 
-test('an iteration the budget cannot finish is not started', function () {
-  // Each root at depth d costs 3^d nodes, so a whole iteration costs 20·3^d.
-  const cost = function (depth) { return Math.pow(3, depth); };
+test('an iteration the budget cannot finish is not started (two-ply average growth)', function () {
+  // Per-root costs alternate by depth parity (×4, ×2, ×4): the last two
+  // growth ratios are 2 and 4, so the two-ply average predicts √8 ≈ 2.83×.
+  const perRoot = [10, 40, 80, 320];
+  const cost = function (depth) { return perRoot[depth - 1]; };
   const n = legal.length;
-  const through = function (d) {
-    let total = 0;
-    for (let i = 1; i <= d; i++) total += n * cost(i);
-    return total;
-  };
-  // Depth 5 would fit exactly; depth 6 (predicted 3× depth 5) would not.
-  const budget = through(5) + n * cost(6) - 1;
-  const skipped = mockEngine({ scanDepth: 9, nodeCost: cost });
-  const out = Core.analyse(state, deep({ nodeBudget: budget }), skipped);
-  assert.equal(out.complete, true);
-  assert.equal(out.depth, 5);
-  assert.equal(rootCalls(skipped).filter(function (c) { return c[2] === 6; }).length, 0);
-  assert.equal(out.nodes, 123 + through(5));
-  // One more node lets the optimistic estimate fit, so depth 6 is verified.
-  const fits = mockEngine({ scanDepth: 9, nodeCost: cost });
-  const deeper = Core.analyse(state, deep({ nodeBudget: budget + 1 }), fits);
-  assert.equal(deeper.depth, 6);
-  assert.equal(deeper.complete, true);
+  const spentThrough3 = n * (10 + 40 + 80);
+  function run(remaining) {
+    const budget = spentThrough3 + remaining;
+    const engine = mockEngine({ scanDepth: 4, nodeCost: cost,
+      stopWhenSpent: budget });
+    const out = Core.analyse(state, deep({ nodeBudget: budget }), engine);
+    return { out: out, depth4: rootCalls(engine).filter(function (c) { return c[2] === 4; }).length };
+  }
+  // 200n left: the average predicts 226n, so depth 4 is skipped (the
+  // optimistic ×2 rule would have started it and wasted the work).
+  const skipped = run(200 * n);
+  assert.equal(skipped.depth4, 0);
+  assert.equal(skipped.out.depth, 3);
+  assert.equal(skipped.out.complete, true);
+  assert.equal(skipped.out.nodes, 123 + spentThrough3);
+  // 250n left: the average predicts 226n, so depth 4 is attempted (the
+  // pessimistic ×4 rule would have skipped it) and discarded when cut.
+  const attempted = run(250 * n);
+  assert.ok(attempted.depth4 > 0 && attempted.depth4 < n);
+  assert.equal(attempted.out.depth, 3);
+  assert.equal(attempted.out.complete, true);
+  // Enough budget verifies depth 4 in full.
+  const fits = run(320 * n);
+  assert.equal(fits.depth4, n);
+  assert.equal(fits.out.depth, 4);
+});
+
+test('timed verification reaches depth 3 even when the scan stopped shallower', function () {
+  const engine = mockEngine({ scanDepth: 1 });
+  const out = Core.analyse(state, deep(), engine);
+  assert.equal(out.depth, 3);
+  assert.deepEqual(out.stability, { depths: [2, 3], bestMoveStable: true });
+  // A request that caps depth lower keeps its own cap.
+  const capped = Core.analyse(state, deep({ maxDepth: 2 }), mockEngine({ scanDepth: 1 }));
+  assert.equal(capped.depth, 2);
 });
 
 test('TT saturation ends verification at the last full depth; other errors propagate', function () {
@@ -314,8 +334,8 @@ test('legacy fixed-node analysis keeps canonical root order and no scan fallback
     mockEngine({ stopAt: function () { return true; } }));
   assert.equal(partial.complete, false);
   assert.equal(partial.bestLines.length, 0);
-  // Fixed-node identities carry no iterative-verification tag.
-  assert.equal(Core.configHashOf({ nodeLimit: 5000, maxDepth: 3 }),
-    Core.configHashOf({ nodeLimit: 5000, maxDepth: 3, verify: 'ignored' }));
+  // Fixed-node cache identities are exactly r79's (literal, not derived).
+  assert.equal(Core.configHashOf(Core.PROFILES.quick), 'd3984af1');
+  assert.equal(Core.configHashOf(Core.PROFILES.quickFallback), 'c0c102dc');
 });
 console.log(passed + ' search-policy tests passed');

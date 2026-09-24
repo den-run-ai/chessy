@@ -45,6 +45,8 @@
 
   var generation = 0;
   var current = null;
+  // Restored job object -> plies whose persisted deep result was unusable.
+  var freshDeepRetries = new WeakMap();
   var currentSource = null;
   var running = false;
   // Validated durable Gate-0 receipts for the current exact game source. This
@@ -1014,7 +1016,15 @@
       return pauseDeepFailure(
         token, job, ply, 'position-no-longer-eligible');
     }
-    var req = moveRequest(review, job, ply, DEEP, false);
+    // Timed deep results depend on the wall clock (a suspended tab can cut
+    // the scan short) and are cached. Retrying a slot whose deep result was
+    // unusable must recompute it, not re-serve the same cached row forever.
+    var restoredRetries = freshDeepRetries.get(job);
+    var retryingDeep = job.unresolved.some(function (item) {
+      return item.phase === 'deep' && item.ply === ply;
+    }) || !!(restoredRetries && restoredRetries[ply]);
+    if (restoredRetries) delete restoredRetries[ply];
+    var req = moveRequest(review, job, ply, DEEP, retryingDeep);
     return ChessyAnalysisService.analyse(req, OWNER).then(function (res) {
       if (!owns(token, job)) return job;
       if (res === null) return pauseAfterNull(token, job);
@@ -1327,6 +1337,13 @@
         return !retryPly[moment.ply];
       });
       job.verifyIndex = deepRetryIndex;
+      // Restoring drops the markers (the slot is simply retried); remember
+      // which slots failed so their retry bypasses the cached result.
+      var failedDeep = Object.create(null);
+      job.unresolved.forEach(function (item) {
+        if (item.phase === 'deep') failedDeep[item.ply] = true;
+      });
+      freshDeepRetries.set(job, failedDeep);
       job.unresolved = [];
       job.state = 'paused';
       delete job.retry;

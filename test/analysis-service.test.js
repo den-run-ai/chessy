@@ -629,6 +629,57 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     'retry progress never moves phase/root/elapsed backward and resumes only after catching the high-water');
   stopRetry();
 
+  // --- A timed retry may plan a different roots × depths schedule (its
+  //     wall-clock scan stopped at another depth). Public progress resumes
+  //     once the retry's completed fraction passes the published one, and it
+  //     never moves backwards. ---
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }), watchdog: 25 });
+  const replanned = [];
+  const stopReplanned = Svc.subscribe('reflection', function (p) {
+    replanned.push(cloneJson(p));
+  });
+  const replanRun = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'progress-replan' }), 'reflection');
+  const replanW1 = made[0], replanId = replanW1.posts[0].jobId;
+  replanW1.deliver(progressReply(replanId, 'initial-scan', 0, 1, 0));
+  replanW1.deliver(progressReply(replanId, 'initial-scan', 1, 1, 1));
+  replanW1.deliver(progressReply(replanId, 'root-verification', 0, 60, 2));
+  replanW1.deliver(progressReply(replanId, 'root-verification', 30, 60, 150));
+  for (let i = 0; i < 50 && made.length < 2; i++) await delay(2);
+  const replanW2 = made[1];
+  let replanResumed = false;
+  if (replanW2) {
+    const offset = replanW2.posts[0].elapsedOffsetMs;
+    const before = replanned.length;
+    replanW2.deliver(progressReply(replanId, 'initial-scan', 0, 1, offset));
+    replanW2.deliver(progressReply(replanId, 'initial-scan', 1, 1, offset + 1));
+    replanW2.deliver(progressReply(replanId, 'root-verification', 0, 48, offset + 2));
+    replanW2.deliver(progressReply(replanId, 'root-verification', 24, 48, offset + 3));
+    const heldBack = replanned.length === before;
+    replanW2.deliver(progressReply(replanId, 'root-verification', 36, 48, offset + 120));
+    replanW2.deliver(progressReply(replanId, 'root-verification', 48, 48, offset + 240));
+    const tail = replanned.slice(before);
+    replanResumed = heldBack && tail.length === 2 &&
+      tail[0].completedRoots === 36 && tail[0].totalRoots === 48 &&
+      tail[1].completedRoots === 48 && tail[1].totalRoots === 48;
+    replanW2.deliver({ v: PROTOCOL, jobId: replanId, result: goodResult });
+    replanResumed = replanResumed && (await replanRun) !== null;
+  } else {
+    Svc.cancel('reflection');
+    await replanRun;
+  }
+  let replanMonotone = replanned.length >= 5;
+  for (let i = 1; i < replanned.length; i++) {
+    const p = replanned[i - 1], n = replanned[i];
+    if (n.elapsedMs < p.elapsedMs || n.phase === 'initial-scan' &&
+        p.phase === 'root-verification' ||
+        n.phase === p.phase &&
+        n.completedRoots * p.totalRoots < p.completedRoots * n.totalRoots) replanMonotone = false;
+  }
+  check(replanResumed && replanMonotone,
+    'a retry with a re-planned schedule resumes public progress by completed fraction, never backwards');
+  stopReplanned();
+
   // --- Watchdog: a wedged worker is retried once in a fresh worker ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }), watchdog: 25 });
   const recovered = await Svc.analyse(Object.assign({}, REQ, { gameId: 'W' }));

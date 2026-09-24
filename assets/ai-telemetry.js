@@ -99,6 +99,9 @@
     if (Array.isArray(value.rootOrderUci)) {
       sanitized.rootOrderUci = rootOrder;
     }
+    // Present only when the loader kept a completed iteration after the
+    // engine's fixed transposition table filled (its stopReason is unknown).
+    if (value.ttSaturated === true) sanitized.ttSaturated = true;
     return sanitized;
   }
 

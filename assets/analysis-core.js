@@ -51,6 +51,7 @@
   const TT_SATURATED = 'tt-saturated';
   // Identity tag of the timed deep algorithm; see configHashOf.
   const ITERATIVE_VERIFY = 'iterative-exact-v1';
+  const MIN_TIMED_VERIFY_DEPTH = 3;
 
   // Quick screening remains cheap. Only the two selected moments, manual
   // verification and Train's live check use DEEP. Its scan gets twice Master's
@@ -306,17 +307,14 @@
     let spentBefore = 0;
     for (let depth = 1; depth <= ctx.cap; depth++) {
       // Do not start an iteration that cannot finish: all of its work would
-      // be discarded. Predict its cost from the SMALLER of the last two growth
-      // ratios, so only an iteration that even that optimistic estimate puts
-      // over the remaining budget is skipped. Node counts keep it
-      // deterministic.
+      // be discarded. Alpha-beta costs alternate between odd and even depths,
+      // so predict the next iteration from the average growth over the last
+      // two (one odd and one even ply): cost × sqrt(cost / cost two plies
+      // earlier). Node counts keep the decision deterministic.
       if (costs.length >= 3) {
         const a = costs[costs.length - 3];
-        const b = costs[costs.length - 2];
         const c = costs[costs.length - 1];
-        if (a > 0 && b > 0 && c * Math.min(b / a, c / b) > ctx.nodeBudget - counters.nodes) {
-          break;
-        }
+        if (a > 0 && c * Math.sqrt(c / a) > ctx.nodeBudget - counters.nodes) break;
       }
       const lines = [];
       let stopped = false;
@@ -452,7 +450,10 @@
     if (scanOptions.timeMs) {
       const verified = verifyIteratively({
         state: state, fen: fen, legal: legal, scan: scan,
-        cap: Math.min(depth, maxDepth), nodeBudget: nodeBudget,
+        // A scan that stops early (a short mate, or a suspended tab) still
+        // gets the cheap depth-3 verification Review needs for stability.
+        cap: Math.max(Math.min(depth, maxDepth), Math.min(MIN_TIMED_VERIFY_DEPTH, maxDepth)),
+        nodeBudget: nodeBudget,
         quiesce: quiesce, positions: positions, pvLen: pvLen,
         played: played, maximizing: maximizing, progress: progress
       }, wasmEngine);

@@ -854,6 +854,7 @@
         rootOrderUci: result.rootOrderUci,
         pvSource: result.pvSource,
         stopReason: result.stopReason,
+        ttSaturated: result.ttSaturated === true,
         source: 'worker',
         fallbackReason: null,
         engine: 'wasm',

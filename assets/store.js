@@ -1164,6 +1164,8 @@
       if (v.score !== undefined && v.score !== null && !Number.isFinite(v.score)) return false;
       if (v.scorePov !== undefined && v.scorePov !== null && v.scorePov !== 'white') return false;
       if (v.stopReason !== undefined && !reasons[v.stopReason]) return false;
+      if (v.ttSaturated !== undefined && v.ttSaturated !== null &&
+          typeof v.ttSaturated !== 'boolean') return false;
       if (v.source !== undefined && !sources[v.source]) return false;
       if (v.fallbackReason !== undefined && v.fallbackReason !== null &&
           !fallbacks[v.fallbackReason]) return false;

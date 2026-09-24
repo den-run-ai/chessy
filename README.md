@@ -54,16 +54,23 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   immutable deep profile: an uncapped-node, up-to-16-second scan (twice
   Master's time), then one exact phase of at most 16M nodes that scores
   **every** legal move under a full window at depth 1, 2, 3, … up to the
-  scan's depth. The reported depth is the deepest depth at which every move
-  was verified — usually a few plies below the scan, and shown as such — and
-  the previous depth supplies stability. If the deeper scan prefers a move
-  that the verified depth ranks strictly lower, the best move is marked
-  unstable, so no mistake mark or lesson is built on it. This allocates more
-  search than Master, not a guarantee of a better move in every position.
-  A result is partial only if not even depth 1 completes; it then keeps only
-  the scan's single best move, never an invented PV or full-MultiPV claim.
-  Deep work remains worker-only and cancellable; node budgets are work caps,
-  not wall-clock promises, and slow devices can reach the service watchdog.
+  scan's depth (at least depth 3). The reported depth is the deepest depth at
+  which every move was verified — usually a few plies below the scan, and
+  shown as such — and the previous depth supplies stability. If the deeper
+  scan prefers a move that the verified depth ranks strictly lower, the best
+  move is marked unstable, so Chessy adds no mistake mark and suggests no
+  moment from it; a manual Verify still shows its lines and leaves the
+  diagnosis to the player. This allocates more search than Master, not a
+  guarantee of a better move in every position: the engine's fixed
+  transposition table can stop Master and the scan at the same node count on
+  fast devices, and a timed scan's depth depends on the device. A result is
+  partial only if not even depth 1 completes; it then keeps only the scan's
+  single best move, never an invented PV or full-MultiPV claim. Deep work
+  remains worker-only and cancellable; node budgets are work caps, not
+  wall-clock promises, and slow devices can reach the service watchdog.
+  Because the deep profile changed, a Review scan completed under r79
+  restarts when reopened (its deep evidence no longer matches), and manual
+  verifications are recomputed rather than served from the old cache.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,
@@ -377,7 +384,7 @@ dispatch.
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, full SAN ledger, and gated score/annotation overlays |
-| `assets/analysis-core.js` | Deterministic Rust/WASM analysis contract (exact MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
+| `assets/analysis-core.js` | Rust/WASM analysis contract: deterministic fixed-node quick analysis, and timed deep analysis whose iterative exact verification is capped by a device-dependent scan depth (exact MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
 | `assets/analysis-worker.js` | Dedicated WASM coaching-analysis worker with throttled non-terminal progress |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, owner-scoped progress/cancellation, watchdog + retry, validated IndexedDB result cache |
 | `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |

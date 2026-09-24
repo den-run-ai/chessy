@@ -168,6 +168,34 @@ check(promotionRoots.indexOf('a7a8q') !== -1 &&
     CoachStore.validateGameRecord(promotionGame) === null,
   'custom-position root validation preserves promotion suffixes');
 
+// A Master move played from a completed iteration after the fixed TT filled
+// keeps that fact explicitly; nothing else invents it.
+const saturated = ChessyAiTelemetry.sanitizeTelemetry({
+  depth: 9, quiesce: true, ms: 8100, stopReason: 'unknown', ttSaturated: true,
+  engine: 'wasm', source: 'worker'
+});
+const unsaturated = ChessyAiTelemetry.sanitizeTelemetry({
+  depth: 9, quiesce: true, ms: 8100, stopReason: 'time-limit', ttSaturated: 'yes',
+  engine: 'wasm', source: 'worker'
+});
+check(saturated.ttSaturated === true && saturated.stopReason === 'unknown' &&
+    !Object.prototype.hasOwnProperty.call(unsaturated, 'ttSaturated') &&
+    Chess.pgnLogComment({ fen: Chess.START_FEN, ai: saturated }, 'w').indexOf('TT full') !== -1 &&
+    Chess.pgnLogComment({ fen: Chess.START_FEN, ai: unsaturated }, 'w').indexOf('TT full') === -1,
+  'a TT-saturated early stop is recorded and exported explicitly, never inferred');
+{
+  const withFlag = JSON.parse(JSON.stringify(promotionGame));
+  const aiIndex = withFlag.ai.findIndex(function (v) { return v && typeof v === 'object'; });
+  const bad = JSON.parse(JSON.stringify(withFlag));
+  if (aiIndex >= 0) {
+    withFlag.ai[aiIndex].ttSaturated = true;
+    bad.ai[aiIndex].ttSaturated = 'yes';
+  }
+  check(aiIndex >= 0 && CoachStore.validateGameRecord(withFlag) === null &&
+      CoachStore.validateGameRecord(bad) !== null,
+    'stored telemetry accepts the optional boolean TT flag and rejects other values');
+}
+
 const badEnvelope = {
   format: 'chessy-coach-backup', version: 1, dbVersion: 6,
   release: injectedRelease, stores: { games: [], cards: [] }

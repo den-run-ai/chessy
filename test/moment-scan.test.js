@@ -1075,6 +1075,11 @@ function manualDeepResult(review, ply, supplied) {
       requests[1].ply === deepUnresolvedCheckpoint.shortlist[1].ply &&
       deepUnresolvedResumed.state === 'done',
     'deep-unresolved reload retries the unproved slot before its suffix');
+  // A cached, wall-clock-dependent deep row that was unusable must be
+  // recomputed on resume; the untouched suffix slot may use the cache.
+  check(requests[0].fresh === true && requests[1].fresh === false,
+    'the retried deep slot bypasses the analysis cache; the next slot does not',
+    JSON.stringify(requests.map(function (r) { return [r.ply, r.fresh]; })));
 
   // Even coordinated corruption of every compact/derived field cannot create
   // circular proof. The full quick result remains genuinely subthreshold,

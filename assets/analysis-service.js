@@ -220,10 +220,18 @@
       var nextOrder = phaseOrder(event.phase);
       if (nextOrder < prevOrder || event.elapsedMs < published.elapsedMs) return null;
       if (nextOrder === prevOrder) {
-        if (event.totalRoots !== published.totalRoots ||
-            event.completedRoots < published.completedRoots) return null;
-        if (event.completedRoots === published.completedRoots &&
-            event.elapsedMs === published.elapsedMs) return null;
+        if (event.totalRoots !== published.totalRoots) {
+          // A fresh attempt of a timed request may plan another schedule
+          // (its wall-clock scan can stop at a different depth). Resume once
+          // its completed FRACTION passes the published one, so the public
+          // meter never moves backwards and never freezes for the retry.
+          if (event.completedRoots * published.totalRoots <=
+              published.completedRoots * event.totalRoots) return null;
+        } else {
+          if (event.completedRoots < published.completedRoots) return null;
+          if (event.completedRoots === published.completedRoots &&
+              event.elapsedMs === published.elapsedMs) return null;
+        }
       }
     }
     return event;

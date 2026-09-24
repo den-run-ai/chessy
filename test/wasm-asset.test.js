@@ -209,6 +209,34 @@ async function main() {
       { maxDepth: 111, quiesce: true, nodeLimit: 100000, timeMs: 0 });
     check(ordinary.ttSaturated === undefined && ordinary.stopReason === 'node-limit',
       'an unsaturated search is unchanged and carries no saturation flag');
+
+    // Exact-root verification: the same full table surfaces as a tagged
+    // error carrying the phase's counters, below the declared node budget.
+    const WasmEngine = require('../assets/wasm-engine.js');
+    require('../assets/analysis-core.js');
+    production.beginAnalysis(castles, { nodeLimit: 16000000, quiesce: true });
+    let saturated = null;
+    let depthReached = 0;
+    for (let depth = 1; depth <= 20 && !saturated; depth++) {
+      for (const move of globalThis.Chess.legalMoves(state)) {
+        try {
+          const result = production.searchRoot(move, depth, 1);
+          if (!result.complete) throw new Error('budget ended before the TT filled');
+        } catch (error) {
+          saturated = error;
+          break;
+        }
+      }
+      if (!saturated) depthReached = depth;
+    }
+    check(!!saturated && saturated.code === WasmEngine.TT_SATURATED &&
+        saturated.code === globalThis.ChessyAnalysisCore.TT_SATURATED &&
+        saturated.result && saturated.result.nodes > 0 &&
+        saturated.result.nodes < 16000000 && depthReached === 8,
+      'searchRoot reports a full TT as the tagged error analysis-core stops on',
+      saturated && (saturated.message + ' ' + JSON.stringify({
+        code: saturated.code, nodes: saturated.result && saturated.result.nodes,
+        depthReached: depthReached })));
   }
 
   console.log(passed + ' passed, ' + failed + ' failed');

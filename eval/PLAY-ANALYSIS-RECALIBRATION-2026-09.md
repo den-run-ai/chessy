@@ -59,11 +59,18 @@ path at depths 4–6).
 - The result is the deepest iteration in which **every** root completed,
   reported at its own depth. An iteration interrupted by the node budget or a
   full TT is discarded whole, never mixed with shallower scores. An iteration
-  that even an optimistic growth estimate cannot fit is not started.
+  whose predicted cost (the last iteration's cost times the average growth
+  over the last two, which alternate between odd and even depths) exceeds the
+  remaining budget is not started; on ten measured positions this lost no
+  verified depth and avoided nine of ten doomed iterations.
+- Verification always reaches depth 3 (budget permitting) even when the scan
+  stopped earlier, for example on a short mate or in a suspended tab, so
+  Review has the stability it requires.
 - The previous iteration supplies stability (`depths: [d−1, d]`, as the
   validator requires). If the deeper scan preferred a move that the verified
   iteration ranks strictly lower, the best move is marked unstable, so no
-  mistake mark, moment or lesson rests on it.
+  automatic mistake mark or suggested moment rests on it (a manual Verify
+  still shows its lines and leaves the diagnosis to the player).
 - Ties rank by canonical legal-move order, as on the fixed-node path, so the
   search order cannot make a tied move "best", "stable" or "same".
 - Only if not even depth 1 completes is the result partial; it then keeps the
@@ -71,12 +78,19 @@ path at depths 4–6).
 - The timed contract's `configHash` carries an `iterative-exact-v1` tag;
   fixed-node identities, the E3 scorecard options and baseline are unchanged.
 - Progress counts root searches over the planned roots × depths schedule, so
-  it stays monotonic with a fixed total; Verify and Train name the depth being
-  verified.
+  it stays monotonic with a fixed total; Verify names the depth being
+  verified and Train's live region announces only depth transitions. A
+  fresh-worker retry may plan a different schedule; public progress resumes
+  once its completed fraction passes the published one.
+- Timed deep results depend on the wall clock and are cached, so resuming a
+  Review slot whose deep result was unusable recomputes it instead of
+  re-serving the cached row.
 
 `search()` now keeps the deepest completed iteration when the TT fills (stop
-reason `unknown`, never a false `time-limit`), and `searchRoot()` throws a
-tagged `tt-saturated` error that ends the verification phase.
+reason `unknown`, never a false `time-limit`, with an explicit `ttSaturated`
+telemetry flag and a "TT full" debug-PGN note), and `searchRoot()` throws a
+tagged `tt-saturated` error that ends the verification phase. Real-WASM tests
+pin both paths on `r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq -`.
 
 ## Measured deep profile (Node 22, loaded 4-core container)
 
