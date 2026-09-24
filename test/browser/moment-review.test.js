@@ -755,6 +755,12 @@ require('./helper').run('moment-review', async function (t) {
   await page.waitForFunction(function () {
     return document.getElementById('scanProgress').textContent.indexOf('timed game') !== -1;
   });
+  // The live-game note renders at once, but the paused job loads from
+  // IndexedDB asynchronously (openArchivedGame does not await it). Wait for
+  // that load to settle; if Resume never appears, the check below fails.
+  await page.waitForFunction(function () {
+    return !document.getElementById('scanResume').hidden;
+  }, null, { timeout: 10000 }).catch(function () {});
   check(await page.locator('#scanResume').isVisible() &&
         await page.locator('#scanResume').isDisabled() &&
         await page.locator('input[name="scanColor"][value="w"]').isDisabled(),
