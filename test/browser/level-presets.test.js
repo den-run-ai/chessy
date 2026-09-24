@@ -41,9 +41,17 @@ require('./helper').run('level-presets', async function (t) {
         ai.quiesce === true && ai.nodeLimit === level.nodeLimit,
       level.name + ' executes the declared default-WASM preset');
     if (level.nodeLimit === null) {
-      check(ai.stopReason === 'time-limit' &&
+      // On fast devices (roughly >= 2.4M NPS) the start-position search fills
+      // the engine's fixed TT before 8 s; the loader then keeps the deepest
+      // COMPLETED iteration as an early stop flagged ttSaturated. Either way
+      // Master is bounded by the wall clock or its memory, never a node count.
+      const spentClock = ai.stopReason === 'time-limit';
+      const filledTable = ai.ttSaturated === true && ai.stopReason === 'unknown' &&
+        ai.depth >= 1;
+      check((spentClock || filledTable) &&
           Number.isInteger(ai.nodes) && ai.nodes > 0,
-        'Master spends the wall-clock budget');
+        'Master spends the wall-clock budget (or stops early at a full TT with a ' +
+          'completed iteration; stopReason ' + ai.stopReason + ')');
     } else {
       const completedBudget = ai.stopReason === 'node-limit' &&
         ai.nodes === level.nodeLimit;

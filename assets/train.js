@@ -420,24 +420,45 @@
         retryFresh = null;
       }
       const rootCount = Chess.legalMoves(replay.state).length;
+      // #trainCheck is a polite live region, and throttled progress can arrive
+      // several times a second for the whole deep deadline. Rewrite it only on
+      // a coarse stage change (scan start/complete, each NEW verification
+      // depth, done) so assistive tech is not flooded with per-root counts.
+      let lastStage = null;
       unsub = ChessyAnalysisService.subscribe(CHECK_OWNER, function (p) {
         if (checkStale(t, token)) return;
         if (!p || !Number.isInteger(p.completedRoots) || !Number.isInteger(p.totalRoots) ||
             p.totalRoots <= 0) return;
+        let stage;
         let detail;
         if (p.phase === 'initial-scan') {
-          detail = p.completedRoots === 1 ? 'initial scan complete.' : 'initial scan…';
-        } else {
+          const scanned = p.completedRoots === 1;
+          stage = scanned ? 'scan-complete' : 'scan';
+          detail = scanned ? 'initial scan complete.' : 'initial scan…';
+        } else if (p.phase === 'root-verification') {
           // Deep checks verify every move at depth 1, 2, ...; name the depth.
           const view = ChessyAnalysisCore.progressView(p.completedRoots, p.totalRoots,
             rootCount);
-          detail = !view || view.cap === 1
-            ? p.completedRoots + ' of ' + p.totalRoots + ' moves checked.'
-            : view.done
-              ? 'all ' + view.roots + ' moves checked through depth ' + view.cap + '.'
-              : 'depth ' + view.depth + ' of up to ' + view.cap + ': ' + view.verified +
-                ' of ' + view.roots + ' moves checked.';
+          const finished = p.completedRoots === p.totalRoots;
+          if (!view || view.cap === 1) {
+            // One pass (or counts outside the depth schedule): announce the
+            // phase transitions only, never each root.
+            stage = finished ? 'verify-done' : 'verify';
+            detail = finished
+              ? p.completedRoots + ' of ' + p.totalRoots + ' moves checked.'
+              : 'checking moves…';
+          } else if (view.done) {
+            stage = 'done';
+            detail = 'all ' + view.roots + ' moves checked through depth ' + view.cap + '.';
+          } else {
+            stage = 'depth:' + view.depth + '/' + view.cap;
+            detail = 'verifying depth ' + view.depth + ' of up to ' + view.cap + '.';
+          }
+        } else {
+          return;
         }
+        if (stage === lastStage) return;
+        lastStage = stage;
         setCheckNote('Checking ' + attemptSan + ' with Chessy… ' + detail);
       });
       let pending;
