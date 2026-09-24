@@ -131,7 +131,7 @@ const EXPECTED_INPUTS = {
   openingProtocolSha256: 'test/ai-match-protocol.js',
   runnerSha256: 'test/eval/level-screen.js'
 };
-const EXPECTED_KEYS = ['schema', 'level', 'anchor', 'openings', 'stockfishSha256']
+const EXPECTED_KEYS = ['schema', 'level', 'anchor', 'openings', 'concurrency', 'stockfishSha256']
   .concat(Object.keys(EXPECTED_INPUTS));
 
 function sha(file) {
@@ -144,7 +144,8 @@ function plain(value) {
 
 const OPENINGS_NOW = {
   list: require('../ai-match-openings.js'),
-  sha256: sha(path.join(ROOT, 'test', 'ai-match-openings.js'))
+  sha256: sha(path.join(ROOT, 'test', 'ai-match-openings.js')),
+  protocolSha256: sha(path.join(ROOT, 'test', 'ai-match-protocol.js'))
 };
 
 function tempDir() {
@@ -152,7 +153,7 @@ function tempDir() {
 }
 
 function block(level, anchor) {
-  const identity = Screen.runIdentity(ROOT, RUNNER, level, anchor, '0-1');
+  const identity = Screen.runIdentity(ROOT, RUNNER, level, anchor, '0-1', 2);
   const preset = Presets.get(Screen.LEVEL_IDS[level]);
   const jobs = [0, 1].flatMap(function (id) {
     return [{ openingId: id, chessyColor: 'white' }, { openingId: id, chessyColor: 'black' }];
@@ -169,13 +170,13 @@ check('the run identity names every loaded input and hashes it from the given ro
   assert.deepStrictEqual(Screen.RUN_IDENTITY_KEYS.slice().sort(), EXPECTED_KEYS.slice().sort());
   assert.deepStrictEqual(Object.assign({}, Screen.SNAPSHOT_FILES), EXPECTED_INPUTS);
   const exe = path.join(ROOT, 'test', 'ai-match-protocol.js');
-  const id = Screen.runIdentity(ROOT, exe, 'medium', 1700, '0-1');
+  const id = Screen.runIdentity(ROOT, exe, 'medium', 1700, '0-1', 3);
   Object.keys(EXPECTED_INPUTS).forEach(function (k) {
     assert.strictEqual(id[k], sha(path.join(ROOT, EXPECTED_INPUTS[k])), k);
   });
   assert.strictEqual(id.stockfishSha256, sha(exe));
-  assert.deepStrictEqual([id.schema, id.level, id.anchor, id.openings],
-    [Screen.SCHEMA + '.run', 'medium', 1700, '0-1']);
+  assert.deepStrictEqual([id.schema, id.level, id.anchor, id.openings, id.concurrency],
+    [Screen.SCHEMA + '.run', 'medium', 1700, '0-1', 3]);
 });
 
 check('a resume fills only the missing slots of the same block', function () {
@@ -290,6 +291,10 @@ check('the committed r80 screen blocks each pass the block check', function () {
     assert.strictEqual(sealed.receipt.ndjsonSha256, sha(path.join(dir, f)), f);
     assert.strictEqual(sealed.receipt.runsSha256, sha(path.join(dir, f + '.runs')), f);
     assert.strictEqual(sealed.receipt.games, 100, f);
+    // These predate the full identity; every game was replayed instead.
+    assert.strictEqual(sealed.receipt.identityComplete, false, f);
+    assert.deepStrictEqual(sealed.receipt.replayedAgainst,
+      { openingsSha256: OPENINGS_NOW.sha256, openingProtocolSha256: OPENINGS_NOW.protocolSha256 }, f);
   });
 });
 
@@ -330,6 +335,28 @@ check('a completion receipt binds complete data and refuses anything else', func
     fs.writeFileSync(out, renamed.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
     assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
       /does not name its scheduled opening/);
+    // A same-named opening with other moves, or an illegal move, cannot be sealed.
+    copy();
+    const shifted = lines.map(JSON.parse);
+    const firstMoves = shifted[0].moves.split(' ');
+    firstMoves[0] = firstMoves[0] === 'e2e4' ? 'd2d4' : 'e2e4';
+    shifted[0].moves = firstMoves.join(' ');
+    fs.writeFileSync(out, shifted.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+      /does not start with its scheduled opening line/);
+    copy();
+    const illegal = lines.map(JSON.parse);
+    const tail = illegal[0].moves.split(' ');
+    tail[tail.length - 1] = 'a1a1';
+    illegal[0].moves = tail.join(' ');
+    fs.writeFileSync(out, illegal.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'test'); },
+      /is not a legal move/);
+    // The runner's own seal requires the full identity these legacy headers lack.
+    copy();
+    assert.throws(function () { Screen.sealBlock(out, OPENINGS_NOW, 'runner'); },
+      /lacks part of the run identity/);
+    assert.ok(!fs.existsSync(Screen.receiptPath(out)));
     // A header bound to another opening list cannot be sealed.
     copy();
     const headers = Screen.readRecords(out + '.runs').map(function (h) {
@@ -381,6 +408,26 @@ check('an output has one canonical path; a dangling link is refused', function (
   }
 });
 
+check('a relative TMPDIR still yields absolute snapshot paths', function () {
+  const dir = fs.realpathSync(tempDir());
+  const saved = process.env.TMPDIR;
+  const cwd = process.cwd();
+  let snap = null;
+  try {
+    process.chdir(dir);
+    fs.mkdirSync('rel');
+    process.env.TMPDIR = 'rel';
+    snap = Screen.makeSnapshot(path.join(ROOT, 'test', 'ai-match-protocol.js'));
+    assert.ok(path.isAbsolute(snap.dir) && snap.dir.indexOf(path.join(dir, 'rel')) === 0, snap.dir);
+    assert.ok(fs.existsSync(snap.runner) && fs.existsSync(snap.stockfish));
+  } finally {
+    if (snap) snap.remove();
+    if (saved === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved;
+    process.chdir(cwd);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 check('a truncated NDJSON line is reported, not skipped', function () {
   const dir = tempDir();
   try {
@@ -396,7 +443,8 @@ check('a truncated NDJSON line is reported, not skipped', function () {
 // ---- End-to-end runs against a scripted UCI anchor ----
 // The fake anchor plays the first legal move in UCI order. FAKE_SF_DELAY_MS
 // slows each reply; FAKE_SF_TAMPER edits the running binary itself (inside the
-// run's snapshot); FAKE_SF_EDIT names a source file it edits mid-run.
+// run's snapshot); FAKE_SF_EDIT names a source file it breaks mid-run;
+// FAKE_SF_TRACE records which runner started the game and which binary runs.
 
 function fakeStockfish(dir, name) {
   const file = path.join(dir, name || 'fakefish');
@@ -423,7 +471,12 @@ function fakeStockfish(dir, name) {
     '        fs.chmodSync(__filename, 0o755);\n' +
     '        fs.appendFileSync(__filename, "\\n// tampered\\n");\n' +
     '      }\n' +
-    '      if (process.env.FAKE_SF_EDIT) fs.appendFileSync(process.env.FAKE_SF_EDIT, "\\n// edited\\n");\n' +
+    '      if (process.env.FAKE_SF_EDIT) fs.writeFileSync(process.env.FAKE_SF_EDIT,\n' +
+    '        "#!" + process.execPath + "\\nprocess.exit(3)\\n");\n' +
+    '      if (process.env.FAKE_SF_TRACE && fs.existsSync("/proc/" + process.ppid + "/cmdline")) {\n' +
+    '        fs.appendFileSync(process.env.FAKE_SF_TRACE, JSON.stringify({ self: __filename,\n' +
+    '          parent: fs.readFileSync("/proc/" + process.ppid + "/cmdline", "utf8").split("\\u0000") }) + "\\n");\n' +
+    '      }\n' +
     '    }\n' +
     '    let state = Chess.newGameState();\n' +
     '    moves.forEach(function (u) {\n' +
@@ -480,8 +533,23 @@ async function endToEnd() {
       '--openings', '0-0', '--out', out, '--concurrency', '2'];
 
     await checkAsync('a run plays its schedule from a snapshot of the hashed inputs', async function () {
-      const r = await runCli(base);
+      const trace = path.join(dir, 'trace.ndjson');
+      const r = await runCli(base, { FAKE_SF_TRACE: trace });
       assert.strictEqual(r.code, 0, r.output);
+      // Each game process ran the snapshot runner and spawned the snapshot
+      // Stockfish, never the checkout (Linux /proc shows the game's argv).
+      if (fs.existsSync('/proc/self/cmdline')) {
+        const games = Screen.readRecords(trace);
+        assert.strictEqual(games.length, 2);
+        games.forEach(function (g) {
+          const script = g.parent[1];
+          assert.ok(script.indexOf(path.join(runTmp, 'chessy-level-screen-')) === 0 &&
+            script.endsWith(path.join('test', 'eval', 'level-screen.js')) &&
+            script !== RUNNER, script);
+          assert.ok(g.self.indexOf(path.join(runTmp, 'chessy-level-screen-')) === 0 &&
+            g.self.endsWith(path.sep + 'stockfish'), g.self);
+        });
+      }
       const records = Screen.readRecords(out);
       const headers = Screen.readRecords(out + '.runs');
       assert.deepStrictEqual(records.map(function (x) { return x.openingId + ':' + x.chessyColor; })
@@ -500,6 +568,8 @@ async function endToEnd() {
       // The receipt comes last and binds the final bytes.
       const sealed = Screen.verifySealed(out, OPENINGS_NOW);
       assert.strictEqual(sealed.receipt.sealedBy, 'runner');
+      assert.strictEqual(sealed.receipt.identityComplete, true);
+      assert.strictEqual(headers[0].concurrency, 2);
       assert.strictEqual(sealed.receipt.ndjsonSha256, sha(out));
       const summary = await runCli(['--summarize', out]);
       assert.strictEqual(summary.code, 0, summary.output);
@@ -550,6 +620,7 @@ async function endToEnd() {
         [base.map(function (a) { return a === '1500' ? '1900' : a; }), /differs in anchor/],
         [base.map(function (a) { return a === sf ? other : a; }), /differs in stockfishSha256/],
         [base.map(function (a) { return a === '0-0' ? '0-1' : a; }), /differs in openings/],
+        [base.map(function (a) { return a === '2' ? '1' : a; }), /differs in concurrency/],
         [base.map(function (a) { return a === '2' ? '0' : a; }), /usage/]
       ];
       for (const c of cases) {
@@ -596,6 +667,18 @@ async function endToEnd() {
       assert.notStrictEqual(sha(source), original, 'the source was edited mid-run');
       assert.strictEqual(Screen.readRecords(edited).length, 2);
       assert.strictEqual(Screen.readRecords(edited + '.runs')[0].stockfishSha256, original);
+    });
+
+    await checkAsync('an anchor that cannot start is refused before any header', async function () {
+      const broken = path.join(dir, 'brokenfish');
+      fs.writeFileSync(broken, '#!' + process.execPath + '\nprocess.exit(0)\n');
+      fs.chmodSync(broken, 0o755);
+      const target = path.join(dir, 'broken.ndjson');
+      const r = await runCli(['--stockfish', broken, '--level', 'easy', '--anchor', '1500',
+        '--openings', '0-0', '--out', target, '--concurrency', '1']);
+      assert.strictEqual(r.code, 1, r.output);
+      assert.ok(/did not start/.test(r.output), r.output);
+      assert.ok(!fs.existsSync(target + '.runs') && !fs.existsSync(target + '.lock'));
     });
 
     await checkAsync('a game is not recorded once its snapshot changes', async function () {

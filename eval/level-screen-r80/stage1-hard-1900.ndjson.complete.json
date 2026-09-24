@@ -5,10 +5,16 @@
     "level": "hard",
     "anchor": 1900,
     "openings": "even",
+    "concurrency": 3,
     "stockfishSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
     "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
     "presetsSha256": "93836807a96d54e43651d194d4bbc74a643a4a0cd67051a89f408eb7d0ed1908",
     "runnerSha256": "64f39623df899161d52b12f2297f4a971122315693d5fc44b70adaa0a3fd588e"
+  },
+  "identityComplete": false,
+  "replayedAgainst": {
+    "openingsSha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27",
+    "openingProtocolSha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63"
   },
   "scheduledGames": 100,
   "games": 100,

@@ -121,11 +121,22 @@ while the host was heavily loaded.
   rules hashes, commit and host load.
 - `*.ndjson.complete.json` — the completion receipt. It binds the SHA-256
   of the exact `.ndjson` and `.runs` bytes to the block's run identity and its
-  complete schedule: every scheduled slot played once, each record naming its
-  scheduled opening. These seven blocks predate receipts. They were sealed
-  after the fact with `--seal` (`"sealedBy": "seal-command"`), which refuses
-  an incomplete block and never replaces an existing receipt. The runner now
-  writes its own receipt (`"sealedBy": "runner"`) after the last game.
+  complete schedule: every scheduled slot played once. Every record is
+  replayed through the rules from its scheduled opening line, and the hashes
+  of the opening list and protocol it was checked against are recorded.
+  - These seven blocks predate receipts. They were sealed after the fact with
+    `--seal` (`"sealedBy": "seal-command"`), which refuses an incomplete block
+    and never replaces an existing receipt.
+  - Their headers also predate the full run identity (no opening-list,
+    protocol or bridge hashes), so their receipts say
+    `"identityComplete": false`. The replay is what ties them to their
+    openings: all 700 games start with their scheduled line and are legal
+    throughout.
+  - The opening list and its protocol module are byte-identical at every
+    commit that played these games and at the PR head. They last changed on
+    `main` before this PR's base.
+  - The runner now writes its own receipt (`"sealedBy": "runner"`) after the
+    last game, and only with the full identity.
 - Summaries: `node test/eval/level-screen.js --summarize <file.ndjson>`.
   The summary requires a receipt that still matches the bytes. It also
   refuses a file that mixes levels, anchors or presets, repeats a schedule
@@ -141,7 +152,12 @@ while the host was heavily loaded.
   - Each run executes a private, read-only snapshot of the runner, rules,
     loader, WASM, presets, opening list and Stockfish. Its header records the
     hashes of that snapshot, including the opening list.
-  - A resume must match the block's recorded inputs, preset and schedule.
+  - A resume must match the block's recorded inputs, preset, schedule and
+    concurrency (Master is wall-clock limited, so host contention is part of
+    what a block measures).
+  - The snapshot lives in `TMPDIR`, which must allow executing programs. A
+    Stockfish that does not answer UCI there is refused before any header is
+    written.
   - An exclusive `<out>.lock` stops two runs from writing the same output.
   - A game is not recorded if the snapshot changes.
   - The completion receipt is written last, and a sealed block is never

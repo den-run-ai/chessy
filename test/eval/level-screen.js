@@ -438,19 +438,21 @@ const SNAPSHOT_FILES = Object.freeze({
 });
 const SNAPSHOT_STOCKFISH = 'stockfish';
 
-// Every input that changes what a block's games measure. A block's .runs
+// Every input that changes what a block's games measure, including how many
+// games share the host (wall-clock searches depend on it). A block's .runs
 // headers and records must agree on all of them; commit, host and load are
 // descriptive only.
 const RUN_IDENTITY_KEYS = Object.freeze(['schema', 'level', 'anchor', 'openings',
-  'stockfishSha256'].concat(Object.keys(SNAPSHOT_FILES)));
+  'concurrency', 'stockfishSha256'].concat(Object.keys(SNAPSHOT_FILES)));
 
 // `root` holds SNAPSHOT_FILES at their relative paths; `exe` is Stockfish.
-function runIdentity(root, exe, level, anchor, openings) {
+function runIdentity(root, exe, level, anchor, openings, concurrency) {
   const identity = {
     schema: SCHEMA + '.run',
     level: level,
     anchor: anchor,
     openings: openings,
+    concurrency: concurrency,
     stockfishSha256: sha256File(exe)
   };
   Object.keys(SNAPSHOT_FILES).forEach(function (key) {
@@ -460,7 +462,7 @@ function runIdentity(root, exe, level, anchor, openings) {
 }
 
 function makeSnapshot(exe) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-level-screen-'));
+  const dir = fs.mkdtempSync(path.join(path.resolve(os.tmpdir()), 'chessy-level-screen-'));
   try {
     Object.keys(SNAPSHOT_FILES).forEach(function (key) {
       const rel = SNAPSHOT_FILES[key];
@@ -564,9 +566,11 @@ function sha256Bytes(bytes) {
 }
 
 // The receipt a complete block must carry, computed from the exact bytes it
-// binds: every scheduled slot played once, each record naming its scheduled
-// opening, and headers from one run identity. `openings` is the opening list
-// and the hash of its source file.
+// binds: every scheduled slot played once, headers from one run identity, and
+// every record replayed through the rules from its scheduled opening line.
+// `openings` is the opening list with the hashes of its source and protocol
+// files. Headers written before the full identity existed (identityComplete
+// false) are authenticated by that replay rather than by recorded hashes.
 function completionOf(dataBytes, runsBytes, openings, label) {
   const records = parseRecords(dataBytes.toString('utf8'), label);
   const headers = parseRecords(runsBytes.toString('utf8'), label + '.runs');
@@ -587,14 +591,31 @@ function completionOf(dataBytes, runsBytes, openings, label) {
     throw new Error(label + ' is incomplete: ' + records.length + ' of ' + expected.length +
       ' scheduled games');
   }
+  const lines = {};
   records.forEach(function (r, i) {
-    if (r.openingName !== openings.list[r.openingId][0]) {
-      throw new Error(label + ' record ' + (i + 1) + ' does not name its scheduled opening');
+    const where = label + ' record ' + (i + 1);
+    const opening = openings.list[r.openingId];
+    if (r.openingName !== opening[0]) throw new Error(where + ' does not name its scheduled opening');
+    if (!lines[r.openingId]) lines[r.openingId] = openingLine(opening[1]).uci;
+    const prefix = lines[r.openingId];
+    const moves = typeof r.moves === 'string' && r.moves ? r.moves.split(' ') : [];
+    if (r.openingPlies !== prefix.length || r.plies !== moves.length ||
+        prefix.some(function (u, k) { return moves[k] !== u; })) {
+      throw new Error(where + ' does not start with its scheduled opening line');
     }
+    let state = Chess.newGameState();
+    moves.forEach(function (u, k) {
+      const move = legalFromUci(state, u);
+      if (!move) throw new Error(where + ' ply ' + (k + 1) + ' is not a legal move');
+      state = Chess.playMove(state, move);
+    });
   });
   const identity = {};
   RUN_IDENTITY_KEYS.forEach(function (k) {
     if (header[k] !== undefined) identity[k] = header[k];
+  });
+  const identityComplete = RUN_IDENTITY_KEYS.every(function (k) {
+    return header[k] !== undefined;
   });
   return {
     records: records,
@@ -602,6 +623,11 @@ function completionOf(dataBytes, runsBytes, openings, label) {
     receipt: {
       schema: RECEIPT_SCHEMA,
       identity: identity,
+      identityComplete: identityComplete,
+      replayedAgainst: {
+        openingsSha256: openings.sha256,
+        openingProtocolSha256: openings.protocolSha256
+      },
       scheduledGames: expected.length,
       games: records.length,
       ndjsonSha256: sha256Bytes(dataBytes),
@@ -610,10 +636,14 @@ function completionOf(dataBytes, runsBytes, openings, label) {
   };
 }
 
-// Write the receipt with no-replace semantics. The caller holds the lock.
+// Write the receipt with no-replace semantics. The caller holds the lock. The
+// runner always records the full identity, so its own seal requires it.
 function sealBlock(out, openings, sealedBy) {
   const done = completionOf(fs.readFileSync(out), fs.readFileSync(out + '.runs'),
     openings, out);
+  if (sealedBy === 'runner' && !done.receipt.identityComplete) {
+    throw new Error(out + ' lacks part of the run identity');
+  }
   const receipt = Object.assign({}, done.receipt, { sealedBy: sealedBy });
   try {
     fs.writeFileSync(receiptPath(out), JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx' });
@@ -646,9 +676,24 @@ function verifySealed(out, openings) {
   return { records: done.records, headers: done.headers, receipt: receipt };
 }
 
-function sourceOpenings() {
-  const file = path.join(ROOT, SNAPSHOT_FILES.openingsSha256);
-  return { list: require(file), sha256: sha256File(file) };
+function sourceOpenings(root) {
+  const file = path.join(root || ROOT, SNAPSHOT_FILES.openingsSha256);
+  return {
+    list: require(file),
+    sha256: sha256File(file),
+    protocolSha256: sha256File(path.join(root || ROOT, SNAPSHOT_FILES.openingProtocolSha256))
+  };
+}
+
+// The snapshot's Stockfish must answer UCI before a header is written; a
+// TMPDIR mounted noexec, for example, fails here instead of mid-run.
+function preflightStockfish(exe) {
+  const r = cp.spawnSync(exe, [], { input: 'uci\nquit\n', encoding: 'utf8', timeout: 15000 });
+  if (r.error || !/^uciok\s*$/m.test(r.stdout || '')) {
+    throw new Error('the snapshot Stockfish ' + exe + ' did not start (' +
+      (r.error ? r.error.code || r.error.message : 'no uciok') +
+      '); TMPDIR must allow executing programs');
+  }
 }
 
 // One exclusive, no-replace lock covers the NDJSON and its .runs sidecar from
@@ -728,16 +773,24 @@ async function runSchedule(argv) {
   const killChildren = function () {
     children.forEach(function (c) { try { c.kill('SIGKILL'); } catch (e) { /* gone */ } });
   };
-  const onSignal = function () {
+  // Idempotent, synchronous cleanup. The 'exit' hook also covers an uncaught
+  // error that would otherwise skip the finally below.
+  const cleanup = function () {
     killChildren();
     if (snapshot) snapshot.remove();
     lock.release();
+  };
+  const onSignal = function () {
+    cleanup();
     process.exit(130);
   };
   STOP_SIGNALS.forEach(function (s) { process.once(s, onSignal); });
+  process.on('exit', cleanup);
   try {
     snapshot = makeSnapshot(exe);
-    const identity = runIdentity(snapshot.dir, snapshot.stockfish, level, anchor, openings);
+    preflightStockfish(snapshot.stockfish);
+    const identity = runIdentity(snapshot.dir, snapshot.stockfish, level, anchor, openings,
+      concurrency);
     // The schedule and preset come from the snapshot the games will load.
     const OPENINGS = require(path.join(snapshot.dir, SNAPSHOT_FILES.openingsSha256));
     const preset = require(path.join(snapshot.dir, SNAPSHOT_FILES.presetsSha256))
@@ -752,7 +805,6 @@ async function runSchedule(argv) {
     const meta = Object.assign({}, identity, {
       scheduledGames: jobs.length,
       alreadyRecorded: jobs.length - pending.length,
-      concurrency: concurrency,
       node: process.version,
       cpu: (os.cpus()[0] || {}).model,
       commit: gitOutput(['rev-parse', 'HEAD']),
@@ -778,11 +830,20 @@ async function runSchedule(argv) {
             { stdio: ['ignore', 'pipe', 'inherit', 'ipc'] });
           children.add(child);
           let reply = null;
-          child.on('message', function (m) { reply = m; });
-          child.on('exit', function (code, signal) {
+          let settled = false;
+          const settle = function (fn, value) {
+            if (settled) return;
+            settled = true;
             children.delete(child);
-            if (reply && reply.ok) resolve(reply.record);
-            else reject(new Error('game worker failed: ' + (reply && reply.error) +
+            fn(value);
+          };
+          child.on('message', function (m) { reply = m; });
+          child.on('error', function (error) {
+            settle(reject, new Error('game worker could not run: ' + error.message));
+          });
+          child.on('exit', function (code, signal) {
+            if (reply && reply.ok) settle(resolve, reply.record);
+            else settle(reject, new Error('game worker failed: ' + (reply && reply.error) +
               ' code ' + code + (signal ? ' signal ' + signal : '')));
           });
         });
@@ -790,7 +851,8 @@ async function runSchedule(argv) {
         // The snapshot is private and read-only; refuse to record a game if it
         // was altered anyway.
         const diff = identityDiff(
-          runIdentity(snapshot.dir, snapshot.stockfish, level, anchor, openings), identity);
+          runIdentity(snapshot.dir, snapshot.stockfish, level, anchor, openings, concurrency),
+          identity);
         if (diff.length) {
           throw new Error('the run snapshot changed (' + diff.join(', ') + '); game not recorded');
         }
@@ -806,15 +868,14 @@ async function runSchedule(argv) {
     await Promise.all(pool);
     if (failed) throw failed;
     // Data first, then the completion receipt last.
-    const openingsNow = { list: OPENINGS, sha256: identity.openingsSha256 };
+    const openingsNow = sourceOpenings(snapshot.dir);
     sealBlock(out, openingsNow, 'runner');
     const records = verifySealed(out, openingsNow).records;
     console.log(JSON.stringify(summarize(records, { anchor: anchor }), null, 2));
   } finally {
-    killChildren();
     STOP_SIGNALS.forEach(function (s) { process.removeListener(s, onSignal); });
-    if (snapshot) snapshot.remove();
-    lock.release();
+    process.removeListener('exit', cleanup);
+    cleanup();
   }
 }
 
@@ -845,8 +906,11 @@ if (require.main === module) {
     const openings = sourceOpenings();
     const files = argv.slice(1);
     files.forEach(function (file) {
-      const records = verifySealed(file, openings).records;
+      const sealed = verifySealed(file, openings);
+      const records = sealed.records;
       const summary = summarize(records, { anchor: records[0].anchor });
+      summary.sealedBy = sealed.receipt.sealedBy;
+      summary.identityComplete = sealed.receipt.identityComplete;
       const reasons = {};
       records.forEach(function (r) { reasons[r.reason] = (reasons[r.reason] || 0) + 1; });
       summary.reasons = reasons;
@@ -885,6 +949,7 @@ module.exports = {
   sealBlock: sealBlock,
   verifySealed: verifySealed,
   receiptPath: receiptPath,
+  sourceOpenings: sourceOpenings,
   checkResume: checkResume,
   validateBlock: validateBlock,
   acquireLock: acquireLock
