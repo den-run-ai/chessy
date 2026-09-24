@@ -134,3 +134,17 @@ before any game: 100 games against the 1500 anchor on the 50 odd-indexed
 openings (disjoint from the stage-1 even openings), same anchor settings and
 adjudication, one game at a time beside the running Master block. No further
 budget search follows in this PR; the result is reported as measured.
+
+### Amendment before any new-Easy game: depth cap instead of 3,500 nodes
+
+The product contract requires every level to complete at least depth 1 on the
+frozen position families. Depth 1 in the tactical Kiwipete family costs about
+9,050 nodes, so any pure node budget below roughly 9.1k — including the 3,500
+proposed above — would sometimes play an unsearched root move. The new Easy is
+therefore Medium's 10k-node work cap with `maxDepth: 2` (quiescence on, 5 s
+ceiling): depth 1 always completes, and play stays deterministic. Across the
+stage-1 blocks, each ply of average completed depth was worth roughly 200 Elo
+on this scale (10k nodes averaged depth 3.2 ≈ 1686), which puts a depth-2 cap
+near 1450–1500. The confirmation block is unchanged: 100 games against the 1500
+anchor on the odd openings, one game at a time beside the Master block, and no
+further budget search in this PR.
