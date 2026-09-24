@@ -19,7 +19,9 @@ screen.
 - Openings: the exposed development list `test/ai-match-openings.js`; each
   opening once per color. Stage 1 = the 50 even-indexed lines against the
   target anchor; stage 2 (only when stage 1 scored above 0.80 or below 0.20) =
-  the disjoint 50 odd-indexed lines at target ± 200.
+  the disjoint 50 odd-indexed lines at target ± 200. After the relabel, the
+  r80 Easy preset played one more 100-game block against 1500 on the odd
+  lines.
 - Adjudication: rules terminals, draw at 180 total plies.
 - Host: one Linux x86-64 container, 4 logical CPUs (Intel Xeon 2.8 GHz),
   Node.js 22.22.2, three games at a time.
@@ -38,8 +40,13 @@ screen.
 | 230k nodes | hard | Expert | 1900 | even | 100 | 71-13-16 | 0.775 (0.80 / 0.75) | 2115 | 2047–2195 | 2056 |
 | 1440k nodes | expert | — (dropped) | 2100 | even | 100 | 79-12-9 | 0.850 (0.88 / 0.82) | 2401 | 2330–2492 | 2341 |
 | 1440k nodes | expert | — (dropped) | 2300 | odd | 100 | 59-19-22 | 0.685 (0.73 / 0.64) | 2435 | 2381–2496 | 2389 |
+| 8 s uncapped | master | Master | 2300 | even | 100 | 69-16-15 | 0.770 (0.82 / 0.72) | 2510 | 2451–2575 | 2464 |
 
-**Master: stage 1 (100 games against 2300) is running; its rows and the reading below will be completed before this PR leaves draft.**
+Master scored 0.77, inside the 0.20–0.80 band, so no stage-2 Master block was
+run. Every block completed its fixed 100 games. Container restarts interrupted
+two blocks; each resume filled only the empty slots and added a `.runs` header
+(Expert stage 2 resumed after 54 games; the first Master attempt recorded no
+game before its restart).
 
 ## Chessy search on this host
 
@@ -51,6 +58,7 @@ screen.
 | 230k nodes | 1900 | checkmate 87, threefold repetition 3, ply-cap 10 | 4513 | 5.6 | 215,834 | 222 / 761 | 0 | n/r | not recorded |
 | 1440k nodes | 2100 | checkmate 88, ply-cap 9, threefold repetition 3 | 4340 | 6.9 | 1,332,444 | 1361 / 5001 | 0 | n/r | not recorded |
 | 1440k nodes | 2300 | checkmate 81, ply-cap 18, insufficient material 1 | 5224 | 7.2 | 1,340,451 | 1275 / 2228 | 0 | n/r | not recorded |
+| 8 s uncapped | 2300 | checkmate 84, ply-cap 16 | 4931 | 8.5 | 6,197,811 | 7358 / 8031 | 0 | 0 | time-limit 4510, mate 421 |
 
 `n/r` / `not recorded`: the draft-preset runner predates the per-move
 stop-reason instrumentation added before Master (PLAN.md); the r80 Easy block
@@ -60,12 +68,42 @@ while the host was heavily loaded.
 
 ## Reading the results
 
-Pending the Master block.
+- **Every r79 budget played about one label above its target** on this scale:
+  10k ≈ 1686, 36k ≈ 1915, 230k ≈ 2115 and 1.44M ≈ 2401–2435 nodes against
+  targets of 1500/1700/1900/2100. The maintainer therefore moved the budgets
+  up one label for r80 (PLAN.md addendum): Medium/Hard/Expert now use
+  10k/36k/230k nodes, the 1.44M-node preset is dropped, and Easy is new.
+- **r80 Easy** (the 10k cap limited to depth 2) measured about 1592
+  (1524–1664) on the disjoint odd openings: clearly easier than Medium, but
+  about 90 above its 1500 target. A depth-1 cap would be the next step down;
+  it has not been measured and is not part of this PR.
+- **Master** (8 s, uncapped nodes) measured about 2510 (2451–2575; one-sided
+  95% lower bound 2464) against the 2300 anchor, averaging depth 8.5 with no
+  transposition-table saturation and no retries. On this host it is well
+  above the dropped 1.44M-node preset, so dropping that preset leaves no gap.
+- **Only the node-capped levels transfer across devices.** Their results
+  depend on node counts, not speed (apart from rare 5 s safety-ceiling stops).
+  Master is wall-clock limited, and here it ran about 0.84M nodes per second
+  per search under load, below an iPhone 12's roughly 1.5M. A faster device
+  plays a stronger Master, and a slower one a weaker Master.
+- **A 10k-node search very occasionally fails to finish depth 1** in extreme
+  quiescence positions: one move in 4,131 at the old Easy/new Medium budget,
+  and one in 4,428 for the new Easy. It then plays its first ordered root move.
+  This is not new in r80. The frozen-family contract test still passes.
+- **What this is not.** These are one host's descriptive numbers against
+  Stockfish's own UCI_Elo scale at one second per move, on a development
+  opening list. They are not FIDE, Chess.com or Lichess ratings, not E4-v1
+  evidence, and they certify no level. The adaptive stage-2 anchors and the
+  post-result relabel are exactly what a certification protocol forbids, so
+  certification (#87/#113) still needs a fresh preregistered protocol,
+  holdout and supported devices.
 
 ## Files
 
-- `stage{1,2}-<level>-<anchor>.ndjson` — one record per game (moves in UCI,
-  result, termination, Chessy per-game search statistics).
+- `stage{1,2}-<level>-<anchor>.ndjson` — one record per game of the draft
+  presets (level names are the draft labels), and `relabel-easy-1500.ndjson`
+  for the r80 Easy confirmation block. Each record carries the exact preset it
+  played, its moves in UCI, result, termination and Chessy search statistics.
 - `*.ndjson.runs` — one header per block start or resume, with the runner,
   preset, WASM, Stockfish and (for Master) loader/rules hashes, commit and
   host load.
