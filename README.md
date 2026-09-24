@@ -27,9 +27,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own
   mating material. All five difficulty levels use quiescent iterative
-  deepening. Easy/Medium/Hard/Expert target
-  reproducible 10k/36k/230k/1.44M-node caps; each also has a five-second
-  safety ceiling, so slower devices can stop earlier. **Master** thinks for
+  deepening. Easy/Medium/Hard/Expert use reproducible 10k/10k/36k/230k-node
+  caps (Easy also stops at depth 2); each also has a five-second safety
+  ceiling, so slower devices can stop earlier. **Master** thinks for
   up to eight seconds, with uncapped nodes and the full supported 111-ply
   ceiling. In timed games, every level reserves time for move delivery and
   one identical-request retry after a reported worker failure (a silent worker
@@ -45,10 +45,14 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   are provisional
   calibration targets on an external engine-rating scale—not certified FIDE,
   Chess.com, or Lichess ratings; absolute and adjacent-level certification
-  remains tracked in #87/#113. The r80 budget policy is **not** an E4-v1
-  certification or evidence for higher Elo; those historical artifacts stay
-  unchanged. A fresh protocol/holdout and supported-device measurements are
-  required before certifying this policy.
+  remains tracked in #87/#113. In r80 the budgets moved up one label after an
+  exploratory screen against pinned Stockfish 18 on a Linux container
+  (`eval/level-screen-r80/`) placed each r79 budget about one label above its
+  target: 10k, 36k and 230k nodes now serve Medium, Hard and Expert, the
+  1.44M-node preset (already Master strength there) was dropped, and Easy is
+  new. That screen is exploratory, not an E4-v1 certification, and the
+  historical E4 artifacts stay unchanged; a fresh protocol/holdout and
+  supported-device measurements are required before certifying this ladder.
 - **Analysis headroom** — quick whole-game screening stays inexpensive.
   Selected moments, manual verification and Train's live check share one
   immutable deep profile: an uncapped-node, up-to-16-second scan (twice

@@ -23,11 +23,12 @@ function check(ok, label, detail) {
 
 (async function () {
   const expected = [
-    ['1', 'Easy', '1500', 10000],
-    ['2', 'Medium', '1700', 36000],
-    ['3', 'Hard', '1900', 230000],
-    ['5', 'Expert', '2100', 1440000],
-    ['master', 'Master', '2300+', null]
+    // [id, label, target, nodeLimit, maxDepth, timeMs]
+    ['1', 'Easy', '1500', 10000, 2, 5000],
+    ['2', 'Medium', '1700', 10000, 30, 5000],
+    ['3', 'Hard', '1900', 36000, 30, 5000],
+    ['5', 'Expert', '2100', 230000, 30, 5000],
+    ['master', 'Master', '2300+', null, 111, 8000]
   ];
   check(JSON.stringify(Presets.ORDER) ===
       JSON.stringify(expected.map(function (row) { return row[0]; })),
@@ -37,8 +38,8 @@ function check(ok, label, detail) {
     return preset && Object.isFrozen(preset) &&
       preset.label === row[1] && preset.target === row[2] &&
       preset.nodeLimit === row[3] &&
-      preset.maxDepth === (row[0] === 'master' ? 111 : 30) &&
-      preset.timeMs === (row[0] === 'master' ? 8000 : 5000) &&
+      preset.maxDepth === row[4] &&
+      preset.timeMs === row[5] &&
       preset.quiesce === true;
   }), 'all five target bands map to the declared immutable search presets');
   check(Presets.get('unknown') === null && Object.isFrozen(Presets.LEVELS),
@@ -69,10 +70,10 @@ function check(ok, label, detail) {
     // tree at a 5k checkpoint without retaining a second search
     // implementation solely as an oracle.
     const frozenOpts = {
-      maxDepth: easy.maxDepth,
+      maxDepth: 30,
       nodeLimit: 5000,
       timeMs: 0,
-      quiesce: easy.quiesce
+      quiesce: true
     };
     const expectedFrozen = bench.frozenSignature(name, frozenOpts);
     const frozenDiffs = expectedFrozen
@@ -112,25 +113,33 @@ function check(ok, label, detail) {
     'Expert reaches its full node target across the frozen WASM families',
     expertShortfalls.slice(0, 3).join(' | '));
 
-  const kiwipete = bench.POSITIONS.find(function (row) {
-    return row[0].toLowerCase().includes('kiwipete');
-  }) || bench.POSITIONS[0];
-  let previousNodes = 0;
+  // Work never decreases with the level in any family, stays within each
+  // cap, and strictly increases in total. (Easy and Medium share a 10k cap,
+  // so a tactical family where depth 2 does not fit is legitimately equal.)
+  let previousTotal = 0;
+  let previousByFamily = null;
   let monotonic = true;
   for (const id of Presets.ORDER.slice(0, 4)) {
     const preset = Presets.get(id);
-    const result = wasm.search(kiwipete[1], {
-      maxDepth: preset.maxDepth,
-      nodeLimit: preset.nodeLimit,
-      timeMs: preset.timeMs,
-      quiesce: preset.quiesce
+    let total = 0;
+    const byFamily = bench.POSITIONS.map(function (row) {
+      const result = wasm.search(row[1], {
+        maxDepth: preset.maxDepth,
+        nodeLimit: preset.nodeLimit,
+        timeMs: preset.timeMs,
+        quiesce: preset.quiesce
+      });
+      if (result.nodes > preset.nodeLimit || result.depth < 1) monotonic = false;
+      total += result.nodes;
+      return result.nodes;
     });
-    if (result.nodes <= previousNodes || result.nodes > preset.nodeLimit) {
-      monotonic = false;
-    }
-    previousNodes = result.nodes;
+    if (total <= previousTotal || (previousByFamily && byFamily.some(function (n, i) {
+      return n < previousByFamily[i];
+    }))) monotonic = false;
+    previousTotal = total;
+    previousByFamily = byFamily;
   }
-  check(monotonic, 'Easy through Expert perform strictly increasing bounded work');
+  check(monotonic, 'Easy through Expert perform non-decreasing, bounded, strictly larger total work');
 
   // Keep the binary read in this contract so a missing release asset fails
   // here even if the separate digest test is accidentally omitted.

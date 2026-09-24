@@ -4,6 +4,13 @@
  * The IDs are durable storage values from the original depth-based ladder;
  * changing them would break saved games and archive metadata. Ratings are
  * external-engine calibration TARGETS, not certified FIDE/server ratings.
+ *
+ * r80 shifts the budgets up one label: an exploratory screen against pinned
+ * Stockfish 18 (eval/level-screen-r80) placed each one about a label above
+ * its target, so 10k/36k/230k nodes now serve Medium/Hard/Expert, the
+ * 1.44M-node preset (already Master strength there) is dropped, and Easy is
+ * Medium's 10k work cap limited to depth 2. Depth 1 always completes (it can
+ * cost ~9k nodes in tactical positions), so no level plays an unsearched move.
  */
 'use strict';
 (function (global, factory) {
@@ -12,20 +19,20 @@
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   const LEVELS = Object.freeze({
     1: Object.freeze({
-      label: 'Easy', target: '1500', maxDepth: 30,
+      label: 'Easy', target: '1500', maxDepth: 2,
       nodeLimit: 10000, timeMs: 5000, quiesce: true
     }),
     2: Object.freeze({
       label: 'Medium', target: '1700', maxDepth: 30,
-      nodeLimit: 36000, timeMs: 5000, quiesce: true
+      nodeLimit: 10000, timeMs: 5000, quiesce: true
     }),
     3: Object.freeze({
       label: 'Hard', target: '1900', maxDepth: 30,
-      nodeLimit: 230000, timeMs: 5000, quiesce: true
+      nodeLimit: 36000, timeMs: 5000, quiesce: true
     }),
     5: Object.freeze({
       label: 'Expert', target: '2100', maxDepth: 30,
-      nodeLimit: 1440000, timeMs: 5000, quiesce: true
+      nodeLimit: 230000, timeMs: 5000, quiesce: true
     }),
     master: Object.freeze({
       label: 'Master', target: '2300+', maxDepth: 111,

@@ -7,11 +7,11 @@
 require('./helper').run('level-presets', async function (t) {
   const page = t.page, check = t.check;
   const levels = [
-    { id: '1', name: 'Easy', target: '1500', nodeLimit: 10000 },
-    { id: '2', name: 'Medium', target: '1700', nodeLimit: 36000 },
-    { id: '3', name: 'Hard', target: '1900', nodeLimit: 230000 },
-    { id: '5', name: 'Expert', target: '2100', nodeLimit: 1440000 },
-    { id: 'master', name: 'Master', target: '2300+', nodeLimit: null }
+    { id: '1', name: 'Easy', target: '1500', nodeLimit: 10000, maxDepth: 2 },
+    { id: '2', name: 'Medium', target: '1700', nodeLimit: 10000, maxDepth: 30 },
+    { id: '3', name: 'Hard', target: '1900', nodeLimit: 36000, maxDepth: 30 },
+    { id: '5', name: 'Expert', target: '2100', nodeLimit: 230000, maxDepth: 30 },
+    { id: 'master', name: 'Master', target: '2300+', nodeLimit: null, maxDepth: 111 }
   ];
 
   for (const level of levels) {
@@ -36,7 +36,7 @@ require('./helper').run('level-presets', async function (t) {
         result.copy.includes('target ' + level.target),
       level.name + ' presents its rating as a target');
     check(ai.engine === 'wasm' && ai.engineFallback === null &&
-        ai.maxDepth === (level.id === 'master' ? 111 : 30) &&
+        ai.maxDepth === level.maxDepth &&
         ai.timeMs === (level.id === 'master' ? 8000 : 5000) &&
         ai.quiesce === true && ai.nodeLimit === level.nodeLimit,
       level.name + ' executes the declared default-WASM preset');
@@ -54,13 +54,17 @@ require('./helper').run('level-presets', async function (t) {
           'completed iteration; stopReason ' + ai.stopReason + ')');
     } else {
       const completedBudget = ai.stopReason === 'node-limit' &&
-        ai.nodes === level.nodeLimit;
+        ai.nodes === level.nodeLimit && ai.attemptedDepth === ai.depth + 1;
       const hitSafetyCeiling = ai.stopReason === 'time-limit' &&
         Number.isInteger(ai.nodes) && ai.nodes > 0 &&
-        ai.nodes <= level.nodeLimit;
-      check((completedBudget || hitSafetyCeiling) && ai.depth >= 1 &&
-          ai.attemptedDepth === ai.depth + 1,
-        level.name + ' respects its node target and time safety ceiling');
+        ai.nodes <= level.nodeLimit && ai.attemptedDepth === ai.depth + 1;
+      // A depth-capped level (Easy) may finish its last allowed iteration
+      // inside the node cap; it then reports max-depth with nothing attempted.
+      const reachedDepthCap = level.maxDepth < 30 && ai.stopReason === 'max-depth' &&
+        ai.depth === level.maxDepth && Number.isInteger(ai.nodes) &&
+        ai.nodes > 0 && ai.nodes <= level.nodeLimit;
+      check((completedBudget || hitSafetyCeiling || reachedDepthCap) && ai.depth >= 1,
+        level.name + ' respects its node target, depth cap and time safety ceiling');
     }
   }
 

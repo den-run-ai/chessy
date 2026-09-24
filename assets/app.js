@@ -688,7 +688,8 @@
   }
 
   // Every level uses the same quiescent Rust/WASM engine. Easy through Expert
-  // stop on deterministic node targets; Master has no artificial node cap.
+  // stop on deterministic node targets (Easy also at depth 2); Master has no
+  // artificial node cap.
   // Timed games reserve clock for move delivery and an identical-request retry.
   function aiConfig(remaining) {
     const tc = tcParts();

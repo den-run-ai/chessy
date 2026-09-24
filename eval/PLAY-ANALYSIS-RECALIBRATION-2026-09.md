@@ -9,8 +9,12 @@ exploratory level screen is reported separately in
 ## Policy
 
 Stable IDs and provisional targets remain Easy 1500 / Medium 1700 / Hard 1900 /
-Expert 2100 / Master 2300+. Easy–Expert keep 10k/36k/230k/1.44M nodes, maxDepth
-30 and a 5-second safety ceiling. Master uses uncapped nodes, the ABI's 111-ply
+Expert 2100 / Master 2300+. After the exploratory level screen
+(`eval/level-screen-r80/`) placed each r79 budget about one label above its
+target, the maintainer moved the budgets up one label: Medium/Hard/Expert now
+use 10k/36k/230k nodes (maxDepth 30), the 1.44M-node preset is dropped, and Easy
+is the 10k cap limited to depth 2. All keep a 5-second safety ceiling. Master
+is unchanged by the relabel: uncapped nodes, the ABI's 111-ply
 ceiling, quiescence and at most 8 seconds. Timed Play sizes each request from
 the remaining clock and increment, reserving delivery time and a second
 identical-request attempt after a reported worker failure. An AI clock that is
