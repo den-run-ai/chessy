@@ -179,10 +179,8 @@ const unsaturated = ChessyAiTelemetry.sanitizeTelemetry({
   engine: 'wasm', source: 'worker'
 });
 check(saturated.ttSaturated === true && saturated.stopReason === 'unknown' &&
-    !Object.prototype.hasOwnProperty.call(unsaturated, 'ttSaturated') &&
-    Chess.pgnLogComment({ fen: Chess.START_FEN, ai: saturated }, 'w').indexOf('TT full') !== -1 &&
-    Chess.pgnLogComment({ fen: Chess.START_FEN, ai: unsaturated }, 'w').indexOf('TT full') === -1,
-  'a TT-saturated early stop is recorded and exported explicitly, never inferred');
+    !Object.prototype.hasOwnProperty.call(unsaturated, 'ttSaturated'),
+  'a TT-saturated early stop is recorded explicitly, never inferred');
 {
   const withFlag = JSON.parse(JSON.stringify(promotionGame));
   const aiIndex = withFlag.ai.findIndex(function (v) { return v && typeof v === 'object'; });

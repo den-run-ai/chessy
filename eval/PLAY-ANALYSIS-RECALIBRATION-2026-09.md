@@ -88,7 +88,7 @@ path at depths 4–6).
 
 `search()` now keeps the deepest completed iteration when the TT fills (stop
 reason `unknown`, never a false `time-limit`, with an explicit `ttSaturated`
-telemetry flag and a "TT full" debug-PGN note), and `searchRoot()` throws a
+flag kept in saved-game telemetry), and `searchRoot()` throws a
 tagged `tt-saturated` error that ends the verification phase. Real-WASM tests
 pin both paths on `r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq -`.
 

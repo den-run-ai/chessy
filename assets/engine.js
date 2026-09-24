@@ -428,7 +428,6 @@
           (ai.scorePov === 'white' ? ' (White POV)' : ''));
       }
       if (typeof ai.stopReason === 'string') details.push('stop ' + ai.stopReason);
-      if (ai.ttSaturated === true) details.push('TT full');
       const config = [];
       if (Number.isInteger(ai.maxDepth)) config.push('dmax ' + ai.maxDepth);
       if (Number.isInteger(ai.timeMs)) config.push('time ' + ai.timeMs + 'ms');
