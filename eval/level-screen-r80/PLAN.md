@@ -75,3 +75,16 @@ Descriptive only. This PR does not retune any shipped budget from this screen
 (E4-v1 exploration is likewise `mayChangeShippedBudgets: false`). A level found
 off-target is reported as such; any future budget change needs its own
 preregistered protocol and fresh disjoint evidence.
+
+## Addendum before any Master game (candidate correction)
+
+While Easy was running, review found that the draft candidate's uncapped
+eight-second Master search can fill the engine's fixed 1M-entry
+transposition table. The loader then threw, and the product's identical retry
+failed the same way (a deterministic node count), so the draft could not move
+in such positions. Commit `6a99dad` keeps the completed iteration instead. That
+is a candidate defect fix, not a result-driven change: no Master game had been
+played. Master therefore runs from a snapshot of `6a99dad`. Easy–Expert keep
+their original snapshot (`246f6bf`): their node caps (at most 1.44M) cannot
+fill the table, and their search requests and presets are unchanged. The
+screen's rules, openings, anchors, counts and adjudication are unchanged.
