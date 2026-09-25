@@ -793,6 +793,21 @@
     if (!global.CoachStore || !CoachStore.putJob) {
       return pauseForFailure(token, job, 'Archive unavailable — scan paused.');
     }
+    // Normalization temporarily removes failure markers while rebuilding the
+    // verified prefix. Preserve their retry-only meaning before EVERY write,
+    // including load and the checkpoint before dispatch: a pause or reload
+    // can abandon the worker before its null-result continuation runs.
+    // These plies came from the independently validated shortlist; a marker
+    // only forces fresh work and never proves a completed or accepted result.
+    var retryMarkers = freshDeepRetries.get(job);
+    if (retryMarkers) {
+      Object.keys(retryMarkers).forEach(function (key) {
+        var ply = Number(key);
+        if (!job.unresolved.some(function (item) {
+          return item.phase === 'deep' && item.ply === ply;
+        })) unresolved(job, ply, 'deep', retryMarkers[key]);
+      });
+    }
     job.updatedAt = now();
     if (CoachStore.putJobIfGame) {
       return Promise.resolve(CoachStore.putJobIfGame(job, currentSource))
@@ -1350,8 +1365,8 @@
         return !retryPly[moment.ply];
       });
       job.verifyIndex = deepRetryIndex;
-      // Restoring drops the markers (the slot is simply retried); remember
-      // which slots failed so their retry bypasses the cached result.
+      // Temporarily remove markers while checking the rebuilt prefix below.
+      // Checkpoint restores them durably until a usable result replaces them.
       var failedDeep = Object.create(null);
       job.unresolved.forEach(function (item) {
         if (item.phase === 'deep') {
@@ -1690,6 +1705,8 @@
         });
         job.moments.sort(function (a, b) { return a.ply - b.ply; });
       }
+      var restoredRetries = freshDeepRetries.get(job);
+      if (restoredRetries) delete restoredRetries[ply];
       job.unresolved = job.unresolved.filter(function (item) {
         return !(item.phase === 'deep' && item.ply === ply);
       });

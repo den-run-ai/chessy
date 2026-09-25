@@ -154,9 +154,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   revalidated before display; malformed FENs or illegal replays are skipped
   with a visible count and preserved unchanged for backup or recovery.
 - **Critical-moment suggestions** — Review can explicitly start, pause, and
-  resume a durable two-pass scan. Its quick pass scores every non-terminal
-  played move, while coaching nominations and at most two deep checks remain
-  limited to the selected player's decisions. Imported games with no known
+  resume a durable two-pass scan. An unusable deep check is recomputed on
+  Resume, including after pausing or reloading during its retry. Its quick
+  pass scores every non-terminal played move, while coaching nominations and
+  at most two deep checks remain limited to the selected player's decisions.
+  Imported games with no known
   player side ask for White, Black, or Both first. The scan shows accessible
   progress and at most two move-location suggestions; scores, categories,
   annotations, and alternative moves remain absent from public scan state

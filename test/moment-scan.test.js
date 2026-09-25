@@ -954,11 +954,13 @@ function manualDeepResult(review, ply, supplied) {
       rewoundDeepFailure.verifyIndex === 0 &&
       rewoundDeepFailure.moments.length === 0 && requests.length === 0 &&
       rewoundDeepJob.deepResults.length === 0 &&
-      rewoundDeepJob.unresolved.length === 0 &&
+      rewoundDeepJob.unresolved.length === 1 &&
+      rewoundDeepJob.unresolved[0].ply === forgedDeepFailure.shortlist[0].ply &&
+      rewoundDeepJob.unresolved[0].phase === 'deep' &&
       rewoundDeepJob.moveSummaries.find(function (summary) {
         return summary.ply === forgedDeepFailure.shortlist[0].ply;
       }).profile.indexOf('quick') === 0,
-    'a forged deep failure rewinds instead of suppressing a required suggestion');
+    'a forged deep failure retains only retry authority and cannot suppress a required suggestion');
   const downgradedAcceptance = clone(passTwoCheckpoint);
   downgradedAcceptance.moveSummaries.find(function (summary) {
     return summary.ply === downgradedAcceptance.shortlist[0].ply;
@@ -1122,6 +1124,95 @@ function manualDeepResult(review, ply, supplied) {
       interruptedRuns[2].state === 'done' && !interruptedRuns[2].durable,
     'an interrupted fresh deep retry keeps its durable failure until a usable result',
     JSON.stringify(interruptedRuns));
+
+  // Reopening Review writes its normalized paused job before Resume. A
+  // pending failure must survive that write and a second reload, even when
+  // no worker has run yet to restore the marker from its null reply.
+  reset();
+  const pausedRetryReview = autoReview('paused-deep-retry', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 160 },
+    { valid: true, complete: true, loss: 150 },
+    { valid: true, complete: true, loss: 140 },
+    { valid: true, complete: true, loss: 130 },
+    { valid: false, complete: true, reason: 'deep-unusable' }
+  ];
+  await Scan.start(pausedRetryReview, { restart: true });
+  const pendingRetryCheckpoint = clone(jobs.get('paused-deep-retry'));
+  const pendingSlot = clone(jobs.get('paused-deep-retry')).unresolved[0];
+  function durablePendingSlot() {
+    return jobs.get('paused-deep-retry').unresolved.some(function (item) {
+      return item.phase === 'deep' && item.ply === pendingSlot.ply &&
+        item.reason === pendingSlot.reason;
+    });
+  }
+  const loadKeepsRetry = [];
+  for (let i = 0; i < 2; i++) {
+    Scan.invalidate();
+    requests = [];
+    const loaded = await Scan.load(pausedRetryReview);
+    loadKeepsRetry.push(loaded.state === 'paused' &&
+      loaded.verifyIndex === 0 && loaded.report === undefined &&
+      requests.length === 0 && durablePendingSlot());
+  }
+  check(loadKeepsRetry.every(Boolean),
+    'opening Review across two reloads preserves the pending deep retry without dispatch or disclosure');
+
+  requests = [];
+  const pausedDeep = deferred();
+  replies = [pausedDeep];
+  const pendingResume = Scan.resume(pausedRetryReview);
+  for (let i = 0; i < 100 && requests.length === 0; i++) await Promise.resolve();
+  const beforePause = requests[0] && requests[0].fresh === true &&
+    requests[0].ply === pendingSlot.ply && durablePendingSlot();
+  await Scan.pause();
+  // The real service resolves cancellation null AFTER ownership is retired.
+  // That stale continuation must not be responsible for saving the marker.
+  pausedDeep.resolve(null);
+  await pendingResume;
+  const afterPause = durablePendingSlot();
+  Scan.invalidate();
+  requests = [];
+  replies = [];
+  const afterPauseResume = await Scan.resume(pausedRetryReview);
+  check(beforePause && afterPause && requests.length === 2 &&
+      requests[0].ply === pendingSlot.ply && requests[0].fresh === true &&
+      requests[1].fresh === false && afterPauseResume.state === 'done' &&
+      !durablePendingSlot(),
+    'Pause during a fresh deep retry survives reload and retires its marker only after usable replacement');
+
+  // Manual Verify can also fill the failed shortlist slot. Its accepted
+  // result must retire the same pending marker before checkpointing, without
+  // granting score access or clearing the untouched suffix's work.
+  Scan.invalidate();
+  const manualRetryCheckpoint = clone(pendingRetryCheckpoint);
+  const pendingSuffix = manualRetryCheckpoint.shortlist[1].ply;
+  manualRetryCheckpoint.unresolved.push({
+    ply: pendingSuffix, phase: 'deep', reason: 'suffix-unusable'
+  });
+  jobs.set('paused-deep-retry', manualRetryCheckpoint);
+  await Scan.load(pausedRetryReview);
+  const badManualRetry = await Scan.recordVerifiedSummary(pausedRetryReview,
+    pendingSlot.ply, { valid: false, complete: true });
+  check(badManualRetry === false && durablePendingSlot(),
+    'an invalid manual replacement cannot retire the pending deep retry');
+  const manualRetry = await Scan.recordVerifiedSummary(pausedRetryReview,
+    pendingSlot.ply, manualDeepResult(pausedRetryReview, pendingSlot.ply));
+  const manualCleared = !durablePendingSlot();
+  Scan.invalidate();
+  const loadedManualRetry = await Scan.load(pausedRetryReview);
+  const manualCheckpoint = clone(jobs.get('paused-deep-retry'));
+  requests = [];
+  replies = [];
+  await Scan.resume(pausedRetryReview);
+  check(manualRetry === true && manualCleared &&
+      loadedManualRetry.verifyIndex === 1 && loadedManualRetry.report === undefined &&
+      manualCheckpoint.deepResults.length === 1 &&
+      manualCheckpoint.deepResults[0].ply === pendingSlot.ply &&
+      manualCheckpoint.unresolved.length === 1 &&
+      manualCheckpoint.unresolved[0].ply === pendingSuffix &&
+      requests.length === 1 && requests[0].ply === pendingSuffix && requests[0].fresh === true,
+    'a usable manual replacement retires its pending retry across reload and resumes only the suffix');
 
   // Even coordinated corruption of every compact/derived field cannot create
   // circular proof. The full quick result remains genuinely subthreshold,
