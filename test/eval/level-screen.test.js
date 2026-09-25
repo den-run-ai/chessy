@@ -597,6 +597,7 @@ const SCRIPTED_THREAD = [
   "const T = require('worker_threads');",
   "const mode = T.workerData.bridge;",
   "if (mode === 'nostart') throw new Error('engine did not load');",
+  "if (mode === 'slowstart') { for (;;) {} }",
   "T.parentPort.on('message', function (m) {",
   "  if (mode === 'hang') { for (;;) {} }",
   "  if (mode === 'throw') { T.parentPort.postMessage({ ok: false, error: 'boom' }); return; }",
@@ -610,8 +611,8 @@ async function retryCase(modes) {
   const started = [];
   const exited = [];
   let attempts = 0;
-  const start = function () {
-    return Screen.startSearchThread(SCRIPTED_THREAD, modes[attempts++]).then(function (t) {
+  const start = function (timeoutMs) {
+    return Screen.startSearchThread(SCRIPTED_THREAD, modes[attempts++], timeoutMs).then(function (t) {
       started.push(t);
       t.once('exit', function () { exited.push(t); });
       return t;
@@ -655,6 +656,16 @@ async function searchRetries() {
     assert.ok(!noFresh.reply.watchdog && /did not start/.test(noFresh.reply.error),
       noFresh.reply.error);
     assert.strictEqual(noFresh.stats.retries, 2);
+    // Loading counts against the watchdog: a thread stuck starting is a
+    // watchdog failure, and the fresh thread gets the one retry.
+    const stuck = await retryCase(['slowstart', 'ok', 'ok']);
+    assert.strictEqual(stuck.reply.ok, true);
+    assert.strictEqual(stuck.stats.retries, 1);
+    assert.ok(/did not start within/.test(stuck.stats.lastError), stuck.stats.lastError);
+    const stuckTwice = await retryCase(['slowstart', 'slowstart', 'ok']);
+    assert.strictEqual(stuckTwice.reply.ok, false);
+    assert.strictEqual(stuckTwice.reply.watchdog, true);
+    assert.strictEqual(stuckTwice.stats.retries, 2);
     const neverStarts = await retryCase(['nostart', 'nostart', 'ok']);
     assert.strictEqual(neverStarts.reply.ok, false);
     assert.ok(/did not start/.test(neverStarts.reply.error), neverStarts.reply.error);

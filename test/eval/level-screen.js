@@ -296,17 +296,33 @@ const SEARCH_THREAD_CODE = [
   "threads.parentPort.postMessage({ ready: true });"
 ].join('\n');
 
-// A search thread that has loaded its engine, or a rejection if it could not.
-function startSearchThread(code, bridge) {
+// A search thread that has loaded its engine, or a rejection if it could not
+// (within `timeoutMs`, when given: the thread is then terminated).
+function startSearchThread(code, bridge, timeoutMs) {
   return new Promise(function (resolve, reject) {
     const thread = new WorkerThread(code, { eval: true, workerData: { bridge: bridge } });
-    const onError = function (error) { reject(error); };
+    let timer = null;
+    const fail = function (error) {
+      clearTimeout(timer);
+      thread.removeAllListeners('message');
+      reject(error);
+    };
+    const onError = function (error) { fail(error); };
     thread.once('error', onError);
     thread.once('message', function (m) {
+      clearTimeout(timer);
       thread.removeListener('error', onError);
       if (m && m.ready) resolve(thread);
       else reject(new Error('search thread did not start'));
     });
+    if (timeoutMs > 0) {
+      timer = setTimeout(function () {
+        thread.removeListener('error', onError);
+        thread.terminate();
+        fail(Object.assign(new Error('search thread did not start within ' + timeoutMs + ' ms'),
+          { watchdog: true }));
+      }, timeoutMs);
+    }
   });
 }
 
@@ -338,15 +354,21 @@ function searchOnce(thread, fen, request, watchdogMs) {
 // One attempt: start a thread if none is live (a thread that cannot start is
 // a failed attempt, as a Play worker that fails to load is), then search.
 // A failed thread is terminated and dropped.
+// As with the Play worker, one watchdog deadline covers loading and searching.
 async function searchAttempt(box, start, fen, request, watchdogMs) {
+  const deadline = Date.now() + watchdogMs;
   if (!box.thread) {
     try {
-      box.thread = await start();
+      box.thread = await start(watchdogMs);
     } catch (error) {
-      return { ok: false, error: 'search thread did not start: ' + (error && error.message || error) };
+      return {
+        ok: false,
+        watchdog: !!(error && error.watchdog),
+        error: 'search thread did not start: ' + (error && error.message || error)
+      };
     }
   }
-  const reply = await searchOnce(box.thread, fen, request, watchdogMs);
+  const reply = await searchOnce(box.thread, fen, request, Math.max(1, deadline - Date.now()));
   if (!reply.ok) {
     await box.thread.terminate();
     box.thread = null;
@@ -370,7 +392,9 @@ async function searchWithRetry(box, start, fen, request, watchdogMs, stats) {
 
 async function playOne(spec) {
   const bridge = path.join(ROOT, 'test', 'wasm-test-engine.js');
-  const start = function () { return startSearchThread(SEARCH_THREAD_CODE, bridge); };
+  const start = function (timeoutMs) {
+    return startSearchThread(SEARCH_THREAD_CODE, bridge, timeoutMs);
+  };
   const box = { thread: null };
   const OPENINGS = require(path.join(ROOT, 'test', 'ai-match-openings.js'));
   const preset = Presets.get(LEVEL_IDS[spec.level]);
