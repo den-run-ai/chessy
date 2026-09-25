@@ -309,6 +309,10 @@ The [compiled synthetic cost report](eval/training/nnue-phase-runtime-results-20
 separates parameter storage, module growth, memory and per-position overhead.
 The [incremental accumulator comparison](eval/training/nnue-incremental-results-2026-09.md)
 records faster direct evaluation but slower aggregate search.
+The [NNUE prototype](eval/nnue-proto-2026-09/REPORT.md) trained pure
+768→16/32/64/128 nets on 20 million CC0 Lichess evaluation positions behind a
+research-only Cargo feature; at equal time the widest nets reached parity with
+the shipped evaluator in development matches, not an improvement.
 These studies preserve the shipped evaluator and the separate admission gates.
 
 For historical reproduction, `test/ai-match.js` supports the archived
