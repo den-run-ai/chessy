@@ -1,0 +1,41 @@
+{
+  "status": "exploratory-development-only",
+  "baseCommit": "74f19f02243e18ef9baf1961d84a79a42489f60c",
+  "preregistrationAndControlCommit": "afde059c891319db73cd1eb6ac09035ac485fd4c",
+  "candidateCommit": "cf38d6f17e7fab67e907a29dbd147e66cd69298d",
+  "candidateChange": "assets/level-presets.js: Easy maxDepth 2 -> 1 only",
+  "cpuQuota": "800000 100000",
+  "archiveSha256": "536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964",
+  "executableSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
+  "filesSha256": {
+    "PLAN.md": "cf809466f140c9b86dfd00ce2d69734205b8eba376f8eb8e515855d912cc4490",
+    "analyze.js": "625fd7e8cadef8925c86772e529a2cd0e011ba11a2514bbaaf83c17446345e17",
+    "control-depth2.ndjson": "6f5ea85ec6b3d8611249fbebcb1e2186662696f985babaece43d5936100da0c3",
+    "control-depth2.ndjson.runs": "f9571209ae8a222e29833e56acd53694216c060118047044ece18d89c65348cf",
+    "control-depth2.ndjson.complete.json": "dd3a027f0451b1574749b6e4d8d46c04a373430369e94eed03dc8223741371ad",
+    "candidate-depth1.ndjson": "ce35192f0592c4b33c9fde668f4357bcb5f6a578cf8ff2adc07bf92d0163d33b",
+    "candidate-depth1.ndjson.runs": "faae0e61d8c5bae96a32970be01f8c572e169f943db6baacdf9edcade37ce702",
+    "candidate-depth1.ndjson.complete.json": "0c014a5dda3d15b4aa9b7aac32e0e651371f3aac29d082b15eb01e714a456b84",
+    "analysis.json": "390a32bcb3f34fe24fa2d089d4ab7b6576ecfe4f99131c2ec92b09f50dc740ef",
+    "candidate.patch": "72dd269c81c7ed46b6da2c32220cf347b631d617382554fd17f01190f64cf7e1",
+    "registration.bundle": "28a67316bea943b209eed48a94ea2aaae7f2f3269da1f909a63d8cda876a7ce7"
+  },
+  "blocks": [
+    {
+      "file": "control-depth2.ndjson",
+      "runHeaders": 1,
+      "sourceCommit": "afde059c891319db73cd1eb6ac09035ac485fd4c",
+      "workingTreeDirty": false,
+      "interrupted": false,
+      "approximateElapsedMinutesFromLocalFileTimes": 24.873
+    },
+    {
+      "file": "candidate-depth1.ndjson",
+      "runHeaders": 1,
+      "sourceCommit": "cf38d6f17e7fab67e907a29dbd147e66cd69298d",
+      "workingTreeDirty": false,
+      "interrupted": false,
+      "approximateElapsedMinutesFromLocalFileTimes": 27.413
+    }
+  ]
+}

@@ -53,6 +53,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   new. That screen is exploratory, not an E4-v1 certification, and the
   historical E4 artifacts stay unchanged; a fresh protocol/holdout and
   supported-device measurements are required before certifying this ladder.
+  A later [200-game depth-cap comparison](eval/easy-depth-screen-2026-09-25/)
+  retained depth-2 Easy: depth 1 was closer to 1500 in point estimate but
+  missed the preregistered paired-confidence threshold.
 - **Analysis headroom** — quick whole-game screening stays inexpensive.
   Selected moments, manual verification and Train's live check share one
   immutable deep profile: an uncapped-node, up-to-16-second scan (twice
