@@ -40,6 +40,7 @@ const os = require('os');
 const cp = require('child_process');
 const crypto = require('crypto');
 const util = require('util');
+const WorkerThread = require('worker_threads').Worker;
 
 const ROOT = path.join(__dirname, '..', '..');
 require(path.join(ROOT, 'assets', 'engine.js'));
@@ -276,10 +277,84 @@ function startAnchor(exe, elo) {
   };
 }
 
+// ---- Chessy search: a terminable thread with one fresh-thread retry ----
+
+// Like the product's Play worker: a search that throws, dies or misses the
+// watchdog is abandoned with its thread, and the identical request gets one
+// fresh thread. A second failure is reported to the caller.
+const SEARCH_THREAD_CODE = [
+  "'use strict';",
+  "const threads = require('worker_threads');",
+  "const Wasm = require(threads.workerData.bridge);",
+  "threads.parentPort.on('message', function (m) {",
+  "  try {",
+  "    threads.parentPort.postMessage({ ok: true, result: Wasm.engine.search(m.fen, m.request) });",
+  "  } catch (e) {",
+  "    threads.parentPort.postMessage({ ok: false, error: String(e && e.message || e) });",
+  "  }",
+  "});",
+  "threads.parentPort.postMessage({ ready: true });"
+].join('\n');
+
+// A search thread that has loaded its engine, or a rejection if it could not.
+function startSearchThread(code, bridge) {
+  return new Promise(function (resolve, reject) {
+    const thread = new WorkerThread(code, { eval: true, workerData: { bridge: bridge } });
+    const onError = function (error) { reject(error); };
+    thread.once('error', onError);
+    thread.once('message', function (m) {
+      thread.removeListener('error', onError);
+      if (m && m.ready) resolve(thread);
+      else reject(new Error('search thread did not start'));
+    });
+  });
+}
+
+function searchOnce(thread, fen, request, watchdogMs) {
+  return new Promise(function (resolve) {
+    const started = Date.now();
+    let settled = false;
+    const finish = function (reply) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      thread.removeListener('message', finish);
+      thread.removeListener('error', onError);
+      thread.removeListener('exit', onExit);
+      resolve(Object.assign({ ms: Date.now() - started }, reply));
+    };
+    const onError = function (error) { finish({ ok: false, error: String(error && error.message || error) }); };
+    const onExit = function (code) { finish({ ok: false, error: 'search thread exited ' + code }); };
+    const timer = setTimeout(function () {
+      finish({ ok: false, watchdog: true, error: 'watchdog after ' + watchdogMs + ' ms' });
+    }, watchdogMs);
+    thread.on('message', finish);
+    thread.on('error', onError);
+    thread.on('exit', onExit);
+    thread.postMessage({ fen: fen, request: request });
+  });
+}
+
+// `box.thread` is the live thread; it is replaced after every failure.
+async function searchWithRetry(box, start, fen, request, watchdogMs, stats) {
+  let reply = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    reply = await searchOnce(box.thread, fen, request, watchdogMs);
+    if (reply.ok) return reply;
+    stats.retries++;
+    stats.lastError = reply.error;
+    await box.thread.terminate();
+    box.thread = await start();
+  }
+  return reply;
+}
+
 // ---- One game (runs in a child process) ----
 
 async function playOne(spec) {
-  const Wasm = require(path.join(ROOT, 'test', 'wasm-test-engine.js'));
+  const bridge = path.join(ROOT, 'test', 'wasm-test-engine.js');
+  const start = function () { return startSearchThread(SEARCH_THREAD_CODE, bridge); };
+  const box = { thread: await start() };
   const OPENINGS = require(path.join(ROOT, 'test', 'ai-match-openings.js'));
   const preset = Presets.get(LEVEL_IDS[spec.level]);
   if (!preset) throw new Error('unknown level ' + spec.level);
@@ -317,20 +392,15 @@ async function playOne(spec) {
           quiesce: preset.quiesce,
           positions: state.positions
         };
-        let r = null;
-        let started = Date.now();
-        for (let attempt = 0; attempt < 2 && !r; attempt++) {
-          started = Date.now();
-          try {
-            r = Wasm.engine.search(Chess.toFen(state), request);
-          } catch (error) {
-            stats.retries++;
-            stats.lastError = String(error && error.message || error);
-          }
+        const reply = await searchWithRetry(box, start, Chess.toFen(state), request,
+          watchdogMs, stats);
+        if (!reply.ok) {
+          result = 0;
+          reason = reply.watchdog ? 'chessy-watchdog' : 'chessy-search-failure';
+          break;
         }
-        const ms = Date.now() - started;
-        if (!r) { result = 0; reason = 'chessy-search-failure'; break; }
-        if (ms > watchdogMs) { result = 0; reason = 'chessy-watchdog'; break; }
+        const r = reply.result;
+        const ms = reply.ms;
         const legal = Chess.legalMoves(state);
         const move = r.move && legal.find(function (m) {
           return m.from === r.move.from && m.to === r.move.to &&
@@ -364,6 +434,7 @@ async function playOne(spec) {
     }
   } finally {
     anchor.quit();
+    box.thread.terminate();
   }
   return {
     schema: SCHEMA,
@@ -571,12 +642,14 @@ const CHESSY_FAILURES = Object.freeze(['chessy-search-failure', 'chessy-watchdog
   'chessy-illegal']);
 
 function outcomeMatches(r, state, plies) {
+  // playOne checks the cap before every move, so no game passes it.
+  if (plies > DRAW_AT_PLIES) return false;
   const status = Chess.gameStatus(state);
   if (status.over) {
     return r.score === chessyScore(status.result, r.chessyColor) &&
       r.reason === (status.reason || 'rules');
   }
-  if (plies >= DRAW_AT_PLIES) return r.score === 0.5 && r.reason === 'ply-cap';
+  if (plies === DRAW_AT_PLIES) return r.score === 0.5 && r.reason === 'ply-cap';
   const chessyToMove = state.turn === (r.chessyColor === 'white' ? 'w' : 'b');
   if (chessyToMove) return r.score === 0 && CHESSY_FAILURES.indexOf(r.reason) >= 0;
   return r.score === 1 && typeof r.reason === 'string' &&
@@ -972,6 +1045,8 @@ module.exports = {
   verifySealed: verifySealed,
   receiptPath: receiptPath,
   sourceOpenings: sourceOpenings,
+  startSearchThread: startSearchThread,
+  searchWithRetry: searchWithRetry,
   checkResume: checkResume,
   validateBlock: validateBlock,
   acquireLock: acquireLock

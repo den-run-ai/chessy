@@ -124,7 +124,8 @@ while the host was heavily loaded.
   complete schedule: every scheduled slot played once. Every record is
   replayed through the rules from its scheduled opening line. Its recorded
   score and reason must match the final position: the rules result, a draw at
-  the 180-ply cap, or a loss for the side to move that failed. The hashes of
+  exactly 180 plies (no game passes the cap), or a loss for the side to move
+  that failed. The hashes of
   the opening list and protocol it was checked against are recorded.
   - These seven blocks predate receipts. They were sealed after the fact with
     `--seal` (`"sealedBy": "seal-command"`), which refuses an incomplete block
@@ -164,4 +165,10 @@ while the host was heavily loaded.
   - A game is not recorded if the snapshot changes.
   - The completion receipt is written last, and a sealed block is never
     resumed.
+  - Chessy searches run in a terminable worker thread with the product's
+    retry rule. A search that throws, dies or misses the watchdog is
+    abandoned with its thread, and the identical request is retried once in
+    a fresh thread. The old runner scored a late search as an immediate
+    loss. No committed game had a retry or a watchdog loss, so no result
+    changes.
   None of this changes how a game is played or scored.

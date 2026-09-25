@@ -364,6 +364,13 @@ check('a completion receipt binds complete data and refuses anything else', func
     const capIndex = lines.findIndex(function (l) { return JSON.parse(l).reason === 'ply-cap'; });
     assert.ok(mateIndex >= 0 && capIndex >= 0);
     const edits = [
+      // One legal move past the cap: the runner never plays beyond it.
+      [capIndex, function (r) {
+        let st = globalThis.Chess.newGameState();
+        r.moves.split(' ').forEach(function (u) { st = globalThis.Chess.playMove(st, Screen.legalFromUci(st, u)); });
+        r.moves += ' ' + Screen.uciOf(globalThis.Chess.legalMoves(st)[0]);
+        r.plies += 1;
+      }],
       [mateIndex, function (r) { r.score = 1 - r.score; }],
       [mateIndex, function (r) { r.reason = 'ply-cap'; r.score = 0.5; }],
       [capIndex, function (r) { r.score = 1; }],
@@ -568,7 +575,62 @@ async function checkAsync(name, fn) {
   console.log('  ok  ' + name);
 }
 
+// Scripted search threads: workerData.bridge names each thread's behavior.
+const SCRIPTED_THREAD = [
+  "const T = require('worker_threads');",
+  "const mode = T.workerData.bridge;",
+  "T.parentPort.on('message', function (m) {",
+  "  if (mode === 'hang') { for (;;) {} }",
+  "  if (mode === 'throw') { T.parentPort.postMessage({ ok: false, error: 'boom' }); return; }",
+  "  if (mode === 'exit') process.exit(3);",
+  "  T.parentPort.postMessage({ ok: true, result: { fen: m.fen, depth: 1 } });",
+  "});",
+  "T.parentPort.postMessage({ ready: true });"
+].join('\n');
+
+async function retryCase(modes) {
+  const started = [];
+  const exited = [];
+  const start = function () {
+    return Screen.startSearchThread(SCRIPTED_THREAD, modes[started.length]).then(function (t) {
+      started.push(t);
+      t.once('exit', function () { exited.push(t); });
+      return t;
+    });
+  };
+  const box = { thread: await start() };
+  const stats = { retries: 0 };
+  const reply = await Screen.searchWithRetry(box, start, 'fen', {}, 200, stats);
+  await box.thread.terminate();
+  await new Promise(function (r) { setImmediate(r); });
+  return { reply: reply, stats: stats, started: started.length, exited: exited.length };
+}
+
+async function searchRetries() {
+  await checkAsync('a hung search is abandoned and retried once in a fresh thread', async function () {
+    const hung = await retryCase(['hang', 'ok', 'ok']);
+    assert.strictEqual(hung.reply.ok, true);
+    assert.strictEqual(hung.reply.result.fen, 'fen');
+    assert.strictEqual(hung.stats.retries, 1);
+    assert.strictEqual(hung.started, 2);
+    assert.strictEqual(hung.exited, 2, 'the hung thread and the final one were terminated');
+    const thrown = await retryCase(['throw', 'ok', 'ok']);
+    assert.strictEqual(thrown.reply.ok, true);
+    assert.strictEqual(thrown.stats.retries, 1);
+  });
+  await checkAsync('a second failure is reported with its kind', async function () {
+    const twice = await retryCase(['hang', 'hang', 'ok']);
+    assert.strictEqual(twice.reply.ok, false);
+    assert.strictEqual(twice.reply.watchdog, true);
+    assert.strictEqual(twice.stats.retries, 2);
+    const died = await retryCase(['exit', 'exit', 'ok']);
+    assert.strictEqual(died.reply.ok, false);
+    assert.ok(!died.reply.watchdog && /exited/.test(died.reply.error), died.reply.error);
+  });
+}
+
 async function endToEnd() {
+  await searchRetries();
   const dir = fs.realpathSync(tempDir());
   runTmp = path.join(dir, 'tmp');
   fs.mkdirSync(runTmp);
