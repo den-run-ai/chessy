@@ -227,6 +227,8 @@ jobs:
           node test/eval/e4-input-schemas.test.js
           node test/eval/prepare-e4-opening-candidates.test.js
           node test/eval/freeze-e4-manifests.test.js
+      - name: Validate the exploratory level-screen runner contract
+        run: node test/eval/level-screen.test.js
       - name: Validate shared HCE/NNUE corpus and teacher adapters
         run: |
           node test/training/license-policy.test.js
@@ -311,7 +313,9 @@ jobs:
       - name: Validate governed engine-signature mechanism
         run: node test/engine-signatures-v2.test.js
       - name: Verify recalibrated difficulty presets
-        run: node test/level-presets.test.js
+        run: |
+          node test/level-presets.test.js
+          node test/search-budgets.test.js
       - name: Run fixed-node AI tactics tests
         run: node test/ai-tactics.js
       - name: Run runtime-update gate tests

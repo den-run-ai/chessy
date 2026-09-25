@@ -168,6 +168,66 @@ check(promotionRoots.indexOf('a7a8q') !== -1 &&
     CoachStore.validateGameRecord(promotionGame) === null,
   'custom-position root validation preserves promotion suffixes');
 
+// A Master move played from a completed iteration after the fixed TT filled
+// keeps that fact explicitly; nothing else invents it.
+const saturated = ChessyAiTelemetry.sanitizeTelemetry({
+  depth: 9, quiesce: true, ms: 8100, stopReason: 'unknown', ttSaturated: true,
+  engine: 'wasm', source: 'worker'
+});
+const unsaturated = ChessyAiTelemetry.sanitizeTelemetry({
+  depth: 9, quiesce: true, ms: 8100, stopReason: 'time-limit', ttSaturated: 'yes',
+  engine: 'wasm', source: 'worker'
+});
+check(saturated.ttSaturated === true && saturated.stopReason === 'unknown' &&
+    !Object.prototype.hasOwnProperty.call(unsaturated, 'ttSaturated'),
+  'a TT-saturated early stop is recorded explicitly, never inferred');
+{
+  // The loader emits the flag only on a completed WASM iteration with stop
+  // reason unknown; each contradiction of that is dropped, not preserved.
+  const base = { depth: 9, quiesce: true, ms: 8100, stopReason: 'unknown',
+    ttSaturated: true, engine: 'wasm', source: 'worker' };
+  const contradictions = [
+    { stopReason: 'time-limit' }, { stopReason: 'node-limit' },
+    { stopReason: 'bogus' }, { engine: 'js' }, { engine: undefined },
+    { depth: 0 }
+  ];
+  const kept = contradictions.filter(function (patch) {
+    const t = ChessyAiTelemetry.sanitizeTelemetry(Object.assign({}, base, patch));
+    return Object.prototype.hasOwnProperty.call(t, 'ttSaturated');
+  });
+  check(kept.length === 0,
+    'sanitized telemetry drops a TT flag that contradicts engine, stop reason or depth');
+}
+{
+  const withFlag = JSON.parse(JSON.stringify(promotionGame));
+  const aiIndex = withFlag.ai.findIndex(function (v) { return v && typeof v === 'object'; });
+  const bad = JSON.parse(JSON.stringify(withFlag));
+  if (aiIndex >= 0) {
+    withFlag.ai[aiIndex].ttSaturated = true;
+    withFlag.ai[aiIndex].stopReason = 'unknown';
+    bad.ai[aiIndex].ttSaturated = 'yes';
+  }
+  const unflagged = JSON.parse(JSON.stringify(withFlag));
+  if (aiIndex >= 0) unflagged.ai[aiIndex].ttSaturated = false;
+  check(aiIndex >= 0 && withFlag.ai[aiIndex].engine === 'wasm' &&
+      withFlag.ai[aiIndex].depth >= 1 &&
+      CoachStore.validateGameRecord(withFlag) === null &&
+      CoachStore.validateGameRecord(unflagged) === null &&
+      CoachStore.validateGameRecord(bad) !== null,
+    'stored telemetry accepts the optional boolean TT flag and rejects other values');
+  const incoherent = [
+    { stopReason: 'time-limit' }, { stopReason: 'node-limit' },
+    { engine: 'js' }, { engine: undefined }, { depth: 0 }
+  ].filter(function (patch) {
+    const game = JSON.parse(JSON.stringify(withFlag));
+    Object.assign(game.ai[aiIndex], patch);
+    if (patch.engine === undefined && 'engine' in patch) delete game.ai[aiIndex].engine;
+    return CoachStore.validateGameRecord(game) === null;
+  });
+  check(aiIndex >= 0 && incoherent.length === 0,
+    'stored telemetry rejects a TT flag that contradicts engine, stop reason or depth');
+}
+
 const badEnvelope = {
   format: 'chessy-coach-backup', version: 1, dbVersion: 6,
   release: injectedRelease, stores: { games: [], cards: [] }

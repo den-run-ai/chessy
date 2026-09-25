@@ -7,11 +7,11 @@
 require('./helper').run('level-presets', async function (t) {
   const page = t.page, check = t.check;
   const levels = [
-    { id: '1', name: 'Easy', target: '1500', nodeLimit: 10000 },
-    { id: '2', name: 'Medium', target: '1700', nodeLimit: 36000 },
-    { id: '3', name: 'Hard', target: '1900', nodeLimit: 230000 },
-    { id: '5', name: 'Expert', target: '2100', nodeLimit: 1440000 },
-    { id: 'master', name: 'Master', target: '2300+', nodeLimit: null }
+    { id: '1', name: 'Easy', target: '1500', nodeLimit: 10000, maxDepth: 2 },
+    { id: '2', name: 'Medium', target: '1700', nodeLimit: 10000, maxDepth: 30 },
+    { id: '3', name: 'Hard', target: '1900', nodeLimit: 36000, maxDepth: 30 },
+    { id: '5', name: 'Expert', target: '2100', nodeLimit: 230000, maxDepth: 30 },
+    { id: 'master', name: 'Master', target: '2300+', nodeLimit: null, maxDepth: 111 }
   ];
 
   for (const level of levels) {
@@ -36,24 +36,105 @@ require('./helper').run('level-presets', async function (t) {
         result.copy.includes('target ' + level.target),
       level.name + ' presents its rating as a target');
     check(ai.engine === 'wasm' && ai.engineFallback === null &&
-        ai.maxDepth === 30 && ai.timeMs === 5000 &&
+        ai.maxDepth === level.maxDepth &&
+        ai.timeMs === (level.id === 'master' ? 8000 : 5000) &&
         ai.quiesce === true && ai.nodeLimit === level.nodeLimit,
       level.name + ' executes the declared default-WASM preset');
     if (level.nodeLimit === null) {
-      check(ai.stopReason === 'time-limit' &&
+      // On fast devices (roughly >= 2.4M NPS) the start-position search fills
+      // the engine's fixed TT before 8 s; the loader then keeps the deepest
+      // COMPLETED iteration as an early stop flagged ttSaturated. Either way
+      // Master is bounded by the wall clock or its memory, never a node count.
+      const spentClock = ai.stopReason === 'time-limit';
+      const filledTable = ai.ttSaturated === true && ai.stopReason === 'unknown' &&
+        ai.depth >= 1;
+      check((spentClock || filledTable) &&
           Number.isInteger(ai.nodes) && ai.nodes > 0,
-        'Master spends the wall-clock budget');
+        'Master spends the wall-clock budget (or stops early at a full TT with a ' +
+          'completed iteration; stopReason ' + ai.stopReason + ')');
     } else {
       const completedBudget = ai.stopReason === 'node-limit' &&
-        ai.nodes === level.nodeLimit;
+        ai.nodes === level.nodeLimit && ai.attemptedDepth === ai.depth + 1;
       const hitSafetyCeiling = ai.stopReason === 'time-limit' &&
         Number.isInteger(ai.nodes) && ai.nodes > 0 &&
-        ai.nodes <= level.nodeLimit;
-      check((completedBudget || hitSafetyCeiling) && ai.depth >= 1 &&
-          ai.attemptedDepth === ai.depth + 1,
-        level.name + ' respects its node target and time safety ceiling');
+        ai.nodes <= level.nodeLimit && ai.attemptedDepth === ai.depth + 1;
+      // A depth-capped level (Easy) may finish its last allowed iteration
+      // inside the node cap; it then reports max-depth with nothing attempted.
+      const reachedDepthCap = level.maxDepth < 30 && ai.stopReason === 'max-depth' &&
+        ai.depth === level.maxDepth && Number.isInteger(ai.nodes) &&
+        ai.nodes > 0 && ai.nodes <= level.nodeLimit;
+      check((completedBudget || hitSafetyCeiling || reachedDepthCap) && ai.depth >= 1,
+        level.name + ' respects its node target, depth cap and time safety ceiling');
     }
   }
+
+  // Seed on the app-less page: pagehide would overwrite an in-app edit.
+  // A fixed eight-second request here loses on time before returning.
+  await t.newGame({ mode: 'pvp', difficulty: 'master', timeControl: '300+3' });
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.mode = 'ai-w';
+    saved.clocks = { wMs: 2000, bMs: 300000 };
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  await page.waitForFunction(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    return saved.history[0] && saved.history[0].ai;
+  }, null, { timeout: 10000 });
+  const timed = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(timed.history[0].ai.timeMs > 0 && timed.history[0].ai.timeMs <= 500 &&
+      timed.history[0].ai.maxDepth === 111 && timed.history[0].ai.nodeLimit === null &&
+      !timed.timeForfeit && timed.clocks.wMs > 0,
+    'near-expired Master clock dispatches a bounded real WASM search without flagging');
+
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.mode = 'pvp';
+    saved.difficulty = 'constructor';
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  const restored = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(restored.difficulty === '2' && restored.history.length === 1,
+    'prototype-property difficulty falls back to Medium without losing the game');
+
+  // An AI clock that is already empty flags before any search is sized or
+  // dispatched: a 1 ms "budget" must not race the ticker for a free move.
+  await t.newGame({ mode: 'pvp', difficulty: 'master', timeControl: '300+3' });
+  await page.addInitScript(function () {
+    const NativeWorker = window.Worker;
+    window.__aiWorkers = 0;
+    window.Worker = function (url, options) {
+      if (String(url).indexOf('ai-worker') >= 0) window.__aiWorkers++;
+      return new NativeWorker(url, options);
+    };
+    window.Worker.prototype = NativeWorker.prototype;
+  });
+  await t.inject(function () {
+    const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+    saved.mode = 'ai-w';
+    saved.clocks = { wMs: 0, bMs: 300000 };
+    localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+  });
+  await page.waitForFunction(function () {
+    return document.getElementById('gameOverDialog') &&
+      document.getElementById('gameOverDialog').open;
+  }, null, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const flagged = await page.evaluate(function () {
+    return {
+      saved: JSON.parse(localStorage.getItem('chessy-game-v1')),
+      workers: window.__aiWorkers,
+      title: document.getElementById('gameOverTitle').textContent
+    };
+  });
+  check(flagged.workers === 0 && flagged.saved.history.length === 0 &&
+      flagged.saved.timeForfeit && flagged.saved.timeForfeit.color === 'w' &&
+      flagged.title === 'Black wins!',
+    'an AI clock already at zero flags without dispatching a search');
 
   const setupCopy = (await page.textContent('#newGameDialog'))
     .replace(/\s+/g, ' ').trim();

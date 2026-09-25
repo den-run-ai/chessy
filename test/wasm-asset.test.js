@@ -186,6 +186,59 @@ async function main() {
       ' (' + bench.POSITIONS.length + ' positions)');
   }
 
+  // A full fixed TT (ABI status 2) is a deterministic node-count event, so an
+  // identical retry would fail forever. The loader keeps the completed
+  // iteration (never the aborted one) and does not call it a time limit.
+  {
+    // The production loader, not the bench harness's reference loader.
+    const production = require('./wasm-test-engine.js').engine;
+    const castles = 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1';
+    const full = production.search(castles,
+      { maxDepth: 111, quiesce: true, nodeLimit: 11000000, timeMs: 0 });
+    const state = globalThis.Chess.parseFen(castles);
+    const legal = globalThis.Chess.legalMoves(state).some(function (m) {
+      return full.move && m.from === full.move.from && m.to === full.move.to &&
+        (m.promotion || null) === (full.move.promotion || null);
+    });
+    check(full.ttSaturated === true && full.stopReason === 'unknown' &&
+        full.depth === 9 && full.attemptedDepth === 10 &&
+        full.nodes === 10355862 && legal,
+      'a TT-saturated search keeps its completed depth-9 move as an early stop',
+      JSON.stringify({ depth: full.depth, nodes: full.nodes, stop: full.stopReason }));
+    const ordinary = production.search(castles,
+      { maxDepth: 111, quiesce: true, nodeLimit: 100000, timeMs: 0 });
+    check(ordinary.ttSaturated === undefined && ordinary.stopReason === 'node-limit',
+      'an unsaturated search is unchanged and carries no saturation flag');
+
+    // Exact-root verification: the same full table surfaces as a tagged
+    // error carrying the phase's counters, below the declared node budget.
+    const WasmEngine = require('../assets/wasm-engine.js');
+    require('../assets/analysis-core.js');
+    production.beginAnalysis(castles, { nodeLimit: 16000000, quiesce: true });
+    let saturated = null;
+    let depthReached = 0;
+    for (let depth = 1; depth <= 20 && !saturated; depth++) {
+      for (const move of globalThis.Chess.legalMoves(state)) {
+        try {
+          const result = production.searchRoot(move, depth, 1);
+          if (!result.complete) throw new Error('budget ended before the TT filled');
+        } catch (error) {
+          saturated = error;
+          break;
+        }
+      }
+      if (!saturated) depthReached = depth;
+    }
+    check(!!saturated && saturated.code === WasmEngine.TT_SATURATED &&
+        saturated.code === globalThis.ChessyAnalysisCore.TT_SATURATED &&
+        saturated.result && saturated.result.nodes > 0 &&
+        saturated.result.nodes < 16000000 && depthReached === 8,
+      'searchRoot reports a full TT as the tagged error analysis-core stops on',
+      saturated && (saturated.message + ' ' + JSON.stringify({
+        code: saturated.code, nodes: saturated.result && saturated.result.nodes,
+        depthReached: depthReached })));
+  }
+
   console.log(passed + ' passed, ' + failed + ' failed');
   process.exitCode = failed ? 1 : 0;
 }

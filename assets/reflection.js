@@ -44,10 +44,9 @@
     match: 'Good move (matched Chessy)'
   };
 
-  // Interactive Review budget: deterministic (fixed nodes, no root shuffle),
-  // deep enough to rank a few candidates, small enough to stay responsive. The
-  // service derives its watchdog from exactly these numbers.
-  const CFG = { maxDepth: 10, multiPV: 3, nodeLimit: 80000, nodeBudget: 1200000, pvLen: 6 };
+  // One immutable profile shared with selected-moment verification. Quick
+  // whole-game screening is intentionally not promoted to this larger budget.
+  const CFG = ChessyAnalysisCore.PROFILES.deep;
   const PV_TAIL = 3; // continuation plies shown after each candidate move
   const ANALYSIS_OWNER = 'reflection';
 
@@ -228,7 +227,7 @@
       if (event.totalRoots !== 1) return;
       text = event.completedRoots === 1 ? 'Initial scan complete.' : 'Initial scan…';
     } else if (event.phase === 'root-verification') {
-      text = 'Verified ' + event.completedRoots + ' of ' + event.totalRoots + ' roots.';
+      text = rootProgressText(run, event);
     } else {
       return;
     }
@@ -254,6 +253,30 @@
     $('cancelVerify').disabled = true;
   }
 
+  function rootCountOf(request) {
+    try {
+      return Chess.legalMoves(Chess.parseFen(request.fen)).length;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Timed deep verification scores every root at depth 1, 2, ... up to the
+  // scan depth, so its counts span roots × depths. Say which depth is being
+  // verified instead of implying a single pass over the roots.
+  function rootProgressText(run, event) {
+    const view = ChessyAnalysisCore.progressView(event.completedRoots,
+      event.totalRoots, run.rootCount);
+    if (!view || view.cap === 1) {
+      return 'Verified ' + event.completedRoots + ' of ' + event.totalRoots + ' roots.';
+    }
+    if (view.done) {
+      return 'Verified all ' + view.roots + ' roots through depth ' + view.cap + '.';
+    }
+    return 'Depth ' + view.depth + ' of up to ' + view.cap + ': verified ' +
+      view.verified + ' of ' + view.roots + ' roots.';
+  }
+
   function startVerifyRun(token, request) {
     // A new Verify owns both the clock and the result area. Clearing the old
     // interval first also makes a terminal callback from the previous request
@@ -262,6 +285,7 @@
     const run = {
       token: token,
       request: request,
+      rootCount: rootCountOf(request),
       jobId: null,
       startedAt: monotonicNow(),
       lastTenths: 0,
@@ -562,8 +586,7 @@
     const analysisReq = {
       gameId: flagged.gameId, ply: ply, gameRev: gameRev,
       fen: fenBefore, positions: sourceState.positions, fresh: wantFresh,
-      opts: { playedMove: entry.move, maxDepth: CFG.maxDepth, multiPV: CFG.multiPV,
-        nodeLimit: CFG.nodeLimit, nodeBudget: CFG.nodeBudget, pvLen: CFG.pvLen }
+      opts: Object.assign({}, CFG, { playedMove: entry.move })
     };
     startVerifyRun(token, analysisReq);
     let pendingAnalysis;

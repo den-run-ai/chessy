@@ -8,8 +8,9 @@ const fs = require('fs');
 require('./helper').run('provenance', async function (t) {
   const page = t.page, check = t.check;
 
-  // Easy's 10k-node budget keeps the WASM-only integration test quick.
-  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  // Medium's 10k-node, depth-30 budget keeps the WASM-only integration test
+  // quick and always stops on its node target (Easy also stops at depth 2).
+  await t.newGame({ mode: 'ai-w', difficulty: '2' });
   await page.waitForFunction(function () {
     const raw = localStorage.getItem('chessy-game-v1');
     if (!raw) return false;
@@ -74,7 +75,7 @@ require('./helper').run('provenance', async function (t) {
     s.history[0].ai = fixture.ai;
     return ChessyArchive.record(
       s,
-      { mode: 'ai-w', difficulty: '1', timeControl: 'none' },
+      { mode: 'ai-w', difficulty: '2', timeControl: 'none' },
       { over: true, result: '1-0', reason: 'resignation' },
       'telemetry-roundtrip',
       { endedAt: 1234, startedRelease: fixture.startedRelease });

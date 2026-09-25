@@ -88,21 +88,24 @@ const CORPUS_DIR = path.join(__dirname, '..', '..', 'eval', 'corpus');
 // stay cheap. Baked into the score vector so a config drift can never compare
 // "clean" against a baseline built under a different budget.
 // ---------------------------------------------------------------------------
-// The shipped coaching width is DERIVED from assets/reflection.js, never
-// duplicated: a copied "3" would silently stop testing the product boundary
-// the moment the app changed it. reflection.js cannot be require()d here (its
-// module guard needs the browser app's globals), so the value is read from the
-// source text, and the run fails loudly if the CFG declaration ever moves or
-// the width cannot be found. A changed width also changes e3_opts below, so
-// the committed baseline goes INCOMPATIBLE and must be consciously rebuilt.
+// The shipped coaching width is DERIVED from the app, never duplicated: a
+// copied "3" would silently stop testing the product boundary the moment the
+// app changed it. reflection.js cannot be require()d here (its module guard
+// needs the browser app's globals), so its source must still bind CFG to the
+// shared deep profile; the width itself is read from that profile in
+// analysis-core. The run fails loudly if the binding ever moves. A changed
+// width also changes e3_opts below, so the committed baseline goes
+// INCOMPATIBLE and must be consciously rebuilt. Only the width is adopted:
+// this scorecard stays fixed-node and never wall-clock.
 function shippedMultiPV() {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'assets', 'reflection.js'), 'utf8');
-  const m = src.match(/const CFG = \{[^}]*\bmultiPV:\s*(\d+)/);
-  if (!m) {
+  const bound = /const CFG = ChessyAnalysisCore\.PROFILES\.deep;/.test(src);
+  const width = AC.PROFILES && AC.PROFILES.deep && AC.PROFILES.deep.multiPV;
+  if (!bound || !Number.isInteger(width) || width < 1) {
     throw new Error('cannot locate the shipped coaching width (CFG.multiPV) in ' +
       'assets/reflection.js — rebind this scorecard\'s ship config to the app');
   }
-  return Number(m[1]);
+  return width;
 }
 const E3_OPTS = {
   ref:     { nodeLimit: 2000, nodeBudget: 2000000, multiPV: 999, pvLen: 4, quiesce: true },

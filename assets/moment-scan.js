@@ -39,20 +39,14 @@
   var QUICK_RESULT_POLICY = 'critical-quick-result-v1';
   var DEEP_RESULT_SCHEMA = 1;
   var DEEP_RESULT_POLICY = 'critical-deep-result-v1';
-  var QUICK = {
-    maxDepth: 5, nodeLimit: 5000, nodeBudget: 150000, multiPV: 1, pvLen: 3
-  };
-  var QUICK_FALLBACK = {
-    maxDepth: 5, nodeLimit: 12000, nodeBudget: 300000, multiPV: 1, pvLen: 3
-  };
-  // Kept byte-for-byte aligned with reflection.js. A suggestion click can
-  // therefore reuse the already validated deep result from the analysis cache.
-  var DEEP = {
-    maxDepth: 10, nodeLimit: 80000, nodeBudget: 1200000, multiPV: 3, pvLen: 6
-  };
+  var QUICK = ChessyAnalysisCore.PROFILES.quick;
+  var QUICK_FALLBACK = ChessyAnalysisCore.PROFILES.quickFallback;
+  var DEEP = ChessyAnalysisCore.PROFILES.deep;
 
   var generation = 0;
   var current = null;
+  // Restored job object -> plies whose persisted deep result was unusable.
+  var freshDeepRetries = new WeakMap();
   var currentSource = null;
   var running = false;
   // Validated durable Gate-0 receipts for the current exact game source. This
@@ -863,14 +857,7 @@
       fen: review.fens[ply],
       positions: state.positions,
       fresh: !!fresh,
-      opts: {
-        playedMove: entry.move,
-        maxDepth: profile.maxDepth,
-        nodeLimit: profile.nodeLimit,
-        nodeBudget: profile.nodeBudget,
-        multiPV: profile.multiPV,
-        pvLen: profile.pvLen
-      }
+      opts: Object.assign({}, profile, { playedMove: entry.move })
     };
   }
 
@@ -1029,10 +1016,29 @@
       return pauseDeepFailure(
         token, job, ply, 'position-no-longer-eligible');
     }
-    var req = moveRequest(review, job, ply, DEEP, false);
+    // Timed deep results depend on the wall clock (a suspended tab can cut
+    // the scan short) and are cached. Retrying a slot whose deep result was
+    // unusable must recompute it, not re-serve the same cached row forever.
+    var restoredRetries = freshDeepRetries.get(job);
+    var restoredReason = restoredRetries ? restoredRetries[ply] : undefined;
+    var hasDeepEntry = function () {
+      return job.unresolved.some(function (item) {
+        return item.phase === 'deep' && item.ply === ply;
+      });
+    };
+    var retryingDeep = hasDeepEntry() || restoredReason !== undefined;
+    var req = moveRequest(review, job, ply, DEEP, retryingDeep);
     return ChessyAnalysisService.analyse(req, OWNER).then(function (res) {
       if (!owns(token, job)) return job;
-      if (res === null) return pauseAfterNull(token, job);
+      if (res === null) {
+        // The retry was interrupted before a usable result. Keep the slot's
+        // durable failure so the next Resume (or a reload) recomputes it
+        // instead of serving the cached unusable row.
+        if (restoredReason !== undefined && !hasDeepEntry()) {
+          unresolved(job, ply, 'deep', restoredReason);
+        }
+        return pauseAfterNull(token, job);
+      }
       var record = makeDeepResult(res, ply);
       var rebuilt = record
         ? rebuildDeepState(record, quick, review, job) : { ok: false };
@@ -1042,6 +1048,8 @@
       }
       replaceDeepResult(job, record);
       replaceSummary(job, rebuilt.summary);
+      // Only a usable replacement retires the slot's fresh-retry marker.
+      if (restoredRetries) delete restoredRetries[ply];
       job.unresolved = job.unresolved.filter(function (item) {
         return !(item.phase === 'deep' && item.ply === ply);
       });
@@ -1342,6 +1350,16 @@
         return !retryPly[moment.ply];
       });
       job.verifyIndex = deepRetryIndex;
+      // Restoring drops the markers (the slot is simply retried); remember
+      // which slots failed so their retry bypasses the cached result.
+      var failedDeep = Object.create(null);
+      job.unresolved.forEach(function (item) {
+        if (item.phase === 'deep') {
+          failedDeep[item.ply] = typeof item.reason === 'string'
+            ? item.reason : 'unusable-result';
+        }
+      });
+      freshDeepRetries.set(job, failedDeep);
       job.unresolved = [];
       job.state = 'paused';
       delete job.retry;

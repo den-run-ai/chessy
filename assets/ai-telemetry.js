@@ -99,6 +99,13 @@
     if (Array.isArray(value.rootOrderUci)) {
       sanitized.rootOrderUci = rootOrder;
     }
+    // Present only when the loader kept a completed WASM iteration after the
+    // engine's fixed transposition table filled; that stop always reports
+    // reason unknown. A flag contradicting either fact is dropped.
+    if (value.ttSaturated === true && value.engine === 'wasm' &&
+        value.stopReason === 'unknown' && sanitized.depth >= 1) {
+      sanitized.ttSaturated = true;
+    }
     return sanitized;
   }
 

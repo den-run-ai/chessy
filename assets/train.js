@@ -40,7 +40,9 @@
   // fallback keeps Train usable in an intentionally partial release.
   const CHECK_PROFILE = (typeof ChessyMomentScan !== 'undefined' && ChessyMomentScan.profiles)
     ? ChessyMomentScan.profiles.deep
-    : { maxDepth: 10, nodeLimit: 80000, nodeBudget: 1200000, multiPV: 3, pvLen: 6 };
+    : (typeof ChessyAnalysisCore !== 'undefined' && ChessyAnalysisCore.PROFILES)
+      ? ChessyAnalysisCore.PROFILES.deep
+      : { maxDepth: 10, nodeLimit: 80000, nodeBudget: 1200000, multiPV: 3, pvLen: 6 };
   const CHECK_OWNER = 'train';
   let checkSeq = 0;
   // A result can satisfy the service's cache identity yet fail the stricter
@@ -404,11 +406,12 @@
       const req = {
         gameId: card.gameId, ply: card.ply, gameRev: gameRevOf(game),
         fen: card.fenBefore, positions: replay.state.positions,
-        opts: { playedMove: { from: attemptMove.from, to: attemptMove.to,
-            promotion: attemptMove.promotion || null },
-          maxDepth: CHECK_PROFILE.maxDepth, multiPV: CHECK_PROFILE.multiPV,
-          nodeLimit: CHECK_PROFILE.nodeLimit, nodeBudget: CHECK_PROFILE.nodeBudget,
-          pvLen: CHECK_PROFILE.pvLen }
+        // Forward the WHOLE profile (including the deep scan deadline) so
+        // the request, its watchdog and its cache identity match Review.
+        opts: Object.assign({}, CHECK_PROFILE, {
+          playedMove: { from: attemptMove.from, to: attemptMove.to,
+            promotion: attemptMove.promotion || null }
+        })
       };
       const retryKey =
         [req.gameId, req.ply, req.gameRev, attemptUci].join('|');
@@ -416,13 +419,47 @@
         req.fresh = true;
         retryFresh = null;
       }
+      const rootCount = Chess.legalMoves(replay.state).length;
+      // #trainCheck is a polite live region, and throttled progress can arrive
+      // several times a second for the whole deep deadline. Rewrite it only on
+      // a coarse stage change (scan start/complete, each NEW verification
+      // depth, done) so assistive tech is not flooded with per-root counts.
+      let lastStage = null;
       unsub = ChessyAnalysisService.subscribe(CHECK_OWNER, function (p) {
         if (checkStale(t, token)) return;
-        if (p && Number.isInteger(p.completedRoots) && Number.isInteger(p.totalRoots) &&
-            p.totalRoots > 0) {
-          setCheckNote('Checking ' + attemptSan + ' with Chessy… ' +
-            p.completedRoots + ' of ' + p.totalRoots + ' moves checked.');
+        if (!p || !Number.isInteger(p.completedRoots) || !Number.isInteger(p.totalRoots) ||
+            p.totalRoots <= 0) return;
+        let stage;
+        let detail;
+        if (p.phase === 'initial-scan') {
+          const scanned = p.completedRoots === 1;
+          stage = scanned ? 'scan-complete' : 'scan';
+          detail = scanned ? 'initial scan complete.' : 'initial scan…';
+        } else if (p.phase === 'root-verification') {
+          // Deep checks verify every move at depth 1, 2, ...; name the depth.
+          const view = ChessyAnalysisCore.progressView(p.completedRoots, p.totalRoots,
+            rootCount);
+          const finished = p.completedRoots === p.totalRoots;
+          if (!view || view.cap === 1) {
+            // One pass (or counts outside the depth schedule): announce the
+            // phase transitions only, never each root.
+            stage = finished ? 'verify-done' : 'verify';
+            detail = finished
+              ? p.completedRoots + ' of ' + p.totalRoots + ' moves checked.'
+              : 'checking moves…';
+          } else if (view.done) {
+            stage = 'done';
+            detail = 'all ' + view.roots + ' moves checked through depth ' + view.cap + '.';
+          } else {
+            stage = 'depth:' + view.depth + '/' + view.cap;
+            detail = 'verifying depth ' + view.depth + ' of up to ' + view.cap + '.';
+          }
+        } else {
+          return;
         }
+        if (stage === lastStage) return;
+        lastStage = stage;
+        setCheckNote('Checking ' + attemptSan + ' with Chessy… ' + detail);
       });
       let pending;
       try { pending = ChessyAnalysisService.analyse(req, CHECK_OWNER); }

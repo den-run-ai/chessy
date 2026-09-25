@@ -27,17 +27,54 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   dead positions score 0, so it avoids repeating when winning, heads for
   perpetual check when losing, and won't grab a last piece that kills its own
   mating material. All five difficulty levels use quiescent iterative
-  deepening. Easy/Medium/Hard/Expert target
-  reproducible 10k/36k/230k/1.44M-node caps; each also has a five-second
-  safety ceiling, so slower devices can stop earlier. **Master** thinks for
-  five seconds and deepens as far as the device allows. Search is WASM-only
+  deepening. Easy/Medium/Hard/Expert use reproducible 10k/10k/36k/230k-node
+  caps (Easy also stops at depth 2); each also has a five-second safety
+  ceiling, so slower devices can stop earlier. **Master** thinks for
+  up to eight seconds, with uncapped nodes and the full supported 111-ply
+  ceiling. In timed games, every level reserves time for move delivery and
+  one identical-request retry after a reported worker failure (a silent worker
+  is only detected by a watchdog three seconds past the limit, which a very low
+  clock may not cover); the effective limit decreases as the clock runs down
+  (and is retained in move telemetry). An AI clock that is already empty flags
+  before any search starts. If the engine's fixed transposition table fills
+  during an uncapped Master search, the deepest completed iteration's move is
+  played. Search is WASM-only
   and Worker-only: a failed worker is retried once against the exact unchanged
   position, then Play stops visibly with a manual Retry action rather than
   substituting another engine. The displayed 1500/1700/1900/2100/2300+ bands
   are provisional
   calibration targets on an external engine-rating scale—not certified FIDE,
   Chess.com, or Lichess ratings; absolute and adjacent-level certification
-  remains tracked in #87/#113.
+  remains tracked in #87/#113. In r80 the budgets moved up one label after an
+  exploratory screen against pinned Stockfish 18 on a Linux container
+  (`eval/level-screen-r80/`) placed each r79 budget about one label above its
+  target: 10k, 36k and 230k nodes now serve Medium, Hard and Expert, the
+  1.44M-node preset (already Master strength there) was dropped, and Easy is
+  new. That screen is exploratory, not an E4-v1 certification, and the
+  historical E4 artifacts stay unchanged; a fresh protocol/holdout and
+  supported-device measurements are required before certifying this ladder.
+- **Analysis headroom** — quick whole-game screening stays inexpensive.
+  Selected moments, manual verification and Train's live check share one
+  immutable deep profile: an uncapped-node, up-to-16-second scan (twice
+  Master's time), then one exact phase of at most 16M nodes that scores
+  **every** legal move under a full window at depth 1, 2, 3, … up to the
+  scan's depth (at least depth 3). The reported depth is the deepest depth at
+  which every move was verified — usually a few plies below the scan, and
+  shown as such — and the previous depth supplies stability. If the deeper
+  scan prefers a move that the verified depth ranks strictly lower, the best
+  move is marked unstable, so Chessy adds no mistake mark and suggests no
+  moment from it; a manual Verify still shows its lines and leaves the
+  diagnosis to the player. This allocates more search than Master, not a
+  guarantee of a better move in every position: the engine's fixed
+  transposition table can stop Master and the scan at the same node count on
+  fast devices, and a timed scan's depth depends on the device. A result is
+  partial only if not even depth 1 completes; it then keeps only the scan's
+  single best move, never an invented PV or full-MultiPV claim. Deep work
+  remains worker-only and cancellable; node budgets are work caps, not
+  wall-clock promises, and slow devices can reach the service watchdog.
+  Because the deep profile changed, a Review scan completed under r79
+  restarts when reopened (its deep evidence no longer matches), and manual
+  verifications are recomputed rather than served from the old cache.
 - **UI** — responsive board, tap/click to move, legal-move hints, last-move and
   check highlights, SAN move list, captured pieces, undo, board flip,
   promotion picker. Game replay: click any move (or use the ⏮◀▶⏭ controls,
@@ -237,8 +274,10 @@ The [prospective 400-opening CC0 manifest](eval/match-v2/PROVENANCE.md) is
 frozen. The [v2 diagnostic runner](eval/match-v2/EXECUTION.md) registers exact
 commits, raw modules and budgets before executing 20 complete shards with
 both colors. It preserves and replays every move, repetition history and
-terminal result. Easy evaluator (10k nodes, endpoint lower bound >50%) and
-Hard selective-search (230k nodes, >49%) are separate profiles. Every result
+terminal result. The fixed-node `evaluator-easy` (10k nodes, endpoint lower
+bound >50%) and `selective-hard` (230k nodes, >49%) profiles are separate.
+Their IDs predate r80 and do not track the Play presets (230k nodes is now
+Expert). Every result
 remains diagnostic: 400 unique endpoints do not prove 400 independent
 families, and source reproduction, correctness and device admission remain
 separate. The [fresh finite-bank formal software contract](eval/match-formal/CONTRACT.md)
@@ -351,7 +390,7 @@ dispatch.
 | `assets/archive.js` | Records finished and deliberately abandoned games into the store |
 | `assets/mini-board.js` | Accessible read-only mini board for the coach views |
 | `assets/review.js` | Review view: tabs, archived-game list, position browser, full SAN ledger, and gated score/annotation overlays |
-| `assets/analysis-core.js` | Deterministic Rust/WASM analysis contract (exact MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
+| `assets/analysis-core.js` | Rust/WASM analysis contract: deterministic fixed-node quick analysis, and timed deep analysis whose iterative exact verification is capped by a device-dependent scan depth (exact MultiPV over every legal root, played-move standing, legal PVs, provenance, bounded progress checkpoints) |
 | `assets/analysis-worker.js` | Dedicated WASM coaching-analysis worker with throttled non-terminal progress |
 | `assets/analysis-service.js` | Analysis transport: one interactive job, owner-scoped progress/cancellation, watchdog + retry, validated IndexedDB result cache |
 | `assets/analysis-result.js` | Shared trust boundary for cached/worker analysis (provenance, completeness, legal canonical lines, stable-depth evidence) |

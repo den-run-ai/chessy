@@ -770,8 +770,20 @@ require('./helper').run('train', async function (t) {
       Object.prototype.hasOwnProperty.call(window, 'CHESSY_ANALYSIS_WORKER_FACTORY');
     window.__trainCancelRealFactory = window.CHESSY_ANALYSIS_WORKER_FACTORY;
     window.__trainCancelRealCancel = ChessyAnalysisService.cancel;
+    window.__trainCancelRealAnalyse = ChessyAnalysisService.analyse;
     window.__trainCancelOwners = [];
     window.__trainCancelWorkers = [];
+    window.__trainAnalyseCalls = [];
+    // Snapshot each request as Train hands it to the service, before the
+    // service normalises anything.
+    ChessyAnalysisService.analyse = function (req, owner) {
+      window.__trainAnalyseCalls.push({
+        owner: owner,
+        fen: req && req.fen,
+        opts: req && req.opts ? JSON.parse(JSON.stringify(req.opts)) : null
+      });
+      return window.__trainCancelRealAnalyse.apply(ChessyAnalysisService, arguments);
+    };
     ChessyAnalysisService.cancel = function (owner) {
       window.__trainCancelOwners.push(arguments.length ? owner : '(global)');
       return window.__trainCancelRealCancel.apply(ChessyAnalysisService, arguments);
@@ -795,6 +807,101 @@ require('./helper').run('train', async function (t) {
     return window.__trainCancelWorkers.length === 1 &&
       window.__trainCancelWorkers[0].posts.length === 1;
   });
+  // The live check must forward the WHOLE shared deep profile (including the
+  // scan deadline and the unlimited per-root node limit it relies on), so its
+  // request, watchdog and cache identity match Review. Literal values: a
+  // field-by-field copy that drops scanTimeMs must fail here.
+  const liveCalls = await page.evaluate(function () {
+    return window.__trainAnalyseCalls.slice();
+  });
+  const liveOpts = liveCalls.length === 1 ? liveCalls[0].opts : null;
+  check(liveCalls.length === 1 && liveCalls[0].owner === 'train' && !!liveOpts &&
+        liveOpts.scanTimeMs === 16000 && liveOpts.nodeLimit === 0 &&
+        liveOpts.nodeBudget === 16000000 && liveOpts.maxDepth === 111 &&
+        liveOpts.multiPV === 3 && liveOpts.pvLen === 6 &&
+        !!liveOpts.playedMove && liveOpts.playedMove.from === t.idx('a2') &&
+        liveOpts.playedMove.to === t.idx('a3') &&
+        liveOpts.playedMove.promotion === null,
+    'the Train live check sends the whole deep profile (' + JSON.stringify(liveOpts) + ')');
+
+  // #trainCheck is a polite live region: a long deep check must announce
+  // only coarse stages (scan start/complete, each new depth, done), never
+  // every throttled root checkpoint.
+  const announced = await page.evaluate(function () {
+    const worker = window.__trainCancelWorkers[0];
+    const post = worker.posts[0];
+    const roots = Chess.legalMoves(Chess.parseFen(window.__trainAnalyseCalls[0].fen)).length;
+    const cap = 3;
+    const note = document.getElementById('trainCheck');
+    const observer = new MutationObserver(function () {});
+    observer.observe(note, { childList: true, characterData: true, subtree: true });
+    let elapsed = 0;
+    let sent = 0;
+    function send(phase, completed, total) {
+      elapsed += 5;
+      sent++;
+      worker.onmessage({
+        data: {
+          v: ChessyAnalysisService.PROTOCOL,
+          jobId: post.jobId,
+          progress: {
+            phase: phase,
+            completedRoots: completed,
+            totalRoots: total,
+            elapsedMs: elapsed
+          }
+        }
+      });
+    }
+    send('initial-scan', 0, 1);
+    send('initial-scan', 0, 1);
+    send('initial-scan', 1, 1);
+    let depth1Text = null;
+    for (let done = 0; done < 2 * roots; done++) {
+      send('root-verification', done, roots * cap);
+      if (done === roots - 1) depth1Text = note.textContent;
+    }
+    const depth2Text = note.textContent;
+    for (let done = 2 * roots; done <= roots * cap; done++) {
+      send('root-verification', done, roots * cap);
+    }
+    const doneText = note.textContent;
+    const records = observer.takeRecords();
+    observer.disconnect();
+    return {
+      roots: roots,
+      cap: cap,
+      sent: sent,
+      mutations: records.length,
+      texts: records.map(function (record) {
+        return record.addedNodes.length ? record.addedNodes[0].textContent : '';
+      }),
+      depth1Text: depth1Text,
+      depth2Text: depth2Text,
+      doneText: doneText,
+      visible: !note.hidden
+    };
+  });
+  const stagePrefix = 'Checking a3 with Chessy… ';
+  const expectedStages = [
+    stagePrefix + 'initial scan…',
+    stagePrefix + 'initial scan complete.',
+    stagePrefix + 'verifying depth 1 of up to ' + announced.cap + '.',
+    stagePrefix + 'verifying depth 2 of up to ' + announced.cap + '.',
+    stagePrefix + 'verifying depth 3 of up to ' + announced.cap + '.',
+    stagePrefix + 'all ' + announced.roots + ' moves checked through depth ' +
+      announced.cap + '.'
+  ];
+  check(announced.roots > 1 && announced.sent > 3 * announced.roots &&
+        announced.visible &&
+        announced.mutations === expectedStages.length &&
+        JSON.stringify(announced.texts) === JSON.stringify(expectedStages),
+    'the Train live region changes only at stage/depth transitions (' +
+      announced.mutations + ' mutations for ' + announced.sent + ' progress events)');
+  check(announced.depth1Text === expectedStages[2] &&
+        announced.depth2Text === expectedStages[3] &&
+        announced.doneText === expectedStages[5],
+    'the Train live region names the depth being verified and the completed schedule');
   await page.click('#tabPlay');
   const leftTrain = await page.evaluate(function () {
     const worker = window.__trainCancelWorkers[0];
@@ -834,6 +941,7 @@ require('./helper').run('train', async function (t) {
     'leaving Train terminates only its live check and late progress cannot repaint the hidden view');
   await page.evaluate(function () {
     ChessyAnalysisService.cancel = window.__trainCancelRealCancel;
+    ChessyAnalysisService.analyse = window.__trainCancelRealAnalyse;
     if (window.__trainCancelHadFactory) {
       window.CHESSY_ANALYSIS_WORKER_FACTORY = window.__trainCancelRealFactory;
     } else {
@@ -852,7 +960,7 @@ require('./helper').run('train', async function (t) {
     'an uncovered answer keeps the honest differs wording while the check runs');
   await page.waitForFunction(function () {
     return document.getElementById('trainCheck').textContent.indexOf('Chessy checked') !== -1;
-  }, null, { timeout: 90000 });
+  }, null, { timeout: 150000 });
   const liveNote = await page.textContent('#trainCheck');
   check(liveNote.includes('✗') && liveNote.includes('a3') &&
         liveNote.includes('falls short of dxe4') &&

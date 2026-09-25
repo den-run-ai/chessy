@@ -71,26 +71,28 @@
   function nowMs() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
 
   // The watchdog rescues only a genuinely WEDGED worker, so it sits above
-  // realistic completion. The contract self-bounds at scanNodes (the scan) plus
-  // the deep and shallow verification budgets, so worst-case runtime is bounded;
-  // dividing that node ceiling by a deliberately CONSERVATIVE slow-device rate
-  // yields a deadline a healthy slow phone beats. Overridable to a tiny value so
-  // a test can exercise the timeout path without a multi-second wait.
+  // realistic completion. A timed scan has its own ceiling. Fixed-node
+  // requests verify in two node-capped phases; a timed request's single
+  // iterative phase is capped by one budget, so counting two over-approximates
+  // it in the safe direction. Divide bounded node work by a conservative
+  // slow-device rate and add any scan time allowance. Overridable to a tiny
+  // value so a test can exercise the timeout path without a multi-second wait.
   //
   // The 18k-NPS floor is deliberately far below the hosted Rust/WASM
   // measurements and retained as a conservative slow-device allowance, not a
   // performance claim. A healthy device that legitimately needs the full node
-  // budget should finish before the deadline rather than being killed,
-  // retried, and finally failing. Erring long here only delays detection of a
-  // truly wedged background coaching worker, which is the safe direction.
+  // budget is given substantial slack rather than a Play-sized watchdog.
+  // The five-minute ceiling remains a fail-safe, NOT a guarantee that any
+  // supported phone can complete arbitrarily large node budgets.
   function watchdogMs(opts) {
     var override = global.CHESSY_ANALYSIS_WATCHDOG_MS;
     if (typeof override === 'number' && override > 0) return override;
-    var scanNodes = (opts && opts.nodeLimit) || 150000;
+    var scan = ChessyAnalysisCore.scanConfig(opts || {});
+    var scanNodes = scan.nodeLimit;
     var nodeBudget = (opts && opts.nodeBudget) || 8000000;
-    var workNodes = scanNodes + 2 * nodeBudget; // scan + deep-verify + shallow-verify
+    var workNodes = scanNodes + 2 * nodeBudget; // scan + at most two verify phases
     var SLOW_NPS = 18000;                         // conservative Rust/WASM floor
-    var ms = Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
+    var ms = scan.timeMs + Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
     return Math.min(Math.max(ms, DEFAULT_WATCHDOG_MS), 300000);
   }
 
@@ -218,10 +220,20 @@
       var nextOrder = phaseOrder(event.phase);
       if (nextOrder < prevOrder || event.elapsedMs < published.elapsedMs) return null;
       if (nextOrder === prevOrder) {
-        if (event.totalRoots !== published.totalRoots ||
-            event.completedRoots < published.completedRoots) return null;
-        if (event.completedRoots === published.completedRoots &&
-            event.elapsedMs === published.elapsedMs) return null;
+        if (event.totalRoots !== published.totalRoots) {
+          // A fresh attempt of a timed request may plan another schedule
+          // (its wall-clock scan can stop at a different depth). Its raw
+          // counts are not comparable with the published ones, and Reflection
+          // and Train derive the verified depth from them, so publishing them
+          // (or projecting them onto the old scale) could move the meter or
+          // the announced depth backwards. Hold public progress until the
+          // result instead.
+          return null;
+        } else {
+          if (event.completedRoots < published.completedRoots) return null;
+          if (event.completedRoots === published.completedRoots &&
+              event.elapsedMs === published.elapsedMs) return null;
+        }
       }
     }
     return event;
