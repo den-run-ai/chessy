@@ -1,0 +1,68 @@
+{
+  "schema": "chessy.hybrid-fixed-node-diagnostic-protocol.v1",
+  "researchOnly": true,
+  "formalPass": false,
+  "shippingOrEloClaimAllowed": false,
+  "purpose": "One fixed-node diagnostic of the unchanged smooth-6-12 hybrid versus shipped HCE after weak equal-time play; separate from all previous one-shot experiments.",
+  "openingSource": "test/ai-match-openings.js",
+  "formalHoldoutAccessAllowed": false,
+  "openingCount": 100,
+  "arms": [
+    "hybrid"
+  ],
+  "reference": "shipped",
+  "colorsPerOpeningArm": [
+    "w",
+    "b"
+  ],
+  "timeMs": 0,
+  "nodeLimit": 16384,
+  "maxDepth": 30,
+  "quiesce": true,
+  "maxSearchedPlies": 180,
+  "totalGames": 200,
+  "concurrentGames": 1,
+  "schedule": "Opening order 0..99; white then black on even openings, black then white on odd openings.",
+  "warmup": {
+    "openingIndices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "nodesPerSearch": 10000,
+    "moduleOrder": [
+      "shipped",
+      "hybrid"
+    ]
+  },
+  "searchWatchdogMs": 30000,
+  "workloadWatchdogMs": 3600000,
+  "scoreRerunAllowed": false,
+  "interimStoppingAllowed": false,
+  "postHocExtensionAllowed": false,
+  "scoreAnalysisRequires": "Complete 200-game inventory; captured archive hashes and independent legal replay, repetition history, termination, and fixed-node metadata audit.",
+  "statistics": "Descriptive candidate score and one-sided 95% t lower bound over 100 paired-opening means, separately per arm. No repeated seed slots. The exposed opening bank and modest node budget preclude formal generalization or shipping claims.",
+  "termination": "Engine gameStatus rules including full-prefix repetition history, otherwise draw at 180 searched plies; no evaluator-score adjudication.",
+  "originalRegistrationSha256": "db7f95f1cfe2b69dd53aeeb0a7faf0d66e8ac1a26d03ee7cdf5560fd346c0fbc",
+  "budgetJustification": "16,384 nodes was the existing higher frozen hybrid-runtime-v1 fixed-node throughput cell. Chosen before any game of this experiment; sufficient for a modest CPU diagnostic and avoids tuning a budget to outcomes. Early mate/max-depth termination may use fewer nodes.",
+  "decisionRule": {
+    "promisingCandidateScoreAtLeast": 0.5,
+    "promisingNext": "Profile residual runtime costs and separately preregister a development equal-time screen closer to shipped levels. No immediate formal test or evaluator change.",
+    "otherwiseNext": "Inspect move-ranking errors, tactical misses and phase transitions before further optimization or training.",
+    "interpretation": "This threshold routes research only; paired score is descriptive and equal nodes allow different search trees. No significance, Elo, or shipping claim."
+  },
+  "paidComputeUsd": 0,
+  "capture": {
+    "retainExactCanonicalBytesInParent": true,
+    "atomicPerGamePublication": true,
+    "parentAcknowledgementRequiredBeforeNextGame": true,
+    "compressOnlyAfterAllTimedSearchesStop": true,
+    "finalImmutableArchiveRequired": true,
+    "archiveEveryGameMustMatchItsCaptureReceipt": true,
+    "auditGamesFromRetainedArchiveOnly": true,
+    "recoverFromMutableLiveFilesAllowed": false,
+    "inventMissingTailsAllowed": false
+  },
+  "timingInterpretation": "Other independent CPU development may run on this host. Wall-clock measurements in this node-capped match are descriptive only and cannot establish NPS or runtime improvement; separate isolated paired profiling is required."
+}

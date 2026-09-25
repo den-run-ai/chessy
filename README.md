@@ -309,6 +309,21 @@ The [compiled synthetic cost report](eval/training/nnue-phase-runtime-results-20
 separates parameter storage, module growth, memory and per-position overhead.
 The [incremental accumulator comparison](eval/training/nnue-incremental-results-2026-09.md)
 records faster direct evaluation but slower aggregate search.
+The unchanged hybrid scored 41.5% in the earlier 200-game 20 ms development arm,
+then [50.0% in 200 games at 16,384 nodes](eval/training/hybrid-fixed-node-results-2026-09.md)
+and [46.25% in a separately registered 40-game 200 ms follow-up](eval/training/hybrid-equal-time-200ms-results-2026-09.md).
+The longer screen used 20 prospectively selected opening pairs, while the earlier
+runs used 100; it cannot isolate a causal time-budget effect. Equal-node parity
+is consistent with a runtime contribution to the original deficit, but does not
+establish a playing-strength benefit from lower teacher loss. Evaluation/search
+interaction remains unresolved; inspect move ranking and phase transitions before
+new training. The [retained tactical census](eval/training/hybrid-retained-tactical-results-2026-09.md)
+found no missed mate-in-one or avoidable immediate mating reply across all
+2,628 hybrid decisions;
+it does not exclude deeper tactical or phase errors. HCE remains shipped, with
+no formal strength or Elo claim.
+The separate [hybrid dispatch-count profile](eval/hybrid-eval-counts-v1/REPORT.md)
+records evaluation branch frequencies without claiming CPU time shares.
 These studies preserve the shipped evaluator and the separate admission gates.
 
 For historical reproduction, `test/ai-match.js` supports the archived
