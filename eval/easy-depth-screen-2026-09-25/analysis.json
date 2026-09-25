@@ -1,0 +1,198 @@
+{
+  "status": "exploratory-development-only",
+  "protocol": "easy-depth-screen-2026-09-25",
+  "control": {
+    "file": "control-depth2.ndjson",
+    "receipt": {
+      "schema": "chessy.level-screen.exploratory.v1.complete",
+      "identity": {
+        "schema": "chessy.level-screen.exploratory.v1.run",
+        "level": "easy",
+        "anchor": 1500,
+        "openings": "even",
+        "concurrency": 3,
+        "host": {
+          "node": "v24.19.0",
+          "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+          "cpus": 9,
+          "os": "Linux",
+          "release": "6.18.44",
+          "arch": "x64"
+        },
+        "stockfishSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
+        "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+        "loaderSha256": "ce338ed49aef859aebb930e5895681b77dfa588d710f8b7131b4220ef903cf01",
+        "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+        "presetsSha256": "561f6b80ea9f7008f2b42949191eaca7343cb66b138a5c45a4e275d2ed4c797f",
+        "bridgeSha256": "91c6eebb6693dab7fb342f4f7b6deec7e8688fa0535164fb42f414f519ae9d43",
+        "openingsSha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27",
+        "openingProtocolSha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63",
+        "runnerSha256": "b24a35f6b37cb51a05b60c34b40492c780fee0462eab6f43eda247429d85cd0d"
+      },
+      "identityComplete": true,
+      "replayedAgainst": {
+        "openingsSha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27",
+        "openingProtocolSha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63"
+      },
+      "scheduledGames": 100,
+      "games": 100,
+      "ndjsonSha256": "6f5ea85ec6b3d8611249fbebcb1e2186662696f985babaece43d5936100da0c3",
+      "runsSha256": "f9571209ae8a222e29833e56acd53694216c060118047044ece18d89c65348cf",
+      "sealedBy": "runner"
+    },
+    "games": 100,
+    "openingClusters": 50,
+    "win": 57,
+    "draw": 7,
+    "loss": 36,
+    "score": 0.605,
+    "scoreWhite": 0.63,
+    "scoreBlack": 0.58,
+    "eloDiff": 74.06331161040345,
+    "ratingEstimate": 1574.0633116104034,
+    "bootstrap": {
+      "replicates": 10000,
+      "seed": 20260925,
+      "clusterUnit": "opening (both colors together)",
+      "score95": [
+        0.52,
+        0.69
+      ],
+      "rating95": [
+        1513.904842503685,
+        1638.994958761193
+      ],
+      "oneSidedLower95Rating": 1524.3603316525098
+    },
+    "reasons": {
+      "checkmate": 93,
+      "ply-cap": 7
+    },
+    "search": {
+      "moves": 4384,
+      "retries": 0,
+      "failures": 0,
+      "meanNodes": 1172.404197080292,
+      "meanMs": 6.0116332116788325,
+      "maxMs": 320,
+      "depths": {
+        "0": 1,
+        "1": 163,
+        "2": 4220
+      },
+      "stops": {
+        "max-depth": 4175,
+        "node-limit": 24,
+        "mate": 185
+      },
+      "ttSaturated": 0
+    }
+  },
+  "candidate": {
+    "file": "candidate-depth1.ndjson",
+    "receipt": {
+      "schema": "chessy.level-screen.exploratory.v1.complete",
+      "identity": {
+        "schema": "chessy.level-screen.exploratory.v1.run",
+        "level": "easy",
+        "anchor": 1500,
+        "openings": "even",
+        "concurrency": 3,
+        "host": {
+          "node": "v24.19.0",
+          "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+          "cpus": 9,
+          "os": "Linux",
+          "release": "6.18.44",
+          "arch": "x64"
+        },
+        "stockfishSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
+        "wasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+        "loaderSha256": "ce338ed49aef859aebb930e5895681b77dfa588d710f8b7131b4220ef903cf01",
+        "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+        "presetsSha256": "084f631e9fb0be0db3358f656570e178112ee19358a3f9d97a78f55c9ae0c776",
+        "bridgeSha256": "91c6eebb6693dab7fb342f4f7b6deec7e8688fa0535164fb42f414f519ae9d43",
+        "openingsSha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27",
+        "openingProtocolSha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63",
+        "runnerSha256": "b24a35f6b37cb51a05b60c34b40492c780fee0462eab6f43eda247429d85cd0d"
+      },
+      "identityComplete": true,
+      "replayedAgainst": {
+        "openingsSha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27",
+        "openingProtocolSha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63"
+      },
+      "scheduledGames": 100,
+      "games": 100,
+      "ndjsonSha256": "ce35192f0592c4b33c9fde668f4357bcb5f6a578cf8ff2adc07bf92d0163d33b",
+      "runsSha256": "faae0e61d8c5bae96a32970be01f8c572e169f943db6baacdf9edcade37ce702",
+      "sealedBy": "runner"
+    },
+    "games": 100,
+    "openingClusters": 50,
+    "win": 41,
+    "draw": 16,
+    "loss": 43,
+    "score": 0.49,
+    "scoreWhite": 0.55,
+    "scoreBlack": 0.43,
+    "eloDiff": -6.94963842776909,
+    "ratingEstimate": 1493.050361572231,
+    "bootstrap": {
+      "replicates": 10000,
+      "seed": 20260925,
+      "clusterUnit": "opening (both colors together)",
+      "score95": [
+        0.405,
+        0.58
+      ],
+      "rating95": [
+        1433.1752229944477,
+        1556.0714812660146
+      ],
+      "oneSidedLower95Rating": 1440.3568922519648
+    },
+    "reasons": {
+      "checkmate": 84,
+      "ply-cap": 14,
+      "threefold repetition": 1,
+      "stalemate": 1
+    },
+    "search": {
+      "moves": 4897,
+      "retries": 0,
+      "failures": 0,
+      "meanNodes": 330.8262201347764,
+      "meanMs": 3.7420869920359405,
+      "maxMs": 229,
+      "depths": {
+        "0": 3,
+        "1": 4894
+      },
+      "stops": {
+        "max-depth": 4757,
+        "mate": 137,
+        "node-limit": 3
+      },
+      "ttSaturated": 0
+    }
+  },
+  "comparison": {
+    "scoreDifference": -0.11499999999999999,
+    "ratingDifference": -81.01295003817245,
+    "pairedOpeningBootstrap": {
+      "replicates": 10000,
+      "seed": 20260925,
+      "scoreDifference95": [
+        -0.24,
+        0.01
+      ]
+    }
+  },
+  "criteria": {
+    "strictlyCloserTo1500": true,
+    "atLeast50EloWeaker": true,
+    "pairedScore95UpperBelowZero": false,
+    "noSearchRetriesOrFailures": true
+  },
+  "selectedDepth": 2
+}

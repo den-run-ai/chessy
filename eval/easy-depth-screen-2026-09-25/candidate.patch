@@ -1,0 +1,13 @@
+diff --git a/assets/level-presets.js b/assets/level-presets.js
+index aadc38de4f2fcc8e3549598d28f300c8aea2d69c..c190eed3c1f30a8f616aeb44e2853c4eaf6681fe 100644
+--- a/assets/level-presets.js
++++ b/assets/level-presets.js
+@@ -22,7 +22,7 @@
+ })(typeof self !== 'undefined' ? self : globalThis, function () {
+   const LEVELS = Object.freeze({
+     1: Object.freeze({
+-      label: 'Easy', target: '1500', maxDepth: 2,
++      label: 'Easy', target: '1500', maxDepth: 1,
+       nodeLimit: 10000, timeMs: 5000, quiesce: true
+     }),
+     2: Object.freeze({

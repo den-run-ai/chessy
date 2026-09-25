@@ -53,6 +53,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   new. That screen is exploratory, not an E4-v1 certification, and the
   historical E4 artifacts stay unchanged; a fresh protocol/holdout and
   supported-device measurements are required before certifying this ladder.
+  A later [200-game depth-cap comparison](eval/easy-depth-screen-2026-09-25/)
+  retained depth-2 Easy: depth 1 was closer to 1500 in point estimate but
+  missed the preregistered paired-confidence threshold.
 - **Analysis headroom** — quick whole-game screening stays inexpensive.
   Selected moments, manual verification and Train's live check share one
   immutable deep profile: an uncapped-node, up-to-16-second scan (twice
@@ -154,9 +157,11 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   revalidated before display; malformed FENs or illegal replays are skipped
   with a visible count and preserved unchanged for backup or recovery.
 - **Critical-moment suggestions** — Review can explicitly start, pause, and
-  resume a durable two-pass scan. Its quick pass scores every non-terminal
-  played move, while coaching nominations and at most two deep checks remain
-  limited to the selected player's decisions. Imported games with no known
+  resume a durable two-pass scan. An unusable deep check is recomputed on
+  Resume, including after pausing or reloading during its retry. Its quick
+  pass scores every non-terminal played move, while coaching nominations and
+  at most two deep checks remain limited to the selected player's decisions.
+  Imported games with no known
   player side ask for White, Black, or Both first. The scan shows accessible
   progress and at most two move-location suggestions; scores, categories,
   annotations, and alternative moves remain absent from public scan state

@@ -229,6 +229,8 @@ jobs:
           node test/eval/freeze-e4-manifests.test.js
       - name: Validate the exploratory level-screen runner contract
         run: node test/eval/level-screen.test.js
+      - name: Verify the preregistered Easy comparison input identities
+        run: node test/eval/easy-depth-verification.test.js
       - name: Validate shared HCE/NNUE corpus and teacher adapters
         run: |
           node test/training/license-policy.test.js
