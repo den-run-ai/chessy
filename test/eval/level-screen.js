@@ -337,15 +337,24 @@ function searchOnce(thread, fen, request, watchdogMs) {
 
 // `box.thread` is the live thread; it is replaced after every failure.
 async function searchWithRetry(box, start, fen, request, watchdogMs, stats) {
-  let reply = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    reply = await searchOnce(box.thread, fen, request, watchdogMs);
-    if (reply.ok) return reply;
-    stats.retries++;
-    stats.lastError = reply.error;
-    await box.thread.terminate();
+  let reply = await searchOnce(box.thread, fen, request, watchdogMs);
+  if (reply.ok) return reply;
+  stats.retries++;
+  stats.lastError = reply.error;
+  await box.thread.terminate();
+  try {
     box.thread = await start();
+  } catch (error) {
+    // A fresh thread that cannot start is the second failure.
+    stats.retries++;
+    stats.lastError = 'fresh search thread did not start: ' + (error && error.message || error);
+    return { ok: false, error: stats.lastError };
   }
+  reply = await searchOnce(box.thread, fen, request, watchdogMs);
+  if (reply.ok) return reply;
+  stats.retries++;
+  stats.lastError = reply.error;
+  await box.thread.terminate();
   return reply;
 }
 
@@ -514,7 +523,25 @@ const SNAPSHOT_STOCKFISH = 'stockfish';
 // headers and records must agree on all of them; commit, host and load are
 // descriptive only.
 const RUN_IDENTITY_KEYS = Object.freeze(['schema', 'level', 'anchor', 'openings',
-  'concurrency', 'stockfishSha256'].concat(Object.keys(SNAPSHOT_FILES)));
+  'concurrency', 'host', 'stockfishSha256'].concat(Object.keys(SNAPSHOT_FILES)));
+
+// Both engines search on the wall clock (Master's 8 s, Stockfish's 1 s), so a
+// block resumed on another runtime or machine would mix incompatible games.
+function hostFingerprint() {
+  const cpus = os.cpus();
+  return {
+    node: process.version,
+    cpu: (cpus[0] || {}).model || null,
+    cpus: cpus.length,
+    os: os.type(),
+    release: os.release(),
+    arch: os.arch()
+  };
+}
+
+// Headers written before `host` existed record these descriptively; a block's
+// headers must still agree on them.
+const LEGACY_HOST_KEYS = Object.freeze(['node', 'cpu', 'os']);
 
 // `root` holds SNAPSHOT_FILES at their relative paths; `exe` is Stockfish.
 function runIdentity(root, exe, level, anchor, openings, concurrency) {
@@ -524,6 +551,7 @@ function runIdentity(root, exe, level, anchor, openings, concurrency) {
     anchor: anchor,
     openings: openings,
     concurrency: concurrency,
+    host: hostFingerprint(),
     stockfishSha256: sha256File(exe)
   };
   Object.keys(SNAPSHOT_FILES).forEach(function (key) {
@@ -616,7 +644,9 @@ function validateBlock(records, headers) {
     slots.add(slot);
   });
   headers.forEach(function (h, i) {
-    const diff = identityDiff(h, headers[0]);
+    const diff = identityDiff(h, headers[0]).concat(LEGACY_HOST_KEYS.filter(function (k) {
+      return h.host === undefined && !util.isDeepStrictEqual(h[k], headers[0][k]);
+    }));
     if (diff.length || h.level !== first.level || h.anchor !== first.anchor) {
       throw new Error('.runs header ' + (i + 1) + ' does not match this block' +
         (diff.length ? ' (' + diff.join(', ') + ')' : ''));
@@ -900,11 +930,8 @@ async function runSchedule(argv) {
     const meta = Object.assign({}, identity, {
       scheduledGames: jobs.length,
       alreadyRecorded: jobs.length - pending.length,
-      node: process.version,
-      cpu: (os.cpus()[0] || {}).model,
       commit: gitOutput(['rev-parse', 'HEAD']),
       dirty: gitOutput(['status', '--porcelain']) !== '',
-      os: os.type() + ' ' + os.release() + ' ' + os.arch(),
       loadavg: os.loadavg()
     });
     fs.appendFileSync(out + '.runs', JSON.stringify(meta) + '\n');
@@ -1046,6 +1073,7 @@ module.exports = {
   receiptPath: receiptPath,
   sourceOpenings: sourceOpenings,
   startSearchThread: startSearchThread,
+  hostFingerprint: hostFingerprint,
   searchWithRetry: searchWithRetry,
   checkResume: checkResume,
   validateBlock: validateBlock,

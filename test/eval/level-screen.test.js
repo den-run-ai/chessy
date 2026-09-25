@@ -131,7 +131,8 @@ const EXPECTED_INPUTS = {
   openingProtocolSha256: 'test/ai-match-protocol.js',
   runnerSha256: 'test/eval/level-screen.js'
 };
-const EXPECTED_KEYS = ['schema', 'level', 'anchor', 'openings', 'concurrency', 'stockfishSha256']
+const EXPECTED_KEYS = ['schema', 'level', 'anchor', 'openings', 'concurrency', 'host',
+  'stockfishSha256']
   .concat(Object.keys(EXPECTED_INPUTS));
 
 function sha(file) {
@@ -177,6 +178,11 @@ check('the run identity names every loaded input and hashes it from the given ro
   assert.strictEqual(id.stockfishSha256, sha(exe));
   assert.deepStrictEqual([id.schema, id.level, id.anchor, id.openings, id.concurrency],
     [Screen.SCHEMA + '.run', 'medium', 1700, '0-1', 3]);
+  // The runtime and machine both games' wall-clock searches depend on.
+  assert.deepStrictEqual(id.host, {
+    node: process.version, cpu: os.cpus()[0].model, cpus: os.cpus().length,
+    os: os.type(), release: os.release(), arch: os.arch()
+  });
 });
 
 check('a resume fills only the missing slots of the same block', function () {
@@ -263,6 +269,17 @@ check('a summary refuses mixed blocks and duplicate slots', function () {
   assert.throws(function () {
     Screen.validateBlock([b.record(0, 'white')], [block('medium', 1900).header]);
   }, /does not match this block/);
+  // Headers from before the host fingerprint must agree on their host fields.
+  const legacy = Object.assign({}, b.header, { node: 'v22.22.2', cpu: 'x', os: 'Linux' });
+  delete legacy.host;
+  Screen.validateBlock([b.record(0, 'white')], [legacy, Object.assign({}, legacy)]);
+  ['node', 'cpu', 'os'].forEach(function (k) {
+    const moved = Object.assign({}, legacy);
+    moved[k] = 'other';
+    assert.throws(function () {
+      Screen.validateBlock([b.record(0, 'white')], [legacy, moved]);
+    }, new RegExp(k), k);
+  });
 });
 
 check('the committed r80 screen blocks each pass the block check', function () {
@@ -579,6 +596,7 @@ async function checkAsync(name, fn) {
 const SCRIPTED_THREAD = [
   "const T = require('worker_threads');",
   "const mode = T.workerData.bridge;",
+  "if (mode === 'nostart') throw new Error('engine did not load');",
   "T.parentPort.on('message', function (m) {",
   "  if (mode === 'hang') { for (;;) {} }",
   "  if (mode === 'throw') { T.parentPort.postMessage({ ok: false, error: 'boom' }); return; }",
@@ -591,8 +609,9 @@ const SCRIPTED_THREAD = [
 async function retryCase(modes) {
   const started = [];
   const exited = [];
+  let attempts = 0;
   const start = function () {
-    return Screen.startSearchThread(SCRIPTED_THREAD, modes[started.length]).then(function (t) {
+    return Screen.startSearchThread(SCRIPTED_THREAD, modes[attempts++]).then(function (t) {
       started.push(t);
       t.once('exit', function () { exited.push(t); });
       return t;
@@ -623,6 +642,14 @@ async function searchRetries() {
     assert.strictEqual(twice.reply.ok, false);
     assert.strictEqual(twice.reply.watchdog, true);
     assert.strictEqual(twice.stats.retries, 2);
+    assert.strictEqual(twice.started, 2, 'no third thread after the final attempt');
+    assert.strictEqual(twice.exited, 2);
+    // A fresh thread that cannot start is the second failure, not a crash.
+    const noFresh = await retryCase(['hang', 'nostart', 'ok']);
+    assert.strictEqual(noFresh.reply.ok, false);
+    assert.ok(!noFresh.reply.watchdog && /did not start/.test(noFresh.reply.error),
+      noFresh.reply.error);
+    assert.strictEqual(noFresh.stats.retries, 2);
     const died = await retryCase(['exit', 'exit', 'ok']);
     assert.strictEqual(died.reply.ok, false);
     assert.ok(!died.reply.watchdog && /exited/.test(died.reply.error), died.reply.error);

@@ -155,9 +155,12 @@ while the host was heavily loaded.
   - Each run executes a private, read-only snapshot of the runner, rules,
     loader, WASM, presets, opening list and Stockfish. Its header records the
     hashes of that snapshot, including the opening list.
-  - A resume must match the block's recorded inputs, preset, schedule and
-    concurrency (Master is wall-clock limited, so host contention is part of
-    what a block measures).
+  - A resume must match the block's recorded inputs, preset, schedule,
+    concurrency and host (Node version, CPU model and count, OS type, release
+    and architecture). Master and Stockfish both search on the wall clock, so
+    the machine and its contention are part of what a block measures. Both
+    resumed blocks above recorded the same Node version and CPU at start and
+    resume.
   - The snapshot lives in `TMPDIR`, which must allow executing programs. A
     Stockfish that does not answer UCI there is refused before any header is
     written.
