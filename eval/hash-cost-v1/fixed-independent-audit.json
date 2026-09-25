@@ -1,0 +1,38 @@
+{
+  "schema": "chessy.searched-board-hash.independent-arithmetic-audit.v1",
+  "resultSha256": "18673ea21fd3abaa5422c02215c2aee2b5d9c6655522dba1b3c5e37c1915a265",
+  "observations": 432,
+  "exactSignatures": true,
+  "actualMeasuredNodes": 39744000,
+  "groups": [
+    {
+      "nodeLimit": 10000,
+      "medianNpsRatio": 1.028719282152187,
+      "phaseMedianNpsRatio": {
+        "opening": 1.006751745258822,
+        "middlegame": 0.9842318006941172,
+        "endgame": 1.1278829638929064
+      }
+    },
+    {
+      "nodeLimit": 36000,
+      "medianNpsRatio": 1.0455231610748177,
+      "phaseMedianNpsRatio": {
+        "opening": 1.1262891845702645,
+        "middlegame": 1.0015960490456837,
+        "endgame": 1.0912833268782718
+      }
+    },
+    {
+      "nodeLimit": 230000,
+      "medianNpsRatio": 1.0738653008392758,
+      "phaseMedianNpsRatio": {
+        "opening": 1.0617523247405019,
+        "middlegame": 1.0669536643472175,
+        "endgame": 1.1011407487840734
+      }
+    }
+  ],
+  "conditionalMasterEligible": true,
+  "independentPythonArithmeticMatches": true
+}

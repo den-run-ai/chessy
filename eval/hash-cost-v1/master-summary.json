@@ -1,0 +1,397 @@
+{
+  "schema": "chessy.searched-board-hash.descriptive-summary.v1",
+  "resultSha256": "1ea8608264401a20e6a4e1316345d0bda0795933fa7bb4575fadf562928e8afa",
+  "registrationSha256": "f0089baace9e9012a247f5210019187c78cae740649098d95949578811c11332",
+  "mode": "master",
+  "paidComputeUsd": 0,
+  "strengthClaimAllowed": false,
+  "conditionalMasterEligible": false,
+  "modules": [
+    {
+      "bytes": 37172,
+      "brotliBytes": 17690,
+      "memoryBytes": 26542080
+    },
+    {
+      "bytes": 38359,
+      "brotliBytes": 18114,
+      "memoryBytes": 26542080
+    }
+  ],
+  "buckets": [
+    {
+      "nodeLimit": 0,
+      "pairs": 36,
+      "medianNpsRatio": 1.0899866482707947,
+      "medianNodeRatio": 1.0900647686053777,
+      "sameMovePairs": 34,
+      "phaseMedianNpsRatio": {
+        "opening": 1.0685857367887754,
+        "middlegame": 1.052136327773476,
+        "endgame": 1.1674859235790251
+      },
+      "observations": [
+        {
+          "position": 0,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 1.0272660102346907,
+          "nodeRatio": 1.0273353997372774,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 0,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.105354597366566,
+          "nodeRatio": 1.1048447459347694,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 1,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 1.031816876210985,
+          "nodeRatio": 1.0318181888801023,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 1,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.1160529235068088,
+          "nodeRatio": 1.1159527605207085,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 2,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0625973635443946,
+          "nodeRatio": 1.0626193320259052,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 2,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0566069796932893,
+          "nodeRatio": 1.056431703421829,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 3,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0242935289080328,
+          "nodeRatio": 1.0241680653656118,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 3,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0554878918749622,
+          "nodeRatio": 1.0556109336869748,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 4,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0659776545785749,
+          "nodeRatio": 1.0658151254108212,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 4,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.3499598679356257,
+          "nodeRatio": 1.3500277647548393,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 5,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.9138683856948572,
+          "nodeRatio": 0.9141572845324097,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 5,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0836576580719512,
+          "nodeRatio": 1.083770847251191,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 6,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0170966875433125,
+          "nodeRatio": 1.0173586715814749,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 6,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0280381457226888,
+          "nodeRatio": 1.0277712466745959,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 7,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0344743753208663,
+          "nodeRatio": 1.0346546484316235,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 7,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.04878476367199,
+          "nodeRatio": 1.048682034562111,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 8,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.0176609806912482,
+          "nodeRatio": 1.0177337354698268,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 8,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.1870189738586328,
+          "nodeRatio": 1.1868132121901207,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 9,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.0100936348621665,
+          "nodeRatio": 1.010215828773582,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 9,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.3262455710000556,
+          "nodeRatio": 1.326160107349652,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 10,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1743337614842118,
+          "nodeRatio": 1.1743067538450978,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 12
+        },
+        {
+          "position": 10,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.6378061126102141,
+          "nodeRatio": 1.6379228438806743,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 12
+        },
+        {
+          "position": 11,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.191236409477025,
+          "nodeRatio": 1.1912306267800703,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 13
+        },
+        {
+          "position": 11,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0979758075450488,
+          "nodeRatio": 1.098091277435503,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 12,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1533672543542084,
+          "nodeRatio": 1.1533309591839809,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 12
+        },
+        {
+          "position": 12,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.102038777183526,
+          "nodeRatio": 1.102038395475846,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 12
+        },
+        {
+          "position": 13,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1606380856738385,
+          "nodeRatio": 1.160679315076864,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 12
+        },
+        {
+          "position": 13,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.2800434533759166,
+          "nodeRatio": 1.2799097506206651,
+          "sameMove": true,
+          "baseDepth": 12,
+          "candidateDepth": 12
+        },
+        {
+          "position": 14,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1831218367619263,
+          "nodeRatio": 1.1830923209070787,
+          "sameMove": true,
+          "baseDepth": 20,
+          "candidateDepth": 20
+        },
+        {
+          "position": 14,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.1593845032957426,
+          "nodeRatio": 1.159835329925818,
+          "sameMove": true,
+          "baseDepth": 20,
+          "candidateDepth": 20
+        },
+        {
+          "position": 15,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1894227225230845,
+          "nodeRatio": 1.189509182361881,
+          "sameMove": true,
+          "baseDepth": 20,
+          "candidateDepth": 21
+        },
+        {
+          "position": 15,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0963156384696382,
+          "nodeRatio": 1.0963586899595643,
+          "sameMove": true,
+          "baseDepth": 20,
+          "candidateDepth": 20
+        },
+        {
+          "position": 16,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.17837258058682,
+          "nodeRatio": 1.1782402040768862,
+          "sameMove": false,
+          "baseDepth": 6,
+          "candidateDepth": 7
+        },
+        {
+          "position": 16,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.059724599105252,
+          "nodeRatio": 1.0597219189245923,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 17,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.978341666215376,
+          "nodeRatio": 0.978303261533832,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 17,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9614275966689965,
+          "nodeRatio": 0.961872577887594,
+          "sameMove": false,
+          "baseDepth": 7,
+          "candidateDepth": 6
+        }
+      ]
+    }
+  ]
+}
