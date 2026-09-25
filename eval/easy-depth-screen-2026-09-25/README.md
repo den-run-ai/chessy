@@ -89,12 +89,20 @@ git bundle verify eval/easy-depth-screen-2026-09-25/registration.bundle
 git fetch eval/easy-depth-screen-2026-09-25/registration.bundle refs/heads/codex/easy-depth1-candidate
 ```
 
-Regenerate `analysis.json` with the preregistered script (the command also
+Regenerate `analysis.json` with the verified entrypoint (the command also
 verifies both receipts and replays all 200 games):
 
 ```sh
-node eval/easy-depth-screen-2026-09-25/analyze.js eval/easy-depth-screen-2026-09-25/control-depth2.ndjson eval/easy-depth-screen-2026-09-25/candidate-depth1.ndjson
+node eval/easy-depth-screen-2026-09-25/verify.js eval/easy-depth-screen-2026-09-25/control-depth2.ndjson eval/easy-depth-screen-2026-09-25/candidate-depth1.ndjson
 ```
+
+`verify.js` was added after the screen to enforce the existing input contract
+before publishing a result. It calls the unchanged preregistered `analyze.js`,
+then checks its returned receipt identities against the exact source hashes,
+Stockfish executable, host, concurrency, schedule and separate preset hashes
+recorded for the registered commits. Two self-consistent receipts, even with
+matching but unregistered inputs, are insufficient. The original analyzer,
+protocol, raw records, selection rule and generated analysis remain unchanged.
 
 The frozen `PLAN.md` gives the exact settings and game commands. No existing
 r80 or other frozen evidence was overwritten; no held-out openings were used.
