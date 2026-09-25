@@ -1020,14 +1020,25 @@
     // the scan short) and are cached. Retrying a slot whose deep result was
     // unusable must recompute it, not re-serve the same cached row forever.
     var restoredRetries = freshDeepRetries.get(job);
-    var retryingDeep = job.unresolved.some(function (item) {
-      return item.phase === 'deep' && item.ply === ply;
-    }) || !!(restoredRetries && restoredRetries[ply]);
-    if (restoredRetries) delete restoredRetries[ply];
+    var restoredReason = restoredRetries ? restoredRetries[ply] : undefined;
+    var hasDeepEntry = function () {
+      return job.unresolved.some(function (item) {
+        return item.phase === 'deep' && item.ply === ply;
+      });
+    };
+    var retryingDeep = hasDeepEntry() || restoredReason !== undefined;
     var req = moveRequest(review, job, ply, DEEP, retryingDeep);
     return ChessyAnalysisService.analyse(req, OWNER).then(function (res) {
       if (!owns(token, job)) return job;
-      if (res === null) return pauseAfterNull(token, job);
+      if (res === null) {
+        // The retry was interrupted before a usable result. Keep the slot's
+        // durable failure so the next Resume (or a reload) recomputes it
+        // instead of serving the cached unusable row.
+        if (restoredReason !== undefined && !hasDeepEntry()) {
+          unresolved(job, ply, 'deep', restoredReason);
+        }
+        return pauseAfterNull(token, job);
+      }
       var record = makeDeepResult(res, ply);
       var rebuilt = record
         ? rebuildDeepState(record, quick, review, job) : { ok: false };
@@ -1037,6 +1048,8 @@
       }
       replaceDeepResult(job, record);
       replaceSummary(job, rebuilt.summary);
+      // Only a usable replacement retires the slot's fresh-retry marker.
+      if (restoredRetries) delete restoredRetries[ply];
       job.unresolved = job.unresolved.filter(function (item) {
         return !(item.phase === 'deep' && item.ply === ply);
       });
@@ -1341,7 +1354,10 @@
       // which slots failed so their retry bypasses the cached result.
       var failedDeep = Object.create(null);
       job.unresolved.forEach(function (item) {
-        if (item.phase === 'deep') failedDeep[item.ply] = true;
+        if (item.phase === 'deep') {
+          failedDeep[item.ply] = typeof item.reason === 'string'
+            ? item.reason : 'unusable-result';
+        }
       });
       freshDeepRetries.set(job, failedDeep);
       job.unresolved = [];

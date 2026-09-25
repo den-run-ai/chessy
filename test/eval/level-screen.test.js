@@ -617,10 +617,10 @@ async function retryCase(modes) {
       return t;
     });
   };
-  const box = { thread: await start() };
+  const box = { thread: null };
   const stats = { retries: 0 };
   const reply = await Screen.searchWithRetry(box, start, 'fen', {}, 200, stats);
-  await box.thread.terminate();
+  if (box.thread) await box.thread.terminate();
   await new Promise(function (r) { setImmediate(r); });
   return { reply: reply, stats: stats, started: started.length, exited: exited.length };
 }
@@ -636,6 +636,11 @@ async function searchRetries() {
     const thrown = await retryCase(['throw', 'ok', 'ok']);
     assert.strictEqual(thrown.reply.ok, true);
     assert.strictEqual(thrown.stats.retries, 1);
+    // A first thread that cannot start is the first failed attempt.
+    const lateStart = await retryCase(['nostart', 'ok', 'ok']);
+    assert.strictEqual(lateStart.reply.ok, true);
+    assert.strictEqual(lateStart.stats.retries, 1);
+    assert.strictEqual(lateStart.started, 1);
   });
   await checkAsync('a second failure is reported with its kind', async function () {
     const twice = await retryCase(['hang', 'hang', 'ok']);
@@ -650,6 +655,11 @@ async function searchRetries() {
     assert.ok(!noFresh.reply.watchdog && /did not start/.test(noFresh.reply.error),
       noFresh.reply.error);
     assert.strictEqual(noFresh.stats.retries, 2);
+    const neverStarts = await retryCase(['nostart', 'nostart', 'ok']);
+    assert.strictEqual(neverStarts.reply.ok, false);
+    assert.ok(/did not start/.test(neverStarts.reply.error), neverStarts.reply.error);
+    assert.strictEqual(neverStarts.stats.retries, 2);
+    assert.strictEqual(neverStarts.started, 0);
     const died = await retryCase(['exit', 'exit', 'ok']);
     assert.strictEqual(died.reply.ok, false);
     assert.ok(!died.reply.watchdog && /exited/.test(died.reply.error), died.reply.error);

@@ -335,26 +335,34 @@ function searchOnce(thread, fen, request, watchdogMs) {
   });
 }
 
-// `box.thread` is the live thread; it is replaced after every failure.
-async function searchWithRetry(box, start, fen, request, watchdogMs, stats) {
-  let reply = await searchOnce(box.thread, fen, request, watchdogMs);
-  if (reply.ok) return reply;
-  stats.retries++;
-  stats.lastError = reply.error;
-  await box.thread.terminate();
-  try {
-    box.thread = await start();
-  } catch (error) {
-    // A fresh thread that cannot start is the second failure.
-    stats.retries++;
-    stats.lastError = 'fresh search thread did not start: ' + (error && error.message || error);
-    return { ok: false, error: stats.lastError };
+// One attempt: start a thread if none is live (a thread that cannot start is
+// a failed attempt, as a Play worker that fails to load is), then search.
+// A failed thread is terminated and dropped.
+async function searchAttempt(box, start, fen, request, watchdogMs) {
+  if (!box.thread) {
+    try {
+      box.thread = await start();
+    } catch (error) {
+      return { ok: false, error: 'search thread did not start: ' + (error && error.message || error) };
+    }
   }
-  reply = await searchOnce(box.thread, fen, request, watchdogMs);
-  if (reply.ok) return reply;
-  stats.retries++;
-  stats.lastError = reply.error;
-  await box.thread.terminate();
+  const reply = await searchOnce(box.thread, fen, request, watchdogMs);
+  if (!reply.ok) {
+    await box.thread.terminate();
+    box.thread = null;
+  }
+  return reply;
+}
+
+// `box.thread` is the live thread or null. At most two attempts per search.
+async function searchWithRetry(box, start, fen, request, watchdogMs, stats) {
+  let reply = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    reply = await searchAttempt(box, start, fen, request, watchdogMs);
+    if (reply.ok) return reply;
+    stats.retries++;
+    stats.lastError = reply.error;
+  }
   return reply;
 }
 
@@ -363,7 +371,7 @@ async function searchWithRetry(box, start, fen, request, watchdogMs, stats) {
 async function playOne(spec) {
   const bridge = path.join(ROOT, 'test', 'wasm-test-engine.js');
   const start = function () { return startSearchThread(SEARCH_THREAD_CODE, bridge); };
-  const box = { thread: await start() };
+  const box = { thread: null };
   const OPENINGS = require(path.join(ROOT, 'test', 'ai-match-openings.js'));
   const preset = Presets.get(LEVEL_IDS[spec.level]);
   if (!preset) throw new Error('unknown level ' + spec.level);
@@ -443,7 +451,7 @@ async function playOne(spec) {
     }
   } finally {
     anchor.quit();
-    box.thread.terminate();
+    if (box.thread) box.thread.terminate();
   }
   return {
     schema: SCHEMA,

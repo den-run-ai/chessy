@@ -1081,6 +1081,48 @@ function manualDeepResult(review, ply, supplied) {
     'the retried deep slot bypasses the analysis cache; the next slot does not',
     JSON.stringify(requests.map(function (r) { return [r.ply, r.fresh]; })));
 
+  // An interrupted fresh retry (null reply) must not lose the slot's failure:
+  // a later reload and a same-session Resume both recompute it again rather
+  // than serving the cached unusable row.
+  reset();
+  const interruptedReview = autoReview('deep-interrupted', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 160 },
+    { valid: true, complete: true, loss: 150 },
+    { valid: true, complete: true, loss: 140 },
+    { valid: true, complete: true, loss: 130 },
+    { valid: false, complete: true, reason: 'deep-unusable' }
+  ];
+  await Scan.start(interruptedReview, { restart: true });
+  const interruptedSlot = clone(jobs.get('deep-interrupted')).unresolved[0];
+  const interruptedRuns = [];
+  for (const reload of [true, true, false]) {
+    if (reload) Scan.invalidate();
+    requests = [];
+    replies = reload ? [null] : [];
+    const state = await Scan.resume(interruptedReview);
+    const saved = clone(jobs.get('deep-interrupted'));
+    interruptedRuns.push({
+      reload: reload,
+      firstPly: requests[0] && requests[0].ply,
+      firstFresh: requests[0] && requests[0].fresh,
+      state: state.state,
+      durable: saved.unresolved.some(function (item) {
+        return item.phase === 'deep' && item.ply === interruptedSlot.ply &&
+          item.reason === interruptedSlot.reason;
+      })
+    });
+  }
+  check(interruptedSlot && interruptedSlot.phase === 'deep' &&
+      interruptedRuns.every(function (run) {
+        return run.firstPly === interruptedSlot.ply && run.firstFresh === true;
+      }) &&
+      interruptedRuns[0].state === 'paused' && interruptedRuns[0].durable &&
+      interruptedRuns[1].state === 'paused' && interruptedRuns[1].durable &&
+      interruptedRuns[2].state === 'done' && !interruptedRuns[2].durable,
+    'an interrupted fresh deep retry keeps its durable failure until a usable result',
+    JSON.stringify(interruptedRuns));
+
   // Even coordinated corruption of every compact/derived field cannot create
   // circular proof. The full quick result remains genuinely subthreshold,
   // while the attacker forges matching quick mirrors, a candidate/shortlist,
