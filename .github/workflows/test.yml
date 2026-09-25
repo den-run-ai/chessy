@@ -83,6 +83,16 @@ jobs:
           sha256sum experiments/wasm/dist/*.wasm
       - name: Verify the committed production asset
         run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - name: Test isolated quiescence candidate generation and search parity
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          for variant in checks tactical; do
+            probe="$RUNNER_TEMP/qsearch-$variant"
+            node tools/search/qsearch-cost.js prepare "$probe" "$variant"
+            (cd "$probe" && cargo test --locked --offline -- --test-threads=1)
+          done
       - name: Build all optional incremental study variants before timing
         if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
         env:
@@ -312,6 +322,8 @@ jobs:
         env:
           CHESSY_SIGNATURE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: node test/wasm-signatures.test.js
+      - name: Quiescence research source isolation and benchmark registration
+        run: node test/search/qsearch-cost.test.js
       - name: Validate governed engine-signature mechanism
         run: node test/engine-signatures-v2.test.js
       - name: Verify recalibrated difficulty presets
