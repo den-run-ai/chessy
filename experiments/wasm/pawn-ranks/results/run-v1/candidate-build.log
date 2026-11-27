@@ -1,0 +1,31 @@
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.36s
+     Running unittests src/lib.rs (/workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/native-target-candidate/debug/deps/chessy_ai_wasm-8ab5d9e90753b2a1)
+
+running 11 tests
+test engine::tests::make_and_unmake_restore_position_exactly ... ok
+test eval::pawn_rank_tests::reference::tests::matches_shipped_javascript_reference_positions ... ok
+test eval::tests::matches_shipped_javascript_reference_positions ... ok
+test search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+test search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+pawn-ranks: 87 special-move edges
+test tests::abi_v2_layout_and_depth_guard_are_fixed ... ok
+test eval::pawn_rank_tests::pawn_ranks_special_move_edges_restore_identically ... ok
+pawn-ranks: 3782 exhaustive pawn pairs
+test eval::pawn_rank_tests::pawn_ranks_exhaustive_single_pawn_pairs ... ok
+pawn-ranks: 5060 legal-walk positions
+test eval::pawn_rank_tests::pawn_ranks_seeded_legal_walks_and_dense_pawns ... ok
+test engine::tests::kiwipete_en_passant_and_promotion_perft ... ok
+test engine::tests::initial_position_perft_and_pseudo_ordering ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate)
+    Finished `release` profile [optimized] target(s) in 2.08s
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate)
+    Finished `small` profile [optimized] target(s) in 1.64s
+ 40794 /workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate/dist/chessy-ai-fast.raw.wasm
+ 37272 /workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate/dist/chessy-ai-fast.wasm
+ 29156 /workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate/dist/chessy-ai-small.raw.wasm
+ 26331 /workspace/scratch/8a384797d3cd/chessy-pawn-ranks-v1/candidate/dist/chessy-ai-small.wasm
+133553 total

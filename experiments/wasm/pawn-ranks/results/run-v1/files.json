@@ -1,0 +1,9 @@
+{
+  "source-registration.json": "b000942fca3d35cb902cffe6eab41c0469d1b480353b8751688c83f8fac8b53f",
+  "measurement-registration.json": "4afcac74341ae26614092735a80831d2050ed39787fde6cd5caf3e8a0f910c1b",
+  "measured-correctness.json": "4e628290d60621108879981101044cd4d4a6f3211cf8fae17aceda0cce30c86e",
+  "report.json": "6a6577ca13af9353a01e33b7d6a651bdbf3c1416360879dec4ab95e201e16bf0",
+  "baseline-build.log": "249c48862e2c596c3fe6b9fd5717e85869a358f868ed7f20ca5965f44017d130",
+  "candidate-build.log": "7eed2b7e3b7e18b700e69df499f9365e85128028a9b5213aac4e5a74699dd5a4",
+  "measurement.log": "0a3aff172a12afb23aa0271562da1a1e1e5111b605a441882848b7c4c074a001"
+}

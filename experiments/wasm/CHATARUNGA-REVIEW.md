@@ -62,7 +62,7 @@ The production Rust/WASM bytes, evaluator, and search budgets are unchanged.
 | Quiet-check cost | [#183](https://github.com/den-run-ai/chessy/pull/183) | Avoid making quiet moves solely to detect checks. Compare any fast predicate against make/check/unmake, including discovered checks, en passant, castling, and promotions. Preserve move order and all fixed-node signatures. |
 | Board hashing | [#184](https://github.com/den-run-ai/chessy/pull/184) | Maintain piece-square hash state instead of scanning all 64 squares repeatedly. Differentially check full recomputation after every make/unmake; preserve Chessy's legal-en-passant repetition normalization. |
 | Small NNUE | [#187](https://github.com/den-run-ai/chessy/pull/187), [#105](https://github.com/den-run-ai/chessy/issues/105) | Validate score scale, quantization, incremental updates, and data provenance before a bounded strength experiment. Lower teacher loss does not establish stronger clock-limited play. |
-| TT saturation | Separate candidate | Clustered bounded replacement may avoid the current full-table early stop, but changes search behavior. It needs explicit correctness, signature-rotation, runtime, and strength admission. |
+| TT saturation | [#192](https://github.com/den-run-ai/chessy/pull/192) | The tested four-way replacement candidate passed 300 correctness checks but took 4.10% longer in its fixed-node screen, with mixed timed results. Preserve the negative evidence; do not activate it. |
 
 Chatarunga's fast-check test compares its predicate with full move application
 for every legal move across 100 seeded games of up to 80 plies. Its random
@@ -73,6 +73,48 @@ Its move picker returns an already computed quiet-history score to search.
 Chessy should remove demonstrated duplicated work while retaining stable
 tie ordering. The paper's reported throughput increase was bundled with
 node-reducing search changes; it cannot be attributed to caching alone.
+
+## Follow-up cost prototypes
+
+After #191 merged, two separate prototypes were prepared against r82 at
+`f65224dece688f23d00429c148715262dd3c9b79`. Each froze one implementation and
+protocol before a single local CPU screen. Measurements ran sequentially;
+local compilation and long-running tests were paused during both windows.
+All positions are exposed development inputs; no holdout or formal match was
+used. Complete sources, build logs, registrations and raw results are retained
+with each experiment.
+
+| Candidate | Measured change | 230k-node elapsed ratio (baseline/candidate) | Raw WASM | Decision |
+| --- | --- | ---: | ---: | --- |
+| [Compact hashing](compact-hash/README.md) | Thread two unchanged Zobrist streams as one value through searched edges | 1.090172 (8.27% less elapsed time) | 37,885 bytes, +713 | Promising development result; size/device/admission gaps remain |
+| [Pawn-rank masks](pawn-ranks/README.md) | Replace repeated enemy-pawn scans with per-file rank masks | 1.012753 (1.26% less elapsed time) | 37,272 bytes, +100 | Small, uneven gain; longer diagnostic skipped under the frozen rule |
+
+Both screens used 18 positions, three node budgets and four balanced pairs per
+position/budget: 216 pairs per candidate. Every fixed-node search consumed its
+declared node budget and every pair retained identical complete search output.
+The summary first takes the median of each position's four elapsed ratios,
+then the geometric mean across positions. These are descriptive development
+statistics, not independent strength samples or proof on all positions.
+
+Compact hashing also met its predeclared routing condition for four paired
+eight-second searches on Ruy Lopez and Lucena. All four pairs kept the same
+move and completed depth while searching more nodes. It is 474 raw bytes
+smaller than #184's prototype, but still above the existing ceiling. Two
+size-directed alternatives were retained; the 15-byte saving from an unchecked
+private lookup was not selected over the checked implementation.
+
+Pawn masks missed the 1.02 ratio threshold at 230k nodes and had an endgame
+phase median of 0.984906, equivalent to about 1.53% longer elapsed time.
+Consequently its conditional Master follow-up did not run. Neither its
+small positive aggregate nor a faster result at 36k nodes waives that outcome.
+
+CI rebuilds the candidates with pinned tools, checks the exact measured module
+hashes, and repeats correctness and evidence checks. It does not rerun timing.
+The [separate admission proposal](SEARCH-COST-ADMISSION-PROPOSAL.md) supplies
+reviewable local invariants and an evidence plan for the pure-cost policy gap
+in #175/#84. It changes no active policy, signature pointer, resource ceiling,
+formal registry or production code. Authentic phone measurements and a
+reviewed admission mechanism remain outstanding.
 
 ## NNUE and platform tradeoffs
 

@@ -242,6 +242,14 @@ reference paper, the most useful performance directions, and their existing
 Chessy experiments. The production engine bytes, evaluation, and difficulty
 budgets are unchanged; this refresh makes no new Elo claim.
 
+Two follow-up [search-cost prototypes](experiments/wasm/CHATARUNGA-REVIEW.md#follow-up-cost-prototypes)
+retain their complete development evidence. Compact hashing reduced elapsed
+time by 8.27% at 230k nodes in its local screen, but remains 713 raw bytes over
+the module ceiling. Pawn-rank masks produced smaller, uneven gains, slowed the
+endgame phase and remain 100 bytes over. Both preserve the measured fixed-node
+results; neither is activated. The [cost-admission proposal](experiments/wasm/SEARCH-COST-ADMISSION-PROPOSAL.md)
+identifies the source, runtime and physical-device evidence still needed.
+
 ## Run it
 
 Serve the directory with any static file server and open it in a browser:
