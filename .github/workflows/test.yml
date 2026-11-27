@@ -748,6 +748,12 @@ jobs:
         run: |
           node test/training/eval-pipeline-worker.test.mjs --browser "${{ matrix.engine }}" \
             "$RUNNER_TEMP/eval-pipeline" "$RUNNER_TEMP/eval-pipeline-worker-${{ matrix.engine }}.json"
+      - name: Retain candidate Worker evidence (${{ matrix.engine }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-pipeline-worker-${{ matrix.engine }}
+          path: ${{ runner.temp }}/eval-pipeline-worker-${{ matrix.engine }}.json
+          if-no-files-found: error
 
   deploy:
     if: >-
