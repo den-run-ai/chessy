@@ -1,0 +1,54 @@
+import ast, hashlib, json, io, os, re
+from pathlib import Path
+import zstandard
+root=Path('/workspace/library-files/chessy-sparse-work/data')
+repo=Path('/workspace/scratch/dfb050648003/chessy')
+raw_manifest=(root/'pgn-v1/manifest.json').read_bytes();manifest=json.loads(raw_manifest)
+def sha(x):return hashlib.sha256(x).hexdigest()
+def enc(x):return json.dumps(x,sort_keys=True,separators=(',',':')).encode()
+helper_raw=(repo/'test/training/natural-select.py').read_bytes()
+module=ast.parse(helper_raw)
+scanner=next(n for n in module.body if isinstance(n,ast.FunctionDef) and n.name=='strict_mainline_tokens')
+ns={'re':re};exec(compile(ast.Module(body=[scanner],type_ignores=[]),'strict-token-audit','exec'),ns)
+strict=ns['strict_mainline_tokens']
+entries={}
+for item in manifest['files']:
+ if item['path']!='positions.jsonl':continue
+ h=hashlib.sha256();n=size=0
+ with open(root/'pgn-v1'/item['path'],'rb') as f:
+  for line in f:
+   h.update(line);size+=len(line);n+=1;r=json.loads(line)
+   assert r['cpWhite'] is None and r['role']=='unlabelled-natural'
+   assert r['sourceGameId'] not in entries
+   entries[r['sourceGameId']]=r['gamePlies']
+ assert (h.hexdigest(),size,n)==(item['sha256'],item['bytes'],item['rows'])
+print(json.dumps({'stage':'selected-inventory','games':len(entries)}),flush=True)
+def raw_games(f):
+ parts=[]
+ for line in f:
+  if line.startswith(b'[Event "'):
+   if parts:yield b''.join(parts)
+   parts=[line]
+  elif parts:parts.append(line)
+  elif line.strip():raise ValueError('PGN preamble')
+ if parts:yield b''.join(parts)
+source=root/manifest['source']['path'];seen=set();count=0;h_inv=hashlib.sha256();inv_size=0
+inventory_item=next(x for x in manifest['files'] if x['path']=='inventory.jsonl')
+with open(source,'rb') as f, open(root/'pgn-v1/inventory.jsonl','rb') as inv:
+ h=hashlib.sha256()
+ for part in iter(lambda:f.read(1024*1024),b''):h.update(part)
+ assert h.hexdigest()==manifest['source']['sha256'];f.seek(0)
+ with zstandard.ZstdDecompressor().stream_reader(f,closefd=False) as z:
+  for raw in raw_games(io.BufferedReader(z)):
+   count+=1;line=next(inv);h_inv.update(line);inv_size+=len(line);item=json.loads(line)
+   assert item['sourceIndex']==count and item['rawSha256']==sha(raw) and item['bytes']==len(raw)
+   sid=item.get('sourceGameId')
+   if sid not in entries:continue
+   tokens=strict(raw.decode());assert len(tokens)==entries[sid]
+   assert sid not in seen;seen.add(sid)
+ assert not inv.read(1)
+assert count==697600 and len(seen)==len(entries)
+assert h_inv.hexdigest()==inventory_item['sha256'] and inv_size==inventory_item['bytes']
+report={'schema':'chessy.sparse-pgn-independent-audit.v1','status':'pass','manifestSha256':sha(raw_manifest),'sourceArchiveSha256':manifest['source']['sha256'],'implementationSha256':sha(Path(__file__).read_bytes()),'strictScannerSourceSha256':sha(helper_raw),'rawGameInventoryJoinsVerified':count,'selectedGameStrictTokenCountsVerified':len(seen),'candidatePerformanceInspected':False,'scope':'all raw archive game hashes/counts joined to inventory; independent strict SAN scanner agrees with complete parser mainline lengths for every selected game; no new teacher scores inspected'}
+with open(root/'pgn-v1/independent-audit.json','xb') as f:f.write(enc(report)+b'\n');f.flush();os.fsync(f.fileno())
+print(json.dumps(report),flush=True)

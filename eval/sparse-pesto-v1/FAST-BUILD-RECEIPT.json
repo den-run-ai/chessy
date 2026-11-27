@@ -1,0 +1,29 @@
+{
+  "buildCommand": [
+    "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+    "--edition=2021",
+    "-O",
+    "--cfg",
+    "sparse_fast",
+    "/workspace/library-files/chessy-sparse-work/fast-runtime-build-v1/source/tools/sparse_eval/runtime.rs",
+    "-o",
+    "/workspace/library-files/chessy-sparse-work/fast-runtime-build-v1/sparse-eval-fast"
+  ],
+  "cfg": "sparse_fast",
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "fixtureDifferentialTests": "3 passing tests; 1550 boards x8 coefficient recipes, compact parity, 11 authored search roots",
+  "native": {
+    "bytes": 4482648,
+    "path": "/workspace/library-files/chessy-sparse-work/fast-runtime-build-v1/sparse-eval-fast",
+    "sha256": "47d481ab0c1892126c108f4dd87ab1bda3280bdd9b9358540e9d8449644d9a55"
+  },
+  "originalRuntimeMeasurementsPreserved": true,
+  "schema": "chessy.sparse-fast-native-build.v1",
+  "sourceHashes": {
+    "experiments/wasm/src/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+    "experiments/wasm/src/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+    "experiments/wasm/src/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+    "tools/sparse_eval/runtime.rs": "0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418"
+  },
+  "weightsChanged": false
+}

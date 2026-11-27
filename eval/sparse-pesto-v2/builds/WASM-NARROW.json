@@ -1,0 +1,216 @@
+{
+  "allocator": false,
+  "binaryen": "wasm-opt version 131 (version_131)",
+  "builds": [
+    {
+      "artifacts": {
+        "disassembly": {
+          "bytes": 854120,
+          "path": "scalar.wat",
+          "sha256": "1ecd59cdd23845547438926c9c80cf902f884cf4cdb28fcbfbd385ee5ec4b9e4"
+        },
+        "module": {
+          "bytes": 108344,
+          "path": "scalar.wasm",
+          "sha256": "daf5724918a96b6bc00418726979c6cf72cb93e22200d580ab50a9b2795089d7"
+        },
+        "raw": {
+          "bytes": 435878,
+          "path": "scalar.raw.wasm",
+          "sha256": "96c50fd298dd6844d2530fa2ffb3090b3002f414c9fbbc45aba5fee6962a5f52"
+        }
+      },
+      "compileCommand": [
+        "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+        "--edition=2021",
+        "--crate-type=cdylib",
+        "--target=wasm32-unknown-unknown",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "-C",
+        "link-arg=--no-entry",
+        "-C",
+        "link-arg=--export-memory",
+        "-C",
+        "link-arg=--gc-sections",
+        "-C",
+        "link-arg=-z",
+        "-C",
+        "link-arg=stack-size=1048576",
+        "-C",
+        "link-arg=--initial-memory=33554432",
+        "-C",
+        "link-arg=--max-memory=33554432",
+        "-C",
+        "target-feature=-simd128",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/source/tools/sparse_eval_v2/wasm.rs",
+        "-o",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/scalar.raw.wasm"
+      ],
+      "containsSimd": false,
+      "emittedSimdOperations": {
+        "i8x16.bitmask": 0,
+        "i8x16.eq": 0,
+        "i8x16.ne": 0,
+        "v128.const": 0,
+        "v128.load": 0
+      },
+      "explicitOccupancySimd": false,
+      "optimizeCommand": [
+        "/workspace/scratch/8a384797d3cd/chessy-tt-tools/binaryen-version_131/bin/wasm-opt",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/scalar.raw.wasm",
+        "--enable-mutable-globals",
+        "--enable-sign-ext",
+        "--enable-reference-types",
+        "--enable-multivalue",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--disable-simd",
+        "--disable-relaxed-simd",
+        "-O3",
+        "--converge",
+        "--strip-debug",
+        "--strip-producers",
+        "--strip-toolchain-annotations",
+        "-o",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/scalar.wasm"
+      ],
+      "target": "scalar"
+    },
+    {
+      "artifacts": {
+        "disassembly": {
+          "bytes": 974925,
+          "path": "simd128.wat",
+          "sha256": "f005a4549edaeec4a6bbd85b7de74af6fd18cdc2890dab0063d6b7f351f330a3"
+        },
+        "module": {
+          "bytes": 113185,
+          "path": "simd128.wasm",
+          "sha256": "8be4abc3b07137995978deaf76cd9e0aec93dff0e5cba8060cad5bb2eba03d85"
+        },
+        "raw": {
+          "bytes": 439745,
+          "path": "simd128.raw.wasm",
+          "sha256": "03c136c595730f900d3f81af82a112fe18803256b3c02f5191748df854321c37"
+        }
+      },
+      "compileCommand": [
+        "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+        "--edition=2021",
+        "--crate-type=cdylib",
+        "--target=wasm32-unknown-unknown",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "-C",
+        "link-arg=--no-entry",
+        "-C",
+        "link-arg=--export-memory",
+        "-C",
+        "link-arg=--gc-sections",
+        "-C",
+        "link-arg=-z",
+        "-C",
+        "link-arg=stack-size=1048576",
+        "-C",
+        "link-arg=--initial-memory=33554432",
+        "-C",
+        "link-arg=--max-memory=33554432",
+        "-C",
+        "target-feature=+simd128",
+        "--cfg",
+        "v2_simd",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/source/tools/sparse_eval_v2/wasm.rs",
+        "-o",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/simd128.raw.wasm"
+      ],
+      "containsSimd": true,
+      "emittedSimdOperations": {
+        "i8x16.bitmask": 8,
+        "i8x16.eq": 76,
+        "i8x16.ne": 0,
+        "v128.const": 82,
+        "v128.load": 62
+      },
+      "explicitOccupancySimd": true,
+      "optimizeCommand": [
+        "/workspace/scratch/8a384797d3cd/chessy-tt-tools/binaryen-version_131/bin/wasm-opt",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/simd128.raw.wasm",
+        "--enable-mutable-globals",
+        "--enable-sign-ext",
+        "--enable-reference-types",
+        "--enable-multivalue",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--enable-simd",
+        "--disable-relaxed-simd",
+        "-O3",
+        "--converge",
+        "--strip-debug",
+        "--strip-producers",
+        "--strip-toolchain-annotations",
+        "-o",
+        "/workspace/library-files/chessy-sparse-v2-work/wasm-build-v2/simd128.wasm"
+      ],
+      "target": "simd128"
+    }
+  ],
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+  "initialMemoryBytes": 33554432,
+  "maximumMemoryBytes": 33554432,
+  "numericSourceSharedAcrossTargets": true,
+  "productionEligible": false,
+  "researchOnly": true,
+  "schema": "chessy.sparse-v2-wasm-build.v1",
+  "sourceHashes": {
+    "assets/engine.js": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+    "tools/sparse_eval/baseline/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+    "tools/sparse_eval/baseline/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+    "tools/sparse_eval/baseline/manifest.json": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+    "tools/sparse_eval/baseline/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+    "tools/sparse_eval_v2/build_wasm.py": "0111a08b2181004edd6b4c6586c7e103a265f30bac580793aa59c1fc66d747ab",
+    "tools/sparse_eval_v2/core.rs": "c606c2a7d32da71e331fc543f3bbadd3dfed75eb3328a3f434140bae9543fa40",
+    "tools/sparse_eval_v2/hce_constants.rs": "5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c",
+    "tools/sparse_eval_v2/simd.rs": "71a20fedbb8ae4851a3c1e0df4eeb4c9453cbfceca9f754f46728a17eb1382a0",
+    "tools/sparse_eval_v2/wasm.rs": "26a5f82767743687dad7100f0ad2046bdc051c906ec1e44e64f4c1eefb82081c",
+    "tools/sparse_eval_v2/wasm_runner.mjs": "e0a49e3c71f8bdfbfd776d5d7a2b6bc57a1471d144545de56872177e05e71410"
+  },
+  "sourceSnapshot": "source",
+  "sourcesUnchangedAtCompletion": true,
+  "stackBytes": 1048576,
+  "status": "complete-research-only",
+  "targets": [
+    "scalar",
+    "simd128"
+  ],
+  "threads": false,
+  "timingsMeasured": false,
+  "tools": {
+    "rustc": {
+      "path": "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+      "sha256": "d3a664c970a9fd8361b64194861bebc1ae37b9054e5ee3400dc1c9e691797eea"
+    },
+    "wasm-dis": {
+      "path": "/workspace/scratch/8a384797d3cd/chessy-tt-tools/binaryen-version_131/bin/wasm-dis",
+      "sha256": "5b26e042911b9648919a0ade2d2f0e7f77479c2676a6bfd007220201ff83a337"
+    },
+    "wasm-opt": {
+      "path": "/workspace/scratch/8a384797d3cd/chessy-tt-tools/binaryen-version_131/bin/wasm-opt",
+      "sha256": "bad4b6524b2c8e4b27b9aa69bde1a4b9a05ec8887c77ef0d34300f5825acd97c"
+    }
+  },
+  "wasi": false,
+  "wideFused": false
+}

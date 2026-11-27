@@ -1,0 +1,197 @@
+{
+  "costRegistrationSha256": "c38b2bb515aa7386a4270ce0794e274fa1a1614d4d5df68eb25bd9a29e2d39e0",
+  "costResultsSha256": "35dec1cd1ca2d6497a0300bc7b87353512adffee3ffd8c34170b896ec0ed8476",
+  "gameOutcomesUsed": false,
+  "modelIds": [
+    "full"
+  ],
+  "models": {
+    "full": {
+      "moduleSha256": "8be4abc3b07137995978deaf76cd9e0aec93dff0e5cba8060cad5bb2eba03d85",
+      "variant": "fused",
+      "weightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304"
+    }
+  },
+  "prunedModelSelected": null,
+  "pruningResultsSha256": "12ffec54b3c0e65bfb82b792010be63a0756b9e93213cd00e47a77711e562ac2",
+  "pruningSelection": {
+    "models": [
+      {
+        "id": "full",
+        "pairedNpsRatioToFull": 1.0,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 1.0
+        },
+        "speedEligible": false,
+        "validationCe": 0.6740707778451409,
+        "wide": false
+      },
+      {
+        "id": "drop-abs1",
+        "pairedNpsRatioToFull": 0.9343491655941453,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9975972944157406
+        },
+        "speedEligible": false,
+        "validationCe": 0.6740835121539689,
+        "wide": false
+      },
+      {
+        "id": "drop-abs2",
+        "pairedNpsRatioToFull": 1.0088893293431507,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9891494329682662
+        },
+        "speedEligible": false,
+        "validationCe": 0.6741282857114588,
+        "wide": false
+      },
+      {
+        "id": "drop-abs4",
+        "pairedNpsRatioToFull": 1.0169593514332054,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9501019877100775
+        },
+        "speedEligible": false,
+        "validationCe": 0.6743352366712929,
+        "wide": false
+      },
+      {
+        "id": "drop-pawn",
+        "pairedNpsRatioToFull": 1.0187974103043347,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.904567338866059
+        },
+        "speedEligible": false,
+        "validationCe": 0.674576569727058,
+        "wide": false
+      },
+      {
+        "id": "q4-per-phase-family",
+        "pairedNpsRatioToFull": 0.9992276210337764,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9345736903231324
+        },
+        "speedEligible": false,
+        "validationCe": 0.6744175364485913,
+        "wide": false
+      },
+      {
+        "id": "king-original",
+        "pairedNpsRatioToFull": 1.0423778600107858,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.7684699973852277
+        },
+        "speedEligible": false,
+        "validationCe": 0.6752978838940694,
+        "wide": true
+      }
+    ],
+    "selected": null
+  },
+  "runtimeSelection": {
+    "geometricMeanElapsedNs": 23781534.681229796,
+    "scores": [
+      {
+        "geometricMeanElapsedNs": 27898645.6981061,
+        "target": "wasm-scalar",
+        "variant": "compact"
+      },
+      {
+        "geometricMeanElapsedNs": 26062086.25268501,
+        "target": "wasm-scalar",
+        "variant": "fused"
+      },
+      {
+        "geometricMeanElapsedNs": 25506323.28786573,
+        "target": "wasm-scalar",
+        "variant": "cached"
+      },
+      {
+        "geometricMeanElapsedNs": 26768706.00629685,
+        "target": "wasm-simd",
+        "variant": "compact"
+      },
+      {
+        "geometricMeanElapsedNs": 23781534.681229796,
+        "target": "wasm-simd",
+        "variant": "fused"
+      },
+      {
+        "geometricMeanElapsedNs": 24546227.571498122,
+        "target": "wasm-simd",
+        "variant": "cached"
+      }
+    ],
+    "target": "wasm-simd",
+    "variant": "fused"
+  },
+  "schema": "chessy.sparse-v2-pre-game-selection.v1",
+  "selectionReason": "The full runtime minimizes the declared WASM latency measure. No validation-qualified alternative improves paired actual whole-search NPS by the required 5%.",
+  "status": "frozen-before-games",
+  "target": "wasm-simd",
+  "variant": "fused"
+}

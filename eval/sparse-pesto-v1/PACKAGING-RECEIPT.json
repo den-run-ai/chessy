@@ -1,0 +1,41 @@
+{
+  "buildCommand": [
+    "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+    "--edition=2021",
+    "-O",
+    "--cfg",
+    "sparse_fast",
+    "/workspace/library-files/chessy-sparse-work/packaged-runtime-v1/source/tools/sparse_eval/runtime.rs",
+    "-o",
+    "/workspace/library-files/chessy-sparse-work/packaged-runtime-v1/sparse-eval-fast"
+  ],
+  "candidateLabelsInspected": false,
+  "changeClass": "import-path-packaging-only",
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "fensSha256": "1f5402d0b61d18f2c8c1dd791d99fc1bcecd2c44956b5bc28c8ed8bcf0c81900",
+  "historicalReceiptsUnchanged": true,
+  "native": {
+    "bytes": 4482576,
+    "path": "/workspace/library-files/chessy-sparse-work/packaged-runtime-v1/sparse-eval-fast",
+    "sha256": "5ac4a988d1b42999deada673b82117a5e9b8fead9d383a841cbc78827d641443"
+  },
+  "numericSourceChanged": false,
+  "packagedScoreSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+  "pinnedBaselineCommit": "5e3558378deab8ba21f648cc2cca98195b1beced",
+  "savedMeasuredFastScoreSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+  "schema": "chessy.sparse-packaging-parity.v1",
+  "scoreTriplesEqual": true,
+  "sourceHashes": {
+    "tools/sparse_eval/baseline/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+    "tools/sparse_eval/baseline/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+    "tools/sparse_eval/baseline/manifest.json": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+    "tools/sparse_eval/baseline/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+    "tools/sparse_eval/features.py": "462b8f68ab65864833a86afc8236d86beecf8c39e05a81d938c2648b30260fb8",
+    "tools/sparse_eval/runtime.rs": "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a"
+  },
+  "status": "pass",
+  "timingsMeasured": false,
+  "validationRows": 100164,
+  "weightsChanged": false,
+  "weightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304"
+}

@@ -1,0 +1,236 @@
+{
+  "benchmarkReruns": 0,
+  "engineCalls": 0,
+  "exactSearchSignatureGroups": 504,
+  "executedRegistrationDirectory": "/workspace/library-files/chessy-sparse-v2-work/cost-registration-v1",
+  "fullSearchObservations": 10368,
+  "implementationSha256": "43f255899ec2ec785fbbeaf5abde6ffceabd1c339ed9ceea9f1e2e51eea8eff0",
+  "independentReducer": true,
+  "nativeWinner": {
+    "geometricMeanElapsedNs": 19865260.61724705,
+    "scores": [
+      {
+        "geometricMeanElapsedNs": 22261526.9253572,
+        "target": "native-scalar",
+        "variant": "compact"
+      },
+      {
+        "geometricMeanElapsedNs": 19984371.73893187,
+        "target": "native-scalar",
+        "variant": "fused"
+      },
+      {
+        "geometricMeanElapsedNs": 20221410.981761023,
+        "target": "native-scalar",
+        "variant": "cached"
+      },
+      {
+        "geometricMeanElapsedNs": 21877098.82853617,
+        "target": "native-simd",
+        "variant": "compact"
+      },
+      {
+        "geometricMeanElapsedNs": 20102782.998606518,
+        "target": "native-simd",
+        "variant": "fused"
+      },
+      {
+        "geometricMeanElapsedNs": 19865260.61724705,
+        "target": "native-simd",
+        "variant": "cached"
+      }
+    ],
+    "target": "native-simd",
+    "variant": "cached"
+  },
+  "numericTolerance": {
+    "absolute": 1e-10,
+    "relative": 1e-11
+  },
+  "productionAdmission": false,
+  "pruningSearchObservations": 1512,
+  "pruningSelection": {
+    "models": [
+      {
+        "id": "full",
+        "pairedNpsRatioToFull": 1.0,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 1.0
+        },
+        "speedEligible": false,
+        "validationCe": 0.6740707778451409,
+        "wide": false
+      },
+      {
+        "id": "drop-abs1",
+        "pairedNpsRatioToFull": 0.9343491655941453,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9975972944157406
+        },
+        "speedEligible": false,
+        "validationCe": 0.6740835121539689,
+        "wide": false
+      },
+      {
+        "id": "drop-abs2",
+        "pairedNpsRatioToFull": 1.0088893293431507,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9891494329682662
+        },
+        "speedEligible": false,
+        "validationCe": 0.6741282857114588,
+        "wide": false
+      },
+      {
+        "id": "drop-abs4",
+        "pairedNpsRatioToFull": 1.0169593514332054,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9501019877100775
+        },
+        "speedEligible": false,
+        "validationCe": 0.6743352366712929,
+        "wide": false
+      },
+      {
+        "id": "drop-pawn",
+        "pairedNpsRatioToFull": 1.0187974103043347,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.904567338866059
+        },
+        "speedEligible": false,
+        "validationCe": 0.674576569727058,
+        "wide": false
+      },
+      {
+        "id": "q4-per-phase-family",
+        "pairedNpsRatioToFull": 0.9992276210337764,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.9345736903231324
+        },
+        "speedEligible": false,
+        "validationCe": 0.6744175364485913,
+        "wide": false
+      },
+      {
+        "id": "king-original",
+        "pairedNpsRatioToFull": 1.0423778600107858,
+        "pairs": 108,
+        "qualityGuard": {
+          "checks": {
+            "maeBound": true,
+            "minimumGainOverHce": true,
+            "phaseCe": true,
+            "retainedFullCeGain": true,
+            "rmseBound": true
+          },
+          "passed": true,
+          "retainedCeGainFraction": 0.7684699973852277
+        },
+        "speedEligible": false,
+        "validationCe": 0.6752978838940694,
+        "wide": true
+      }
+    ],
+    "selected": null
+  },
+  "rawInvocations": 147,
+  "rawStderrNonempty": 0,
+  "registrationSha256": "c38b2bb515aa7386a4270ce0794e274fa1a1614d4d5df68eb25bd9a29e2d39e0",
+  "resultsSha256": "35dec1cd1ca2d6497a0300bc7b87353512adffee3ffd8c34170b896ec0ed8476",
+  "runtimeSelection": {
+    "geometricMeanElapsedNs": 23781534.681229778,
+    "scores": [
+      {
+        "geometricMeanElapsedNs": 27898645.698106088,
+        "target": "wasm-scalar",
+        "variant": "compact"
+      },
+      {
+        "geometricMeanElapsedNs": 26062086.25268498,
+        "target": "wasm-scalar",
+        "variant": "fused"
+      },
+      {
+        "geometricMeanElapsedNs": 25506323.287865706,
+        "target": "wasm-scalar",
+        "variant": "cached"
+      },
+      {
+        "geometricMeanElapsedNs": 26768706.006296877,
+        "target": "wasm-simd",
+        "variant": "compact"
+      },
+      {
+        "geometricMeanElapsedNs": 23781534.681229778,
+        "target": "wasm-simd",
+        "variant": "fused"
+      },
+      {
+        "geometricMeanElapsedNs": 24546227.571498025,
+        "target": "wasm-simd",
+        "variant": "cached"
+      }
+    ],
+    "target": "wasm-simd",
+    "variant": "fused"
+  },
+  "runtimeSelectionSha256": "78d73e93f9a5645d32e2d951e6598937b7239a7414cc03db6f4da0c2b587d939",
+  "schema": "chessy.sparse-v2-cost-independent-audit.v1",
+  "staticObservations": 72,
+  "status": "pass",
+  "teacherLabelsRead": false
+}

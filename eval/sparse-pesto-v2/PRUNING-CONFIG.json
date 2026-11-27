@@ -1,0 +1,32 @@
+{
+  "schema": "chessy.sparse-v2-pruning.v1",
+  "researchOnly": true,
+  "sourceModel": "eval/sparse-pesto-v1/fit/full.i16le",
+  "sourceModelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+  "kingModel": "eval/sparse-pesto-v1/fit/king.i16le",
+  "kingModelSha256": "f0079ded36124750ea38c65e8886fb812b1dccb643b50820e7b4934a5e37da36",
+  "packedManifestSha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+  "role": "validation",
+  "recipes": [
+    {"id": "full", "operation": "identity"},
+    {"id": "drop-abs1", "operation": "zero-small", "threshold": 1},
+    {"id": "drop-abs2", "operation": "zero-small", "threshold": 2},
+    {"id": "drop-abs4", "operation": "zero-small", "threshold": 4},
+    {"id": "drop-rays", "operation": "zero-families", "families": ["ray"]},
+    {"id": "drop-pawn", "operation": "zero-families", "families": ["pawn_context"]},
+    {"id": "drop-pawn-rays", "operation": "zero-families", "families": ["pawn_context", "ray"]},
+    {"id": "q4-per-phase-family", "operation": "symmetric-int4", "maxCode": 7},
+    {"id": "king-original", "operation": "existing-king"}
+  ],
+  "quantization": "For each MG/EG feature family: integer scale=max(1,ceil(max(abs(w))/7)); code=sign(w)*floor(abs(w)/scale+0.5); reconstructed coefficient=code*scale. No floating-point rounding convention changes.",
+  "qualityRules": {
+    "minimumRetainedFractionOfFullCeGain": 0.75,
+    "minimumCeImprovementOverHce": 0.005,
+    "maximumMaeRatioToFull": 1.03,
+    "maximumRmseRatioToFull": 1.03,
+    "phaseCeMayExceedHce": false
+  },
+  "selection": "Full remains mandatory. At most one other candidate may enter fresh game testing: pass all validation guards, then improve optimized WASM whole-search geometric-mean NPS by at least5% against full on the separately frozen cost grid. Choose highest such NPS; ties within0.5% choose lower validation CE, then lexicographic ID. Freeze this choice before any game output.",
+  "holdoutPolicy": "No v1 holdout or OOD performance is recomputed or used for selection. Existing validation is development data; fresh game outcomes supply independent evidence.",
+  "outputPolicy": "Freeze configuration, source hashes and all derived model bytes before loading validation; reserve output directory exclusively and write completion last. No refit, adaptive recipe, or selective retry."
+}

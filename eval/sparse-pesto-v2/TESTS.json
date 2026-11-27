@@ -1,0 +1,67 @@
+{
+  "schema": "chessy.sparse-v2-final-tests.v1",
+  "status": "pass",
+  "pythonTests": 43,
+  "nodeContractChecks": 7,
+  "rustUnitContractsInsideNativeSuite": 4,
+  "skipped": 0,
+  "timingsAreNotBenchmarks": true,
+  "tests": [
+    {
+      "path": "test/training/sparse-v2-native.test.py",
+      "sha256": "52b775eb820e8b4724da146744dfd4ca6ae9a06331fd5357dcfe36bcd740329d",
+      "cases": 10,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-wasm.test.py",
+      "sha256": "09b5d496f133b727d980ce8eaf2d6bba9b1c9c88479424c64707a2029ad7f41e",
+      "cases": 4,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-pruning.test.py",
+      "sha256": "926bed9b92f5b3e84d2bd244c269eb5ca89d0b8f4bc4a781c1e18fc0562c5637",
+      "cases": 4,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-cost.test.py",
+      "sha256": "48c8b01b59583a45a8e6b71c0b40e5fba6c04fe04d6af11c8f1a2c0b9265ba3d",
+      "cases": 5,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-cost-audit.test.py",
+      "sha256": "b40e7e59b688e840371fa902cb22b334752e06834fa7c5cd5109d1218c86a771",
+      "cases": 1,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-openings.test.py",
+      "sha256": "ac632a8ecbe43c88dafee97b3866a66394ace1d9dec7c3bc73cd90f957fef0d4",
+      "cases": 6,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-games.test.py",
+      "sha256": "9d4d1bceb5d0b1f8d82f7aeaef0fd4a1c30ec6b6ce5eca5b4b7e9e90921bb59a",
+      "cases": 7,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-bundle.test.py",
+      "sha256": "6879f7eaf22046093774744353b79ca45752f184ab722be4a81cc6565182c6a7",
+      "cases": 6,
+      "status": "pass"
+    },
+    {
+      "path": "test/training/sparse-v2-parallel.test.mjs",
+      "sha256": "47b26cf4f52e554288c95b91d137ecb586ff11233723dbbb2c23e39bdd2816c1",
+      "contractChecks": 7,
+      "status": "pass"
+    }
+  ],
+  "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+  "node": "v24.22.3"
+}

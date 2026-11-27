@@ -230,6 +230,7 @@ themselves, change the shipped evaluator or certify strength.
 | Topic | Reference |
 | --- | --- |
 | Expanded PeSTO evaluation | [Pilot](PESTO-PILOT-2026-09.md) |
+| Sparse interaction PeSTO | [17,280 coefficients, million-position fit, native runtime, and weight-editing experiments](sparse-pesto-v1/REPORT.md) |
 | Natural-game follow-up | [50,000-position experiment and 80-game development screen](NATURAL-PILOT-2026-09.md) |
 | Compact neural evaluation | [Original H4](neural-h4/REPORT.md), [residual repair](neural-h4-v2/REPORT.md), [phase/width](neural-h4-v3/REPORT.md), [factorial and budget screen](neural-h4-v4/REPORT.md) |
 | Compiled neural cost | [Storage, module, memory, and runtime](training/nnue-phase-runtime-results-2026-09.md) |

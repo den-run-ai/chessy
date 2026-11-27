@@ -1,0 +1,58 @@
+{
+  "schema": "chessy.sparse-game-config.v2",
+  "id": "sparse-pesto-v2-development-games-20261127",
+  "researchOnly": true,
+  "formalPass": false,
+  "openingPairs": 64,
+  "candidateColors": ["white", "black"],
+  "mandatoryProfiles": [
+    {"id": "full-time", "model": "full", "timeMs": 25, "nodeLimit": 0},
+    {"id": "full-nodes", "model": "full", "timeMs": 0, "nodeLimit": 10000}
+  ],
+  "optionalProfile": {"id": "pruned-time", "model": "pruned", "timeMs": 25, "nodeLimit": 0},
+  "optionalAdmission": "At most one approximation, selected and frozen using declared validation and cost guards before any scheduled game; never selected by games",
+  "backend": "research WASM in Node; frozen scalar/SIMD and runtime variant chosen before games",
+  "maxDepth": 30,
+  "postOpeningPlyCap": 180,
+  "rootSeed": 0,
+  "rootSeedMeaning": "pinned r84 deterministic legacy root order; no repeated seed slots",
+  "schedule": "profiles in declared order; ascending frozen opening index; candidate White first for even indices and Black first for odd indices",
+  "warmup": {
+    "cycles": 4,
+    "modes": ["hce", "candidate"],
+    "nodeLimit": 10000,
+    "timeMs": 0,
+    "fens": [
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1",
+      "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"
+    ],
+    "timingExcluded": true,
+    "requestsPerModelProcess": 32
+  },
+  "termination": ["checkmate", "stalemate", "insufficient-material", "current-threefold", "current-fifty-move", "ply-cap"],
+  "terminalRulesBeforePlyCap": true,
+  "scoreAdjudication": false,
+  "resignation": false,
+  "completeHistoryRequired": true,
+  "timeoutPerRequestSeconds": 10,
+  "timeoutWholeCampaignSeconds": 3600,
+  "cpuPolicy": "one search at a time, child process pinned to first available CPU, no concurrent cost profiling",
+  "failurePolicy": "preserve raw incomplete evidence; no resume, replacement, selective retries, optional stopping, or result-based extension",
+  "resultsSealedUntilComplete": true,
+  "statistics": {
+    "estimand": "candidate points per game averaged equally over the 64 color-reversed opening pairs",
+    "primary": "two-sided 95% Student-t interval over opening-pair means",
+    "sensitivity": "two-sided 95% cluster-robust Student-t interval grouped by structural family after four recorded plies, preserving endpoint weighting",
+    "independenceClaim": false,
+    "formalAdmission": false,
+    "eloConversion": false
+  },
+  "timeBudgetAudit": {
+    "unit": "identical requested search deadline; report internal WASM-call and full request wall times separately",
+    "timeLimitMedianCandidateOverHceAcceptableRange": [0.9, 1.1],
+    "maximumTimeLimitP99OverRequested": 2.0,
+    "failedBudgetAudit": "retain all game results but do not describe the campaign as a clean realized equal-time comparison"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "buildReceiptSha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+  "candidateLabelsInspected": false,
+  "fastNativeSha256": "47d481ab0c1892126c108f4dd87ab1bda3280bdd9b9358540e9d8449644d9a55",
+  "fensSha256": "1f5402d0b61d18f2c8c1dd791d99fc1bcecd2c44956b5bc28c8ed8bcf0c81900",
+  "oldNativeSha256": "b9827497e32a636b40bbfc9f15db814402c0f55a33b5c2e5f2a095fcafe88400",
+  "outputSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+  "rows": 100164,
+  "schema": "chessy.sparse-fast-validation-parity.v1",
+  "scoreTriplesEqual": true,
+  "status": "pass",
+  "timingsMeasured": false,
+  "weightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304"
+}

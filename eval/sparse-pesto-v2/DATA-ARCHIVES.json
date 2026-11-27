@@ -1,0 +1,42 @@
+{
+  "schema": "chessy.sparse-v2-data-archives.v1",
+  "researchOnly": true,
+  "archive": {
+    "archive": "/workspace/scratch/dfb050648003/chessy_sparse_pesto_v2_evidence.tar.zst",
+    "bytes": 18973353,
+    "files": 612,
+    "rawBytes": 126123992,
+    "rawFiles": 428,
+    "referencedBytes": 3425685,
+    "repoReferences": 184,
+    "restoreManifestSha256": "25c10b75c3687d63cb8b7c1021be5e977bb81970c04fda4e5169f867e8328bca",
+    "sha256": "77c9346a32fd5deef5447cbc94d19eda0e71e1c5c21a4a7411abee42f2946a56",
+    "name": "chessy_sparse_pesto_v2_evidence.tar.zst",
+    "libraryFileId": "libfile_fde3_f-b702f088c4cc81918c59b261a312eb2a_6824491366a08191b570eab67c6febac",
+    "url": "https://chatgpt.com/library?file_id=libfile_fde3_f-b702f088c4cc81918c59b261a312eb2a_6824491366a08191b570eab67c6febac&account_id=personal"
+  },
+  "verifiedRestoration": {
+    "archiveSha256": "77c9346a32fd5deef5447cbc94d19eda0e71e1c5c21a4a7411abee42f2946a56",
+    "fileCount": 612,
+    "rawFiles": 428,
+    "repoReferences": 184,
+    "restoredBytes": 129549677,
+    "schema": "chessy.sparse-evidence-bundle.v1.restored",
+    "status": "complete"
+  },
+  "bundleToolSha256": "ecfc2e53945b20ecaa7e09c9f148fa3d93ff332255dd5f0474221c6e4e2faaa5",
+  "content": [
+    "instrumented profile and native parity raw outputs",
+    "all frozen native and WASM builds and measured binaries",
+    "all nine pruning outputs",
+    "complete cost registration and raw grid",
+    "fresh opening bank and full game registration",
+    "256 PGNs and all 25,816 raw move exchanges",
+    "independent game and cost audit outputs",
+    "parallel registration, all nine blocks and independent audit",
+    "preserved failed and successful pre-game host checks"
+  ],
+  "repositoryFilesReferencedByExactGitBlobs": true,
+  "noExperimentExecutedByRestoration": true,
+  "originalTrainingData": "../sparse-pesto-v1/DATA-ARCHIVES.json"
+}

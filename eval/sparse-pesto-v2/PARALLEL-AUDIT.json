@@ -1,0 +1,131 @@
+{
+  "actualNodes": 23328000,
+  "allExactCostSignaturesMatch": true,
+  "allExpectedJobsAppearExactlyOnce": true,
+  "allSummaryArithmeticMatches": true,
+  "allWorkerWarmupsAndRuntimeIdentitiesMatch": true,
+  "benchmarkReruns": 0,
+  "blocks": 9,
+  "costReferenceRows": 216,
+  "distinctRoots": 72,
+  "engineCalls": 0,
+  "executionPlanSha256": "2c79400d2ce7b6e1bdc38224022ace3b1129e3fa15f15b798466d6df9d58217a",
+  "gameOutcomesRead": false,
+  "implementationSha256": "bc3191554003a594a6235609c28e38b6a0930c04291a0920144fae8514b22e28",
+  "independentReducer": true,
+  "independentWorkerProcesses": 21,
+  "limitations": [
+    "Independent-job throughput, not search-tree parallelism or one-move latency speedup.",
+    "72 exposed cost roots repeated three times per worker count; no new playing-strength evidence.",
+    "Nearest-rank latency quantiles; sums of per-process peak RSS are upper bounds, not simultaneous RSS.",
+    "One host and one complete campaign. Missing cgroup quota/throttle counters leave CPU entitlement unknown.",
+    "Audit checks retained identities, inventory and arithmetic; it does not independently observe historical CPU scheduling."
+  ],
+  "numericTolerance": {
+    "absolute": 1e-09,
+    "relative": 1e-12
+  },
+  "productionAdmission": false,
+  "registeredFilesAuthenticated": 12,
+  "registrationSha256": "73ff84e9b1931ccc536b06b01f0d42e92840dbbf08add0514cae364b728e289a",
+  "researchOnly": true,
+  "resultFilesAuthenticated": 10,
+  "resultsSha256": "a71cf8796a3e5e587cc783cf63cbebd0384bca5f884fea6a2a47e850e4c584e3",
+  "schema": "chessy.sparse-v2-parallel-independent-audit.v1",
+  "searchObservations": 648,
+  "status": "pass",
+  "summary": [
+    {
+      "actualNodes": 7776000,
+      "actualNodesPerSecond": 744252.0362177952,
+      "blockActualNodesPerSecond": [
+        742916.0940517387,
+        735758.407976925,
+        754316.3406266939
+      ],
+      "blocks": 3,
+      "distinctRoots": 72,
+      "fixedWasmLinearMemoryBytes": 33554432,
+      "maximumSumOfWorkerEndRssBytes": 79376384,
+      "maximumSumOfWorkerPeakRssBytes": 79376384,
+      "maximumSumOfWorkerReadyRssBytes": 64303104,
+      "meanSearchLatencyRatioToOneWorker": 1.0,
+      "observedWorkerCpuSecondsPerBatchWallSecond": 0.9869681687637426,
+      "searchCallLatencyNs": {
+        "max": 119561765,
+        "mean": 48049804.356481485,
+        "median": 48142896,
+        "min": 22321902,
+        "p95": 75329245
+      },
+      "searches": 216,
+      "searchesPerSecond": 20.673667672716537,
+      "throughputRatioToOneWorker": 1.0,
+      "totalBatchWallNs": 10448073531,
+      "workerCpuTimeUs": 10311916,
+      "workers": 1
+    },
+    {
+      "actualNodes": 7776000,
+      "actualNodesPerSecond": 1130897.3860841254,
+      "blockActualNodesPerSecond": [
+        1457945.2823112174,
+        805644.130175475,
+        1378130.0049327272
+      ],
+      "blocks": 3,
+      "distinctRoots": 72,
+      "fixedWasmLinearMemoryBytes": 67108864,
+      "maximumSumOfWorkerEndRssBytes": 163065856,
+      "maximumSumOfWorkerPeakRssBytes": 163065856,
+      "maximumSumOfWorkerReadyRssBytes": 133312512,
+      "meanSearchLatencyRatioToOneWorker": 1.146308155358648,
+      "observedWorkerCpuSecondsPerBatchWallSecond": 1.7223465386026986,
+      "searchCallLatencyNs": {
+        "max": 154638635,
+        "mean": 55079882.597222224,
+        "median": 50406265,
+        "min": 24752541,
+        "p95": 106365772
+      },
+      "searches": 216,
+      "searchesPerSecond": 31.41381628011459,
+      "throughputRatioToOneWorker": 1.519508622147973,
+      "totalBatchWallNs": 6875955410,
+      "workerCpuTimeUs": 11842778,
+      "workers": 2
+    },
+    {
+      "actualNodes": 7776000,
+      "actualNodesPerSecond": 1525670.7329777882,
+      "blockActualNodesPerSecond": [
+        1742355.7569410494,
+        1219441.8527698184,
+        1747135.7712641652
+      ],
+      "blocks": 3,
+      "distinctRoots": 72,
+      "fixedWasmLinearMemoryBytes": 134217728,
+      "maximumSumOfWorkerEndRssBytes": 318775296,
+      "maximumSumOfWorkerPeakRssBytes": 318775296,
+      "maximumSumOfWorkerReadyRssBytes": 260186112,
+      "meanSearchLatencyRatioToOneWorker": 1.5013721479829654,
+      "observedWorkerCpuSecondsPerBatchWallSecond": 3.0500484914017796,
+      "searchCallLatencyNs": {
+        "max": 299631683,
+        "mean": 72140637.97685185,
+        "median": 60525853,
+        "min": 29033075,
+        "p95": 134570821
+      },
+      "searches": 216,
+      "searchesPerSecond": 42.37974258271634,
+      "throughputRatioToOneWorker": 2.049938271893853,
+      "totalBatchWallNs": 5096774705,
+      "workerCpuTimeUs": 15545410,
+      "workers": 4
+    }
+  ],
+  "teacherLabelsRead": false,
+  "warmupObservations": 672
+}
