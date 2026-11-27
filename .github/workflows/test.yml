@@ -306,6 +306,10 @@ jobs:
         run: node test/ai-telemetry.test.js
       - name: Verify the shipped WASM ABI and production asset
         run: node test/wasm-asset.test.js
+      - name: Verify WASM loader phase ownership and reserved ABI fields
+        run: node test/wasm-loader.test.js
+      - name: Compare WASM search with independent rules and budget oracles
+        run: node test/wasm-search-oracle.test.js
       - name: Enforce the production WASM download-size ratchet
         run: node test/wasm-size.test.js
       - name: Verify frozen pre-removal WASM behavior

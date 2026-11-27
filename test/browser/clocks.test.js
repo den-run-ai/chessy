@@ -123,4 +123,152 @@ require('./helper').run('clocks', async function (t) {
   // New untimed game hides the clocks again.
   await t.newGame({ timeControl: 'none' });
   check(await page.locator('#clocks').isHidden(), 'switching back to untimed hides clocks');
+
+  // A promotion is not a move until the player chooses a piece. In
+  // particular, the chooser must not outlive a flag or edit a newer game.
+  // Use a real, replayable opening rather than a custom board injection.
+  const promotionSave = await page.evaluate(function () {
+    let s = Chess.newGameState();
+    ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'e7e6', 'a6a7', 'e6e5']
+      .forEach(function (uci) {
+        const move = Chess.legalMoves(s).find(function (m) {
+          return Chess.sqName(m.from) + Chess.sqName(m.to) === uci;
+        });
+        s = Chess.playMove(s, move);
+      });
+    return {
+      fen: Chess.toFen(s), history: s.history,
+      mode: 'pvp', difficulty: '2', timeControl: '300+3',
+      clocks: { wMs: 60000, bMs: 60000 }
+    };
+  });
+
+  async function openPromotion(id) {
+    await t.inject(function (saved) {
+      localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+    }, Object.assign({}, promotionSave, { gameId: id }));
+    await mv('a7', 'b8');
+    await page.evaluate(function () {
+      window.__retiredPromotionButton = document.querySelector(
+        '#promotionChoices [aria-label="Promote to queen"]');
+    });
+  }
+
+  function expirePromotionClock() {
+    const now = Date.now;
+    Date.now = function () { return now() + 120000; };
+  }
+
+  // The ticker sees the flag while the dialog is open. A retained click
+  // simulates already queued input, independently of the dialog being closed.
+  const flaggedId = 'clock-promotion-flag';
+  await openPromotion(flaggedId);
+  await page.evaluate(expirePromotionClock);
+  await page.waitForSelector('#gameOverDialog[open]');
+  check(!await page.locator('#promotionDialog').evaluate(function (d) { return d.open; }),
+    'flagging while choosing a promotion closes the obsolete picker');
+  await page.click('#gameOverClose');
+  const afterFlagClick = await page.evaluate(function () {
+    window.__retiredPromotionButton.click();
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(afterFlagClick.history.length === 8 && afterFlagClick.fen === promotionSave.fen &&
+        afterFlagClick.timeForfeit.color === 'w' && afterFlagClick.clocks.wMs === 0,
+    'a promotion click after flag leaves the terminal board, history and clock unchanged');
+  await page.waitForFunction(function (id) {
+    return CoachStore.getGame(id).then(function (game) { return !!game; });
+  }, flaggedId);
+  const flaggedArchive = await page.evaluate(function (id) {
+    return CoachStore.getGame(id);
+  }, flaggedId);
+  check(flaggedArchive.sans.length === 8 && flaggedArchive.result === '0-1' &&
+        flaggedArchive.reason === 'time forfeit',
+    'the archive keeps the unpromoted position and original time-forfeit result');
+  await page.reload();
+  await page.waitForSelector('#board .square');
+  const reloadedFlag = await page.evaluate(function () {
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(reloadedFlag.fen === promotionSave.fen && reloadedFlag.history.length === 8 &&
+        reloadedFlag.timeForfeit.color === 'w',
+    'the unchanged time-forfeit position survives reload');
+
+  // The click and the time jump happen within the same event-loop turn, so
+  // the 200 ms ticker cannot rescue a missing pre-commit deadline check.
+  await openPromotion('clock-promotion-before-tick');
+  const beforeTick = await page.evaluate(function () {
+    const now = Date.now;
+    Date.now = function () { return now() + 120000; };
+    window.__retiredPromotionButton.click();
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(beforeTick.history.length === 8 && beforeTick.fen === promotionSave.fen &&
+        beforeTick.timeForfeit && beforeTick.timeForfeit.color === 'w' &&
+        beforeTick.clocks.wMs === 0,
+    'a promotion at an expired deadline flags before committing or awarding increment');
+
+  await openPromotion('clock-promotion-cancel');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(function () {
+    return !document.getElementById('promotionDialog').open;
+  });
+  const cancelled = await page.evaluate(function () {
+    window.__retiredPromotionButton.click();
+    return JSON.parse(localStorage.getItem('chessy-game-v1')).history.length;
+  });
+  check(cancelled === 8, 'Escape retires the promotion callback without moving');
+  await mv('a7', 'b8');
+  await page.evaluate(function () { window.__retiredPromotionButton.click(); });
+  check(await page.locator('#promotionDialog[open]').count() === 1,
+    'a retired button cannot dismiss or choose a newer promotion');
+  await page.click('#promotionChoices [aria-label="Promote to knight"]');
+  const validPromotion = await page.evaluate(function () {
+    window.__retiredPromotionButton.click();
+    return JSON.parse(localStorage.getItem('chessy-game-v1'));
+  });
+  check(validPromotion.history.length === 9 && validPromotion.history[8].move.promotion === 'N',
+    'a fresh underpromotion commits exactly once after cancellation');
+
+  // Native modals normally block these controls. Exercise their event
+  // handlers directly to verify that an already queued transition retires
+  // the callback as well as hiding the dialog.
+  await openPromotion('clock-promotion-undo');
+  const afterUndo = await page.evaluate(function () {
+    document.getElementById('undo').click();
+    window.__retiredPromotionButton.click();
+    return {
+      open: document.getElementById('promotionDialog').open,
+      plies: JSON.parse(localStorage.getItem('chessy-game-v1')).history.length
+    };
+  });
+  check(!afterUndo.open && afterUndo.plies === 7,
+    'Undo retires a promotion without allowing its stale move into the rewound position');
+
+  await openPromotion('clock-promotion-replay');
+  const afterReplay = await page.evaluate(function () {
+    document.getElementById('replayStart').click();
+    window.__retiredPromotionButton.click();
+    return {
+      open: document.getElementById('promotionDialog').open,
+      plies: JSON.parse(localStorage.getItem('chessy-game-v1')).history.length
+    };
+  });
+  check(!afterReplay.open && afterReplay.plies === 8,
+    'replay retires a promotion and preserves the live position');
+
+  await openPromotion('clock-promotion-new-game');
+  await page.evaluate(function () { document.getElementById('newGame').click(); });
+  await page.click('#newGameStart');
+  await page.waitForFunction(function () {
+    return !document.getElementById('newGameDialog').open;
+  });
+  const afterNewGame = await page.evaluate(function () {
+    window.__retiredPromotionButton.click();
+    return {
+      open: document.getElementById('promotionDialog').open,
+      plies: JSON.parse(localStorage.getItem('chessy-game-v1')).history.length
+    };
+  });
+  check(!afterNewGame.open && afterNewGame.plies === 0,
+    'New Game retires a promotion without letting its callback change the new game');
 });

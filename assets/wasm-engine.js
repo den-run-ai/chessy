@@ -92,6 +92,9 @@
       throw new Error('WASM result struct is ' + bytes +
         ' bytes; loader requires exactly ' + RESULT_BYTES);
     }
+    if (view.getUint32(60, true) !== 0) {
+      throw new Error('WASM result has a non-zero reserved field');
+    }
     const attempted = view.getUint32(20, true);
     const stopCode = view.getUint32(56, true);
     if (stopCode >= STOP_REASONS.length) {
@@ -148,6 +151,10 @@
     const analysisBegin = requiredFunction(exports, 'analysis_begin');
     const analysisRoot = requiredFunction(exports, 'analysis_root');
     const encoder = new TextEncoder();
+    // A failed load can leave the raw module's previous position/phase intact.
+    // Own readiness here as well: rejected replacement input must never make
+    // that previous phase available as evidence for the new request.
+    let analysisReady = false;
 
     function writeBytes(pointerFunction, bytes, capacity, label) {
       if (bytes.byteLength > capacity) {
@@ -219,6 +226,7 @@
     }
 
     function setHistory(positions, currentFen) {
+      analysisReady = false;
       const lines = [];
       const currentSignature = irreversibleSignature(currentFen);
       if (positions != null) {
@@ -251,6 +259,7 @@
     }
 
     function prepare(fen, positions) {
+      analysisReady = false;
       // load_position deliberately clears stale history, so this order is part
       // of ABI v2 rather than an interchangeable implementation detail.
       loadFen(fen);
@@ -307,6 +316,7 @@
         return evaluateLoaded();
       },
       search: function (fen, opts) {
+        analysisReady = false;
         opts = opts || {};
         const maxDepth = checkedDepth(opts.maxDepth, 'maxDepth');
         prepare(fen, opts.positions || null);
@@ -339,6 +349,7 @@
         return decodeResult(exports.memory, resultPointer());
       },
       fixedSearch: function (fen, opts) {
+        analysisReady = false;
         opts = opts || {};
         const depth = checkedFixedDepth(opts.depth, 'fixed search depth');
         prepare(fen, opts.positions || null);
@@ -355,6 +366,7 @@
         return result;
       },
       beginAnalysis: function (fen, opts) {
+        analysisReady = false;
         opts = opts || {};
         prepare(fen, opts.positions || null);
         const status = analysisBegin(
@@ -364,8 +376,12 @@
         if (status !== 0) {
           throw new Error('analysis_begin() failed with status ' + status);
         }
+        analysisReady = true;
       },
       searchRoot: function (move, totalDepth, pvLen) {
+        if (!analysisReady) {
+          throw new Error('analysis phase is not ready; call beginAnalysis() first');
+        }
         const packed = packMove(move);
         const depth = checkedDepth(totalDepth, 'analysis totalDepth');
         const maxPv = checkedDepth(pvLen, 'analysis pvLen');

@@ -66,6 +66,7 @@
 
   let state = Chess.newGameState();
   let selected = null;        // selected square index
+  let promotionPending = null; // owns one picker for one exact live position
   let flipped = false;
   let aiThinking = false;
   // Rules-independent endings are semantic and validated, never an arbitrary
@@ -227,6 +228,7 @@
   function isViewing() { return viewPly !== null && viewPly < state.history.length; }
 
   function setViewPly(k) {
+    cancelPromotion();
     viewPly = (k === null || k >= state.history.length) ? null : Math.max(0, k);
     selected = null;
     render();
@@ -657,7 +659,14 @@
     }
   }
 
+  function cancelPromotion() {
+    promotionPending = null;
+    if (promotionDialog.open) promotionDialog.close();
+  }
+
   function choosePromotion(color, cb) {
+    const pending = { gameId: gameId, state: state };
+    promotionPending = pending;
     promotionChoices.innerHTML = '';
     ['Q', 'R', 'B', 'N'].forEach(function (type) {
       const btn = document.createElement('button');
@@ -668,13 +677,38 @@
       // piece color — name the action explicitly instead.
       btn.setAttribute('aria-label', 'Promote to ' + PIECE_NAMES[type]);
       btn.addEventListener('click', function () {
-        promotionDialog.close();
+        // The clock keeps running while this modal is open. A flag, Undo,
+        // replay, or New Game can retire it before a queued click arrives;
+        // an old button must neither move a piece nor close a newer picker.
+        if (promotionPending !== pending) return;
+        if (!promotionDialog.open || gameId !== pending.gameId ||
+            state !== pending.state || fullStatus().over || aiThinking ||
+            archiveRetractionActive || checkpointAttempt || endAttempt ||
+            isViewing()) {
+          cancelPromotion();
+          return;
+        }
+        const remaining = liveRemaining(state.turn);
+        cancelPromotion();
+        // Check before committing: the next 200 ms ticker may not have
+        // observed the flag yet. An expired choice must not alter the board,
+        // win an increment, or change the archived terminal position.
+        if (remaining !== null && remaining <= 0) {
+          flag(state.turn);
+          return;
+        }
         cb(type);
       });
       promotionChoices.appendChild(btn);
     });
     promotionDialog.showModal();
   }
+
+  promotionDialog.addEventListener('cancel', function () {
+    promotionPending = null;
+    selected = null;
+    render();
+  });
 
   function commitMove(move) {
     state = Chess.playMove(state, move);
@@ -869,6 +903,7 @@
   }
 
   function showGameOver(status) {
+    cancelPromotion();
     const title = status.result === '1-0' ? 'White wins!' :
                   status.result === '0-1' ? 'Black wins!' : 'Draw';
     document.getElementById('gameOverTitle').textContent = title;
@@ -1056,6 +1091,7 @@
 
   function openEndPrompt(kind) {
     if (endAttempt || fullStatus().over || isViewing()) return;
+    cancelPromotion();
     const frozen = freezeEndClock();
     if (!frozen.ok) {
       flag(state.turn);
@@ -1117,6 +1153,7 @@
   }
 
   function startNewGame() {
+    cancelPromotion();
     checkpointAttempt = null;
     endAttempt = null;
     manualEnding = null;
@@ -1353,6 +1390,7 @@
   // replaced; a failed checkpoint keeps the game unless the player explicitly
   // chooses "Start without saving".
   document.getElementById('newGame').addEventListener('click', function () {
+    cancelPromotion();
     freshStartSeq++; // invalidate a pending Rematch/start request
     setChoice('mode', settings.mode);
     setChoice('difficulty', settings.difficulty);
@@ -1413,6 +1451,7 @@
 
   undoEl.addEventListener('click', function () {
     if (archiveRetractionActive) return;
+    cancelPromotion();
     // Editing the game voids any queued Review-game handoff: the ending
     // it would open is being taken back (see movedOnSeq).
     movedOnSeq++;
