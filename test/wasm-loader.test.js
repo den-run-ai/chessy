@@ -42,6 +42,7 @@ const rejectedReplacements = [
   ['an invalid phase budget', () => engine.beginAnalysis(fen, { nodeLimit: -1 }), /nodeLimit/],
   ['invalid repetition counts', () => engine.beginAnalysis(fen, { positions: { [fen]: -1 } }), /occurrence/],
   ['an invalid ordinary-search depth', () => engine.search(fen, { maxDepth: 0 }), /maxDepth/],
+  ['an invalid opening seed', () => engine.search(fen, { maxDepth: 2, rootSeed: -1 }), /rootSeed/],
   ['an invalid fixed-search depth', () => engine.fixedSearch(fen, { depth: -1 }), /depth/],
   ['a rejected evaluation position', () => engine.evaluate('not a fen'), /load_position/],
   ['a rejected explicit history replacement', () => engine.setHistory({ [fen]: -1 }, fen), /occurrence/]

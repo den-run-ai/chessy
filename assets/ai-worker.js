@@ -35,6 +35,7 @@ async function think(data) {
       timeMs: data.timeMs,
       nodeLimit: data.nodeLimit,
       quiesce: data.quiesce,
+      rootSeed: data.rootSeed,
       positions: data.positions
     });
     result.elapsedMs = Date.now() - started;

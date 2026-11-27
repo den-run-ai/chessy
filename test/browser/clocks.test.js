@@ -271,4 +271,138 @@ require('./helper').run('clocks', async function (t) {
   });
   check(!afterNewGame.open && afterNewGame.plies === 0,
     'New Game retires a promotion without letting its callback change the new game');
+
+  // Ordinary moves have the same admission boundary as promotions. Hold the
+  // clock jump and input in one event-loop turn so no ticker can flag first.
+  const ordinarySave = await page.evaluate(function () {
+    let s = Chess.newGameState();
+    ['e2e4', 'e7e5'].forEach(function (uci) {
+      s = Chess.playMove(s, Chess.legalMoves(s).find(function (m) {
+        return Chess.sqName(m.from) + Chess.sqName(m.to) === uci;
+      }));
+    });
+    return {
+      fen: Chess.toFen(s), history: s.history,
+      mode: 'pvp', difficulty: '2', timeControl: '300+3',
+      clocks: { wMs: 60000, bMs: 300000 }
+    };
+  });
+  async function seedOrdinary(id, ai) {
+    await t.inject(function (saved) {
+      localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+    }, Object.assign({}, ordinarySave, { gameId: id, mode: ai ? 'ai-w' : 'pvp' }));
+  }
+  async function checkUnchangedFlag(id, label) {
+    const saved = await page.evaluate(function () {
+      return JSON.parse(localStorage.getItem('chessy-game-v1'));
+    });
+    check(saved.fen === ordinarySave.fen && saved.history.length === 2 &&
+        saved.timeForfeit && saved.timeForfeit.color === 'w' &&
+        saved.clocks.wMs === 0,
+      label + ': expires before changing the board, history or clock increment');
+    await page.waitForFunction(function (gameId) {
+      return CoachStore.getGame(gameId).then(function (game) { return !!game; });
+    }, id);
+    const archive = await page.evaluate(function (gameId) {
+      return CoachStore.getGame(gameId);
+    }, id);
+    check(archive.sans.length === 2 && archive.result === '0-1' &&
+        archive.reason === 'time forfeit',
+      label + ': archives the original position and time-forfeit result');
+    await page.reload();
+    await page.waitForSelector('#board .square');
+    const restored = await page.evaluate(function () {
+      return JSON.parse(localStorage.getItem('chessy-game-v1'));
+    });
+    check(restored.fen === ordinarySave.fen && restored.history.length === 2 &&
+        restored.timeForfeit && restored.timeForfeit.color === 'w',
+      label + ': preserves the original terminal position on reload');
+  }
+
+  await seedOrdinary('clock-human-before-tick');
+  await page.click(t.sq('g1'));
+  await page.evaluate(function () {
+    const now = Date.now;
+    Date.now = function () { return now() + 120000; };
+    document.querySelector('#board [data-index="45"]').click(); // Nf3
+  });
+  await checkUnchangedFlag('clock-human-before-tick', 'late human move');
+
+  // Charge the exact admission instant, even if applying a legal move takes
+  // the wall clock across the deadline before its increment is recorded.
+  await seedOrdinary('clock-human-admitted');
+  await page.click(t.sq('g1'));
+  const humanAdmitted = await page.evaluate(function () {
+    const now = Date.now, playMove = Chess.playMove, admittedAt = now();
+    Date.now = function () { return admittedAt; };
+    Chess.playMove = function (s, m) {
+      const next = playMove(s, m);
+      Date.now = function () { return admittedAt + 120000; };
+      return next;
+    };
+    try {
+      document.querySelector('#board [data-index="45"]').click();
+      return JSON.parse(localStorage.getItem('chessy-game-v1'));
+    } finally { Date.now = now; Chess.playMove = playMove; }
+  });
+  check(humanAdmitted.history.length === 3 && !humanAdmitted.timeForfeit &&
+      humanAdmitted.history[2].clock.thinkMs < 60000 && humanAdmitted.clocks.wMs > 3000,
+    'an admitted human move uses one clock snapshot for deadline and increment');
+
+  // Hold a genuine WASM worker reply at the page boundary. Delivering it in
+  // the same turn as the jump must not append an already-expired AI move.
+  await page.addInitScript(function () {
+    const NativeWorker = window.Worker;
+    window.Worker = function (url, options) {
+      const native = new NativeWorker(url, options);
+      if (String(url).indexOf('ai-worker') < 0) return native;
+      const worker = {
+        postMessage: function (request) { native.postMessage(request); },
+        terminate: function () { native.terminate(); },
+        onmessage: null, onerror: null
+      };
+      native.onmessage = function (event) {
+        window.__heldClockReply = function () {
+          if (worker.onmessage) worker.onmessage(event);
+        };
+      };
+      native.onerror = function (event) {
+        if (worker.onerror) worker.onerror(event);
+      };
+      return worker;
+    };
+  });
+  async function waitForHeldReply() {
+    await page.waitForFunction(function () {
+      return typeof window.__heldClockReply === 'function';
+    }, null, { timeout: 10000 });
+  }
+  await seedOrdinary('clock-ai-before-tick', true);
+  await waitForHeldReply();
+  await page.evaluate(function () {
+    const now = Date.now;
+    Date.now = function () { return now() + 120000; };
+    window.__heldClockReply();
+    window.__heldClockReply(); // already queued duplicate from the retired worker
+  });
+  await checkUnchangedFlag('clock-ai-before-tick', 'late AI reply');
+
+  await seedOrdinary('clock-ai-admitted', true);
+  await waitForHeldReply();
+  const aiAdmitted = await page.evaluate(function () {
+    const now = Date.now, playMove = Chess.playMove, admittedAt = now();
+    Date.now = function () { return admittedAt; };
+    Chess.playMove = function (s, m) {
+      const next = playMove(s, m);
+      Date.now = function () { return admittedAt + 120000; };
+      return next;
+    };
+    try {
+      window.__heldClockReply();
+      return JSON.parse(localStorage.getItem('chessy-game-v1'));
+    } finally { Date.now = now; Chess.playMove = playMove; }
+  });
+  check(aiAdmitted.history.length === 3 && !aiAdmitted.timeForfeit &&
+      aiAdmitted.history[2].clock.thinkMs < 60000 && aiAdmitted.clocks.wMs > 3000,
+    'an admitted AI move uses one clock snapshot for deadline and increment');
 });

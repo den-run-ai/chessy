@@ -138,8 +138,7 @@ require('./helper').run('level-presets', async function (t) {
 
   const setupCopy = (await page.textContent('#newGameDialog'))
     .replace(/\s+/g, ' ').trim();
-  check(setupCopy.includes('Rust/WASM backend') &&
-      setupCopy.includes('may stop early') &&
-      setupCopy.includes('Not FIDE, Chess.com, or Lichess ratings'),
-    'setup qualifies target bands by backend, device, and rating scale');
+  check(setupCopy.includes('Ratings are provisional targets, not FIDE, Chess.com, or Lichess ratings.') &&
+      setupCopy.includes('Master thinks for up to eight seconds per move, less when its clock is low.'),
+    'setup qualifies provisional ratings and explains Master thinking time');
 });

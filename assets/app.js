@@ -134,12 +134,11 @@
 
   // Record think time and remaining clocks on the entry for the move that
   // was just played (state has already advanced, so the mover is the side
-  // NOT to move now). If the flag had already fallen during the think —
-  // a suspended tab or the tick gap can delay detection — the move stands
-  // on the board but the game ends on time: no increment is awarded.
-  function punchClock() {
+  // NOT to move now). Callers admit the move before changing the board and
+  // pass that same instant here: applying the move must not charge a later
+  // clock reading or turn an on-time move into a flag.
+  function punchClock(now) {
     if (clocks.wMs === null) return;
-    const now = Date.now();
     const mover = state.turn === 'w' ? 'b' : 'w';
     const key = mover + 'Ms';
     const elapsed = Math.max(0, now - turnStartedAt);
@@ -181,11 +180,11 @@
     else renderClocks();
   }
 
-  function liveRemaining(color) {
+  function liveRemaining(color, now) {
     const stored = color === 'w' ? clocks.wMs : clocks.bMs;
     if (stored === null) return null;
     if (turnStartedAt === null || fullStatus().over || color !== state.turn) return stored;
-    return stored - Math.max(0, Date.now() - turnStartedAt);
+    return stored - Math.max(0, (now === undefined ? Date.now() : now) - turnStartedAt);
   }
 
   function manualEndingStatus(value) {
@@ -711,8 +710,14 @@
   });
 
   function commitMove(move) {
+    const moveTime = Date.now();
+    const remaining = liveRemaining(state.turn, moveTime);
+    if (remaining !== null && remaining <= 0) {
+      flag(state.turn);
+      return;
+    }
     state = Chess.playMove(state, move);
-    punchClock();
+    punchClock(moveTime);
     selected = null;
     viewPly = null;
     render();
@@ -853,11 +858,17 @@
       recoverAiSearch(aiWorker, 'wasm-search-error');
       return;
     }
+    const moveTime = Date.now();
+    const remaining = liveRemaining(state.turn, moveTime);
+    if (remaining !== null && remaining <= 0) {
+      flag(state.turn);
+      return;
+    }
     clearTimeout(aiWatchdog);
     aiThinking = false;
     viewPly = null;
     state = Chess.playMove(state, local);
-    punchClock();
+    punchClock(moveTime);
     if (aiPending) {
       const totalMs = Date.now() - aiPending.started;
       // Record enough evidence to reproduce or explain a Master incident.
@@ -1831,9 +1842,13 @@
       // into a genuinely fresh game, not its otherwise-valid board snapshot.
       state = s;
       manualEnding = restoredManualEnding ? Object.assign({}, data.manualEnding) : null;
-      settings.mode = MODE_LABELS[data.mode] ? data.mode : 'ai-b';
+      settings.mode = typeof data.mode === 'string' &&
+        Object.prototype.hasOwnProperty.call(MODE_LABELS, data.mode)
+        ? data.mode : 'ai-b';
       settings.difficulty = ChessyLevelPresets.get(data.difficulty) ? String(data.difficulty) : '2';
-      settings.timeControl = TIME_CONTROLS[data.timeControl] ? data.timeControl : 'none';
+      settings.timeControl = typeof data.timeControl === 'string' &&
+        Object.prototype.hasOwnProperty.call(TIME_CONTROLS, data.timeControl)
+        ? data.timeControl : 'none';
       const tc = tcParts();
       if (tc) {
         clocks.wMs = data.clocks && isFinite(data.clocks.wMs)

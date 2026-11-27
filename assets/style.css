@@ -397,19 +397,59 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .setup-actions { justify-content: center; margin-top: 1rem; }
 .setup-actions .btn { min-height: 44px; flex: 1; }
 
+/* Long settings and messages scroll independently of their actions. Keeping
+   the whole dialog scrollable hides Start/Cancel below the fold on phones.
+   Only open dialogs become flex containers: closed dialogs must stay hidden. */
+dialog.dialog-panel {
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  padding: 0;
+  overflow: hidden;
+  max-width: calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  max-height: calc(100vh - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+.dialog-panel[open] { display: flex; flex-direction: column; }
+.dialog-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 1.2rem;
+  scroll-padding-block: 0.5rem;
+}
+.dialog-panel > .buttons {
+  flex: none;
+  margin-top: 0;
+  padding: 0.8rem 1.2rem 1.2rem;
+  border-top: 1px solid #4a4642;
+  background: var(--panel);
+}
+.dialog-panel > .buttons .btn { min-height: 44px; }
+/* Native file inputs have a wide intrinsic size. They must shrink inside the
+   import form instead of clipping a narrow dialog's scrollable body. */
+.dialog-content input[type="file"] { min-width: 0; width: 100%; }
+/* iOS zooms text fields below 16px on focus, reducing the usable viewport. */
+.dialog-content .coach-form input[type="text"],
+.dialog-content .coach-form textarea,
+.dialog-content .coach-form select { font-size: max(1rem, 16px); }
+
 /* Radio groups styled as tap-friendly pills (44px targets). The inputs
    stay in the tree (hidden, not display:none) so keyboard focus and
    arrow-key group navigation keep working. */
 .choice { border: none; margin: 0 0 0.85rem; padding: 0; }
 .choice legend { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
 .choice-options { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.choice label { flex: 1 1 auto; display: block; }
+.choice label { flex: 1 1 auto; display: block; position: relative; }
 .choice.stack .choice-options { flex-direction: column; }
 .choice input {
   position: absolute;
+  inset: 0;
   opacity: 0;
-  width: 1px;
-  height: 1px;
+  /* The focus target occupies its whole pill so keyboard navigation scrolls
+     the full label into view. The label still owns pointer/touch activation. */
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 .choice span {
   display: flex;
