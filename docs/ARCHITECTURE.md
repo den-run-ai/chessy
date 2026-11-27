@@ -60,6 +60,10 @@ All levels use quiescence. A time ceiling can stop a fixed-node search early
 on slower devices. A full transposition table can also stop an uncapped search;
 the engine retains its deepest completed iteration.
 
+If no iteration completes, the engine uses the best root it finished scoring,
+or the first ordered legal root if none finished. Opening seeds can affect
+that fallback order too.
+
 Timed games reduce the effective search limit as the clock runs down. The
 budget reserves delivery time and one identical-request retry after a reported
 worker failure. A silent worker is detected only three seconds after its

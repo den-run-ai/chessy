@@ -16,9 +16,9 @@ retain the seed. Later moves and coaching analysis use ordinary fixed ordering.
 Moves still come from Rust/WASM search with the same evaluation, strict
 improving-score selection, and difficulty budgets. A seed can change the search
 path and completed depth under a finite budget; it neither adds score noise
-nor chooses an unevaluated move. It may still select the same move. This release
-makes no new strength claim and preserves historical unseeded signatures under
-separately reviewed engine evidence.
+nor guarantees a different move. The existing fallback when no root finishes
+remains in place. This release makes no new strength claim and preserves
+historical unseeded signatures under separately reviewed engine evidence.
 
 ## r84: Mobile dialogs and game state
 
