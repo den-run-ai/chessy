@@ -1,0 +1,49 @@
+{
+  "dataArchive": {
+    "bytes": 456904369,
+    "files": 207,
+    "name": "chessy-sparse-pesto-data-and-evidence.tar.zst",
+    "sha256": "d921612ff1c062a635092def504a1505460ffdb7c47774752e8dd53c72d3a638",
+    "uncompressedFileBytes": 1214371739
+  },
+  "schema": "chessy-sparse-delivery-v1",
+  "sourcePrefix": {
+    "bytes": 536870912,
+    "parts": [
+      {
+        "bytes": 268435456,
+        "name": "chessy-eval-prefix-512m.part01.bin",
+        "sha256": "fd9a78747fd22c8b9f5033c4f4fdc7e1eee11200f4dcedef1afe91f3582fe020"
+      },
+      {
+        "bytes": 268435456,
+        "name": "chessy-eval-prefix-512m.part02.bin",
+        "sha256": "b3c35bc58f165094f561195596ea16840b90fabe573153b2fe4569e52cdbdc39"
+      }
+    ],
+    "reassembledPath": "data/lichess-eval-prefix512m.jsonl.zst",
+    "sha256": "6c2dc6c9b3856d3fb19bcd1d568cdbb49418f2895b12091cd0497b0c2aff117f"
+  },
+  "sourcePrefixDelivery": [
+    {
+      "bytes": 268435622,
+      "contains": {
+        "bytes": 268435456,
+        "name": "chessy-eval-prefix-512m.part01.bin",
+        "sha256": "fd9a78747fd22c8b9f5033c4f4fdc7e1eee11200f4dcedef1afe91f3582fe020"
+      },
+      "name": "chessy-eval-prefix-512m.part01.zip",
+      "sha256": "f579f7e6a98aa60e72659d31fea7102983d38949f8b058ae97d179c67a4d1e1a"
+    },
+    {
+      "bytes": 268435622,
+      "contains": {
+        "bytes": 268435456,
+        "name": "chessy-eval-prefix-512m.part02.bin",
+        "sha256": "b3c35bc58f165094f561195596ea16840b90fabe573153b2fe4569e52cdbdc39"
+      },
+      "name": "chessy-eval-prefix-512m.part02.zip",
+      "sha256": "0e582de944544550a64f663eee609834f69058b9a94473781f0829ba30aeeca7"
+    }
+  ]
+}

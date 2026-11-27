@@ -1,0 +1,75 @@
+import gzip,hashlib,json,os,re
+from pathlib import Path
+from collections import Counter
+import chess
+root=Path('/workspace/library-files/chessy-sparse-work/data')
+def sha(b):return hashlib.sha256(b).hexdigest()
+def enc(v):return json.dumps(v,sort_keys=True,separators=(',',':')).encode()
+raw_manifest=(root/'ood-labels-v1/manifest.json').read_bytes();m=json.loads(raw_manifest)
+assert m['status']=='complete-research-only' and m['productionFitAllowed'] is False
+files={x['path']:x for x in m['files']};payloads={}
+for name,binding in files.items():
+ b=(root/'ood-labels-v1'/name).read_bytes();assert len(b)==binding['bytes'] and sha(b)==binding['sha256'];payloads[name]=b
+selection_manifest=(root/'ood-selection-v1/manifest.json').read_bytes();selection_meta=json.loads(selection_manifest)
+assert sha(selection_manifest)==m['selectionManifest']['sha256']
+selection_bytes=(root/'ood-selection-v1/selection.jsonl').read_bytes()
+assert sha(selection_bytes)==selection_meta['files'][0]['sha256']
+selection=[json.loads(x) for x in selection_bytes.splitlines()]
+labels=[json.loads(x) for x in payloads['labels.jsonl'].splitlines()]
+raw_traces=gzip.decompress(payloads['traces.jsonl.gz']).splitlines(keepends=True)
+assert len(selection)==len(labels)==len(raw_traces)==4096
+counts=Counter();byphase={phase:Counter() for phase in ['opening','middlegame','endgame']}
+node_sum=0;admitted_node_sum=0
+for i,(original,record,trace_bytes) in enumerate(zip(selection,labels,raw_traces)):
+ assert all(record[k]==v for k,v in original.items() if k!='role')
+ assert record['role']=='independent-source-ood'
+ trace=json.loads(trace_bytes)
+ assert trace['oodIndex']==record['oodIndex']==i and record['traceSha256']==sha(trace_bytes)
+ events=trace['events'];commands=[e['line'] for e in events if e['direction']=='in'];outputs=[e['line'] for e in events if e['direction']=='out']
+ assert commands==['ucinewgame','setoption name Clear Hash','isready','position startpos moves '+' '.join(original['prefixUci']),'go nodes 100000']
+ best=[line.split()[1] for line in outputs if line.startswith('bestmove ')]
+ assert len(best)==1 and outputs[-1].startswith('bestmove ')
+ infos=[]
+ for line in outputs:
+  if not line.startswith('info ') or ' pv ' not in line or ' score ' not in line:continue
+  if ' multipv ' in line and re.search(r' multipv (\d+)',line).group(1)!='1':continue
+  infos.append(line)
+ assert infos
+ final=infos[-1]
+ score_type,score=re.search(r' score (cp|mate) (-?\d+)',final).groups();score=int(score)
+ depth=int(re.search(r' depth (\d+)',final).group(1));nodes=int(re.search(r' nodes (\d+)',final).group(1))
+ wdl=list(map(int,re.search(r' wdl (\d+) (\d+) (\d+)',final).groups()))
+ pv=final.split(' pv ')[1].split()
+ node_sum+=nodes
+ board=chess.Board(record['fen']);turn=board.turn
+ first=chess.Move.from_uci(pv[0]);assert first in board.legal_moves
+ tactical=first.promotion or board.is_capture(first) or board.gives_check(first)
+ for token in pv:
+  move=chess.Move.from_uci(token);assert move in board.legal_moves;board.push(move)
+ if ' lowerbound' in final or ' upperbound' in final:reason='bounded-score'
+ elif score_type=='mate':reason='mate-score'
+ elif abs(score)>2000:reason='invalid-or-outside-cp-band'
+ elif nodes<100000:reason='below-node-budget'
+ elif depth<10:reason='below-depth-floor'
+ elif pv[0]!=best[0]:reason='bestmove-pv-mismatch'
+ elif tactical:reason='tactical-teacher-first-move'
+ elif sum(wdl)!=1000:reason='invalid-wdl'
+ else:reason=None
+ assert reason==record['exclusion'],(i,reason,record['exclusion'])
+ if reason is None:
+  expected={'cpWhite':score if turn else -score,'wdlWhite':wdl if turn else list(reversed(wdl)),'nodes':nodes,'depth':depth,'pv':pv,'bestmove':best[0]}
+  assert record['teacher']==expected,(i,record['teacher'],expected)
+  admitted_node_sum+=nodes
+ else:assert record['teacher'] is None
+ counts[reason or 'accepted']+=1;byphase[record['phaseBucket']][reason or 'accepted']+=1
+assert dict(counts)==m['counts'] and {p:dict(c) for p,c in byphase.items()}==m['byPhase']
+initialization=json.loads(payloads['initialization.json']);assert len(initialization)==m['workers']==4
+for events in initialization:
+ commands=[e['line'] for e in events if e['direction']=='in'];outputs=[e['line'] for e in events if e['direction']=='out']
+ assert commands[0]=='uci' and commands[-1]=='isready'
+ assert 'id name Stockfish 18' in outputs and outputs[-1]=='readyok'
+ for name,value in m['options'].items():assert f'setoption name {name} value {value}' in commands
+ assert [x for x in outputs if x.startswith('option name EvalFile')]==m['embeddedNetworks']
+report={'schema':'chessy.sparse-ood-independent-label-audit.v1','status':'pass','labelManifestSha256':sha(raw_manifest),'selectionManifestSha256':sha(selection_manifest),'implementationSha256':sha(Path(__file__).read_bytes()),'rowsVerified':4096,'acceptedLabelsVerified':counts['accepted'],'allRawUciJoinsVerified':True,'allFinalPvsLegal':True,'allCommandBudgetsAndHistoriesVerified':True,'actualFinalReportedNodes':node_sum,'admittedFinalReportedNodes':admitted_node_sum,'counts':dict(counts),'byPhase':{p:dict(c) for p,c in byphase.items()},'candidatePerformanceInspected':False}
+with open(root/'ood-labels-v1/independent-audit.json','xb') as f:f.write(enc(report)+b'\n');f.flush();os.fsync(f.fileno())
+print(json.dumps(report,indent=2))

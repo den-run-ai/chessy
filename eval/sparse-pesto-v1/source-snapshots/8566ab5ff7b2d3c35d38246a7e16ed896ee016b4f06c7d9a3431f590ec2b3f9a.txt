@@ -1,0 +1,425 @@
+#!/usr/bin/env python3
+"""Large, explicitly exploratory CC0 input for sparse PeSTO experiments.
+
+The eval export has mixed Stockfish labels and no game lineage. These files
+are NEVER production/certification inputs. A bounded compressed prefix is a
+declared sample, not a copy of the complete database. Inputs are hashed and
+consumed through the same retained descriptor; related outputs are committed
+under an exclusive directory reservation, with the manifest written last.
+"""
+import argparse
+from collections import Counter
+import csv
+from datetime import datetime, timezone
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import urllib.request
+
+import chess
+import chess.pgn
+import zstandard
+
+ROOT = Path(__file__).resolve().parents[2]
+ROLES = ("train", "validation", "holdout")
+EVAL_URL = "https://database.lichess.org/lichess_db_eval.jsonl.zst"
+PGN_URL = "https://database.lichess.org/standard/lichess_db_standard_rated_2014-01.pgn.zst"
+QUARANTINE = (
+    "eval/corpus/eval-v1.ndjson", "eval/corpus/sources/lichess-puzzles-v1.csv",
+    "test/fixtures/master-incident-20260724.json",
+    "test/fixtures/master-e4-regression-20260729.json",
+    "test/fixtures/master-e4-regression-20260729.pgn",
+    "test/ai-match-openings.js", "eval/match-v2/openings.json",
+    "test/fixtures/wasm-r69-signatures.json",
+)
+RULES = {
+    "id": "sparse-pesto-v1-2026-11", "sourceBytes": 512 * 1024 * 1024,
+    "minimumDepth": 20, "minimumKnodes": 100, "maximumAbsCp": 2000,
+    "maximumRows": 1_000_000, "maximumRowsPerFamily": 8,
+    "roleFractions": [80, 10, 10],
+    "roleRule": "sha256(id NUL structural-family) first12 hex modulo100; 0..79/80..89/90..99",
+    "quietness": "root not in check; first teacher PV move legal, noncapture, nonpromotion, nonchecking; entire PV legal",
+    "labelRule": "deepest evaluation, ties most knodes, first PV; reject mate/absCP>2000; White POV",
+    "selection": "stream order, dedup color/rank/file mirrors, cap8 per family, stop admissions at1M but inventory whole declared prefix",
+    "researchOnly": True, "productionFitAllowed": False,
+}
+
+
+def encoded(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+
+
+def digest(value):
+    return hashlib.sha256(value).hexdigest()
+
+
+def write_json(path, value):
+    with open(path, "xb") as stream:
+        stream.write(encoded(value) + b"\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def descriptor_identity(stream):
+    """Hash a retained descriptor and restore its offset; never reopen by path."""
+    at = stream.tell()
+    stream.seek(0)
+    h, size = hashlib.sha256(), 0
+    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        h.update(chunk)
+        size += len(chunk)
+    stream.seek(at)
+    return {"sha256": h.hexdigest(), "bytes": size}
+
+
+def key_data(fen):
+    """Exact corpus.js model cluster/family semantics, independent of turn.
+
+    Ignoring turn/counters is deliberately conservative for leakage control.
+    Four transforms include file reflection and color/rank reflection.
+    """
+    original = []
+    for rank in fen.split()[0].split("/"):
+        cells = []
+        for piece in rank:
+            if piece in "12345678":
+                cells.extend([None] * int(piece))
+            elif piece in "PNBRQKpnbrqk":
+                cells.append(piece)
+            else:
+                raise ValueError("invalid board character")
+        if len(cells) != 8:
+            raise ValueError("invalid rank")
+        original.append(cells)
+    if len(original) != 8:
+        raise ValueError("invalid board")
+    boards, families = [], []
+    for mirror, color in ((False, False), (True, False), (False, True), (True, True)):
+        board = [list(reversed(rank)) if mirror else list(rank) for rank in original]
+        if color:
+            board = [[p.swapcase() if p else None for p in rank] for rank in reversed(board)]
+        ranks, pawns, kings = [], [], []
+        material = {p: 0 for p in "PNBRQpnbrq"}
+        for r, rank in enumerate(board):
+            result, empty = "", 0
+            for f, p in enumerate(rank):
+                if p is None:
+                    empty += 1
+                    continue
+                if empty:
+                    result += str(empty)
+                    empty = 0
+                result += p
+                if p in "Pp":
+                    pawns.append(p + str(r * 8 + f))
+                elif p in "Kk":
+                    kings.append(p + str(r * 8 + f))
+                else:
+                    material[p] += 1
+            ranks.append(result + (str(empty) if empty else ""))
+        boards.append("/".join(ranks))
+        families.append(json.dumps({"pawns": sorted(pawns), "kings": sorted(kings),
+                                    "material": [[p, material[p]] for p in sorted(material)]}, separators=(",", ":")))
+    phase = min(24, sum({"n": 1, "b": 1, "r": 2, "q": 4}.get(p.lower(), 0)
+                        for rank in original for p in rank if p))
+    return {"cluster": digest(min(boards).encode()), "family": digest(min(families).encode()),
+            "phase": phase, "phaseBucket": "opening" if phase >= 18 else "middlegame" if phase >= 7 else "endgame"}
+
+
+def role_for_family(family):
+    cell = int(digest((RULES["id"] + "\0" + family).encode())[:12], 16) % 100
+    return "train" if cell < 80 else "validation" if cell < 90 else "holdout"
+
+
+def load_quarantine(root):
+    clusters, families, sources, bindings = set(), set(), set(), []
+    def add(fen):
+        if isinstance(fen, str) and len(fen.split()) in (4, 6):
+            keys = key_data(fen)
+            clusters.add(keys["cluster"])
+            families.add(keys["family"])
+    def walk(value):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                if k.lower() in ("fen", "fen4", "source_fen", "startfen", "setupfen"):
+                    add(v)
+                if isinstance(v, str):
+                    m = re.fullmatch(r"https?://(?:www\.)?lichess\.org/([A-Za-z0-9]{8})(?:[A-Za-z0-9]{4})?(?:[/#?].*)?", v)
+                    if m:
+                        sources.add(m.group(1))
+                walk(v)
+            if isinstance(value.get("sans"), list):
+                b = chess.Board(value.get("setupFen") or chess.STARTING_FEN)
+                add(b.fen())
+                for san in value["sans"]:
+                    b.push_san(san)
+                    add(b.fen())
+            if isinstance(value.get("uci"), str) and value.get("pgn"):
+                b = chess.Board()
+                add(b.fen())
+                for uci in value["uci"].split():
+                    b.push_uci(uci)
+                    add(b.fen())
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+    for relative in QUARANTINE:
+        raw = (Path(root) / relative).read_bytes()
+        bindings.append({"path": relative, "sha256": digest(raw), "bytes": len(raw)})
+        text = raw.decode()
+        if relative.endswith(".ndjson"):
+            for line in text.splitlines():
+                walk(json.loads(line))
+        elif relative.endswith(".json"):
+            walk(json.loads(text))
+        elif relative.endswith(".csv"):
+            for row in csv.DictReader(io.StringIO(text)):
+                walk(row)
+        elif relative.endswith(".pgn"):
+            game = chess.pgn.read_game(io.StringIO(text))
+            if game is None or game.errors:
+                raise ValueError("invalid quarantine PGN")
+            b = game.board()
+            add(b.fen())
+            for move in game.mainline_moves():
+                b.push(move)
+                add(b.fen())
+        elif relative.endswith(".js"):
+            # Execute the bytes already retained, never reopen the named module.
+            program = "const vm=require('node:vm'),fs=require('node:fs');const s={module:{exports:{}}};vm.runInNewContext(fs.readFileSync(0,'utf8'),s);process.stdout.write(JSON.stringify(s.module.exports));"
+            openings = json.loads(subprocess.check_output(["node", "-e", program], input=raw))
+            for _, sans in openings:
+                b = chess.Board()
+                add(b.fen())
+                for san in sans.split():
+                    b.push_san(san)
+                    add(b.fen())
+    return {"clusters": clusters, "families": families, "sources": sources,
+            "manifest": {"files": bindings, "clusters": len(clusters), "families": len(families),
+                         "knownSourceGames": len(sources), "clusterSha256": digest(encoded(sorted(clusters))),
+                         "familySha256": digest(encoded(sorted(families))),
+                         "incidentCrossSourceLineage": "unknown; not inferred"}}
+
+
+def adapt_eval(record):
+    """Return (row, reason). No outcome or historical locked label is consulted."""
+    if not isinstance(record, dict) or not isinstance(record.get("fen"), str):
+        return None, "invalid-schema"
+    evaluations = record.get("evals")
+    if not isinstance(evaluations, list):
+        return None, "no-evaluation"
+    entries = [e for e in evaluations if isinstance(e, dict) and type(e.get("depth")) is int
+               and type(e.get("knodes")) in (int, float) and e["knodes"] >= 0]
+    if not entries:
+        return None, "no-evaluation"
+    e = max(entries, key=lambda e: (e["depth"], e["knodes"]))
+    if e["depth"] < RULES["minimumDepth"] or e["knodes"] < RULES["minimumKnodes"]:
+        return None, "insufficient-search"
+    pvs = e.get("pvs")
+    if not isinstance(pvs, list) or not pvs or not isinstance(pvs[0], dict):
+        return None, "missing-pv"
+    pv = pvs[0]
+    if type(pv.get("cp")) is not int or "mate" in pv:
+        return None, "mate-or-invalid-cp"
+    if abs(pv["cp"]) > RULES["maximumAbsCp"]:
+        return None, "cp-outside-band"
+    fields = record["fen"].split()
+    if len(fields) not in (4, 6):
+        return None, "invalid-fen"
+    fen = " ".join(fields) + (" 0 1" if len(fields) == 4 else "")
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return None, "invalid-fen"
+    if not board.is_valid():
+        return None, "invalid-board"
+    if board.is_check() or board.is_insufficient_material():
+        return None, "check-or-insufficient"
+    line = pv.get("line", pv.get("moves"))
+    if not isinstance(line, str) or not line.split():
+        return None, "missing-pv"
+    moves = line.split()
+    try:
+        first = chess.Move.from_uci(moves[0])
+        if first not in board.legal_moves:
+            return None, "illegal-pv"
+        if first.promotion or board.is_capture(first) or board.gives_check(first):
+            return None, "tactical-first-pv"
+        for token in moves:
+            move = chess.Move.from_uci(token)
+            if move not in board.legal_moves:
+                return None, "illegal-pv"
+            board.push(move)
+    except ValueError:
+        return None, "illegal-pv"
+    return {"fen": fen, "cpWhite": pv["cp"], "depth": e["depth"], "knodes": e["knodes"],
+            "pvFirst": moves[0], "pvPlies": len(moves), "pvSha256": digest(line.encode()),
+            "sourceGameId": None, "sourceId": "lichess-eval-2026-11-prefix512m", **key_data(fen)}, None
+
+
+def download(url, output, byte_count=None, expected_sha=None):
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"Range": f"bytes=0-{byte_count-1}"} if byte_count else {})
+    with urllib.request.urlopen(request, timeout=60) as response, open(output, "xb") as stream:
+        if byte_count and (response.status != 206 or not re.fullmatch(r"bytes 0-" + str(byte_count - 1) + r"/\d+", response.headers.get("Content-Range", ""))):
+            raise ValueError("server did not honor exact byte-range sample")
+        if not byte_count and response.status != 200:
+            raise ValueError("full archive request was not complete")
+        declared = int(response.headers["Content-Length"])
+        h, count = hashlib.sha256(), 0
+        while True:
+            part = response.read(1024 * 1024)
+            if not part:
+                break
+            count += len(part)
+            stream.write(part)
+            h.update(part)
+            if count % (64 * 1024 * 1024) == 0:
+                print(json.dumps({"stage": "download", "bytes": count}), flush=True)
+        if count != declared or (byte_count and count != byte_count):
+            raise ValueError("download byte count mismatch")
+        if expected_sha and h.hexdigest() != expected_sha:
+            raise ValueError("download checksum mismatch")
+        stream.flush()
+        os.fsync(stream.fileno())
+        identity = {"url": url, "path": output.name, "bytes": count, "sha256": h.hexdigest(),
+                    "license": "CC0-1.0", "licenseUrl": "https://database.lichess.org/",
+                    "retrievedAt": datetime.now(timezone.utc).isoformat(), "contentRange": response.headers.get("Content-Range"),
+                    "etag": response.headers.get("ETag"), "lastModified": response.headers.get("Last-Modified"),
+                    "sample": "bounded-compressed-prefix" if byte_count else "complete-archive",
+                    "upstreamChecksumVerified": expected_sha is not None}
+    os.chmod(output, 0o444)
+    write_json(str(output) + ".source.json", identity)
+    return identity
+
+
+def import_eval(source, source_manifest, output, root=ROOT):
+    source, output = Path(source), Path(output)
+    raw_manifest = Path(source_manifest).read_bytes()
+    metadata = json.loads(raw_manifest)
+    if metadata.get("url") != EVAL_URL or metadata.get("license") != "CC0-1.0" or metadata.get("bytes") != RULES["sourceBytes"]:
+        raise ValueError("unexpected source declaration")
+    code = Path(__file__).read_bytes()
+    boundary = load_quarantine(root)
+    output.mkdir(parents=False, exist_ok=False)  # Exclusive no-replace reservation.
+    write_json(output / "plan.json", {"rules": RULES, "source": metadata, "sourceManifestSha256": digest(raw_manifest),
+                                     "implementationSha256": digest(code), "quarantine": boundary["manifest"]})
+    handles, hashes, rows = {}, {}, Counter()
+    counts, families, seen = Counter(), Counter(), set()
+    phases = {role: Counter() for role in ROLES}
+    depth = Counter()
+    for role in ROLES:
+        handles[role] = open(output / (role + ".jsonl"), "xb")
+        hashes[role] = hashlib.sha256()
+    complete_hash, tail = hashlib.sha256(), b""
+    try:
+        with open(source, "rb") as compressed:
+            before = descriptor_identity(compressed)
+            if any(before[k] != metadata[k] for k in ("bytes", "sha256")):
+                raise ValueError("source bytes do not match declaration")
+            with zstandard.ZstdDecompressor().stream_reader(compressed, closefd=False) as decompressed:
+                reader = io.BufferedReader(decompressed)
+                for line in reader:
+                    if not line.endswith(b"\n"):
+                        tail = line
+                        break
+                    complete_hash.update(line)
+                    counts["sourceRecords"] += 1
+                    if counts["admitted"] >= RULES["maximumRows"]:
+                        counts["global-row-cap"] += 1
+                        continue
+                    try:
+                        record = json.loads(line)
+                        row, reason = adapt_eval(record)
+                    except (ValueError, TypeError, OverflowError):
+                        row, reason = None, "invalid-json-or-schema"
+                    if row is not None:
+                        cluster, family = row["cluster"], row["family"]
+                        if cluster in boundary["clusters"] or family in boundary["families"]:
+                            reason = "quarantine"
+                        elif cluster in seen:
+                            reason = "duplicate-cluster"
+                        elif families[family] >= RULES["maximumRowsPerFamily"]:
+                            reason = "family-cap"
+                        else:
+                            row["role"] = role_for_family(family)
+                            row["sourceRecord"] = counts["sourceRecords"]
+                            raw = encoded(row) + b"\n"
+                            handles[row["role"]].write(raw)
+                            hashes[row["role"]].update(raw)
+                            rows[row["role"]] += 1
+                            phases[row["role"]][row["phaseBucket"]] += 1
+                            depth[str(row["depth"])] += 1
+                            seen.add(cluster)
+                            families[family] += 1
+                            reason = "admitted"
+                    counts[reason] += 1
+                    if counts["sourceRecords"] % 100000 == 0:
+                        print(json.dumps({"stage": "import", "records": counts["sourceRecords"], "admitted": counts["admitted"]}), flush=True)
+            if descriptor_identity(compressed) != before:
+                raise ValueError("input descriptor changed during import")
+            if os.stat(source).st_ino != os.fstat(compressed.fileno()).st_ino:
+                raise ValueError("input pathname replaced during import")
+        files = []
+        for role, handle in handles.items():
+            handle.flush()
+            os.fsync(handle.fileno())
+            files.append({"path": role + ".jsonl", "role": role, "sha256": hashes[role].hexdigest(),
+                          "bytes": handle.tell(), "rows": rows[role]})
+        if digest(Path(__file__).read_bytes()) != digest(code):
+            raise ValueError("implementation changed during import")
+        # Boundary files are authenticated again before completion publication.
+        for binding in boundary["manifest"]["files"]:
+            if digest((Path(root) / binding["path"]).read_bytes()) != binding["sha256"]:
+                raise ValueError("quarantine changed during import")
+        manifest = {"schema": "chessy.sparse-eval-data.v1", "status": "complete-research-only",
+                    "researchOnly": True, "productionFitAllowed": False, "publishableArtifact": False,
+                    "rules": RULES, "source": metadata, "implementationSha256": digest(code),
+                    "quarantine": boundary["manifest"], "files": files, "counts": dict(counts),
+                    "uniqueClusters": len(seen), "uniqueFamilies": len(families), "uniqueSourceGames": None,
+                    "byRoleAndPhase": {r: dict(c) for r, c in phases.items()}, "depthHistogram": dict(depth),
+                    "completeSourceLinesSha256": complete_hash.hexdigest(), "discardedPartialLineBytes": len(tail),
+                    "discardedPartialLineSha256": digest(tail),
+                    "limitations": ["prefix sample, not representative full-export random sample",
+                                    "mixed Stockfish versions and settings; no pinned-teacher quality certification",
+                                    "no source-game IDs, repetition history or authentic move counters",
+                                    "family grouping prevents recorded mirror/family overlap, not all opening/player dependence",
+                                    "four-field FENs receive synthetic 0/1 counters for static evaluation only"]}
+        write_json(output / "manifest.json", manifest)
+        return manifest
+    finally:
+        for handle in handles.values():
+            handle.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("download-eval")
+    p.add_argument("output", type=Path)
+    p = sub.add_parser("download-pgn")
+    p.add_argument("output", type=Path)
+    p.add_argument("--sha256", required=True)
+    p = sub.add_parser("import-eval")
+    p.add_argument("source", type=Path)
+    p.add_argument("source_manifest", type=Path)
+    p.add_argument("output", type=Path)
+    p.add_argument("--root", type=Path, default=ROOT)
+    a = parser.parse_args()
+    if a.command == "download-eval":
+        result = download(EVAL_URL, a.output, RULES["sourceBytes"])
+    elif a.command == "download-pgn":
+        result = download(PGN_URL, a.output, expected_sha=a.sha256)
+    else:
+        result = import_eval(a.source, a.source_manifest, a.output, a.root)
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

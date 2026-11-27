@@ -211,7 +211,9 @@ def correction(value: str | Position, weights: Sequence[float], *,
 @lru_cache(maxsize=1)
 def baseline_constants() -> dict:
     """Consume the exact source bytes once; expose their hash in the schema."""
-    source = Path(__file__).resolve().parents[2] / "experiments/wasm/src/eval.rs"
+    # Keep the measured r84 baseline stable when the production engine evolves.
+    # baseline/manifest.json binds this exact source to its original Git blob.
+    source = Path(__file__).resolve().parent / "baseline/eval.rs"
     payload = source.read_bytes()
     text = payload.decode("utf-8")
     result = {"source_sha256": hashlib.sha256(payload).hexdigest()}

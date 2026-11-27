@@ -76,6 +76,14 @@ class SolverTests(unittest.TestCase):
             with self.assertRaises(ValueError): authenticated_bytes(root, item)
             with self.assertRaises(ValueError): bound_path(root, "../x")
 
+    def test_replaced_role_manifest_is_rejected_before_data_reads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.json"
+            item = write(path, b'{}')
+            path.write_bytes(b'{"changed":true}')
+            with self.assertRaisesRegex(ValueError, "manifest changed"):
+                load_role(path, "train", expected_manifest_sha=item["sha256"])
+
 
 if __name__ == "__main__":
     unittest.main()

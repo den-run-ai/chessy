@@ -1,6 +1,7 @@
 //! Standalone, native research bridge. Never linked into the shipped app.
 //!
 //! Build: rustc --edition=2021 -O tools/sparse_eval/runtime.rs -o /tmp/sparse-eval
+//! Cost-only pair-sweep variant: add --cfg sparse_fast to the same command.
 //! Input: one FEN per line. Commands:
 //!   baseline                 -> White-POV shipped HCE integer
 //!   features                 -> baseline phase base_id:integer_count ...
@@ -8,17 +9,20 @@
 //!   bench weights.i16le N    -> JSON static-evaluation timings, N passes
 //!   search weights.i16le N   -> JSON paired fixed-node search per FEN
 //!
-//! Weight storage is exactly 17,280 little-endian i16: MG IDs 0..8639, EG IDs
-//! 8640..17279. The baseline includes unmodified repository source. Fused
+//! Weight storage accepts 17,280 little-endian i16 or strict SPV1 sparse bytes
+//! (magic, u32 count, sorted u16 ID/i16 nonzero pairs). Magic takes precedence
+//! over legacy dense length detection. MG IDs 0..8639, EG IDs 8640..17279.
+//! The baseline imports the exact r84 source snapshot under baseline/, whose
+//! manifest pins commit 5e3558378deab8ba21f648cc2cca98195b1beced. Fused
 //! own-king/PST tables are derived at load time, not fitted a second time.
 
 #![allow(dead_code)]
 
-#[path = "../../experiments/wasm/src/engine.rs"]
+#[path = "baseline/engine.rs"]
 mod engine;
-#[path = "../../experiments/wasm/src/eval.rs"]
+#[path = "baseline/eval.rs"]
 mod baseline;
-#[path = "../../experiments/wasm/src/search.rs"]
+#[path = "baseline/search.rs"]
 mod search;
 
 use engine::{Piece, Position};
@@ -59,11 +63,34 @@ struct Model {
     weights: Vec<i16>,
     fused: Vec<[i32; 2]>,
     active: [bool; 5],
+    #[cfg(sparse_fast)]
+    paired_rays: Vec<[i32; 2]>,
 }
 
 impl Model {
     fn load(path: &str) -> io::Result<Self> {
         let bytes = std::fs::read(path)?;
+        if bytes.starts_with(b"SPV1") {
+            if bytes.len() < 8 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "truncated SPV1 header"));
+            }
+            let count = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+            if count > TOTAL || bytes.len() != 8 + count * 4 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "SPV1 count/length mismatch"));
+            }
+            let mut weights = vec![0_i16; TOTAL];
+            let mut previous: Option<usize> = None;
+            for record in bytes[8..].chunks_exact(4) {
+                let index = u16::from_le_bytes([record[0], record[1]]) as usize;
+                let value = i16::from_le_bytes([record[2], record[3]]);
+                if index >= TOTAL || value == 0 || previous.is_some_and(|last| index <= last) {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid SPV1 index/order/value"));
+                }
+                weights[index] = value;
+                previous = Some(index);
+            }
+            return Ok(Self::new(weights));
+        }
         if bytes.len() != TOTAL * 2 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "expected 34560 weight bytes"));
         }
@@ -84,9 +111,16 @@ impl Model {
             [weights[pst] as i32 + weights[384 + i] as i32,
              weights[BASE + pst] as i32 + weights[BASE + 384 + i] as i32]
         }).collect();
-        Self { weights, fused, active }
+        #[cfg(sparse_fast)]
+        let paired_rays = pair_ray_weights(&weights);
+        Self {
+            weights, fused, active,
+            #[cfg(sparse_fast)]
+            paired_rays,
+        }
     }
 
+    #[cfg(not(sparse_fast))]
     fn correction(&self, position: &Position) -> i32 {
         if !self.active.iter().any(|&v| v) { return 0; }
         let mut mg = 0_i64;
@@ -134,6 +168,128 @@ impl Model {
         let rounded = (numerator.abs() + 12) / 24;
         if numerator < 0 { -(rounded as i32) } else { rounded as i32 }
     }
+
+    /// Exactly the original correction, enumerating each adjacent occupied
+    /// ray pair once. Sorted a1..h8 traversal links predecessors along ranks,
+    /// files, and both diagonals; the precomputed pair contains both directed
+    /// source contributions, including each source color's orientation/sign.
+    #[cfg(sparse_fast)]
+    fn correction(&self, position: &Position) -> i32 {
+        if !self.active.iter().any(|&value| value) { return 0; }
+        let attacks = if self.active[3] { pawn_attacks_fast(position) } else { [0, 0] };
+        let white_king = position.king_sq[0] as usize ^ 56;
+        let black_king = position.king_sq[1] as usize ^ 56;
+        let own_offsets = [bucket(white_king) * 384, bucket(black_king ^ 56) * 384];
+        let enemy_offsets = [3456 + bucket(black_king) * 384, 3456 + bucket(white_king ^ 56) * 384];
+        let mut previous_file = [0_usize; 8];
+        let mut previous_diagonal = [0_usize; 15];
+        let mut previous_antidiagonal = [0_usize; 15];
+        let mut mg = 0_i64;
+        let mut eg = 0_i64;
+        let mut phase = 0;
+        for rank in 0..8 {
+            let mut previous_rank = 0_usize;
+            for file in 0..8 {
+                let square = rank * 8 + file;
+                let piece = position.board[square ^ 56];
+                if piece == Piece::Empty { continue; }
+                let code = piece as usize;
+                let color = usize::from(code >= 7);
+                let kind = (code - 1) % 6;
+                let sign = if color == 0 { 1_i64 } else { -1_i64 };
+                let oriented = square ^ if color == 0 { 0 } else { 56 };
+                let ps = kind * 64 + oriented;
+                phase += PHASE[kind];
+                if self.active[0] || self.active[1] {
+                    let value = self.fused[own_offsets[color] + ps];
+                    mg += sign * value[0] as i64;
+                    eg += sign * value[1] as i64;
+                }
+                if self.active[2] {
+                    let index = enemy_offsets[color] + ps;
+                    mg += sign * self.weights[index] as i64;
+                    eg += sign * self.weights[index + BASE] as i64;
+                }
+                if self.active[3] {
+                    let state = (((attacks[color] >> square) & 1)
+                        | (((attacks[1 - color] >> square) & 1) << 1)) as usize;
+                    let index = 6528 + state * 384 + ps;
+                    mg += sign * self.weights[index] as i64;
+                    eg += sign * self.weights[index + BASE] as i64;
+                }
+                if self.active[4] {
+                    let diagonal = rank + 7 - file;
+                    let antidiagonal = rank + file;
+                    // Previous->current global directions: E, N, NE, NW.
+                    // A zero predecessor maps to an exactly zero table entry.
+                    let predecessors = [previous_rank, previous_file[file],
+                        previous_diagonal[diagonal], previous_antidiagonal[antidiagonal]];
+                    for (axis, previous) in predecessors.into_iter().enumerate() {
+                        let value = self.paired_rays[(previous * 13 + code) * 4 + axis];
+                        mg += value[0] as i64;
+                        eg += value[1] as i64;
+                    }
+                    previous_rank = code;
+                    previous_file[file] = code;
+                    previous_diagonal[diagonal] = code;
+                    previous_antidiagonal[antidiagonal] = code;
+                }
+            }
+        }
+        phase = phase.min(24);
+        let numerator = mg * phase as i64 + eg * (24 - phase) as i64;
+        let rounded = (numerator.abs() + 12) / 24;
+        if numerator < 0 { -(rounded as i32) } else { rounded as i32 }
+    }
+}
+
+/// Combine both directions of a nearest-occupied pair before evaluation.
+/// Entries with either empty piece are zero, so first-on-line handling needs
+/// no special branch. The 676 MG/EG pairs occupy 5,408 bytes in this prototype.
+#[cfg(sparse_fast)]
+fn pair_ray_weights(weights: &[i16]) -> Vec<[i32; 2]> {
+    let mut pairs = vec![[0_i32; 2]; 13 * 13 * 4];
+    const GLOBAL_DIRECTIONS: [usize; 4] = [2, 0, 1, 7];
+    const BLACK_DIRECTION: [usize; 8] = [4, 3, 2, 1, 0, 7, 6, 5];
+    for source in 1..13 {
+        let source_color = (source - 1) / 6;
+        let source_kind = (source - 1) % 6;
+        let source_sign = if source_color == 0 { 1 } else { -1 };
+        for target in 1..13 {
+            let target_color = (target - 1) / 6;
+            let target_kind = (target - 1) % 6;
+            let target_sign = if target_color == 0 { 1 } else { -1 };
+            let enemy = usize::from(source_color != target_color);
+            for (axis, global) in GLOBAL_DIRECTIONS.into_iter().enumerate() {
+                let reverse = (global + 4) % 8;
+                let source_direction = if source_color == 0 { global } else { BLACK_DIRECTION[global] };
+                let target_direction = if target_color == 0 { reverse } else { BLACK_DIRECTION[reverse] };
+                let source_id = 8064 + (((source_kind * 6 + target_kind) * 2 + enemy) * 8 + source_direction);
+                let target_id = 8064 + (((target_kind * 6 + source_kind) * 2 + enemy) * 8 + target_direction);
+                pairs[(source * 13 + target) * 4 + axis] = [
+                    source_sign * weights[source_id] as i32 + target_sign * weights[target_id] as i32,
+                    source_sign * weights[source_id + BASE] as i32 + target_sign * weights[target_id + BASE] as i32,
+                ];
+            }
+        }
+    }
+    pairs
+}
+
+#[cfg(sparse_fast)]
+fn pawn_attacks_fast(position: &Position) -> [u64; 2] {
+    let mut pawns = [0_u64; 2];
+    for internal in 0..64 {
+        match position.board[internal] {
+            Piece::WhitePawn => pawns[0] |= 1_u64 << (internal ^ 56),
+            Piece::BlackPawn => pawns[1] |= 1_u64 << (internal ^ 56),
+            _ => {},
+        }
+    }
+    const NOT_A_FILE: u64 = 0xfefefefefefefefe;
+    const NOT_H_FILE: u64 = 0x7f7f7f7f7f7f7f7f;
+    [((pawns[0] & NOT_A_FILE) << 7) | ((pawns[0] & NOT_H_FILE) << 9),
+     ((pawns[1] & NOT_A_FILE) >> 9) | ((pawns[1] & NOT_H_FILE) >> 7)]
 }
 
 fn bucket(square: usize) -> usize { (square / 32) * 4 + (square % 8) / 2 }

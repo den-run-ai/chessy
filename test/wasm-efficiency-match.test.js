@@ -598,12 +598,69 @@ throws(function () {
   accounting.validateSources(trustedAccounting, {
     lib: replaceOnce(
       trustedAccounting.lib,
-      'search::run(&mut position, max_depth, node_limit, time_ms, quiesce != 0)',
-      'search::run(&mut position, max_depth, 0, time_ms, quiesce != 0)'),
+      'search_seeded(max_depth, node_limit, time_ms, quiesce, 0x00C0FFEE)',
+      'search_seeded(max_depth, 0, time_ms, quiesce, 0x00C0FFEE)'),
     search: trustedAccounting.search
   });
 }, /changed trusted WASM node accounting: search function/,
-'rejects bypassing the requested node limit at the ABI boundary');
+'rejects bypassing the requested node limit in the ordinary ABI wrapper');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: replaceOnce(
+      trustedAccounting.lib,
+      '&mut position, max_depth, node_limit, time_ms, quiesce != 0, root_seed,',
+      '&mut position, max_depth, 0, time_ms, quiesce != 0, root_seed,'),
+    search: trustedAccounting.search
+  });
+}, /changed trusted WASM node accounting: search_seeded function/,
+'rejects bypassing the requested node limit in the seeded ABI delegate');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: replaceOnce(
+      trustedAccounting.search,
+      '    reset_context(quiesce, node_limit, time_ms, false);',
+      '    reset_context(quiesce, 0, time_ms, false);')
+  });
+}, /changed trusted WASM node accounting: run_seeded function/,
+'rejects bypassing the requested node limit in the seeded search runner');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: replaceOnce(trustedAccounting.lib,
+      accounting.extractFunction(trustedAccounting.lib, 'search_seeded'), ''),
+    search: trustedAccounting.search
+  });
+}, /changed trusted WASM node accounting: search_seeded function presence/,
+'rejects removing the protected seeded ABI delegate');
+throws(function () {
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search + '\n' +
+      accounting.extractFunction(trustedAccounting.search, 'run_seeded')
+  });
+}, /expected exactly one Rust function run_seeded, found 2/,
+'rejects duplicate seeded search delegates');
+{
+  // Keep the original pre-seed ABI mutation and historical-source support.
+  // These immutable inputs must not be redefined from the current wrapper.
+  const legacyCommit = 'd56a745c3bdb373e9fa23fca0d48b2b6e9f21114';
+  const files = Object.fromEntries(Object.keys(trustedAccounting.files).map(function (name) {
+    return [name, cp.execFileSync('git', ['--no-replace-objects', '-C', ROOT,
+      'show', legacyCommit + ':experiments/wasm/src/' + name], { encoding: 'utf8' })];
+  }));
+  const legacyAccounting = { files: files, lib: files['lib.rs'], search: files['search.rs'] };
+  accounting.validateSources(legacyAccounting, legacyAccounting);
+  check(true, 'the unchanged pre-seed accounting pipeline remains supported');
+  throws(function () {
+    accounting.validateSources(legacyAccounting, {
+      lib: replaceOnce(legacyAccounting.lib,
+        'search::run(&mut position, max_depth, node_limit, time_ms, quiesce != 0)',
+        'search::run(&mut position, max_depth, 0, time_ms, quiesce != 0)'),
+      search: legacyAccounting.search
+    });
+  }, /changed trusted WASM node accounting: search function/,
+  'still rejects the original pre-seed ABI node-limit bypass');
+}
 throws(function () {
   accounting.validateSources(trustedAccounting, {
     lib: trustedAccounting.lib,

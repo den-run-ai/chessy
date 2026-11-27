@@ -72,8 +72,9 @@ def authenticated_bytes(root, item):
 def code_receipt():
     paths = sorted((ROOT / "tools/sparse_eval").glob("*.py"))
     paths += [ROOT / p for p in (
-        "tools/sparse_eval/runtime.rs", "experiments/wasm/src/engine.rs",
-        "experiments/wasm/src/eval.rs", "experiments/wasm/src/search.rs",
+        "tools/sparse_eval/runtime.rs", "tools/sparse_eval/baseline/engine.rs",
+        "tools/sparse_eval/baseline/eval.rs", "tools/sparse_eval/baseline/search.rs",
+        "tools/sparse_eval/baseline/manifest.json",
         "eval/sparse-pesto-v1/PLAN.md")]
     return {str(p.relative_to(ROOT)): sha(p.read_bytes()) for p in paths if p.exists()}
 
@@ -219,9 +220,11 @@ def pack(manifest_path, output, runtime):
     return result
 
 
-def load_role(manifest_path, role):
+def load_role(manifest_path, role, *, expected_manifest_sha=None):
     manifest_path = Path(manifest_path)
-    manifest, _ = read_json(manifest_path)
+    manifest, consumed_manifest_sha = read_json(manifest_path)
+    if expected_manifest_sha is not None and consumed_manifest_sha != expected_manifest_sha:
+        raise ValueError("packed manifest changed between role reads")
     if (manifest.get("schema") != "chessy.sparse-packed.v1" or
         manifest.get("status") != "complete-research-only" or
         manifest.get("featureCount") != N_FEATURES or
@@ -265,8 +268,8 @@ def train(manifest_path, output):
     write_json(output / "plan.json", {"schema": "chessy.sparse-fit-plan.v1", "grid": GRID,
         "sourceManifestSha256": manifest_sha, "implementation": receipt, "researchOnly": True,
         "validationSelection": "minimum integer CE among converged fits passing frozen guards; baseline selectable"})
-    train_data = load_role(manifest_path, "train")
-    validation = load_role(manifest_path, "validation")
+    train_data = load_role(manifest_path, "train", expected_manifest_sha=manifest_sha)
+    validation = load_role(manifest_path, "validation", expected_manifest_sha=manifest_sha)
     baseline_metrics = metrics(validation["baseline"], validation["teacher"], validation["phase"])
     results = []
     choice = {"id": "baseline", "validation": baseline_metrics, "eligible": True}
@@ -299,7 +302,7 @@ def train(manifest_path, output):
     del train_data, validation
     if code_receipt() != receipt:
         raise ValueError("implementation changed during fit")
-    holdout = load_role(manifest_path, "holdout")
+    holdout = load_role(manifest_path, "holdout", expected_manifest_sha=manifest_sha)
     if choice["id"] == "baseline":
         final_weights = np.zeros(N_FEATURES, dtype="<i2")
     else:

@@ -86,6 +86,23 @@ def generated():
 
 
 class FeatureSemantics(unittest.TestCase):
+    def test_research_baseline_is_the_exact_measured_r84_snapshot(self):
+        directory = ROOT / "tools/sparse_eval/baseline"
+        manifest = json.loads((directory / "manifest.json").read_bytes())
+        expected = {
+            "engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+            "eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+            "search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+        }
+        self.assertEqual(manifest["upstreamCommit"], "5e3558378deab8ba21f648cc2cca98195b1beced")
+        self.assertEqual({item["path"] for item in manifest["files"]}, set(expected))
+        for item in manifest["files"]:
+            payload = (directory / item["path"]).read_bytes()
+            self.assertEqual(len(payload), item["bytes"])
+            self.assertEqual(hashlib.sha256(payload).hexdigest(), expected[item["path"]])
+            self.assertEqual(item["sha256"], expected[item["path"]])
+        self.assertEqual(f.baseline_constants()["source_sha256"], expected["eval.rs"])
+
     def test_capacity_and_frozen_ids(self):
         self.assertEqual(f.N_FEATURES, 17280)
         self.assertGreaterEqual(f.N_FEATURES, 9650)

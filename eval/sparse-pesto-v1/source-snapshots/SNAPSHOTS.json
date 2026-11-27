@@ -1,0 +1,2081 @@
+{
+  "archiveMetadataVerification": {
+    "note": "Read-only packaging check of source identities in retained archival metadata. Original receipts are unchanged and stored with the raw evidence; sources resolve through sourceVersions.",
+    "originalRoot": "/workspace/library-files/chessy-sparse-work",
+    "receiptFiles": [
+      {
+        "bytes": 5106,
+        "originalPath": "packed-v1/manifest.json",
+        "sha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+        "sourceHashReferences": 9,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "e5780fc52f591df69f58762a234c1943c663cc59f58c1f21d47dbd288e557365",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 1119,
+        "originalPath": "packed-v1/plan.json",
+        "sha256": "d08ed0c959fbe66636a15aa19ffad2b88fcb2cc662a4a9811b60cc92e0fa3684",
+        "sourceHashReferences": 9,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "e5780fc52f591df69f58762a234c1943c663cc59f58c1f21d47dbd288e557365",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 1618,
+        "originalPath": "fit-v1/plan.json",
+        "sha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+        "sourceHashReferences": 9,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 12588,
+        "originalPath": "fit-v1/results.json",
+        "sha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+        "sourceHashReferences": 9,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 10768,
+        "originalPath": "fit-v1/selection.json",
+        "sha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+        "sourceHashReferences": 9,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 670,
+        "originalPath": "runtime-v1/independent-audit.json",
+        "sha256": "7db3d3b658596e36eea7f59ba3179b54414a37bdd442f97a4fd82f5320327f81",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "ac84f11e0632401f587490a0400c3dfe14d36d66f7423287ac9bd0032b0e2681"
+        ]
+      },
+      {
+        "bytes": 3419,
+        "originalPath": "runtime-v1/plan.json",
+        "sha256": "b5370fad02af7d006e7de025b69a236e08da2bb62d1550631ace2ecc545f73d3",
+        "sourceHashReferences": 5,
+        "uniqueSourceHashes": [
+          "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 39637,
+        "originalPath": "runtime-v1/results.json",
+        "sha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+        "sourceHashReferences": 5,
+        "uniqueSourceHashes": [
+          "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 1531,
+        "originalPath": "runtime-fast-v1/fast-build.json",
+        "sha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+        "sourceHashReferences": 4,
+        "uniqueSourceHashes": [
+          "0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        ]
+      },
+      {
+        "bytes": 714,
+        "originalPath": "runtime-fast-v1/independent-audit.json",
+        "sha256": "8c5f0409f83e2077ec0c4b51962ebe672269b4d9b9bb55e191f44cd7e96131c0",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "b8be5d0d78ed58b5aa56223012df88ef5fb390a401f5a722a2a0dffdc0bc3601"
+        ]
+      },
+      {
+        "bytes": 4039,
+        "originalPath": "runtime-fast-v1/plan.json",
+        "sha256": "c01f21847284f38f56a3541b5c70ce0b087a221faf74216090dcab6bd4c6cca5",
+        "sourceHashReferences": 7,
+        "uniqueSourceHashes": [
+          "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f",
+          "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 15086,
+        "originalPath": "runtime-fast-v1/results.json",
+        "sha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+        "sourceHashReferences": 7,
+        "uniqueSourceHashes": [
+          "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f",
+          "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 1954,
+        "originalPath": "table-edit-v1/config-frozen.json",
+        "sha256": "d8734b15aec6856e096c04a2d31a7847129a0083c81401e905c74540c1905960",
+        "sourceHashReferences": 4,
+        "uniqueSourceHashes": [
+          "19c903074fc593de6190898427bd25a5283fb485db4f2cc2bb912896efc05909",
+          "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 4738,
+        "originalPath": "table-edit-v1/report.json",
+        "sha256": "2e1dce5cece337183777bee5922c073c66d281b19577800c3389dc4a639a2a0d",
+        "sourceHashReferences": 4,
+        "uniqueSourceHashes": [
+          "19c903074fc593de6190898427bd25a5283fb485db4f2cc2bb912896efc05909",
+          "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 1647,
+        "originalPath": "ood-evaluation-v1/plan.json",
+        "sha256": "33141e77d60c1861a73d8f34f56e840d2007ace878a30ce071ca03df77a3e871",
+        "sourceHashReferences": 10,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "d8f9eec3c4d9477718d71b9330d1ce048f33157129ea1047c14a498dc4a326f3",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 3655,
+        "originalPath": "ood-evaluation-v1/results.json",
+        "sha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+        "sourceHashReferences": 10,
+        "uniqueSourceHashes": [
+          "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+          "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+          "d8f9eec3c4d9477718d71b9330d1ce048f33157129ea1047c14a498dc4a326f3",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+          "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 2615,
+        "originalPath": "chnn/head-screen-v1/config-frozen.json",
+        "sha256": "03ef52c565dd779c7d149be1821672599faa05ffc8e52a064a9e7a8c21e5f676",
+        "sourceHashReferences": 4,
+        "uniqueSourceHashes": [
+          "08e249010933d6964b05cb5913cbe1d071036c1a36449ebb75f36dd815566af0",
+          "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06",
+          "b3a1f81868bf5e5353e00d853ac761b0ac4de1d8a498613e4bd09f66f1314d0f",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 6229,
+        "originalPath": "chnn/head-screen-v1/report.json",
+        "sha256": "a26ca493859f1820280aeca3e7c7b11fa039255141d83e8eaa26faba62d25b39",
+        "sourceHashReferences": 4,
+        "uniqueSourceHashes": [
+          "08e249010933d6964b05cb5913cbe1d071036c1a36449ebb75f36dd815566af0",
+          "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06",
+          "b3a1f81868bf5e5353e00d853ac761b0ac4de1d8a498613e4bd09f66f1314d0f",
+          "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        ]
+      },
+      {
+        "bytes": 730,
+        "originalPath": "data/eval-v1/independent-audit.json",
+        "sha256": "1a3eb71e69749099d856aaded1b8e013d77c0ca9df70389ee7d129eaa320262d",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "14f5ff4376f5656236aee877bbc400a98b39d87838d33321cd941eb345acbb51"
+        ]
+      },
+      {
+        "bytes": 5522,
+        "originalPath": "data/eval-v1/manifest.json",
+        "sha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+        ]
+      },
+      {
+        "bytes": 2789,
+        "originalPath": "data/eval-v1/plan.json",
+        "sha256": "5c50dfda7cce4d36ebf59c60c7dcf73b26ca2ef6d38e5981864b6d5506ba9f8e",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+        ]
+      },
+      {
+        "bytes": 749,
+        "originalPath": "data/pgn-v1/independent-audit.json",
+        "sha256": "cdcaf70e50cf3f7c010c836a72f4802674c316407004029e8ba71cdce5d109f9",
+        "sourceHashReferences": 2,
+        "uniqueSourceHashes": [
+          "2267a9acf94f80969e870d62201db610b00ee7a7c4283cd1c2954c4e9ba642f3",
+          "d1d0734851c60c4143c627f0bd29b1c5804879af3c6874a7d63a49d6121df847"
+        ]
+      },
+      {
+        "bytes": 2917,
+        "originalPath": "data/pgn-v1/manifest.json",
+        "sha256": "8053024c4c6b70bd66fc4463b4f8e7c4b24f380f201f946618e2ef1c6a030ab4",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+        ]
+      },
+      {
+        "bytes": 2295,
+        "originalPath": "data/pgn-v1/plan.json",
+        "sha256": "7287f1024a570bc5d88fd5743330e4ea75477e0c23ea3478a3d4e00d1e9d5cf0",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+        ]
+      },
+      {
+        "bytes": 731,
+        "originalPath": "data/ood-selection-v1/independent-audit.json",
+        "sha256": "f4547b836a12dc6a90d7ad3bb3a2210de80a84089ef82e84658b5f5e7b1f1cca",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "f7f08f20cb7f7d3cb7e715f666f3eda8159257968e3011ecb7161a4fe94a87d8"
+        ]
+      },
+      {
+        "bytes": 2070,
+        "originalPath": "data/ood-selection-v1/manifest.json",
+        "sha256": "3180d17d7958f10b7ebd9830db3d64633fe706868b6323d6846489d4a654e1d2",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+        ]
+      },
+      {
+        "bytes": 1057,
+        "originalPath": "data/ood-labels-v1/independent-audit.json",
+        "sha256": "57fb2350d932c5c9d78ef49fb9199ca081319446e9f5e8ed40c7ee9e95153a80",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "32f3f9e04d55bf54a29286fa9812714cb2a82a5c37b1785b8688ef828fb13c6d"
+        ]
+      },
+      {
+        "bytes": 2611,
+        "originalPath": "data/ood-labels-v1/manifest.json",
+        "sha256": "2c719dff3dd1448b85748b5b79f4e5755b1c8208a572b350703d28c41ea28a05",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+        ]
+      },
+      {
+        "bytes": 1376,
+        "originalPath": "data/ood-labels-v1/plan.json",
+        "sha256": "021df61eed2934d9d5f4ee6dfe976a8cb6cddb06ab2a464dd8bfbb062a96f466",
+        "sourceHashReferences": 1,
+        "uniqueSourceHashes": [
+          "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+        ]
+      },
+      {
+        "bytes": 2261,
+        "originalPath": "packaged-runtime-v1/receipt.json",
+        "sha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+        "sourceHashReferences": 6,
+        "uniqueSourceHashes": [
+          "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+          "462b8f68ab65864833a86afc8236d86beecf8c39e05a81d938c2648b30260fb8",
+          "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+          "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a",
+          "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+          "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        ]
+      }
+    ],
+    "sourceHashReferences": 129,
+    "unresolvedExplicitSourceHashes": 0
+  },
+  "baselineRepositoryCommit": "1e6000d43b8a4bcf17405bd150971256bfd3114e",
+  "coverage": {
+    "currentRepoVersions": 20,
+    "historicalTextVersions": 14,
+    "sourceReceiptBindings": 115,
+    "sourceVersions": 34,
+    "unresolvedExplicitSourceHashes": 0
+  },
+  "immutableReceipts": [
+    {
+      "bytes": 331,
+      "originalPath": "data/ood-code-v1/receipt.json",
+      "sha256": "d96970442d13979d1419550078ce3957e8dd7fa5f6bffae531faaaceb55101ec",
+      "storage": {
+        "kind": "historical-receipt",
+        "path": "eval/sparse-pesto-v1/source-snapshots/receipts/d96970442d13979d1419550078ce3957e8dd7fa5f6bffae531faaaceb55101ec.json"
+      }
+    },
+    {
+      "bytes": 1531,
+      "originalPath": "fast-runtime-build-v1/build-receipt.json",
+      "sha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+      "storage": {
+        "kind": "repository-receipt",
+        "path": "eval/sparse-pesto-v1/FAST-BUILD-RECEIPT.json"
+      }
+    },
+    {
+      "bytes": 1229,
+      "originalPath": "fit-implementation-v1/receipt.json",
+      "sha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "storage": {
+        "kind": "historical-receipt",
+        "path": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json"
+      }
+    },
+    {
+      "bytes": 1229,
+      "originalPath": "fit-implementation-v2/receipt.json",
+      "sha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "storage": {
+        "kind": "historical-receipt",
+        "path": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json"
+      }
+    },
+    {
+      "bytes": 824,
+      "originalPath": "measure-fast-implementation-v1/FROZEN.json",
+      "sha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "storage": {
+        "kind": "historical-receipt",
+        "path": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json"
+      }
+    },
+    {
+      "bytes": 857,
+      "originalPath": "measure-implementation-v1/FROZEN.json",
+      "sha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "storage": {
+        "kind": "historical-receipt",
+        "path": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json"
+      }
+    },
+    {
+      "bytes": 1229,
+      "originalPath": "ood-evaluation-implementation-v1/receipt.json",
+      "sha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "storage": {
+        "kind": "historical-receipt",
+        "path": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json"
+      }
+    },
+    {
+      "bytes": 2261,
+      "originalPath": "packaged-runtime-v1/receipt.json",
+      "sha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "storage": {
+        "kind": "repository-receipt",
+        "path": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json"
+      }
+    }
+  ],
+  "newExperimentPerformed": false,
+  "notes": [
+    "Generated __pycache__ files, native executables, model weights, and raw datasets are outside this source inventory.",
+    "Source reconstruction must use the exact original file inventory; extra modules can change a directory-based implementation receipt.",
+    "The inherited OOD receipt omits the subsequently added evaluator; its actual published result contains and binds the complete ten-source execution inventory.",
+    "Pre-hardening sources are historical evidence. Current reusable readers retain their later validation checks.",
+    "All hashes were checked against retained bytes; no fit, evaluation, benchmark, label generation or result rewrite was performed."
+  ],
+  "packagingBaselinePin": {
+    "baselineManifest": {
+      "bytes": 1387,
+      "path": "tools/sparse_eval/baseline/manifest.json",
+      "sha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728"
+    },
+    "currentPipelineSource": {
+      "bytes": 18198,
+      "experimentExecutionClaim": false,
+      "path": "tools/sparse_eval/pipeline.py",
+      "sha256": "f0bc0034509ce35ea093c2ee3232c13f04988843d52e747ad72793386c1e8c19"
+    },
+    "experimentRerun": false,
+    "historicalImportsAndReceiptSourcesPreservedAsText": [
+      "0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418",
+      "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709",
+      "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    ],
+    "incomingMainCommit": "4239cec84600b81c68e49a5a31cf92816a27ce20",
+    "integrationStrategy": "merge preserving the existing research commits",
+    "measuredProductionCommit": "5e3558378deab8ba21f648cc2cca98195b1beced",
+    "note": "The incoming main release changes production search. Research entry points now use byte-identical pinned r84 engine/eval/search files. Historical source hashes resolve to these copies or exact text snapshots, never to changed main sources.",
+    "originalReceiptsChanged": false,
+    "parityReceipt": {
+      "bytes": 2261,
+      "path": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "sha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8"
+    }
+  },
+  "purpose": "Deduplicated exact source versions and immutable source receipts for the published sparse evaluator experiments. Identical current sources remain at repo paths; differing historical sources are inert SHA-256-named text.",
+  "receiptBindings": [
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1chnn.py",
+      "receipt": "eval/sparse-pesto-v1/CHNN-RESULTS.json",
+      "receiptSha256": "a26ca493859f1820280aeca3e7c7b11fa039255141d83e8eaa26faba62d25b39",
+      "sourceSha256": "08e249010933d6964b05cb5913cbe1d071036c1a36449ebb75f36dd815566af0"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1chnn_experiment.py",
+      "receipt": "eval/sparse-pesto-v1/CHNN-RESULTS.json",
+      "receiptSha256": "a26ca493859f1820280aeca3e7c7b11fa039255141d83e8eaa26faba62d25b39",
+      "sourceSha256": "b3a1f81868bf5e5353e00d853ac761b0ac4de1d8a498613e4bd09f66f1314d0f"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/CHNN-RESULTS.json",
+      "receiptSha256": "a26ca493859f1820280aeca3e7c7b11fa039255141d83e8eaa26faba62d25b39",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1wsp.py",
+      "receipt": "eval/sparse-pesto-v1/CHNN-RESULTS.json",
+      "receiptSha256": "a26ca493859f1820280aeca3e7c7b11fa039255141d83e8eaa26faba62d25b39",
+      "sourceSha256": "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/DATA-AUDIT.json",
+      "receiptSha256": "1a3eb71e69749099d856aaded1b8e013d77c0ca9df70389ee7d129eaa320262d",
+      "sourceSha256": "14f5ff4376f5656236aee877bbc400a98b39d87838d33321cd941eb345acbb51"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/DATA-MANIFEST.json",
+      "receiptSha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e",
+      "sourceSha256": "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+    },
+    {
+      "jsonPointer": "/sourceHashes/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/FAST-BUILD-RECEIPT.json",
+      "receiptSha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/sourceHashes/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/FAST-BUILD-RECEIPT.json",
+      "receiptSha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/sourceHashes/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/FAST-BUILD-RECEIPT.json",
+      "receiptSha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/FAST-BUILD-RECEIPT.json",
+      "receiptSha256": "e5eaddfc589f057b9c6a087c9e8a6a3876c20851f4a769e2cfa8e2f5618c9fbe",
+      "sourceSha256": "0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/NATURAL-AUDIT.json",
+      "receiptSha256": "cdcaf70e50cf3f7c010c836a72f4802674c316407004029e8ba71cdce5d109f9",
+      "sourceSha256": "d1d0734851c60c4143c627f0bd29b1c5804879af3c6874a7d63a49d6121df847"
+    },
+    {
+      "jsonPointer": "/strictScannerSourceSha256",
+      "receipt": "eval/sparse-pesto-v1/NATURAL-AUDIT.json",
+      "receiptSha256": "cdcaf70e50cf3f7c010c836a72f4802674c316407004029e8ba71cdce5d109f9",
+      "sourceSha256": "2267a9acf94f80969e870d62201db610b00ee7a7c4283cd1c2954c4e9ba642f3"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/NATURAL-MANIFEST.json",
+      "receiptSha256": "8053024c4c6b70bd66fc4463b4f8e7c4b24f380f201f946618e2ef1c6a030ab4",
+      "sourceSha256": "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+    },
+    {
+      "jsonPointer": "/implementation/eval~1sparse-pesto-v1~1PLAN.md",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1evaluate_ood.py",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "d8f9eec3c4d9477718d71b9330d1ce048f33157129ea1047c14a498dc4a326f3"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/OOD-EVAL-RESULTS.json",
+      "receiptSha256": "e8313cd05ae192edb4c81567f1f9671eb31157b52161b3b32589eb8928b0c84c",
+      "sourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/OOD-LABEL-AUDIT.json",
+      "receiptSha256": "57fb2350d932c5c9d78ef49fb9199ca081319446e9f5e8ed40c7ee9e95153a80",
+      "sourceSha256": "32f3f9e04d55bf54a29286fa9812714cb2a82a5c37b1785b8688ef828fb13c6d"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/OOD-LABEL-MANIFEST.json",
+      "receiptSha256": "2c719dff3dd1448b85748b5b79f4e5755b1c8208a572b350703d28c41ea28a05",
+      "sourceSha256": "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/OOD-SELECTION-AUDIT.json",
+      "receiptSha256": "f4547b836a12dc6a90d7ad3bb3a2210de80a84089ef82e84658b5f5e7b1f1cca",
+      "sourceSha256": "f7f08f20cb7f7d3cb7e715f666f3eda8159257968e3011ecb7161a4fe94a87d8"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/OOD-SELECTION-MANIFEST.json",
+      "receiptSha256": "3180d17d7958f10b7ebd9830db3d64633fe706868b6323d6846489d4a654e1d2",
+      "sourceSha256": "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1baseline~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "receiptSha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1baseline~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "receiptSha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1baseline~1manifest.json",
+      "receipt": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "receiptSha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "sourceSha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1baseline~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "receiptSha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "receiptSha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "sourceSha256": "462b8f68ab65864833a86afc8236d86beecf8c39e05a81d938c2648b30260fb8"
+    },
+    {
+      "jsonPointer": "/sourceHashes/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/PACKAGING-RECEIPT.json",
+      "receiptSha256": "a67862a0feadfdbe8350096dfb1f6af288d81e8dec25291d19b14d71e8d885e8",
+      "sourceSha256": "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-AUDIT.json",
+      "receiptSha256": "7db3d3b658596e36eea7f59ba3179b54414a37bdd442f97a4fd82f5320327f81",
+      "sourceSha256": "ac84f11e0632401f587490a0400c3dfe14d36d66f7423287ac9bd0032b0e2681"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-AUDIT.json",
+      "receiptSha256": "8c5f0409f83e2077ec0c4b51962ebe672269b4d9b9bb55e191f44cd7e96131c0",
+      "sourceSha256": "b8be5d0d78ed58b5aa56223012df88ef5fb390a401f5a722a2a0dffdc0bc3601"
+    },
+    {
+      "jsonPointer": "/plan/configSha256",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1eval~1sparse-pesto-v1~1RUNTIME-FAST-CONFIG.json",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1tools~1sparse_eval~1measure.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1tools~1sparse_eval~1measure_fast.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-fast-implementation-v1~1tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-FAST-RESULTS.json",
+      "receiptSha256": "afe620988625451a43e2cc4d62e01c87eb462ee8d6811cb9d2c5b7bb723dd740",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/plan/configSha256",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-RESULTS.json",
+      "receiptSha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+      "sourceSha256": "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-implementation-v1~1eval~1sparse-pesto-v1~1RUNTIME-CONFIG.json",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-RESULTS.json",
+      "receiptSha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+      "sourceSha256": "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-implementation-v1~1tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-RESULTS.json",
+      "receiptSha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-implementation-v1~1tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-RESULTS.json",
+      "receiptSha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-implementation-v1~1tools~1sparse_eval~1measure.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-RESULTS.json",
+      "receiptSha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+      "sourceSha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af"
+    },
+    {
+      "jsonPointer": "/plan/implementation/~1workspace~1library-files~1chessy-sparse-work~1measure-implementation-v1~1tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/RUNTIME-RESULTS.json",
+      "receiptSha256": "2017a461388ae5bf5a4ece7c684bdc16bf29ae3ae684fef28b83ea649f26bfae",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/TABLE-EDIT-RESULTS.json",
+      "receiptSha256": "2e1dce5cece337183777bee5922c073c66d281b19577800c3389dc4a639a2a0d",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/TABLE-EDIT-RESULTS.json",
+      "receiptSha256": "2e1dce5cece337183777bee5922c073c66d281b19577800c3389dc4a639a2a0d",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1table_edit.py",
+      "receipt": "eval/sparse-pesto-v1/TABLE-EDIT-RESULTS.json",
+      "receiptSha256": "2e1dce5cece337183777bee5922c073c66d281b19577800c3389dc4a639a2a0d",
+      "sourceSha256": "19c903074fc593de6190898427bd25a5283fb485db4f2cc2bb912896efc05909"
+    },
+    {
+      "jsonPointer": "/frozen/implementation/tools~1sparse_eval~1wsp.py",
+      "receipt": "eval/sparse-pesto-v1/TABLE-EDIT-RESULTS.json",
+      "receiptSha256": "2e1dce5cece337183777bee5922c073c66d281b19577800c3389dc4a639a2a0d",
+      "sourceSha256": "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06"
+    },
+    {
+      "jsonPointer": "/implementation/eval~1sparse-pesto-v1~1PLAN.md",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/plan.json",
+      "receiptSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+      "sourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    {
+      "jsonPointer": "/implementation/eval~1sparse-pesto-v1~1PLAN.md",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/results.json",
+      "receiptSha256": "328b475f6a6305430adf7b90edc9a217a4a5a5b14b41c73ea60d0e8fc55be1fe",
+      "sourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    {
+      "jsonPointer": "/implementation/eval~1sparse-pesto-v1~1PLAN.md",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/implementation/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/implementation/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/fit/selection.json",
+      "receiptSha256": "36627ab40b763f614b7f046c537c4024e1276c09758f1f1c85071b1381c032bc",
+      "sourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    {
+      "jsonPointer": "/eval~1sparse-pesto-v1~1PLAN.md",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+    },
+    {
+      "jsonPointer": "/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe.json",
+      "receiptSha256": "1d5904b06c482d4b9ad1199ad6ee38a7794017de993d7a58bba6d8be3b279abe",
+      "sourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    {
+      "jsonPointer": "/eval~1sparse-pesto-v1~1PLAN.md",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+    },
+    {
+      "jsonPointer": "/experiments~1wasm~1src~1engine.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/experiments~1wasm~1src~1eval.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/experiments~1wasm~1src~1search.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "e5780fc52f591df69f58762a234c1943c663cc59f58c1f21d47dbd288e557365"
+    },
+    {
+      "jsonPointer": "/tools~1sparse_eval~1runtime.rs",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785.json",
+      "receiptSha256": "5bbec9fd0e01e03fc25f6faa98631877df5c27a719a231d94e83759f4256f785",
+      "sourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    {
+      "jsonPointer": "/files/eval~1sparse-pesto-v1~1RUNTIME-CONFIG.json",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json",
+      "receiptSha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "sourceSha256": "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json",
+      "receiptSha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json",
+      "receiptSha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json",
+      "receiptSha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1measure.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json",
+      "receiptSha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "sourceSha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8.json",
+      "receiptSha256": "6eaa3de3e7b2057d21277fac3f5925f65c468421ef720fca00383a2cd3db15e8",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/files/eval~1sparse-pesto-v1~1RUNTIME-FAST-CONFIG.json",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1__init__.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1features.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1fit.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1measure.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1measure_fast.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319"
+    },
+    {
+      "jsonPointer": "/files/tools~1sparse_eval~1pipeline.py",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a.json",
+      "receiptSha256": "acf49295d0393a7570630db6370b96012445c1b8ba7c98894a226ba1326f706a",
+      "sourceSha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+    },
+    {
+      "jsonPointer": "/implementationSha256",
+      "receipt": "eval/sparse-pesto-v1/source-snapshots/receipts/d96970442d13979d1419550078ce3957e8dd7fa5f6bffae531faaaceb55101ec.json",
+      "receiptSha256": "d96970442d13979d1419550078ce3957e8dd7fa5f6bffae531faaaceb55101ec",
+      "sourceSha256": "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+    },
+    {
+      "jsonPointer": "/files/0/sha256",
+      "receipt": "tools/sparse_eval/baseline/manifest.json",
+      "receiptSha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+      "sourceSha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "jsonPointer": "/files/1/sha256",
+      "receipt": "tools/sparse_eval/baseline/manifest.json",
+      "receiptSha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+      "sourceSha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "jsonPointer": "/files/2/sha256",
+      "receipt": "tools/sparse_eval/baseline/manifest.json",
+      "receiptSha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+      "sourceSha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    }
+  ],
+  "researchOnly": true,
+  "schema": "chessy.sparse-source-snapshots.v2",
+  "scope": [
+    "fit-implementation-v1",
+    "fit-implementation-v2",
+    "measure-implementation-v1",
+    "measure-fast-implementation-v1",
+    "ood-evaluation-implementation-v1",
+    "fast-runtime-build-v1",
+    "data/implementation",
+    "data/ood-code-v1",
+    "direct NNUE and table LP implementation receipts",
+    "six independent audit scripts and strict SAN helper",
+    "packaged-runtime-v1 import-path parity receipt",
+    "current pipeline packaging adaptation (no experiment execution claim)"
+  ],
+  "snapshotInventories": [
+    {
+      "files": [
+        {
+          "bytes": 6627,
+          "path": "eval/sparse-pesto-v1/PLAN.md",
+          "sha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+        },
+        {
+          "bytes": 37233,
+          "path": "experiments/wasm/src/engine.rs",
+          "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+        },
+        {
+          "bytes": 15221,
+          "path": "experiments/wasm/src/eval.rs",
+          "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+        },
+        {
+          "bytes": 48406,
+          "path": "experiments/wasm/src/search.rs",
+          "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/sparse_eval/__init__.py",
+          "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+        },
+        {
+          "bytes": 14328,
+          "path": "tools/sparse_eval/features.py",
+          "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        },
+        {
+          "bytes": 8999,
+          "path": "tools/sparse_eval/fit.py",
+          "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+        },
+        {
+          "bytes": 17805,
+          "path": "tools/sparse_eval/pipeline.py",
+          "sha256": "e5780fc52f591df69f58762a234c1943c663cc59f58c1f21d47dbd288e557365"
+        },
+        {
+          "bytes": 13893,
+          "path": "tools/sparse_eval/runtime.rs",
+          "sha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "fit-implementation-v1",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/fit-implementation-v1"
+    },
+    {
+      "files": [
+        {
+          "bytes": 6627,
+          "path": "eval/sparse-pesto-v1/PLAN.md",
+          "sha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+        },
+        {
+          "bytes": 37233,
+          "path": "experiments/wasm/src/engine.rs",
+          "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+        },
+        {
+          "bytes": 15221,
+          "path": "experiments/wasm/src/eval.rs",
+          "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+        },
+        {
+          "bytes": 48406,
+          "path": "experiments/wasm/src/search.rs",
+          "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/sparse_eval/__init__.py",
+          "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+        },
+        {
+          "bytes": 14328,
+          "path": "tools/sparse_eval/features.py",
+          "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        },
+        {
+          "bytes": 8999,
+          "path": "tools/sparse_eval/fit.py",
+          "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+        },
+        {
+          "bytes": 18128,
+          "path": "tools/sparse_eval/pipeline.py",
+          "sha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+        },
+        {
+          "bytes": 13893,
+          "path": "tools/sparse_eval/runtime.rs",
+          "sha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "fit-implementation-v2",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/fit-implementation-v2"
+    },
+    {
+      "files": [
+        {
+          "bytes": 1416,
+          "path": "eval/sparse-pesto-v1/RUNTIME-CONFIG.json",
+          "sha256": "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/sparse_eval/__init__.py",
+          "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+        },
+        {
+          "bytes": 14328,
+          "path": "tools/sparse_eval/features.py",
+          "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        },
+        {
+          "bytes": 8999,
+          "path": "tools/sparse_eval/fit.py",
+          "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+        },
+        {
+          "bytes": 18537,
+          "path": "tools/sparse_eval/measure.py",
+          "sha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af"
+        },
+        {
+          "bytes": 18128,
+          "path": "tools/sparse_eval/pipeline.py",
+          "sha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "measure-implementation-v1",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/measure-implementation-v1"
+    },
+    {
+      "files": [
+        {
+          "bytes": 2240,
+          "path": "eval/sparse-pesto-v1/RUNTIME-FAST-CONFIG.json",
+          "sha256": "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/sparse_eval/__init__.py",
+          "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+        },
+        {
+          "bytes": 14328,
+          "path": "tools/sparse_eval/features.py",
+          "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        },
+        {
+          "bytes": 8999,
+          "path": "tools/sparse_eval/fit.py",
+          "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+        },
+        {
+          "bytes": 18537,
+          "path": "tools/sparse_eval/measure.py",
+          "sha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af"
+        },
+        {
+          "bytes": 15575,
+          "path": "tools/sparse_eval/measure_fast.py",
+          "sha256": "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319"
+        },
+        {
+          "bytes": 18128,
+          "path": "tools/sparse_eval/pipeline.py",
+          "sha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "measure-fast-implementation-v1",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/measure-fast-implementation-v1"
+    },
+    {
+      "files": [
+        {
+          "bytes": 6627,
+          "path": "eval/sparse-pesto-v1/PLAN.md",
+          "sha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5"
+        },
+        {
+          "bytes": 37233,
+          "path": "experiments/wasm/src/engine.rs",
+          "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+        },
+        {
+          "bytes": 15221,
+          "path": "experiments/wasm/src/eval.rs",
+          "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+        },
+        {
+          "bytes": 48406,
+          "path": "experiments/wasm/src/search.rs",
+          "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        },
+        {
+          "bytes": 78,
+          "path": "tools/sparse_eval/__init__.py",
+          "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+        },
+        {
+          "bytes": 6406,
+          "path": "tools/sparse_eval/evaluate_ood.py",
+          "sha256": "d8f9eec3c4d9477718d71b9330d1ce048f33157129ea1047c14a498dc4a326f3"
+        },
+        {
+          "bytes": 14328,
+          "path": "tools/sparse_eval/features.py",
+          "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+        },
+        {
+          "bytes": 8999,
+          "path": "tools/sparse_eval/fit.py",
+          "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+        },
+        {
+          "bytes": 18128,
+          "path": "tools/sparse_eval/pipeline.py",
+          "sha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928"
+        },
+        {
+          "bytes": 13893,
+          "path": "tools/sparse_eval/runtime.rs",
+          "sha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "ood-evaluation-implementation-v1",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/ood-evaluation-implementation-v1",
+      "receiptNote": "The inherited receipt.json predates evaluate_ood.py. The complete ten-source execution inventory is bound by OOD-EVAL-RESULTS.json; the inherited receipt is preserved unchanged."
+    },
+    {
+      "files": [
+        {
+          "bytes": 37233,
+          "path": "experiments/wasm/src/engine.rs",
+          "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+        },
+        {
+          "bytes": 15221,
+          "path": "experiments/wasm/src/eval.rs",
+          "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+        },
+        {
+          "bytes": 48406,
+          "path": "experiments/wasm/src/search.rs",
+          "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        },
+        {
+          "bytes": 21732,
+          "path": "tools/sparse_eval/runtime.rs",
+          "sha256": "0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "fast-runtime-build-v1",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/fast-runtime-build-v1/source"
+    },
+    {
+      "files": [
+        {
+          "bytes": 20549,
+          "originalRepoPath": "tools/sparse_eval/data.py",
+          "path": "data.py",
+          "sha256": "8566ab5ff7b2d3c35d38246a7e16ed896ee016b4f06c7d9a3431f590ec2b3f9a"
+        },
+        {
+          "bytes": 31154,
+          "originalRepoPath": "tools/sparse_eval/data.py",
+          "path": "data-v1.py",
+          "sha256": "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b"
+        }
+      ],
+      "name": "data/implementation",
+      "note": "data-v1.py is the final corpus implementation; the earlier data.py precursor is retained without a final-run execution claim.",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/data/implementation"
+    },
+    {
+      "files": [
+        {
+          "bytes": 26076,
+          "originalRepoPath": "tools/sparse_eval/label_ood.py",
+          "path": "label_ood.py",
+          "sha256": "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b"
+        }
+      ],
+      "name": "data/ood-code-v1",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/data/ood-code-v1"
+    },
+    {
+      "files": [
+        {
+          "bytes": 37233,
+          "path": "tools/sparse_eval/baseline/engine.rs",
+          "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+        },
+        {
+          "bytes": 15221,
+          "path": "tools/sparse_eval/baseline/eval.rs",
+          "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+        },
+        {
+          "bytes": 1387,
+          "path": "tools/sparse_eval/baseline/manifest.json",
+          "sha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728"
+        },
+        {
+          "bytes": 48406,
+          "path": "tools/sparse_eval/baseline/search.rs",
+          "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+        },
+        {
+          "bytes": 14471,
+          "path": "tools/sparse_eval/features.py",
+          "sha256": "462b8f68ab65864833a86afc8236d86beecf8c39e05a81d938c2648b30260fb8"
+        },
+        {
+          "bytes": 21767,
+          "path": "tools/sparse_eval/runtime.rs",
+          "sha256": "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a"
+        }
+      ],
+      "generatedCachesAndNativeExecutablesExcluded": true,
+      "name": "packaged-runtime-v1",
+      "note": "Import-path-only packaging parity against already saved score triples; no new model selection, fitting, teacher labels or timing.",
+      "originalRoot": "/workspace/library-files/chessy-sparse-work/packaged-runtime-v1/source"
+    }
+  ],
+  "sourceVersions": [
+    {
+      "bytes": 6627,
+      "originalPaths": [
+        "eval/sparse-pesto-v1/PLAN.md"
+      ],
+      "origins": [
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "ood-evaluation-implementation-v1"
+      ],
+      "sha256": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+      "storage": {
+        "kind": "repository-source",
+        "path": "eval/sparse-pesto-v1/PLAN.md"
+      }
+    },
+    {
+      "bytes": 11768,
+      "originalPaths": [
+        "tools/sparse_eval/chnn.py"
+      ],
+      "origins": [
+        "hash-verified recovery of measured CHNN adapter"
+      ],
+      "recovery": {
+        "basePath": "tools/sparse_eval/chnn.py",
+        "baseSha256": "0a89f4fd8dc4ed54f8f6f4a62284844a85a43e4fe97a0b803db1dd1e3d17ff62",
+        "method": "hash-verified-byte-recovery",
+        "note": "Reverses the single documented post-run guard change. Exact recovered bytes match the implementation SHA-256 recorded before the real experiment; no experiment or metric was rerun.",
+        "replacementCount": 1,
+        "replacementFrom": "not 1 <= qa <= 255",
+        "replacementTo": "not 1 <= qa <= 32767"
+      },
+      "sha256": "08e249010933d6964b05cb5913cbe1d071036c1a36449ebb75f36dd815566af0",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/08e249010933d6964b05cb5913cbe1d071036c1a36449ebb75f36dd815566af0.txt"
+      }
+    },
+    {
+      "bytes": 26076,
+      "originalPaths": [
+        "tools/sparse_eval/label_ood.py"
+      ],
+      "origins": [
+        "data/ood-code-v1"
+      ],
+      "sha256": "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/label_ood.py"
+      }
+    },
+    {
+      "bytes": 21732,
+      "originalPaths": [
+        "tools/sparse_eval/runtime.rs"
+      ],
+      "origins": [
+        "fast-runtime-build-v1"
+      ],
+      "packagingNote": "Preserved before adapting standalone research imports or implementation receipt paths to the immutable r84 baseline during the subsequent main merge; original experiment identity is unchanged.",
+      "sha256": "0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/0f5248a5cf12c3f98d348f640b7c8a5517bae7944827fe8aa42fa992c7c33418.txt"
+      }
+    },
+    {
+      "bytes": 4384,
+      "originalPaths": [
+        "/workspace/library-files/chessy-sparse-work/data/audit-source.py"
+      ],
+      "origins": [
+        "independent audit source data/audit-source.py"
+      ],
+      "sha256": "14f5ff4376f5656236aee877bbc400a98b39d87838d33321cd941eb345acbb51",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/14f5ff4376f5656236aee877bbc400a98b39d87838d33321cd941eb345acbb51.txt"
+      }
+    },
+    {
+      "bytes": 14143,
+      "originalPaths": [
+        "tools/sparse_eval/table_edit.py"
+      ],
+      "origins": [
+        "published diagnostic or audit implementation receipt"
+      ],
+      "sha256": "19c903074fc593de6190898427bd25a5283fb485db4f2cc2bb912896efc05909",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/table_edit.py"
+      }
+    },
+    {
+      "bytes": 23119,
+      "originalPaths": [
+        "test/training/natural-select.py"
+      ],
+      "origins": [
+        "published diagnostic or audit implementation receipt"
+      ],
+      "sha256": "2267a9acf94f80969e870d62201db610b00ee7a7c4283cd1c2954c4e9ba642f3",
+      "storage": {
+        "kind": "repository-source",
+        "path": "test/training/natural-select.py"
+      }
+    },
+    {
+      "bytes": 18073,
+      "originalPaths": [
+        "tools/sparse_eval/wsp.py"
+      ],
+      "origins": [
+        "published diagnostic or audit implementation receipt"
+      ],
+      "sha256": "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/wsp.py"
+      }
+    },
+    {
+      "bytes": 5316,
+      "originalPaths": [
+        "/workspace/library-files/chessy-sparse-work/data/audit-ood-v1.py"
+      ],
+      "origins": [
+        "independent audit source data/audit-ood-v1.py"
+      ],
+      "sha256": "32f3f9e04d55bf54a29286fa9812714cb2a82a5c37b1785b8688ef828fb13c6d",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/32f3f9e04d55bf54a29286fa9812714cb2a82a5c37b1785b8688ef828fb13c6d.txt"
+      }
+    },
+    {
+      "bytes": 15221,
+      "originalPaths": [
+        "experiments/wasm/src/eval.rs"
+      ],
+      "origins": [
+        "fast-runtime-build-v1",
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "ood-evaluation-implementation-v1"
+      ],
+      "packagingNote": "Exact measured r84 production bytes now retained under the immutable research baseline; historical original paths and receipt pointers are unchanged.",
+      "packagingPaths": [
+        "tools/sparse_eval/baseline/eval.rs"
+      ],
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/baseline/eval.rs"
+      }
+    },
+    {
+      "bytes": 14471,
+      "originalPaths": [
+        "tools/sparse_eval/features.py"
+      ],
+      "origins": [
+        "packaged-runtime-v1 import-path-only parity receipt"
+      ],
+      "packagingNote": "Packaging identity only; historical experiment and timing receipts retain their original source versions.",
+      "sha256": "462b8f68ab65864833a86afc8236d86beecf8c39e05a81d938c2648b30260fb8",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/features.py"
+      }
+    },
+    {
+      "bytes": 31154,
+      "originalPaths": [
+        "tools/sparse_eval/data.py"
+      ],
+      "origins": [
+        "data/implementation/data-v1.py"
+      ],
+      "sha256": "4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/4a3bcc8d439ede1ffec81965450fe1ec839d7ab6c9c9902576ec68120ac0fb0b.txt"
+      }
+    },
+    {
+      "bytes": 2240,
+      "originalPaths": [
+        "eval/sparse-pesto-v1/RUNTIME-FAST-CONFIG.json"
+      ],
+      "origins": [
+        "measure-fast-implementation-v1"
+      ],
+      "sha256": "6019545bba75af37cc9d17ad7c4cb33688a64ff67d8f4faad0a7a1f463d24b2f",
+      "storage": {
+        "kind": "repository-source",
+        "path": "eval/sparse-pesto-v1/RUNTIME-FAST-CONFIG.json"
+      }
+    },
+    {
+      "bytes": 18537,
+      "originalPaths": [
+        "tools/sparse_eval/measure.py"
+      ],
+      "origins": [
+        "measure-fast-implementation-v1",
+        "measure-implementation-v1"
+      ],
+      "sha256": "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/measure.py"
+      }
+    },
+    {
+      "bytes": 1387,
+      "originalPaths": [
+        "tools/sparse_eval/baseline/manifest.json"
+      ],
+      "origins": [
+        "packaged-runtime-v1 import-path-only parity receipt"
+      ],
+      "packagingNote": "Packaging identity only; historical experiment and timing receipts retain their original source versions.",
+      "sha256": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/baseline/manifest.json"
+      }
+    },
+    {
+      "bytes": 21767,
+      "originalPaths": [
+        "tools/sparse_eval/runtime.rs"
+      ],
+      "origins": [
+        "packaged-runtime-v1 import-path-only parity receipt"
+      ],
+      "packagingNote": "Packaging identity only; historical experiment and timing receipts retain their original source versions.",
+      "sha256": "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/runtime.rs"
+      }
+    },
+    {
+      "bytes": 18128,
+      "originalPaths": [
+        "tools/sparse_eval/pipeline.py"
+      ],
+      "origins": [
+        "fit-implementation-v2",
+        "measure-fast-implementation-v1",
+        "measure-implementation-v1",
+        "ood-evaluation-implementation-v1"
+      ],
+      "packagingNote": "Preserved before adapting standalone research imports or implementation receipt paths to the immutable r84 baseline during the subsequent main merge; original experiment identity is unchanged.",
+      "sha256": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928.txt"
+      }
+    },
+    {
+      "bytes": 37233,
+      "originalPaths": [
+        "experiments/wasm/src/engine.rs"
+      ],
+      "origins": [
+        "fast-runtime-build-v1",
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "ood-evaluation-implementation-v1"
+      ],
+      "packagingNote": "Exact measured r84 production bytes now retained under the immutable research baseline; historical original paths and receipt pointers are unchanged.",
+      "packagingPaths": [
+        "tools/sparse_eval/baseline/engine.rs"
+      ],
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/baseline/engine.rs"
+      }
+    },
+    {
+      "bytes": 20549,
+      "originalPaths": [
+        "tools/sparse_eval/data.py"
+      ],
+      "origins": [
+        "data/implementation/data.py"
+      ],
+      "sha256": "8566ab5ff7b2d3c35d38246a7e16ed896ee016b4f06c7d9a3431f590ec2b3f9a",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/8566ab5ff7b2d3c35d38246a7e16ed896ee016b4f06c7d9a3431f590ec2b3f9a.txt"
+      }
+    },
+    {
+      "bytes": 13893,
+      "originalPaths": [
+        "tools/sparse_eval/runtime.rs"
+      ],
+      "origins": [
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "ood-evaluation-implementation-v1"
+      ],
+      "sha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663.txt"
+      }
+    },
+    {
+      "bytes": 5821,
+      "originalPaths": [
+        "/workspace/library-files/chessy-sparse-work/audit-runtime.py"
+      ],
+      "origins": [
+        "independent audit source audit-runtime.py"
+      ],
+      "sha256": "ac84f11e0632401f587490a0400c3dfe14d36d66f7423287ac9bd0032b0e2681",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/ac84f11e0632401f587490a0400c3dfe14d36d66f7423287ac9bd0032b0e2681.txt"
+      }
+    },
+    {
+      "bytes": 12000,
+      "originalPaths": [
+        "tools/sparse_eval/chnn_experiment.py"
+      ],
+      "origins": [
+        "published diagnostic or audit implementation receipt"
+      ],
+      "sha256": "b3a1f81868bf5e5353e00d853ac761b0ac4de1d8a498613e4bd09f66f1314d0f",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/chnn_experiment.py"
+      }
+    },
+    {
+      "bytes": 5683,
+      "originalPaths": [
+        "/workspace/library-files/chessy-sparse-work/audit-runtime-fast.py"
+      ],
+      "origins": [
+        "independent audit source audit-runtime-fast.py"
+      ],
+      "sha256": "b8be5d0d78ed58b5aa56223012df88ef5fb390a401f5a722a2a0dffdc0bc3601",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/b8be5d0d78ed58b5aa56223012df88ef5fb390a401f5a722a2a0dffdc0bc3601.txt"
+      }
+    },
+    {
+      "bytes": 8999,
+      "originalPaths": [
+        "tools/sparse_eval/fit.py"
+      ],
+      "origins": [
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "measure-fast-implementation-v1",
+        "measure-implementation-v1",
+        "ood-evaluation-implementation-v1"
+      ],
+      "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/fit.py"
+      }
+    },
+    {
+      "bytes": 3319,
+      "originalPaths": [
+        "/workspace/library-files/chessy-sparse-work/data/audit-pgn.py"
+      ],
+      "origins": [
+        "independent audit source data/audit-pgn.py"
+      ],
+      "sha256": "d1d0734851c60c4143c627f0bd29b1c5804879af3c6874a7d63a49d6121df847",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/d1d0734851c60c4143c627f0bd29b1c5804879af3c6874a7d63a49d6121df847.txt"
+      }
+    },
+    {
+      "bytes": 6406,
+      "originalPaths": [
+        "tools/sparse_eval/evaluate_ood.py"
+      ],
+      "origins": [
+        "ood-evaluation-implementation-v1"
+      ],
+      "sha256": "d8f9eec3c4d9477718d71b9330d1ce048f33157129ea1047c14a498dc4a326f3",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/evaluate_ood.py"
+      }
+    },
+    {
+      "bytes": 1416,
+      "originalPaths": [
+        "eval/sparse-pesto-v1/RUNTIME-CONFIG.json"
+      ],
+      "origins": [
+        "measure-implementation-v1"
+      ],
+      "sha256": "dcbf1819b6aa78c0d59ccf5a8791fb9b44fdb74f86c4bd7a5d733e914ce8c26b",
+      "storage": {
+        "kind": "repository-source",
+        "path": "eval/sparse-pesto-v1/RUNTIME-CONFIG.json"
+      }
+    },
+    {
+      "bytes": 48406,
+      "originalPaths": [
+        "experiments/wasm/src/search.rs"
+      ],
+      "origins": [
+        "fast-runtime-build-v1",
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "ood-evaluation-implementation-v1"
+      ],
+      "packagingNote": "Exact measured r84 production bytes now retained under the immutable research baseline; historical original paths and receipt pointers are unchanged.",
+      "packagingPaths": [
+        "tools/sparse_eval/baseline/search.rs"
+      ],
+      "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/baseline/search.rs"
+      }
+    },
+    {
+      "bytes": 17805,
+      "originalPaths": [
+        "tools/sparse_eval/pipeline.py"
+      ],
+      "origins": [
+        "fit-implementation-v1"
+      ],
+      "sha256": "e5780fc52f591df69f58762a234c1943c663cc59f58c1f21d47dbd288e557365",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/e5780fc52f591df69f58762a234c1943c663cc59f58c1f21d47dbd288e557365.txt"
+      }
+    },
+    {
+      "bytes": 18198,
+      "originalPaths": [
+        "tools/sparse_eval/pipeline.py"
+      ],
+      "origins": [
+        "final packaging baseline receipt-path adaptation"
+      ],
+      "packagingNote": "Current source identity recorded for reconstruction. No historical fit or timing was run with this version; original pipeline versions remain separately retained.",
+      "sha256": "f0bc0034509ce35ea093c2ee3232c13f04988843d52e747ad72793386c1e8c19",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/pipeline.py"
+      }
+    },
+    {
+      "bytes": 15575,
+      "originalPaths": [
+        "tools/sparse_eval/measure_fast.py"
+      ],
+      "origins": [
+        "measure-fast-implementation-v1"
+      ],
+      "sha256": "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/measure_fast.py"
+      }
+    },
+    {
+      "bytes": 78,
+      "originalPaths": [
+        "tools/sparse_eval/__init__.py"
+      ],
+      "origins": [
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "measure-fast-implementation-v1",
+        "measure-implementation-v1",
+        "ood-evaluation-implementation-v1"
+      ],
+      "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+      "storage": {
+        "kind": "repository-source",
+        "path": "tools/sparse_eval/__init__.py"
+      }
+    },
+    {
+      "bytes": 14328,
+      "originalPaths": [
+        "tools/sparse_eval/features.py"
+      ],
+      "origins": [
+        "fit-implementation-v1",
+        "fit-implementation-v2",
+        "measure-fast-implementation-v1",
+        "measure-implementation-v1",
+        "ood-evaluation-implementation-v1"
+      ],
+      "packagingNote": "Preserved before adapting standalone research imports or implementation receipt paths to the immutable r84 baseline during the subsequent main merge; original experiment identity is unchanged.",
+      "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709.txt"
+      }
+    },
+    {
+      "bytes": 3368,
+      "originalPaths": [
+        "/workspace/library-files/chessy-sparse-work/data/audit-ood-selection.py"
+      ],
+      "origins": [
+        "independent audit source data/audit-ood-selection.py"
+      ],
+      "sha256": "f7f08f20cb7f7d3cb7e715f666f3eda8159257968e3011ecb7161a4fe94a87d8",
+      "storage": {
+        "kind": "historical-source-text",
+        "path": "eval/sparse-pesto-v1/source-snapshots/f7f08f20cb7f7d3cb7e715f666f3eda8159257968e3011ecb7161a4fe94a87d8.txt"
+      }
+    }
+  ]
+}

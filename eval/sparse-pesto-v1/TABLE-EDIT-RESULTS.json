@@ -1,0 +1,124 @@
+{
+  "additionalCandidateSelectionAllowed": false,
+  "baseVariant": "full",
+  "baseVariantChosenBeforeScores": true,
+  "changedIntegerCoefficients": 62,
+  "elapsedSeconds": 4.960772455000551,
+  "frozen": {
+    "baseModelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+    "config": {
+      "additionalCandidateSelectionAllowed": false,
+      "baseSelectionUsesValidation": false,
+      "baseVariant": "full",
+      "coefficientRounding": "nearest ties away from zero, matching the table fitter",
+      "featureCost": "RMS over the complete 4096-row training prefix; floor 1e-12",
+      "floatingPreservationEpsilonCp": 5,
+      "holdoutOpened": false,
+      "integerPreservationGateCp": 5,
+      "l1": 0.01,
+      "maximumAbsoluteCoefficientDeltaCp": 8,
+      "nativeParityRows": 4096,
+      "playingStrengthMeasured": false,
+      "preservationRows": 2048,
+      "productionEligible": false,
+      "repairRows": 2048,
+      "repairWeight": "uniform",
+      "schema": "chessy.sparse-table-edit-config.v1",
+      "solverTimeLimitSeconds": 120,
+      "supportBudget": 128,
+      "supportRule": "abs(full-model coefficient) times RMS over the complete 4096-row training prefix; tie by index",
+      "trainPrefixRows": 4096,
+      "validationOpened": false
+    },
+    "configSha256": "9fb4212d4f5cbb0a634c4ea381570dd89ac9213a4efa00b2f62084f6fe91ad7e",
+    "fitEntrySha256": "40f629bf2f6a20b1ddf641d41a79c5a886523d7bf7cd52242764191cc24d5197",
+    "fitPlanSha256": "2f3e25777e19a5b5aaf87b0b64a402f31badfb54c115fdee8e1fd5d9955e0ee0",
+    "implementation": {
+      "tools/sparse_eval/features.py": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709",
+      "tools/sparse_eval/fit.py": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+      "tools/sparse_eval/table_edit.py": "19c903074fc593de6190898427bd25a5283fb485db4f2cc2bb912896efc05909",
+      "tools/sparse_eval/wsp.py": "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06"
+    },
+    "nativeSha256": "b9827497e32a636b40bbfc9f15db814402c0f55a33b5c2e5f2a095fcafe88400",
+    "packedManifestSha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+    "validationUsedToChooseBase": false
+  },
+  "holdoutOpened": false,
+  "integerPreservationPassed": false,
+  "maximumIntegerPreservationChangeCp": 8,
+  "nativeParity": {
+    "afterTranscriptSha256": "bd9309746cf4b918f07a74feefc447115cc6162e8efc4d612f15a89db9ef1bf6",
+    "beforeTranscriptSha256": "dc8faae66e9cf515595d2f1b82d5b1250f23f97fdf62412287e64766b4e95f3c",
+    "mismatches": 0,
+    "models": 2,
+    "rowsPerModel": 4096
+  },
+  "optimization": {
+    "absoluteDualityGap": 1.4210854715202004e-14,
+    "baselineWeightedMaeCp": 122.80908203125,
+    "dualObjective": 121.88883400726016,
+    "editedWeightedMaeCp": 121.64493099667487,
+    "features": 17280,
+    "fixedFeatureOptimizationIsConvex": true,
+    "implicitBias": false,
+    "l1": 0.01,
+    "l1Delta": 100.52522952828156,
+    "marginIsSoft": false,
+    "marginRows": 0,
+    "marginSlackSum": 0.0,
+    "maximumMarginShortfallCp": 0.0,
+    "maximumPreservationChangeCp": 5.000000000000886,
+    "maximumPreservationExcessCp": 8.86402062860725e-13,
+    "maximumPrimalViolation": 8.86402062860725e-13,
+    "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+    "nonzeroDelta": 87,
+    "objective": 121.88883400726017,
+    "playingStrengthMeasured": false,
+    "preservationIsSoft": false,
+    "preservationRows": 2048,
+    "preservationSlackSum": 0.0,
+    "productionEligible": false,
+    "rows": 2048,
+    "schema": "chessy.sparse-linear-edit.v1",
+    "solver": "scipy.optimize.linprog/highs",
+    "status": 0,
+    "success": true,
+    "supportSelectionIsConvex": false,
+    "supportSize": 128
+  },
+  "outcome": "quantized-candidate-rejected",
+  "playingStrengthMeasured": false,
+  "preservation": {
+    "after": {
+      "maeCp": 110.79150390625,
+      "meanSignedErrorCp": -29.04443359375,
+      "rmseCp": 176.87428362266587,
+      "rows": 2048
+    },
+    "before": {
+      "maeCp": 111.2578125,
+      "meanSignedErrorCp": -28.990234375,
+      "rmseCp": 177.3229778583771,
+      "rows": 2048
+    }
+  },
+  "productionEligible": false,
+  "repair": {
+    "after": {
+      "maeCp": 121.6982421875,
+      "meanSignedErrorCp": -19.0791015625,
+      "rmseCp": 195.92330490845137,
+      "rows": 2048
+    },
+    "before": {
+      "maeCp": 122.80908203125,
+      "meanSignedErrorCp": -18.74853515625,
+      "rmseCp": 196.86741180812848,
+      "rows": 2048
+    }
+  },
+  "resultModelSha256": "b257c4161cef230aed0f77a95285693557af2a6ddf6423b15aeb69a50a5117df",
+  "schema": "chessy.sparse-table-edit.v1",
+  "trainOnlyMechanismDiagnostic": true,
+  "validationOpened": false
+}

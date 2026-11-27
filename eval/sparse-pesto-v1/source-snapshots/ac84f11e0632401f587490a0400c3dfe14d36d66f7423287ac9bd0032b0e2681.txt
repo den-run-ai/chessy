@@ -1,0 +1,65 @@
+from pathlib import Path
+import hashlib,json,math,statistics,os
+import numpy as np
+from scipy import sparse
+root=Path('/workspace/library-files/chessy-sparse-work/runtime-v1');pack=root.parent/'packed-v1'
+def sha(x):return hashlib.sha256(x).hexdigest()
+def enc(x):return json.dumps(x,sort_keys=True,separators=(',',':')).encode()+b'\n'
+def read_bound(directory,item):
+ raw=(directory/item['path']).read_bytes();assert len(raw)==item['bytes'] and sha(raw)==item['sha256'];return raw
+raw=(root/'results.json').read_bytes();result=json.loads(raw)
+assert result['status']=='complete-research-only'
+plan=result['plan'];assert sha((root/'native-extractor').read_bytes())==plan['nativeSha256']
+assert sha((root/'config.json').read_bytes())==plan['configSha256']
+packraw=(pack/'manifest.json').read_bytes();assert sha(packraw)==plan['packedManifestSha256'];manifest=json.loads(packraw)
+part=next(x for x in manifest['roles'] if x['role']=='validation');files=part['files']
+arrays={}
+for name,dtype in [('indices.i32','<i4'),('values.f32','<f4'),('indptr.i64','<i8'),('baseline.i32','<i4'),('phase.u8','u1')]:arrays[name]=np.frombuffer(read_bound(pack,files[name]),dtype=dtype)
+# Independent exact integer numerator reference, not fit.predict's float dot.
+values=np.rint(arrays['values.f32'].astype(np.float64)*24).astype(np.int64)
+x=sparse.csr_matrix((values,arrays['indices.i32'],arrays['indptr.i64']),shape=(part['rows'],17280))
+fens=read_bound(pack,files['fens.txt']).decode().splitlines();assert len(fens)==part['rows']
+selected=json.loads(read_bound(root,plan['selectedPositions']))
+for name,low,high in [('opening',18,25),('middlegame',7,18),('endgame',0,7)]:
+ candidates=sorted((sha(fen.encode()),fen,index) for index,(fen,phase) in enumerate(zip(fens,arrays['phase.u8'])) if low<=phase<high)
+ assert [r['validationIndex'] for r in selected if r['phaseBucket']==name]==[index for _,_,index in candidates[:8]]
+outputs={};parity_rows=0
+for name in ['pst','king','full','full-ridge','full-sparse']:
+ wraw=(root/(name+'.i16le')).read_bytes();assert sha(wraw)==plan['weightsSha256'][name];weights=np.frombuffer(wraw,dtype='<i2').astype(np.int64)
+ numerator=x@weights;correct=np.sign(numerator)*((np.abs(numerator)+12)//24);expected=arrays['baseline.i32'].astype(np.int64)+correct
+ actual=np.array([list(map(int,line.split())) for line in (root/(name+'.parity.stdout')).read_text().splitlines()],dtype=np.int64)
+ assert actual.shape==(part['rows'],3);assert np.array_equal(actual[:,0],arrays['baseline.i32']);assert np.array_equal(actual[:,1],expected);assert np.array_equal(actual[:,2],correct)
+ outputs[name]=actual;parity_rows+=len(actual)
+raw_search=[];raw_static=0
+for command in result['rawFiles']:
+ assert command['returncode']==0
+ stdout=read_bound(root,command['stdout']);assert read_bound(root,command['stderr'])==b''
+ stem=command['stdout']['path'];name=stem.split('.')[0]
+ if '.static.' in stem:
+  group=stem.split('.')[-2];r=json.loads(stdout);subset=selected if group=='all' else [p for p in selected if p['phaseBucket']==group]
+  ids=[p['validationIndex'] for p in subset];assert r['positions']==len(ids) and r['passes']==6000
+  assert r['baseline_checksum']==int(outputs[name][ids,0].sum())*6000 and r['candidate_checksum']==int(outputs[name][ids,1].sum())*6000
+  published=next(x for x in result['static'] if x['model']==name and x['phaseBucket']==group)
+  assert abs(published['baselineOverCandidateTime']-r['baseline_ns']/r['candidate_ns'])<1e-15;raw_static+=1
+ elif '.search.' in stem:
+  _,_,nodes,replicate,_=stem.split('.');nodes=int(nodes);replicate=int(replicate)
+  positions=selected if replicate==0 else list(reversed(selected));lines=stdout.splitlines();assert len(lines)==48
+  seen=set()
+  for line in lines:
+   r=json.loads(line);p=positions[r['row']];key=(r['row'],r['candidate']);assert key not in seen;seen.add(key)
+   assert r['requested_nodes']==nodes and r['nodes']==nodes and r['elapsed_ns']>0
+   raw_search.append(dict(r,model=name,replicate=replicate,positionIndex=p['positionIndex'],phaseBucket=p['phaseBucket'],fenSha256=p['fenSha256'],consumedRequestedNodes=True))
+assert raw_static==20 and len(raw_search)==960 and parity_rows==500820
+saved=[json.loads(line) for line in read_bound(root,result['observations']).splitlines()];assert saved==raw_search
+pairs={}
+for r in raw_search:pairs.setdefault((r['model'],r['requested_nodes'],r['replicate'],r['positionIndex']),{})[r['candidate']]=r
+assert len(pairs)==480 and all(set(v)=={False,True} for v in pairs.values())
+for row in result['search']:
+ picked=[v for key,v in pairs.items() if key[0]==row['model'] and key[1]==row['requestedNodes'] and (row['phaseBucket']=='all' or v[False]['phaseBucket']==row['phaseBucket'])]
+ ratio=statistics.geometric_mean(v[False]['elapsed_ns']/v[True]['elapsed_ns'] for v in picked)
+ nps=statistics.geometric_mean((v[True]['nodes']/v[True]['elapsed_ns'])/(v[False]['nodes']/v[False]['elapsed_ns']) for v in picked)
+ assert len(picked)==row['pairs']==row['bothConsumedRequestedNodes']
+ assert abs(ratio-row['timeRatioGeometricMean'])<1e-12 and abs(nps-row['npsRatioGeometricMean'])<1e-12
+report={'schema':'chessy.sparse-runtime-independent-audit.v1','status':'pass','resultsSha256':sha(raw),'implementationSha256':sha(Path(__file__).read_bytes()),'fullIntegerParityRows':parity_rows,'nativeRawSearchObservations':960,'completePairedSearches':480,'allRequestedNodeBudgetsReached':True,'staticBlocksVerified':20,'phaseStratifiedHashSelectionVerified':True,'allReportedRatiosRecomputed':True,'holdoutRoleFilesRead':False,'scope':'independent integer numerator parity, raw stdout joins, checksums, selected FENs and complete paired timing arithmetic; no search or benchmark rerun'}
+with open(root/'independent-audit.json','xb') as f:f.write(enc(report));f.flush();os.fsync(f.fileno())
+print(json.dumps(report))
