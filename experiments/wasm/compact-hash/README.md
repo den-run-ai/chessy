@@ -122,10 +122,13 @@ already conclusive and no ceiling exception is requested.
 
 ## Reproduction and guards
 
-`prepare.js` captures its own recipe, pins all eight base build/source inputs,
-requires exact patch anchors and a new destination outside the repository,
-and writes a source receipt. Native reference/oracle code is `cfg(test)` only.
-The build crate and its target directory remain outside the repository.
+`prepare.js` captures its own recipe and reads all eight base build/source
+inputs from immutable `f65224d` Git objects with replacement refs disabled.
+It also pins that commit's baseline module, rules, strict ABI loader and frozen
+fixture. Current production source, module and loader changes therefore cannot
+change this historical comparison. Exact patch anchors and a new destination
+outside the repository are required. Native reference/oracle code is
+`cfg(test)` only; the build crate and target directory remain outside the repo.
 
 ```sh
 CHESSY_HASH_TMP=$(mktemp -d)
@@ -142,6 +145,18 @@ The final probe asserts that newly built fast bytes equal the measured digest.
 These commands perform correctness/reproduction checks and no timing campaign.
 The validator records `rawGatePassed: false`; its successful exit means the
 finite correctness checks passed, never that this candidate can ship.
+
+Fresh generation and validation use v2 receipts marked
+`historical-correctness-reproduction`. They identify the current adapters and
+the pinned historical inputs; they are not the v1 receipts from the measured
+run and cannot replace them. The original measured generator and validator
+are retained byte-for-byte as
+[`measured-prepare.js.txt`](evidence/measured-prepare.js.txt) and
+[`measured-validate.js.txt`](evidence/measured-validate.js.txt). The probes check
+their original recorded hashes and reproduce every historical generated-source
+digest. Mutating active production inputs or installing a Git replacement ref
+does not change the reproduced candidate; corrupting its receipts or generated
+source still fails verification. No timing is repeated by these checks.
 
 The benchmark captures and executes the runner/loader/rules bytes that it
 identifies, retains input module bytes, journals every warmup and measurement,

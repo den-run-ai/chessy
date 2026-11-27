@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 'use strict';
-// Execute the retained verifier, loader and rules bytes identified in its report.
+// Execute the retained verifier and historical Git inputs identified in its
+// fresh correctness report; the original measured verifier remains archived.
 if (typeof __compactValidation === 'undefined') {
   const fs = require('node:fs'), path = require('node:path');
-  const root = path.resolve(__dirname, '../../..');
-  const files = [__filename, ...['prepare.js', 'paired-hash.rs.in', 'parity.rs.in', 'protocol.json'].map(p => path.join(__dirname,p)),
-    ...['assets/engine.js','assets/wasm-engine.js','test/fixtures/wasm-r69-signatures.json'].map(p => path.join(root,p))]
+  const files = [__filename, ...['prepare.js', 'paired-hash.rs.in', 'parity.rs.in', 'protocol.json'].map(p => path.join(__dirname,p))]
     .map(file => ({ file, bytes: Buffer.from(fs.readFileSync(file)) }));
   require('node:vm').compileFunction(files[0].bytes.toString().replace(/^#![^\n]*/, ''),
     ['require','module','exports','__filename','__dirname','__compactValidation'], { filename: __filename })
@@ -23,34 +22,61 @@ if (typeof __compactValidation === 'undefined') {
   const retained = __compactValidation;
   const get = suffix => retained.find(f => f.file.endsWith('/'+suffix)).bytes;
   const same = (a,b,label) => assert.equal(JSON.stringify(a),JSON.stringify(b),label);
-  function validate(directory, output) {
+  // Compile the captured helper directly, bypassing require.cache and any
+  // subsequent pathname read. Its pinned Git inputs are retained in memory.
+  const helper = {exports:{}};
+  const recipe = ['prepare.js', 'paired-hash.rs.in', 'parity.rs.in'].map(name => ({
+    name, file:path.join(__dirname,name), bytes:get(name)
+  }));
+  vm.compileFunction(get('prepare.js').toString().replace(/^#![^\n]*/, ''),
+    ['require','module','exports','__filename','__dirname','__capturedCompactHash'], {filename:path.join(__dirname,'prepare.js')})
+    (require,helper,helper.exports,path.join(__dirname,'prepare.js'),__dirname,recipe);
+
+  function snapshot(directory, root = ROOT) {
     directory = fs.realpathSync(directory);
     const sourceBytes = fs.readFileSync(path.join(directory,'source.json')), source = JSON.parse(sourceBytes);
+    assert.equal(source.schema,'chessy.compact-hash.source.v2');
+    assert.equal(source.purpose,'historical-correctness-reproduction');
     assert.equal(source.baseCommit,BASE); assert.equal(source.variant,'threaded');
     assert.equal(source.researchOnly,true); assert.equal(source.productionIntegrationAllowed,false);
     assert.equal(source.strengthClaimAllowed,false);
-    for (const entry of source.recipe) assert.equal(sha(get(entry.path)),entry.sha256,'recipe drift: '+entry.path);
+    assert.deepEqual(source.recipe,recipe.map(r=>({path:r.name,sha256:sha(r.bytes)})),'recipe drift');
+    const baseline = helper.exports.readBaseline(root);
+    assert.deepEqual(source.source,Object.entries(baseline.source).map(([p,b])=>({path:p,sha256:sha(b)})),
+      'baseline source drift');
+    assert.deepEqual(source.baseline,Object.entries(baseline.runtime).map(([p,b])=>({path:p,sha256:sha(b)})),
+      'baseline runtime drift');
     const inputs = [];
-    for (const entry of source.source) {
-      assert.match(entry.path,/^(Cargo\.(toml|lock)|rust-toolchain\.toml|build\.sh|src\/(engine|eval|lib|search)\.rs)$/);
-      const file = path.join(ROOT,'experiments/wasm',entry.path), bytes = fs.readFileSync(file);
-      assert.equal(sha(bytes),entry.sha256,'baseline source drift: '+entry.path); inputs.push({file,bytes});
-    }
+    assert.deepEqual(source.generated.map(e=>e.path),source.source.map(e=>e.path),'generated inventory drift');
+    // The generated receipt cannot authenticate its own source. Derive every
+    // expected file from the pinned baseline and the captured recipe, so a
+    // coherent edit to both bytes and their declared digest still fails.
+    const expectedGenerated = Object.entries(baseline.source).map(([p,b])=>({
+      path:p, sha256:sha(p==='src/search.rs'
+        ? Buffer.from(helper.exports.render(b.toString('utf8'),source.variant)) : b)
+    }));
+    assert.deepEqual(source.generated,expectedGenerated,'generated recipe output drift');
     for (const entry of source.generated) {
-      assert.ok(source.source.some(e => e.path===entry.path));
       const file = path.join(directory,entry.path), bytes = fs.readFileSync(file);
       assert.equal(sha(bytes),entry.sha256,'generated source drift: '+entry.path); inputs.push({file,bytes});
     }
-    assert.equal(source.source.length,8); assert.equal(source.generated.length,8); assert.equal(source.recipe.length,3);
-    const modules = ['assets/chessy-ai-fast.wasm',path.join(directory,'dist/chessy-ai-fast.wasm')].map((p,i) => {
-      const file = i===0 ? path.join(ROOT,p) : p; return {file,bytes:fs.readFileSync(file)};
-    });
+    const candidateFile = path.join(directory,'dist/chessy-ai-fast.wasm');
+    const modules = [
+      {gitPath:'assets/chessy-ai-fast.wasm',bytes:baseline.runtime['assets/chessy-ai-fast.wasm']},
+      {file:candidateFile,bytes:fs.readFileSync(candidateFile)}
+    ];
     assert.equal(sha(modules[0].bytes),BASE_WASM);
-    assert.equal(sha(get('wasm-r69-signatures.json')),FIXTURE,'frozen fixture changed');
+    assert.equal(sha(baseline.runtime['test/fixtures/wasm-r69-signatures.json']),FIXTURE,'frozen fixture changed');
+    return {directory,sourceBytes,source,baseline,inputs,modules};
+  }
+  function validate(directory, output) {
+    const frozen = snapshot(directory);
+    const {sourceBytes,source,baseline,inputs,modules} = frozen;
+    directory = frozen.directory;
     const context = {WebAssembly,TextEncoder,performance,console,module:{exports:{}}};
     vm.createContext(context);
-    vm.runInContext(get('assets/engine.js').toString(),context,{filename:'retained-engine.js'});
-    vm.runInContext(get('assets/wasm-engine.js').toString(),context,{filename:'retained-wasm-engine.js'});
+    vm.runInContext(baseline.runtime['assets/engine.js'].toString(),context,{filename:'retained-engine.js'});
+    vm.runInContext(baseline.runtime['assets/wasm-engine.js'].toString(),context,{filename:'retained-wasm-engine.js'});
     const Chess=context.Chess, engines=modules.map(m=>context.module.exports.loadSync(m.bytes));
     engines.forEach(e=>assert.equal(e.memoryBytes(),26542080));
     const uci = m => m ? Chess.sqName(m.from)+Chess.sqName(m.to)+(m.promotion||'') : '-';
@@ -59,7 +85,7 @@ if (typeof __compactValidation === 'undefined') {
       let state=Chess.newGameState(fen);
       for(const move of moves){const found=Chess.legalMoves(state).find(m=>uci(m)===uci(move));assert.ok(found,'illegal move/PV');state=Chess.applyMove(state,found);}
     };
-    const fixture=JSON.parse(get('wasm-r69-signatures.json')), protocol=JSON.parse(get('protocol.json'));
+    const fixture=JSON.parse(baseline.runtime['test/fixtures/wasm-r69-signatures.json']), protocol=JSON.parse(get('protocol.json'));
     assert.equal(fixture.cases.length,144);
     const positions=new Map(protocol.positions.map(p=>[p.name,p.fen])), rows=[];
     for(const item of fixture.cases){
@@ -82,16 +108,17 @@ if (typeof __compactValidation === 'undefined') {
       const pair=engines.map(e=>normalize(e.search(fen,config))); same(pair[0],pair[1],'history-sensitive search');
       historyRows.push({fen,count,result:pair[1]});
     }
-    for(const record of [...retained,...inputs,...modules,{file:path.join(directory,'source.json'),bytes:sourceBytes}])
+    for(const record of [...retained,...inputs,modules[1],{file:path.join(directory,'source.json'),bytes:sourceBytes}])
       assert.equal(sha(fs.readFileSync(record.file)),sha(record.bytes),'input changed during verification');
-    const report={schema:'chessy.compact-hash.validation.v1',researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
+    const report={schema:'chessy.compact-hash.validation.v2',purpose:'historical-correctness-reproduction',
+      researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
       complete:true,exactFiniteParity:true,universalEquivalenceProven:false,baseCommit:BASE,sourceReceipt:source,sourceReceiptSha256:sha(sourceBytes),
-      implementation:retained.map(r=>({path:path.relative(ROOT,r.file),sha256:sha(r.bytes)})),
+      implementation:retained.map(r=>({path:path.relative(ROOT,r.file),sha256:sha(r.bytes)})),baseline:source.baseline,
       modules:modules.map(m=>({sha256:sha(m.bytes),rawBytes:m.bytes.length,memoryBytes:26542080})),
       rawLimit:37172,rawGatePassed:modules[1].bytes.length<=37172,signatureCases:rows.length,historyCases:historyRows.length,rows,historyRows};
     fs.writeFileSync(output,json(report),{flag:'wx'}); return report;
   }
-  module.exports={validate};
+  module.exports={validate,snapshot};
   if(require.main===module){
     try{assert.equal(process.argv.length,4,'usage: node validate.js GENERATED_CRATE NEW_REPORT');const r=validate(...process.argv.slice(2));console.log(json({complete:r.complete,signatureCases:r.signatureCases,historyCases:r.historyCases,rawGatePassed:r.rawGatePassed}));}
     catch(error){console.error(error.stack||error);process.exitCode=1;}

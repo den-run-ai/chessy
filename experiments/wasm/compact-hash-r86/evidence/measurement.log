@@ -1,0 +1,17 @@
+Completed fixed repetition 1
+Completed fixed repetition 2
+Completed fixed repetition 3
+Completed fixed repetition 4
+Completed seeded repetition 1
+Completed seeded repetition 2
+Completed seeded repetition 3
+Completed seeded repetition 4
+Fixed-node routing {"master":true,"at230k":1.082120750067849,"phases":{"opening":1.0435503315127317,"middlegame":1.0441673881254327,"endgame":1.124418164940078},"seeded230k":1.0456201583806817}
+Completed Master pair 0/0
+Completed Master pair 0/1
+Completed Master pair 8/0
+Completed Master pair 8/1
+{
+  "status": "complete",
+  "experimentIdentity": "efa6437b5cc9d5059c6538e5356ebed5d0b10da96d8aaa5e68fd7ddcc63e1ae5"
+}

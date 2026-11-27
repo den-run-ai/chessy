@@ -58,8 +58,9 @@ function throws(callback, pattern, label) {
 }
 
 function replaceOnce(source, before, after) {
-  const first = source.indexOf(before);
-  if (first === -1 || first !== source.lastIndexOf(before)) {
+  const production = accounting.withoutCfgTestItems(source);
+  const first = production.indexOf(before);
+  if (first === -1 || first !== production.lastIndexOf(before)) {
     throw new Error('test mutation expected one occurrence of ' +
       JSON.stringify(before));
   }
@@ -337,6 +338,101 @@ console.log('trusted node-accounting source contract');
 const trustedAccounting = accounting.readSources(RUST_SRC);
 accounting.validateSources(trustedAccounting, trustedAccounting);
 check(true, 'accepts the unchanged trusted accounting pipeline');
+{
+  const live = 'fn guard() -> bool { true }';
+  const next = 'fn next() {}';
+  const fixture = live + '\n' +
+    '#[allow(dead_code)]\n#[cfg(test)]\n#[inline]\n' +
+    'pub(crate) unsafe extern "C" fn guard() -> bool {\n' +
+    '    let braces = r#"} #[cfg(test)] mod fake {"#; true\n' +
+    '}\n' + next + '\n' +
+    '#[cfg(test)]\n#[allow(dead_code)]\npub mod reference {\n' +
+    '    /* nested { /* comment } */ still comment */\n' + live + '\n}\n' +
+    '#[cfg(test)] pub(crate) mod external_tests;\n';
+  const production = accounting.withoutCfgTestItems(fixture);
+  check(production.length === fixture.length &&
+      [...production.matchAll(/\n/g)].map(x => x.index).join() ===
+        [...fixture.matchAll(/\n/g)].map(x => x.index).join() &&
+      accounting.extractFunction(fixture, 'guard') === live &&
+      accounting.extractFunction(fixture, 'next') === next &&
+      accounting.moduleLines(fixture).length === 0,
+    'test-only modules/functions and their attributes are masked without moving production offsets');
+  for (const condition of ['not(test)', 'any(test, feature = "production")']) {
+    throws(function () {
+      accounting.extractFunction(live + '\n#[cfg(' + condition + ')]\n' + live, 'guard');
+    }, /expected exactly one Rust function guard, found 2/,
+    'does not hide a potentially active production function behind cfg(' + condition + ')');
+  }
+}
+{
+  // Keep an entire independent search copy intact while changing only the
+  // production implementation. Choosing the first/last matching name would
+  // either reject the valid reference or let it conceal an accounting bypass.
+  const reference = '\n#[cfg(test)]\nmod node_accounting_reference_fixture {\n' +
+    trustedAccounting.search + '\n}\n';
+  const withReference = {
+    lib: trustedAccounting.lib,
+    search: trustedAccounting.search + reference
+  };
+  accounting.validateSources(trustedAccounting, withReference);
+  accounting.validateSources(trustedAccounting, {
+    lib: trustedAccounting.lib, search: reference + trustedAccounting.search
+  });
+  check(true, 'accepts a full test-only reference before or after the production search');
+  const entry = '    if !check_budget() {\n        return ABORT_SCORE;\n    }\n';
+  const mutations = [
+    ['search', '    context().nodes = next_node;', '    context().nodes = next_node / 10;',
+      'check_budget function', 'undercounting each node'],
+    ['search', entry + '    context().rep_ply = REP_INFINITY;',
+      '    context().rep_ply = REP_INFINITY;',
+      'search_node accounting prologue', 'skipping the search entry charge'],
+    ['search', entry + '    context().qnodes += 1;', '    context().qnodes += 1;',
+      'quiesce_node accounting prologue', 'skipping the quiescence entry charge'],
+    ['search', '    ctx.nodes = 0;', '    ctx.nodes = 500;',
+      'reset_context accounting prefix', 'rewriting the initial counter'],
+    ['lib', '        nodes: search_result.nodes,', '        nodes: search_result.nodes / 10,',
+      'node counter declarations, writes, and result fields', 'clamping reported nodes'],
+    ['lib', 'search_seeded(max_depth, node_limit, time_ms, quiesce, 0x00C0FFEE)',
+      'search_seeded(max_depth, 0, time_ms, quiesce, 0x00C0FFEE)',
+      'search function', 'bypassing the ordinary ABI budget'],
+    ['lib', '&mut position, max_depth, node_limit, time_ms, quiesce != 0, root_seed,',
+      '&mut position, max_depth, 0, time_ms, quiesce != 0, root_seed,',
+      'search_seeded function', 'bypassing the seeded ABI budget'],
+    ['search', '    reset_context(quiesce, node_limit, time_ms, false);',
+      '    reset_context(quiesce, 0, time_ms, false);',
+      'run_seeded function', 'bypassing the seeded runner budget'],
+    ['search', '    context().rep_ply = REP_INFINITY;\n\n' +
+      '    let turn = position.turn;\n    let maximizing = turn == Color::White;',
+      '    context().rep_ply = REP_INFINITY;\n    context().nodes = 0;\n\n' +
+      '    let turn = position.turn;\n    let maximizing = turn == Color::White;',
+      'node counter declarations, writes, and result fields', 'resetting nodes during search']
+  ];
+  for (const [file, before, after, guard, label] of mutations) {
+    const candidate = Object.assign({}, withReference);
+    candidate[file] = replaceOnce(candidate[file], before, after);
+    if (!candidate.search.endsWith(reference)) throw new Error('test mutated the retained reference');
+    throws(function () {
+      accounting.validateSources(trustedAccounting, candidate);
+    }, new RegExp('changed trusted WASM node accounting: ' + guard),
+    'an intact test-only reference cannot hide ' + label);
+  }
+  const budget = accounting.extractFunction(trustedAccounting.search, 'check_budget');
+  throws(function () {
+    accounting.validateSources(trustedAccounting, {
+      lib: trustedAccounting.lib,
+      search: replaceOnce(withReference.search, budget, '#[cfg(test)]\n' + budget)
+    });
+  }, /expected exactly one Rust function check_budget, found 0/,
+  'test-only copies cannot replace a missing production accounting primitive');
+  const seeded = accounting.extractFunction(trustedAccounting.search, 'run_seeded');
+  throws(function () {
+    accounting.validateSources(trustedAccounting, {
+      lib: trustedAccounting.lib,
+      search: replaceOnce(withReference.search, seeded, '#[cfg(test)]\n' + seeded)
+    });
+  }, /changed trusted WASM node accounting: run_seeded function presence/,
+  'test-only copies cannot replace the production seeded delegate');
+}
 {
   const compatible = {
     lib: trustedAccounting.lib,
@@ -651,6 +747,15 @@ throws(function () {
   const legacyAccounting = { files: files, lib: files['lib.rs'], search: files['search.rs'] };
   accounting.validateSources(legacyAccounting, legacyAccounting);
   check(true, 'the unchanged pre-seed accounting pipeline remains supported');
+  throws(function () {
+    const legacyRun = accounting.extractFunction(legacyAccounting.search, 'run');
+    accounting.validateSources(legacyAccounting, {
+      lib: legacyAccounting.lib,
+      search: replaceOnce(legacyAccounting.search, legacyRun, '#[cfg(test)]\n' + legacyRun) +
+        '\n#[cfg(test)] mod retained_reference {\n' + legacyAccounting.search + '\n}\n'
+    });
+  }, /changed trusted WASM node accounting: run function presence/,
+  'the legacy production runner cannot be replaced by test-only copies');
   throws(function () {
     accounting.validateSources(legacyAccounting, {
       lib: replaceOnce(legacyAccounting.lib,

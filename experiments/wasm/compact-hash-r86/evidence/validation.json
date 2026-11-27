@@ -1,0 +1,7432 @@
+{
+  "schema": "chessy.compact-hash-r86.validation.v1",
+  "baseCommit": "f27f05581c4be6bb35e230e1ffd01a62edf67541",
+  "complete": true,
+  "exactFiniteParity": true,
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "universalEquivalenceProven": false,
+  "protocolSha256": "d95ca16a88363445c3f96372b9b85342d0e35d8e7cf8ec55c9d33eb9970f6462",
+  "sourceReceiptSha256": "a4b0e75e80673ddc90299012d63651438809556c078d7c62728aa595a12396a2",
+  "sourceReceipt": {
+    "schema": "chessy.compact-hash-r86.source.v1",
+    "baseCommit": "3b32d2e7c23341d2245003c5324aa2ee6d07aa08",
+    "variant": "threaded",
+    "purpose": "Checked compact hashing integrated with unchanged r85 seeded root ordering",
+    "timingPerformed": false,
+    "strengthClaimAllowed": false,
+    "universalEquivalenceProven": false,
+    "source": [
+      {
+        "path": "Cargo.toml",
+        "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+      },
+      {
+        "path": "Cargo.lock",
+        "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+      },
+      {
+        "path": "rust-toolchain.toml",
+        "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+      },
+      {
+        "path": "build.sh",
+        "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+      },
+      {
+        "path": "src/engine.rs",
+        "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+      },
+      {
+        "path": "src/eval.rs",
+        "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+      },
+      {
+        "path": "src/lib.rs",
+        "sha256": "c05fa66c239fdf4e38bf4912cd1491be1c57146b0670e71a340af8e586e8cd15"
+      },
+      {
+        "path": "src/search.rs",
+        "sha256": "9f8f2a798c26e7c4ff22cbc8b4605ed72fd17eadfc8bf9305747bf7ec40194b5"
+      }
+    ],
+    "generated": [
+      {
+        "path": "Cargo.toml",
+        "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+      },
+      {
+        "path": "Cargo.lock",
+        "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+      },
+      {
+        "path": "rust-toolchain.toml",
+        "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+      },
+      {
+        "path": "build.sh",
+        "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+      },
+      {
+        "path": "src/engine.rs",
+        "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+      },
+      {
+        "path": "src/eval.rs",
+        "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+      },
+      {
+        "path": "src/lib.rs",
+        "sha256": "c05fa66c239fdf4e38bf4912cd1491be1c57146b0670e71a340af8e586e8cd15"
+      },
+      {
+        "path": "src/search.rs",
+        "sha256": "4db05a27ae42560d6f45920859f9916eb84d0df3d59ab3eca95a4e53ed75ffc4"
+      }
+    ],
+    "historicalRecipe": [
+      {
+        "path": "prepare.js",
+        "sha256": "f2897609873e707ed67561e77d932b61db5fdb833305e128628114dcb2251277"
+      },
+      {
+        "path": "paired-hash.rs.in",
+        "sha256": "e3740877481dcfcbad9b984da9661790ffb6d34f9d72b923760e395ea503ade7"
+      },
+      {
+        "path": "parity.rs.in",
+        "sha256": "6cafc8b53351d4f55e246ce1bf8a242c4c87c3845f2772a61ca55cd9be9ad386"
+      }
+    ],
+    "implementation": [
+      {
+        "path": "prepare.js",
+        "sha256": "7fc2769e8bb5832c0e9611d3c896eff1d9ff1375b48ec65c5c0e6b37d248fe98"
+      },
+      {
+        "path": "seeded-parity.rs.in",
+        "sha256": "d46a64084f3aed87d713457cf9f5dbc0d2921c47355f5244a4c3a647798ee9d7"
+      }
+    ]
+  },
+  "implementation": [
+    {
+      "path": "experiments/wasm/compact-hash-r86/validate.js",
+      "sha256": "49e8f8df01ad6f67fd92543505bb6f113065db28d90404929651a1d21e9f2cc6"
+    },
+    {
+      "path": "experiments/wasm/compact-hash-r86/prepare.js",
+      "sha256": "7fc2769e8bb5832c0e9611d3c896eff1d9ff1375b48ec65c5c0e6b37d248fe98"
+    },
+    {
+      "path": "experiments/wasm/compact-hash-r86/seeded-parity.rs.in",
+      "sha256": "d46a64084f3aed87d713457cf9f5dbc0d2921c47355f5244a4c3a647798ee9d7"
+    },
+    {
+      "path": "experiments/wasm/compact-hash-r86/protocol.json",
+      "sha256": "d95ca16a88363445c3f96372b9b85342d0e35d8e7cf8ec55c9d33eb9970f6462"
+    }
+  ],
+  "runtime": [
+    {
+      "path": "assets/engine.js",
+      "commit": "f27f05581c4be6bb35e230e1ffd01a62edf67541",
+      "sha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa"
+    },
+    {
+      "path": "assets/wasm-engine.js",
+      "commit": "f27f05581c4be6bb35e230e1ffd01a62edf67541",
+      "sha256": "39e52ff72c81c6c0340e0f593addfec3a23b1047baadc02a5888bbb0484e3b52"
+    },
+    {
+      "path": "assets/chessy-ai-fast.wasm",
+      "commit": "f27f05581c4be6bb35e230e1ffd01a62edf67541",
+      "sha256": "a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7"
+    },
+    {
+      "path": "test/fixtures/wasm-r69-signatures.json",
+      "commit": "f27f05581c4be6bb35e230e1ffd01a62edf67541",
+      "sha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b"
+    }
+  ],
+  "modules": [
+    {
+      "role": "baseline",
+      "sha256": "a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7",
+      "rawBytes": 37210,
+      "memoryBytes": 26542080
+    },
+    {
+      "role": "candidate",
+      "sha256": "4f63b8dd25b4ae6787d1720392417a60daab1066bef7d494060939cb2016f74c",
+      "rawBytes": 37934,
+      "memoryBytes": 26542080
+    }
+  ],
+  "signatureCases": 144,
+  "historyCases": 2,
+  "seededCases": 16,
+  "defaultSeedCases": 4,
+  "seededHistoryCases": 16,
+  "seedExportVerified": true,
+  "seedEffectObserved": true,
+  "seedEffect": [
+    {
+      "position": 0,
+      "nodeLimit": 10000,
+      "distinctFullResults": 4,
+      "distinctMoves": 2
+    },
+    {
+      "position": 0,
+      "nodeLimit": 230000,
+      "distinctFullResults": 4,
+      "distinctMoves": 2
+    },
+    {
+      "position": 1,
+      "nodeLimit": 10000,
+      "distinctFullResults": 3,
+      "distinctMoves": 2
+    },
+    {
+      "position": 1,
+      "nodeLimit": 230000,
+      "distinctFullResults": 3,
+      "distinctMoves": 1
+    }
+  ],
+  "rows": [
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6e4",
+        "score": -131,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f6e4",
+        "score": -131,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b5",
+        "score": 123,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 146,
+        "qnodes": 0,
+        "cutoffs": 60,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b5",
+        "score": 123,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 25,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b5",
+          "f3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6e4",
+        "score": -153,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1101,
+        "qnodes": 0,
+        "cutoffs": 191,
+        "researches": 5,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f6e4",
+        "score": -153,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 84,
+        "qnodes": 0,
+        "cutoffs": 24,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "f6e4",
+          "a4c6",
+          "d7c6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b5",
+        "score": 61,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1781,
+        "researches": 14,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 112,
+        "qnodes": 0,
+        "cutoffs": 23,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b5",
+          "a4b3",
+          "f6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f8c5",
+        "score": -42,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 111,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f8c5",
+        "score": -42,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 28,
+        "qnodes": 27,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f8c5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1064,
+        "qnodes": 794,
+        "cutoffs": 56,
+        "researches": 11,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 123,
+        "qnodes": 97,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b5",
+          "a4b3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2786,
+        "qnodes": 1644,
+        "cutoffs": 108,
+        "researches": 11,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 245,
+        "qnodes": 133,
+        "cutoffs": 23,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b5",
+          "a4b3",
+          "f6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 3247,
+        "cutoffs": 378,
+        "researches": 13,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b7b5",
+        "score": -106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 245,
+        "qnodes": 133,
+        "cutoffs": 23,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b5",
+          "a4b3",
+          "f6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3e5",
+        "score": 131,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f3e5",
+        "score": 131,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b4",
+        "score": -123,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 146,
+        "qnodes": 0,
+        "cutoffs": 60,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b4",
+        "score": -123,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 25,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b4",
+          "f6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3e5",
+        "score": 153,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1101,
+        "qnodes": 0,
+        "cutoffs": 191,
+        "researches": 5,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f3e5",
+        "score": 153,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 84,
+        "qnodes": 0,
+        "cutoffs": 24,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "f3e5",
+          "a5c3",
+          "d2c3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b4",
+        "score": -61,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1844,
+        "researches": 11,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 177,
+        "qnodes": 0,
+        "cutoffs": 23,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b4",
+          "a5b6",
+          "f3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f1c4",
+        "score": 42,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 111,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f1c4",
+        "score": 42,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 28,
+        "qnodes": 27,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f1c4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1176,
+        "qnodes": 917,
+        "cutoffs": 56,
+        "researches": 10,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 177,
+        "qnodes": 149,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b4",
+          "a5b6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2910,
+        "qnodes": 1781,
+        "cutoffs": 108,
+        "researches": 10,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 413,
+        "qnodes": 237,
+        "cutoffs": 23,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b4",
+          "a5b6",
+          "f3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 3327,
+        "cutoffs": 346,
+        "researches": 11,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b2b4",
+        "score": 106,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 413,
+        "qnodes": 237,
+        "cutoffs": 23,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b4",
+          "a5b6",
+          "f3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4c6",
+        "score": 435,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 46,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "d4c6",
+        "score": 435,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "d4c6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4c6",
+        "score": 27,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 220,
+        "qnodes": 0,
+        "cutoffs": 91,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "d4c6",
+        "score": 27,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 37,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "d4c6",
+          "d7c6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4b5",
+        "score": 139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2460,
+        "qnodes": 0,
+        "cutoffs": 257,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "d4b5",
+        "score": 139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 343,
+        "qnodes": 0,
+        "cutoffs": 36,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "d4b5",
+          "e7e5",
+          "b5d6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d4b5",
+        "score": 139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1632,
+        "researches": 4,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "d4b5",
+        "score": 139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 343,
+        "qnodes": 0,
+        "cutoffs": 36,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "d4b5",
+          "e7e5",
+          "b5d6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1e1",
+        "score": 57,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 606,
+        "qnodes": 556,
+        "cutoffs": 0,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1e1",
+        "score": 57,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 67,
+        "qnodes": 66,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1e1"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1d1",
+        "score": 29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 3292,
+        "qnodes": 2973,
+        "cutoffs": 44,
+        "researches": 12,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1d1",
+        "score": 29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 335,
+        "qnodes": 293,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1d1",
+          "c6e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1d1",
+        "score": 41,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 11922,
+        "qnodes": 9135,
+        "cutoffs": 187,
+        "researches": 14,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1d1",
+        "score": 41,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2861,
+        "qnodes": 2539,
+        "cutoffs": 35,
+        "researches": 5,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1d1",
+          "c6e5",
+          "a2a3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1d1",
+        "score": 29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4455,
+        "cutoffs": 95,
+        "researches": 14,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "a1d1",
+        "score": 29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 335,
+        "qnodes": 293,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1d1",
+          "c6e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5c3",
+        "score": -435,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 46,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "d5c3",
+        "score": -435,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "d5c3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5c3",
+        "score": -27,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 220,
+        "qnodes": 0,
+        "cutoffs": 91,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "d5c3",
+        "score": -27,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 37,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "d5c3",
+          "d2c3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5b4",
+        "score": -139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2435,
+        "qnodes": 0,
+        "cutoffs": 257,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "d5b4",
+        "score": -139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 321,
+        "qnodes": 0,
+        "cutoffs": 36,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "d5b4",
+          "e2e4",
+          "b4d3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "d5b4",
+        "score": -139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1646,
+        "researches": 4,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "d5b4",
+        "score": -139,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 321,
+        "qnodes": 0,
+        "cutoffs": 36,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "d5b4",
+          "e2e4",
+          "b4d3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8e8",
+        "score": -57,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 271,
+        "qnodes": 222,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8e8",
+        "score": -57,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 21,
+        "qnodes": 20,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8e8"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8d8",
+        "score": -29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1943,
+        "qnodes": 1635,
+        "cutoffs": 44,
+        "researches": 10,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8d8",
+        "score": -29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 252,
+        "qnodes": 211,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8d8",
+          "c3e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8d8",
+        "score": -41,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 7917,
+        "qnodes": 5373,
+        "cutoffs": 139,
+        "researches": 13,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8d8",
+        "score": -41,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1431,
+        "qnodes": 1142,
+        "cutoffs": 35,
+        "researches": 11,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8d8",
+          "c3e4",
+          "a7a6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8d8",
+        "score": -29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 3757,
+        "cutoffs": 110,
+        "researches": 13,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "a8d8",
+        "score": -29,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 252,
+        "qnodes": 211,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8d8",
+          "c3e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 35,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3g5",
+        "score": -41,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 178,
+        "qnodes": 0,
+        "cutoffs": 70,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f3g5",
+        "score": -41,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 32,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "f3g5",
+          "f8f2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1g5",
+        "score": 335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1923,
+        "qnodes": 0,
+        "cutoffs": 385,
+        "researches": 12,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1g5",
+        "score": 335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 98,
+        "qnodes": 0,
+        "cutoffs": 29,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1g5",
+          "f8f3",
+          "d1f3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1g5",
+        "score": 335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1900,
+        "researches": 13,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c1g5",
+        "score": 335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 98,
+        "qnodes": 0,
+        "cutoffs": 29,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1g5",
+          "f8f3",
+          "d1f3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1e3",
+        "score": 190,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 165,
+        "qnodes": 126,
+        "cutoffs": 0,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1e3",
+        "score": 190,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 10,
+        "qnodes": 9,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1e3",
+        "score": 156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 843,
+        "qnodes": 640,
+        "cutoffs": 34,
+        "researches": 7,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1e3",
+        "score": 156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 128,
+        "qnodes": 93,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1e3",
+          "c8g4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f3g5",
+        "score": 189,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 5857,
+        "qnodes": 4044,
+        "cutoffs": 170,
+        "researches": 16,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f3g5",
+        "score": 189,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1081,
+        "qnodes": 786,
+        "cutoffs": 28,
+        "researches": 9,
+        "stopReason": "max-depth",
+        "pv": [
+          "f3g5",
+          "f8f6",
+          "c1e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1e3",
+        "score": 156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 3625,
+        "cutoffs": 157,
+        "researches": 16,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c1e3",
+        "score": 156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 128,
+        "qnodes": 93,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1e3",
+          "c8g4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 35,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6g4",
+        "score": 41,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 178,
+        "qnodes": 0,
+        "cutoffs": 70,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f6g4",
+        "score": 41,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 32,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "f6g4",
+          "f1f7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8g4",
+        "score": -335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2084,
+        "qnodes": 0,
+        "cutoffs": 386,
+        "researches": 18,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8g4",
+        "score": -335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 98,
+        "qnodes": 0,
+        "cutoffs": 29,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8g4",
+          "f1f6",
+          "d8f6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8g4",
+        "score": -335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1831,
+        "researches": 19,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c8g4",
+        "score": -335,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 98,
+        "qnodes": 0,
+        "cutoffs": 29,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8g4",
+          "f1f6",
+          "d8f6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8e6",
+        "score": -190,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 124,
+        "qnodes": 86,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8e6",
+        "score": -190,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 10,
+        "qnodes": 9,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8e6",
+        "score": -156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 907,
+        "qnodes": 689,
+        "cutoffs": 34,
+        "researches": 9,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8e6",
+        "score": -156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 233,
+        "qnodes": 194,
+        "cutoffs": 0,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8e6",
+          "c1g5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "f6g4",
+        "score": -189,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 6072,
+        "qnodes": 4108,
+        "cutoffs": 181,
+        "researches": 17,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f6g4",
+        "score": -189,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 1242,
+        "qnodes": 857,
+        "cutoffs": 28,
+        "researches": 10,
+        "stopReason": "max-depth",
+        "pv": [
+          "f6g4",
+          "f1f3",
+          "c8e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8e6",
+        "score": -156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 3582,
+        "cutoffs": 165,
+        "researches": 17,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c8e6",
+        "score": -156,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 233,
+        "qnodes": 194,
+        "cutoffs": 0,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8e6",
+          "c1g5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f3f6",
+        "score": 484,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 49,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f3f6",
+        "score": 484,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f3f6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 231,
+        "qnodes": 0,
+        "cutoffs": 96,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 37,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e2a6",
+          "b4c3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2655,
+        "qnodes": 0,
+        "cutoffs": 229,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 124,
+        "qnodes": 0,
+        "cutoffs": 35,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e2a6",
+          "b4c3",
+          "f3f6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1508,
+        "researches": 4,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 124,
+        "qnodes": 0,
+        "cutoffs": 35,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e2a6",
+          "b4c3",
+          "f3f6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 8428,
+        "qnodes": 8380,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 445,
+        "qnodes": 444,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e2a6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 18861,
+        "qnodes": 18680,
+        "cutoffs": 47,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 510,
+        "qnodes": 473,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e2a6",
+          "b4c3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 8,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 39650,
+        "qnodes": 36715,
+        "cutoffs": 183,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 0,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4988,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "node-limit",
+        "complete": false,
+        "pv": []
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 0,
+        "attemptedDepth": 1,
+        "nodes": 5000,
+        "qnodes": 4996,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e2a6",
+        "score": 65,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 445,
+        "qnodes": 444,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e2a6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "f6f3",
+        "score": -484,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 49,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "f6f3",
+        "score": -484,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "f6f3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 231,
+        "qnodes": 0,
+        "cutoffs": 96,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 37,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3",
+          "b5c6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2702,
+        "qnodes": 0,
+        "cutoffs": 267,
+        "researches": 5,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 126,
+        "qnodes": 0,
+        "cutoffs": 35,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3",
+          "b5c6",
+          "f6f3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1522,
+        "researches": 5,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -469,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 126,
+        "qnodes": 0,
+        "cutoffs": 35,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3",
+          "b5c6",
+          "f6f3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 9050,
+        "qnodes": 9002,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 201,
+        "qnodes": 200,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 19969,
+        "qnodes": 19786,
+        "cutoffs": 47,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 266,
+        "qnodes": 229,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3",
+          "b5c6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -8,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 41170,
+        "qnodes": 38179,
+        "cutoffs": 183,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -8,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 4411,
+        "qnodes": 4253,
+        "cutoffs": 35,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3",
+          "b5c6",
+          "d7c6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 0,
+        "attemptedDepth": 1,
+        "nodes": 5000,
+        "qnodes": 4996,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e7a3",
+        "score": -65,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 201,
+        "qnodes": 200,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e7a3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 361,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 16,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1c7",
+        "score": 361,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1c7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 354,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 61,
+        "qnodes": 0,
+        "cutoffs": 13,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1c7",
+        "score": 354,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 18,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1c7",
+          "a2c2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 316,
+        "qnodes": 0,
+        "cutoffs": 42,
+        "researches": 7,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1c7",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 71,
+        "qnodes": 0,
+        "cutoffs": 14,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1c7",
+          "a2a1",
+          "c7d7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c1d1",
+        "score": 350,
+        "scorePov": "white",
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 2026,
+        "researches": 17,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c1d1",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 40,
+        "qnodes": 0,
+        "cutoffs": 2,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1d1",
+          "d8e7",
+          "b8c7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 361,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 43,
+        "qnodes": 27,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1c7",
+        "score": 361,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 4,
+        "qnodes": 3,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1c7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1c7",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 191,
+        "qnodes": 130,
+        "cutoffs": 13,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1c7",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 57,
+        "qnodes": 39,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1c7",
+          "a2d2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1d1",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 794,
+        "qnodes": 455,
+        "cutoffs": 44,
+        "researches": 9,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c1d1",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 96,
+        "qnodes": 56,
+        "cutoffs": 2,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1d1",
+          "d8e7",
+          "b8c7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c1d1",
+        "score": 361,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 5000,
+        "qnodes": 2595,
+        "cutoffs": 495,
+        "researches": 13,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c1d1",
+        "score": 357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 96,
+        "qnodes": 56,
+        "cutoffs": 2,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "c1d1",
+          "d8e7",
+          "b8c7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -360,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 16,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8c2",
+        "score": -360,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8c2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -354,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 59,
+        "qnodes": 0,
+        "cutoffs": 13,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8c2",
+        "score": -354,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 17,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8c2",
+          "a7c7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 329,
+        "qnodes": 0,
+        "cutoffs": 46,
+        "researches": 5,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8c2",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 64,
+        "qnodes": 0,
+        "cutoffs": 14,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8c2",
+          "a7a8",
+          "c2d2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c8d8",
+        "score": -361,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1774,
+        "researches": 15,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c8d8",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 33,
+        "qnodes": 0,
+        "cutoffs": 2,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8d8",
+          "d1e2",
+          "b1c2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -360,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 47,
+        "qnodes": 31,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8c2",
+        "score": -360,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 4,
+        "qnodes": 3,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8c2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8c2",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 215,
+        "qnodes": 154,
+        "cutoffs": 13,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8c2",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 47,
+        "qnodes": 30,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8c2",
+          "a7d7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8d8",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 913,
+        "qnodes": 538,
+        "cutoffs": 49,
+        "researches": 9,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c8d8",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 149,
+        "qnodes": 93,
+        "cutoffs": 1,
+        "researches": 5,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8d8",
+          "d1e2",
+          "b1c2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c8d8",
+        "score": -361,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 5000,
+        "qnodes": 2724,
+        "cutoffs": 474,
+        "researches": 12,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c8d8",
+        "score": -357,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 149,
+        "qnodes": 93,
+        "cutoffs": 1,
+        "researches": 5,
+        "stopReason": "max-depth",
+        "pv": [
+          "c8d8",
+          "d1e2",
+          "b1c2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 17,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 61,
+        "qnodes": 0,
+        "cutoffs": 16,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5",
+          "g6g5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 425,
+        "qnodes": 0,
+        "cutoffs": 42,
+        "researches": 7,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 115,
+        "qnodes": 0,
+        "cutoffs": 7,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5",
+          "g6g5",
+          "e2e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 255,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 697,
+        "researches": 18,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 115,
+        "qnodes": 0,
+        "cutoffs": 7,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5",
+          "g6g5",
+          "e2e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 34,
+        "qnodes": 17,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 2,
+        "qnodes": 1,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 176,
+        "qnodes": 112,
+        "cutoffs": 16,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 39,
+        "qnodes": 27,
+        "cutoffs": 0,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5",
+          "g6g5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 867,
+        "qnodes": 445,
+        "cutoffs": 39,
+        "researches": 7,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 224,
+        "qnodes": 109,
+        "cutoffs": 7,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5",
+          "g6g5",
+          "e2e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c3e5",
+        "score": 256,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 2664,
+        "cutoffs": 633,
+        "researches": 22,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c3e5",
+        "score": 265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 224,
+        "qnodes": 109,
+        "cutoffs": 7,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "c3e5",
+          "g6g5",
+          "e2e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 17,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 58,
+        "qnodes": 0,
+        "cutoffs": 16,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 9,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4",
+          "g3g4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 407,
+        "qnodes": 0,
+        "cutoffs": 39,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 53,
+        "qnodes": 0,
+        "cutoffs": 7,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4",
+          "g3g4",
+          "e7e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -254,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 736,
+        "researches": 10,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 53,
+        "qnodes": 0,
+        "cutoffs": 7,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4",
+          "g3g4",
+          "e7e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 34,
+        "qnodes": 17,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -259,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 2,
+        "qnodes": 1,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 134,
+        "qnodes": 76,
+        "cutoffs": 16,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -257,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 17,
+        "qnodes": 8,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4",
+          "g3g4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 793,
+        "qnodes": 386,
+        "cutoffs": 39,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 99,
+        "qnodes": 46,
+        "cutoffs": 7,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4",
+          "g3g4",
+          "e7e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "c6e4",
+        "score": -256,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 2369,
+        "cutoffs": 550,
+        "researches": 13,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "c6e4",
+        "score": -265,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 99,
+        "qnodes": 46,
+        "cutoffs": 7,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "c6e4",
+          "g3g4",
+          "e7e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 57,
+        "qnodes": 0,
+        "cutoffs": 23,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 10,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q",
+          "b2b1Q"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 237,
+        "qnodes": 0,
+        "cutoffs": 55,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 102,
+        "qnodes": 0,
+        "cutoffs": 8,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q",
+          "f7e6",
+          "b8b2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 1018,
+        "scorePov": "white",
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1464,
+        "researches": 11,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 102,
+        "qnodes": 0,
+        "cutoffs": 8,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q",
+          "f7e6",
+          "b8b2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 18,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 8,
+        "qnodes": 7,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 227,
+        "qnodes": 149,
+        "cutoffs": 34,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 184,
+        "qnodes": 172,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q",
+          "f7e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 560,
+        "qnodes": 316,
+        "cutoffs": 53,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 410,
+        "qnodes": 263,
+        "cutoffs": 7,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q",
+          "f7e6",
+          "b8b2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b7b8Q",
+        "score": 980,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 3209,
+        "cutoffs": 441,
+        "researches": 8,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b7b8Q",
+        "score": 965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 410,
+        "qnodes": 263,
+        "cutoffs": 7,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "b7b8Q",
+          "f7e6",
+          "b8b2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 57,
+        "qnodes": 0,
+        "cutoffs": 23,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 10,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q",
+          "b7b8Q"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 237,
+        "qnodes": 0,
+        "cutoffs": 55,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 73,
+        "qnodes": 0,
+        "cutoffs": 8,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q",
+          "f2e3",
+          "b1b7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -1018,
+        "scorePov": "white",
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1521,
+        "researches": 15,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 73,
+        "qnodes": 0,
+        "cutoffs": 8,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q",
+          "f2e3",
+          "b1b7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 30,
+        "qnodes": 18,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -624,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 8,
+        "qnodes": 7,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 218,
+        "qnodes": 140,
+        "cutoffs": 34,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 107,
+        "qnodes": 96,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q",
+          "f2e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 542,
+        "qnodes": 298,
+        "cutoffs": 53,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 179,
+        "qnodes": 106,
+        "cutoffs": 8,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q",
+          "f2e3",
+          "b1b7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "b2b1Q",
+        "score": -980,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 5000,
+        "qnodes": 3096,
+        "cutoffs": 383,
+        "researches": 9,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "b2b1Q",
+        "score": -965,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 179,
+        "qnodes": 106,
+        "cutoffs": 8,
+        "researches": 1,
+        "stopReason": "max-depth",
+        "pv": [
+          "b2b1Q",
+          "f2e3",
+          "b1b7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 7,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 26,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 8,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3",
+          "e6d6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 81,
+        "qnodes": 0,
+        "cutoffs": 12,
+        "researches": 5,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 31,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3",
+          "e6d6",
+          "d3e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 7,
+        "attemptedDepth": 8,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 2022,
+        "researches": 28,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 31,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3",
+          "e6d6",
+          "d3e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 14,
+        "qnodes": 7,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 2,
+        "qnodes": 1,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 47,
+        "qnodes": 21,
+        "cutoffs": 4,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 15,
+        "qnodes": 7,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3",
+          "e6d6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 62,
+        "cutoffs": 12,
+        "researches": 5,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 54,
+        "qnodes": 23,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3",
+          "e6d6",
+          "d3e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e3d3",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 1565,
+        "cutoffs": 1290,
+        "researches": 21,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e3d3",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 54,
+        "qnodes": 23,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3d3",
+          "e6d6",
+          "d3e3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 6,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 20,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 6,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6",
+          "e3d3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 81,
+        "qnodes": 0,
+        "cutoffs": 12,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 23,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6",
+          "e3d3",
+          "d6e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 7,
+        "attemptedDepth": 8,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1909,
+        "researches": 33,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 23,
+        "qnodes": 0,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6",
+          "e3d3",
+          "d6e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 12,
+        "qnodes": 6,
+        "cutoffs": 0,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": 2,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 2,
+        "qnodes": 1,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 35,
+        "qnodes": 15,
+        "cutoffs": 4,
+        "researches": 1,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 11,
+        "qnodes": 5,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6",
+          "e3d3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 143,
+        "qnodes": 62,
+        "cutoffs": 12,
+        "researches": 4,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 40,
+        "qnodes": 17,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6",
+          "e3d3",
+          "d6e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "e6d6",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 6,
+        "attemptedDepth": 7,
+        "nodes": 5000,
+        "qnodes": 1607,
+        "cutoffs": 1232,
+        "researches": 27,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e6d6",
+        "score": -2,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 40,
+        "qnodes": 17,
+        "cutoffs": 4,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6d6",
+          "e3d3",
+          "d6e6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 41,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8a2",
+        "score": -245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8a2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -56,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 263,
+        "qnodes": 0,
+        "cutoffs": 122,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8a2",
+        "score": -56,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 51,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8a2",
+          "h5f7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6f4",
+        "score": -495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2117,
+        "qnodes": 0,
+        "cutoffs": 378,
+        "researches": 9,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e6f4",
+        "score": -495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 205,
+        "qnodes": 0,
+        "cutoffs": 50,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6f4",
+          "f5h6",
+          "g7h6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e6f4",
+        "score": -495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1812,
+        "researches": 11,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e6f4",
+        "score": -495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 205,
+        "qnodes": 0,
+        "cutoffs": 50,
+        "researches": 3,
+        "stopReason": "max-depth",
+        "pv": [
+          "e6f4",
+          "f5h6",
+          "g7h6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 128,
+        "qnodes": 87,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8a2",
+        "score": -245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 48,
+        "qnodes": 47,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8a2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1385,
+        "qnodes": 1122,
+        "cutoffs": 40,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8a2",
+        "score": -235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 281,
+        "qnodes": 228,
+        "cutoffs": 0,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8a2",
+          "b4b5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -234,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 7833,
+        "qnodes": 5768,
+        "cutoffs": 126,
+        "researches": 10,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a8a2",
+        "score": -234,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 3703,
+        "qnodes": 3323,
+        "cutoffs": 45,
+        "researches": 7,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8a2",
+          "h5g4",
+          "g7g6"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a8a2",
+        "score": -235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4340,
+        "cutoffs": 88,
+        "researches": 10,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "a8a2",
+        "score": -235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 281,
+        "qnodes": 228,
+        "cutoffs": 0,
+        "researches": 4,
+        "stopReason": "max-depth",
+        "pv": [
+          "a8a2",
+          "b4b5"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 41,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1a7",
+        "score": 245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 1,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1a7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": false
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 56,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 263,
+        "qnodes": 0,
+        "cutoffs": 122,
+        "researches": 3,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1a7",
+        "score": 56,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 51,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1a7",
+          "h4f2"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3f5",
+        "score": 495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 2143,
+        "qnodes": 0,
+        "cutoffs": 392,
+        "researches": 9,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "e3f5",
+        "score": 495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 201,
+        "qnodes": 0,
+        "cutoffs": 50,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3f5",
+          "f4h3",
+          "g2h3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": false
+      },
+      "result": {
+        "move": "e3f5",
+        "score": 495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": 4,
+        "nodes": 5000,
+        "qnodes": 0,
+        "cutoffs": 1830,
+        "researches": 11,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "e3f5",
+        "score": 495,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 201,
+        "qnodes": 0,
+        "cutoffs": 50,
+        "researches": 2,
+        "stopReason": "max-depth",
+        "pv": [
+          "e3f5",
+          "f4h3",
+          "g2h3"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 1,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 128,
+        "qnodes": 87,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1a7",
+        "score": 245,
+        "scorePov": "white",
+        "depth": 1,
+        "attemptedDepth": null,
+        "nodes": 48,
+        "qnodes": 47,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1a7"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 2,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 1474,
+        "qnodes": 1190,
+        "cutoffs": 40,
+        "researches": 6,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1a7",
+        "score": 235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 295,
+        "qnodes": 240,
+        "cutoffs": 0,
+        "researches": 6,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1a7",
+          "b5b4"
+        ],
+        "complete": true
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 3,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 234,
+        "scorePov": "white",
+        "depth": 3,
+        "attemptedDepth": null,
+        "nodes": 7827,
+        "qnodes": 5746,
+        "cutoffs": 126,
+        "researches": 13,
+        "stopReason": "max-depth"
+      },
+      "root": {
+        "move": "a1a7",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 0,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4417,
+        "cutoffs": 43,
+        "researches": 15,
+        "stopReason": "node-limit",
+        "complete": false,
+        "pv": []
+      }
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "config": {
+        "maxDepth": 30,
+        "nodeLimit": 5000,
+        "quiesce": true
+      },
+      "result": {
+        "move": "a1a7",
+        "score": 235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": 3,
+        "nodes": 5000,
+        "qnodes": 4350,
+        "cutoffs": 87,
+        "researches": 13,
+        "stopReason": "node-limit"
+      },
+      "root": {
+        "move": "a1a7",
+        "score": 235,
+        "scorePov": "white",
+        "depth": 2,
+        "attemptedDepth": null,
+        "nodes": 295,
+        "qnodes": 240,
+        "cutoffs": 0,
+        "researches": 6,
+        "stopReason": "max-depth",
+        "pv": [
+          "a1a7",
+          "b5b4"
+        ],
+        "complete": true
+      }
+    }
+  ],
+  "historyRows": [
+    {
+      "fen": "4k1n1/8/8/8/8/8/8/4K1N1 w - - 8 5",
+      "count": 2,
+      "result": {
+        "move": "g1f3",
+        "score": 25,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": null,
+        "nodes": 2677,
+        "qnodes": 1230,
+        "cutoffs": 313,
+        "researches": 8,
+        "stopReason": "max-depth"
+      }
+    },
+    {
+      "fen": "4k1n1/8/8/8/8/8/8/4K1N1 w - - 8 5",
+      "count": 3,
+      "result": {
+        "move": "-",
+        "score": 0,
+        "scorePov": "white",
+        "depth": 0,
+        "attemptedDepth": null,
+        "nodes": 0,
+        "qnodes": 0,
+        "cutoffs": 0,
+        "researches": 0,
+        "stopReason": "game-over"
+      }
+    }
+  ],
+  "seededRows": [
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 0,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5316,
+          "cutoffs": 1074,
+          "researches": 10,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5316,
+          "cutoffs": 1074,
+          "researches": 10,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 1,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5316,
+          "cutoffs": 1074,
+          "researches": 8,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5316,
+          "cutoffs": 1074,
+          "researches": 8,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 12648430,
+      "results": [
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5375,
+          "cutoffs": 1058,
+          "researches": 16,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5375,
+          "cutoffs": 1058,
+          "researches": 16,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 4294967295,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5316,
+          "cutoffs": 1074,
+          "researches": 9,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5316,
+          "cutoffs": 1074,
+          "researches": 9,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 0,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 121429,
+          "cutoffs": 21321,
+          "researches": 16,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 121429,
+          "cutoffs": 21321,
+          "researches": 16,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 1,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 121429,
+          "cutoffs": 21321,
+          "researches": 14,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 121429,
+          "cutoffs": 21321,
+          "researches": 14,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 12648430,
+      "results": [
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 125819,
+          "cutoffs": 22318,
+          "researches": 18,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 125819,
+          "cutoffs": 22318,
+          "researches": 18,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "name": "initial position (White)",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 4294967295,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 121429,
+          "cutoffs": 21321,
+          "researches": 15,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 121429,
+          "cutoffs": 21321,
+          "researches": 15,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 0,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 11,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 11,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 1,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 11,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 11,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 12648430,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 12,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 12,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 10000,
+      "rootSeed": 4294967295,
+      "results": [
+        {
+          "move": "g8f6",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5650,
+          "cutoffs": 792,
+          "researches": 21,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g8f6",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5650,
+          "cutoffs": 792,
+          "researches": 21,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            10000,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 0,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131095,
+          "cutoffs": 20384,
+          "researches": 70,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131095,
+          "cutoffs": 20384,
+          "researches": 70,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 1,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131095,
+          "cutoffs": 20384,
+          "researches": 70,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131095,
+          "cutoffs": 20384,
+          "researches": 70,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 12648430,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131094,
+          "cutoffs": 20384,
+          "researches": 71,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131094,
+          "cutoffs": 20384,
+          "researches": 71,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "name": "after 1.e4 (Black)",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "nodeLimit": 230000,
+      "rootSeed": 4294967295,
+      "results": [
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 130972,
+          "cutoffs": 20806,
+          "researches": 69,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 130972,
+          "cutoffs": 20806,
+          "researches": 69,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            111,
+            230000,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    }
+  ],
+  "defaultSeedRows": [
+    {
+      "position": 0,
+      "nodeLimit": 10000,
+      "ordinary": [
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5375,
+          "cutoffs": 1058,
+          "researches": 16,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5375,
+          "cutoffs": 1058,
+          "researches": 16,
+          "stopReason": "node-limit"
+        }
+      ],
+      "explicitHistoricalSeed": [
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5375,
+          "cutoffs": 1058,
+          "researches": 16,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5375,
+          "cutoffs": 1058,
+          "researches": 16,
+          "stopReason": "node-limit"
+        }
+      ]
+    },
+    {
+      "position": 0,
+      "nodeLimit": 230000,
+      "ordinary": [
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 125819,
+          "cutoffs": 22318,
+          "researches": 18,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 125819,
+          "cutoffs": 22318,
+          "researches": 18,
+          "stopReason": "node-limit"
+        }
+      ],
+      "explicitHistoricalSeed": [
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 125819,
+          "cutoffs": 22318,
+          "researches": 18,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d2d4",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 125819,
+          "cutoffs": 22318,
+          "researches": 18,
+          "stopReason": "node-limit"
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "nodeLimit": 10000,
+      "ordinary": [
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 12,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 12,
+          "stopReason": "node-limit"
+        }
+      ],
+      "explicitHistoricalSeed": [
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 12,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 23,
+          "scorePov": "white",
+          "depth": 4,
+          "attemptedDepth": 5,
+          "nodes": 10000,
+          "qnodes": 5741,
+          "cutoffs": 684,
+          "researches": 12,
+          "stopReason": "node-limit"
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "nodeLimit": 230000,
+      "ordinary": [
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131094,
+          "cutoffs": 20384,
+          "researches": 71,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131094,
+          "cutoffs": 20384,
+          "researches": 71,
+          "stopReason": "node-limit"
+        }
+      ],
+      "explicitHistoricalSeed": [
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131094,
+          "cutoffs": 20384,
+          "researches": 71,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "d7d5",
+          "score": 18,
+          "scorePov": "white",
+          "depth": 6,
+          "attemptedDepth": 7,
+          "nodes": 230000,
+          "qnodes": 131094,
+          "cutoffs": 20384,
+          "researches": 71,
+          "stopReason": "node-limit"
+        }
+      ]
+    }
+  ],
+  "seededHistoryRows": [
+    {
+      "count": 2,
+      "rootSeed": 0,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 37,
+          "cutoffs": 5,
+          "researches": 4,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 37,
+          "cutoffs": 5,
+          "researches": 4,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 0,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 552,
+          "researches": 13,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 552,
+          "researches": 13,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 1,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 37,
+          "cutoffs": 4,
+          "researches": 5,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 37,
+          "cutoffs": 4,
+          "researches": 5,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 1,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 551,
+          "researches": 14,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 551,
+          "researches": 14,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 12648430,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 36,
+          "cutoffs": 5,
+          "researches": 3,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 36,
+          "cutoffs": 5,
+          "researches": 3,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 12648430,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 553,
+          "researches": 12,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 553,
+          "researches": 12,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 4294967295,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 36,
+          "cutoffs": 5,
+          "researches": 3,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 58,
+          "scorePov": "white",
+          "depth": 1,
+          "attemptedDepth": 2,
+          "nodes": 64,
+          "qnodes": 36,
+          "cutoffs": 5,
+          "researches": 3,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    },
+    {
+      "count": 2,
+      "rootSeed": 4294967295,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 553,
+          "researches": 12,
+          "stopReason": "node-limit"
+        },
+        {
+          "move": "g1f3",
+          "score": 25,
+          "scorePov": "white",
+          "depth": 5,
+          "attemptedDepth": 6,
+          "nodes": 4096,
+          "qnodes": 1875,
+          "cutoffs": 553,
+          "researches": 12,
+          "stopReason": "node-limit"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 0,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 0,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 1,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 1,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 12648430,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 12648430,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            12648430
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            12648430
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 4294967295,
+      "nodeLimit": 64,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            64,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    },
+    {
+      "count": 3,
+      "rootSeed": 4294967295,
+      "nodeLimit": 4096,
+      "results": [
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        },
+        {
+          "move": "-",
+          "score": 0,
+          "scorePov": "white",
+          "depth": 0,
+          "attemptedDepth": null,
+          "nodes": 0,
+          "qnodes": 0,
+          "cutoffs": 0,
+          "researches": 0,
+          "stopReason": "game-over"
+        }
+      ],
+      "exports": [
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            4294967295
+          ]
+        },
+        {
+          "name": "search_seeded",
+          "args": [
+            6,
+            4096,
+            0,
+            1,
+            4294967295
+          ]
+        }
+      ]
+    }
+  ]
+}
