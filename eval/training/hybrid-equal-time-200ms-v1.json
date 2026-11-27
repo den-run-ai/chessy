@@ -1,0 +1,107 @@
+{
+  "schema": "chessy.hybrid-equal-time-200ms-diagnostic-protocol.v1",
+  "researchOnly": true,
+  "formalPass": false,
+  "shippingOrEloClaimAllowed": false,
+  "purpose": "One small longer-time development screen of unchanged smooth-6-12 hybrid versus shipped HCE after exactly 50 percent fixed-node play; not a formal strength test.",
+  "openingSource": "test/ai-match-openings.js",
+  "formalHoldoutAccessAllowed": false,
+  "openingCount": 20,
+  "arms": [
+    "hybrid"
+  ],
+  "reference": "shipped",
+  "colorsPerOpeningArm": [
+    "w",
+    "b"
+  ],
+  "timeMs": 200,
+  "nodeLimit": 0,
+  "maxDepth": 30,
+  "quiesce": true,
+  "maxSearchedPlies": 180,
+  "totalGames": 40,
+  "concurrentGames": 1,
+  "schedule": "Lowest 20 salted-SHA256 opening indices in digest order; white then black for even original indices, black then white for odd indices.",
+  "warmup": {
+    "openingIndices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "nodesPerSearch": 10000,
+    "moduleOrder": [
+      "shipped",
+      "hybrid"
+    ],
+    "indexMeaning": "Slots 0..3 in selected opening list, not original global opening IDs"
+  },
+  "searchWatchdogMs": 30000,
+  "workloadWatchdogMs": 2100000,
+  "scoreRerunAllowed": false,
+  "interimStoppingAllowed": false,
+  "postHocExtensionAllowed": false,
+  "scoreAnalysisRequires": "Complete 40-game inventory and41 archived members; independently replayed histories, endpoints, termination, raw requests and stop reasons.",
+  "statistics": "Descriptive score and one-sided 95 percent t-approx lower bound over 20 paired-opening means. This exposed subset differs from prior 200-game populations; cross-study score changes are not causal evidence.",
+  "termination": "Engine gameStatus rules including full-prefix repetition history, otherwise draw at 180 searched plies; no evaluator-score adjudication.",
+  "originalRegistrationSha256": "db7f95f1cfe2b69dd53aeeb0a7faf0d66e8ac1a26d03ee7cdf5560fd346c0fbc",
+  "budgetJustification": "200 ms is ten times the prior 20 ms development budget and still below Master’s five seconds. Forty games cap requested search time at 24 minutes plus warmup/capture overhead; 35-minute hard watchdog. No expansion after results.",
+  "decisionRule": {
+    "promisingCandidateScoreAtLeast": 0.5,
+    "promisingNext": "Discuss whether development evidence justifies another changed runtime candidate; this protocol authorizes no additional run and no production change.",
+    "otherwiseNext": "Inspect captured move-ranking and phase failures before new optimization or training; this protocol authorizes no additional run.",
+    "interpretation": "Research routing only. Forty games and 20 exposed pairs are too small for shipping or generalization; do not infer causal budget benefit by comparing populations."
+  },
+  "paidComputeUsd": 0,
+  "capture": {
+    "retainExactCanonicalBytesInParent": true,
+    "atomicPerGamePublication": true,
+    "parentAcknowledgementRequiredBeforeNextGame": true,
+    "compressOnlyAfterAllTimedSearchesStop": true,
+    "finalImmutableArchiveRequired": true,
+    "archiveEveryGameMustMatchItsCaptureReceipt": true,
+    "auditGamesFromRetainedArchiveOnly": true,
+    "recoverFromMutableLiveFilesAllowed": false,
+    "inventMissingTailsAllowed": false
+  },
+  "timingInterpretation": "Sequential single-game execution only after the exclusive qsearch benchmark ends. Preserve observed elapsed per move and report overruns; elapsed is not remeasured by replay. No Master-strength or runtime-admission claim.",
+  "openingSelection": {
+    "algorithm": "SHA256 UTF8(salt + \"|\" + decimal(originalIndex)), ascending hex digest; first 20",
+    "salt": "chessy.hybrid-200ms-diagnostic.v1|2026-09-15",
+    "sourceCount": 100,
+    "outcomesUsed": false,
+    "sourceIndices": "0..99 from unchanged exposed bank",
+    "selectionRetryAllowed": false,
+    "selectedOriginalIndices": [
+      6,
+      59,
+      38,
+      86,
+      28,
+      60,
+      41,
+      58,
+      57,
+      51,
+      96,
+      83,
+      78,
+      34,
+      91,
+      14,
+      5,
+      84,
+      75,
+      74
+    ]
+  },
+  "precursor": {
+    "registrationSha256": "61633ee445f4d4ed6b3e53aac6a828d88d8dadafd7eb90173075bc81f2d8a2aa",
+    "summarySha256": "ef392674f7a081a2dcf714bf7d79fa243e6ac95af5888a975f9a0e625651f6ae",
+    "independentAuditSha256": "39f206db782a82ed4b37b86bec08a1cd926e12f15f3d1216828668f477c392ba",
+    "candidateScore": 0.5,
+    "completedGames": 200,
+    "route": "promising/runtime under frozen >=0.5 rule; conditional failure sampler skipped"
+  }
+}

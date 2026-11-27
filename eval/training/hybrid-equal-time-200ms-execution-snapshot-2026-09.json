@@ -1,0 +1,131 @@
+{
+  "directoriesMode": "0555",
+  "files": [
+    {
+      "bytes": 17874,
+      "mode": "0444",
+      "relativePath": "tools/training/hybrid-equal-time-200ms-v1.js",
+      "sha256": "0025243225792e557b6d57f4bde7064248ef4b8550f2664b6e2ea2f9885b8ba6",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-equal-time-200ms-v1.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/hybrid-equal-time-200ms-v1.js"
+    },
+    {
+      "bytes": 4512,
+      "mode": "0444",
+      "relativePath": "eval/training/hybrid-equal-time-200ms-v1.json",
+      "sha256": "aede871ae44db83a2bb4d427cb8c3ec02017e24980c0f50a407af49dd2921345",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/eval/training/hybrid-equal-time-200ms-v1.json",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/eval/training/hybrid-equal-time-200ms-v1.json"
+    },
+    {
+      "bytes": 13091,
+      "mode": "0444",
+      "relativePath": "tools/training/hybrid-match-recovery-v1.js",
+      "sha256": "ab6533d456910d617cc49034bd62d540f8e61fbbdaea27638b47c33395e5fd29",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-match-recovery-v1.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/hybrid-match-recovery-v1.js"
+    },
+    {
+      "bytes": 4434,
+      "mode": "0444",
+      "relativePath": "tools/training/hybrid-match-capture-v1.js",
+      "sha256": "381e39b5d7d060bb2d4062ebac9815fa467072f93d03cf646bf24648f6af3cd0",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-match-capture-v1.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/hybrid-match-capture-v1.js"
+    },
+    {
+      "bytes": 20616,
+      "mode": "0444",
+      "relativePath": "tools/training/hybrid-match-v1.js",
+      "sha256": "62a7198f2180b6c3b85edddfbb64e67bf914516ef749a4e2d4e60811cedb337f",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-match-v1.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/hybrid-match-v1.js"
+    },
+    {
+      "bytes": 21305,
+      "mode": "0444",
+      "relativePath": "tools/training/hybrid-fixed-node-v1.js",
+      "sha256": "b3e3f5be084f325da2a4bdb263f1c20cc415f5516dc010cd1565685e3d017962",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-fixed-node-v1.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/hybrid-fixed-node-v1.js"
+    },
+    {
+      "bytes": 3395,
+      "mode": "0444",
+      "relativePath": "eval/training/hybrid-fixed-node-v1.json",
+      "sha256": "69ca2dfbf9dc7635adb94c0c4ea12506648098d98f8fa53e686acd4aa1c39572",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/eval/training/hybrid-fixed-node-v1.json",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/eval/training/hybrid-fixed-node-v1.json"
+    },
+    {
+      "bytes": 32355,
+      "mode": "0444",
+      "relativePath": "tools/training/natural-runtime-run.js",
+      "sha256": "9f2b987626d0331944aa070dfa2e0b33b50b0f6b5107f7e0d8d37d73cbab3f54",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/natural-runtime-run.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/natural-runtime-run.js"
+    },
+    {
+      "bytes": 23349,
+      "mode": "0444",
+      "relativePath": "assets/engine.js",
+      "sha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/assets/engine.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/assets/engine.js"
+    },
+    {
+      "bytes": 15430,
+      "mode": "0444",
+      "relativePath": "assets/wasm-engine.js",
+      "sha256": "50b403038be4dfcde8f524d4c398088b9947066ea61846d0120bba1e0cd97cdc",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/assets/wasm-engine.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/assets/wasm-engine.js"
+    },
+    {
+      "bytes": 5736,
+      "mode": "0444",
+      "relativePath": "test/ai-match-openings.js",
+      "sha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/test/ai-match-openings.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/test/ai-match-openings.js"
+    },
+    {
+      "bytes": 2540,
+      "mode": "0444",
+      "relativePath": "test/ai-match-protocol.js",
+      "sha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/test/ai-match-protocol.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/test/ai-match-protocol.js"
+    },
+    {
+      "bytes": 4137,
+      "mode": "0444",
+      "relativePath": "test/match-stats.js",
+      "sha256": "c4f6c5cdbd19710325fb1bc550c150b73a1bb90c0211f4f95ca4deb5a5b78d48",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/test/match-stats.js",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/test/match-stats.js"
+    },
+    {
+      "bytes": 19159,
+      "mode": "0444",
+      "relativePath": "tools/training/audit-hybrid-equal-time-200ms-v1.py",
+      "sha256": "1eacd6e2b48cab3e32717afe49a4fc4aaefca5986fe5253cebb4e149cdcf6f90",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/audit-hybrid-equal-time-200ms-v1.py",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/audit-hybrid-equal-time-200ms-v1.py"
+    },
+    {
+      "bytes": 40632,
+      "mode": "0444",
+      "relativePath": "tools/training/audit-natural-runtime.py",
+      "sha256": "7903ae11ae2b0448d56656366819ccf87847c1098ded97b033104e8f73323129",
+      "snapshotPath": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/audit-natural-runtime.py",
+      "sourcePath": "/workspace/scratch/ec6584e1ca6d/chessy-fixed-node/tools/training/audit-natural-runtime.py"
+    }
+  ],
+  "filesMode": "0444",
+  "localSourceCommit": "2599ca7e6c5ef65cd32d2e4feae488c4c1e943c2",
+  "publishedProvenance": "Exact source bytes and registration published before games; localSourceCommit records preparation only.",
+  "schema": "chessy.hybrid-equal-time-200ms-execution-snapshot.v1",
+  "snapshotRoot": "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1",
+  "threatBoundary": "Dedicated unchanged retained execution snapshot under honest operator; not protection against hostile owner/root chmod and replacement."
+}

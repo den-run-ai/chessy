@@ -1,0 +1,24 @@
+{
+  "conditionalExecution": "Only after complete200-game built-in and independent audits and candidateScore<0.5. No sampling from partial games or interim scores.",
+  "createdAtUtc": "2026-09-15T08:51:19.723214+00:00",
+  "failureSelection": "Visit opening indices0..99. For each opening, consider candidate moves in hybrid losses immediately followed by a shipped search, both non-mate scores abs<999000. Compute candidate-POV optimism gap: (hybrid score minus next shipped score) times +1 for candidate White or -1 for candidate Black. Require positive gap. Retain greatest gap in opening, ties by frozen task order then ply. Take first12 eligible distinct openings. This is evaluator/search disagreement, not a verified mistake.",
+  "frozenBeforeCompleteOutcomeInspection": true,
+  "maximumPerSlice": 12,
+  "nextAnalysis": "Root may separately freeze deeper230k/1.44m-node shipped/expanded/hybrid comparisons at these exact positions; disagreement alone cannot establish an error.",
+  "registrationSha256": "61633ee445f4d4ed6b3e53aac6a828d88d8dadafd7eb90173075bc81f2d8a2aa",
+  "representativeSelection": "All candidate moves irrespective game outcome. Sort ascending SHA256 of UTF-8 fixed-node-representative-v1|taskId|ply|fenBefore. Take first12 distinct opening indices. No exclusion based on failure-slice overlap; report overlap explicitly.",
+  "retainedFields": [
+    "opening prefixUci",
+    "complete searched prefix through sampled root",
+    "full repetition history",
+    "fenBefore",
+    "selected move",
+    "search requested/result",
+    "following shipped search when present",
+    "game outcome",
+    "material phase",
+    "archive/member provenance"
+  ],
+  "schema": "chessy.hybrid-fixed-node-postmatch-sample-policy.v1",
+  "use": "Unlabelled development review only; both slices remain separate and not fit/model-selection/holdout eligible. No new engine searches, training, or paid work in the sampler."
+}

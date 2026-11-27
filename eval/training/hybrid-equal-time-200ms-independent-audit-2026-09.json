@@ -1,0 +1,235 @@
+{
+  "byArm": {
+    "hybrid": {
+      "aggregateNodesPerSecondRatio": 0.8425852627992584,
+      "candidateScore": 0.4625,
+      "descriptiveOpeningClusterLower95": 0.32844380317848043,
+      "draws": 11,
+      "formalPass": false,
+      "games": 40,
+      "losses": 16,
+      "meanObservedTimeRatio": 0.9996199094894481,
+      "openingPairStandardDeviation": 0.3467423584708028,
+      "openingPairs": 20,
+      "shippingOrEloClaimAllowed": false,
+      "terminationReasons": {
+        "checkmate": 29,
+        "insufficient material": 2,
+        "ply-cap": 6,
+        "threefold repetition": 3
+      },
+      "timing": {
+        "baseline": {
+          "depthHistogram": {
+            "1": 31,
+            "10": 40,
+            "11": 12,
+            "12": 10,
+            "13": 9,
+            "14": 4,
+            "15": 5,
+            "16": 6,
+            "2": 16,
+            "3": 30,
+            "4": 206,
+            "5": 919,
+            "6": 544,
+            "7": 455,
+            "8": 244,
+            "9": 99
+          },
+          "maximumObservedMs": 402.10584900004324,
+          "meanCompletedDepth": 6.030418250950571,
+          "meanObservedMs": 194.83698401064586,
+          "medianObservedMs": 201.04658950003795,
+          "moves": 2630,
+          "nodesPerSecond": 1043464.7495042332,
+          "overTwoTimesRequested": 1,
+          "p95ObservedMs": 204.1230764499458,
+          "stopReasons": {
+            "mate": 105,
+            "time-limit": 2525
+          },
+          "totalElapsedMs": 512421.26794799865,
+          "totalNodes": 534693530
+        },
+        "candidate": {
+          "depthHistogram": {
+            "1": 31,
+            "10": 27,
+            "11": 10,
+            "12": 11,
+            "13": 8,
+            "14": 3,
+            "15": 6,
+            "16": 1,
+            "17": 1,
+            "2": 13,
+            "20": 1,
+            "3": 43,
+            "4": 315,
+            "5": 923,
+            "6": 481,
+            "7": 407,
+            "8": 254,
+            "9": 93
+          },
+          "maximumObservedMs": 340.2981419999851,
+          "meanCompletedDepth": 5.885083713850837,
+          "meanObservedMs": 194.76292832191888,
+          "medianObservedMs": 201.12757199997577,
+          "moves": 2628,
+          "nodesPerSecond": 879208.0201827867,
+          "overTwoTimesRequested": 0,
+          "p95ObservedMs": 204.32401959999407,
+          "stopReasons": {
+            "mate": 105,
+            "time-limit": 2523
+          },
+          "totalElapsedMs": 511836.9756300028,
+          "totalNodes": 450011174
+        }
+      },
+      "wins": 13
+    }
+  },
+  "canonicalArchiveMembers": 41,
+  "engineSearchesRunByAuditor": 0,
+  "formalPass": false,
+  "games": 40,
+  "independentlyReplayedSearchedMoves": 5258,
+  "inputs": {
+    "/tmp/chessy-hybrid-fitted-v1-20260915/expanded/dist/chessy-ai-fast.wasm": {
+      "bytes": 37470,
+      "sha256": "1d42329167b097ca8cf7527ce3143cd084924c19ff3b25e1107b528642307a9b"
+    },
+    "/tmp/chessy-hybrid-fitted-v1-20260915/hybrid-source.json": {
+      "bytes": 8521,
+      "sha256": "1095afc9bc9d6155cd8ffbffc8173a22ee88cf0df8f3c8329ebe6c0a3742b48d"
+    },
+    "/tmp/chessy-hybrid-fitted-v1-20260915/hybrid/dist/chessy-ai-fast.wasm": {
+      "bytes": 58085,
+      "sha256": "18c69302d9aaecc0078a5b398e68789f24adb66e525c99f8bc9ac9ddc60e9493"
+    },
+    "/workspace/scratch/90b8383e2cc0/chessy/assets/chessy-ai-fast.wasm": {
+      "bytes": 37172,
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-match-v1-registration.json": {
+      "bytes": 139775,
+      "sha256": "db7f95f1cfe2b69dd53aeeb0a7faf0d66e8ac1a26d03ee7cdf5560fd346c0fbc"
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-runtime-cost-v1.json": {
+      "bytes": 480445,
+      "sha256": "5c77665ed36070e8f763e9200a3ce04226ba2b5ee42d8c91511deb5fbf6f122c"
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-v1b-run/.hybrid-equal-time-200ms-v1.started.json": {
+      "bytes": 242,
+      "sha256": "78f1a97fc2df88781fea8e788915fb2cfbf2963e2b7ce8f0d25c588c55328e53"
+    },
+    "/workspace/scratch/90b8383e2cc0/hybrid-v1b-run/selection.json": {
+      "bytes": 92439,
+      "sha256": "5c871d29debd20bf7d5ff867f7f1a0ba442dd154c3324f690cd7665f7d280702"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-artifacts-v1/registration.json": {
+      "bytes": 25129,
+      "sha256": "8610cb22228618f4a2f5da68e269b25eaf8cf2f883d251527769a618b26a5c71"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-artifacts-v1/run/raw-manifest.json": {
+      "bytes": 8351,
+      "sha256": "95bd69b7c546af546297a0096e0dae07c036dd4fbbf3e594b9cf2d1c9cf74e41"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-artifacts-v1/run/retained-games.json": {
+      "bytes": 820079,
+      "sha256": "d1fe0e2b2cb0586a3811df386d48110fa2859ec39fac659f518118d307b72f86"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-artifacts-v1/run/summary.json": {
+      "bytes": 2392,
+      "sha256": "8837f65eeca1d45bc27ed4e929a95d8770a76516b05632a84e9651257586ca17"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/assets/engine.js": {
+      "bytes": 23349,
+      "sha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/assets/wasm-engine.js": {
+      "bytes": 15430,
+      "sha256": "50b403038be4dfcde8f524d4c398088b9947066ea61846d0120bba1e0cd97cdc"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/eval/training/hybrid-equal-time-200ms-v1.json": {
+      "bytes": 4512,
+      "sha256": "aede871ae44db83a2bb4d427cb8c3ec02017e24980c0f50a407af49dd2921345"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/eval/training/hybrid-fixed-node-v1.json": {
+      "bytes": 3395,
+      "sha256": "69ca2dfbf9dc7635adb94c0c4ea12506648098d98f8fa53e686acd4aa1c39572"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/test/ai-match-openings.js": {
+      "bytes": 5736,
+      "sha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/test/ai-match-protocol.js": {
+      "bytes": 2540,
+      "sha256": "d9613facd3c310699481dea1d5a58e6f10d3c2be4de12911c8dcb3928da65c63"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/test/match-stats.js": {
+      "bytes": 4137,
+      "sha256": "c4f6c5cdbd19710325fb1bc550c150b73a1bb90c0211f4f95ca4deb5a5b78d48"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/audit-hybrid-equal-time-200ms-v1.py": {
+      "bytes": 19159,
+      "sha256": "1eacd6e2b48cab3e32717afe49a4fc4aaefca5986fe5253cebb4e149cdcf6f90"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/audit-natural-runtime.py": {
+      "bytes": 40632,
+      "sha256": "7903ae11ae2b0448d56656366819ccf87847c1098ded97b033104e8f73323129"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-equal-time-200ms-v1.js": {
+      "bytes": 17874,
+      "sha256": "0025243225792e557b6d57f4bde7064248ef4b8550f2664b6e2ea2f9885b8ba6"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-fixed-node-v1.js": {
+      "bytes": 21305,
+      "sha256": "b3e3f5be084f325da2a4bdb263f1c20cc415f5516dc010cd1565685e3d017962"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-match-capture-v1.js": {
+      "bytes": 4434,
+      "sha256": "381e39b5d7d060bb2d4062ebac9815fa467072f93d03cf646bf24648f6af3cd0"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-match-recovery-v1.js": {
+      "bytes": 13091,
+      "sha256": "ab6533d456910d617cc49034bd62d540f8e61fbbdaea27638b47c33395e5fd29"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/hybrid-match-v1.js": {
+      "bytes": 20616,
+      "sha256": "62a7198f2180b6c3b85edddfbb64e67bf914516ef749a4e2d4e60811cedb337f"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-equal-time-200ms-execution-v1/tools/training/natural-runtime-run.js": {
+      "bytes": 32355,
+      "sha256": "9f2b987626d0331944aa070dfa2e0b33b50b0f6b5107f7e0d8d37d73cbab3f54"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-fixed-node-artifacts-v1/independent-audit.json": {
+      "bytes": 8840,
+      "sha256": "39f206db782a82ed4b37b86bec08a1cd926e12f15f3d1216828668f477c392ba"
+    },
+    "/workspace/scratch/ec6584e1ca6d/hybrid-fixed-node-artifacts-v1/run/summary.json": {
+      "bytes": 2377,
+      "sha256": "ef392674f7a081a2dcf714bf7d79fa243e6ac95af5888a975f9a0e625651f6ae"
+    }
+  },
+  "limitations": [
+    "Independent legality/repetition/adjudication uses python-chess on authenticated retained archive members; mutable live game files are never used and wall-clock numbers are not remeasured.",
+    "Unchanged hybrid versus shipped HCE at200ms; expanded HCE remains an offline control, not an additional match arm.",
+    "The20-pair exposed subset and200ms budget are developmental; descriptive clustered bounds do not establish Elo or shipping acceptance."
+  ],
+  "mismatches": 0,
+  "mutableLiveGameFilesRead": 0,
+  "pythonChessVersion": "1.11.2",
+  "rawGameSource": "authenticated retained gzip archive only",
+  "registrationSha256": "8610cb22228618f4a2f5da68e269b25eaf8cf2f883d251527769a618b26a5c71",
+  "researchOnly": true,
+  "schema": "chessy.hybrid-equal-time-200ms-independent-audit.v1",
+  "shippingOrEloClaimAllowed": false,
+  "status": "PASS",
+  "summarySha256": "8837f65eeca1d45bc27ed4e929a95d8770a76516b05632a84e9651257586ca17",
+  "warmupSearches": 8
+}

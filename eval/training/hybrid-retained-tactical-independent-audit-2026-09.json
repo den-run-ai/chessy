@@ -1,0 +1,257 @@
+{
+  "aggregates": {
+    "avoidableImmediateMate": 0,
+    "chosenMoveWithImmediateMatingReply": 16,
+    "decisionsWithMateInOneMoves": 13,
+    "missedMateInOne": 0,
+    "phaseTransitions": {
+      "high12-down": 39,
+      "high12-up": 1,
+      "low6-down": 43,
+      "low6-up": 20
+    }
+  },
+  "checks": [
+    "Literal registration/result/raw digests agree; frozen script/protocol and registered Python/chess file digests match.",
+    "All41 retained archive members authenticate and exactly match40 registered game IDs,5258 move records and2628 hybrid decisions.",
+    "Every decision taskId/ply/FEN/chosen move matches its authenticated source move; all40 cumulative checkpoints and final footer reconcile.",
+    "Every root phase independently counted from FEN piece characters; all recorded crossings recomputed between consecutive hybrid decisions.",
+    "Mate flags and result aggregates recomputed from retained mate lists and witnesses; all16 mating-reply records have no avoiding witness."
+  ],
+  "coverage": {
+    "archiveMembers": 41,
+    "completeFooter": true,
+    "gameCompleteCheckpoints": 40,
+    "games": 40,
+    "hybridDecisions": 2628,
+    "moves": 5258,
+    "rawRows": 2669,
+    "uniqueTaskPlyDecisions": 2628
+  },
+  "formalPass": false,
+  "implementation": {
+    "protocolSha256": "dc3c6792054f423cb62854e82cd06f8ce50864dea45a9df164fc2ac1b54760d9",
+    "registeredRuntimeFileHashesVerified": true,
+    "scriptSha256": "15a9b6b4fc34cb804783d5ae171c0ba514eeeba0bc086d3d62a637dbf4e4984f",
+    "snapshotReadOnly": true
+  },
+  "inputs": {
+    "archive": "d1fe0e2b2cb0586a3811df386d48110fa2859ec39fac659f518118d307b72f86",
+    "matchAudit": "508190d5fb45668eb9d023958ff3e41a9e69c55d04f3e4679fa26df921220d85",
+    "matchRegistration": "8610cb22228618f4a2f5da68e269b25eaf8cf2f883d251527769a618b26a5c71"
+  },
+  "limitations": [
+    "No engine, legal-move search, mate enumeration or tactical census rerun was performed.",
+    "This audit authenticates retained evidence and arithmetic; it does not independently establish completeness or legality of the recorded mate lists.",
+    "Zero one-move findings do not rule out deeper tactics, ranking errors or phase-evaluation errors."
+  ],
+  "pass": true,
+  "perGame": [
+    {
+      "hybridDecisions": 42,
+      "moves": 83,
+      "taskId": "hybrid-t200-o6-w"
+    },
+    {
+      "hybridDecisions": 84,
+      "moves": 168,
+      "taskId": "hybrid-t200-o6-b"
+    },
+    {
+      "hybridDecisions": 63,
+      "moves": 126,
+      "taskId": "hybrid-t200-o59-b"
+    },
+    {
+      "hybridDecisions": 66,
+      "moves": 131,
+      "taskId": "hybrid-t200-o59-w"
+    },
+    {
+      "hybridDecisions": 79,
+      "moves": 158,
+      "taskId": "hybrid-t200-o38-w"
+    },
+    {
+      "hybridDecisions": 61,
+      "moves": 123,
+      "taskId": "hybrid-t200-o38-b"
+    },
+    {
+      "hybridDecisions": 48,
+      "moves": 95,
+      "taskId": "hybrid-t200-o86-w"
+    },
+    {
+      "hybridDecisions": 74,
+      "moves": 148,
+      "taskId": "hybrid-t200-o86-b"
+    },
+    {
+      "hybridDecisions": 42,
+      "moves": 84,
+      "taskId": "hybrid-t200-o28-w"
+    },
+    {
+      "hybridDecisions": 79,
+      "moves": 158,
+      "taskId": "hybrid-t200-o28-b"
+    },
+    {
+      "hybridDecisions": 90,
+      "moves": 180,
+      "taskId": "hybrid-t200-o60-w"
+    },
+    {
+      "hybridDecisions": 66,
+      "moves": 133,
+      "taskId": "hybrid-t200-o60-b"
+    },
+    {
+      "hybridDecisions": 82,
+      "moves": 164,
+      "taskId": "hybrid-t200-o41-b"
+    },
+    {
+      "hybridDecisions": 77,
+      "moves": 154,
+      "taskId": "hybrid-t200-o41-w"
+    },
+    {
+      "hybridDecisions": 36,
+      "moves": 71,
+      "taskId": "hybrid-t200-o58-w"
+    },
+    {
+      "hybridDecisions": 60,
+      "moves": 120,
+      "taskId": "hybrid-t200-o58-b"
+    },
+    {
+      "hybridDecisions": 90,
+      "moves": 180,
+      "taskId": "hybrid-t200-o57-b"
+    },
+    {
+      "hybridDecisions": 90,
+      "moves": 180,
+      "taskId": "hybrid-t200-o57-w"
+    },
+    {
+      "hybridDecisions": 53,
+      "moves": 106,
+      "taskId": "hybrid-t200-o51-b"
+    },
+    {
+      "hybridDecisions": 90,
+      "moves": 180,
+      "taskId": "hybrid-t200-o51-w"
+    },
+    {
+      "hybridDecisions": 66,
+      "moves": 132,
+      "taskId": "hybrid-t200-o96-w"
+    },
+    {
+      "hybridDecisions": 50,
+      "moves": 101,
+      "taskId": "hybrid-t200-o96-b"
+    },
+    {
+      "hybridDecisions": 22,
+      "moves": 44,
+      "taskId": "hybrid-t200-o83-b"
+    },
+    {
+      "hybridDecisions": 82,
+      "moves": 164,
+      "taskId": "hybrid-t200-o83-w"
+    },
+    {
+      "hybridDecisions": 50,
+      "moves": 100,
+      "taskId": "hybrid-t200-o78-w"
+    },
+    {
+      "hybridDecisions": 55,
+      "moves": 111,
+      "taskId": "hybrid-t200-o78-b"
+    },
+    {
+      "hybridDecisions": 68,
+      "moves": 136,
+      "taskId": "hybrid-t200-o34-w"
+    },
+    {
+      "hybridDecisions": 50,
+      "moves": 101,
+      "taskId": "hybrid-t200-o34-b"
+    },
+    {
+      "hybridDecisions": 90,
+      "moves": 180,
+      "taskId": "hybrid-t200-o91-b"
+    },
+    {
+      "hybridDecisions": 52,
+      "moves": 104,
+      "taskId": "hybrid-t200-o91-w"
+    },
+    {
+      "hybridDecisions": 58,
+      "moves": 116,
+      "taskId": "hybrid-t200-o14-w"
+    },
+    {
+      "hybridDecisions": 28,
+      "moves": 57,
+      "taskId": "hybrid-t200-o14-b"
+    },
+    {
+      "hybridDecisions": 65,
+      "moves": 131,
+      "taskId": "hybrid-t200-o5-b"
+    },
+    {
+      "hybridDecisions": 64,
+      "moves": 127,
+      "taskId": "hybrid-t200-o5-w"
+    },
+    {
+      "hybridDecisions": 90,
+      "moves": 180,
+      "taskId": "hybrid-t200-o84-w"
+    },
+    {
+      "hybridDecisions": 66,
+      "moves": 133,
+      "taskId": "hybrid-t200-o84-b"
+    },
+    {
+      "hybridDecisions": 66,
+      "moves": 132,
+      "taskId": "hybrid-t200-o75-b"
+    },
+    {
+      "hybridDecisions": 75,
+      "moves": 149,
+      "taskId": "hybrid-t200-o75-w"
+    },
+    {
+      "hybridDecisions": 80,
+      "moves": 159,
+      "taskId": "hybrid-t200-o74-w"
+    },
+    {
+      "hybridDecisions": 79,
+      "moves": 159,
+      "taskId": "hybrid-t200-o74-b"
+    }
+  ],
+  "posthoc": true,
+  "registrationSha256": "faf720ff2309c9e6569cc70aed692238becea87fcadd6866661bead0a779467d",
+  "researchOnly": true,
+  "resultsSha256": "35374d6c50fedce08056fecb8f7bdfda72c3db4ef9283d539f88568e348aaad7",
+  "rowsSha256": "b2af28a647f6508f10af7e0cae559216ab6530250019b10b493c0ebdd9ee7d6d",
+  "schema": "chessy.hybrid-retained-tactical.independent-audit.v1"
+}
