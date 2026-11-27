@@ -118,13 +118,13 @@
     },
     {
       "path": "prepare.js",
-      "bytes": 8694,
-      "sha256": "f2897609873e707ed67561e77d932b61db5fdb833305e128628114dcb2251277"
+      "bytes": 10377,
+      "sha256": "1912a8de9ba67a42f75df7e22fec51841d22f5a99436e5b2cb8eef51a05a0e0f"
     },
     {
       "path": "probe.test.js",
-      "bytes": 3594,
-      "sha256": "5cc88fd65bfd1e0c4e20a3550d786d2561a75a96b5c6240353dbff08b074e3f7"
+      "bytes": 8799,
+      "sha256": "f3944d4ec71245464e445592cdca92d28838c759c10e2ba24baa0494511bd059"
     },
     {
       "path": "protocol.json",
@@ -133,13 +133,29 @@
     },
     {
       "path": "README.md",
-      "bytes": 9326,
-      "sha256": "65b245512c17ee63cc02ab8d47a1243819719883f471bc5fc3e91dfa3efa067e"
+      "bytes": 10329,
+      "sha256": "7bf8bd675be42f795bbe7dd4d8373c7c1c4d5936b39e2ef5bd75aa0eb0b1ff48"
     },
     {
       "path": "validate.js",
+      "bytes": 8807,
+      "sha256": "1ebc3cd38c21d58e55e2e48eb5796adea9bae14cb47542a6c593ba9bd1a5c62c"
+    },
+    {
+      "path": "evidence/measured-prepare.js.txt",
+      "bytes": 8694,
+      "sha256": "f2897609873e707ed67561e77d932b61db5fdb833305e128628114dcb2251277"
+    },
+    {
+      "path": "evidence/measured-validate.js.txt",
       "bytes": 7256,
       "sha256": "da5d47b2de3317a0e1eb47d7d393e3e28fde67ce1ca4b4917ce8dd5755f980ef"
     }
-  ]
+  ],
+  "correctnessReproduction": {
+    "purpose": "historical-correctness-reproduction",
+    "sourceSchema": "chessy.compact-hash.source.v2",
+    "validationSchema": "chessy.compact-hash.validation.v2",
+    "baselineCommit": "f65224dece688f23d00429c148715262dd3c9b79"
+  }
 }

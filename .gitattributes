@@ -9,3 +9,6 @@ eval/corpus/sources/*.tsv        text eol=lf
 eval/corpus/sources/*.json       text eol=lf
 eval/BASELINE.json               text eol=lf
 eval/ANALYSIS-BASELINE.json      text eol=lf
+# This historical source is a hash-bound measurement input. Its final blank
+# line must remain byte-exact; the active generated source has been normalized.
+eval/sparse-pesto-v2/source-snapshots/5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c-hce_constants.rs.txt text eol=lf whitespace=-blank-at-eof

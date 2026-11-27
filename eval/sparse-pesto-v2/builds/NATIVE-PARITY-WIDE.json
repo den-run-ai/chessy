@@ -1,0 +1,95 @@
+{
+  "schema": "chessy.sparse-v2-native-build.v1",
+  "researchOnly": true,
+  "compilerVersion": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "compilerSha256": "d3a664c970a9fd8361b64194861bebc1ae37b9054e5ee3400dc1c9e691797eea",
+  "sourceHashes": {
+    "tools/sparse_eval_v2/runtime.rs": "be09888e29247acfa70b9fddc0c68ee4986e6e3abdc03507104e2c582216a63d",
+    "tools/sparse_eval_v2/core.rs": "c606c2a7d32da71e331fc543f3bbadd3dfed75eb3328a3f434140bae9543fa40",
+    "tools/sparse_eval_v2/simd.rs": "71a20fedbb8ae4851a3c1e0df4eeb4c9453cbfceca9f754f46728a17eb1382a0",
+    "tools/sparse_eval_v2/hce_constants.rs": "5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c",
+    "tools/sparse_eval_v2/generate_hce_constants.py": "a2c8fb69792d029724ad994379846c7d3083383ab3a19a6f357bde09065ca44a",
+    "tools/sparse_eval_v2/build_native.py": "50ec984548e6d10e0642f6e9cf5a9b8479402810f412f81ee9f838a3040ebde7",
+    "tools/sparse_eval/baseline/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+    "tools/sparse_eval/baseline/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+    "tools/sparse_eval/baseline/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+    "tools/sparse_eval/baseline/manifest.json": "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728"
+  },
+  "sourceSnapshot": "/workspace/library-files/chessy-sparse-work/v2-native-wide-build-v1/source",
+  "wideFused": true,
+  "target": "portable-native-x86_64",
+  "native": {
+    "scalar": {
+      "path": "/workspace/library-files/chessy-sparse-work/v2-native-wide-build-v1/sparse-v2-scalar",
+      "sha256": "889d2219b809cdf1be653eff3fa280cfedbfbdcc3dd42b00c8ee0171a03b74a9",
+      "bytes": 2330032,
+      "command": [
+        "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+        "--edition=2021",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "--cfg",
+        "v2_wide_fused",
+        "tools/sparse_eval_v2/runtime.rs",
+        "-o",
+        "/workspace/library-files/chessy-sparse-work/v2-native-wide-build-v1/sparse-v2-scalar"
+      ],
+      "metadata": {
+        "schema": "chessy.sparse-v2-native.v1",
+        "researchOnly": true,
+        "modelBytes": 22860,
+        "coefficientPayloadBytes": 22856,
+        "evalCacheBytes": 73752,
+        "cacheSlots": 1024,
+        "simd": false,
+        "wideFused": true,
+        "rootSeed": 0,
+        "historyIncludesRoot": true,
+        "maximumHistoryOccurrences": 768
+      }
+    },
+    "simd": {
+      "path": "/workspace/library-files/chessy-sparse-work/v2-native-wide-build-v1/sparse-v2-simd",
+      "sha256": "06ff2f2111a265d0a16b1a53a6052651411b4f9a20bcd266f80e5127f023bfe8",
+      "bytes": 2329488,
+      "command": [
+        "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+        "--edition=2021",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "panic=abort",
+        "--cfg",
+        "v2_wide_fused",
+        "--cfg",
+        "v2_simd",
+        "tools/sparse_eval_v2/runtime.rs",
+        "-o",
+        "/workspace/library-files/chessy-sparse-work/v2-native-wide-build-v1/sparse-v2-simd"
+      ],
+      "metadata": {
+        "schema": "chessy.sparse-v2-native.v1",
+        "researchOnly": true,
+        "modelBytes": 22860,
+        "coefficientPayloadBytes": 22856,
+        "evalCacheBytes": 73752,
+        "cacheSlots": 1024,
+        "simd": true,
+        "wideFused": true,
+        "rootSeed": 0,
+        "historyIncludesRoot": true,
+        "maximumHistoryOccurrences": 768
+      }
+    }
+  }
+}

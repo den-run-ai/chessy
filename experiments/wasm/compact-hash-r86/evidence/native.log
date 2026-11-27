@@ -1,0 +1,43 @@
+   Compiling chessy-ai-wasm v0.1.0 (/tmp/chessy-hash-seeded-build)
+warning: function `history_input_ptr` is never used
+    --> src/search.rs:2004:8
+     |
+2004 | pub fn history_input_ptr() -> *mut u8 {
+     |        ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `pv_ptr` is never used
+    --> src/search.rs:2008:8
+     |
+2008 | pub fn pv_ptr() -> u32 {
+     |        ^^^^^^
+
+warning: `chessy-ai-wasm` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.42s
+     Running unittests src/lib.rs (/tmp/chessy-hash-seeded-native-target/debug/deps/chessy_ai_wasm-8ab5d9e90753b2a1)
+
+running 16 tests
+test search::reference_search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+test engine::tests::make_and_unmake_restore_position_exactly ... ok
+test eval::tests::matches_shipped_javascript_reference_positions ... ok
+test engine::tests::kiwipete_en_passant_and_promotion_perft ... ok
+test engine::tests::initial_position_perft_and_pseudo_ordering ... ok
+test search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+120 ordinary, 120 fixed, 312 shared-budget forced-root/PV cases plus repeated-history parity
+test search::compact_hash_tests::exact_search_abort_repetition_forced_root_and_pv_parity ... ok
+38622 seeded legal sibling edges match both original hash streams
+test search::compact_hash_tests::random_legal_sequences_and_all_sibling_hashes_match_oracle ... ok
+7097 authored legal edges match board/full hash with parent restoration
+test search::compact_hash_tests::every_authored_legal_edge_matches_full_scan_and_restores_parent ... ok
+test search::reference_search::tests::seeded_roots_reproduce_and_do_not_change_full_depth_value ... ok
+216 seeded ordinary searches match the complete full-scan result and restore roots
+test search::seeded_hash_parity_tests::seeded_search_matches_full_scan_across_special_moves_and_budget_edges ... ok
+test search::reference_search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+108 seeded searches match across onefold, twofold and threefold root histories
+test search::seeded_hash_parity_tests::seeded_search_matches_full_scan_with_reversible_game_histories ... ok
+test search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+test search::tests::seeded_roots_reproduce_and_do_not_change_full_depth_value ... ok
+test tests::abi_v2_layout_and_depth_guard_are_fixed ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.26s

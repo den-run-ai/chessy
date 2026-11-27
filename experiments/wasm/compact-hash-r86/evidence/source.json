@@ -1,0 +1,101 @@
+{
+  "schema": "chessy.compact-hash-r86.source.v1",
+  "baseCommit": "3b32d2e7c23341d2245003c5324aa2ee6d07aa08",
+  "variant": "threaded",
+  "purpose": "Checked compact hashing integrated with unchanged r85 seeded root ordering",
+  "timingPerformed": false,
+  "strengthClaimAllowed": false,
+  "universalEquivalenceProven": false,
+  "source": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+    },
+    {
+      "path": "build.sh",
+      "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+    },
+    {
+      "path": "src/engine.rs",
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "path": "src/eval.rs",
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "c05fa66c239fdf4e38bf4912cd1491be1c57146b0670e71a340af8e586e8cd15"
+    },
+    {
+      "path": "src/search.rs",
+      "sha256": "9f8f2a798c26e7c4ff22cbc8b4605ed72fd17eadfc8bf9305747bf7ec40194b5"
+    }
+  ],
+  "generated": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+    },
+    {
+      "path": "build.sh",
+      "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+    },
+    {
+      "path": "src/engine.rs",
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "path": "src/eval.rs",
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "c05fa66c239fdf4e38bf4912cd1491be1c57146b0670e71a340af8e586e8cd15"
+    },
+    {
+      "path": "src/search.rs",
+      "sha256": "4db05a27ae42560d6f45920859f9916eb84d0df3d59ab3eca95a4e53ed75ffc4"
+    }
+  ],
+  "historicalRecipe": [
+    {
+      "path": "prepare.js",
+      "sha256": "f2897609873e707ed67561e77d932b61db5fdb833305e128628114dcb2251277"
+    },
+    {
+      "path": "paired-hash.rs.in",
+      "sha256": "e3740877481dcfcbad9b984da9661790ffb6d34f9d72b923760e395ea503ade7"
+    },
+    {
+      "path": "parity.rs.in",
+      "sha256": "6cafc8b53351d4f55e246ce1bf8a242c4c87c3845f2772a61ca55cd9be9ad386"
+    }
+  ],
+  "implementation": [
+    {
+      "path": "prepare.js",
+      "sha256": "7fc2769e8bb5832c0e9611d3c896eff1d9ff1375b48ec65c5c0e6b37d248fe98"
+    },
+    {
+      "path": "seeded-parity.rs.in",
+      "sha256": "d46a64084f3aed87d713457cf9f5dbc0d2921c47355f5244a4c3a647798ee9d7"
+    }
+  ]
+}

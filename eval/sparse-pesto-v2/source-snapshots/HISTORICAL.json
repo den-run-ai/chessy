@@ -1,0 +1,35 @@
+{
+  "schema": "chessy.sparse-v2-historical-sources.v1",
+  "files": [
+    {
+      "sha256": "be09888e29247acfa70b9fddc0c68ee4986e6e3abdc03507104e2c582216a63d",
+      "bytes": 13290,
+      "path": "eval/sparse-pesto-v2/source-snapshots/be09888e29247acfa70b9fddc0c68ee4986e6e3abdc03507104e2c582216a63d-runtime.rs.txt",
+      "role": "earlier pre-measurement implementation retained for its receipt"
+    },
+    {
+      "sha256": "0ef3764d00bbaf859b801346e16ab4fcc551f192e4b723a6a79a0ea3e983b8a0",
+      "bytes": 15588,
+      "path": "eval/sparse-pesto-v2/source-snapshots/0ef3764d00bbaf859b801346e16ab4fcc551f192e4b723a6a79a0ea3e983b8a0-wasm_runner.mjs.txt",
+      "role": "earlier pre-measurement implementation retained for its receipt"
+    },
+    {
+      "sha256": "cba776d5b5b9a515467b180edf972d62acc5ca6e1c3b8646f291b543f5ab6070",
+      "bytes": 23954,
+      "path": "eval/sparse-pesto-v2/source-snapshots/cba776d5b5b9a515467b180edf972d62acc5ca6e1c3b8646f291b543f5ab6070-instrumented.rs.txt",
+      "role": "instrumentation-only generated source"
+    },
+    {
+      "sha256": "5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c",
+      "bytes": 4423,
+      "path": "eval/sparse-pesto-v2/source-snapshots/5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c-hce_constants.rs.txt",
+      "role": "measured source before packaging-only trailing blank-line normalization"
+    },
+    {
+      "sha256": "a2c8fb69792d029724ad994379846c7d3083383ab3a19a6f357bde09065ca44a",
+      "bytes": 1536,
+      "path": "eval/sparse-pesto-v2/source-snapshots/a2c8fb69792d029724ad994379846c7d3083383ab3a19a6f357bde09065ca44a-generate_hce_constants.py.txt",
+      "role": "measured source before packaging-only trailing blank-line normalization"
+    }
+  ]
+}

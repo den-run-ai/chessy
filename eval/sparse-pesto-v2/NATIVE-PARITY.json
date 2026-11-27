@@ -1,0 +1,393 @@
+{
+  "schema": "chessy.sparse-v2-native-parity.v1",
+  "status": "complete-exact",
+  "purpose": "correctness-only-no-labels-no-timing-claims",
+  "sourceSha256": "b3f6ac249b89d9cf4103da4b2fbb57e66a310a302fa1ea6fb3fc477e15f99257",
+  "buildReceiptSha256": {
+    "narrow": "b361744976b18ef5c0d729f8a9c4623a99bdea091593772316309da9dd1dbdcf",
+    "wide": "6c832d3ff8a12470af987380d13086db76f528fb780322d05f07613dc14e57ef"
+  },
+  "validationFenSha256": "1f5402d0b61d18f2c8c1dd791d99fc1bcecd2c44956b5bc28c8ed8bcf0c81900",
+  "fullWeightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+  "kingWeightsSha256": "f0079ded36124750ea38c65e8886fb812b1dccb643b50820e7b4934a5e37da36",
+  "rootsSha256": "31de3c9558e860f0944a8b860633a7050330af666dede4ab902ea55fd7bd3400",
+  "referenceBinarySha256": "5ac4a988d1b42999deada673b82117a5e9b8fead9d383a841cbc78827d641443",
+  "scoreComparisons": 1201968,
+  "searchComparisons": 1152,
+  "static": [
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "compact",
+      "model": "full",
+      "binarySha256": "0256cdc8abd9cea97105517bea42118896d660beafc221cee5066a61065c9e92",
+      "rows": 100164,
+      "scoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "referenceScoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "fused",
+      "model": "full",
+      "binarySha256": "0256cdc8abd9cea97105517bea42118896d660beafc221cee5066a61065c9e92",
+      "rows": 100164,
+      "scoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "referenceScoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "cached",
+      "model": "full",
+      "binarySha256": "0256cdc8abd9cea97105517bea42118896d660beafc221cee5066a61065c9e92",
+      "rows": 100164,
+      "scoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "referenceScoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "compact",
+      "model": "full",
+      "binarySha256": "cf7816b447df2c921efe411752a18ddc87099db8f25b348d6ca18d420fbe8863",
+      "rows": 100164,
+      "scoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "referenceScoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "fused",
+      "model": "full",
+      "binarySha256": "cf7816b447df2c921efe411752a18ddc87099db8f25b348d6ca18d420fbe8863",
+      "rows": 100164,
+      "scoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "referenceScoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "cached",
+      "model": "full",
+      "binarySha256": "cf7816b447df2c921efe411752a18ddc87099db8f25b348d6ca18d420fbe8863",
+      "rows": 100164,
+      "scoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "referenceScoresSha256": "489cb41f8ee9dbfd61ed546bbd172804dd51ff82e4f538c4982ae79668fc1df0",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "compact",
+      "model": "king",
+      "binarySha256": "889d2219b809cdf1be653eff3fa280cfedbfbdcc3dd42b00c8ee0171a03b74a9",
+      "rows": 100164,
+      "scoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "referenceScoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "fused",
+      "model": "king",
+      "binarySha256": "889d2219b809cdf1be653eff3fa280cfedbfbdcc3dd42b00c8ee0171a03b74a9",
+      "rows": 100164,
+      "scoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "referenceScoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "cached",
+      "model": "king",
+      "binarySha256": "889d2219b809cdf1be653eff3fa280cfedbfbdcc3dd42b00c8ee0171a03b74a9",
+      "rows": 100164,
+      "scoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "referenceScoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "compact",
+      "model": "king",
+      "binarySha256": "06ff2f2111a265d0a16b1a53a6052651411b4f9a20bcd266f80e5127f023bfe8",
+      "rows": 100164,
+      "scoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "referenceScoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "fused",
+      "model": "king",
+      "binarySha256": "06ff2f2111a265d0a16b1a53a6052651411b4f9a20bcd266f80e5127f023bfe8",
+      "rows": 100164,
+      "scoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "referenceScoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "cached",
+      "model": "king",
+      "binarySha256": "06ff2f2111a265d0a16b1a53a6052651411b4f9a20bcd266f80e5127f023bfe8",
+      "rows": 100164,
+      "scoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "referenceScoresSha256": "8ed86078771f2548bd59ef212d5ea237540778469dc9b5ce134ccaf5a84739ff",
+      "exact": true
+    }
+  ],
+  "search": [
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "compact",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "fused",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "cached",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "compact",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "fused",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "cached",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "compact",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "fused",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "cached",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "compact",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "fused",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "cached",
+      "nodeBudget": 10000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "7c98e145cf58619896a73b51dd62ed8295273effd72c7388f4905e6f40903004",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "compact",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "fused",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "scalar",
+      "variant": "cached",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "compact",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "fused",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "narrow",
+      "architecture": "simd",
+      "variant": "cached",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "compact",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "fused",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "scalar",
+      "variant": "cached",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "compact",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "fused",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    },
+    {
+      "precision": "wide",
+      "architecture": "simd",
+      "variant": "cached",
+      "nodeBudget": 36000,
+      "positions": 24,
+      "comparisons": 48,
+      "signatureSha256": "4d4e038398f7f7776739f7e2f7e8e0bc8da4b64c9bf698ecfca5474eff445176",
+      "exact": true
+    }
+  ]
+}

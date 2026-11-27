@@ -1,0 +1,227 @@
+{
+  "schema": "chessy.sparse-v2-parallel-results.v1",
+  "status": "complete-research-only",
+  "researchOnly": true,
+  "productionAdmission": false,
+  "registrationSha256": "73ff84e9b1931ccc536b06b01f0d42e92840dbbf08add0514cae364b728e289a",
+  "selection": {
+    "target": "wasm-simd",
+    "variant": "fused",
+    "model": "full"
+  },
+  "allExactSignaturesMatch": true,
+  "searchObservations": 648,
+  "fixedJobsPerWorkerCount": 216,
+  "distinctRoots": 72,
+  "independentProcessCounts": [
+    1,
+    2,
+    4
+  ],
+  "summary": [
+    {
+      "workers": 1,
+      "blocks": 3,
+      "searches": 216,
+      "distinctRoots": 72,
+      "actualNodes": 7776000,
+      "totalBatchWallNs": 10448073531,
+      "actualNodesPerSecond": 744252.0362177952,
+      "searchesPerSecond": 20.673667672716537,
+      "searchCallLatencyNs": {
+        "mean": 48049804.356481485,
+        "median": 48142896,
+        "p95": 75329245,
+        "min": 22321902,
+        "max": 119561765
+      },
+      "workerCpuTimeUs": 10311916,
+      "observedWorkerCpuSecondsPerBatchWallSecond": 0.9869681687637426,
+      "maximumSumOfWorkerPeakRssBytes": 79376384,
+      "maximumSumOfWorkerReadyRssBytes": 64303104,
+      "maximumSumOfWorkerEndRssBytes": 79376384,
+      "fixedWasmLinearMemoryBytes": 33554432,
+      "blockActualNodesPerSecond": [
+        742916.0940517387,
+        735758.407976925,
+        754316.3406266939
+      ],
+      "throughputRatioToOneWorker": 1,
+      "meanSearchLatencyRatioToOneWorker": 1
+    },
+    {
+      "workers": 2,
+      "blocks": 3,
+      "searches": 216,
+      "distinctRoots": 72,
+      "actualNodes": 7776000,
+      "totalBatchWallNs": 6875955410,
+      "actualNodesPerSecond": 1130897.3860841254,
+      "searchesPerSecond": 31.41381628011459,
+      "searchCallLatencyNs": {
+        "mean": 55079882.597222224,
+        "median": 50406265,
+        "p95": 106365772,
+        "min": 24752541,
+        "max": 154638635
+      },
+      "workerCpuTimeUs": 11842778,
+      "observedWorkerCpuSecondsPerBatchWallSecond": 1.7223465386026986,
+      "maximumSumOfWorkerPeakRssBytes": 163065856,
+      "maximumSumOfWorkerReadyRssBytes": 133312512,
+      "maximumSumOfWorkerEndRssBytes": 163065856,
+      "fixedWasmLinearMemoryBytes": 67108864,
+      "blockActualNodesPerSecond": [
+        1457945.2823112174,
+        805644.130175475,
+        1378130.0049327272
+      ],
+      "throughputRatioToOneWorker": 1.519508622147973,
+      "meanSearchLatencyRatioToOneWorker": 1.146308155358648
+    },
+    {
+      "workers": 4,
+      "blocks": 3,
+      "searches": 216,
+      "distinctRoots": 72,
+      "actualNodes": 7776000,
+      "totalBatchWallNs": 5096774705,
+      "actualNodesPerSecond": 1525670.7329777882,
+      "searchesPerSecond": 42.37974258271634,
+      "searchCallLatencyNs": {
+        "mean": 72140637.97685185,
+        "median": 60525853,
+        "p95": 134570821,
+        "min": 29033075,
+        "max": 299631683
+      },
+      "workerCpuTimeUs": 15545410,
+      "observedWorkerCpuSecondsPerBatchWallSecond": 3.0500484914017796,
+      "maximumSumOfWorkerPeakRssBytes": 318775296,
+      "maximumSumOfWorkerReadyRssBytes": 260186112,
+      "maximumSumOfWorkerEndRssBytes": 318775296,
+      "fixedWasmLinearMemoryBytes": 134217728,
+      "blockActualNodesPerSecond": [
+        1742355.7569410494,
+        1219441.8527698184,
+        1747135.7712641652
+      ],
+      "throughputRatioToOneWorker": 2.049938271893853,
+      "meanSearchLatencyRatioToOneWorker": 1.5013721479829654
+    }
+  ],
+  "inventory": {
+    "block-00.json": {
+      "path": "block-00.json",
+      "bytes": 60695,
+      "sha256": "13196a0a5145d6138e131a7d840bfd103e7a093c94839206e2cc179b61740b53"
+    },
+    "block-01.json": {
+      "path": "block-01.json",
+      "bytes": 79763,
+      "sha256": "2b20f580b4a88970ce4fe6e83d6e85eb34335ccdc3f5c50b266a57269e9ec6c4"
+    },
+    "block-02.json": {
+      "path": "block-02.json",
+      "bytes": 117902,
+      "sha256": "caec35d081049943f437ecb2455c92a7755ff485ce2fe18e608a94592cb942f7"
+    },
+    "block-03.json": {
+      "path": "block-03.json",
+      "bytes": 79767,
+      "sha256": "395d0e50ce77070d7e06f9cc19a9f66a9937dd917ba098ddbb6b13066a4c90cb"
+    },
+    "block-04.json": {
+      "path": "block-04.json",
+      "bytes": 117910,
+      "sha256": "181943be8c756fe64d5917646fa410f6e6744953775c097604b54d56ad9e74c5"
+    },
+    "block-05.json": {
+      "path": "block-05.json",
+      "bytes": 60699,
+      "sha256": "d0426e5a119fe7ded032a8b54959d1c5b71fcf4fc1327688f906dd3b85142b8e"
+    },
+    "block-06.json": {
+      "path": "block-06.json",
+      "bytes": 117901,
+      "sha256": "046d6a744056038c53836e39e0083dee6f2101280e38e5c3e27d779533562293"
+    },
+    "block-07.json": {
+      "path": "block-07.json",
+      "bytes": 60693,
+      "sha256": "d542889c662fbb3d0320578554c4b2069296ef29b42df58d5a8bbd7af6b5d0ba"
+    },
+    "block-08.json": {
+      "path": "block-08.json",
+      "bytes": 79753,
+      "sha256": "808c2cddde71f8ad9341b854aff7da085351224ac71e23ea1b9bfe147ff0553b"
+    },
+    "search.jsonl": {
+      "path": "search.jsonl",
+      "bytes": 245919,
+      "sha256": "88460e030397850db02fac6f42970c8f3350b6cda9dee2bb5f074d40d967d6e0"
+    }
+  },
+  "environmentBefore": {
+    "timestamp": "2026-11-27T07:58:57.528Z",
+    "platform": "linux",
+    "architecture": "x64",
+    "release": "6.18.57",
+    "nodeVersion": "v24.22.3",
+    "v8Version": "13.6.233.17-node.63",
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "cpuModel": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "procCgroup": "0::/\n",
+    "cgroupMountLines": [],
+    "cpuMax": null,
+    "cpuStat": null,
+    "cpuPressure": null,
+    "quotaObservation": "Missing cgroup files do not establish an unlimited CPU quota; affinity is not a CPU-time entitlement."
+  },
+  "environmentAfter": {
+    "timestamp": "2026-11-27T07:59:29.528Z",
+    "platform": "linux",
+    "architecture": "x64",
+    "release": "6.18.57",
+    "nodeVersion": "v24.22.3",
+    "v8Version": "13.6.233.17-node.63",
+    "affinity": [
+      8
+    ],
+    "cpuModel": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "procCgroup": "0::/\n",
+    "cgroupMountLines": [],
+    "cpuMax": null,
+    "cpuStat": null,
+    "cpuPressure": null,
+    "quotaObservation": "Missing cgroup files do not establish an unlimited CPU quota; affinity is not a CPU-time entitlement."
+  },
+  "workerCpus": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "coordinatorCpu": 8,
+  "limitations": [
+    "Independent searches in separate Node/WASM processes; no parallelism inside one search tree.",
+    "Seventy-two development cost roots repeated three times; not 216 independent positions and not playing-strength evidence.",
+    "One complete nine-block campaign on one host; no selective retries or confidence interval claim.",
+    "Batch wall time includes dispatch, IPC, serialization and scheduling. Per-search latency times the synchronous WASM call.",
+    "Worker peak RSS is process-lifetime Linux maxRSS including warmup. Sums of worker peaks are upper bounds, not simultaneous sampled resident memory; coordinator memory is excluded.",
+    "Each worker has a separate fixed WASM memory; coefficient payload is only part of its process memory.",
+    "CPU affinity does not establish quota. Unexposed cgroup quota/throttling remain unknown."
+  ],
+  "gameOutcomesRead": false,
+  "teacherLabelsRead": false
+}

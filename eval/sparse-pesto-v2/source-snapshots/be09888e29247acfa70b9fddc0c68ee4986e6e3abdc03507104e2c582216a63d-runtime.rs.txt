@@ -1,0 +1,255 @@
+//! Standalone research-only native bridge for shared exact sparse v2 variants.
+//! Build with pinned rustc --edition=2021 -O runtime.rs; optional --cfg v2_simd.
+//! Commands: metadata; baseline; eval WEIGHTS VARIANT; bench WEIGHTS VARIANT N;
+//! search WEIGHTS VARIANT NODES [DEPTH]; serve WEIGHTS VARIANT.
+//! Variants: compact, fused, cached. HCE search always uses the original r84.
+//! Serve is persistent TSV in / one JSON result out; see native protocol tests.
+#![allow(dead_code, static_mut_refs)]
+
+#[path = "../sparse_eval/baseline/engine.rs"] mod engine;
+#[path = "../sparse_eval/baseline/eval.rs"] mod baseline;
+#[path = "../sparse_eval/baseline/search.rs"] mod search;
+#[path = "core.rs"] mod model;
+mod simd;
+
+use engine::{Color, Piece, Position};
+use model::{EvalCache, Model, Variant};
+use std::io::{self, BufRead, Write};
+use std::sync::{OnceLock, atomic::{AtomicU32, Ordering}};
+use std::time::Instant;
+
+static MODEL: OnceLock<Model> = OnceLock::new();
+static MODE: AtomicU32 = AtomicU32::new(0);
+static CLOCK: OnceLock<Instant> = OnceLock::new();
+// The bridge has exactly one synchronous search at a time. It never spawns
+// threads or exposes this mutable state across concurrently executing calls.
+static mut CACHE: EvalCache = EvalCache::ZERO;
+#[cfg(test)] pub static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[no_mangle]
+pub extern "C" fn now_ms() -> f64 {
+    CLOCK.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+mod eval {
+    pub fn evaluate(position: &crate::engine::Position) -> i32 {
+        crate::evaluate(position, crate::MODE.load(std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
+fn evaluate(position: &Position, variant: u32) -> i32 {
+    match variant {
+        0 => baseline::evaluate(position),
+        1 => MODEL.get().unwrap().evaluate(position, Variant::Compact),
+        2 => MODEL.get().unwrap().evaluate(position, Variant::Fused),
+        3 => unsafe { CACHE.evaluate(MODEL.get().unwrap(), position) },
+        _ => unreachable!(),
+    }
+}
+
+fn variant(text: &str) -> Result<u32, String> {
+    match text { "hce" => Ok(0), "compact" => Ok(1), "fused" => Ok(2), "cached" => Ok(3),
+        _ => Err("expected hce, compact, fused or cached".into()) }
+}
+
+fn position(fen: &str) -> Result<Position, String> {
+    if fen.split_whitespace().count() != 6 { return Err("exactly six FEN fields required".into()); }
+    let result = engine::parse_fen(fen.as_bytes()).ok_or("invalid FEN")?;
+    if [Piece::WhiteKing, Piece::BlackKing].iter().any(|king| result.board.iter().filter(|piece| *piece == king).count() != 1) {
+        return Err("exactly one king per color required".into());
+    }
+    if result.fullmove == 0 { return Err("FEN fullmove must be positive".into()); }
+    Ok(result)
+}
+
+fn move_uci(mv: Option<engine::Move>) -> String {
+    let Some(mv) = mv else { return "0000".to_string(); };
+    let mut output = String::with_capacity(5);
+    for square in [engine::move_from(mv), engine::move_to(mv)] {
+        output.push((b'a' + square % 8) as char);
+        output.push((b'8' - square / 8) as char);
+    }
+    if let Some(kind) = engine::move_promotion(mv) {
+        output.push(match kind { engine::PieceType::Queen => 'q', engine::PieceType::Rook => 'r',
+            engine::PieceType::Bishop => 'b', engine::PieceType::Knight => 'n', _ => '?' });
+    }
+    output
+}
+
+fn fen(position: &Position) -> String {
+    let mut output = String::new();
+    const PIECES: &[u8; 13] = b" PNBRQKpnbrqk";
+    for rank in 0..8 {
+        if rank != 0 { output.push('/'); }
+        let mut empty = 0_u8;
+        for file in 0..8 {
+            let piece = position.board[rank * 8 + file];
+            if piece == Piece::Empty { empty += 1; }
+            else {
+                if empty != 0 { output.push((b'0' + empty) as char); empty = 0; }
+                output.push(PIECES[piece as usize] as char);
+            }
+        }
+        if empty != 0 { output.push((b'0' + empty) as char); }
+    }
+    output.push_str(if position.turn == Color::White { " w " } else { " b " });
+    if position.castling == 0 { output.push('-'); }
+    else {
+        for (flag, letter) in [(1, 'K'), (2, 'Q'), (4, 'k'), (8, 'q')] {
+            if position.castling & flag != 0 { output.push(letter); }
+        }
+    }
+    output.push(' ');
+    if position.ep == engine::NO_SQUARE { output.push('-'); }
+    else { output.push((b'a' + position.ep % 8) as char); output.push((b'8' - position.ep / 8) as char); }
+    output.push_str(&format!(" {} {}", position.halfmove, position.fullmove));
+    output
+}
+
+fn quoted(text: &str) -> String {
+    let mut result = String::from("\"");
+    for ch in text.chars() {
+        match ch {
+            '"' => result.push_str("\\\""), '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"), '\r' => result.push_str("\\r"), '\t' => result.push_str("\\t"),
+            ch if ch < ' ' => result.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch => result.push(ch),
+        }
+    }
+    result.push('"'); result
+}
+
+fn stop_reason(reason: search::StopReason) -> &'static str {
+    match reason { search::StopReason::Unknown => "unknown", search::StopReason::MaxDepth => "max_depth",
+        search::StopReason::TimeLimit => "time_limit", search::StopReason::NodeLimit => "node_limit",
+        search::StopReason::Mate => "mate", search::StopReason::GameOver => "game_over" }
+}
+
+fn result_json(id: &str, result: &search::SearchResult, elapsed: u128, extra: &str) -> String {
+    format!("{{\"id\":{},\"move\":{},\"scorePov\":\"white\",\"score\":{},\"depth\":{},\"attempted_depth\":{},\"nodes\":{},\"qnodes\":{},\"cutoffs\":{},\"researches\":{},\"stop_reason\":{},\"tt_saturated\":{},\"elapsed_ns\":{}{}}}",
+        quoted(id), quoted(&move_uci(result.mv)), result.score, result.depth,
+        result.attempted_depth.map(|v| v.to_string()).unwrap_or("null".into()),
+        result.nodes, result.qnodes, result.cutoffs, result.researches, quoted(stop_reason(result.stop_reason)),
+        result.tt_saturated, elapsed, extra)
+}
+
+/// Search owns its deadline; replay and history admission precede that clock.
+/// Each full request supplies all history, including the current occurrence.
+fn serve_request(line: &str, candidate: u32) -> Result<String, String> {
+    let replay_start = Instant::now();
+    let fields: Vec<&str> = line.split('\t').collect();
+    if fields.len() != 10 || fields[0] != "SEARCH" { return Err("expected ten TSV fields beginning SEARCH".into()); }
+    let id = fields[1];
+    if id.is_empty() || id.len() > 128 { return Err("request id must contain 1..128 bytes".into()); }
+    let mode = match fields[2] { "hce" => 0, "candidate" => candidate, _ => return Err("invalid mode".into()) };
+    let nodes: u32 = fields[3].parse().map_err(|_| "invalid node budget")?;
+    let time_ms: u32 = fields[4].parse().map_err(|_| "invalid time budget")?;
+    let depth: u32 = fields[5].parse().map_err(|_| "invalid maximum depth")?;
+    if nodes == 0 && time_ms == 0 { return Err("a node or time limit is required".into()); }
+    if !(1..=search::MAX_SEARCH_DEPTH).contains(&depth) { return Err("invalid maximum depth".into()); }
+    if fields[6] != "0" { return Err("pinned r84 supports only root_seed=0".into()); }
+    let mut root = position(fields[7])?;
+    let expected = position(fields[8])?;
+    let mut history = fen(&root);
+    history.push('\n');
+    let mut plies = 0;
+    for uci in fields[9].split_whitespace() {
+        if plies >= 767 { return Err("history exceeds768 occurrences".into()); }
+        let mut moves = [0; engine::MAX_MOVES];
+        let count = engine::generate_legal(&mut root, &mut moves);
+        let mv = moves[..count].iter().copied().find(|&mv| move_uci(Some(mv)) == uci)
+            .ok_or_else(|| format!("illegal history move at ply{}", plies + 1))?;
+        engine::make_move(&mut root, mv);
+        history.push_str(&fen(&root)); history.push('\n');
+        plies += 1;
+    }
+    if root != expected { return Err("replayed root differs from expected full FEN".into()); }
+    unsafe { search::load_game_history(history.as_bytes()).map_err(|_| "history admission failed")?; CACHE.clear(); }
+    MODE.store(mode, Ordering::Relaxed);
+    let replay_ns = replay_start.elapsed().as_nanos();
+    let root_fen = fen(&root);
+    let search_start = Instant::now();
+    let result = unsafe { search::run(&mut root, depth, nodes, time_ms, true) };
+    let elapsed = search_start.elapsed().as_nanos();
+    Ok(result_json(id, &result, elapsed, &format!(",\"verifiedFen\":true,\"root_fen\":{},\"replay_ns\":{},\"history_occurrences\":{},\"mode\":{}",
+        quoted(&root_fen), replay_ns, plies + 1, quoted(fields[2]))))
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    let command = args.get(1).map(String::as_str).unwrap_or("metadata");
+    if command == "metadata" {
+        println!("{{\"schema\":\"chessy.sparse-v2-native.v1\",\"researchOnly\":true,\"modelBytes\":{},\"coefficientPayloadBytes\":{},\"evalCacheBytes\":{},\"cacheSlots\":{},\"simd\":{},\"wideFused\":{},\"rootSeed\":0,\"historyIncludesRoot\":true,\"maximumHistoryOccurrences\":768}}",
+            std::mem::size_of::<Model>(), model::COEFFICIENT_BYTES, std::mem::size_of::<EvalCache>(), model::CACHE_SLOTS, cfg!(v2_simd), cfg!(v2_wide_fused));
+        return Ok(());
+    }
+    let selected = if command == "baseline" { 0 } else {
+        let bytes = std::fs::read(args.get(2).ok_or("missing weights path")?)?;
+        let mut model = Model::ZERO; model.load_dense(&bytes)?;
+        MODEL.set(model).map_err(|_| "already loaded")?;
+        variant(args.get(3).ok_or("missing variant")?)?
+    };
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut output = io::BufWriter::new(stdout.lock());
+    if command == "serve" {
+        for line in stdin.lock().lines() {
+            let line = line?;
+            let response = serve_request(&line, selected).unwrap_or_else(|error| format!("{{\"id\":{},\"error\":{}}}",
+                quoted(line.split('\t').nth(1).unwrap_or("")), quoted(&error)));
+            writeln!(output, "{response}")?; output.flush()?;
+        }
+        return Ok(());
+    }
+    if !["baseline", "eval", "parts", "bench", "search"].contains(&command) { return Err("unknown command".into()); }
+    let mut positions = Vec::new();
+    for (row, line) in stdin.lock().lines().enumerate() {
+        let line = line?;
+        if line.trim().is_empty() { continue; }
+        let pos = position(line.trim()).map_err(|error| format!("row{}: {}", row + 1, error))?;
+        if command == "bench" || command == "search" { positions.push(pos); continue; }
+        let base = baseline::evaluate(&pos);
+        if command == "baseline" { writeln!(output, "{base}")?; }
+        else if command == "parts" {
+            let (fused_base, residual) = MODEL.get().unwrap().fused_parts(&pos);
+            writeln!(output, "{} {} {}", fused_base, fused_base + residual, residual)?;
+        } else {
+            let result = evaluate(&pos, selected);
+            writeln!(output, "{} {} {}", base, result, result - base)?;
+        }
+    }
+    if command == "bench" {
+        let passes: usize = args.get(4).ok_or("missing passes")?.parse()?;
+        if passes == 0 || positions.is_empty() { return Err("positive passes and positions required".into()); }
+        for pos in &positions { std::hint::black_box(evaluate(pos, selected)); }
+        unsafe { CACHE.clear(); }
+        let mut checksum = 0_i64;
+        let start = Instant::now();
+        for _ in 0..passes { for pos in &positions { checksum += std::hint::black_box(evaluate(std::hint::black_box(pos), selected)) as i64; } }
+        let ns = start.elapsed().as_nanos();
+        let (hits, misses) = unsafe { CACHE.stats() };
+        writeln!(output, "{{\"positions\":{},\"passes\":{},\"variant\":{},\"elapsed_ns\":{},\"checksum\":{},\"cache_hits\":{},\"cache_misses\":{}}}", positions.len(), passes, selected, ns, checksum, hits, misses)?;
+    }
+    if command == "search" {
+        let nodes: u32 = args.get(4).ok_or("missing nodes")?.parse()?;
+        let depth: u32 = args.get(5).map(|text| text.parse()).transpose()?.unwrap_or(30);
+        if nodes == 0 || positions.is_empty() || !(1..=search::MAX_SEARCH_DEPTH).contains(&depth) { return Err("invalid search request".into()); }
+        for (row, pos) in positions.iter().enumerate() {
+            for ordinal in 0..2 {
+                let candidate = (row + ordinal) % 2 == 1;
+                MODE.store(if candidate { selected } else { 0 }, Ordering::Relaxed);
+                // Static-root comparison uses the same empty-history contract as
+                // the recorded v1 timing runner; serve is the full-game path.
+                unsafe { search::clear_game_history(); CACHE.clear(); }
+                let mut copied = *pos;
+                let start = Instant::now();
+                let result = unsafe { search::run(&mut copied, depth, nodes, 0, true) };
+                let elapsed = start.elapsed().as_nanos();
+                writeln!(output, "{}", result_json(&row.to_string(), &result, elapsed,
+                    &format!(",\"row\":{},\"candidate\":{},\"requested_nodes\":{}", row, candidate, nodes)))?;
+            }
+        }
+    }
+    output.flush()?;
+    Ok(())
+}

@@ -1,0 +1,104 @@
+
+#[cfg(test)]
+mod seeded_hash_parity_tests {
+    use super::*;
+
+    const SEEDS: [u32; 6] = [0, 1, 0x00C0FFEE, 0x18318482, 0x80000000, 0xFFFFFFFF];
+    const BUDGETS: [u32; 3] = [1, 64, 4096];
+    const POSITIONS: [&[u8]; 6] = [
+        b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        b"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        b"r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 4 1",
+        b"1r2k3/P7/8/8/8/8/7p/4K1R1 w - - 0 1",
+        b"4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+        b"k7/8/8/4KPpr/8/8/8/8 w - g6 0 1",
+    ];
+
+    fn signature(r: &SearchResult) -> (Option<Move>, i32, u32, Option<u32>, u64, u64, u64, u64, u32, bool) {
+        (r.mv, r.score, r.depth, r.attempted_depth, r.nodes, r.qnodes,
+         r.cutoffs, r.researches, r.stop_reason as u32, r.tt_saturated)
+    }
+
+    fn reference_signature(r: &reference_search::SearchResult) -> (Option<Move>, i32, u32, Option<u32>, u64, u64, u64, u64, u32, bool) {
+        (r.mv, r.score, r.depth, r.attempted_depth, r.nodes, r.qnodes,
+         r.cutoffs, r.researches, r.stop_reason as u32, r.tt_saturated)
+    }
+
+    unsafe fn compare(fen: &[u8], seed: u32, budget: u32, quiesce: bool) {
+        let mut candidate = engine::parse_fen(fen).unwrap();
+        let mut reference = candidate;
+        let initial = candidate;
+        let actual = run_seeded(&mut candidate, 6, budget, 0, quiesce, seed);
+        let expected = reference_search::run_seeded(&mut reference, 6, budget, 0, quiesce, seed);
+        assert_eq!(signature(&actual), reference_signature(&expected),
+            "seed={}, budget={}, quiesce={}, fen={}", seed, budget, quiesce,
+            core::str::from_utf8(fen).unwrap());
+        assert_eq!(research_pv(), reference_search::research_pv());
+        assert!(candidate == initial && reference == initial, "seeded search changed root position");
+        assert!(actual.nodes <= budget as u64);
+    }
+
+    #[test]
+    fn seeded_search_matches_full_scan_across_special_moves_and_budget_edges() {
+        let _guard = crate::TEST_LOCK.lock().unwrap();
+        let mut cases = 0;
+        unsafe {
+            clear_game_history();
+            reference_search::clear_game_history();
+            for fen in POSITIONS {
+                for seed in SEEDS {
+                    for budget in BUDGETS {
+                        for quiesce in [false, true] {
+                            compare(fen, seed, budget, quiesce);
+                            cases += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(cases, 216);
+        println!("{} seeded ordinary searches match the complete full-scan result and restore roots", cases);
+    }
+
+    #[test]
+    fn seeded_search_matches_full_scan_with_reversible_game_histories() {
+        let _guard = crate::TEST_LOCK.lock().unwrap();
+        // Two legal cycles g1f3, g8f6, f3g1, f6g8. Prefixes include the current
+        // root once, twice, or three times and include repeated child states.
+        const HISTORY: [&[u8]; 9] = [
+            b"4k1n1/8/8/8/8/8/8/4K1N1 w - - 0 1",
+            b"4k1n1/8/8/8/8/5N2/8/4K3 b - - 1 1",
+            b"4k3/8/5n2/8/8/5N2/8/4K3 w - - 2 2",
+            b"4k3/8/5n2/8/8/8/8/4K1N1 b - - 3 2",
+            b"4k1n1/8/8/8/8/8/8/4K1N1 w - - 4 3",
+            b"4k1n1/8/8/8/8/5N2/8/4K3 b - - 5 3",
+            b"4k3/8/5n2/8/8/5N2/8/4K3 w - - 6 4",
+            b"4k3/8/5n2/8/8/8/8/4K1N1 b - - 7 4",
+            b"4k1n1/8/8/8/8/8/8/4K1N1 w - - 8 5",
+        ];
+        let mut cases = 0;
+        unsafe {
+            for length in [1, 5, 9] {
+                let mut history = std::vec::Vec::new();
+                for fen in &HISTORY[..length] {
+                    history.extend_from_slice(fen);
+                    history.push(b'\n');
+                }
+                load_game_history(&history).unwrap();
+                reference_search::load_game_history(&history).unwrap();
+                for seed in SEEDS {
+                    for budget in BUDGETS {
+                        for quiesce in [false, true] {
+                            compare(HISTORY[length - 1], seed, budget, quiesce);
+                            cases += 1;
+                        }
+                    }
+                }
+            }
+            clear_game_history();
+            reference_search::clear_game_history();
+        }
+        assert_eq!(cases, 108);
+        println!("{} seeded searches match across onefold, twofold and threefold root histories", cases);
+    }
+}

@@ -1,0 +1,190 @@
+{
+  "schema": "chessy.sparse-v2-retained-copies.v1",
+  "copies": [
+    {
+      "path": "INSTRUMENTATION.json",
+      "bytes": 1683,
+      "sha256": "27afa01da8962399f228370197ce984b0e3db80c681360e024df7a8c684968b5"
+    },
+    {
+      "path": "NATIVE-PARITY.json",
+      "bytes": 13175,
+      "sha256": "444b81f2ef5d43861f468a248ddf17a8ea8e096000dd1694c98ecca599208d35"
+    },
+    {
+      "path": "COST-REGISTRATION.json",
+      "bytes": 26684,
+      "sha256": "c38b2bb515aa7386a4270ce0794e274fa1a1614d4d5df68eb25bd9a29e2d39e0"
+    },
+    {
+      "path": "COST-RESULTS.json",
+      "bytes": 37354,
+      "sha256": "35dec1cd1ca2d6497a0300bc7b87353512adffee3ffd8c34170b896ec0ed8476"
+    },
+    {
+      "path": "COST-AUDIT.json",
+      "bytes": 6646,
+      "sha256": "42d6cf5917071c5cca13e1f7d92e24c59ebcf31279a97152079d9a4534706aa9"
+    },
+    {
+      "path": "COST-ROOTS.json",
+      "bytes": 16940,
+      "sha256": "2d20138bf4751c2a9185a55baa2935bf496eddc1a8bcadb235a717562cf775fe"
+    },
+    {
+      "path": "PRUNING-COST-ROOTS.json",
+      "bytes": 8478,
+      "sha256": "9a0d47e150f8dbb8c2776debc111007192eea573fab2f1637f85a150f1ab5725"
+    },
+    {
+      "path": "GAME-SELECTION.json",
+      "bytes": 5685,
+      "sha256": "b164526e6569d254dcf46f906b129b468d2a41793e72f0ea63d37f8810eb2006"
+    },
+    {
+      "path": "GAME-REGISTRATION.json",
+      "bytes": 47262,
+      "sha256": "250cd6f5b53c51b7ec9ae335b49e6079da05f5d49fdd5975ba54d11d46a23245"
+    },
+    {
+      "path": "GAME-BANK.json",
+      "bytes": 4401,
+      "sha256": "987c3d8d48bfbb32babbbbf291ffb1524169fa6a5abdba2ef4b53efcbbd90a74"
+    },
+    {
+      "path": "game-openings.jsonl",
+      "bytes": 54661,
+      "sha256": "f26a1d26788092497093f46c017c134949134c800c8043a10dfe5a5fc743de55"
+    },
+    {
+      "path": "HOST-PREFLIGHT-FAILURE.json",
+      "bytes": 921,
+      "sha256": "9127b0c87d66906445afd8c562aad781f03f20573f0e9a39a7df541fe23000c6"
+    },
+    {
+      "path": "HOST-PREFLIGHT.json",
+      "bytes": 3267,
+      "sha256": "ffd679184485aea256ca820770187ab81ebe5a018511dc5a646af601a07f4703"
+    },
+    {
+      "path": "builds/NATIVE-NARROW.json",
+      "bytes": 3809,
+      "sha256": "492630739f107cd4b77127f07305bf976cc444e58cd6b42981f15505fda9edab"
+    },
+    {
+      "path": "builds/NATIVE-WIDE.json",
+      "bytes": 3915,
+      "sha256": "d903482efd31a0f96749d8e70ad3dafd656d1811f3cd33041865e90e184bd3dd"
+    },
+    {
+      "path": "builds/WASM-NARROW.json",
+      "bytes": 7699,
+      "sha256": "2caa4bc66cac694bbea3ab3edb45b9ac1a1da2259065bb4c28982d666eb264a6"
+    },
+    {
+      "path": "builds/WASM-WIDE.json",
+      "bytes": 7822,
+      "sha256": "e08a1664e6b33b665a9c892f0b90ec32ebb3dae4b1e68239ca0804a660d0c34d"
+    },
+    {
+      "path": "builds/NATIVE-PARITY-NARROW.json",
+      "bytes": 3809,
+      "sha256": "b361744976b18ef5c0d729f8a9c4623a99bdea091593772316309da9dd1dbdcf"
+    },
+    {
+      "path": "builds/NATIVE-PARITY-WIDE.json",
+      "bytes": 3915,
+      "sha256": "6c832d3ff8a12470af987380d13086db76f528fb780322d05f07613dc14e57ef"
+    },
+    {
+      "path": "pruning/drop-pawn.i16le",
+      "bytes": 34560,
+      "sha256": "d6171eb72ff344a300138f934c2bf37a443dbd53ea93cd5b21b0a3d4209d9075"
+    },
+    {
+      "path": "pruning/full.i16le",
+      "bytes": 34560,
+      "sha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304"
+    },
+    {
+      "path": "pruning/drop-abs2.i16le",
+      "bytes": 34560,
+      "sha256": "1eafb6a5eddf5815934008d94f1a93b758b1c4312d596a7efbf9ed3a2b02a753"
+    },
+    {
+      "path": "pruning/drop-abs1.i16le",
+      "bytes": 34560,
+      "sha256": "f4ffcdc1dd2911cb905af41d29a2771a688f691a0b11d186954eb89bc9e843e0"
+    },
+    {
+      "path": "pruning/plan.json",
+      "bytes": 7270,
+      "sha256": "47d5a8b8a7ad3f48ef2cd0dcbf400facf9040234210f4647d1296e1c640b92f0"
+    },
+    {
+      "path": "pruning/drop-rays.i16le",
+      "bytes": 34560,
+      "sha256": "26fc9198d4083d2cb410adb3cf630571f8ca2cf09fb3b4416325b5d759471140"
+    },
+    {
+      "path": "pruning/q4-per-phase-family.i16le",
+      "bytes": 34560,
+      "sha256": "eaa5f0399c354f98f52848fac91b3b2b01f0d9867e2ead0d42cf6c0ddcdc94e9"
+    },
+    {
+      "path": "pruning/drop-abs4.i16le",
+      "bytes": 34560,
+      "sha256": "2ff84275557d178460c5a4922269a7ad7c3b2a2fc98127ec58fecf495dc1ada8"
+    },
+    {
+      "path": "pruning/king-original.i16le",
+      "bytes": 34560,
+      "sha256": "f0079ded36124750ea38c65e8886fb812b1dccb643b50820e7b4934a5e37da36"
+    },
+    {
+      "path": "pruning/results.json",
+      "bytes": 15466,
+      "sha256": "12ffec54b3c0e65bfb82b792010be63a0756b9e93213cd00e47a77711e562ac2"
+    },
+    {
+      "path": "pruning/drop-pawn-rays.i16le",
+      "bytes": 34560,
+      "sha256": "c9ec38d86c1151c2951d211c0d8b0c3af97d41bffcd1c48194dd22cf8eef8dcc"
+    },
+    {
+      "path": "GAME-RESULTS.json",
+      "bytes": 4620,
+      "sha256": "f7e4bdd0b996cb6fa8418fb2eec8dbb0b5882720d3006e80f38a2ca989567da2"
+    },
+    {
+      "path": "GAME-COMPLETION.json",
+      "bytes": 878,
+      "sha256": "868c5e7cc4deb9c6fd39b0848f1fb0e5637b7854db12ce43f09d042335ab37f8"
+    },
+    {
+      "path": "game-records.jsonl",
+      "bytes": 59194,
+      "sha256": "b5eb8a0133736ae9b35f5e94cf28e3d689f60f14778317ee2357f3159db1dedb"
+    },
+    {
+      "path": "game-rules-replay.jsonl",
+      "bytes": 33829,
+      "sha256": "1d2d2c5d0c5a4790e75a754aca4f7723ac4aef1d2dc4c73174bc56fdc9589191"
+    },
+    {
+      "path": "PARALLEL-REGISTRATION.json",
+      "bytes": 7883,
+      "sha256": "73ff84e9b1931ccc536b06b01f0d42e92840dbbf08add0514cae364b728e289a"
+    },
+    {
+      "path": "PARALLEL-RESULTS.json",
+      "bytes": 7361,
+      "sha256": "a71cf8796a3e5e587cc783cf63cbebd0384bca5f884fea6a2a47e850e4c584e3"
+    },
+    {
+      "path": "PARALLEL-AUDIT.json",
+      "bytes": 4688,
+      "sha256": "153cbd0944209e7b0daa20d503cb19b1a832fbb2c88d637f2f67badebfac7b0b"
+    }
+  ]
+}

@@ -1,0 +1,592 @@
+{
+  "schema": "chessy.compact-hash-r86.static-resources.v1",
+  "sources": {
+    "baseline": {
+      "commit": "3b32d2e7c23341d2245003c5324aa2ee6d07aa08",
+      "sha256": {
+        "experiments/wasm/src/search.rs": "9f8f2a798c26e7c4ff22cbc8b4605ed72fd17eadfc8bf9305747bf7ec40194b5",
+        "experiments/wasm/src/lib.rs": "c05fa66c239fdf4e38bf4912cd1491be1c57146b0670e71a340af8e586e8cd15"
+      }
+    },
+    "candidate": {
+      "commit": "173e06fd29f587f7de1ab9a84ad990760d7f23ae",
+      "sha256": {
+        "experiments/wasm/src/search.rs": "4db05a27ae42560d6f45920859f9916eb84d0df3d59ab3eca95a4e53ed75ffc4",
+        "experiments/wasm/src/lib.rs": "c05fa66c239fdf4e38bf4912cd1491be1c57146b0670e71a340af8e586e8cd15"
+      }
+    }
+  },
+  "auditorSha256": "4feb9aa1e46915412bff8f732a9741fabc0fe2b747e51848e1488b985d9b08d1",
+  "disassembler": {
+    "version": "wasm-dis version 131 (version_131)",
+    "sha256": "5b26e042911b9648919a0ade2d2f0e7f77479c2676a6bfd007220201ff83a337"
+  },
+  "modules": [
+    {
+      "label": "baseline",
+      "sourceCommit": "3b32d2e7c23341d2245003c5324aa2ee6d07aa08",
+      "wasmSha256": "a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7",
+      "wasmBytes": 37210,
+      "disassemblySha256": "8e46291eba28b895423816a5039b42645a76f80e0d26449a1b97b2e68db4af89",
+      "memoryInitialPages": 405,
+      "memoryMaximumPages": 405,
+      "memoryBytes": 26542080,
+      "reservedLinearStackBytes": 1048576,
+      "entrypoints": {
+        "search": "$24",
+        "search_seeded": "$25",
+        "fixed_search": "$16",
+        "analysis_root": "$14"
+      },
+      "functions": [
+        {
+          "id": "$0",
+          "decrements": [
+            192
+          ],
+          "conservativeFrameBytes": 192,
+          "calls": []
+        },
+        {
+          "id": "$1",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$2",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$3",
+          "decrements": [
+            16
+          ],
+          "conservativeFrameBytes": 16,
+          "calls": [
+            "$1",
+            "$2",
+            "$4",
+            "$5"
+          ]
+        },
+        {
+          "id": "$4",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": [
+            "$1"
+          ]
+        },
+        {
+          "id": "$5",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$6",
+          "decrements": [
+            80
+          ],
+          "conservativeFrameBytes": 80,
+          "calls": []
+        },
+        {
+          "id": "$7",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$8",
+          "decrements": [
+            32
+          ],
+          "conservativeFrameBytes": 32,
+          "calls": [
+            "$0",
+            "$1",
+            "$10",
+            "$11",
+            "$12",
+            "$2",
+            "$4",
+            "$5",
+            "$7",
+            "$8",
+            "$9",
+            "$fimport$0"
+          ]
+        },
+        {
+          "id": "$9",
+          "decrements": [
+            16
+          ],
+          "conservativeFrameBytes": 16,
+          "calls": [
+            "$1",
+            "$2",
+            "$5"
+          ]
+        },
+        {
+          "id": "$10",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$11",
+          "decrements": [
+            16
+          ],
+          "conservativeFrameBytes": 16,
+          "calls": [
+            "$1",
+            "$2",
+            "$4",
+            "$5"
+          ]
+        },
+        {
+          "id": "$12",
+          "decrements": [
+            32
+          ],
+          "conservativeFrameBytes": 32,
+          "calls": [
+            "$0",
+            "$1",
+            "$10",
+            "$11",
+            "$12",
+            "$2",
+            "$4",
+            "$5",
+            "$7",
+            "$9",
+            "$fimport$0"
+          ]
+        },
+        {
+          "id": "$13",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$14",
+          "decrements": [
+            2320
+          ],
+          "conservativeFrameBytes": 2320,
+          "calls": [
+            "$3",
+            "$5",
+            "$8",
+            "$9"
+          ]
+        },
+        {
+          "id": "$15",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": [
+            "$0"
+          ]
+        },
+        {
+          "id": "$16",
+          "decrements": [
+            96
+          ],
+          "conservativeFrameBytes": 96,
+          "calls": [
+            "$8",
+            "$9"
+          ]
+        },
+        {
+          "id": "$17",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$18",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$19",
+          "decrements": [
+            160
+          ],
+          "conservativeFrameBytes": 160,
+          "calls": [
+            "$6",
+            "$9"
+          ]
+        },
+        {
+          "id": "$20",
+          "decrements": [
+            160
+          ],
+          "conservativeFrameBytes": 160,
+          "calls": [
+            "$6"
+          ]
+        },
+        {
+          "id": "$21",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$22",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$23",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$24",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": [
+            "$25"
+          ]
+        },
+        {
+          "id": "$25",
+          "decrements": [
+            1152,
+            16
+          ],
+          "conservativeFrameBytes": 1168,
+          "calls": [
+            "$2",
+            "$3",
+            "$5",
+            "$8",
+            "$9",
+            "$fimport$0"
+          ]
+        }
+      ],
+      "recursiveFunctionIds": [
+        "$8",
+        "$12"
+      ],
+      "maximumRecursiveFrames": 129,
+      "nonrecursiveBytes": 4224,
+      "conservativeLinearStackBoundBytes": 8352,
+      "reservationFraction": 0.007965087890625
+    },
+    {
+      "label": "candidate",
+      "sourceCommit": "173e06fd29f587f7de1ab9a84ad990760d7f23ae",
+      "wasmSha256": "4f63b8dd25b4ae6787d1720392417a60daab1066bef7d494060939cb2016f74c",
+      "wasmBytes": 37934,
+      "disassemblySha256": "d2d259dd46bf9072a4bcd000b763f58be90276d3c64450c5eb4d277ef8790aad",
+      "memoryInitialPages": 405,
+      "memoryMaximumPages": 405,
+      "memoryBytes": 26542080,
+      "reservedLinearStackBytes": 1048576,
+      "entrypoints": {
+        "search": "$25",
+        "search_seeded": "$26",
+        "fixed_search": "$17",
+        "analysis_root": "$15"
+      },
+      "functions": [
+        {
+          "id": "$0",
+          "decrements": [
+            192
+          ],
+          "conservativeFrameBytes": 192,
+          "calls": []
+        },
+        {
+          "id": "$1",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$2",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$3",
+          "decrements": [
+            16
+          ],
+          "conservativeFrameBytes": 16,
+          "calls": [
+            "$1",
+            "$2",
+            "$4",
+            "$5"
+          ]
+        },
+        {
+          "id": "$4",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": [
+            "$1"
+          ]
+        },
+        {
+          "id": "$5",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$6",
+          "decrements": [
+            80
+          ],
+          "conservativeFrameBytes": 80,
+          "calls": []
+        },
+        {
+          "id": "$7",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$8",
+          "decrements": [
+            32
+          ],
+          "conservativeFrameBytes": 32,
+          "calls": [
+            "$0",
+            "$1",
+            "$10",
+            "$11",
+            "$12",
+            "$13",
+            "$2",
+            "$4",
+            "$5",
+            "$7",
+            "$8",
+            "$9",
+            "$fimport$0"
+          ]
+        },
+        {
+          "id": "$9",
+          "decrements": [
+            16
+          ],
+          "conservativeFrameBytes": 16,
+          "calls": [
+            "$1",
+            "$2",
+            "$5"
+          ]
+        },
+        {
+          "id": "$10",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$11",
+          "decrements": [
+            16
+          ],
+          "conservativeFrameBytes": 16,
+          "calls": [
+            "$1",
+            "$2",
+            "$4",
+            "$5"
+          ]
+        },
+        {
+          "id": "$12",
+          "decrements": [
+            32
+          ],
+          "conservativeFrameBytes": 32,
+          "calls": [
+            "$0",
+            "$1",
+            "$10",
+            "$11",
+            "$12",
+            "$13",
+            "$2",
+            "$4",
+            "$5",
+            "$7",
+            "$9",
+            "$fimport$0"
+          ]
+        },
+        {
+          "id": "$13",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$14",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$15",
+          "decrements": [
+            2320
+          ],
+          "conservativeFrameBytes": 2320,
+          "calls": [
+            "$13",
+            "$3",
+            "$5",
+            "$8",
+            "$9"
+          ]
+        },
+        {
+          "id": "$16",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": [
+            "$0"
+          ]
+        },
+        {
+          "id": "$17",
+          "decrements": [
+            96
+          ],
+          "conservativeFrameBytes": 96,
+          "calls": [
+            "$8",
+            "$9"
+          ]
+        },
+        {
+          "id": "$18",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$19",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$20",
+          "decrements": [
+            160
+          ],
+          "conservativeFrameBytes": 160,
+          "calls": [
+            "$6",
+            "$9"
+          ]
+        },
+        {
+          "id": "$21",
+          "decrements": [
+            160
+          ],
+          "conservativeFrameBytes": 160,
+          "calls": [
+            "$6"
+          ]
+        },
+        {
+          "id": "$22",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$23",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$24",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": []
+        },
+        {
+          "id": "$25",
+          "decrements": [],
+          "conservativeFrameBytes": 0,
+          "calls": [
+            "$26"
+          ]
+        },
+        {
+          "id": "$26",
+          "decrements": [
+            1152,
+            16
+          ],
+          "conservativeFrameBytes": 1168,
+          "calls": [
+            "$13",
+            "$2",
+            "$3",
+            "$5",
+            "$8",
+            "$9",
+            "$fimport$0"
+          ]
+        }
+      ],
+      "recursiveFunctionIds": [
+        "$8",
+        "$12"
+      ],
+      "maximumRecursiveFrames": 129,
+      "nonrecursiveBytes": 4224,
+      "conservativeLinearStackBoundBytes": 8352,
+      "reservationFraction": 0.007965087890625
+    }
+  ],
+  "scope": "conservative static linear-memory stack accounting for exact seeded baseline and combined candidate; no execution timing",
+  "assumptions": [
+    "admitted ABI depth <=111 and qply <=16",
+    "standard env.now_ms returns without re-entering WASM",
+    "valid execution follows the inspected generated call graph and fixed frame/restoration forms",
+    "normal calls restore the stack; trapped instances are not reused"
+  ],
+  "physicalDeviceEvidence": false,
+  "browserNativeStackBoundProven": false,
+  "productionAdmissionGranted": false
+}
