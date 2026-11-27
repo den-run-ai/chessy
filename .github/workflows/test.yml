@@ -115,6 +115,33 @@ jobs:
             SPARSE_EVAL_WASM_OPT="$PWD/binaryen-version_131/bin/wasm-opt" \
             SPARSE_EVAL_WASM_DIS="$PWD/binaryen-version_131/bin/wasm-dis" \
             python3 test/training/sparse-v2-wasm.test.py
+      - name: Validate production-ABI evaluator candidates without changing deployed assets
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          EVAL_PIPELINE_RUSTC="$(rustup which --toolchain "$RUST_VERSION" rustc)" \
+            python3 test/training/eval-pipeline-runtime.test.py
+          python3 test/training/eval-pipeline-build.test.py
+          python3 tools/eval_pipeline/prepare.py \
+            --base-commit "$GITHUB_SHA" --output "$RUNNER_TEMP/eval-pipeline" \
+            --extra-memory-page --build \
+            --rustc "$(rustup which --toolchain "$RUST_VERSION" rustc)" \
+            --cargo "$(rustup which --toolchain "$RUST_VERSION" cargo)" \
+            --wasm-opt "$PWD/binaryen-version_131/bin/wasm-opt"
+          node test/training/eval-pipeline-abi.test.mjs \
+            "$RUNNER_TEMP/eval-pipeline" "$RUNNER_TEMP/eval-pipeline-abi.json"
+          node test/training/eval-pipeline-host.test.mjs
+      - name: Retain evaluator candidates for browser Worker contracts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-pipeline-candidates
+          path: |
+            ${{ runner.temp }}/eval-pipeline/PREPARED.json
+            ${{ runner.temp }}/eval-pipeline/BUILT.json
+            ${{ runner.temp }}/eval-pipeline/modules/
+            ${{ runner.temp }}/eval-pipeline/runtime/
+          if-no-files-found: error
       - name: Reproduce research-only TT correctness without rerunning timings
         env:
           RUSTUP_HOME: ${{ runner.temp }}/rustup-home
@@ -479,6 +506,13 @@ jobs:
           python test/training/sparse-v2-games.test.py
           python test/training/sparse-v2-bundle.test.py
           python -m py_compile tools/sparse_eval_v2/audit_parallel.py
+      - name: Validate equal-time frontier and sealed production-candidate campaigns
+        run: |
+          python test/training/eval-pipeline-cost.test.py
+          python test/training/eval-pipeline-frontier.test.py
+          python test/training/eval-pipeline-games.test.py
+          python test/training/eval-pipeline-refit.test.py
+          python test/training/eval-pipeline-refit-cost.test.py
       - name: Validate private runtime export and complete measurement evidence
         run: |
           node test/training/natural-runtime-export.test.js
@@ -685,6 +719,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    needs: [wasm-reproducibility]
     strategy:
       fail-fast: false
       matrix:
@@ -704,6 +739,15 @@ jobs:
         run: node test/browser/all.js
         env:
           BROWSER: ${{ matrix.engine }}
+      - name: Download evaluator candidates
+        uses: actions/download-artifact@v4
+        with:
+          name: eval-pipeline-candidates
+          path: ${{ runner.temp }}/eval-pipeline
+      - name: Validate candidate Play Workers (${{ matrix.engine }})
+        run: |
+          node test/training/eval-pipeline-worker.test.mjs --browser "${{ matrix.engine }}" \
+            "$RUNNER_TEMP/eval-pipeline" "$RUNNER_TEMP/eval-pipeline-worker-${{ matrix.engine }}.json"
 
   deploy:
     if: >-
