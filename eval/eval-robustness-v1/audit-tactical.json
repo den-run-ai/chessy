@@ -1,0 +1,146 @@
+{
+  "allScoredNativeOutputSha256": "6e940781a82494a56523b4839f903090a301dcf8e44cab92ea250525917855a0",
+  "effects": "Full minus HCE. Errors use centipawns and sign accuracy uses percentage points. Relative MAE reduction is positive when the full model lowers error.",
+  "labelsAndTraces": [
+    {
+      "bytes": 5196947,
+      "path": "labels.jsonl",
+      "rows": 4096,
+      "sha256": "7d95d02426ef09da884ac3051d333731f41054210f52ed66eeafcef780342fff"
+    },
+    {
+      "bytes": 2638934,
+      "path": "traces.jsonl.gz",
+      "rows": 4096,
+      "sha256": "e77bbfd0569d54a84d7aa369755cec55e2b5efafbe052eb0c6b3c295fee0dc91"
+    }
+  ],
+  "nativeSha256": "b9827497e32a636b40bbfc9f15db814402c0f55a33b5c2e5f2a095fcafe88400",
+  "originalSelectedRows": 4096,
+  "quiet": {
+    "byPhase": {
+      "endgame": 857,
+      "middlegame": 855,
+      "opening": 713
+    },
+    "full": {
+      "maeCp": 146.83463917525773,
+      "p95AbsCp": 381.0,
+      "p99AbsCp": 576.039999999999,
+      "rmseCp": 192.6881182840163,
+      "signAccuracyPercent": 89.89690721649485
+    },
+    "fullMinusHce": {
+      "maeCp": -6.740618556701037,
+      "p95AbsCp": -17.0,
+      "p99AbsCp": -61.24000000000024,
+      "rmseCp": -10.510191230828639,
+      "signAccuracyPercent": -0.04123711340206171
+    },
+    "fullMinusHce95Interval": {
+      "maeCp": [
+        -9.776092783505147,
+        -3.9178453608247326
+      ],
+      "p95AbsCp": [
+        -38.79999999999973,
+        0.7999999999997272
+      ],
+      "p99AbsCp": [
+        -92.4010000000022,
+        1.9200000000018917
+      ],
+      "rmseCp": [
+        -14.409415521473628,
+        -6.7719877481121555
+      ],
+      "signAccuracyPercent": [
+        -1.0309278350515427,
+        0.989690721649481
+      ]
+    },
+    "hce": {
+      "maeCp": 153.57525773195877,
+      "p95AbsCp": 398.0,
+      "p99AbsCp": 637.2799999999993,
+      "rmseCp": 203.19830951484494,
+      "signAccuracyPercent": 89.93814432989691
+    },
+    "relativeMaeReductionPercent": 4.389130551527853,
+    "relativeMaeReductionPercent95Interval": [
+      2.5391266586024037,
+      6.317472309293708
+    ],
+    "rows": 2425
+  },
+  "quietNativeOutputSha256": "f97d24bc0e7941e5cd36b09788bb0448ef68a517a110da795b202c532d4a2e0c",
+  "remainingExclusions": {
+    "below-node-budget": 1,
+    "bounded-score": 1166,
+    "mate-score": 160
+  },
+  "schema": "chessy.eval-robustness.frozen-tactical-audit.v1",
+  "scope": "Historical, retrospective static scores. All roots were outside check and the move played in the source game was quiet. No fitting, new model selection, or playing-strength measurement.",
+  "scoredRows": 2769,
+  "selection": "All rows satisfying the original SF18 exact-centipawn admission after relaxing only the quiet best-move rule.",
+  "sourceManifestSha256": "2c719dff3dd1448b85748b5b79f4e5755b1c8208a572b350703d28c41ea28a05",
+  "tactical": {
+    "byPhase": {
+      "endgame": 94,
+      "middlegame": 138,
+      "opening": 112
+    },
+    "full": {
+      "maeCp": 198.17441860465115,
+      "p95AbsCp": 560.3999999999999,
+      "p99AbsCp": 752.3599999999997,
+      "rmseCp": 264.5733181892581,
+      "signAccuracyPercent": 86.33720930232558
+    },
+    "fullMinusHce": {
+      "maeCp": -6.534883720930253,
+      "p95AbsCp": -28.299999999999386,
+      "p99AbsCp": -0.6200000000002319,
+      "rmseCp": -7.29754718962073,
+      "signAccuracyPercent": 0.0
+    },
+    "fullMinusHce95Interval": {
+      "maeCp": [
+        -15.25610465116279,
+        2.0035610465116296
+      ],
+      "p95AbsCp": [
+        -79.1524999999994,
+        45.0
+      ],
+      "p99AbsCp": [
+        -153.1099999999991,
+        87.0200000000001
+      ],
+      "rmseCp": [
+        -18.09862094541916,
+        3.2992619011938324
+      ],
+      "signAccuracyPercent": [
+        -2.616279069767444,
+        2.616279069767444
+      ]
+    },
+    "hce": {
+      "maeCp": 204.7093023255814,
+      "p95AbsCp": 588.6999999999992,
+      "p99AbsCp": 752.9799999999999,
+      "rmseCp": 271.8708653788788,
+      "signAccuracyPercent": 86.33720930232558
+    },
+    "relativeMaeReductionPercent": 3.192274921897198,
+    "relativeMaeReductionPercent95Interval": [
+      -0.9877591040982502,
+      7.289344729803477
+    ],
+    "rows": 344
+  },
+  "teacherSha256": "6b087694916228c905a5e14db74cca8c7e5643602226af1fa5d42353c455b9f9",
+  "uncertainty": "Paired row bootstrap within each phase, 4000 replicates, seed 20261127. Nominal pointwise percentile intervals. Each row is a distinct game and structural family. Opening and player dependence is unmodeled.",
+  "weightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304"
+}

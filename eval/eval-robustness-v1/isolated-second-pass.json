@@ -1,0 +1,9 @@
+{
+  "candidateScoresAndNodesIdentical": true,
+  "exactFitResult": true,
+  "exactIsolatedCollection": true,
+  "isolatedFitSha256": "17f72635000957886462b03e911ee1675aaccd850aa9e79000e1e6a02bbd5951",
+  "method": "All 631 roots traversed again in reverse order, fresh process per query; restore canonical row order before export.",
+  "nonterminalChildComparisons": 2007,
+  "rootComparisons": 631
+}

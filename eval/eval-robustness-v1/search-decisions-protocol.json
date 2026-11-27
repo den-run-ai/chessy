@@ -1,0 +1,10 @@
+{
+  "scope": "Development-only test on the independently labelled held-out sibling decisions. No scale or case selection by search outcomes.",
+  "sample": "Use every root from the held-out SF11 cross-teacher sample that passes the fit source-group exclusions and cross-split board-key audit. One root per game. Keep all preselected legal alternatives.",
+  "profiles": ["Static exported evaluation at each child", "Exact prescribed root move to depth 1 with quiescence", "Exact prescribed root move to depth 3 with quiescence"],
+  "engines": ["r85 HCE", "frozen full", "unscaled no-pawn", "registered fitted scale"],
+  "search": "Production ABI v2. Load complete canonical game history. Start a new analysis/TT phase per child, evaluator, and depth. 10000 nodes per individual call; no deadline. No retries or fallback depths. Replay PVs for completed searches. No latency or playing-strength inference.",
+  "coverage": "Count completed child and complete-alternative-set root totals separately by model and depth. Compare all models on the common complete-root subset separately at each depth. Evaluate static choices on that same subset.",
+  "estimand": "Primary Stockfish 11 and secondary Chatarunga: mean regret in root-mover centipawns across games among only these alternatives, teacher scores clamped at +/-2000 as in the fit protocol. Report fraction with regret >=150 cp, and teacher top agreement. Highest model score wins, with lexicographic ascending UCI ties. Also report mean paired regret differences vs HCE and versus same model static with nominal percentile intervals from 5000 whole-game resamples, seed 20261127.",
+  "cpu": "Pin research process to CPU 5 during collection."
+}

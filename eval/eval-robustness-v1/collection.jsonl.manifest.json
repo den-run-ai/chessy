@@ -1,0 +1,41 @@
+{
+  "childCounts": {
+    "capture": 704,
+    "check": 226,
+    "recapture": 228,
+    "tactical": 835
+  },
+  "children": 2019,
+  "exclusions": 4160,
+  "hashMiB": 16,
+  "mateLabels": 111,
+  "mateMapping": "sign * (3000 - distance), terminal checkmate = 3000",
+  "nodesRequested": 12000,
+  "pythonChess": "1.11.2",
+  "retainedGroups": 320,
+  "rootStrata": {
+    "check": 143,
+    "endgame": 90,
+    "quiet": 331,
+    "recapture": 166,
+    "tactical": 300
+  },
+  "roots": 631,
+  "rootsSelected": 631,
+  "scorePOV": "root mover",
+  "selectedGroups": 320,
+  "sha256": {
+    "extractor": "70c8b583c4083e956ae550c196d59edf15bffce7dfb75742d41b5a9ee966431a",
+    "full": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+    "no_pawn": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2",
+    "output": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+    "pgn": "f4e9efea9aeb608211a1e1b62aff00b92679eab6b70f957e77a1d7c4d8bfbbc8",
+    "previous_ood": "2add1b46557117edd833bf493bc66c4264ad4700e0fa416ffa81a543a8b8a92f",
+    "previous_openings": "f26a1d26788092497093f46c017c134949134c800c8043a10dfe5a5fc743de55",
+    "teacher": "a3b3fe59985900655940c1088f3d24d2388d359b498a5d84664577fa46135e4a"
+  },
+  "source": "Lichess standard January 2014; earliest qualifying games in archive order",
+  "teacher": "Chatarunga 2.0 embedded NNUE",
+  "terminal": 12,
+  "threads": 1
+}

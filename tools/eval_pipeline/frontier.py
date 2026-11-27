@@ -70,7 +70,8 @@ def validate_config(config: dict) -> dict:
             require(_digest(binding["modelSha256"]), "invalid " + side + " model identity")
     require(config["base"]["id"] != config["candidate"]["id"], "evaluator IDs must differ")
     times = config.get("timeControlsMs")
-    require(isinstance(times, list) and len(times) >= 2
+    minimum_controls = 1 if config.get("singleBudgetScreen") is True else 2
+    require(isinstance(times, list) and len(times) >= minimum_controls
             and all(_integer(value, 1, 60000) for value in times)
             and times == sorted(set(times)), "time grid must contain distinct increasing positive integer milliseconds")
     openings = config.get("openingIds")

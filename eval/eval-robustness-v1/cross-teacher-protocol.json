@@ -1,0 +1,7 @@
+{
+  "status": "Development cross-check, fixed before opening the sample or second-teacher labels",
+  "teacher": "Stockfish 11 at 30000 nodes per child, one thread, 16 MiB hash, new UCI game per search, complete real game history, default classical evaluator. Release sf_11 upstream commit c3483fa9a7d7c0ffa9fcc32b467ca844cfb63790. Built with make build ARCH=x86-64-modern COMP=gcc, all upstream source blobs hash verified.",
+  "sample": "Exclude fit groups and drop any held-out root with root/child four-field FEN overlap to train roots or children. Keep one root per held-out game and up to 100 games. Rank game and root IDs independently by SHA256 of 'sf11-cross-v1' + NUL + ID. Take lowest hashes. No sample selection by teacher, baseline, model score or outcomes.",
+  "metrics": "Primary mean regret among supplied siblings. Reuse the original fit analysis including within-game weights, signed score truncation, CP cap of +/-2000, rank ties and group-paired 5000-draw bootstrap. Also report the teachers' agreement on a best supplied move allowing score ties. Root candidates are inherited from the original experiment and include its teacher's preferred move where available. This second opinion on identical decisions does not supply fresh games.",
+  "comparison": ["hce", "full", "noPawn", "calibrated"]
+}

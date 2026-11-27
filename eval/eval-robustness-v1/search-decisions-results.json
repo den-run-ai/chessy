@@ -1,0 +1,539 @@
+{
+  "calls": 1968,
+  "children": 246,
+  "denominator": 16,
+  "depths": {
+    "1": {
+      "byTeacher": {
+        "chatarunga": {
+          "choices": {
+            "searched-fitted": {
+              "regretCp": 34.256410256410255,
+              "severe150Rate": 0.07692307692307693,
+              "topAgreement": 0.6923076923076923
+            },
+            "searched-full": {
+              "regretCp": 31.692307692307693,
+              "severe150Rate": 0.07692307692307693,
+              "topAgreement": 0.6923076923076923
+            },
+            "searched-hce": {
+              "regretCp": 29.897435897435898,
+              "severe150Rate": 0.0641025641025641,
+              "topAgreement": 0.6666666666666666
+            },
+            "searched-nopawn": {
+              "regretCp": 25.08974358974359,
+              "severe150Rate": 0.0641025641025641,
+              "topAgreement": 0.717948717948718
+            },
+            "static-fitted": {
+              "regretCp": 216.2948717948718,
+              "severe150Rate": 0.34615384615384615,
+              "topAgreement": 0.47435897435897434
+            },
+            "static-full": {
+              "regretCp": 197.8846153846154,
+              "severe150Rate": 0.32051282051282054,
+              "topAgreement": 0.47435897435897434
+            },
+            "static-hce": {
+              "regretCp": 230.19230769230768,
+              "severe150Rate": 0.358974358974359,
+              "topAgreement": 0.44871794871794873
+            },
+            "static-nopawn": {
+              "regretCp": 208.48717948717947,
+              "severe150Rate": 0.3333333333333333,
+              "topAgreement": 0.47435897435897434
+            }
+          },
+          "pairedRegretCp": {
+            "fitted": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -182.03846153846155,
+                "percentile95": [
+                  -263.9102564102564,
+                  -106.98717948717949
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": 4.358974358974359,
+                "percentile95": [
+                  -7.602564102564102,
+                  22.08974358974359
+                ]
+              }
+            },
+            "full": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -166.19230769230768,
+                "percentile95": [
+                  -245.14102564102564,
+                  -95.14102564102564
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": 1.794871794871795,
+                "percentile95": [
+                  -10.91025641025641,
+                  19.73076923076923
+                ]
+              }
+            },
+            "hce": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -200.2948717948718,
+                "percentile95": [
+                  -286.52564102564105,
+                  -121.02564102564102
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": 0.0,
+                "percentile95": [
+                  0.0,
+                  0.0
+                ]
+              }
+            },
+            "nopawn": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -183.39743589743588,
+                "percentile95": [
+                  -264.56410256410254,
+                  -107.84615384615384
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": -4.8076923076923075,
+                "percentile95": [
+                  -12.115384615384615,
+                  2.41025641025641
+                ]
+              }
+            }
+          }
+        },
+        "stockfish11": {
+          "choices": {
+            "searched-fitted": {
+              "regretCp": 53.53846153846154,
+              "severe150Rate": 0.08974358974358974,
+              "topAgreement": 0.6538461538461539
+            },
+            "searched-full": {
+              "regretCp": 48.35897435897436,
+              "severe150Rate": 0.07692307692307693,
+              "topAgreement": 0.6538461538461539
+            },
+            "searched-hce": {
+              "regretCp": 43.05128205128205,
+              "severe150Rate": 0.0641025641025641,
+              "topAgreement": 0.6282051282051282
+            },
+            "searched-nopawn": {
+              "regretCp": 37.98717948717949,
+              "severe150Rate": 0.0641025641025641,
+              "topAgreement": 0.6794871794871795
+            },
+            "static-fitted": {
+              "regretCp": 315.62820512820514,
+              "severe150Rate": 0.3717948717948718,
+              "topAgreement": 0.4358974358974359
+            },
+            "static-full": {
+              "regretCp": 283.71794871794873,
+              "severe150Rate": 0.358974358974359,
+              "topAgreement": 0.4358974358974359
+            },
+            "static-hce": {
+              "regretCp": 338.62820512820514,
+              "severe150Rate": 0.38461538461538464,
+              "topAgreement": 0.4230769230769231
+            },
+            "static-nopawn": {
+              "regretCp": 300.96153846153845,
+              "severe150Rate": 0.3717948717948718,
+              "topAgreement": 0.4358974358974359
+            }
+          },
+          "pairedRegretCp": {
+            "fitted": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -262.0897435897436,
+                "percentile95": [
+                  -372.29487179487177,
+                  -159.12820512820514
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": 10.487179487179487,
+                "percentile95": [
+                  -5.358974358974359,
+                  37.05128205128205
+                ]
+              }
+            },
+            "full": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -235.35897435897436,
+                "percentile95": [
+                  -340.14102564102564,
+                  -137.4102564102564
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": 5.3076923076923075,
+                "percentile95": [
+                  -13.512820512820513,
+                  33.12820512820513
+                ]
+              }
+            },
+            "hce": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -295.5769230769231,
+                "percentile95": [
+                  -413.88461538461536,
+                  -184.76923076923077
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": 0.0,
+                "percentile95": [
+                  0.0,
+                  0.0
+                ]
+              }
+            },
+            "nopawn": {
+              "vsOwnStatic": {
+                "groups": 78,
+                "mean": -262.97435897435895,
+                "percentile95": [
+                  -371.35897435897436,
+                  -160.15384615384616
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 78,
+                "mean": -5.064102564102564,
+                "percentile95": [
+                  -14.666666666666666,
+                  3.6794871794871793
+                ]
+              }
+            }
+          }
+        }
+      },
+      "commonCompleteRoots": 78,
+      "completeChildren": {
+        "fitted": 246,
+        "full": 246,
+        "hce": 246,
+        "nopawn": 246
+      },
+      "completeRoots": {
+        "fitted": 78,
+        "full": 78,
+        "hce": 78,
+        "nopawn": 78
+      }
+    },
+    "3": {
+      "byTeacher": {
+        "chatarunga": {
+          "choices": {
+            "searched-fitted": {
+              "regretCp": 16.44,
+              "severe150Rate": 0.02666666666666667,
+              "topAgreement": 0.76
+            },
+            "searched-full": {
+              "regretCp": 16.12,
+              "severe150Rate": 0.02666666666666667,
+              "topAgreement": 0.7466666666666667
+            },
+            "searched-hce": {
+              "regretCp": 15.546666666666667,
+              "severe150Rate": 0.02666666666666667,
+              "topAgreement": 0.7866666666666666
+            },
+            "searched-nopawn": {
+              "regretCp": 16.28,
+              "severe150Rate": 0.02666666666666667,
+              "topAgreement": 0.76
+            },
+            "static-fitted": {
+              "regretCp": 220.2,
+              "severe150Rate": 0.3466666666666667,
+              "topAgreement": 0.48
+            },
+            "static-full": {
+              "regretCp": 201.05333333333334,
+              "severe150Rate": 0.32,
+              "topAgreement": 0.48
+            },
+            "static-hce": {
+              "regretCp": 234.65333333333334,
+              "severe150Rate": 0.36,
+              "topAgreement": 0.4533333333333333
+            },
+            "static-nopawn": {
+              "regretCp": 212.08,
+              "severe150Rate": 0.3333333333333333,
+              "topAgreement": 0.48
+            }
+          },
+          "pairedRegretCp": {
+            "fitted": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -203.76,
+                "percentile95": [
+                  -289.88,
+                  -126.96
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": 0.8933333333333333,
+                "percentile95": [
+                  -2.8,
+                  5.0
+                ]
+              }
+            },
+            "full": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -184.93333333333334,
+                "percentile95": [
+                  -270.26666666666665,
+                  -108.77333333333333
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": 0.5733333333333334,
+                "percentile95": [
+                  -3.066666666666667,
+                  4.413333333333333
+                ]
+              }
+            },
+            "hce": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -219.10666666666665,
+                "percentile95": [
+                  -315.05333333333334,
+                  -138.49333333333334
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": 0.0,
+                "percentile95": [
+                  0.0,
+                  0.0
+                ]
+              }
+            },
+            "nopawn": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -195.8,
+                "percentile95": [
+                  -281.3333333333333,
+                  -118.38666666666667
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": 0.7333333333333333,
+                "percentile95": [
+                  -3.12,
+                  5.053333333333334
+                ]
+              }
+            }
+          }
+        },
+        "stockfish11": {
+          "choices": {
+            "searched-fitted": {
+              "regretCp": 18.36,
+              "severe150Rate": 0.02666666666666667,
+              "topAgreement": 0.7333333333333333
+            },
+            "searched-full": {
+              "regretCp": 26.093333333333334,
+              "severe150Rate": 0.04,
+              "topAgreement": 0.6933333333333334
+            },
+            "searched-hce": {
+              "regretCp": 23.69333333333333,
+              "severe150Rate": 0.04,
+              "topAgreement": 0.7466666666666667
+            },
+            "searched-nopawn": {
+              "regretCp": 18.293333333333333,
+              "severe150Rate": 0.02666666666666667,
+              "topAgreement": 0.7333333333333333
+            },
+            "static-fitted": {
+              "regretCp": 323.1333333333333,
+              "severe150Rate": 0.37333333333333335,
+              "topAgreement": 0.44
+            },
+            "static-full": {
+              "regretCp": 289.94666666666666,
+              "severe150Rate": 0.36,
+              "topAgreement": 0.44
+            },
+            "static-hce": {
+              "regretCp": 347.05333333333334,
+              "severe150Rate": 0.38666666666666666,
+              "topAgreement": 0.4266666666666667
+            },
+            "static-nopawn": {
+              "regretCp": 307.88,
+              "severe150Rate": 0.37333333333333335,
+              "topAgreement": 0.44
+            }
+          },
+          "pairedRegretCp": {
+            "fitted": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -304.7733333333333,
+                "percentile95": [
+                  -419.32,
+                  -200.64
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": -5.333333333333333,
+                "percentile95": [
+                  -18.36,
+                  2.0
+                ]
+              }
+            },
+            "full": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -263.85333333333335,
+                "percentile95": [
+                  -369.48,
+                  -168.98666666666668
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": 2.4,
+                "percentile95": [
+                  -1.5466666666666666,
+                  7.08
+                ]
+              }
+            },
+            "hce": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -323.36,
+                "percentile95": [
+                  -444.6933333333333,
+                  -216.64
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": 0.0,
+                "percentile95": [
+                  0.0,
+                  0.0
+                ]
+              }
+            },
+            "nopawn": {
+              "vsOwnStatic": {
+                "groups": 75,
+                "mean": -289.58666666666664,
+                "percentile95": [
+                  -401.81333333333333,
+                  -187.33333333333334
+                ]
+              },
+              "vsSearchedHce": {
+                "groups": 75,
+                "mean": -5.4,
+                "percentile95": [
+                  -19.56,
+                  3.32
+                ]
+              }
+            }
+          }
+        }
+      },
+      "commonCompleteRoots": 75,
+      "completeChildren": {
+        "fitted": 244,
+        "full": 243,
+        "hce": 244,
+        "nopawn": 243
+      },
+      "completeRoots": {
+        "fitted": 76,
+        "full": 75,
+        "hce": 76,
+        "nopawn": 75
+      }
+    }
+  },
+  "fittedNumerator": 12,
+  "inputsSha256": {
+    "collection": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+    "excluded": "6f053095d2355e2f8d8d6a4cebc47f24887fb128e362edc83a72ed0a854414e0",
+    "fit": "e31c1b21b70cfe62e1e44667afbc7473756ad3bfed22c1ded6ea79b4b49aad36",
+    "labels": "3c01180f74a3d2597017de197c5013adc234fbaf678726cd4d07032daa270625",
+    "manifest": "743cbf80bd3326e4895e2920b3d2a9725edb03167737cf12024526664fec310b",
+    "protocol": "4961fbf6ee22c1864ade9f1c3b359cba723b21270117097da48f1866bc871c63"
+  },
+  "nodes": 1337452,
+  "recordsSha256": "6d69cd9449d5920ca883cb5b610011028a853707b87f6ebafd147623694f0e7d",
+  "roots": 78,
+  "runtime": {
+    "hostSha256": "8f8bd93b16a32cef1d83f2ff1b3af5ebb4123a7a85f3ff9dff43306ee86298c6",
+    "loaderSha256": "39e52ff72c81c6c0340e0f593addfec3a23b1047baadc02a5888bbb0484e3b52",
+    "modulesSha256": {
+      "fitted": "e397d4153179c2585fc6ccb38db4459fdc6d40075b67918e87e71f87df1ce884",
+      "full": "a84bca237b114d82be743747d9db14ad7721a996b14c7483c27d2369752f3039",
+      "hce": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5",
+      "nopawn": "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+    },
+    "nodeVersion": "v24.22.3",
+    "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa"
+  },
+  "schema": "chessy.robustness.search-decisions.v1",
+  "scriptSha256": "fdcd8d55eb821a6c436cb9a67a9e8a5506bb753019bfa1bcbdc3a713508c000a"
+}

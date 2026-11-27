@@ -1,0 +1,384 @@
+{
+  "calibratedMinusControlRegretCp": {
+    "full": {
+      "groups": 78,
+      "mean": 16.03205128205128,
+      "percentile95": [
+        3.198717948717949,
+        32.59615384615385
+      ]
+    },
+    "hce": {
+      "groups": 78,
+      "mean": -23.794871794871796,
+      "percentile95": [
+        -81.38461538461539,
+        17.634615384615383
+      ]
+    },
+    "noPawn": {
+      "groups": 78,
+      "mean": 6.467948717948718,
+      "percentile95": [
+        -0.7948717948717948,
+        16.692307692307693
+      ]
+    }
+  },
+  "collectionSha256": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+  "droppedCrossSplitTestRoots": 0,
+  "excludedSourceGroups": 32,
+  "exclusionsSha256": "6f053095d2355e2f8d8d6a4cebc47f24887fb128e362edc83a72ed0a854414e0",
+  "fitDiagnostics": {
+    "all": {
+      "childMaeCp": 328.13511904761907,
+      "children": 1326,
+      "groups": 210,
+      "pairAccuracy": 0.6456349206349207,
+      "quietChildMaeCp": 313.80357142857144,
+      "regretCp": 152.31190476190477,
+      "roots": 417,
+      "severe150Rate": 0.29523809523809524,
+      "tacticalChildMaeCp": 402.8811881188119,
+      "topAgreement": 0.4928571428571429
+    },
+    "teacherBestIncludesTactical": {
+      "childMaeCp": 349.29001103752756,
+      "children": 642,
+      "groups": 151,
+      "pairAccuracy": 0.7716666666666666,
+      "quietChildMaeCp": 373.22350993377484,
+      "regretCp": 94.68543046357615,
+      "roots": 207,
+      "severe150Rate": 0.1490066225165563,
+      "tacticalChildMaeCp": 333.2836644591612,
+      "topAgreement": 0.7119205298013245
+    },
+    "teacherBestOnlyQuiet": {
+      "childMaeCp": 305.9320175438596,
+      "children": 684,
+      "groups": 152,
+      "pairAccuracy": 0.5192982456140351,
+      "quietChildMaeCp": 248.42653508771932,
+      "regretCp": 210.1315789473684,
+      "roots": 210,
+      "severe150Rate": 0.4375,
+      "tacticalChildMaeCp": 499.5743243243243,
+      "topAgreement": 0.26973684210526316
+    }
+  },
+  "fitScriptSha256": "43704a71986d7514f1c100245a7e7ecdb3751990f2c0903a69898d8590d245e7",
+  "fits": {
+    "calibrated": {
+      "alpha": 0.7404016200378876,
+      "denominator": 16,
+      "gradientAtFit": -4.336808689942018e-19,
+      "gradientAtOne": 0.008171445000134553,
+      "gradientAtZero": -0.023672403420058177,
+      "numerator": 12,
+      "penalty": 0.0025
+    },
+    "pointwiseOnly": {
+      "alpha": 0.5874604799731415,
+      "denominator": 16,
+      "gradientAtFit": -8.673617379884035e-19,
+      "gradientAtOne": 0.010565926321365056,
+      "gradientAtZero": -0.015130165176550645,
+      "numerator": 9,
+      "penalty": 0.0025
+    },
+    "tenfoldPenalty": {
+      "alpha": 0.3078429597259428,
+      "denominator": 16,
+      "gradientAtFit": 3.469446951953614e-18,
+      "gradientAtOne": 0.05317144500013456,
+      "gradientAtZero": -0.023672403420058177,
+      "numerator": 5,
+      "penalty": 0.025
+    },
+    "unregularized": {
+      "alpha": 0.8794515757120192,
+      "denominator": 16,
+      "gradientAtFit": -3.18359949184216e-19,
+      "gradientAtOne": 0.003171445000134553,
+      "gradientAtZero": -0.023672403420058177,
+      "numerator": 14,
+      "penalty": 0
+    }
+  },
+  "heldOut": {
+    "calibrated": {
+      "all": {
+        "childMaeCp": 334.71581196581195,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6086538461538462,
+        "quietChildMaeCp": 303.0726495726496,
+        "regretCp": 184.52564102564102,
+        "roots": 153,
+        "severe150Rate": 0.3141025641025641,
+        "tacticalChildMaeCp": 412.02,
+        "topAgreement": 0.4935897435897436
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 307.13888888888886,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8125,
+        "quietChildMaeCp": 313.475,
+        "regretCp": 45.425,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 300.93055555555554,
+        "topAgreement": 0.8416666666666667
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 361.61616161616166,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.426010101010101,
+        "quietChildMaeCp": 302.20328282828285,
+        "regretCp": 325.9015151515151,
+        "roots": 84,
+        "severe150Rate": 0.5378787878787878,
+        "tacticalChildMaeCp": 584.9825581395348,
+        "topAgreement": 0.1893939393939394
+      }
+    },
+    "full": {
+      "all": {
+        "childMaeCp": 333.78418803418805,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6230769230769231,
+        "quietChildMaeCp": 304.88461538461536,
+        "regretCp": 168.49358974358975,
+        "roots": 153,
+        "severe150Rate": 0.28846153846153844,
+        "tacticalChildMaeCp": 407.0911111111111,
+        "topAgreement": 0.48717948717948717
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 307.9506944444445,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.825,
+        "quietChildMaeCp": 317.8527777777778,
+        "regretCp": 46.458333333333336,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 299.06111111111113,
+        "topAgreement": 0.825
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 359.75,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4424242424242424,
+        "quietChildMaeCp": 302.1603535353535,
+        "regretCp": 292.1060606060606,
+        "roots": 84,
+        "severe150Rate": 0.48484848484848486,
+        "tacticalChildMaeCp": 577.1453488372093,
+        "topAgreement": 0.1893939393939394
+      }
+    },
+    "hce": {
+      "all": {
+        "childMaeCp": 345.61111111111114,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.5851495726495727,
+        "quietChildMaeCp": 311.4818376068376,
+        "regretCp": 208.32051282051282,
+        "roots": 153,
+        "severe150Rate": 0.33974358974358976,
+        "tacticalChildMaeCp": 428.8155555555556,
+        "topAgreement": 0.46794871794871795
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 315.6027777777778,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.7958333333333333,
+        "quietChildMaeCp": 319.65833333333336,
+        "regretCp": 86.14166666666667,
+        "roots": 69,
+        "severe150Rate": 0.11666666666666667,
+        "tacticalChildMaeCp": 312.7027777777778,
+        "topAgreement": 0.8
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 372.31439393939394,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4070707070707071,
+        "quietChildMaeCp": 309.66161616161617,
+        "regretCp": 305.75757575757575,
+        "roots": 84,
+        "severe150Rate": 0.5227272727272727,
+        "tacticalChildMaeCp": 607.8023255813954,
+        "topAgreement": 0.21212121212121213
+      }
+    },
+    "noPawn": {
+      "all": {
+        "childMaeCp": 334.2879273504273,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6204059829059829,
+        "quietChildMaeCp": 304.59722222222223,
+        "regretCp": 178.05769230769232,
+        "roots": 153,
+        "severe150Rate": 0.30128205128205127,
+        "tacticalChildMaeCp": 408.5211111111111,
+        "topAgreement": 0.48717948717948717
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 308.42569444444445,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8243055555555556,
+        "quietChildMaeCp": 317.5222222222222,
+        "regretCp": 46.458333333333336,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 299.93333333333334,
+        "topAgreement": 0.825
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 360.27588383838383,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4424242424242424,
+        "quietChildMaeCp": 302.17676767676767,
+        "regretCp": 309.67424242424244,
+        "roots": 84,
+        "severe150Rate": 0.5075757575757576,
+        "tacticalChildMaeCp": 578.8895348837209,
+        "topAgreement": 0.1893939393939394
+      }
+    },
+    "pointwiseOnly": {
+      "all": {
+        "childMaeCp": 336.2110042735043,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6086538461538462,
+        "quietChildMaeCp": 303.78311965811963,
+        "regretCp": 193.51923076923077,
+        "roots": 153,
+        "severe150Rate": 0.3333333333333333,
+        "tacticalChildMaeCp": 415.42,
+        "topAgreement": 0.47435897435897434
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 307.99583333333334,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8138888888888889,
+        "quietChildMaeCp": 313.6166666666667,
+        "regretCp": 55.06666666666667,
+        "roots": 69,
+        "severe150Rate": 0.1,
+        "tacticalChildMaeCp": 302.7416666666667,
+        "topAgreement": 0.8166666666666667
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 363.16477272727275,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4285353535353535,
+        "quietChildMaeCp": 302.86616161616166,
+        "regretCp": 326.99242424242425,
+        "roots": 84,
+        "severe150Rate": 0.5378787878787878,
+        "tacticalChildMaeCp": 589.6976744186046,
+        "topAgreement": 0.1893939393939394
+      }
+    },
+    "tenfoldPenalty": {
+      "all": {
+        "childMaeCp": 339.678952991453,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.5990384615384615,
+        "quietChildMaeCp": 306.4957264957265,
+        "regretCp": 192.6153846153846,
+        "roots": 153,
+        "severe150Rate": 0.3333333333333333,
+        "tacticalChildMaeCp": 420.9066666666667,
+        "topAgreement": 0.48717948717948717
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 310.4534722222222,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8180555555555556,
+        "quietChildMaeCp": 315.78611111111115,
+        "regretCp": 53.666666666666664,
+        "roots": 69,
+        "severe150Rate": 0.1,
+        "tacticalChildMaeCp": 305.9972222222222,
+        "topAgreement": 0.8333333333333334
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 366.7537878787879,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.41085858585858587,
+        "quietChildMaeCp": 305.2171717171717,
+        "regretCp": 326.1287878787879,
+        "roots": 84,
+        "severe150Rate": 0.5378787878787878,
+        "tacticalChildMaeCp": 597.8081395348837,
+        "topAgreement": 0.20454545454545456
+      }
+    },
+    "unregularized": {
+      "all": {
+        "childMaeCp": 334.3440170940171,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6145299145299145,
+        "quietChildMaeCp": 303.5459401709401,
+        "regretCp": 181.96153846153845,
+        "roots": 153,
+        "severe150Rate": 0.3076923076923077,
+        "tacticalChildMaeCp": 410.17555555555555,
+        "topAgreement": 0.48717948717948717
+      },
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 307.52777777777777,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8166666666666667,
+        "quietChildMaeCp": 315.0847222222222,
+        "regretCp": 46.458333333333336,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 300.24305555555554,
+        "topAgreement": 0.825
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 360.863005050505,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4348484848484848,
+        "quietChildMaeCp": 302.04924242424244,
+        "regretCp": 318.9015151515151,
+        "roots": 84,
+        "severe150Rate": 0.5227272727272727,
+        "tacticalChildMaeCp": 581.9651162790698,
+        "topAgreement": 0.1893939393939394
+      }
+    }
+  },
+  "model": "calibrated",
+  "protocolSha256": "2fc45f051789dc3da602ce80e617081e43cf8a00a2e5001fe66382ba5e162da6",
+  "researchOnly": true,
+  "schema": "chessy.sparse-hard-position-fit-result.v1",
+  "trainChildren": 1326,
+  "trainGroups": 210,
+  "trainRoots": 417
+}

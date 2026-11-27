@@ -514,6 +514,8 @@ jobs:
           python test/training/eval-pipeline-refit.test.py
           python test/training/eval-pipeline-refit-cost.test.py
           python test/training/eval-pipeline-restore-refit.test.py
+          python test/training/eval-robustness.test.py
+          python -m unittest tools.eval_robustness.medium_test
       - name: Validate private runtime export and complete measurement evidence
         run: |
           node test/training/natural-runtime-export.test.js

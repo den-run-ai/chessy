@@ -1,0 +1,7 @@
+{
+  "design": "The two frozen no-pawn scales (1 and 0.75) each play HCE at 25 ms on the same 128 new openings, with both colors. Models and rules were fixed before either replication score was opened.",
+  "estimands": ["unscaled score versus HCE", "fitted score versus HCE", "fitted score minus unscaled score versus HCE on the same openings"],
+  "intervals": "Take each color pair's two-game mean. With seed 20261127 draw the 100 structural four-ply families with replacement, including all openings and both models in the same draw, across 10000 replicates. Use linear 2.5% and 97.5% quantiles for marginal 95% intervals. For three simultaneous comparisons apply Bonferroni, using tail probability 0.05/6 for each quantile.",
+  "order": "Four shards in bank-index modulo four, same CPU assignments and color order in both arms. Unscaled games run first and finish before fitted measurement uses the CPUs. A period or system-load effect can affect the indirect difference.",
+  "target": "A 10% relative gain over parity means 55% candidate score. Quoted intervals, target threshold and equality to parity are considered separately. No filtering on realized game strength, draw cause or time."
+}

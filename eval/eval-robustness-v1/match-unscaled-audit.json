@@ -1,0 +1,332 @@
+{
+  "base": {
+    "id": "r85-hce-memory",
+    "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+  },
+  "bootstrap": {
+    "clusterCount": 27,
+    "confidence": 0.95,
+    "degeneratePolicy": "report [0,1], never infer strength from a zero-variance bootstrap",
+    "degenerateTimesMs": [],
+    "estimand": "opening-weighted mean of two-color pair scores",
+    "largestCluster": 2,
+    "marginalTailProbability": 0.025000000000000022,
+    "method": "paired-cluster-bootstrap-bonferroni-percentile",
+    "openingCount": 32,
+    "replicates": 10000,
+    "rng": "Python random.Random (MT19937)",
+    "sameClusterDrawAcrossTimeGrid": true,
+    "scope": "nominal simultaneous descriptive intervals over this fixed time grid; approximate, not a coverage guarantee",
+    "seed": 20261127
+  },
+  "campaignAudit": {
+    "auditorSha256": "ea448b556c4428358fe7b215652a8d827dc063cb1b4d47a57fd1dc277a682982",
+    "completionSha256": "29c90f0bc93311b51410541328e0804df5d66ebba974ea65671e2fc5866fcbb1",
+    "fullHistoryVerified": true,
+    "gamesReplayed": 64,
+    "hostInfo": {
+      "abiVersion": 2,
+      "engines": {
+        "base": {
+          "bytes": 37210,
+          "loadMs": 54.143536999999995,
+          "memoryBytes": 26607616,
+          "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+        },
+        "candidate": {
+          "bytes": 57175,
+          "loadMs": 56.12347,
+          "memoryBytes": 26607616,
+          "sha256": "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+        }
+      },
+      "execArgv": [
+        "--no-liftoff",
+        "--no-wasm-lazy-compilation"
+      ],
+      "loaderSha256": "39e52ff72c81c6c0340e0f593addfec3a23b1047baadc02a5888bbb0484e3b52",
+      "nodeVersion": "v24.22.3",
+      "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+      "v8Version": "13.6.233.17-node.63"
+    },
+    "javascriptRulesReplayVerified": true,
+    "movesReplayed": 5910,
+    "pgnsVerified": 64,
+    "registrationSha256": "a672f10d25bfbf5f9871c6513a9724003cc268477b80f680475e3ac9c84a65e5",
+    "schema": "chessy.eval-game-campaign.v1.audit",
+    "searchesRerun": 0,
+    "status": "pass"
+  },
+  "candidate": {
+    "id": "r85-no-pawn-ratio-16-16",
+    "sha256": "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+  },
+  "completeSchedule": true,
+  "configSha256": "d61beb433c842810bbc81531a63f753a65c3b0642278d58382416066efbffbc3",
+  "experimentId": "sparse-robustness-unscaled-n16",
+  "formalPass": false,
+  "games": 64,
+  "implementationSha256": "44e5f09ec70e90ce93556221ae189bc06f735778fa906c771b3d9e5dd2aaf48d",
+  "limitations": [
+    "Separate full-history legal replay and measured-budget audit are required before interpreting scores.",
+    "Opening/family dependence may remain beyond the declared clusters; these intervals are exploratory.",
+    "Time-limited execution varies across runs, hardware, compiler tiers and thermal conditions.",
+    "Relative Elo is a score transform for this opponent and budget, not a human or universal rating.",
+    "No inference about intermediate times, unmeasured models/devices, or a universal saturation curve.",
+    "Ply-cap draws remain draws and are reported separately; no result-based exclusions or retries."
+  ],
+  "policy": {
+    "candidateConfirmationTimesMs": [],
+    "crossingStatus": "not-established",
+    "nextStep": "No budget qualifies for confirmation on this screen; retain HCE and improve the candidate before a new registered comparison.",
+    "noAutomaticActivationFromPointCrossing": true,
+    "noInterpolationOrExtrapolation": true,
+    "noMonotoneCurveFit": true,
+    "pointEstimateTransitions": [],
+    "productionEnable": false,
+    "requiresFreshConfirmation": true,
+    "selectionRule": "confirm only preregistered product budgets whose simultaneous lower score exceeds the minimum worthwhile score",
+    "supportedGridBrackets": [],
+    "timingAuditFailedTimesMs": []
+  },
+  "productionAdmission": false,
+  "profiles": [
+    {
+      "candidateScore": 0.578125,
+      "descriptiveClassification": "inconclusive",
+      "draws": 12,
+      "games": 64,
+      "losses": 21,
+      "openingPairs": 32,
+      "pairedScores": [
+        {
+          "openingId": "c81ce33962228564fc9944e889b39e176aa262e2421ffacaba1f34483d338a14",
+          "score": 0.5
+        },
+        {
+          "openingId": "82e97905e8f2495fe1859d1f175d99bba0e3b476cb73fd29c6fd790a0be03a70",
+          "score": 0.5
+        },
+        {
+          "openingId": "e7585d0eb237c4698b88b20f015aaeea2d0afd1573cc8123c0227f5b46c25a8f",
+          "score": 1.0
+        },
+        {
+          "openingId": "fc7ea181a48cf092ea2e6ba1b99c02517de1df9e89db835016f77fa67cbae429",
+          "score": 0.25
+        },
+        {
+          "openingId": "cf68937801d3609104e387d8a4af28772838fa00ab5cd6adfab61a732061764f",
+          "score": 1.0
+        },
+        {
+          "openingId": "1fffbfdbc78ee04e6662507a02fbf21ec2dd4b7d9374cf3595e65e9c083bb328",
+          "score": 0.0
+        },
+        {
+          "openingId": "4c6070021120f9013f0c2ce15cc5d859814ac9438daef7bb13a43c33d9d32314",
+          "score": 1.0
+        },
+        {
+          "openingId": "ae6103c5273158decb9339fa087d270f3bcc6001c464fbbba915107841d5d6ff",
+          "score": 0.5
+        },
+        {
+          "openingId": "d7a79c0daee6062542ad71e11b98da9b6f00a8320b9c4973cc5f0f6260d8a88b",
+          "score": 0.5
+        },
+        {
+          "openingId": "5b369e4642089c9722ec4bbab0ba288bf8374f34df93cac457b42f3f76461423",
+          "score": 0.5
+        },
+        {
+          "openingId": "28aa2b189140b23649f8f2f52888702aef3736e5394f853092098e2a06a82ee7",
+          "score": 0.75
+        },
+        {
+          "openingId": "9e1d1c387fb0578f5a829e472e9a8fc01e6dab048bbfe1ff7c114804c858ab62",
+          "score": 0.5
+        },
+        {
+          "openingId": "084bc6fb455d7b1f724b96521e369d6bbece6b97ca555c628beceffd1e3fab42",
+          "score": 0.25
+        },
+        {
+          "openingId": "eccb7b35d6cd028f94a1399de76c1b1718839dc09b7b00ae1ee68e456200e6e6",
+          "score": 1.0
+        },
+        {
+          "openingId": "fe03584d360f04fe77d46bf92fc178a538efe72b092a1c65a646e794f1041aaf",
+          "score": 0.75
+        },
+        {
+          "openingId": "c1e61d2496ed3defb639d6eba79cb28f22f9e2d5c637099dc6a353c54c481750",
+          "score": 0.5
+        },
+        {
+          "openingId": "4eae5b3b07ecef8db46f4bc4402757531a2ce152e75748d247cbea351950f3c4",
+          "score": 0.25
+        },
+        {
+          "openingId": "a6fca71170374353d2ac88195b3d76697df3203810fb81b2e311c8b5a32b02dc",
+          "score": 0.5
+        },
+        {
+          "openingId": "cb88c31f753f9f42c70fd5b3c84cb2fa04751c07a6abaf0fd1a57b0bbc3c23a1",
+          "score": 0.25
+        },
+        {
+          "openingId": "8313a29f5ce21ffb81d77ca88f2274c3348d2eef9630da02e8d350d8cc5c39b9",
+          "score": 0.75
+        },
+        {
+          "openingId": "fd372b976b4ae2aa446d9c1a7d5b3fe2b38de774a42806cf83c6a975ad92f2e8",
+          "score": 0.5
+        },
+        {
+          "openingId": "87a53b0d44ae7847918260d4b1da47c31dee667bbbf609fbd605f977716f6d8b",
+          "score": 1.0
+        },
+        {
+          "openingId": "b98b25abd900dc0eb51c2475fd53914af25163e294da228921345ade7aeea2ff",
+          "score": 0.0
+        },
+        {
+          "openingId": "b3b1e0857b2ac6b822332b6b486868cf7055ca0d6c8303a294b8fdae24bcef20",
+          "score": 0.5
+        },
+        {
+          "openingId": "2a2935a048344cbe4fb4adc73bca99913aff20785e487c13182499c1d83fb088",
+          "score": 0.75
+        },
+        {
+          "openingId": "cf5cf359130ee9458f5369029c84a5a4fbad3094cf2401d8341c777ad79f6adf",
+          "score": 0.5
+        },
+        {
+          "openingId": "b7fcb49c59255a4a6e99ff251d52c2d49174ba931141c975d98d923ab65b2ee5",
+          "score": 1.0
+        },
+        {
+          "openingId": "3fc844cf906239496f687832348880ec816074e712e783ca0523bd7338791a68",
+          "score": 0.5
+        },
+        {
+          "openingId": "451f336dbdaf5f2b0eb04b5576590e77334500e0be08b2c3282450807e6a6fef",
+          "score": 0.25
+        },
+        {
+          "openingId": "d95427835cc8b643d4f41807a44a6b51dd945a2360caad6009ac0c32f5dab8a4",
+          "score": 1.0
+        },
+        {
+          "openingId": "0f347a215427021f5d464603655b1d1691e12dea5a40b0e9f16ce064de314204",
+          "score": 0.75
+        },
+        {
+          "openingId": "896a16d375ca55329dfc492f55ba9addbfe02d1e2c2927ae15d2e499fdf5c634",
+          "score": 0.5
+        }
+      ],
+      "relativeElo": {
+        "interval": [
+          -10.531575488939641,
+          126.96816474086026
+        ],
+        "lowerUnbounded": false,
+        "point": 54.735183963203085,
+        "scope": "relative logistic score transform against this exact base at this time; not calibrated Elo",
+        "upperUnbounded": false
+      },
+      "simultaneousInterval": [
+        0.48484848484848486,
+        0.675
+      ],
+      "terminationCounts": {
+        "checkmate": 52,
+        "current-threefold": 2,
+        "insufficient-material": 2,
+        "ply-cap": 8
+      },
+      "timeMs": 25,
+      "wins": 31
+    }
+  ],
+  "recordsSha256": "a2b9b67f76967c7a7097b90178263f1f7e4d4a38eb637e895c8163ccc3e41a8e",
+  "researchOnly": true,
+  "restoredArchive": {
+    "bytes": 1666146,
+    "filename": "chessy-robustness-match-unscaled.tar.zst",
+    "restoredAuditMatched": true,
+    "sha256": "23994b6673e1d9c235f1658b3a69e558f3082d79da538320442404fb4cf7db9c"
+  },
+  "rulesReplayPerformedByAnalyzer": false,
+  "scheduleSha256": "792667e6f1809abd5bf36ccfbb8fa9a064d294446027bbef74df925b8f3cbf74",
+  "schema": "chessy.eval-frontier.v1.report",
+  "status": "complete-development-screen",
+  "timing": [
+    {
+      "cleanRealizedEqualTime": true,
+      "medianRatioRange": [
+        0.9,
+        1.1
+      ],
+      "p99LimitMultiplier": 2,
+      "scope": "loader/WASM call duration and full request wall time; not browser UI or CPU-time equality",
+      "telemetry": {
+        "base": {
+          "engineCallSeconds": 73.000605748,
+          "meanDepth": 4.632452574525745,
+          "meanEngineCallMs": 24.729202489159892,
+          "meanNodes": 35543.41734417344,
+          "meanRequestWallMs": 26.335664062330622,
+          "medianDepth": 4.0,
+          "medianEngineCallMs": 25.662301999997,
+          "nodes": 104924168,
+          "nodesPerEngineCallSecond": 1437305.4432205805,
+          "p95EngineCallMs": 26.570459049998497,
+          "p99EngineCallMs": 29.53638034000014,
+          "p99RequestWallMs": 34.94931621999999,
+          "qnodes": 66545139,
+          "requestWallSeconds": 77.742880312,
+          "searches": 2952,
+          "stopReasons": {
+            "mate": 147,
+            "time-limit": 2805
+          },
+          "timeLimitFraction": 0.9502032520325203,
+          "timeLimitMedianMs": 25.681345000004512,
+          "timeLimitP99Ms": 29.56417264000091,
+          "timeLimitStops": 2805
+        },
+        "candidate": {
+          "engineCallSeconds": 73.44889115999987,
+          "meanDepth": 4.529073698444895,
+          "meanEngineCallMs": 24.83059200811355,
+          "meanNodes": 34000.21433400946,
+          "meanRequestWallMs": 26.434678573022314,
+          "medianDepth": 4.0,
+          "medianEngineCallMs": 25.687086999998428,
+          "nodes": 100572634,
+          "nodesPerEngineCallSecond": 1369287.3018452274,
+          "p95EngineCallMs": 26.68538720000397,
+          "p99EngineCallMs": 29.7002136999994,
+          "p99RequestWallMs": 35.20915388999994,
+          "qnodes": 63942729,
+          "requestWallSeconds": 78.193779219,
+          "searches": 2958,
+          "stopReasons": {
+            "mate": 153,
+            "time-limit": 2805
+          },
+          "timeLimitFraction": 0.9482758620689655,
+          "timeLimitMedianMs": 25.706672999978764,
+          "timeLimitP99Ms": 29.799630519998612,
+          "timeLimitStops": 2805
+        }
+      },
+      "timeLimitMedianCandidateOverBase": 1.0009862411791224,
+      "timeMs": 25
+    }
+  ]
+}

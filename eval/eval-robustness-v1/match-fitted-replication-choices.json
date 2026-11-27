@@ -1,0 +1,4655 @@
+{
+  "campaignSealsSha256": [
+    "0ee6c37d5a0b7854e77662d2e8ed6708bc182f9ab95f55eef545fe84a916e8e2",
+    "66af75de26bda5380ead10e00cbe89771205eb49db6e57bac4c9be7936d3ac70",
+    "cccf0580d002360f67d2c8e674641eb1e8db1fd577fc2b244fd30e81fba68d8b",
+    "abb07ca894a59059b5356465454f104021d164085ea760f68cdd02217a0cec7a"
+  ],
+  "candidatePreferred": 24,
+  "disagreements": 54,
+  "hcePreferred": 30,
+  "meanCandidateMinusHceCpIncludingAgreements": 1.84375,
+  "meanCompletedRootDepth": {
+    "base": 3.40625,
+    "candidate": 3.2734375
+  },
+  "meanRootNodes": {
+    "base": 24126.6875,
+    "candidate": 21262.2734375
+  },
+  "nodesPerChild": 100000,
+  "pairs": 128,
+  "roots": [
+    {
+      "candidateMinusHceCp": -15,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.904137999999875,
+          "nodes": 13311,
+          "uci": "a1d1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 28.225018000000034,
+          "nodes": 16383,
+          "uci": "a1e1"
+        }
+      },
+      "openingId": "0da0fc411a2195433cca19de5c443ff89cc642cd1db0d2762e68e580f572e83d",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100152,
+          "pv": [
+            "b7b5",
+            "a2a4"
+          ],
+          "teacher": 107,
+          "terminal": null,
+          "totalNodesReported": 100152,
+          "uci": "a1d1"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 75724,
+          "pv": [
+            "d8d7",
+            "a2a4",
+            "a7a6",
+            "e1a1",
+            "b7b5",
+            "a4b5",
+            "a6b5",
+            "f1e1",
+            "h7h6",
+            "a1a8",
+            "f8a8",
+            "e3d2"
+          ],
+          "teacher": 92,
+          "terminal": null,
+          "totalNodesReported": 100074,
+          "uci": "a1e1"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -3,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.263495999999577,
+          "nodes": 27647,
+          "uci": "c7c6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.072213999999803,
+          "nodes": 25599,
+          "uci": "f8e8"
+        }
+      },
+      "openingId": "e8dab4dbb171b33e93d4c8c82cab0e0a68fd408cb76df2174eee2a823a09da9c",
+      "teacherLabels": [
+        {
+          "depth": 10,
+          "mate": null,
+          "nodes": 63363,
+          "pv": [
+            "b1c3",
+            "f8e8",
+            "f1e1",
+            "e7b4",
+            "c1e3",
+            "b4c3",
+            "b2c3",
+            "c6d5",
+            "e2c2",
+            "d5c4",
+            "d3c4"
+          ],
+          "teacher": -84,
+          "terminal": null,
+          "totalNodesReported": 100144,
+          "uci": "c7c6"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100005,
+          "pv": [
+            "c1e3",
+            "b8a6",
+            "b1c3",
+            "c7c6",
+            "f1d1",
+            "d8c7",
+            "d3f5",
+            "e7b4",
+            "e2c2",
+            "b4c3",
+            "c2c3",
+            "c6d5"
+          ],
+          "teacher": -87,
+          "terminal": null,
+          "totalNodesReported": 100005,
+          "uci": "f8e8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.548665000000256,
+          "nodes": 18431,
+          "uci": "b1c3"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.303674999999203,
+          "nodes": 25599,
+          "uci": "b1c3"
+        }
+      },
+      "openingId": "23d87b670fdb8130dccf98e60bd65451e83a114adfffffd9b4e2e9abe3ef5b2e",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.304167000002053,
+          "nodes": 23551,
+          "uci": "f3f4"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.935137000000395,
+          "nodes": 21503,
+          "uci": "f3f4"
+        }
+      },
+      "openingId": "f82429472b6c2340429f1391b16d178042a314376d94bc5ffcf59e6e68d7d979",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.181799000001774,
+          "nodes": 27647,
+          "uci": "f6e5"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.276742000001832,
+          "nodes": 25599,
+          "uci": "f6e5"
+        }
+      },
+      "openingId": "e007d0c4cc763803c1898e94e45c90cc214904b83160f335861f8cec9015852d",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -68,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.981456999998045,
+          "nodes": 31743,
+          "uci": "a1d1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.867286000000604,
+          "nodes": 18431,
+          "uci": "d5d6"
+        }
+      },
+      "openingId": "b56dc43146019a2f9ee4d7e8d11fda171f77f17ae79de7d1453ba3d8d996b310",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100076,
+          "pv": [
+            "c7c6",
+            "d5d6",
+            "e7g6",
+            "e2f1",
+            "f7f6",
+            "e5f6",
+            "f8f6",
+            "b2b3",
+            "f6f5",
+            "f1g1",
+            "e8d8",
+            "e4c2",
+            "d8f6",
+            "h2h3",
+            "f5f3",
+            "g2f3"
+          ],
+          "teacher": 25,
+          "terminal": null,
+          "totalNodesReported": 100076,
+          "uci": "a1d1"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100085,
+          "pv": [
+            "c7d6",
+            "e5d6"
+          ],
+          "teacher": -43,
+          "terminal": null,
+          "totalNodesReported": 100085,
+          "uci": "d5d6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 7,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.58394799999951,
+          "nodes": 29695,
+          "uci": "a2a4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.31699600000138,
+          "nodes": 25599,
+          "uci": "f3g5"
+        }
+      },
+      "openingId": "210459dbe671bd65f24ea67edbaabda08c8f1fc39756329e9ed13efbb782ff00",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100028,
+          "pv": [
+            "b5c4",
+            "g1h2",
+            "f8e7",
+            "g2g3",
+            "a5c7",
+            "a4a5",
+            "b7b6",
+            "a5b6",
+            "a7b6",
+            "d1a4",
+            "e8f8",
+            "a4a7",
+            "c7a7",
+            "a1a7",
+            "g8g7",
+            "d4b6"
+          ],
+          "teacher": 122,
+          "terminal": null,
+          "totalNodesReported": 100028,
+          "uci": "a2a4"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100049,
+          "pv": [
+            "h7h6",
+            "g5h7",
+            "f8e7",
+            "a2a4",
+            "b5d7",
+            "b2b4",
+            "a5d8",
+            "f2e2",
+            "b7b6",
+            "d1d2",
+            "c8c4",
+            "h7f6",
+            "e7f6",
+            "e5f6",
+            "e8f8"
+          ],
+          "teacher": 129,
+          "terminal": null,
+          "totalNodesReported": 100049,
+          "uci": "f3g5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.12639499999932,
+          "nodes": 26623,
+          "uci": "f8e7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.660713999997824,
+          "nodes": 14335,
+          "uci": "f8e7"
+        }
+      },
+      "openingId": "933b37aac1901707951e9f02379da5d332b8abd601853e720d1c3013da0929d7",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 17,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.297376999995322,
+          "nodes": 29695,
+          "uci": "d1b3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.764861000003293,
+          "nodes": 26623,
+          "uci": "f1e1"
+        }
+      },
+      "openingId": "8b4ec3271bb2c85500b5657bdad42b67c7d74d0f43873d4dd8f84a68f92ccf62",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100010,
+          "pv": [
+            "d6d5"
+          ],
+          "teacher": -91,
+          "terminal": null,
+          "totalNodesReported": 100010,
+          "uci": "d1b3"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100107,
+          "pv": [
+            "f6d7",
+            "g2g4"
+          ],
+          "teacher": -74,
+          "terminal": null,
+          "totalNodesReported": 100107,
+          "uci": "f1e1"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.530377000002773,
+          "nodes": 19455,
+          "uci": "c3d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.55265099999815,
+          "nodes": 16383,
+          "uci": "c3d5"
+        }
+      },
+      "openingId": "e73b7a3501b065b19073cb5685aad94ea10938d40394a65405afc1d524683167",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -75,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.800522000005003,
+          "nodes": 16383,
+          "uci": "b2a3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.818661999997857,
+          "nodes": 23551,
+          "uci": "h2h3"
+        }
+      },
+      "openingId": "3426e47f83ec1615a63cab274be5d33d6673875d501471cf328045cfa896d7be",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100068,
+          "pv": [
+            "a6c7"
+          ],
+          "teacher": 82,
+          "terminal": null,
+          "totalNodesReported": 100068,
+          "uci": "b2a3"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100097,
+          "pv": [
+            "g4f6",
+            "b2a3"
+          ],
+          "teacher": 7,
+          "terminal": null,
+          "totalNodesReported": 100097,
+          "uci": "h2h3"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -10,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.295950999992783,
+          "nodes": 17407,
+          "uci": "d3e4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.968378000005032,
+          "nodes": 26623,
+          "uci": "d1e2"
+        }
+      },
+      "openingId": "fb2a2d508532bddc596c7179abfb52c12961970992fbe05ff40aa8908207821e",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100055,
+          "pv": [
+            "e8g8",
+            "d3e4"
+          ],
+          "teacher": -65,
+          "terminal": null,
+          "totalNodesReported": 100055,
+          "uci": "d1e2"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 54048,
+          "pv": [
+            "f5e4",
+            "c3e4",
+            "d5e4",
+            "f3e5",
+            "d8d5",
+            "e5c6",
+            "d5c6",
+            "c1d2",
+            "a6a5",
+            "f4f5",
+            "e8g8",
+            "f5e6",
+            "c6e6",
+            "d1e2",
+            "f8d8"
+          ],
+          "teacher": -55,
+          "terminal": null,
+          "totalNodesReported": 100072,
+          "uci": "d3e4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.790058999991743,
+          "nodes": 25599,
+          "uci": "e5e6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.984330000006594,
+          "nodes": 17407,
+          "uci": "e5e6"
+        }
+      },
+      "openingId": "d23bf7ccc656da54ef35c50026d4aa9378e4eca1d43495151187e26594a6b427",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.978221999990637,
+          "nodes": 19455,
+          "uci": "h2h3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 28.441625000006752,
+          "nodes": 15359,
+          "uci": "h2h3"
+        }
+      },
+      "openingId": "e68884cfdc3e05969f7766f5457280a56d710c7f8488358f1fd3e861b530daec",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -35,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.637899999986985,
+          "nodes": 27647,
+          "uci": "d8e8"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.93454699999711,
+          "nodes": 25589,
+          "uci": "d8d7"
+        }
+      },
+      "openingId": "6644cf31608ec2bd799cfc9d7b1b6a7deedfd7ba38abf9151ea977f8f1fe0478",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100063,
+          "pv": [
+            "e2g4",
+            "e7e5",
+            "g4e4",
+            "d7f7",
+            "b2c3",
+            "c7d7",
+            "e1g1",
+            "f7f5",
+            "d2d3",
+            "d6d5",
+            "c4d5",
+            "b6d5",
+            "c3a5",
+            "b7b6",
+            "a5c3",
+            "d5f6",
+            "e4c6",
+            "d7c6",
+            "b5c6"
+          ],
+          "teacher": -853,
+          "terminal": null,
+          "totalNodesReported": 100063,
+          "uci": "d8d7"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100059,
+          "pv": [
+            "d2d3",
+            "e7e6",
+            "e2h5",
+            "e8e7",
+            "h5f3",
+            "e4f6",
+            "f7g5",
+            "e6e5",
+            "g5e4",
+            "e7f7",
+            "e4f6",
+            "f7f6",
+            "f3h3",
+            "b6d7",
+            "h3h7"
+          ],
+          "teacher": -818,
+          "terminal": null,
+          "totalNodesReported": 100059,
+          "uci": "d8e8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -95,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.698432000004686,
+          "nodes": 18431,
+          "uci": "d6d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.089561000000685,
+          "nodes": 24575,
+          "uci": "f6g4"
+        }
+      },
+      "openingId": "d6adcf5b02b6343ff754f22061af7aca5f42d72452bd45519535b9cad122e1cc",
+      "teacherLabels": [
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 58095,
+          "pv": [
+            "e4d5",
+            "f6d5",
+            "b4b5",
+            "c6b5",
+            "a4b5",
+            "d5c3",
+            "d1d2",
+            "e7b4",
+            "d3d4",
+            "c3e2",
+            "d2e2",
+            "b7f3",
+            "e2f3",
+            "e5d4",
+            "f3g4"
+          ],
+          "teacher": 37,
+          "terminal": null,
+          "totalNodesReported": 100126,
+          "uci": "d6d5"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100054,
+          "pv": [
+            "e3d2",
+            "d6d5"
+          ],
+          "teacher": -58,
+          "terminal": null,
+          "totalNodesReported": 100054,
+          "uci": "f6g4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.8487679999962,
+          "nodes": 28671,
+          "uci": "b8d7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.476393000004464,
+          "nodes": 16383,
+          "uci": "b8d7"
+        }
+      },
+      "openingId": "b83f2979b0517b3c93e390695b21778e57cdefb003094a7172df383eaf8fc30c",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -112,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 27.255128000004333,
+          "nodes": 16383,
+          "uci": "c8e6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.588215000010678,
+          "nodes": 16383,
+          "uci": "d6d5"
+        }
+      },
+      "openingId": "af9c0907a5fe7aace94f28b449f5a6b5396d479b94bebdab0e477cf13e96a352",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100076,
+          "pv": [
+            "c2c3",
+            "d4c2",
+            "a3c2",
+            "e6c4",
+            "g5g3",
+            "d8d7",
+            "b2b3",
+            "c4f7",
+            "c1g5",
+            "e8c8",
+            "e1c1",
+            "c8b8",
+            "c1b2",
+            "d8e8",
+            "f2f3",
+            "e7c6",
+            "h1f1",
+            "c6e5",
+            "c2e3"
+          ],
+          "teacher": -298,
+          "terminal": null,
+          "totalNodesReported": 100076,
+          "uci": "c8e6"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100084,
+          "pv": [
+            "e4d5"
+          ],
+          "teacher": -410,
+          "terminal": null,
+          "totalNodesReported": 100084,
+          "uci": "d6d5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -13,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.221639999988838,
+          "nodes": 20479,
+          "uci": "c6e5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.082320000001346,
+          "nodes": 18431,
+          "uci": "f6e5"
+        }
+      },
+      "openingId": "d24f132771c41392a4fc06f338c73e3536705848339c98e9339812d704f6c5f2",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 64696,
+          "pv": [
+            "f3e5",
+            "e7e5",
+            "e2f3",
+            "g8h8",
+            "d1b3",
+            "c5b6",
+            "c1f4",
+            "e5f5",
+            "f4d6",
+            "f8d8",
+            "a1d1"
+          ],
+          "teacher": -592,
+          "terminal": null,
+          "totalNodesReported": 100003,
+          "uci": "c6e5"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100057,
+          "pv": [
+            "d1d5",
+            "g8h8",
+            "c1g5",
+            "e7d6",
+            "d5d6",
+            "c5d6",
+            "a1d1",
+            "e5e4",
+            "f3d4",
+            "c6d4",
+            "d1d4",
+            "d6e5",
+            "d4d2",
+            "e5f6",
+            "g5e3",
+            "a8d8",
+            "f1d1"
+          ],
+          "teacher": -605,
+          "terminal": null,
+          "totalNodesReported": 100057,
+          "uci": "f6e5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -18,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.771570999990217,
+          "nodes": 19455,
+          "uci": "d6d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.24286500000744,
+          "nodes": 16383,
+          "uci": "e6c4"
+        }
+      },
+      "openingId": "bbb31116cad50991454b4fd731d808d6c4b43a6f63c094a375549ad6116f0970",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100030,
+          "pv": [
+            "e4d5",
+            "f6d5"
+          ],
+          "teacher": 114,
+          "terminal": null,
+          "totalNodesReported": 100030,
+          "uci": "d6d5"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100015,
+          "pv": [
+            "f1e1",
+            "d6d5",
+            "e4d5",
+            "f6d5",
+            "c3d5",
+            "c4d5",
+            "a1c1",
+            "e7e6",
+            "h2g4",
+            "b7b5",
+            "c2c3",
+            "d8d6",
+            "c1c2",
+            "c8c4"
+          ],
+          "teacher": 96,
+          "terminal": null,
+          "totalNodesReported": 100015,
+          "uci": "e6c4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 6,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.8871450000006,
+          "nodes": 16383,
+          "uci": "e8g8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.225124000004143,
+          "nodes": 15359,
+          "uci": "f6d5"
+        }
+      },
+      "openingId": "e19a616d307d65624d8d50aa08f5e1ce661c51672a933322c5c2ed81b35e427e",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100056,
+          "pv": [
+            "g1f3",
+            "f6d5"
+          ],
+          "teacher": 57,
+          "terminal": null,
+          "totalNodesReported": 100056,
+          "uci": "e8g8"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100018,
+          "pv": [
+            "d1f3",
+            "e8g8",
+            "g1e2",
+            "c7c5",
+            "e1g1",
+            "c5d4",
+            "e2d4",
+            "b8c6",
+            "d4c6",
+            "b7c6",
+            "d2c4",
+            "f7f5"
+          ],
+          "teacher": 63,
+          "terminal": null,
+          "totalNodesReported": 100018,
+          "uci": "f6d5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.262990999995964,
+          "nodes": 24575,
+          "uci": "d7d6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.191437000001315,
+          "nodes": 26623,
+          "uci": "d7d6"
+        }
+      },
+      "openingId": "c063b5441330b539435f3f07c19826b583fcc6bc760273c2db8f383a7b50296b",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -76,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.16235300002154,
+          "nodes": 25599,
+          "uci": "e1g1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.66167899998254,
+          "nodes": 23551,
+          "uci": "g4g5"
+        }
+      },
+      "openingId": "193c2db149ca588768b08a66d5b8d7391f2baee4c2761e0be0ab5cb51c737bca",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100023,
+          "pv": [
+            "e8g8",
+            "d2c3",
+            "f6d7",
+            "d3d4",
+            "a6c7",
+            "c3b4",
+            "c6c5",
+            "d4c5",
+            "d7c5",
+            "b4c5",
+            "d6c5",
+            "b1c3",
+            "a7a5",
+            "d1d2",
+            "c5d6",
+            "a1d1"
+          ],
+          "teacher": -114,
+          "terminal": null,
+          "totalNodesReported": 100023,
+          "uci": "e1g1"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100036,
+          "pv": [
+            "h6g5",
+            "f3g5",
+            "h7g6",
+            "e1g1",
+            "d8e7",
+            "d2a5",
+            "b7b6",
+            "a5d2",
+            "e8c8",
+            "a3a4",
+            "f6d7",
+            "g5f3",
+            "c8b7",
+            "a4a5",
+            "d7e5",
+            "f3e5",
+            "d6e5"
+          ],
+          "teacher": -190,
+          "terminal": null,
+          "totalNodesReported": 100036,
+          "uci": "g4g5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -64,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.473515000019688,
+          "nodes": 18431,
+          "uci": "f4c1"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.57879299999331,
+          "nodes": 21503,
+          "uci": "f4e3"
+        }
+      },
+      "openingId": "fe3eefb29441658c08f0488392e6015d2b462ba4606a87587f6eb19c2682a654",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 79517,
+          "pv": [
+            "f6d4",
+            "f1g2",
+            "g6e5",
+            "c1e3",
+            "d4b2",
+            "e1g1",
+            "c8e6",
+            "e2f2",
+            "f7f6",
+            "f1b1",
+            "b2c3"
+          ],
+          "teacher": -220,
+          "terminal": null,
+          "totalNodesReported": 100019,
+          "uci": "f4c1"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100061,
+          "pv": [
+            "f6b2",
+            "a1c1"
+          ],
+          "teacher": -284,
+          "terminal": null,
+          "totalNodesReported": 100061,
+          "uci": "f4e3"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -23,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.347372000018368,
+          "nodes": 27647,
+          "uci": "f8d6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.93777599997702,
+          "nodes": 25599,
+          "uci": "d5e4"
+        }
+      },
+      "openingId": "f54c1134ad7eeffe0483ff47c4c5c12b2c06aa896be7fac4de973a293efa67bf",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100019,
+          "pv": [
+            "f1c4",
+            "b5c4",
+            "g1e2",
+            "a8a4",
+            "e2g3",
+            "f8b4",
+            "c3c4",
+            "b4d2",
+            "b1d2",
+            "a4c4",
+            "d2c4",
+            "d8d5",
+            "c4e3"
+          ],
+          "teacher": 146,
+          "terminal": null,
+          "totalNodesReported": 100019,
+          "uci": "d5e4"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100032,
+          "pv": [
+            "f1c4",
+            "b5c4",
+            "d1e1",
+            "e8g8",
+            "h2h4",
+            "d8b6",
+            "h4g5",
+            "f6g5",
+            "c3b2",
+            "b6b4",
+            "b2b4",
+            "d6b4",
+            "c2c3"
+          ],
+          "teacher": 169,
+          "terminal": null,
+          "totalNodesReported": 100032,
+          "uci": "f8d6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.544122999999672,
+          "nodes": 15359,
+          "uci": "f6g4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.776073000015458,
+          "nodes": 16383,
+          "uci": "f6g4"
+        }
+      },
+      "openingId": "7d44b96a1c239c410d77bf69c9d27d9834943de32d8032f8f334127dde7b69af",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 144,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.230822999990778,
+          "nodes": 28671,
+          "uci": "f6d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.242239000013797,
+          "nodes": 25599,
+          "uci": "f8e7"
+        }
+      },
+      "openingId": "37ef0c2dc0d1f796ce555d44ee4633cb7e8209bb0f509d5d4a22a4d037dcacc9",
+      "teacherLabels": [
+        {
+          "depth": 15,
+          "mate": null,
+          "nodes": 100029,
+          "pv": [
+            "a2d5",
+            "d6d5"
+          ],
+          "teacher": -323,
+          "terminal": null,
+          "totalNodesReported": 100029,
+          "uci": "f6d5"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100022,
+          "pv": [
+            "e1c1",
+            "c8b7",
+            "a2b3",
+            "e8g8",
+            "b3a4",
+            "c6a7",
+            "e3f4",
+            "d6d8",
+            "f4c7",
+            "d8c8",
+            "c2b3",
+            "a7b5",
+            "c7b8",
+            "c8b8",
+            "a4b5",
+            "a6b5",
+            "f3e5"
+          ],
+          "teacher": -179,
+          "terminal": null,
+          "totalNodesReported": 100022,
+          "uci": "f8e7"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.480543000012403,
+          "nodes": 27647,
+          "uci": "d1c2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.292627999995602,
+          "nodes": 23551,
+          "uci": "d1c2"
+        }
+      },
+      "openingId": "c91f1e4daf47858eb8284afa9d6a7d9a275834a909516a3c3c60f1ed9082eb25",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 29.67184100000304,
+          "nodes": 22487,
+          "uci": "f8d6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.188312999991467,
+          "nodes": 25599,
+          "uci": "f8d6"
+        }
+      },
+      "openingId": "c55d66e696d5e2321484bef328e175e0abab34db19992d974933bb5fe90ddfa3",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.89391000001342,
+          "nodes": 29695,
+          "uci": "a6b4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.7021910000185,
+          "nodes": 28671,
+          "uci": "a6b4"
+        }
+      },
+      "openingId": "12e1f09fc3042b5af8d97fbd1a5d183cab1a818c8af7a7084d881c69cbf23f3e",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -15,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.498179999995045,
+          "nodes": 26623,
+          "uci": "c2c3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.769610999996075,
+          "nodes": 26623,
+          "uci": "b2b4"
+        }
+      },
+      "openingId": "93ad9df5ca12275c27327298ab0a79bf2e5717c85908d1a96d9c05f5c02bf8a1",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100038,
+          "pv": [
+            "f8e7",
+            "c2c4"
+          ],
+          "teacher": -46,
+          "terminal": null,
+          "totalNodesReported": 100038,
+          "uci": "b2b4"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100088,
+          "pv": [
+            "f8e7"
+          ],
+          "teacher": -31,
+          "terminal": null,
+          "totalNodesReported": 100088,
+          "uci": "c2c3"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.531166000000667,
+          "nodes": 17407,
+          "uci": "e8g8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.147775999997975,
+          "nodes": 16383,
+          "uci": "e8g8"
+        }
+      },
+      "openingId": "39f0269ff841a64a027861366ae49c96b3901d90d5a02820ec342d72c9513bfb",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.404214000000024,
+          "nodes": 15359,
+          "uci": "d1g4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 27.97261900000001,
+          "nodes": 14335,
+          "uci": "d1g4"
+        }
+      },
+      "openingId": "2f4ef56204e79bb474ac75df139cb7ab706079a7b527e998bfc70097170b4c62",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 283,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.89053100000001,
+          "nodes": 25599,
+          "uci": "b3f7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.755183999999645,
+          "nodes": 20479,
+          "uci": "f4e3"
+        }
+      },
+      "openingId": "0449358f84397a1f4b31b5eba999ce81e6485ad33a687e49b49f943de430dd73",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100090,
+          "pv": [
+            "g6f4",
+            "f3f4"
+          ],
+          "teacher": 351,
+          "terminal": null,
+          "totalNodesReported": 100090,
+          "uci": "b3f7"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100114,
+          "pv": [
+            "g6e5",
+            "f3h5"
+          ],
+          "teacher": 634,
+          "terminal": null,
+          "totalNodesReported": 100114,
+          "uci": "f4e3"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.196850999999697,
+          "nodes": 27647,
+          "uci": "g8f6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.089089000000968,
+          "nodes": 24575,
+          "uci": "g8f6"
+        }
+      },
+      "openingId": "b602f87b92e845a3c69ea2c613dfc47b39c017a585b27a56c3186ee8e1312781",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -4,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.538440000000264,
+          "nodes": 28671,
+          "uci": "b1d2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.963285999998334,
+          "nodes": 17407,
+          "uci": "b3e6"
+        }
+      },
+      "openingId": "ce4724ae8a87088228456923f971bd10874ca01617ada60e6f9a139393364d88",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100035,
+          "pv": [
+            "e8g8",
+            "a1e1",
+            "e6b3",
+            "a2b3",
+            "a8d8",
+            "e2e5",
+            "d6e5",
+            "e1e5",
+            "d8d3",
+            "d2f3",
+            "b5b4",
+            "f1e1",
+            "b4c3",
+            "b2c3",
+            "d3c3"
+          ],
+          "teacher": -142,
+          "terminal": null,
+          "totalNodesReported": 100035,
+          "uci": "b1d2"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100033,
+          "pv": [
+            "d6e6",
+            "f1e1",
+            "e6b6",
+            "e2e3",
+            "b6e3",
+            "e1e3",
+            "f6d7",
+            "a2a4",
+            "e8g8",
+            "b1d2",
+            "f7f6",
+            "b2b4",
+            "g8f7"
+          ],
+          "teacher": -146,
+          "terminal": null,
+          "totalNodesReported": 100033,
+          "uci": "b3e6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 244,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.64301699999851,
+          "nodes": 25599,
+          "uci": "e8e7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.54235499999777,
+          "nodes": 26623,
+          "uci": "f6h5"
+        }
+      },
+      "openingId": "8cd1ed01fc0211693f6fda79bb1089a0463ffb3cefa45fb8eaebbe94cb1de56c",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100024,
+          "pv": [
+            "f1e1",
+            "e7d8",
+            "c4d6",
+            "d8c7",
+            "h4g3",
+            "g8h7",
+            "c3b5",
+            "c7c6",
+            "e1e7",
+            "f6h5",
+            "g3h3",
+            "h7g8",
+            "h3g4",
+            "g7d4",
+            "c1e3",
+            "d4e3",
+            "e7e3"
+          ],
+          "teacher": -134,
+          "terminal": null,
+          "totalNodesReported": 100024,
+          "uci": "e8e7"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100018,
+          "pv": [
+            "f1f8"
+          ],
+          "teacher": 110,
+          "terminal": null,
+          "totalNodesReported": 100018,
+          "uci": "f6h5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.320150999999896,
+          "nodes": 26623,
+          "uci": "e8g8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.662122999998246,
+          "nodes": 15359,
+          "uci": "e8g8"
+        }
+      },
+      "openingId": "a3bd56480deb1f91733c0f76ffe88c2707fee5e57d6123f42335011c088cb8cd",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.330416000000696,
+          "nodes": 21503,
+          "uci": "b4b7"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.211296999998012,
+          "nodes": 22904,
+          "uci": "b4b7"
+        }
+      },
+      "openingId": "32f82d57257a21385befcab65fea81f5387f9794f92e4b48fdb54b70e344e5e5",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.85232299999916,
+          "nodes": 23551,
+          "uci": "h8g8"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.56240600000092,
+          "nodes": 22527,
+          "uci": "h8g8"
+        }
+      },
+      "openingId": "d3abbf24f24d8c8c1914e4d8eef3eccbcece6f7502aaff8372276cb8d308c007",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.04239900000539,
+          "nodes": 28671,
+          "uci": "f8h6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.59770600000047,
+          "nodes": 15359,
+          "uci": "f8h6"
+        }
+      },
+      "openingId": "98351c6b2092eb7e950cbad2b16133cc52b2e9b4d41f1e80ee785c036e93d0cc",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.73660899999959,
+          "nodes": 25599,
+          "uci": "e4e3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.639522999998007,
+          "nodes": 13311,
+          "uci": "e4e3"
+        }
+      },
+      "openingId": "f77cfcd7f0daf2192e0bce6a02e91a3c6eb6867a5b7e227937d220317f425410",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.65348300000187,
+          "nodes": 27647,
+          "uci": "f6d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.586281999996572,
+          "nodes": 22527,
+          "uci": "f6d5"
+        }
+      },
+      "openingId": "c25ad533823c202026585fbe15c3696c00d204eb16d5ec2bd9e4ddfa43a4ab21",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 5,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.732121000000916,
+          "nodes": 28671,
+          "uci": "f8e8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.217376000000513,
+          "nodes": 23551,
+          "uci": "h7h6"
+        }
+      },
+      "openingId": "8d2d4c0a8a4321b14810aa1cd6fc4b03cb2e8ecbc03958deba544e740e2bd07b",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100119,
+          "pv": [
+            "c3e2",
+            "e6e5",
+            "f3e5",
+            "d7e5",
+            "d4e5",
+            "c7e5",
+            "d2c3",
+            "e5c3",
+            "e2c3",
+            "h7h5",
+            "c3e2",
+            "c8g4",
+            "d1c2",
+            "g4e2",
+            "d3e2",
+            "h5h4"
+          ],
+          "teacher": -52,
+          "terminal": null,
+          "totalNodesReported": 100119,
+          "uci": "f8e8"
+        },
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 69879,
+          "pv": [
+            "e3e4",
+            "e6e5",
+            "d2e3",
+            "d5e4",
+            "d3e4",
+            "f8e8",
+            "f1e1",
+            "f6e4",
+            "c3e4",
+            "d7f6",
+            "e4f6",
+            "d8f6",
+            "d4e5",
+            "c7e5",
+            "f3e5",
+            "e8e5",
+            "d1d4"
+          ],
+          "teacher": -47,
+          "terminal": null,
+          "totalNodesReported": 100107,
+          "uci": "h7h6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -6,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.738938000002236,
+          "nodes": 18431,
+          "uci": "c3c4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.25372999999672,
+          "nodes": 14335,
+          "uci": "e3h6"
+        }
+      },
+      "openingId": "836f7865f2adc50296686ef27983db83d5ba66389097019232a92f0aca97db49",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100000,
+          "pv": [
+            "b8d7"
+          ],
+          "teacher": -154,
+          "terminal": null,
+          "totalNodesReported": 100000,
+          "uci": "c3c4"
+        },
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 68521,
+          "pv": [
+            "c5c4",
+            "h6g7",
+            "g8g7",
+            "b3c2",
+            "b8d7",
+            "d2e2",
+            "d7c5",
+            "d3c4",
+            "b7e4",
+            "c2e4",
+            "c5e4",
+            "e1g1",
+            "b5c4",
+            "b1d2"
+          ],
+          "teacher": -160,
+          "terminal": null,
+          "totalNodesReported": 100047,
+          "uci": "e3h6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.71809000000212,
+          "nodes": 30719,
+          "uci": "e5d7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.295121000002837,
+          "nodes": 18431,
+          "uci": "e5d7"
+        }
+      },
+      "openingId": "8448ed94f4e8ba1351a9a70e7adbca34a986b8be86c278310b8243e78a9ee8ad",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.59562699998787,
+          "nodes": 29695,
+          "uci": "d4d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.620464000006905,
+          "nodes": 22527,
+          "uci": "d4d5"
+        }
+      },
+      "openingId": "7e53782428444c778996d8914697050074fbfd064453ebe64efca5ad69925486",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.5734330000123,
+          "nodes": 18431,
+          "uci": "c7c6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.006145000006654,
+          "nodes": 26623,
+          "uci": "c7c6"
+        }
+      },
+      "openingId": "20e6c6bb4e9590b209f5673d5b7ba010b2da809044e5f24744deebdf9de92825",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.34802399999171,
+          "nodes": 31743,
+          "uci": "e8c8"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.412341000002925,
+          "nodes": 26623,
+          "uci": "e8c8"
+        }
+      },
+      "openingId": "fd432ff96dd828176a50c9cf19de946ccfeb66618a9197a5f4876bf508120635",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -166,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.58778600000369,
+          "nodes": 13311,
+          "uci": "e1g1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.334098999999696,
+          "nodes": 23551,
+          "uci": "h1g1"
+        }
+      },
+      "openingId": "83e49e5acdce171f14685aafc3babfcdbb686281ef1f867eba4a760c13c710a4",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100119,
+          "pv": [
+            "e6e5",
+            "b4b5",
+            "f6f5",
+            "a2a4",
+            "c8e6",
+            "d4e5",
+            "g7e5",
+            "g2f4",
+            "e6f7",
+            "c3e2",
+            "e5a1",
+            "d1a1",
+            "b8d7",
+            "a1c3",
+            "f5g4",
+            "f3g4"
+          ],
+          "teacher": -106,
+          "terminal": null,
+          "totalNodesReported": 100119,
+          "uci": "e1g1"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100174,
+          "pv": [
+            "e6e5",
+            "f3e2"
+          ],
+          "teacher": -272,
+          "terminal": null,
+          "totalNodesReported": 100174,
+          "uci": "h1g1"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 144,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.55342300000484,
+          "nodes": 19455,
+          "uci": "c5b4"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.980816999988747,
+          "nodes": 28671,
+          "uci": "c5b6"
+        }
+      },
+      "openingId": "8a309453efcb97eadb3abaf30b82432274b5430259974bbe79c5c13787e103e7",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100023,
+          "pv": [
+            "d1d3",
+            "e4c5",
+            "d4c5",
+            "b4c5",
+            "g1h1",
+            "d8d3",
+            "c2d3",
+            "c8a6",
+            "c1g5",
+            "a6d3",
+            "f1d1",
+            "d3g6",
+            "b1c3",
+            "f8e8",
+            "c3a4",
+            "c5f8",
+            "g5e3",
+            "h7h6"
+          ],
+          "teacher": -384,
+          "terminal": null,
+          "totalNodesReported": 100023,
+          "uci": "c5b4"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100094,
+          "pv": [
+            "d1d3",
+            "c8f5",
+            "f1e1",
+            "e4d6",
+            "d3e2",
+            "d6e4",
+            "e2d1",
+            "c6c5",
+            "d4d5",
+            "c5c4",
+            "c1e3",
+            "a8c8",
+            "b1c3",
+            "e4c3",
+            "b2c3"
+          ],
+          "teacher": -240,
+          "terminal": null,
+          "totalNodesReported": 100094,
+          "uci": "c5b6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.495386000009603,
+          "nodes": 28671,
+          "uci": "b4b5"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.776988999990863,
+          "nodes": 25599,
+          "uci": "b4b5"
+        }
+      },
+      "openingId": "15caa9cfe38db3aa35e3c4ed4efeb13e35a960b48c3b7f0c391d76ac85ed7100",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 1,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.796388999995543,
+          "nodes": 17407,
+          "uci": "e8g8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.735482999996748,
+          "nodes": 15359,
+          "uci": "b8c6"
+        }
+      },
+      "openingId": "9adf28879b22ff06d8128a505252965ead1652d0d717d09e850c62a93680a3ef",
+      "teacherLabels": [
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 74462,
+          "pv": [
+            "c3e2",
+            "g4f3",
+            "g2f3",
+            "e8g8",
+            "a2a3",
+            "b4d6",
+            "f3f4",
+            "a8c8",
+            "d3c2",
+            "e6e5",
+            "b3b4",
+            "e5f4",
+            "e2f4",
+            "d6e5"
+          ],
+          "teacher": -21,
+          "terminal": null,
+          "totalNodesReported": 100038,
+          "uci": "b8c6"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100125,
+          "pv": [
+            "d3e2",
+            "b8c6",
+            "h2h3",
+            "g4h5",
+            "a1c1",
+            "f6e4",
+            "d2d3",
+            "h5f3",
+            "e2f3",
+            "e4c3",
+            "b2c3",
+            "b4c3"
+          ],
+          "teacher": -22,
+          "terminal": null,
+          "totalNodesReported": 100125,
+          "uci": "e8g8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.466973000002326,
+          "nodes": 26623,
+          "uci": "g5g4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.821887999991304,
+          "nodes": 15359,
+          "uci": "g5g4"
+        }
+      },
+      "openingId": "5e19cb33b763d7344b684fd340eaeb2f868e2dce53a48ace443669be77df7999",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.423496999996132,
+          "nodes": 16383,
+          "uci": "f3e5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.55098599998746,
+          "nodes": 15359,
+          "uci": "f3e5"
+        }
+      },
+      "openingId": "1d4ffbc073e2b6021084a531a1b5fd18abfa99dcac9e5be9f407bc6aac0287d3",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.19941899999685,
+          "nodes": 30719,
+          "uci": "e7f7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.589827000003424,
+          "nodes": 15359,
+          "uci": "e7f7"
+        }
+      },
+      "openingId": "6a83cc6061996855cfe9d6d37cf33ebfeda55d3d2944fc3e104c75fd92073a33",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.148698999997578,
+          "nodes": 24575,
+          "uci": "e1g1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.872933999999077,
+          "nodes": 15359,
+          "uci": "e1g1"
+        }
+      },
+      "openingId": "28be2755646e9ae3f26b1e4972f4303efaa26153dd5a029f410b6fe4543f5f91",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.314027000014903,
+          "nodes": 24575,
+          "uci": "b1d2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.48201199999312,
+          "nodes": 15359,
+          "uci": "b1d2"
+        }
+      },
+      "openingId": "6d882cde63543fa76350da99ad5964ba9cfd9dccd563a86b2aaeeef194d41566",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.669349999981932,
+          "nodes": 24575,
+          "uci": "d6e5"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.356369000015547,
+          "nodes": 23551,
+          "uci": "d6e5"
+        }
+      },
+      "openingId": "d282d7b21ab5e5c4706389cc1423873a2742300c2129c87e6abafb0645aa2bb4",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 26,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.22119500002009,
+          "nodes": 29695,
+          "uci": "h4g4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.846103999996558,
+          "nodes": 13311,
+          "uci": "h4h5"
+        }
+      },
+      "openingId": "0158215685f5ea3d354f8e7c19f7448723c89678865d83b86ddf61b9dbf44291",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 77710,
+          "pv": [
+            "g6e7",
+            "f4f5",
+            "e6f5",
+            "d4f5",
+            "d6h2",
+            "g1h1",
+            "e7f5",
+            "g4f5",
+            "h2e5"
+          ],
+          "teacher": 3,
+          "terminal": null,
+          "totalNodesReported": 100071,
+          "uci": "h4g4"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100116,
+          "pv": [
+            "g6e7",
+            "g2g4"
+          ],
+          "teacher": 29,
+          "terminal": null,
+          "totalNodesReported": 100116,
+          "uci": "h4h5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 4,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.5434580000001,
+          "nodes": 17407,
+          "uci": "b1d2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.164779000013368,
+          "nodes": 22527,
+          "uci": "f1e1"
+        }
+      },
+      "openingId": "60007468e43aea470fd4943afe1fe270b7bb4b911c8ef62f248680bef540db50",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100100,
+          "pv": [
+            "d8h4",
+            "e2f3",
+            "e8f8",
+            "g1h1",
+            "c6e7",
+            "d1b3",
+            "d7d5",
+            "a1e1",
+            "g7g6",
+            "f3d5",
+            "c8e6",
+            "e1e6",
+            "f7e6",
+            "b3b7",
+            "a8d8",
+            "d5f3",
+            "h4g5"
+          ],
+          "teacher": -184,
+          "terminal": null,
+          "totalNodesReported": 100100,
+          "uci": "b1d2"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100117,
+          "pv": [
+            "d8h4",
+            "g2g3"
+          ],
+          "teacher": -180,
+          "terminal": null,
+          "totalNodesReported": 100117,
+          "uci": "f1e1"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.99822799998219,
+          "nodes": 28671,
+          "uci": "h7h6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.040237000008347,
+          "nodes": 25599,
+          "uci": "h7h6"
+        }
+      },
+      "openingId": "d0ee57f85867a1886bc879e2a0af3ed04907d09a92d6f3200de8a11b24c3fc98",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.491837999987183,
+          "nodes": 17407,
+          "uci": "d1d3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.123996999987867,
+          "nodes": 23551,
+          "uci": "d1d3"
+        }
+      },
+      "openingId": "2ca79254fa33d9bacd0c1bdc10da4b2a17017790891164d88335e843f589d243",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -156,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.742288000008557,
+          "nodes": 32767,
+          "uci": "b5d7"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.561216000001878,
+          "nodes": 17407,
+          "uci": "b3g3"
+        }
+      },
+      "openingId": "aa7bf1364e12b2c9ece25eccce18c2b2d7e989f1b622a3a8730be6454937fa4f",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100001,
+          "pv": [
+            "c7c6",
+            "b5d3",
+            "b7b6",
+            "c1b1",
+            "g7g5",
+            "h1f1",
+            "e7g6",
+            "d3g6",
+            "h7g6",
+            "g3e3",
+            "g5f4"
+          ],
+          "teacher": -129,
+          "terminal": null,
+          "totalNodesReported": 100001,
+          "uci": "b3g3"
+        },
+        {
+          "depth": 15,
+          "mate": null,
+          "nodes": 100038,
+          "pv": [
+            "d6d7",
+            "a4c5",
+            "d7c6",
+            "b3e3",
+            "e6e5",
+            "f4e5",
+            "b8e8",
+            "e5f6",
+            "e7g6",
+            "e3f2",
+            "e8f8",
+            "d1f1",
+            "f8f6",
+            "f2d2",
+            "a8f8",
+            "f1f6",
+            "c6f6"
+          ],
+          "teacher": 27,
+          "terminal": null,
+          "totalNodesReported": 100038,
+          "uci": "b5d7"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.164396000000124,
+          "nodes": 28671,
+          "uci": "c4f7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.637320999999986,
+          "nodes": 17407,
+          "uci": "c4f7"
+        }
+      },
+      "openingId": "a65776cd695babdea8d2e2de44d32e7fae5b6a43a445fcfcdc37848a759e568f",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 53,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.91203200000018,
+          "nodes": 27647,
+          "uci": "c6d4"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.944632999999612,
+          "nodes": 27647,
+          "uci": "h7h6"
+        }
+      },
+      "openingId": "a5a1e90ebb9fda990ec5c8267650ee7d31beb5fa4a8df237ce03d4e7d4cf2185",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100091,
+          "pv": [
+            "e1c1",
+            "h7h6"
+          ],
+          "teacher": -284,
+          "terminal": null,
+          "totalNodesReported": 100091,
+          "uci": "c6d4"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100021,
+          "pv": [
+            "c3d5",
+            "e7d7",
+            "e1c1",
+            "e8c8",
+            "h3h4",
+            "c6e5",
+            "c4b3",
+            "c7c6",
+            "d5e3",
+            "h6g5",
+            "f4g5",
+            "f8e7"
+          ],
+          "teacher": -231,
+          "terminal": null,
+          "totalNodesReported": 100021,
+          "uci": "h7h6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 2,
+          "engineCallMs": 25.513562000000093,
+          "nodes": 25599,
+          "uci": "c8e6"
+        },
+        "candidate": {
+          "depth": 2,
+          "engineCallMs": 26.65534200000002,
+          "nodes": 14335,
+          "uci": "c8e6"
+        }
+      },
+      "openingId": "f80334bba5dbbc3491be115213892a12e0943c043efabe6e233f9b6fd92de159",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.1701209999992,
+          "nodes": 31743,
+          "uci": "a6c7"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.824899999999616,
+          "nodes": 29695,
+          "uci": "a6c7"
+        }
+      },
+      "openingId": "625656afbf20eb34d872c94be2307924fe2bd549ad0962c64293458504bee145",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.387187999996968,
+          "nodes": 18431,
+          "uci": "f1g1"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.885087999999087,
+          "nodes": 17407,
+          "uci": "f1g1"
+        }
+      },
+      "openingId": "ad6693704bce2dd07ec39d872999af5103defedf8dd7973f754faee94c75f8c9",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.27882899999895,
+          "nodes": 28671,
+          "uci": "b8d7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.74784599999839,
+          "nodes": 19455,
+          "uci": "b8d7"
+        }
+      },
+      "openingId": "1ad1fa989b8f7074e1c05ad6f0cca35a4ae9d6cf59810c2e9b0e21415cde3ab4",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -92,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.853313999999955,
+          "nodes": 15359,
+          "uci": "b1c3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.553218000000925,
+          "nodes": 16383,
+          "uci": "d2d4"
+        }
+      },
+      "openingId": "b78802565560ea558e11b1478f2d49d8c84a4ba68fccadc19af2404ede0479fc",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100014,
+          "pv": [
+            "e7e5"
+          ],
+          "teacher": -19,
+          "terminal": null,
+          "totalNodesReported": 100014,
+          "uci": "b1c3"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100101,
+          "pv": [
+            "c5e4",
+            "g1f3",
+            "f8g7",
+            "e1g1",
+            "e8g8",
+            "c2c4",
+            "d8e8",
+            "f3g5",
+            "e4d6",
+            "g2b7",
+            "d6b7",
+            "b1c3",
+            "h7h6"
+          ],
+          "teacher": -111,
+          "terminal": null,
+          "totalNodesReported": 100101,
+          "uci": "d2d4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -62,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 30.606064999999944,
+          "nodes": 20479,
+          "uci": "e1e2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.59420500000124,
+          "nodes": 15359,
+          "uci": "f3e5"
+        }
+      },
+      "openingId": "26f1820aa8050e717277f00c5b4bd433a074e01a26d2b873fd7953e6e1e77e25",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100132,
+          "pv": [
+            "b6c7",
+            "h2h3"
+          ],
+          "teacher": -77,
+          "terminal": null,
+          "totalNodesReported": 100132,
+          "uci": "e1e2"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100071,
+          "pv": [
+            "g4e3",
+            "d3e3"
+          ],
+          "teacher": -139,
+          "terminal": null,
+          "totalNodesReported": 100071,
+          "uci": "f3e5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 48,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.189964999997756,
+          "nodes": 26623,
+          "uci": "d6d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.882166999996116,
+          "nodes": 24575,
+          "uci": "f7f5"
+        }
+      },
+      "openingId": "c4bc159aa1184a1bfc96f7cb4d76a29ab9ef49c72a1ee81ec89a792f28d726e4",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100095,
+          "pv": [
+            "h3h4",
+            "d5e4",
+            "g2e4",
+            "f7f5",
+            "h4h5",
+            "g6h6",
+            "e4g2",
+            "e5e4",
+            "d2d4",
+            "c8e6",
+            "b2b4",
+            "f8d8",
+            "e1g1",
+            "e6f7",
+            "g3g4"
+          ],
+          "teacher": 376,
+          "terminal": null,
+          "totalNodesReported": 100095,
+          "uci": "d6d5"
+        },
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 70559,
+          "pv": [
+            "e1g1",
+            "f5e4",
+            "c3e4",
+            "d6d5",
+            "e4c3",
+            "c8e6",
+            "d2d3",
+            "f8f5",
+            "a1b1",
+            "a8f8",
+            "g3g4",
+            "f5f6",
+            "c1d2"
+          ],
+          "teacher": 424,
+          "terminal": null,
+          "totalNodesReported": 100113,
+          "uci": "f7f5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.56293700000242,
+          "nodes": 19455,
+          "uci": "b5b4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.779022000002442,
+          "nodes": 23551,
+          "uci": "b5b4"
+        }
+      },
+      "openingId": "1d144a620f68eea0ac02fd1ff15f358e63033136f1fe0b2636ef9829aeab3a48",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 2,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.53580199999851,
+          "nodes": 20479,
+          "uci": "d1a4"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.315193999995245,
+          "nodes": 28671,
+          "uci": "c1e3"
+        }
+      },
+      "openingId": "0b6dc30964976263a3cf106ada63f549a3c838016ff5608d5b6d4c3a9c1ed885",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100127,
+          "pv": [
+            "c6c5",
+            "a1c1"
+          ],
+          "teacher": -60,
+          "terminal": null,
+          "totalNodesReported": 100127,
+          "uci": "c1e3"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100099,
+          "pv": [
+            "d8d7",
+            "e5e6",
+            "g4e6",
+            "f3e5",
+            "d7c7",
+            "a4c6",
+            "c7c6",
+            "e5c6",
+            "f8d6",
+            "c6d4",
+            "e8g8",
+            "f1e1",
+            "e6d7",
+            "b2b3",
+            "g8h8",
+            "c1b2",
+            "f8c8"
+          ],
+          "teacher": -62,
+          "terminal": null,
+          "totalNodesReported": 100099,
+          "uci": "d1a4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.277486999999383,
+          "nodes": 34815,
+          "uci": "h5f4"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.402256000001216,
+          "nodes": 16383,
+          "uci": "h5f4"
+        }
+      },
+      "openingId": "24e15ffb5d32876ca138e986480474e869320985301822f65e6c6a46b9b2ef11",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 49,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.232749999995576,
+          "nodes": 27647,
+          "uci": "d8e7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.12132799999381,
+          "nodes": 16383,
+          "uci": "f8e8"
+        }
+      },
+      "openingId": "4703585e301b0e026e1e630177872a020929db9888baca31a9477df8ed3f02cb",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100015,
+          "pv": [
+            "g1h1",
+            "e7c7"
+          ],
+          "teacher": 174,
+          "terminal": null,
+          "totalNodesReported": 100015,
+          "uci": "d8e7"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 79938,
+          "pv": [
+            "e1d1",
+            "e5g6",
+            "f5g6",
+            "f7g6",
+            "b1c3",
+            "b7b5",
+            "d2d4",
+            "a8b8",
+            "c1e3",
+            "b5b4",
+            "c3b1",
+            "d8c8",
+            "b1d2",
+            "c8f5"
+          ],
+          "teacher": 223,
+          "terminal": null,
+          "totalNodesReported": 100085,
+          "uci": "f8e8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.323898000002373,
+          "nodes": 26623,
+          "uci": "c8d7"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.704880000004778,
+          "nodes": 27647,
+          "uci": "c8d7"
+        }
+      },
+      "openingId": "9add8dc9b4ffe9aea0228a1494935349f71cfb7ae9d599d80f3178da000a6ceb",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.607023999997182,
+          "nodes": 31743,
+          "uci": "c3b5"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.15467200000421,
+          "nodes": 29695,
+          "uci": "c3b5"
+        }
+      },
+      "openingId": "b353caf0cd6f559255a461d08e05bc11fe5cf988eef1984e76cce824aa5a3c85",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.26223100000061,
+          "nodes": 27647,
+          "uci": "a4b6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.593794000000344,
+          "nodes": 27647,
+          "uci": "a4b6"
+        }
+      },
+      "openingId": "f5e4227d5a69a4112ba25ce6f2ab9fef02678b71aff61522307dcf0aff436df6",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 5,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.581248999995296,
+          "nodes": 23551,
+          "uci": "f1e2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.747806000013952,
+          "nodes": 15359,
+          "uci": "h2g4"
+        }
+      },
+      "openingId": "b3081dd157c4f76a2e3334e1ca3ae4594cc264d5593aa7efccab18eebd314ecf",
+      "teacherLabels": [
+        {
+          "depth": 10,
+          "mate": null,
+          "nodes": 32952,
+          "pv": [
+            "c7c6",
+            "a3a4",
+            "f5h4",
+            "g2g3",
+            "h4g2",
+            "e1f1",
+            "c8h3",
+            "f1g1"
+          ],
+          "teacher": -315,
+          "terminal": null,
+          "totalNodesReported": 100020,
+          "uci": "f1e2"
+        },
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 56311,
+          "pv": [
+            "f5h4",
+            "a3a4",
+            "c8e6",
+            "b2b4",
+            "a5c4",
+            "f1c4",
+            "d5c4",
+            "e1g1",
+            "d8e8",
+            "g1h1"
+          ],
+          "teacher": -310,
+          "terminal": null,
+          "totalNodesReported": 100023,
+          "uci": "h2g4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.347008999990067,
+          "nodes": 17407,
+          "uci": "d5d4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.311037999999826,
+          "nodes": 23551,
+          "uci": "d5d4"
+        }
+      },
+      "openingId": "d223464f089fc922aec6942d0a177a8e6774eff0761f922643812e0d8dfc43dd",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.68016400000488,
+          "nodes": 17407,
+          "uci": "f3e1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 27.212333000003127,
+          "nodes": 16383,
+          "uci": "f3e1"
+        }
+      },
+      "openingId": "3ded01aa811364d93cbd092b951583f88d21efe2298fc11531acc30fe5508f2c",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -100,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.532892000002903,
+          "nodes": 19455,
+          "uci": "e2d2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.112615000005462,
+          "nodes": 24575,
+          "uci": "a1e1"
+        }
+      },
+      "openingId": "e4efdb2e340008a7acad6c80fb768ef43f404a355c92fd83b9608674f44b113b",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100092,
+          "pv": [
+            "f6f4"
+          ],
+          "teacher": -176,
+          "terminal": null,
+          "totalNodesReported": 100092,
+          "uci": "a1e1"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100099,
+          "pv": [
+            "b8d7",
+            "e5c6"
+          ],
+          "teacher": -76,
+          "terminal": null,
+          "totalNodesReported": 100099,
+          "uci": "e2d2"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.26986699999543,
+          "nodes": 25599,
+          "uci": "f8e8"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.217964000010397,
+          "nodes": 26623,
+          "uci": "f8e8"
+        }
+      },
+      "openingId": "8197b13d8c364d9e255959c34a3a67e6a0fa94a2790fe679daa81b0aad3bd58a",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 32,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.235513999999966,
+          "nodes": 30719,
+          "uci": "c3d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.297325999999885,
+          "nodes": 20479,
+          "uci": "d1d8"
+        }
+      },
+      "openingId": "68de9c78d79e56790eb26438a239a747c757692c8959a80b90e6a62b9d96f79d",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100020,
+          "pv": [
+            "f6d5",
+            "c4d5",
+            "c7c2",
+            "c1c2",
+            "d8d5",
+            "d1d5",
+            "b7d5",
+            "e2a6",
+            "f8d8",
+            "a6b5",
+            "e5e4",
+            "b2g7",
+            "g8g7",
+            "c2d2",
+            "g7f6",
+            "a3a4"
+          ],
+          "teacher": -25,
+          "terminal": null,
+          "totalNodesReported": 100020,
+          "uci": "c3d5"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100089,
+          "pv": [
+            "f8d8",
+            "c1d1"
+          ],
+          "teacher": 7,
+          "terminal": null,
+          "totalNodesReported": 100089,
+          "uci": "d1d8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 49,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.15374999999767,
+          "nodes": 18431,
+          "uci": "a4c2"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.418421999987913,
+          "nodes": 14335,
+          "uci": "a4b3"
+        }
+      },
+      "openingId": "13f47309531319932eab3868e5aefa385d03b7a12fc57ec752dc04718837779f",
+      "teacherLabels": [
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 100019,
+          "pv": [
+            "e8g8",
+            "b1d2"
+          ],
+          "teacher": -51,
+          "terminal": null,
+          "totalNodesReported": 100019,
+          "uci": "a4b3"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100123,
+          "pv": [
+            "e8g8",
+            "f1e1",
+            "a8c8",
+            "b1d2",
+            "d8c7",
+            "c3c4",
+            "e6e5",
+            "c4c5",
+            "e5e4",
+            "c5d6",
+            "e4d3",
+            "d6c7"
+          ],
+          "teacher": -100,
+          "terminal": null,
+          "totalNodesReported": 100123,
+          "uci": "a4c2"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -54,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.00732900001458,
+          "nodes": 34815,
+          "uci": "c1g5"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.304059999994934,
+          "nodes": 23091,
+          "uci": "f3g5"
+        }
+      },
+      "openingId": "f36035b1c94e1afcf9fc7f802a7cf3c3fb8f9d32b3d359ce99ae899e285395f0",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100037,
+          "pv": [
+            "g8e7"
+          ],
+          "teacher": 52,
+          "terminal": null,
+          "totalNodesReported": 100037,
+          "uci": "c1g5"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100009,
+          "pv": [
+            "g8e7",
+            "d1h5",
+            "e7g6",
+            "g5h7",
+            "d8h4",
+            "h5h4",
+            "g6h4",
+            "h7g5",
+            "b4e7",
+            "c3e2",
+            "h4f5",
+            "g5f3",
+            "a6a5",
+            "h2h3",
+            "a5a4",
+            "a1b1"
+          ],
+          "teacher": -2,
+          "terminal": null,
+          "totalNodesReported": 100009,
+          "uci": "f3g5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.003654000000097,
+          "nodes": 17407,
+          "uci": "g8f6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.27567099998123,
+          "nodes": 25599,
+          "uci": "g8f6"
+        }
+      },
+      "openingId": "0909b590e1cd82b62d3f34d4297288ecb5db7bd939c01b55752bf854d18ffd56",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -213,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.37986600000295,
+          "nodes": 18431,
+          "uci": "e8g8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.64745000001858,
+          "nodes": 22527,
+          "uci": "d7c7"
+        }
+      },
+      "openingId": "a241762cc620791c09867ca738e38028c3e451c8b8a9eb15771d7a229da4d197",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100059,
+          "pv": [
+            "d1c1",
+            "g4f6",
+            "f3h4",
+            "c2d4",
+            "a4d4",
+            "e8g8",
+            "h4f5",
+            "g6f5",
+            "d4d3",
+            "a8d8",
+            "c1a3",
+            "d5d4"
+          ],
+          "teacher": -200,
+          "terminal": null,
+          "totalNodesReported": 100059,
+          "uci": "d7c7"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100008,
+          "pv": [
+            "d1c1",
+            "h7h5"
+          ],
+          "teacher": 13,
+          "terminal": null,
+          "totalNodesReported": 100008,
+          "uci": "e8g8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.717093999992358,
+          "nodes": 26623,
+          "uci": "e5e4"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.343338000006042,
+          "nodes": 25599,
+          "uci": "e5e4"
+        }
+      },
+      "openingId": "fe270c78296917e10c09399e9c053b0b4edd6b28fe342d7f1170c7cbfde23233",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.87116999999853,
+          "nodes": 19455,
+          "uci": "c4c2"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.145048000005772,
+          "nodes": 27647,
+          "uci": "c4c2"
+        }
+      },
+      "openingId": "7931c63a974d3649ccdd66c12a0eddaba4af32357ee046a6b9f6318e6af54e22",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.518002000026172,
+          "nodes": 33791,
+          "uci": "d8c7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.936044999980368,
+          "nodes": 16383,
+          "uci": "d8c7"
+        }
+      },
+      "openingId": "b11860a7a7d5aae29e3d9dffd03b93e90eaa4b0b1a1fc9fbc28eb04ead0e3ccd",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.68911300000036,
+          "nodes": 18431,
+          "uci": "e3b6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.110521000024164,
+          "nodes": 16383,
+          "uci": "e3b6"
+        }
+      },
+      "openingId": "296173699d27b0c6f9cc3bd64f3ac93c5f26c71c327be79c13e71b66248420aa",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.887954999983776,
+          "nodes": 17407,
+          "uci": "g4f3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.810132999991765,
+          "nodes": 22527,
+          "uci": "g4f3"
+        }
+      },
+      "openingId": "7b97e8cae8c2b573e13c391e55f33dc29baee04a706ebbaec54cec8bf9952a0c",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.48268299998017,
+          "nodes": 24575,
+          "uci": "g2g3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.09573800000362,
+          "nodes": 23551,
+          "uci": "g2g3"
+        }
+      },
+      "openingId": "0a71b97507d24e93a2d54ee2d176894a3b426a3508e87112967c7c4fc2a4d0b8",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.283576000000267,
+          "nodes": 25599,
+          "uci": "b3c3"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 27.617662999999993,
+          "nodes": 17407,
+          "uci": "b3c3"
+        }
+      },
+      "openingId": "581c0eb65d68755c60a3641a14e88fbce25169a29271d5638c61362fa8b85072",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.63457400000061,
+          "nodes": 27647,
+          "uci": "b5d6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.006955000000744,
+          "nodes": 25599,
+          "uci": "b5d6"
+        }
+      },
+      "openingId": "2dc9b88e8f33362b1b972f3a2d409f8cb473446de5d2ae9e4252feb5c0c34358",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.248029000000315,
+          "nodes": 21503,
+          "uci": "e6f5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.25988000000143,
+          "nodes": 16383,
+          "uci": "e6f5"
+        }
+      },
+      "openingId": "b1b63938818821a40c37e8f9b0d069d82d3f85d2121713235bfa1c6b26782740",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -32,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.894642999999633,
+          "nodes": 18431,
+          "uci": "e1g1"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.85114099999919,
+          "nodes": 24575,
+          "uci": "e2f4"
+        }
+      },
+      "openingId": "422d32aeadf5b8d72889a052b6013a8af14b99ddb99882ad24a64b3e9f50349e",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100085,
+          "pv": [
+            "a7a5",
+            "a2a4",
+            "e8g8",
+            "b2b3",
+            "b7a6",
+            "c3b2",
+            "c6b4",
+            "f1e1",
+            "h7h6",
+            "a1c1",
+            "a8c8",
+            "e2f4",
+            "c7c5",
+            "d4c5",
+            "c8c5"
+          ],
+          "teacher": 41,
+          "terminal": null,
+          "totalNodesReported": 100085,
+          "uci": "e1g1"
+        },
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 100027,
+          "pv": [
+            "b7a6",
+            "f4d3"
+          ],
+          "teacher": 9,
+          "terminal": null,
+          "totalNodesReported": 100027,
+          "uci": "e2f4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 45,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.330786999998963,
+          "nodes": 29695,
+          "uci": "g3f3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.29848800000036,
+          "nodes": 26623,
+          "uci": "g3g4"
+        }
+      },
+      "openingId": "2998f9462737ccc227ffb349d6a1aaac2772a3c211434361c00b6ccec0e421a8",
+      "teacherLabels": [
+        {
+          "depth": 15,
+          "mate": null,
+          "nodes": 100098,
+          "pv": [
+            "d7e5"
+          ],
+          "teacher": 27,
+          "terminal": null,
+          "totalNodesReported": 100098,
+          "uci": "g3f3"
+        },
+        {
+          "depth": 15,
+          "mate": null,
+          "nodes": 100105,
+          "pv": [
+            "d7e5"
+          ],
+          "teacher": 72,
+          "terminal": null,
+          "totalNodesReported": 100105,
+          "uci": "g3g4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.252659000001586,
+          "nodes": 17407,
+          "uci": "b1c3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.655775999999605,
+          "nodes": 23551,
+          "uci": "b1c3"
+        }
+      },
+      "openingId": "777ea25c66689a258948ddad17598ab2d1291c32bf26bc601040699142228d52",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -11,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.847194999998464,
+          "nodes": 24575,
+          "uci": "a5a4"
+        },
+        "candidate": {
+          "depth": 2,
+          "engineCallMs": 25.657618999997794,
+          "nodes": 22527,
+          "uci": "e6e5"
+        }
+      },
+      "openingId": "ae51487655a749818e1f9a09ab68f89d4649e27aef8b2617536a9e1653226425",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100017,
+          "pv": [
+            "a2b1",
+            "e6e5",
+            "d1e2",
+            "e5d4",
+            "f3d4",
+            "c6d4",
+            "e3d4",
+            "c8c1",
+            "e1c1",
+            "d7c6",
+            "e2d3",
+            "h7h6",
+            "d3g3",
+            "f8c8",
+            "e4e5"
+          ],
+          "teacher": -76,
+          "terminal": null,
+          "totalNodesReported": 100017,
+          "uci": "a5a4"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100004,
+          "pv": [
+            "d4e5"
+          ],
+          "teacher": -87,
+          "terminal": null,
+          "totalNodesReported": 100004,
+          "uci": "e6e5"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.36740199999622,
+          "nodes": 41983,
+          "uci": "e5d3"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.155982999996922,
+          "nodes": 36863,
+          "uci": "e5d3"
+        }
+      },
+      "openingId": "63c710aaf821ed916ec5eb8e5d0b1827941757d534397357c59b6063783bcf3c",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 4,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.180110999994213,
+          "nodes": 27647,
+          "uci": "c5d6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.497638000000734,
+          "nodes": 16383,
+          "uci": "d8e7"
+        }
+      },
+      "openingId": "3f9d5cd5bc7c21577ed59d23305389b2d929803b13ee1477695470f88295cebe",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100144,
+          "pv": [
+            "f3e5",
+            "a6c5",
+            "a1c1",
+            "c5d7",
+            "f2f4",
+            "d6c5",
+            "f1e1",
+            "c5e7",
+            "e5d7",
+            "d8d7",
+            "d2f3"
+          ],
+          "teacher": 2,
+          "terminal": null,
+          "totalNodesReported": 100144,
+          "uci": "c5d6"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100139,
+          "pv": [
+            "f3e5",
+            "c5d6",
+            "f2f4",
+            "a5a4",
+            "e5g4",
+            "f6g4",
+            "d1g4",
+            "f7f6",
+            "g4h4",
+            "a6c5"
+          ],
+          "teacher": 6,
+          "terminal": null,
+          "totalNodesReported": 100139,
+          "uci": "d8e7"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": -7,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.194697999999335,
+          "nodes": 28671,
+          "uci": "b8c6"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.322333999996772,
+          "nodes": 23551,
+          "uci": "b8d7"
+        }
+      },
+      "openingId": "59885f069905c5ae2ace2ade5bb3c1ed148279b2c9a18a920501d319faacdf57",
+      "teacherLabels": [
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100110,
+          "pv": [
+            "e3g5",
+            "h4g5",
+            "d2g5",
+            "g7g6",
+            "g5d2",
+            "a3e7",
+            "e2f4",
+            "a8d8",
+            "f1f2",
+            "d8d7",
+            "a1d1",
+            "a7a5",
+            "f2e2",
+            "g8g7",
+            "d3e4"
+          ],
+          "teacher": -855,
+          "terminal": null,
+          "totalNodesReported": 100110,
+          "uci": "b8c6"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100014,
+          "pv": [
+            "e3g5",
+            "h4g5",
+            "d2g5",
+            "a8e8",
+            "a1b1",
+            "a7a6",
+            "d3e4",
+            "c7c6",
+            "g5g4",
+            "a3e7",
+            "e2f4",
+            "g7g6",
+            "g2g3",
+            "g8g7"
+          ],
+          "teacher": -862,
+          "terminal": null,
+          "totalNodesReported": 100014,
+          "uci": "b8d7"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.288283000001684,
+          "nodes": 28671,
+          "uci": "g5e7"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 26.20983200000046,
+          "nodes": 23551,
+          "uci": "g5e7"
+        }
+      },
+      "openingId": "d8c8d29abe9b905be19096f93da84f6e40d09e4ceb6b26523167a176204458ca",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.380541999998968,
+          "nodes": 18431,
+          "uci": "b8c6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.64614199999778,
+          "nodes": 25599,
+          "uci": "b8c6"
+        }
+      },
+      "openingId": "8f18e6e728eed35df02012aa0ba45170df8aca845749766ee625b6bfca104720",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.567971000011312,
+          "nodes": 21503,
+          "uci": "b1b7"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.291225000008126,
+          "nodes": 17407,
+          "uci": "b1b7"
+        }
+      },
+      "openingId": "dd7c796b96e8e627e3e468d1a5a6d5d5108a6c455012b919893c8d93c6ae6795",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.173431000002893,
+          "nodes": 30719,
+          "uci": "a6c5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.0180229999969,
+          "nodes": 22527,
+          "uci": "a6c5"
+        }
+      },
+      "openingId": "4d72e95e740e0681a3817541f79af314dd2e88c4497957781b5b05ce71ea91c3",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.670188999996753,
+          "nodes": 28671,
+          "uci": "f4e6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.042929999995977,
+          "nodes": 17407,
+          "uci": "f4e6"
+        }
+      },
+      "openingId": "495f30b80c11db30e0ba2f7cb72a8c56cdc567634a197ef6ceb05da749df1b6e",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 73,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.199316000012914,
+          "nodes": 19455,
+          "uci": "d7d5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.338446000008844,
+          "nodes": 16383,
+          "uci": "d7d6"
+        }
+      },
+      "openingId": "c18fb45ca963af5ce6c80b562c07f6994daeb6454629d43c9b6cfe10b795cfad",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100065,
+          "pv": [
+            "f3g5",
+            "c8f5"
+          ],
+          "teacher": -264,
+          "terminal": null,
+          "totalNodesReported": 100065,
+          "uci": "d7d5"
+        },
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 74013,
+          "pv": [
+            "f3g5",
+            "c8f5",
+            "d3f5",
+            "e7f5",
+            "e5e6",
+            "f7f6",
+            "g5f7",
+            "d8e8",
+            "f1e1",
+            "a7a5",
+            "b1d2",
+            "c6e7",
+            "d2c4",
+            "f8f7",
+            "e6f7",
+            "e8f7"
+          ],
+          "teacher": -191,
+          "terminal": null,
+          "totalNodesReported": 100082,
+          "uci": "d7d6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.567213999995147,
+          "nodes": 24575,
+          "uci": "f3g2"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.60893699999724,
+          "nodes": 26623,
+          "uci": "f3g2"
+        }
+      },
+      "openingId": "d27e326cb355093067b7718881d9587871d2bbbae6ab857d50cb9345863493cc",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -15,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.629606999995303,
+          "nodes": 25599,
+          "uci": "g8f6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.311707999993814,
+          "nodes": 14335,
+          "uci": "e8c8"
+        }
+      },
+      "openingId": "c9a90a6f4187147253ea9c4edfe05d0e02cb741b32934efd0cef187098f5c907",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100138,
+          "pv": [
+            "b1d2",
+            "g8f6"
+          ],
+          "teacher": 147,
+          "terminal": null,
+          "totalNodesReported": 100138,
+          "uci": "e8c8"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100092,
+          "pv": [
+            "b1d2",
+            "g4h5"
+          ],
+          "teacher": 162,
+          "terminal": null,
+          "totalNodesReported": 100092,
+          "uci": "g8f6"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 2,
+          "engineCallMs": 26.04648499999894,
+          "nodes": 17407,
+          "uci": "f6e4"
+        },
+        "candidate": {
+          "depth": 2,
+          "engineCallMs": 27.81731500000751,
+          "nodes": 21503,
+          "uci": "f6e4"
+        }
+      },
+      "openingId": "ecb971474920a2600fb43ac7ee06643ca64535ec897fa85d359950af66f70df0",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -19,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.093575999999302,
+          "nodes": 28671,
+          "uci": "e8g8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.9598960000003,
+          "nodes": 10239,
+          "uci": "a5c4"
+        }
+      },
+      "openingId": "1dd4493430a307d6f4ceb45574adb0a93d7f69f23542eb3c4d67883caeadc93b",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100095,
+          "pv": [
+            "f2g1",
+            "b7b5",
+            "d1e1",
+            "e8g8",
+            "e1g3",
+            "g8h8",
+            "g3h3",
+            "h7h6",
+            "f3g5",
+            "c7c5",
+            "h3h5",
+            "c5d4",
+            "c3d4"
+          ],
+          "teacher": -63,
+          "terminal": null,
+          "totalNodesReported": 100095,
+          "uci": "a5c4"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 78434,
+          "pv": [
+            "f2g1",
+            "c7c5",
+            "d1e1",
+            "c5c4",
+            "d3e2",
+            "a8c8",
+            "c1d2",
+            "h7h6",
+            "e1g3",
+            "b7b6",
+            "d2e3",
+            "f8e8",
+            "a1b1",
+            "d8c7"
+          ],
+          "teacher": -44,
+          "terminal": null,
+          "totalNodesReported": 100120,
+          "uci": "e8g8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 41,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 26.68563899998844,
+          "nodes": 20479,
+          "uci": "c7d8"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.296822999996948,
+          "nodes": 17407,
+          "uci": "c7c8"
+        }
+      },
+      "openingId": "f1029ce45772e12858fe567408849aa1a413845faa446c6b60e3b87eaa7da2c1",
+      "teacherLabels": [
+        {
+          "depth": 11,
+          "mate": null,
+          "nodes": 64954,
+          "pv": [
+            "b1d2",
+            "e7f5",
+            "e3f4",
+            "f5d6",
+            "f4d6",
+            "f8d6",
+            "c3c4",
+            "e8g8",
+            "c4d5",
+            "a6a5",
+            "d5e6",
+            "c8e6",
+            "b3e6",
+            "f7e6"
+          ],
+          "teacher": -149,
+          "terminal": null,
+          "totalNodesReported": 100029,
+          "uci": "c7c8"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100088,
+          "pv": [
+            "e3f4",
+            "b8d7"
+          ],
+          "teacher": -190,
+          "terminal": null,
+          "totalNodesReported": 100088,
+          "uci": "c7d8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.73267300000589,
+          "nodes": 17407,
+          "uci": "g1f3"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.52139100000204,
+          "nodes": 16383,
+          "uci": "g1f3"
+        }
+      },
+      "openingId": "d36bac21e15fef88dfe3f690ebce156a167629f28de06c7838a22b6e3aadeef1",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 78,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.688246000005165,
+          "nodes": 14335,
+          "uci": "e2e1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.957600999987335,
+          "nodes": 15359,
+          "uci": "d1a4"
+        }
+      },
+      "openingId": "67dc12f5482282c293611c49edf5ba01350e3ff5ac7bac267aa1fdce0d33c8c5",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100037,
+          "pv": [
+            "b6b5",
+            "a4b3",
+            "d8c8",
+            "c1g5",
+            "e8g8",
+            "f1d1",
+            "a7a6",
+            "a2a4",
+            "b5a4",
+            "b3a4",
+            "c6c5",
+            "g5f6",
+            "e7f6",
+            "e2f1"
+          ],
+          "teacher": 22,
+          "terminal": null,
+          "totalNodesReported": 100037,
+          "uci": "d1a4"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100035,
+          "pv": [
+            "c6d5",
+            "e4d5",
+            "d8d7",
+            "f3d4",
+            "e8g8",
+            "f1h1",
+            "f8c8",
+            "d1f3",
+            "d7g4",
+            "f3g4",
+            "f6g4",
+            "d4f5",
+            "e7f8"
+          ],
+          "teacher": -56,
+          "terminal": null,
+          "totalNodesReported": 100035,
+          "uci": "e2e1"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.16532400000142,
+          "nodes": 23551,
+          "uci": "c4e5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.65296700000181,
+          "nodes": 22527,
+          "uci": "c4e5"
+        }
+      },
+      "openingId": "1b8cf9b2443c732c81e9c9d18124817e5794ec842730f6aa37fd57b99f408d41",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 535,
+      "firstMove": {
+        "base": {
+          "depth": 2,
+          "engineCallMs": 25.745722000021487,
+          "nodes": 24575,
+          "uci": "g2g3"
+        },
+        "candidate": {
+          "depth": 2,
+          "engineCallMs": 26.11211399998865,
+          "nodes": 22527,
+          "uci": "c1b2"
+        }
+      },
+      "openingId": "583f118e38410579f2451cd450566e7f080b7f8ccc4feb2f2ec870fce53ae8b1",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100037,
+          "pv": [
+            "a6c7",
+            "f1b1",
+            "h7h6",
+            "b3c2",
+            "c8d7",
+            "b4b5",
+            "a7a6",
+            "a3a4",
+            "a6b5",
+            "a4b5",
+            "a8a1",
+            "b1a1"
+          ],
+          "teacher": 46,
+          "terminal": null,
+          "totalNodesReported": 100037,
+          "uci": "c1b2"
+        },
+        {
+          "depth": 14,
+          "mate": null,
+          "nodes": 100026,
+          "pv": [
+            "g6h5"
+          ],
+          "teacher": -489,
+          "terminal": null,
+          "totalNodesReported": 100026,
+          "uci": "g2g3"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.447933999996167,
+          "nodes": 29695,
+          "uci": "e5c6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.662116000021342,
+          "nodes": 23551,
+          "uci": "e5c6"
+        }
+      },
+      "openingId": "38b3326881d727d2ba8d238e23f65b7e7f0aae74508ca5d9ce7aa6bce7d9b932",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.364380999992136,
+          "nodes": 19455,
+          "uci": "c8c4"
+        },
+        "candidate": {
+          "depth": 5,
+          "engineCallMs": 25.754409000015585,
+          "nodes": 30719,
+          "uci": "c8c4"
+        }
+      },
+      "openingId": "ef60bd3432807ca31314534f7be2d76b9a9a56ac89bd65917fbcd812a173019c",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -94,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.17177400001674,
+          "nodes": 27647,
+          "uci": "c7c5"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 26.350746999989497,
+          "nodes": 16383,
+          "uci": "e8c8"
+        }
+      },
+      "openingId": "ee344d64bb39da349f031f7258bd4bab9809ee05747d0ae06109dc930bc5cb59",
+      "teacherLabels": [
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100106,
+          "pv": [
+            "d4e2",
+            "b6b5"
+          ],
+          "teacher": 65,
+          "terminal": null,
+          "totalNodesReported": 100106,
+          "uci": "c7c5"
+        },
+        {
+          "depth": 12,
+          "mate": null,
+          "nodes": 100139,
+          "pv": [
+            "d2e2",
+            "b6b5",
+            "c1b1",
+            "d7d5",
+            "d4b3",
+            "g8f6",
+            "e4d5",
+            "d8d5",
+            "c2c4",
+            "b5c4",
+            "d3c4"
+          ],
+          "teacher": -29,
+          "terminal": null,
+          "totalNodesReported": 100139,
+          "uci": "e8c8"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.38969799998449,
+          "nodes": 18431,
+          "uci": "c8e6"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.905858000012813,
+          "nodes": 25599,
+          "uci": "c8e6"
+        }
+      },
+      "openingId": "d4c17d554903cc6aa063b92b0f19f22d66e6b67717616af5a70591c8360dbad6",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 26.015503999980865,
+          "nodes": 24575,
+          "uci": "c2c3"
+        },
+        "candidate": {
+          "depth": 4,
+          "engineCallMs": 25.627756000001682,
+          "nodes": 26623,
+          "uci": "c2c3"
+        }
+      },
+      "openingId": "ed0606e4a015d88a9f9a4573f550c3290fcc843b1d3f3ad790b831bd26408cbf",
+      "teacherLabels": []
+    },
+    {
+      "candidateMinusHceCp": -6,
+      "firstMove": {
+        "base": {
+          "depth": 3,
+          "engineCallMs": 25.59915200000978,
+          "nodes": 32767,
+          "uci": "e3f4"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.874488000001293,
+          "nodes": 19455,
+          "uci": "a1c1"
+        }
+      },
+      "openingId": "0d7256edf9bc8bdc89106b5f4126686a8c6f06761aa8f51ceeb17fff1aa01bc7",
+      "teacherLabels": [
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100025,
+          "pv": [
+            "a8c8",
+            "b2b3"
+          ],
+          "teacher": -54,
+          "terminal": null,
+          "totalNodesReported": 100025,
+          "uci": "a1c1"
+        },
+        {
+          "depth": 13,
+          "mate": null,
+          "nodes": 100048,
+          "pv": [
+            "f8e8",
+            "b2b3"
+          ],
+          "teacher": -48,
+          "terminal": null,
+          "totalNodesReported": 100048,
+          "uci": "e3f4"
+        }
+      ]
+    },
+    {
+      "candidateMinusHceCp": 0,
+      "firstMove": {
+        "base": {
+          "depth": 4,
+          "engineCallMs": 25.24366900001769,
+          "nodes": 28671,
+          "uci": "e1g1"
+        },
+        "candidate": {
+          "depth": 3,
+          "engineCallMs": 25.60184499999741,
+          "nodes": 23551,
+          "uci": "e1g1"
+        }
+      },
+      "openingId": "ae204f6bcc3bc1d6c9f1e8d8ef0461ff065f7e774d8cb140ea78f9c2a188c982",
+      "teacherLabels": []
+    }
+  ],
+  "scope": "Exploratory, post hoc first-root comparison. Fixed search time and game history. Only the two played moves are compared.",
+  "scoreClipCp": [
+    -2000,
+    2000
+  ],
+  "teacherSha256": "835cca1bae51344ab86bb9443bd46e886a1c0d07011a377b6c50056be3e43718"
+}

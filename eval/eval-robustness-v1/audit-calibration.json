@@ -1,0 +1,117 @@
+{
+  "changedSearches": [
+    {
+      "newCp": 76,
+      "newNodes": 38618,
+      "oldCp": 76,
+      "oldNodes": 38636,
+      "root": "014a3a4800907df274781949dc660fba11afee021eaa4be602c16c92089c06a6",
+      "uci": "a1b1"
+    },
+    {
+      "newCp": -162,
+      "newNodes": 26564,
+      "oldCp": -193,
+      "oldNodes": 13089,
+      "root": "49e3f83a95d3f75441909c7735a46a785c5297c488ddee2f34851346a7b3550f",
+      "uci": "c2d1"
+    },
+    {
+      "newCp": -234,
+      "newNodes": 12395,
+      "oldCp": -234,
+      "oldNodes": 12396,
+      "root": "49e3f83a95d3f75441909c7735a46a785c5297c488ddee2f34851346a7b3550f",
+      "uci": "g1e2"
+    },
+    {
+      "newCp": 10,
+      "newNodes": 19001,
+      "oldCp": 12,
+      "oldNodes": 12072,
+      "root": "06fbb8f824ec4157a4c7a45cbf09149a97856008aa6686c4df0677b23ace2ad0",
+      "uci": "h5g4"
+    },
+    {
+      "newCp": 1792,
+      "newNodes": 19126,
+      "oldCp": 1792,
+      "oldNodes": 19120,
+      "root": "2991bdfc6988b641780c258c3b3c975a8463a154eda95f4c30ee68cca891bddd",
+      "uci": "b7b8"
+    }
+  ],
+  "collectionReportedNodes": {
+    "maximum": 89453,
+    "median": 15924.0,
+    "minimum": 8,
+    "nonterminal": 2007,
+    "over": 1912,
+    "p95": 31071.499999999985,
+    "requested": 12000,
+    "under": 95
+  },
+  "collectionSha256": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+  "fitSha256": "e31c1b21b70cfe62e1e44667afbc7473756ad3bfed22c1ded6ea79b4b49aad36",
+  "independentScalarOptima": {
+    "calibrated": {
+      "alpha": 0.7404016206640135,
+      "loss": 0.6737834884856918,
+      "numerator": 12
+    },
+    "pointwiseOnly": {
+      "alpha": 0.5874604120940549,
+      "loss": 0.5726179698309939,
+      "numerator": 9
+    },
+    "tenfoldPenalty": {
+      "alpha": 0.30784295539871664,
+      "loss": 0.6789067816279687,
+      "numerator": 5
+    },
+    "unregularized": {
+      "alpha": 0.8794515617446623,
+      "loss": 0.6721561177333026,
+      "numerator": 14
+    }
+  },
+  "matchedCp": 95,
+  "matchedNodes": 92,
+  "maxAbsoluteCpDifference": 31,
+  "orderRepeats": [
+    {
+      "fresh": [
+        -162,
+        -159,
+        -202
+      ],
+      "frozen": -193,
+      "root": "49e3f83a95d3f75441909c7735a46a785c5297c488ddee2f34851346a7b3550f",
+      "sameRootAndPrecedingSiblings": [
+        -193,
+        -162,
+        -159
+      ],
+      "uci": "c2d1"
+    },
+    {
+      "fresh": [
+        6,
+        12,
+        6
+      ],
+      "frozen": 12,
+      "root": "06fbb8f824ec4157a4c7a45cbf09149a97856008aa6686c4df0677b23ace2ad0",
+      "sameRootAndPrecedingSiblings": [
+        12,
+        6,
+        12
+      ],
+      "uci": "h5g4"
+    }
+  ],
+  "repeatedChildren": 97,
+  "repeatedRoots": 32,
+  "scope": "Single repeated 32-root hash sample. Exact fresh search outcomes may vary. Training reuses frozen labels.",
+  "teacherSha256": "a3b3fe59985900655940c1088f3d24d2388d359b498a5d84664577fa46135e4a"
+}
