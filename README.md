@@ -229,6 +229,22 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 No fonts, images, or libraries are fetched from the network: pieces are
 Unicode glyphs, styling is system fonts, and the icons ship in the repo.
 
+## r85 calculated opening variety
+
+Computer Play varies its initial move-search order during the first six full
+moves. Each game has its own seed, derived from its saved game ID and exact
+position; an automatic retry, Undo, or reload of that position uses the same
+seed. The seed is retained in move telemetry and debug PGNs. After the opening,
+Play uses the ordinary fixed ordering, as coaching and analysis always do.
+
+Every move still comes from the Rust/WASM search using the same evaluation,
+strict improving-score selection, and difficulty budgets. There is no score
+noise or random selection of an unevaluated move. A seed can change the search
+path and completed depth under a finite budget; it does not force a different
+move where the calculation continues to prefer one. This adds variety, with
+no new strength or rating claim. The historical unseeded signatures remain
+unchanged under the separately reviewed engine evidence.
+
 ## r84 mobile dialogs and game-state fixes
 
 New Game keeps Start and Cancel visible while its settings scroll, including

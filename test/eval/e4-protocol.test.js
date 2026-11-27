@@ -6,6 +6,9 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const childProcess = require('child_process');
 const E4 = require('./e4-protocol.js');
 const Corpus = require('../training/corpus.js');
 
@@ -269,6 +272,66 @@ function main() {
       'checked-in adapter, protocol, statistics, templates, and r71 WASM pins validate',
       String(error && error.message || error));
   }
+
+  // The study authenticates its original Git object even after a legitimate
+  // production rotation. Do not read or mutate the active app file here.
+  const readFile = fs.readFileSync;
+  let activeRead = false;
+  fs.readFileSync = function (file) {
+    if (typeof file === 'string' && path.resolve(file) === E4.PATHS.wasm) {
+      activeRead = true;
+      throw new Error('active module must not be used as historical E4 evidence');
+    }
+    return readFile.apply(this, arguments);
+  };
+  try {
+    E4.validateRepository();
+    check(!activeRead && E4.sha256(E4.loadFrozenWasm()) === E4.EXPECTED.wasmSha256,
+      'historical E4 validation does not consume the mutable active runtime');
+  } catch (error) {
+    check(false, 'historical E4 validation does not consume the mutable active runtime', error.message);
+  } finally { fs.readFileSync = readFile; }
+
+  const execFile = childProcess.execFileSync;
+  childProcess.execFileSync = function (command, args) {
+    if (command === 'git' && args.includes(E4.EXPECTED.commit + ':' + E4.EXPECTED.wasmAsset)) {
+      return Buffer.from('corrupt historical module');
+    }
+    return execFile.apply(this, arguments);
+  };
+  try {
+    expectThrow('corrupt historical module bytes fail the unchanged E4 pin',
+      /frozen r71 WASM bytes drifted/, () => E4.loadFrozenWasm());
+  } finally { childProcess.execFileSync = execFile; }
+
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'chessy-e4-frozen-'));
+  function git(args, input) {
+    return execFile('git', ['-C', temporary, ...args], {
+      input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, GIT_AUTHOR_NAME: 'E4 test', GIT_AUTHOR_EMAIL: 'e4-test@invalid.example',
+        GIT_COMMITTER_NAME: 'E4 test', GIT_COMMITTER_EMAIL: 'e4-test@invalid.example' }
+    }).trim();
+  }
+  try {
+    git(['init', '--quiet']);
+    fs.mkdirSync(path.join(temporary, 'assets'));
+    fs.writeFileSync(path.join(temporary, E4.EXPECTED.wasmAsset), E4.loadFrozenWasm());
+    expectThrow('missing historical Git objects never fall back to matching active bytes',
+      /Command failed|invalid object|bad object/, () => E4.loadFrozenWasm(temporary));
+
+    // Local Git replacement refs may reinterpret a literal commit unless the
+    // read explicitly ignores them. Exercise that boundary using real objects.
+    git(['fetch', '--quiet', path.join(__dirname, '..', '..'), E4.EXPECTED.commit]);
+    const wrongBlob = git(['hash-object', '-w', '--stdin'], 'wrong module');
+    const assetsTree = git(['mktree'], '100644 blob ' + wrongBlob + '\tchessy-ai-fast.wasm\n');
+    const rootTree = git(['mktree'], '040000 tree ' + assetsTree + '\tassets\n');
+    const replacement = git(['commit-tree', rootTree, '-m', 'replacement-object regression']);
+    git(['replace', E4.EXPECTED.commit, replacement]);
+    check(E4.sha256(E4.loadFrozenWasm(temporary)) === E4.EXPECTED.wasmSha256,
+      'replacement objects cannot substitute a different frozen E4 module');
+  } catch (error) {
+    check(false, 'historical E4 object binding regressions', error.message);
+  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 
   check(templates.exploration.status === 'awaiting-opening-freeze' &&
     templates.certification.status === 'awaiting-opening-freeze' &&

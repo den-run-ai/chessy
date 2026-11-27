@@ -1086,8 +1086,7 @@ unsafe fn search_node(
     best
 }
 
-unsafe fn shuffle_root(count: usize) {
-    let mut seed = 0x00C0FFEE_u32;
+unsafe fn shuffle_root(count: usize, mut seed: u32) {
     let mut index = count;
     while index > 1 {
         index -= 1;
@@ -1395,12 +1394,27 @@ pub unsafe fn run_fixed(
     context_result(None, score, depth, None, StopReason::MaxDepth)
 }
 
+#[cfg(test)]
 pub unsafe fn run(
     position: &mut Position,
     max_depth_input: u32,
     node_limit: u32,
     time_ms: u32,
     quiesce: bool,
+) -> SearchResult {
+    run_seeded(position, max_depth_input, node_limit, time_ms, quiesce, 0x00C0FFEE)
+}
+
+/// The seed only changes initial root ordering. Scores, strict improving-move
+/// selection, pruning, aspiration windows, and search budgets stay identical.
+/// In particular, a fail-low PVS bound is never treated as an exact-score tie.
+pub unsafe fn run_seeded(
+    position: &mut Position,
+    max_depth_input: u32,
+    node_limit: u32,
+    time_ms: u32,
+    quiesce: bool,
+    root_seed: u32,
 ) -> SearchResult {
     reset_context(quiesce, node_limit, time_ms, false);
     let max_depth = core::cmp::max(1, max_depth_input);
@@ -1435,7 +1449,7 @@ pub unsafe fn run(
         };
         index += 1;
     }
-    shuffle_root(root_count);
+    shuffle_root(root_count, root_seed);
     order_initial_root(root_count);
 
     let root_hash = hash_position(position);
@@ -1613,6 +1627,36 @@ mod tests {
         assert!(!super::tt_unavailable(super::TT_CAPACITY - 1, false));
         assert!(super::tt_unavailable(super::TT_CAPACITY, false));
         assert!(super::tt_unavailable(0, true));
+    }
+
+    #[test]
+    fn seeded_roots_reproduce_and_do_not_change_full_depth_value() {
+        let _guard = crate::TEST_LOCK.lock().unwrap();
+        unsafe {
+            let mut position = engine::parse_fen(
+                b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            ).unwrap();
+            clear_game_history();
+            let baseline = run(&mut position, 2, 0, 0, false);
+            let historical_seed = run_seeded(&mut position, 2, 0, 0, false, 0x00C0FFEE);
+            assert_eq!(baseline.mv, historical_seed.mv);
+            assert_eq!(baseline.score, historical_seed.score);
+            assert_eq!(baseline.nodes, historical_seed.nodes);
+            let mut first = None;
+            let mut varied = false;
+            for seed in 0..16 {
+                let actual = run_seeded(&mut position, 2, 0, 0, false, seed);
+                assert_eq!(actual.score, baseline.score);
+                assert_eq!(actual.depth, 2);
+                assert_eq!(actual.stop_reason, StopReason::MaxDepth);
+                let replay = run_seeded(&mut position, 2, 0, 0, false, seed);
+                assert_eq!(actual.mv, replay.mv);
+                assert_eq!(actual.nodes, replay.nodes);
+                if first.is_none() { first = actual.mv; }
+                varied |= actual.mv != first;
+            }
+            assert!(varied, "different seeds must reach distinct evaluated best roots");
+        }
     }
 
     #[test]

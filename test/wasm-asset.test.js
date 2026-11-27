@@ -2,7 +2,8 @@
  * Shipped Rust/WASM engine asset contract (#84/#113 flagged rollout).
  *
  * The committed assets/chessy-ai-fast.wasm must be byte-identical to the
- * canonical pinned-toolchain ABI-v2 build validated by PR #147 (Rust 1.97.1
+ * canonical pinned-toolchain ABI-v2 build with the reviewed optional opening
+ * seed export (Rust 1.97.1
  * commit 8bab26f4f, Binaryen 131), and the production loader
  * (assets/wasm-engine.js) must preserve the frozen r69 Rust/WASM signatures
  * for quiescent shipped Play and the legacy quiescence-off configuration
@@ -28,7 +29,7 @@ const WASM_PATH = path.join(ROOT, 'assets', 'chessy-ai-fast.wasm');
 // byte-reproducible CI builder. A drifted binary must never ship under this
 // release's provenance.
 const CANONICAL_SHA256 =
-  '57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f';
+  'a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7';
 
 let passed = 0;
 let failed = 0;

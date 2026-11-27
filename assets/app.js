@@ -736,6 +736,20 @@
       remaining, tc ? tc.incMs : 0);
   }
 
+  function openingSeed(fen) {
+    if (state.history.length >= 12) return null;
+    // A fresh game UUID supplies variety; the exact position makes retries,
+    // Undo and reload reproducible without adding a new save format. Keep
+    // the signed 32-bit telemetry representation used by older saved games;
+    // dispatch converts the same bits to the WASM API's unsigned seed.
+    const identity = gameId + '\n' + fen;
+    let seed = 2166136261;
+    for (let i = 0; i < identity.length; i++) {
+      seed = Math.imul(seed ^ identity.charCodeAt(i), 16777619);
+    }
+    return seed | 0;
+  }
+
   function maybeAiMove() {
     if (archiveRetractionActive || checkpointAttempt ||
         state.turn !== aiColor() || fullStatus().over) return;
@@ -746,18 +760,18 @@
     const remaining = liveRemaining(state.turn);
     if (remaining !== null && remaining <= 0) { flag(state.turn); return; }
     const cfg = aiConfig(remaining);
+    const fen = Chess.toFen(state);
+    const seed = openingSeed(fen);
     aiPending = {
       id: ++aiRequestId,
-      fen: Chess.toFen(state),
+      fen: fen,
       attempts: 0,
       depth: cfg.maxDepth,
       quiesce: cfg.quiesce,
       timeMs: cfg.timeMs,
       nodeLimit: cfg.nodeLimit,
-      // The raw WASM ABI owns a fixed deterministic root order; it accepts no
-      // page-provided seed/randomize controls.
-      seed: null,
-      randomize: null,
+      seed: seed,
+      randomize: seed !== null,
       release: currentRelease(),
       started: Date.now()
     };
@@ -801,6 +815,7 @@
         timeMs: pending.timeMs,
         nodeLimit: pending.nodeLimit,
         quiesce: pending.quiesce,
+        rootSeed: pending.randomize ? pending.seed >>> 0 : null,
         positions: state.positions,
         wasmUrl: 'chessy-ai-fast.wasm' +
           (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : '')
