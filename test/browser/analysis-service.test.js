@@ -169,4 +169,91 @@ require('./helper').run('analysis-service', async function (t) {
   }, FAST);
   check(offMain.ran && offMain.mainCalls === 0,
     'the heavy contract search runs only in the worker; the page main thread never invokes it');
+
+  // Optional IndexedDB reads cannot hold Verify forever. Keep the real
+  // Worker/WASM path and hold only the cache Promise, then deliver its miss
+  // after search completed to prove it cannot start another attempt.
+  const stalledCache = await page.evaluate(async function (opts) {
+    const realGet = CoachStore.getAnalysis;
+    let releaseLookup, deadline;
+    CoachStore.getAnalysis = function () {
+      return new Promise(function (resolve) { releaseLookup = resolve; });
+    };
+    window.CHESSY_ANALYSIS_CACHE_TIMEOUT_MS = 20;
+    const before = ChessyAnalysisService.stats().dispatches;
+    try {
+      const run = ChessyAnalysisService.analyse({
+        gameId: 'browser-stalled-cache', ply: 0, gameRev: 1,
+        fen: Chess.START_FEN, opts: opts
+      }, 'browser-stalled-cache');
+      const result = await Promise.race([
+        run,
+        new Promise(function (resolve) {
+          deadline = setTimeout(function () { resolve('timed-out'); }, 5000);
+        })
+      ]);
+      if (releaseLookup) releaseLookup(null);
+      await new Promise(function (resolve) { setTimeout(resolve, 20); });
+      return {
+        valid: !!result && result !== 'timed-out' && result.bestLines.length > 0,
+        dispatches: ChessyAnalysisService.stats().dispatches - before
+      };
+    } finally {
+      clearTimeout(deadline);
+      ChessyAnalysisService.cancel('browser-stalled-cache');
+      CoachStore.getAnalysis = realGet;
+      delete window.CHESSY_ANALYSIS_CACHE_TIMEOUT_MS;
+    }
+  }, FAST);
+  check(stalledCache.valid && stalledCache.dispatches === 1,
+    'a stalled cache read yields to a real worker, and its late miss cannot redispatch');
+
+  // A synchronous browser transport error follows the same retry policy as
+  // an error message. Preserve real worker execution for the successful
+  // retry, observing the failed instance's retirement and unchanged request.
+  const dispatchRecovery = await page.evaluate(async function (opts) {
+    const realPost = Worker.prototype.postMessage;
+    const realTerminate = Worker.prototype.terminate;
+    const posts = [], retired = [];
+    let failedWorker, deadline;
+    Worker.prototype.postMessage = function (msg) {
+      posts.push(msg);
+      if (posts.length === 1) {
+        failedWorker = this;
+        throw new DOMException('synthetic structured clone failure', 'DataCloneError');
+      }
+      return realPost.apply(this, arguments);
+    };
+    Worker.prototype.terminate = function () {
+      retired.push(this);
+      return realTerminate.apply(this, arguments);
+    };
+    try {
+      const run = ChessyAnalysisService.analyse({
+        gameId: 'browser-dispatch-failure', ply: 0, gameRev: 1,
+        fen: Chess.START_FEN, opts: opts, fresh: true
+      }, 'browser-dispatch-failure').catch(function () { return 'rejected'; });
+      const result = await Promise.race([
+        run,
+        new Promise(function (resolve) {
+          deadline = setTimeout(function () { resolve('timed-out'); }, 5000);
+        })
+      ]);
+      return {
+        valid: !!result && typeof result === 'object' && result.bestLines.length > 0,
+        posts: posts.length,
+        retired: retired.indexOf(failedWorker) !== -1,
+        same: posts.length === 2 && posts[0].jobId === posts[1].jobId &&
+          posts[0].fen === posts[1].fen && JSON.stringify(posts[0].opts) === JSON.stringify(posts[1].opts)
+      };
+    } finally {
+      clearTimeout(deadline);
+      ChessyAnalysisService.cancel('browser-dispatch-failure');
+      Worker.prototype.postMessage = realPost;
+      Worker.prototype.terminate = realTerminate;
+    }
+  }, FAST);
+  check(dispatchRecovery.valid && dispatchRecovery.posts === 2 &&
+        dispatchRecovery.retired && dispatchRecovery.same,
+    'a synchronous postMessage failure retries once in a fresh real worker against the unchanged request');
 });
