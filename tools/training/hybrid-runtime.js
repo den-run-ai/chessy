@@ -4,7 +4,7 @@
 // Separate private research experiment. Parameters are external authenticated
 // inputs; only generated scratch copies contain fitted numbers. No holdout data
 // is read and no output can qualify a model for production or assert strength.
-const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib');
+const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),cp=require('node:child_process');
 const {performance}=require('node:perf_hooks');
 const Phase=require('./nnue-phase-runtime');
 const Exporter=require('./natural-runtime-export');
@@ -104,7 +104,33 @@ function render(source,data,variant) {
   check(!template.includes('{{'),'unexpanded runtime template');
   return neural+'\nmod hybrid_expanded {\n'+expanded+'\n}\n'+template;
 }
-function capturedSources(){return Object.fromEntries(FILES.map(p=>[p,fs.readFileSync(path.join(ROOT,'experiments/wasm',p))]));}
+// Reachable original registration, also byte-identical at the lazy registration.
+// The completed study's reported execution commit remains historical metadata;
+// this pin never substitutes the active Rust source, ABI or production module.
+// This reader is part of __filename in DEPENDENCIES, including through every
+// follow-up's authenticated prior preparation receipt.
+const HISTORICAL_COMMIT="577d4abcaee6c86099120963023ad6bcef1a3401";
+const HISTORICAL_INPUTS=Object.freeze({
+  "experiments/wasm/Cargo.toml": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c",
+  "experiments/wasm/Cargo.lock": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32",
+  "experiments/wasm/rust-toolchain.toml": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9",
+  "experiments/wasm/build.sh": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489",
+  "experiments/wasm/src/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+  "experiments/wasm/src/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+  "experiments/wasm/src/lib.rs": "f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc",
+  "experiments/wasm/src/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+  "assets/chessy-ai-fast.wasm": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+});
+function historicalInput(filename){
+  check(Object.hasOwn(HISTORICAL_INPUTS,filename),'unknown historical hybrid input');
+  const env={PATH:process.env.PATH,LANG:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'};
+  const bytes=cp.execFileSync('git',['--no-replace-objects','show',HISTORICAL_COMMIT+':'+filename],
+    {cwd:ROOT,env,stdio:['ignore','pipe','pipe']});
+  check(sha(bytes)===HISTORICAL_INPUTS[filename],'historical hybrid input hash differs: '+filename);
+  return bytes;
+}
+function capturedSources(){return Object.fromEntries(FILES.map(p=>[p,historicalInput('experiments/wasm/'+p)]));}
+function baselineWasm(){return historicalInput('assets/chessy-ai-fast.wasm');}
 function renderAll(captured,data,variant) {
   return {...captured,'src/eval.rs':Buffer.from(render(captured['src/eval.rs'].toString(),data,variant)),
     'build.sh':Buffer.from(Phase.researchBuild(captured['build.sh'].toString()))};
@@ -118,9 +144,9 @@ function prepare(destination,manifestPath) {
   fs.writeFileSync(path.join(destination,'inputs.json'),manifestBytes,{flag:'wx'});
   for(const {variant,output}of variants){fs.mkdirSync(path.join(destination,variant));fs.mkdirSync(path.join(destination,variant,'src'));
     for(const p of FILES)fs.writeFileSync(path.join(destination,variant,p),output[p],{flag:'wx'});}
-  const receipt={schema:'chessy.hybrid-runtime-build.v1',researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
+  const receipt={schema:'chessy.hybrid-runtime-build.v2',baselineCommit:HISTORICAL_COMMIT,researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
     inputManifestSha256:sha(manifestBytes),config:data.config,plan:PLAN,fixtureSha256:sha(JSON.stringify(FIXTURES)),
-    baselineWasmSha256:sha(fs.readFileSync(path.join(ROOT,'assets/chessy-ai-fast.wasm'))),dependencies:dependency,
+    baselineWasmSha256:sha(baselineWasm()),dependencies:dependency,
     sourceInputs:FILES.map(p=>({path:p,sha256:sha(captured[p])})),
     emitted:variants.map(({variant,output})=>({variant,files:FILES.map(p=>({path:p,sha256:sha(output[p]),bytes:output[p].length}))})),
     modelSha256:manifest.model.sha256,expandedWeightsSha256:manifest.expandedWeightsSha256,
@@ -131,7 +157,8 @@ function prepare(destination,manifestPath) {
 }
 function verifyPrepared(directory) {
   const rb=fs.readFileSync(path.join(directory,'hybrid-source.json')),receipt=JSON.parse(rb);
-  check(receipt.schema==='chessy.hybrid-runtime-build.v1'&&receipt.productionIntegrationAllowed===false&&receipt.strengthClaimAllowed===false,'invalid source receipt');
+  check(receipt.schema==='chessy.hybrid-runtime-build.v2'&&receipt.productionIntegrationAllowed===false&&receipt.strengthClaimAllowed===false,'invalid source receipt');
+  check(receipt.baselineCommit===HISTORICAL_COMMIT&&receipt.baselineWasmSha256===sha(baselineWasm()),'historical baseline identity differs');
   check(JSON.stringify(receipt.plan)===JSON.stringify(PLAN)&&receipt.fixtureSha256===sha(JSON.stringify(FIXTURES)),'frozen cost plan changed');
   check(Array.isArray(receipt.dependencies)&&receipt.dependencies.length===DEPENDENCIES.length,'incomplete dependency closure');
   receipt.dependencies.forEach((d,i)=>check(d.path===path.relative(ROOT,DEPENDENCIES[i])&&d.sha256===sha(fs.readFileSync(DEPENDENCIES[i])),'dependency identity changed'));
@@ -169,7 +196,7 @@ function summarize(records) {
 }
 function measure(directory,output) {
   check(!fs.existsSync(output),'measurement output already exists');const verified=verifyPrepared(directory),{receipt,data}=verified;
-  const shippedBytes=fs.readFileSync(path.join(ROOT,'assets/chessy-ai-fast.wasm'));check(sha(shippedBytes)===receipt.baselineWasmSha256,'shipped module changed');
+  const shippedBytes=baselineWasm();check(sha(shippedBytes)===receipt.baselineWasmSha256,'shipped module changed');
   const modules={shipped:loadModule(shippedBytes)};
   for(const variant of ['expanded','neural','hybrid'])modules[variant]=loadModule(fs.readFileSync(path.join(directory,variant,'dist/chessy-ai-fast.wasm')));
   for(const [id,m]of Object.entries(modules))check(m.engine.memoryBytes()===(id==='shipped'?26542080:26607616),'unexpected module memory');
@@ -208,7 +235,7 @@ function measure(directory,output) {
     ]};
   fs.writeFileSync(output,encode(result),{flag:'wx'});return {status:result.status,config:result.config,parityRows:parity.length,modules:info,summary:result.summary};
 }
-module.exports={CONFIGS,FIXTURES,SPECIAL_FENS,PLAN,mix,validateConfig,parityFens,inputs,render,prepare,verifyPrepared,summarize,measure};
+module.exports={HISTORICAL_COMMIT,historicalInput,capturedSources,baselineWasm,CONFIGS,FIXTURES,SPECIAL_FENS,PLAN,mix,validateConfig,parityFens,inputs,render,prepare,verifyPrepared,summarize,measure};
 if(require.main===module){const [command,...args]=process.argv.slice(2);try{
   if(command==='prepare'&&args.length===2)console.log(encode(prepare(...args)));
   else if(command==='measure'&&args.length===2)console.log(encode(measure(...args)));

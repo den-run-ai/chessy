@@ -857,6 +857,27 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     coldRes.positionFingerprint === coldSeed.ident.positionFingerprint,
     'the served result keeps its provenance (engine id/version/configHash, fingerprint) intact');
 
+  // Compact hashing keeps the ABI but can change timed analysis. A valid
+  // previous-provider cache row must remain historical, never a current hit.
+  const upgradedStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: upgradedStore });
+  const upgradedReq = Object.assign({}, REQ, { gameId: 'compact-hash-cache-upgrade' });
+  const previousOpts = Object.assign({}, FAST, { engineVersion: '2.0.0' });
+  const previousReq = Object.assign({}, upgradedReq, { opts: previousOpts });
+  const previousTruth = Core.analyse(Chess.parseFen(START), previousOpts);
+  const previousSeed = seedRecord(upgradedStore, previousReq, previousTruth);
+  const upgradeDispatches = Svc.stats().dispatches;
+  const upgraded = await Svc.analyse(upgradedReq);
+  const currentSeed = recordFor(upgradedStore, upgradedReq, upgraded);
+  check(!!upgraded && upgraded.engine.version === '2.0.1' &&
+    upgraded.engine.configHash !== previousTruth.engine.configHash &&
+    Svc.stats().dispatches === upgradeDispatches + 1 && made.length === 1,
+    'a valid 2.0.0 cache row triggers fresh work under the compact-hash identity');
+  check(previousSeed.key !== currentSeed.key &&
+    upgradedStore._map.get(previousSeed.key).result === previousTruth &&
+    upgradedStore._map.get(currentSeed.key).result === upgraded,
+    'the new cache entry preserves historical analysis provenance without a purge');
+
   // A budget-capped partial that was honestly persisted is served back still
   // partial: the data half of the reflection-panel rule (assets/reflection.js
   // shows a partial as visibly partial — the transport must never let a

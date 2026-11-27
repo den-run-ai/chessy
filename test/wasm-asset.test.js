@@ -29,7 +29,7 @@ const WASM_PATH = path.join(ROOT, 'assets', 'chessy-ai-fast.wasm');
 // byte-reproducible CI builder. A drifted binary must never ship under this
 // release's provenance.
 const CANONICAL_SHA256 =
-  'a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7';
+  '4f63b8dd25b4ae6787d1720392417a60daab1066bef7d494060939cb2016f74c';
 
 let passed = 0;
 let failed = 0;

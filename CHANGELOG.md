@@ -6,6 +6,21 @@
 Selected recent app changes, newest first. Earlier behavior and calibration
 studies are linked below; this is not a complete release history.
 
+## r86: Compact hashing
+
+Search updates the board's piece-square hash from the squares changed by each
+move, reducing repeated board scans. Opening seeds, evaluation, difficulty
+budgets, repetition rules and fixed memory are preserved. Ordinary and seeded
+fixed-node comparisons retain identical complete results on the recorded test
+panels; a time-limited search can finish more work and select a different move.
+
+Coaching uses engine identity 2.0.1, so previously cached analyses are preserved
+but recomputed when needed under this engine. The
+[candidate evidence](experiments/wasm/compact-hash-r86/ADMISSION.md) records the
+exact source/module identities, signature reproduction, resource checks and
+separate runtime admission requirements. Development timing results are
+reported with their complete raw observations; they are not a rating claim.
+
 ## r85: Calculated opening variety
 
 Computer Play varies its initial move-search order during the first six full

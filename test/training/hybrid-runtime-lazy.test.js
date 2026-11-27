@@ -4,8 +4,8 @@ const Phase=require('../../tools/training/nnue-phase-runtime'),Runtime=require('
 const Lazy=require('../../tools/training/hybrid-runtime-lazy'),Baseline=require('./hce-r3-baseline');
 const ROOT=path.resolve(__dirname,'../..'),tmp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-hybrid-lazy-test-'));
 try {
-  const evaluator=fs.readFileSync(path.join(ROOT,'experiments/wasm/src/eval.rs'),'utf8');
-  const search=fs.readFileSync(path.join(ROOT,'experiments/wasm/src/search.rs'),'utf8');
+  const evaluator=Runtime.historicalInput('experiments/wasm/src/eval.rs').toString('utf8');
+  const search=Runtime.historicalInput('experiments/wasm/src/search.rs').toString('utf8');
   const engine=fs.readFileSync(path.join(ROOT,'experiments/wasm/src/engine.rs'));
   const synthetic=Phase.synthetic(8),weights=Baseline.baselineCenter(Baseline.parseRustEvaluator(evaluator));
   const original=Runtime.render(evaluator,{model:synthetic.model||require('./h4-v3-reference').loadModel(synthetic.bytes,synthetic.metadata),weights,config:Runtime.CONFIGS[5]},'hybrid');

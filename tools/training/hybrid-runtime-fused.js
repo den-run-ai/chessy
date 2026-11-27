@@ -124,7 +124,7 @@ function rendered(prior,variant) {
   if(variant==='original')return {...original,'src/lib.rs':Buffer.from(original['src/lib.rs'].toString()+
     '\n#[cfg(test)]\nmod original_layout_test { #[test] fn unchanged_layout() { assert_eq!(core::mem::size_of::<crate::engine::Position>(), 74); assert_eq!(core::mem::size_of::<crate::engine::Undo>(), 10); } }\n')};
   const data=Runtime.inputs(JSON.parse(fs.readFileSync(path.join(prior,'inputs.json'))));
-  const baseline=fs.readFileSync(path.join(ROOT,'experiments/wasm/src/eval.rs'),'utf8');
+  const baseline=Runtime.historicalInput('experiments/wasm/src/eval.rs').toString('utf8');
   const evalSource=original['src/eval.rs'].toString();
   return {...original,'src/engine.rs':Buffer.from(patchEngine(original['src/engine.rs'].toString())),
     'src/eval.rs':Buffer.from(variant==='cached'?cachedEvaluator(evalSource)+mechanismTests(evalSource):fusedEvaluator(baseline,data,evalSource))};
@@ -181,7 +181,7 @@ function selectMechanism(summary,searchMismatches,parityMismatches=[]) {
 }
 function measure(directory,output) {
   check(!fs.existsSync(output),'mechanism output already exists');const checked=verifyPrepared(directory),{receipt,prior}=checked;
-  const modules={shipped:moduleFrom(fs.readFileSync(path.join(ROOT,'assets/chessy-ai-fast.wasm')))};
+  const modules={shipped:moduleFrom(Runtime.baselineWasm())};
   for(const v of VARIANTS)modules[v]=moduleFrom(fs.readFileSync(path.join(directory,v,'dist/chessy-ai-fast.wasm')));
   check(sha(modules.shipped.bytes)===prior.receipt.baselineWasmSha256,'shipped baseline changed');
   check(modules.original.bytes.equals(fs.readFileSync(path.join(receipt.priorDirectory,'hybrid/dist/chessy-ai-fast.wasm'))),'concurrent original must reproduce exact prior module');

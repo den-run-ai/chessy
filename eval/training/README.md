@@ -18,6 +18,23 @@ and an external corpus-scale Stockfish run. CI exercises small real-teacher
 fixtures; those fixtures cannot produce a production fit or release artifact.
 For later research reports, see the [evaluation index](../README.md#research-index).
 
+### Historical hybrid runtime inputs
+
+The original hybrid, fused and lazy runtime tools reproduce their eight Rust/build
+inputs and baseline WASM from registration commit
+`577d4abcaee6c86099120963023ad6bcef1a3401`, with original SHA-256 checks and Git
+replacement objects disabled. Those nine inputs are byte-identical at the later
+lazy registration `1f61789e1a21c5be1bf7f9493956f6a2e005ffd7`. The baseline module
+remains `57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f`.
+Current production search, ABI and assets cannot rebaseline these studies.
+
+Fresh hybrid preparation receipts use schema v2, record the pinned commit, and
+authenticate the reader within the existing generator dependency closure.
+Follow-ups verify that prior receipt. Original measured receipts, execution
+commit annotations, protocols and results remain unchanged; this correction
+does not rerun a completed study. The synthetic CI tests use the pinned inputs
+and retain the original lazy search-boundary and selection checks.
+
 ## Workflow
 
 Run commands from the repository root and keep large inputs and outputs

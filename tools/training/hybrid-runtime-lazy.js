@@ -244,7 +244,7 @@ function measure(directory,output) {
   check(!fs.existsSync(output),'lazy cost output exists');const checked=verifyPrepared(directory),{receipt,prior}=checked;
   const nativeEvidence=verifyNative(directory,checked.receiptSha256);
   const compiledEvidence=verifyBuild(directory,checked.receiptSha256,nativeEvidence.sha256);
-  const modules={shipped:moduleFrom(fs.readFileSync(path.join(ROOT,'assets/chessy-ai-fast.wasm')))};
+  const modules={shipped:moduleFrom(Runtime.baselineWasm())};
   for(const variant of VARIANTS)modules[variant]=moduleFrom(fs.readFileSync(path.join(directory,variant,'dist/chessy-ai-fast.wasm')));
   check(sha(modules.shipped.bytes)===prior.receipt.baselineWasmSha256,'shipped bytes changed');
   check(modules.original.bytes.equals(fs.readFileSync(path.join(receipt.priorDirectory,'hybrid/dist/chessy-ai-fast.wasm'))),'original module must reproduce exact bytes');

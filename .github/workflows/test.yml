@@ -507,6 +507,8 @@ jobs:
         # --baseline makes lost checks / a vacuous axis / a changed analysis
         # config fail the gate, not just new assertion failures.
         run: node test/eval/scorecard.js --baseline eval/BASELINE.json
+      - name: Verify the retained E3 provider-version transition
+        run: node test/eval/analysis-baseline-transition.test.js
       - name: Run eval-v1 analysis scorecard (E3, frozen 34-case train/val shard)
         # The E3 quality vector: two STRICT output contracts (complete/ordered
         # MultiPV over every legal root; self-consistent played-move rank +
@@ -515,7 +517,7 @@ jobs:
         # committed baseline. The accepted-move criterion identity and each
         # PR-shard puzzle's verdict/reason are an exact fixture: semantic drift
         # or lost coverage also fails here until consciously re-baselined.
-        run: node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json
+        run: node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE-v2.0.1.json
       - name: Verify eval corpus is up to date with its generator
         # The committed ndjson/manifest must match a fresh generation (with the
         # oracle installed above), and the scorecard verifies the ndjson sha256
