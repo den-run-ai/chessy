@@ -1,0 +1,783 @@
+{
+  "candidates": [
+    {
+      "dataManifestSha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e",
+      "familyBalanced": {
+        "endgame": {
+          "ce": 0.6504690465461002,
+          "families": 14295,
+          "maeCp": 225.1188624061027,
+          "rmseCp": 328.3820362066509,
+          "rows": 20585
+        },
+        "middlegame": {
+          "ce": 0.6553739276202145,
+          "families": 12750,
+          "maeCp": 145.90931690009333,
+          "rmseCp": 218.37374213482775,
+          "rows": 21911
+        },
+        "opening": {
+          "ce": 0.6851407201118798,
+          "families": 28045,
+          "maeCp": 98.51355708088198,
+          "rmseCp": 153.58660884641094,
+          "rows": 57668
+        },
+        "overall": {
+          "ce": 0.6692547484674511,
+          "families": 55090,
+          "maeCp": 142.33491807777764,
+          "rmseCp": 225.89076733958177,
+          "rows": 100164
+        }
+      },
+      "fit": {
+        "columns": 17280,
+        "evaluations": 234,
+        "families": [
+          "pst",
+          "own_king",
+          "enemy_king",
+          "ray"
+        ],
+        "familyNonzeroInteger": {
+          "enemy_king": 833,
+          "own_king": 711,
+          "pawn_context": 0,
+          "pst": 432,
+          "ray": 484
+        },
+        "integerParameterBytes": 34560,
+        "iterations": 232,
+        "l1": 1e-05,
+        "l2": 0.0001,
+        "maxAbsCp": 119.25372817182911,
+        "noGlobalIntegerOptimalityClaim": true,
+        "nonzeroFloat": 2577,
+        "nonzeroInteger": 2460,
+        "numericallyConverged": true,
+        "objective": 0.6703062834835641,
+        "projectedGradientInfinityNorm": 1.977510772114516e-06,
+        "researchOnly": true,
+        "rows": 799145,
+        "schema": "chessy.sparse-convex-fit.v1",
+        "seconds": 53.54425949199958,
+        "solverMessage": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "solverSuccess": true,
+        "supportedColumns": 10770
+      },
+      "floatWeights": {
+        "bytes": 138240,
+        "path": "refit-no-pawn.f64le",
+        "sha256": "ea01e1bcaea8633be05ba03b2a33d945b31d1078b689735cf9cdbf1a58bda13c"
+      },
+      "id": "refit-no-pawn",
+      "noHoldoutOrOodFilesRead": true,
+      "originalFullModelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+      "packedManifestSha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+      "productionAdmission": false,
+      "qualityEligible": true,
+      "qualityGuards": {
+        "families": {
+          "checks": {
+            "endgameCe": true,
+            "maeCp": true,
+            "middlegameCe": true,
+            "minimumCeGainOverHce": true,
+            "numericallyConverged": true,
+            "openingCe": true,
+            "removedFamilyExactlyZero": true,
+            "retainedFullCeGain": true,
+            "rmseCp": true
+          },
+          "passed": true,
+          "retainedFullCeGain": 0.9733143238951508
+        },
+        "rows": {
+          "checks": {
+            "endgameCe": true,
+            "maeCp": true,
+            "middlegameCe": true,
+            "minimumCeGainOverHce": true,
+            "numericallyConverged": true,
+            "openingCe": true,
+            "removedFamilyExactlyZero": true,
+            "retainedFullCeGain": true,
+            "rmseCp": true
+          },
+          "passed": true,
+          "retainedFullCeGain": 0.970945966377656
+        }
+      },
+      "recipe": {
+        "families": [
+          "pst",
+          "own_king",
+          "enemy_king",
+          "ray"
+        ],
+        "id": "refit-no-pawn",
+        "removedFamily": "pawn_context"
+      },
+      "registrationSha256": "ac9dfedbe1c62652e36be9f77636e103dc9689387541ea19beb2df2b719616a5",
+      "researchOnly": true,
+      "runtime": {
+        "losslessI8TablesSupported": true,
+        "reason": null
+      },
+      "schema": "chessy.eval-pipeline-refit-model.v1",
+      "selection": "no winner selected; no latency or playing-strength admission",
+      "validation": {
+        "endgame": {
+          "ce": 0.6541519731409542,
+          "maeCp": 215.95210104444985,
+          "p95AbsCp": 648.7999999999993,
+          "p99AbsCp": 1087.1599999999999,
+          "rmseCp": 311.65106840532917,
+          "rows": 20585,
+          "signAccuracy": 0.5889725528297304
+        },
+        "middlegame": {
+          "ce": 0.6598064079244985,
+          "maeCp": 137.81374652001278,
+          "p95AbsCp": 418.0,
+          "p99AbsCp": 713.0,
+          "rmseCp": 204.61989269946164,
+          "rows": 21911,
+          "signAccuracy": 0.6848158459221395
+        },
+        "opening": {
+          "ce": 0.686868153486496,
+          "maeCp": 88.18937712422834,
+          "p95AbsCp": 294.0,
+          "p99AbsCp": 516.0,
+          "rmseCp": 137.5529309736774,
+          "rows": 57668,
+          "signAccuracy": 0.6459561628632864
+        },
+        "overall": {
+          "ce": 0.6742247638512788,
+          "maeCp": 125.30166526895891,
+          "p95AbsCp": 428.0,
+          "p99AbsCp": 752.0,
+          "rmseCp": 200.0326974989023,
+          "rows": 100164,
+          "signAccuracy": 0.6427458967293639
+        }
+      },
+      "validationScores": {
+        "bytes": 400656,
+        "path": "refit-no-pawn.validation.i32",
+        "sha256": "1d9d06f813ddf2e2c94f111d412d0562876b32bb374aa7e9d5b178f3d9339853"
+      },
+      "weights": {
+        "bytes": 34560,
+        "path": "refit-no-pawn.i16le",
+        "sha256": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2"
+      }
+    },
+    {
+      "dataManifestSha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e",
+      "familyBalanced": {
+        "endgame": {
+          "ce": 0.6516712059482305,
+          "families": 14295,
+          "maeCp": 227.47920876430317,
+          "rmseCp": 331.8160538304166,
+          "rows": 20585
+        },
+        "middlegame": {
+          "ce": 0.6563123847381062,
+          "families": 12750,
+          "maeCp": 147.5118823529412,
+          "rmseCp": 222.22068114988525,
+          "rows": 21911
+        },
+        "opening": {
+          "ce": 0.6859842446440485,
+          "families": 28045,
+          "maeCp": 99.6108939714235,
+          "rmseCp": 157.61611769561335,
+          "rows": 57668
+        },
+        "overall": {
+          "ce": 0.6702133043289733,
+          "families": 55090,
+          "maeCp": 143.87691615019594,
+          "rmseCp": 229.44624353547445,
+          "rows": 100164
+        }
+      },
+      "fit": {
+        "columns": 17280,
+        "evaluations": 191,
+        "families": [
+          "pst",
+          "own_king",
+          "enemy_king",
+          "pawn_context"
+        ],
+        "familyNonzeroInteger": {
+          "enemy_king": 865,
+          "own_king": 770,
+          "pawn_context": 229,
+          "pst": 451,
+          "ray": 0
+        },
+        "integerParameterBytes": 34560,
+        "iterations": 189,
+        "l1": 1e-05,
+        "l2": 0.0001,
+        "maxAbsCp": 128.0,
+        "noGlobalIntegerOptimalityClaim": true,
+        "nonzeroFloat": 2400,
+        "nonzeroInteger": 2315,
+        "numericallyConverged": true,
+        "objective": 0.6711575288173054,
+        "projectedGradientInfinityNorm": 1.9812434550378153e-06,
+        "researchOnly": true,
+        "rows": 799145,
+        "schema": "chessy.sparse-convex-fit.v1",
+        "seconds": 29.64164484899993,
+        "solverMessage": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+        "solverSuccess": true,
+        "supportedColumns": 11522
+      },
+      "floatWeights": {
+        "bytes": 138240,
+        "path": "refit-no-ray.f64le",
+        "sha256": "300c23c5c4a1ad0693fadd7123e883463bcb8b2bd76941c7c88deb9b16a60695"
+      },
+      "id": "refit-no-ray",
+      "noHoldoutOrOodFilesRead": true,
+      "originalFullModelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+      "packedManifestSha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+      "productionAdmission": false,
+      "qualityEligible": true,
+      "qualityGuards": {
+        "families": {
+          "checks": {
+            "endgameCe": true,
+            "maeCp": true,
+            "middlegameCe": true,
+            "minimumCeGainOverHce": true,
+            "numericallyConverged": true,
+            "openingCe": true,
+            "removedFamilyExactlyZero": true,
+            "retainedFullCeGain": true,
+            "rmseCp": true
+          },
+          "passed": true,
+          "retainedFullCeGain": 0.8200340251277995
+        },
+        "rows": {
+          "checks": {
+            "endgameCe": true,
+            "maeCp": true,
+            "middlegameCe": true,
+            "minimumCeGainOverHce": true,
+            "numericallyConverged": true,
+            "openingCe": true,
+            "removedFamilyExactlyZero": true,
+            "retainedFullCeGain": true,
+            "rmseCp": true
+          },
+          "passed": true,
+          "retainedFullCeGain": 0.8169982905797183
+        }
+      },
+      "recipe": {
+        "families": [
+          "pst",
+          "own_king",
+          "enemy_king",
+          "pawn_context"
+        ],
+        "id": "refit-no-ray",
+        "removedFamily": "ray"
+      },
+      "registrationSha256": "ac9dfedbe1c62652e36be9f77636e103dc9689387541ea19beb2df2b719616a5",
+      "researchOnly": true,
+      "runtime": {
+        "losslessI8TablesSupported": true,
+        "reason": null
+      },
+      "schema": "chessy.eval-pipeline-refit-model.v1",
+      "selection": "no winner selected; no latency or playing-strength admission",
+      "validation": {
+        "endgame": {
+          "ce": 0.6554357683660289,
+          "maeCp": 218.39863978625212,
+          "p95AbsCp": 661.0,
+          "p99AbsCp": 1096.3199999999997,
+          "rmseCp": 315.34636404668464,
+          "rows": 20585,
+          "signAccuracy": 0.5882438668933689
+        },
+        "middlegame": {
+          "ce": 0.6607162012163236,
+          "maeCp": 139.38031125918488,
+          "p95AbsCp": 426.0,
+          "p99AbsCp": 725.9000000000015,
+          "rmseCp": 208.4447949256712,
+          "rows": 21911,
+          "signAccuracy": 0.6775592168317284
+        },
+        "opening": {
+          "ce": 0.6874813961254217,
+          "maeCp": 88.67992647568842,
+          "p95AbsCp": 303.0,
+          "p99AbsCp": 541.3300000000017,
+          "rmseCp": 140.8214251734774,
+          "rows": 57668,
+          "signAccuracy": 0.6426961226330027
+        },
+        "overall": {
+          "ce": 0.6750406845615828,
+          "maeCp": 126.42957549618626,
+          "p95AbsCp": 440.0,
+          "p99AbsCp": 763.0,
+          "rmseCp": 203.36837359721764,
+          "rows": 100164,
+          "signAccuracy": 0.6391318238089533
+        }
+      },
+      "validationScores": {
+        "bytes": 400656,
+        "path": "refit-no-ray.validation.i32",
+        "sha256": "24d1c94e323040a26b3a0bc85b6f598cee1c2cf9403a9515e98bcc524059c129"
+      },
+      "weights": {
+        "bytes": 34560,
+        "path": "refit-no-ray.i16le",
+        "sha256": "c14d4bf4bffa1be3034a2b1151c393615a654699236207b4901aefd2643ad872"
+      }
+    }
+  ],
+  "files": {
+    "EXTRACTOR-BUILD.json": {
+      "bytes": 1546,
+      "sha256": "16c0ec600e262c18137babae4ed5deb586f995f4e2dcc2a854e7f9bc689a6282"
+    },
+    "PROTOCOL.json": {
+      "bytes": 2188,
+      "sha256": "5e4d4a00d15cee547d806377e50b95b6a0f1eb2050664db008a462db8f2974a2"
+    },
+    "REGISTRATION.json": {
+      "bytes": 5604,
+      "sha256": "ac9dfedbe1c62652e36be9f77636e103dc9689387541ea19beb2df2b719616a5"
+    },
+    "RUN-STARTED.json": {
+      "bytes": 2418,
+      "sha256": "6e8329c1b1bf5b39cc9375f4e84573defdb8e3a218a969afce913433b5102309"
+    },
+    "extractor": {
+      "bytes": 4477872,
+      "sha256": "70c8b583c4083e956ae550c196d59edf15bffce7dfb75742d41b5a9ee966431a"
+    },
+    "full.validation.i32": {
+      "bytes": 400656,
+      "sha256": "7a615c0166b8cf94b6dcc4203f3284f9679dcc9bc707e92a25306b25ca06dc28"
+    },
+    "hce.validation.i32": {
+      "bytes": 400656,
+      "sha256": "a7b08bcbb6bb2dc60d9d866ee5b18ee6dbff9e2e76c5e3f3aaae002e42f3351e"
+    },
+    "inputs/data-manifest.json": {
+      "bytes": 5522,
+      "sha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e"
+    },
+    "inputs/original-full.i16le": {
+      "bytes": 34560,
+      "sha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304"
+    },
+    "inputs/packed-manifest.json": {
+      "bytes": 5106,
+      "sha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a"
+    },
+    "inputs/train.jsonl": {
+      "bytes": 404131352,
+      "sha256": "cff320775c81a2444949bb26c353c9db9a9ca600ebdcc5e0df7635f10963eeee"
+    },
+    "inputs/validation.jsonl": {
+      "bytes": 51152678,
+      "sha256": "2f4c686bcf519287f2dfe8197bfb62d59c5c60f42151c198715c217f02d833d2"
+    },
+    "packed/PACKED.json": {
+      "bytes": 3570,
+      "sha256": "4cc0a754faa64a03ba7c70e5f17bc941d03b90fd3516b371cb825558a53e8628"
+    },
+    "packed/train.baseline.i32": {
+      "bytes": 3196580,
+      "sha256": "26e3a702241b924161f381fcb0fcf1ea01a27ed0e2500a7023fcfb5259296fa0"
+    },
+    "packed/train.family.u32": {
+      "bytes": 3196580,
+      "sha256": "965555d33b27fcfca5a13a5d720e264d073bc1a330c6ea264fa002333289e845"
+    },
+    "packed/train.fens.txt": {
+      "bytes": 45984152,
+      "sha256": "dd04363a6a6d5359f6737eacec727e6fd91022cdc3108964a0eceed0c87c15a2"
+    },
+    "packed/train.indices.i32": {
+      "bytes": 595912408,
+      "sha256": "7f0c17d15c1a95eed62e8b3b65e19ef80233e6f37e6c51906514ac95a89d7fca"
+    },
+    "packed/train.indptr.i64": {
+      "bytes": 6393168,
+      "sha256": "ef57a0fd51412fc43ab8713bed96b3d67762a80f4d8cc76dce74c6d6ed8f6098"
+    },
+    "packed/train.phase.u8": {
+      "bytes": 799145,
+      "sha256": "85e8e13ac58c4a123923dc4f7f845157216ce3e580093791289b100cb5153877"
+    },
+    "packed/train.teacher.f64": {
+      "bytes": 6393160,
+      "sha256": "65ad21c7b5a87b4aa3a938c4229fae02cba670329ca8f773d70865b8d1c8e236"
+    },
+    "packed/train.values.f32": {
+      "bytes": 595912408,
+      "sha256": "bd24698ae22b5aa3354d338145ee738ef76126f1d6566960e33e00317dee58e4"
+    },
+    "packed/validation.baseline.i32": {
+      "bytes": 400656,
+      "sha256": "a7b08bcbb6bb2dc60d9d866ee5b18ee6dbff9e2e76c5e3f3aaae002e42f3351e"
+    },
+    "packed/validation.family.u32": {
+      "bytes": 400656,
+      "sha256": "023501c42a76219fb2f012031e892b9bc7d3edced1e4635f9848a6c9654a63dd"
+    },
+    "packed/validation.fens.txt": {
+      "bytes": 5760888,
+      "sha256": "1f5402d0b61d18f2c8c1dd791d99fc1bcecd2c44956b5bc28c8ed8bcf0c81900"
+    },
+    "packed/validation.indices.i32": {
+      "bytes": 74762600,
+      "sha256": "34d80aa51a2d130feffd202f98164270c02a7962a9a4d2fb89a5b7e60d1446dd"
+    },
+    "packed/validation.indptr.i64": {
+      "bytes": 801320,
+      "sha256": "0a1b62e13e1ab005c9d0956a3025f42025706376d1f420d3fb155ea43c36ab1c"
+    },
+    "packed/validation.phase.u8": {
+      "bytes": 100164,
+      "sha256": "36a71d708755af1d089fcb54106a7dab8e019cd335996b3b5e3ddad8b76c2758"
+    },
+    "packed/validation.teacher.f64": {
+      "bytes": 801312,
+      "sha256": "2bf88496e93968f3d97d03e0fbdbfb8b04430612aef11f7bd1cbe6420820e2c0"
+    },
+    "packed/validation.values.f32": {
+      "bytes": 74762600,
+      "sha256": "b8c1575ae7443d07dd6fd938b8192b639ed5d4309a51938df59c6a7db2776913"
+    },
+    "refit-no-pawn.f64le": {
+      "bytes": 138240,
+      "sha256": "ea01e1bcaea8633be05ba03b2a33d945b31d1078b689735cf9cdbf1a58bda13c"
+    },
+    "refit-no-pawn.i16le": {
+      "bytes": 34560,
+      "sha256": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2"
+    },
+    "refit-no-pawn.json": {
+      "bytes": 4849,
+      "sha256": "5a9340ae732c97f54d8e5223620d464bfe30e4ead9224fcd82a4b405f424b818"
+    },
+    "refit-no-pawn.validation.i32": {
+      "bytes": 400656,
+      "sha256": "1d9d06f813ddf2e2c94f111d412d0562876b32bb374aa7e9d5b178f3d9339853"
+    },
+    "refit-no-ray.f64le": {
+      "bytes": 138240,
+      "sha256": "300c23c5c4a1ad0693fadd7123e883463bcb8b2bd76941c7c88deb9b16a60695"
+    },
+    "refit-no-ray.i16le": {
+      "bytes": 34560,
+      "sha256": "c14d4bf4bffa1be3034a2b1151c393615a654699236207b4901aefd2643ad872"
+    },
+    "refit-no-ray.json": {
+      "bytes": 4854,
+      "sha256": "67b4353a1b19e640943e9eba43223fd75a73811dc3700ff3fbe2b1fe5dfbb97d"
+    },
+    "refit-no-ray.validation.i32": {
+      "bytes": 400656,
+      "sha256": "24d1c94e323040a26b3a0bc85b6f598cee1c2cf9403a9515e98bcc524059c129"
+    },
+    "source/LICENSE": {
+      "bytes": 1072,
+      "sha256": "802da1c331ccd90b667bd3d356dce67f71b499d9974846a2bbf75d97a7f261e9"
+    },
+    "source/THIRD_PARTY_NOTICES.md": {
+      "bytes": 2057,
+      "sha256": "d9130931adc735efc08ddb7e39b8b9d65e9224a47929594e8ce22c288cef9ea2"
+    },
+    "source/experiments/wasm/src/engine.rs": {
+      "bytes": 37233,
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    "source/experiments/wasm/src/eval.rs": {
+      "bytes": 15221,
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    "source/experiments/wasm/src/search.rs": {
+      "bytes": 48406,
+      "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+    },
+    "source/tools/eval_pipeline/prepare.py": {
+      "bytes": 22322,
+      "sha256": "0882943297341ce995c193564f293dd76d87cba7c19121795609fc9be28f9da3"
+    },
+    "source/tools/eval_pipeline/refit.py": {
+      "bytes": 30350,
+      "sha256": "75d7fe25efe772dbadb3a158564ccf42a78d939c497155a34b41b191668c2dfa"
+    },
+    "source/tools/sparse_eval/__init__.py": {
+      "bytes": 78,
+      "sha256": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58"
+    },
+    "source/tools/sparse_eval/features.py": {
+      "bytes": 14328,
+      "sha256": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709"
+    },
+    "source/tools/sparse_eval/fit.py": {
+      "bytes": 8999,
+      "sha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39"
+    },
+    "source/tools/sparse_eval/runtime.rs": {
+      "bytes": 13893,
+      "sha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663"
+    },
+    "tools/rustc": {
+      "bytes": 645000,
+      "sha256": "d3a664c970a9fd8361b64194861bebc1ae37b9054e5ee3400dc1c9e691797eea"
+    }
+  },
+  "limitations": [
+    "original corpus has no source-game IDs",
+    "validation is previously exposed development data",
+    "teacher-score guards do not establish equal-time playing strength",
+    "integer export is outside the convex optimization"
+  ],
+  "noHoldoutOrOodFilesRead": true,
+  "paidComputeUSD": 0,
+  "productionAdmission": false,
+  "protocol": {
+    "batchRows": 4096,
+    "dataManifestSha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e",
+    "decision": "retain both recipes and all failures; quality eligibility only; no speed gate or winner",
+    "familyBalance": "each represented structural family has equal total weight within each phase stratum",
+    "fit": {
+      "boundsAndFamilyCosts": "unchanged original bounded L1/L2 convex fit",
+      "initialization": "all zero; no outcome or validation warm start",
+      "l1": 1e-05,
+      "l2": 0.0001,
+      "maxIterations": 400,
+      "minSupport": 32,
+      "optimizerSourceSha256": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+      "sampleWeight": "inverse train structural-family count; normalized by original optimizer"
+    },
+    "noHoldoutOrOodFilesRead": true,
+    "originalFullModelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+    "packedManifestSha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+    "paidComputeUSD": 0,
+    "priorDifference": "v2 zeroed existing weights; these refit retained columns. Prior king removed both pawn and ray; neither recipe does that.",
+    "productionAdmission": false,
+    "qualityRules": {
+      "applyAlsoToFamilyBalancedMetrics": true,
+      "everyPhaseCeAtMostHce": true,
+      "maximumMaeRatioToFull": 1.03,
+      "maximumRmseRatioToFull": 1.03,
+      "minimumCeImprovementOverHce": 0.005,
+      "requireNumericalConvergence": true,
+      "retainedFullCeGain": 0.75
+    },
+    "recipes": [
+      {
+        "families": [
+          "pst",
+          "own_king",
+          "enemy_king",
+          "ray"
+        ],
+        "id": "refit-no-pawn",
+        "removedFamily": "pawn_context"
+      },
+      {
+        "families": [
+          "pst",
+          "own_king",
+          "enemy_king",
+          "pawn_context"
+        ],
+        "id": "refit-no-ray",
+        "removedFamily": "ray"
+      }
+    ],
+    "researchOnly": true,
+    "rolesOpened": [
+      "train",
+      "validation"
+    ],
+    "schema": "chessy.eval-pipeline-refit-protocol.v1",
+    "strengthCriterion": "a later fresh equal-time crossover campaign; no fixed-node strength admission",
+    "validation": "exact integer numerator/24 residual, separately rounded from original HCE"
+  },
+  "references": {
+    "full": {
+      "familyBalanced": {
+        "endgame": {
+          "ce": 0.650317451801744,
+          "families": 14295,
+          "maeCp": 224.65916354369654,
+          "rmseCp": 327.84648474235723,
+          "rows": 20585
+        },
+        "middlegame": {
+          "ce": 0.6552357192633035,
+          "families": 12750,
+          "maeCp": 145.50580410831003,
+          "rmseCp": 217.8688019259781,
+          "rows": 21911
+        },
+        "opening": {
+          "ce": 0.6849530102954945,
+          "families": 28045,
+          "maeCp": 98.0232151134656,
+          "rmseCp": 152.7198746500467,
+          "rows": 57668
+        },
+        "overall": {
+          "ce": 0.6690878665429332,
+          "families": 55090,
+          "maeCp": 141.87262321828362,
+          "rmseCp": 225.27607750313675,
+          "rows": 100164
+        }
+      },
+      "scores": {
+        "bytes": 400656,
+        "path": "full.validation.i32",
+        "sha256": "7a615c0166b8cf94b6dcc4203f3284f9679dcc9bc707e92a25306b25ca06dc28"
+      },
+      "validation": {
+        "endgame": {
+          "ce": 0.6539937039705456,
+          "maeCp": 215.51304347826087,
+          "p95AbsCp": 647.0,
+          "p99AbsCp": 1094.0,
+          "rmseCp": 311.0896573870687,
+          "rows": 20585,
+          "signAccuracy": 0.5890697109545786
+        },
+        "middlegame": {
+          "ce": 0.6596647683118375,
+          "maeCp": 137.39952535256265,
+          "p95AbsCp": 416.0,
+          "p99AbsCp": 715.0,
+          "rmseCp": 204.06777846638582,
+          "rows": 21911,
+          "signAccuracy": 0.6840856190954315
+        },
+        "opening": {
+          "ce": 0.6867110053646103,
+          "maeCp": 87.78223624887286,
+          "p95AbsCp": 290.0,
+          "p99AbsCp": 516.0,
+          "rmseCp": 136.74539382693953,
+          "rows": 57668,
+          "signAccuracy": 0.6491121592564334
+        },
+        "overall": {
+          "ce": 0.6740707778451409,
+          "maeCp": 124.88641627730522,
+          "p95AbsCp": 427.0,
+          "p99AbsCp": 751.0,
+          "rmseCp": 199.4099833258655,
+          "rows": 100164,
+          "signAccuracy": 0.6444231460404936
+        }
+      }
+    },
+    "hce": {
+      "familyBalanced": {
+        "endgame": {
+          "ce": 0.6583448937773324,
+          "families": 14295,
+          "maeCp": 239.73637510618093,
+          "rmseCp": 350.6802074724775,
+          "rows": 20585
+        },
+        "middlegame": {
+          "ce": 0.6594977332730476,
+          "families": 12750,
+          "maeCp": 152.0765866479925,
+          "rmseCp": 234.78614474464263,
+          "rows": 21911
+        },
+        "opening": {
+          "ce": 0.6912079094822648,
+          "families": 28045,
+          "maeCp": 109.84763509325997,
+          "rmseCp": 180.20875354390748,
+          "rows": 57668
+        },
+        "overall": {
+          "ce": 0.6753414807988465,
+          "families": 55090,
+          "maeCp": 153.32519310392533,
+          "rmseCp": 247.38807122277404,
+          "rows": 100164
+        }
+      },
+      "scores": {
+        "bytes": 400656,
+        "path": "hce.validation.i32",
+        "sha256": "a7b08bcbb6bb2dc60d9d866ee5b18ee6dbff9e2e76c5e3f3aaae002e42f3351e"
+      },
+      "validation": {
+        "endgame": {
+          "ce": 0.6620555854942002,
+          "maeCp": 231.18275443283946,
+          "p95AbsCp": 702.7999999999993,
+          "p99AbsCp": 1142.1599999999999,
+          "rmseCp": 334.2976566550854,
+          "rows": 20585,
+          "signAccuracy": 0.5849404906485305
+        },
+        "middlegame": {
+          "ce": 0.6636632704267922,
+          "maeCp": 143.65848204098398,
+          "p95AbsCp": 468.0,
+          "p99AbsCp": 780.0,
+          "rmseCp": 220.64329266645456,
+          "rows": 21911,
+          "signAccuracy": 0.6678380722011775
+        },
+        "opening": {
+          "ce": 0.6915196151016116,
+          "maeCp": 97.00142193244086,
+          "p95AbsCp": 356.0,
+          "p99AbsCp": 628.0,
+          "rmseCp": 160.2866005171174,
+          "rows": 57668,
+          "signAccuracy": 0.6045467156828744
+        },
+        "overall": {
+          "ce": 0.6793707650393285,
+          "maeCp": 134.78371470787908,
+          "p95AbsCp": 487.0,
+          "p99AbsCp": 814.3699999999953,
+          "rmseCp": 220.01895078498256,
+          "rows": 100164,
+          "signAccuracy": 0.6143624455892337
+        }
+      }
+    }
+  },
+  "registrationSha256": "ac9dfedbe1c62652e36be9f77636e103dc9689387541ea19beb2df2b719616a5",
+  "researchOnly": true,
+  "schema": "chessy.eval-pipeline-refit-results.v1",
+  "status": "complete-research-only",
+  "strengthEvidence": false
+}

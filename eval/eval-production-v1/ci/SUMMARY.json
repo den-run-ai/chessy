@@ -1,0 +1,40 @@
+{
+  "headCommit": "637ce8d82fc9ca5dafd48f27a1179427ff44f8bd",
+  "moduleReproduction": {
+    "allSixModulesByteIdenticalToLocalGameBuild": true,
+    "artifactId": 15210446591,
+    "artifactSha256": "c32bfefc3c7c1951dff8b485ac6e3f2befca96f77047c14a6d63595d72289991"
+  },
+  "runId": 46022918601,
+  "runUrl": "https://github.com/den-run-ai/chessy/actions/runs/46022918601",
+  "schema": "chessy.eval-pipeline-browser-evidence.v1",
+  "scope": "Headless desktop browser correctness; not mobile or latency admission.",
+  "workerReceipts": [
+    {
+      "artifactId": 15210412675,
+      "artifactSha256": "4cfa3aa6a5f1333169e8f51174858e94f8a43a117d41886e74c6c2079592a06a",
+      "browser": "chromium",
+      "browserVersion": "149.0.7827.55",
+      "contracts": 16,
+      "gameBuildModulesMatch": true,
+      "moduleVariants": 6,
+      "path": "worker-chromium.json",
+      "playwrightVersion": "1.61.1",
+      "receiptBytes": 211102,
+      "receiptSha256": "7b4237e45a7b818ce2d1659a24863744afcfa198c25a693f21d3e3a94198c236"
+    },
+    {
+      "artifactId": 15210253069,
+      "artifactSha256": "c36d67a8f26e06693a60e9995f9eeb674e41d173b820889eaad8f7a0d27106d1",
+      "browser": "webkit",
+      "browserVersion": "26.5",
+      "contracts": 16,
+      "gameBuildModulesMatch": true,
+      "moduleVariants": 6,
+      "path": "worker-webkit.json",
+      "playwrightVersion": "1.61.1",
+      "receiptBytes": 208269,
+      "receiptSha256": "9014c0acbe6792f276a0bee1c5adcc9a12d99da728ede28e85b56b5d4b14e37c"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "campaignAudit": "5bbc44937c218e24a934a9cbe9de7478fda74972f12fc797bc4447920229f80b",
+  "experimentId": "eval-production-v1-full-time-frontier",
+  "files": {
+    "png": {
+      "bytes": 253929,
+      "name": "strength-time-frontier.png",
+      "sha256": "ac69e58932bb426b7cf8a9e2491acb2ffb97fa6ee1865b0697d1b8e8a0bd26b3"
+    },
+    "svg": {
+      "bytes": 22955,
+      "name": "strength-time-frontier.svg",
+      "sha256": "4b66023a26c399a4f4169583b29fd0e27bfa13980147969dba65fb74ae8f6ef7"
+    }
+  },
+  "matplotlibVersion": "3.10.8",
+  "plotSourceSha256": "8c9b8f82012f61d43cef8c8120ce9f4ada5f32bb78e7c02208f583d9c8c89709",
+  "productionAdmission": false,
+  "researchOnly": true,
+  "resultsSha256": "4ab74a44e647904aac2ac099afdd14cf0d5720b77afbf81a5d2e95f9d2eba177",
+  "schema": "chessy.eval-frontier-figure.v1",
+  "scoreAxis": true
+}

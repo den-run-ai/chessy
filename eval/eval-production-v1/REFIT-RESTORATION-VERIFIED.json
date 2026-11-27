@@ -1,0 +1,97 @@
+{
+  "focusedTests": {
+    "command": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "test/training/eval-pipeline-restore-refit.test.py"
+    ],
+    "cwd": "/workspace/scratch/6bfe86cd4820/chessy-work",
+    "logs": {
+      "tests.stderr": {
+        "bytes": 107,
+        "sha256": "5f0635b83af38a6c5d516fcb60dc3fa63c9c6ca4854e51a6a29ca33c92ccef16"
+      },
+      "tests.stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "returnCode": 0,
+    "tests": 9
+  },
+  "holdoutOpened": false,
+  "independentImporterChecks": {
+    "refit-no-pawn": {
+      "filesVerified": 49,
+      "model": {
+        "bytes": 34560,
+        "sha256": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2"
+      },
+      "qualityEligible": true,
+      "runtimeExportEligible": true
+    },
+    "refit-no-ray": {
+      "filesVerified": 49,
+      "model": {
+        "bytes": 34560,
+        "sha256": "c14d4bf4bffa1be3034a2b1151c393615a654699236207b4901aefd2643ad872"
+      },
+      "qualityEligible": true,
+      "runtimeExportEligible": true
+    }
+  },
+  "omittedFiles": [
+    "inputs/train.jsonl",
+    "inputs/validation.jsonl",
+    "packed/train.baseline.i32",
+    "packed/train.family.u32",
+    "packed/train.fens.txt",
+    "packed/train.indices.i32",
+    "packed/train.indptr.i64",
+    "packed/train.phase.u8",
+    "packed/train.teacher.f64",
+    "packed/train.values.f32",
+    "packed/validation.baseline.i32",
+    "packed/validation.family.u32",
+    "packed/validation.fens.txt",
+    "packed/validation.indices.i32",
+    "packed/validation.indptr.i64",
+    "packed/validation.phase.u8",
+    "packed/validation.teacher.f64",
+    "packed/validation.values.f32"
+  ],
+  "originalResultsUnchanged": true,
+  "passed": true,
+  "refitExecuted": false,
+  "restoreReceipt": {
+    "bytes": 1396,
+    "sha256": "db1430dabdca3a2ad33aa9ed4e340002286a910b3cf12acae38e96ec7de7ab77"
+  },
+  "restoredStudy": "/workspace/scratch/6bfe86cd4820/refit-restoration-check-v1",
+  "resultsManifest": {
+    "bytes": 25655,
+    "sha256": "3a703fb06361eacd4dfd120fc85492b5c33de8e1e01b987763be82ae8925bc1e"
+  },
+  "schema": "chessy.eval-pipeline-refit-restoration-check.v1",
+  "sourceFiles": {
+    "test/training/eval-pipeline-restore-refit.test.py": {
+      "bytes": 7730,
+      "sha256": "c85e644bcad3bd330d2f7199e87003c1c3523ea85894426be78407fa43a15aa7"
+    },
+    "tools/eval_pipeline/prepare.py": {
+      "bytes": 24721,
+      "sha256": "3e3576bfd1ebf4a8a2c27f78069015ade74116e8d109afb599611cb3da318a04"
+    },
+    "tools/eval_pipeline/refit_import.py": {
+      "bytes": 19308,
+      "sha256": "1d5edd27aa4ee0b915acb24772b2f37eb770c713c0314e7ffd6039d902fe6807"
+    },
+    "tools/eval_pipeline/restore_refit_inputs.py": {
+      "bytes": 14602,
+      "sha256": "b6f71f8deef9b06faab02921b63b8dc2b86e306d692de2b30a6fbde82c7c4836"
+    }
+  },
+  "thinInventoryFilesOmitted": 18,
+  "thinInventoryFilesRetained": 31,
+  "thinStaging": "/workspace/scratch/6bfe86cd4820/refit-thin-staging-v1",
+  "verifiedInventoryFiles": 49
+}

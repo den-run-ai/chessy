@@ -33,6 +33,16 @@ outside Git. Read the [source/license policy](DATASETS.md) before acquiring data
 | Convex handcrafted evaluation | [HCE R3](#hce-r3) |
 | Neural evaluation | [NNUE G0/G1](#nnue-g0g1) |
 | Execution and publication boundaries | [Trusted runners](#trusted-runner-and-publication) |
+| Restore omitted sparse-refit research inputs | [Thin-bundle restoration](../../tools/eval_pipeline/BUILD.md#restore-omitted-refit-inputs-from-a-thin-bundle) |
+
+The separately recorded evaluator production study has a thin evidence bundle
+that preserves both cost-aware refits while omitting duplicate bulk inputs.
+Its [restoration helper](../../tools/eval_pipeline/restore_refit_inputs.py)
+authenticates the original train/validation data, reconstructs exact packed
+features through the retained extractor, and verifies the complete 49-file
+study inventory. It preserves the fitted models and reads no holdout data.
+See the linked guide for prerequisites and commands; restored research evidence
+does not change a model's production or playing-strength admission.
 
 ## Predeclared sequence
 

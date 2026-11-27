@@ -104,6 +104,48 @@ to a registered cost/game campaign or activate it. Its prepared model identity,
 family flag, validation/runtime admission, and complete provenance are explicit
 in `PREPARED.json`. Equal-time playing strength remains a separate gate.
 
+### Restore omitted refit inputs from a thin bundle
+
+The thin evidence bundle preserves the completed v1 refit results, both models,
+validation scores, registration, source snapshots, native extractor, and packed
+receipt. It omits the two large raw train/validation files and their 16 packed
+array files. Importing a refit requires those inputs to be restored so all 49
+files in the original `RESULTS.json` inventory can be authenticated.
+
+Obtain the original `chessy-sparse-pesto-data-and-evidence.tar.zst` archive and
+extract `data/eval-v1/manifest.json`, `data/eval-v1/train.jsonl`, and
+`data/eval-v1/validation.jsonl`. The restoration helper authenticates the exact
+original manifest and both raw inputs. It does not need a holdout extraction.
+
+Use a Linux x86-64 host compatible with the retained native extractor and
+Python with the recorded NumPy/SciPy versions. No Rust compiler is executed.
+Run from the repository root, with a new reconstruction directory outside the
+thin study and original-data trees:
+
+```sh
+python3 -m pip install 'numpy==2.3.5' 'scipy==1.17.0'
+python3 tools/eval_pipeline/restore_refit_inputs.py \
+  --study /data/thin-evidence/refit-study-v1 \
+  --data-directory /data/original-inputs/data/eval-v1 \
+  --work-directory /data/new-refit-input-reconstruction
+```
+
+The helper executes the captured, hash-pinned `pack_roles` in an isolated
+subprocess. It reconstructs only train/validation features and verifies all 16
+arrays plus `packed/PACKED.json` against the completed study before publishing
+missing inputs. It preserves fitted weights, validation outputs, and all
+historical manifests. Existing mismatches, changed source, symlinks, and unsafe
+paths stop restoration without overwriting evidence. Valid inputs already
+present are kept. Failed attempts leave no success receipt; a partial attempt
+may leave verified inputs already restored.
+
+Successful restoration verifies all 49 inventory identities and writes
+`RESTORED-INPUTS.json`. The original `RESULTS.json` remains unchanged. No fitting
+is rerun and only train/validation data are opened. The helper is bound to this
+recorded v1 study; another study requires an explicitly reviewed identity.
+The restored tree can then be passed to `prepare.py --refit-manifest` using the
+command above. Its quality and playing-strength status remain unchanged.
+
 ### Explicit one-page memory experiment
 
 The current 405-page capacity is 26,542,080 bytes. An initial real build

@@ -1,0 +1,1273 @@
+{
+  "bootstrap": {
+    "clusterCount": 10,
+    "clusterSizesDescending": [
+      5,
+      2,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "confidence": 0.95,
+    "marginalTailProbability": 0.0062500000000000056,
+    "method": "Independent count-weighted family resampling of both colors, Bonferroni percentile bands.",
+    "sameFamilyDrawAcrossTimeGrid": true,
+    "samples": 10000,
+    "seed": 20261127
+  },
+  "canonicalAuditComparison": {
+    "agrees": true,
+    "canonicalAuditSha256": "4ab74a44e647904aac2ac099afdd14cf0d5720b77afbf81a5d2e95f9d2eba177",
+    "performed": true
+  },
+  "completeScheduleVerified": true,
+  "completionSha256": "256f767960ff3a17c660a63f9ba90cbe4f79ec0242a0261a4546d04c239e7e1b",
+  "formalPass": false,
+  "freshProductionJavascriptReplay": {
+    "fullPliesReplayed": 16734,
+    "gameLedgerSha256": "7e2f25ee36c639d576b46ad567dfae6727e3054269bff3896c27facb51d5d91f",
+    "games": 128,
+    "nodeVersion": "v22.23.2",
+    "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+    "scope": "Fresh production-JavaScript legal replay, all full histories and natural outcomes, without WASM.",
+    "searchesExecuted": 0,
+    "sourceSha256": "c80c415a47bb64eec029d4a34264a40bdd828e699849fb12b0eebcb8c2589213",
+    "status": "pass",
+    "wasmLoaded": false
+  },
+  "fullHistoriesVerified": true,
+  "gamesReplayed": 128,
+  "implementationSha256": "2a33ee6ab27ab7c7ef25f9dd8da77e59b13dfc952bcdb3aa79fb6fbe5d7027fa",
+  "inputFiles": {
+    "games.jsonl": {
+      "bytes": 227526,
+      "path": "games.jsonl",
+      "sha256": "7e2f25ee36c639d576b46ad567dfae6727e3054269bff3896c27facb51d5d91f"
+    },
+    "games.pgn": {
+      "bytes": 165529,
+      "path": "games.pgn",
+      "sha256": "f115a9f22b830fe15a342ba7ff5cdba3f38959ba0ce28a4e4de0044322cd6e4d"
+    },
+    "host.stderr": {
+      "bytes": 171,
+      "path": "host.stderr",
+      "sha256": "13be72cb9398f24696a032e65707b89d429030fc21baff38865f963a9452320d"
+    },
+    "raw.jsonl": {
+      "bytes": 90336179,
+      "path": "raw.jsonl",
+      "rows": 14009,
+      "sha256": "d1770646f7b3282bdffae58816157167ec08989cf5b54b6f253be4e30080e306"
+    }
+  },
+  "javascriptReplayImplementationSha256": "c80c415a47bb64eec029d4a34264a40bdd828e699849fb12b0eebcb8c2589213",
+  "legalMoveSetsVerified": true,
+  "limitations": [
+    "Ten coarse clusters from an exposed development bank provide exploratory, approximate simultaneous intervals.",
+    "The original training corpus lacks source-game IDs; this audit does not establish source-game isolation.",
+    "The registered clean-time predicate is broad: median ratio [0.9,1.1] and time-limit p99 at most twice budget.",
+    "Absolute overshoot and full-request latency are reported separately; passing that predicate is not a hard deadline guarantee.",
+    "Engine-call time includes loader/WASM preparation and search; full-request time additionally includes transport and host/rules overhead.",
+    "Different encountered positions make per-game mean nodes and depths descriptive, not a matched-position speed comparison.",
+    "No fresh confirmation, device latency claim, interpolated crossover threshold, or production activation follows from these results."
+  ],
+  "naturalTerminationBeforeCapVerified": true,
+  "pgnsVerified": 128,
+  "productionAdmission": false,
+  "profiles": [
+    {
+      "candidateScore": 0.328125,
+      "draws": 5,
+      "games": 32,
+      "losses": 19,
+      "openingPairs": 16,
+      "pairedScores": [
+        {
+          "openingId": "dbc21d96751a36dc5ad5244130c81c7e275bf7a64aebaa9a09688742125ca3fd",
+          "score": 0.5
+        },
+        {
+          "openingId": "923428f6fbbe49921f4fd027db3ff04fdf1061cfe29f8df7e923e10b26cfca6f",
+          "score": 0.5
+        },
+        {
+          "openingId": "2a87fbc8f35e30c768fa8461fb42e40acedaf936e14d9524762e7cc95f2a0ca0",
+          "score": 0.5
+        },
+        {
+          "openingId": "fc1affc8f04729075cf35db5fca0de14243644a93e51ba8181718c099c570eb5",
+          "score": 0.5
+        },
+        {
+          "openingId": "33d3c8b3c40bbbf6d639bb6490659af4e901ae6e368ed8f3b306d1ed0006c13c",
+          "score": 0.25
+        },
+        {
+          "openingId": "dc7e0206c9c6bbbbce03ae6ce1e9348d90aba085e1d7722ab165d3085fe9e70a",
+          "score": 0.5
+        },
+        {
+          "openingId": "4f3a5c481d5384dd77ba50666d7eeaa338cc51fb1c45cceb07dc184550ef6a1b",
+          "score": 0.0
+        },
+        {
+          "openingId": "17fa6212c9a5a038b5ee8e042202a0ea7966d8ee86e4f330751e492101e337cd",
+          "score": 0.25
+        },
+        {
+          "openingId": "9355fa1bec3b0cc316c02f45bac599f95f2f2468164afa3f986828c1bcfc0615",
+          "score": 0.5
+        },
+        {
+          "openingId": "c3fa59310442acbdd09c0df43172b93755a6088ac7b8202d17e8fcd2d7ea2ff6",
+          "score": 0.25
+        },
+        {
+          "openingId": "50bbe60a1f8e7b17dabe4f556a9ddbb8992c50c9396e71d62fe53db136a9b0b8",
+          "score": 0.5
+        },
+        {
+          "openingId": "69877c91f7eaa55fec842fa6cf3777201d7feb62e67c4cdf7c8f3ec56d2c0516",
+          "score": 0.0
+        },
+        {
+          "openingId": "9bc1974b50494988f75807341c2eda55208ada086d2edb344cf78007db3a2b10",
+          "score": 0.25
+        },
+        {
+          "openingId": "4abd1a6da27a784d0479a5364829281fe2e71eccf1ffc698125d2d3e0867c686",
+          "score": 0.0
+        },
+        {
+          "openingId": "4328795f3ec0132a3e1575e13a1aac14d13708ddc35d0060b599d2895b32adf1",
+          "score": 0.0
+        },
+        {
+          "openingId": "85c00240b44f410019ef9525daa3cab66b1b0af7a6c3cdf0bb7c4f24cdc68a49",
+          "score": 0.75
+        }
+      ],
+      "simultaneousInterval": [
+        0.18181818181818182,
+        0.4375
+      ],
+      "terminationCounts": {
+        "checkmate": 27,
+        "current-threefold": 1,
+        "ply-cap": 4
+      },
+      "timeMs": 10,
+      "wins": 8
+    },
+    {
+      "candidateScore": 0.421875,
+      "draws": 5,
+      "games": 32,
+      "losses": 16,
+      "openingPairs": 16,
+      "pairedScores": [
+        {
+          "openingId": "dbc21d96751a36dc5ad5244130c81c7e275bf7a64aebaa9a09688742125ca3fd",
+          "score": 0.5
+        },
+        {
+          "openingId": "923428f6fbbe49921f4fd027db3ff04fdf1061cfe29f8df7e923e10b26cfca6f",
+          "score": 1.0
+        },
+        {
+          "openingId": "2a87fbc8f35e30c768fa8461fb42e40acedaf936e14d9524762e7cc95f2a0ca0",
+          "score": 0.0
+        },
+        {
+          "openingId": "fc1affc8f04729075cf35db5fca0de14243644a93e51ba8181718c099c570eb5",
+          "score": 0.0
+        },
+        {
+          "openingId": "33d3c8b3c40bbbf6d639bb6490659af4e901ae6e368ed8f3b306d1ed0006c13c",
+          "score": 0.5
+        },
+        {
+          "openingId": "dc7e0206c9c6bbbbce03ae6ce1e9348d90aba085e1d7722ab165d3085fe9e70a",
+          "score": 0.75
+        },
+        {
+          "openingId": "4f3a5c481d5384dd77ba50666d7eeaa338cc51fb1c45cceb07dc184550ef6a1b",
+          "score": 0.25
+        },
+        {
+          "openingId": "17fa6212c9a5a038b5ee8e042202a0ea7966d8ee86e4f330751e492101e337cd",
+          "score": 0.0
+        },
+        {
+          "openingId": "9355fa1bec3b0cc316c02f45bac599f95f2f2468164afa3f986828c1bcfc0615",
+          "score": 0.5
+        },
+        {
+          "openingId": "c3fa59310442acbdd09c0df43172b93755a6088ac7b8202d17e8fcd2d7ea2ff6",
+          "score": 0.5
+        },
+        {
+          "openingId": "50bbe60a1f8e7b17dabe4f556a9ddbb8992c50c9396e71d62fe53db136a9b0b8",
+          "score": 0.5
+        },
+        {
+          "openingId": "69877c91f7eaa55fec842fa6cf3777201d7feb62e67c4cdf7c8f3ec56d2c0516",
+          "score": 0.5
+        },
+        {
+          "openingId": "9bc1974b50494988f75807341c2eda55208ada086d2edb344cf78007db3a2b10",
+          "score": 0.5
+        },
+        {
+          "openingId": "4abd1a6da27a784d0479a5364829281fe2e71eccf1ffc698125d2d3e0867c686",
+          "score": 0.25
+        },
+        {
+          "openingId": "4328795f3ec0132a3e1575e13a1aac14d13708ddc35d0060b599d2895b32adf1",
+          "score": 0.5
+        },
+        {
+          "openingId": "85c00240b44f410019ef9525daa3cab66b1b0af7a6c3cdf0bb7c4f24cdc68a49",
+          "score": 0.5
+        }
+      ],
+      "simultaneousInterval": [
+        0.2727272727272727,
+        0.49074074074074076
+      ],
+      "terminationCounts": {
+        "checkmate": 27,
+        "current-threefold": 1,
+        "ply-cap": 4
+      },
+      "timeMs": 25,
+      "wins": 11
+    },
+    {
+      "candidateScore": 0.515625,
+      "draws": 9,
+      "games": 32,
+      "losses": 11,
+      "openingPairs": 16,
+      "pairedScores": [
+        {
+          "openingId": "dbc21d96751a36dc5ad5244130c81c7e275bf7a64aebaa9a09688742125ca3fd",
+          "score": 0.25
+        },
+        {
+          "openingId": "923428f6fbbe49921f4fd027db3ff04fdf1061cfe29f8df7e923e10b26cfca6f",
+          "score": 0.5
+        },
+        {
+          "openingId": "2a87fbc8f35e30c768fa8461fb42e40acedaf936e14d9524762e7cc95f2a0ca0",
+          "score": 0.25
+        },
+        {
+          "openingId": "fc1affc8f04729075cf35db5fca0de14243644a93e51ba8181718c099c570eb5",
+          "score": 1.0
+        },
+        {
+          "openingId": "33d3c8b3c40bbbf6d639bb6490659af4e901ae6e368ed8f3b306d1ed0006c13c",
+          "score": 0.75
+        },
+        {
+          "openingId": "dc7e0206c9c6bbbbce03ae6ce1e9348d90aba085e1d7722ab165d3085fe9e70a",
+          "score": 0.5
+        },
+        {
+          "openingId": "4f3a5c481d5384dd77ba50666d7eeaa338cc51fb1c45cceb07dc184550ef6a1b",
+          "score": 0.25
+        },
+        {
+          "openingId": "17fa6212c9a5a038b5ee8e042202a0ea7966d8ee86e4f330751e492101e337cd",
+          "score": 0.0
+        },
+        {
+          "openingId": "9355fa1bec3b0cc316c02f45bac599f95f2f2468164afa3f986828c1bcfc0615",
+          "score": 1.0
+        },
+        {
+          "openingId": "c3fa59310442acbdd09c0df43172b93755a6088ac7b8202d17e8fcd2d7ea2ff6",
+          "score": 0.0
+        },
+        {
+          "openingId": "50bbe60a1f8e7b17dabe4f556a9ddbb8992c50c9396e71d62fe53db136a9b0b8",
+          "score": 0.25
+        },
+        {
+          "openingId": "69877c91f7eaa55fec842fa6cf3777201d7feb62e67c4cdf7c8f3ec56d2c0516",
+          "score": 1.0
+        },
+        {
+          "openingId": "9bc1974b50494988f75807341c2eda55208ada086d2edb344cf78007db3a2b10",
+          "score": 0.75
+        },
+        {
+          "openingId": "4abd1a6da27a784d0479a5364829281fe2e71eccf1ffc698125d2d3e0867c686",
+          "score": 0.25
+        },
+        {
+          "openingId": "4328795f3ec0132a3e1575e13a1aac14d13708ddc35d0060b599d2895b32adf1",
+          "score": 0.75
+        },
+        {
+          "openingId": "85c00240b44f410019ef9525daa3cab66b1b0af7a6c3cdf0bb7c4f24cdc68a49",
+          "score": 0.75
+        }
+      ],
+      "simultaneousInterval": [
+        0.29545454545454547,
+        0.6811947601010105
+      ],
+      "terminationCounts": {
+        "checkmate": 23,
+        "current-threefold": 2,
+        "insufficient-material": 1,
+        "ply-cap": 6
+      },
+      "timeMs": 100,
+      "wins": 12
+    },
+    {
+      "candidateScore": 0.328125,
+      "draws": 3,
+      "games": 32,
+      "losses": 20,
+      "openingPairs": 16,
+      "pairedScores": [
+        {
+          "openingId": "dbc21d96751a36dc5ad5244130c81c7e275bf7a64aebaa9a09688742125ca3fd",
+          "score": 0.5
+        },
+        {
+          "openingId": "923428f6fbbe49921f4fd027db3ff04fdf1061cfe29f8df7e923e10b26cfca6f",
+          "score": 0.5
+        },
+        {
+          "openingId": "2a87fbc8f35e30c768fa8461fb42e40acedaf936e14d9524762e7cc95f2a0ca0",
+          "score": 0.5
+        },
+        {
+          "openingId": "fc1affc8f04729075cf35db5fca0de14243644a93e51ba8181718c099c570eb5",
+          "score": 0.5
+        },
+        {
+          "openingId": "33d3c8b3c40bbbf6d639bb6490659af4e901ae6e368ed8f3b306d1ed0006c13c",
+          "score": 0.0
+        },
+        {
+          "openingId": "dc7e0206c9c6bbbbce03ae6ce1e9348d90aba085e1d7722ab165d3085fe9e70a",
+          "score": 0.5
+        },
+        {
+          "openingId": "4f3a5c481d5384dd77ba50666d7eeaa338cc51fb1c45cceb07dc184550ef6a1b",
+          "score": 0.0
+        },
+        {
+          "openingId": "17fa6212c9a5a038b5ee8e042202a0ea7966d8ee86e4f330751e492101e337cd",
+          "score": 0.0
+        },
+        {
+          "openingId": "9355fa1bec3b0cc316c02f45bac599f95f2f2468164afa3f986828c1bcfc0615",
+          "score": 0.25
+        },
+        {
+          "openingId": "c3fa59310442acbdd09c0df43172b93755a6088ac7b8202d17e8fcd2d7ea2ff6",
+          "score": 0.0
+        },
+        {
+          "openingId": "50bbe60a1f8e7b17dabe4f556a9ddbb8992c50c9396e71d62fe53db136a9b0b8",
+          "score": 0.0
+        },
+        {
+          "openingId": "69877c91f7eaa55fec842fa6cf3777201d7feb62e67c4cdf7c8f3ec56d2c0516",
+          "score": 0.75
+        },
+        {
+          "openingId": "9bc1974b50494988f75807341c2eda55208ada086d2edb344cf78007db3a2b10",
+          "score": 0.5
+        },
+        {
+          "openingId": "4abd1a6da27a784d0479a5364829281fe2e71eccf1ffc698125d2d3e0867c686",
+          "score": 0.0
+        },
+        {
+          "openingId": "4328795f3ec0132a3e1575e13a1aac14d13708ddc35d0060b599d2895b32adf1",
+          "score": 0.5
+        },
+        {
+          "openingId": "85c00240b44f410019ef9525daa3cab66b1b0af7a6c3cdf0bb7c4f24cdc68a49",
+          "score": 0.75
+        }
+      ],
+      "simultaneousInterval": [
+        0.11924715909090972,
+        0.48214285714285715
+      ],
+      "terminationCounts": {
+        "checkmate": 29,
+        "ply-cap": 3
+      },
+      "timeMs": 400,
+      "wins": 9
+    }
+  ],
+  "rawRowsVerified": 14009,
+  "registrationSha256": "5bbc44937c218e24a934a9cbe9de7478fda74972f12fc797bc4447920229f80b",
+  "researchOnly": true,
+  "result": "pass",
+  "schema": "chessy.eval-game-independent-audit.v1",
+  "scope": [
+    "Independent verifier imports no games.py/frontier.py/cost.py code.",
+    "All raw request/response identities, legal moves, complete histories, outcomes, PGNs and module/runtime bindings are checked.",
+    "Fresh retained production JavaScript replay independently confirms every full game without WASM loading or search.",
+    "The score bootstrap and timing distributions are recomputed from the independently reconstructed ledger.",
+    "Runtime observations are the original sealed campaign measurements; verification does not add timing observations."
+  ],
+  "searchedPliesReplayed": 13590,
+  "searchesRerun": 0,
+  "timing": [
+    {
+      "hardDeadlineGuarantee": false,
+      "registeredBroadRealizedTimePredicate": true,
+      "sides": {
+        "base": {
+          "allStopsEngineCallAboveTwiceBudget": 1,
+          "allStopsRequestWallAboveTwiceBudget": 6,
+          "depthZeroSearches": 1,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1726,
+            "maximum": 14.157638999866322,
+            "mean": 0.36808574043916675,
+            "median": 0.6600020000187214,
+            "minimum": -9.693558000028133,
+            "p95": 1.2278732499544276,
+            "p99": 2.1079937498871004
+          },
+          "engineCallMsAllStops": {
+            "count": 1726,
+            "maximum": 24.15763899986632,
+            "mean": 10.368085740439167,
+            "median": 10.660002000018721,
+            "minimum": 0.3064419999718666,
+            "p95": 11.227873249954428,
+            "p99": 12.1079937498871
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1726,
+            "maximum": 215.282454,
+            "mean": 1.84477208400927,
+            "median": 1.8988084999999995,
+            "minimum": -8.74548,
+            "p95": 3.0316142499999996,
+            "p99": 6.20368225
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1726,
+            "maximum": 225.282454,
+            "mean": 11.84477208400927,
+            "median": 11.8988085,
+            "minimum": 1.25452,
+            "p95": 13.03161425,
+            "p99": 16.20368225
+          },
+          "meanDepth": 3.769409038238702,
+          "meanNodes": 14533.15932792584,
+          "nodes": 25084233,
+          "requestMinusEngineCallMs": {
+            "count": 1726,
+            "maximum": 213.6361359999572,
+            "mean": 1.4766863435701032,
+            "median": 1.2278204999684075,
+            "minimum": 0.5576810000218195,
+            "p95": 2.044664000173886,
+            "p99": 5.106249750005054
+          },
+          "searches": 1726,
+          "stopReasons": {
+            "mate": 73,
+            "time-limit": 1653
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 231,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 231,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1653,
+            "maximum": 14.157638999866322,
+            "mean": 0.7393476218982654,
+            "median": 0.672614999988582,
+            "minimum": 0.16028899978846312,
+            "p95": 1.2357562000003774,
+            "p99": 2.191451839897783
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1653,
+            "maximum": 24.15763899986632,
+            "mean": 10.739347621898267,
+            "median": 10.672614999988582,
+            "minimum": 10.160288999788463,
+            "p95": 11.235756200000377,
+            "p99": 12.191451839897784
+          },
+          "timeLimitFraction": 0.9577056778679026,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1653,
+            "maximum": 215.282454,
+            "mean": 2.212004950998185,
+            "median": 1.9332949999999993,
+            "minimum": 0.7713090000000005,
+            "p95": 3.068637399999999,
+            "p99": 6.51738724000001
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1653,
+            "maximum": 225.282454,
+            "mean": 12.212004950998185,
+            "median": 11.933295,
+            "minimum": 10.771309,
+            "p95": 13.0686374,
+            "p99": 16.517387240000012
+          },
+          "timeLimitStops": 1653
+        },
+        "candidate": {
+          "allStopsEngineCallAboveTwiceBudget": 1,
+          "allStopsRequestWallAboveTwiceBudget": 6,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1721,
+            "maximum": 41.045833999989554,
+            "mean": 0.42560040034988866,
+            "median": 0.6891159999649972,
+            "minimum": -9.712146000005305,
+            "p95": 1.2688299999572337,
+            "p99": 2.2836352000595035
+          },
+          "engineCallMsAllStops": {
+            "count": 1721,
+            "maximum": 51.045833999989554,
+            "mean": 10.42560040034989,
+            "median": 10.689115999964997,
+            "minimum": 0.2878539999946952,
+            "p95": 11.268829999957234,
+            "p99": 12.283635200059503
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1721,
+            "maximum": 69.818706,
+            "mean": 1.8252683451481697,
+            "median": 1.9327649999999998,
+            "minimum": -8.800022,
+            "p95": 3.0422910000000005,
+            "p99": 6.456222599999991
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1721,
+            "maximum": 79.818706,
+            "mean": 11.825268345148169,
+            "median": 11.932765,
+            "minimum": 1.199978,
+            "p95": 13.042291,
+            "p99": 16.45622259999999
+          },
+          "meanDepth": 3.7332945961650204,
+          "meanNodes": 13529.168506682161,
+          "nodes": 23283699,
+          "requestMinusEngineCallMs": {
+            "count": 1721,
+            "maximum": 69.21038199997018,
+            "mean": 1.399667944798281,
+            "median": 1.209040999995068,
+            "minimum": 0.5436689999436144,
+            "p95": 2.0596029999840155,
+            "p99": 5.080612200012742
+          },
+          "searches": 1721,
+          "stopReasons": {
+            "mate": 70,
+            "time-limit": 1651
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 308,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 308,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1651,
+            "maximum": 41.045833999989554,
+            "mean": 0.7811906493046865,
+            "median": 0.7055759999784641,
+            "minimum": 0.16287300002295524,
+            "p95": 1.2760870000347495,
+            "p99": 2.378977000073064
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1651,
+            "maximum": 51.045833999989554,
+            "mean": 10.781190649304685,
+            "median": 10.705575999978464,
+            "minimum": 10.162873000022955,
+            "p95": 11.27608700003475,
+            "p99": 12.378977000073064
+          },
+          "timeLimitFraction": 0.9593259732713538,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1651,
+            "maximum": 69.818706,
+            "mean": 2.1637730375529984,
+            "median": 1.9496730000000007,
+            "minimum": 0.7670130000000004,
+            "p95": 3.0735085,
+            "p99": 6.405104999999999
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1651,
+            "maximum": 79.818706,
+            "mean": 12.163773037552998,
+            "median": 11.949673,
+            "minimum": 10.767013,
+            "p95": 13.073508499999999,
+            "p99": 16.405105
+          },
+          "timeLimitStops": 1651
+        }
+      },
+      "timeLimitMedianCandidateOverBase": 1.003088371499386,
+      "timeMs": 10
+    },
+    {
+      "hardDeadlineGuarantee": false,
+      "registeredBroadRealizedTimePredicate": true,
+      "sides": {
+        "base": {
+          "allStopsEngineCallAboveTwiceBudget": 0,
+          "allStopsRequestWallAboveTwiceBudget": 1,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1522,
+            "maximum": 5.66345100000035,
+            "mean": -0.3535545703041165,
+            "median": 0.660052000079304,
+            "minimum": -24.80925200006459,
+            "p95": 1.241634449964795,
+            "p99": 2.2552427699579787
+          },
+          "engineCallMsAllStops": {
+            "count": 1522,
+            "maximum": 30.66345100000035,
+            "mean": 24.646445429695884,
+            "median": 25.660052000079304,
+            "minimum": 0.19074799993541092,
+            "p95": 26.241634449964796,
+            "p99": 27.255242769957977
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1522,
+            "maximum": 33.692901,
+            "mean": 1.0775781346911957,
+            "median": 2.0072565000000004,
+            "minimum": -24.005682,
+            "p95": 3.155273900000003,
+            "p99": 4.919304999999995
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1522,
+            "maximum": 58.692901,
+            "mean": 26.077578134691198,
+            "median": 27.0072565,
+            "minimum": 0.994318,
+            "p95": 28.155273900000005,
+            "p99": 29.919304999999994
+          },
+          "meanDepth": 4.505913272010512,
+          "meanNodes": 36899.23850197109,
+          "nodes": 56160641,
+          "requestMinusEngineCallMs": {
+            "count": 1522,
+            "maximum": 31.81386499999973,
+            "mean": 1.4311327049953124,
+            "median": 1.3255580000062253,
+            "minimum": 0.5708599999998434,
+            "p95": 2.126131550065038,
+            "p99": 3.360033150108034
+          },
+          "searches": 1522,
+          "stopReasons": {
+            "mate": 74,
+            "max-depth": 1,
+            "time-limit": 1447
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 12,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 228,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1447,
+            "maximum": 5.66345100000035,
+            "mean": 0.738881044227285,
+            "median": 0.6814350001513958,
+            "minimum": 0.1300139999948442,
+            "p95": 1.2536582000146157,
+            "p99": 2.320815719984237
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1447,
+            "maximum": 30.66345100000035,
+            "mean": 25.738881044227284,
+            "median": 25.681435000151396,
+            "minimum": 25.130013999994844,
+            "p95": 26.253658200014613,
+            "p99": 27.32081571998424
+          },
+          "timeLimitFraction": 0.9507227332457293,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1447,
+            "maximum": 33.692901,
+            "mean": 2.1642813517622668,
+            "median": 2.0543739999999993,
+            "minimum": 0.7531190000000016,
+            "p95": 3.1781144,
+            "p99": 4.998049899999995
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1447,
+            "maximum": 58.692901,
+            "mean": 27.164281351762266,
+            "median": 27.054374,
+            "minimum": 25.753119,
+            "p95": 28.1781144,
+            "p99": 29.998049899999998
+          },
+          "timeLimitStops": 1447
+        },
+        "candidate": {
+          "allStopsEngineCallAboveTwiceBudget": 0,
+          "allStopsRequestWallAboveTwiceBudget": 0,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1519,
+            "maximum": 20.56401399988681,
+            "mean": -0.2935513693215258,
+            "median": 0.6911349999718368,
+            "minimum": -24.783333000028506,
+            "p95": 1.3354350000037798,
+            "p99": 3.254341339967207
+          },
+          "engineCallMsAllStops": {
+            "count": 1519,
+            "maximum": 45.56401399988681,
+            "mean": 24.706448630678477,
+            "median": 25.691134999971837,
+            "minimum": 0.21666699997149408,
+            "p95": 26.33543500000378,
+            "p99": 28.25434133996721
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1519,
+            "maximum": 21.822288999999998,
+            "mean": 1.1206317188940091,
+            "median": 2.0454399999999993,
+            "minimum": -24.008386,
+            "p95": 3.210759800000001,
+            "p99": 6.136623419999992
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1519,
+            "maximum": 46.822289,
+            "mean": 26.12063171889401,
+            "median": 27.04544,
+            "minimum": 0.991614,
+            "p95": 28.2107598,
+            "p99": 31.136623419999992
+          },
+          "meanDepth": 4.448979591836735,
+          "meanNodes": 34075.211323238975,
+          "nodes": 51760246,
+          "requestMinusEngineCallMs": {
+            "count": 1519,
+            "maximum": 13.527102000067742,
+            "mean": 1.4141830882155348,
+            "median": 1.2950509999662785,
+            "minimum": 0.6159270000089236,
+            "p95": 2.173017700109806,
+            "p99": 3.510754920031168
+          },
+          "searches": 1519,
+          "stopReasons": {
+            "mate": 75,
+            "time-limit": 1444
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 23,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 289,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1444,
+            "maximum": 20.56401399988681,
+            "mean": 0.8072240692519631,
+            "median": 0.7072505000396632,
+            "minimum": 0.16755199991166592,
+            "p95": 1.3552480499871309,
+            "p99": 3.2865579799667453
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1444,
+            "maximum": 45.56401399988681,
+            "mean": 25.807224069251962,
+            "median": 25.707250500039663,
+            "minimum": 25.167551999911666,
+            "p95": 26.355248049987132,
+            "p99": 28.286557979966744
+          },
+          "timeLimitFraction": 0.9506254114549045,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1444,
+            "maximum": 21.822288999999998,
+            "mean": 2.222400290166205,
+            "median": 2.0739579999999993,
+            "minimum": 0.8348869999999984,
+            "p95": 3.2505654999999996,
+            "p99": 6.190115759999998
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1444,
+            "maximum": 46.822289,
+            "mean": 27.222400290166206,
+            "median": 27.073957999999998,
+            "minimum": 25.834887,
+            "p95": 28.2505655,
+            "p99": 31.190115759999998
+          },
+          "timeLimitStops": 1444
+        }
+      },
+      "timeLimitMedianCandidateOverBase": 1.0010052203036206,
+      "timeMs": 25
+    },
+    {
+      "hardDeadlineGuarantee": false,
+      "registeredBroadRealizedTimePredicate": true,
+      "sides": {
+        "base": {
+          "allStopsEngineCallAboveTwiceBudget": 0,
+          "allStopsRequestWallAboveTwiceBudget": 0,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1815,
+            "maximum": 31.849696999997832,
+            "mean": -3.294373051793343,
+            "median": 0.66795300017111,
+            "minimum": -99.69879600009881,
+            "p95": 1.2614158000214952,
+            "p99": 2.9623013600380954
+          },
+          "engineCallMsAllStops": {
+            "count": 1815,
+            "maximum": 131.84969699999783,
+            "mean": 96.70562694820666,
+            "median": 100.66795300017111,
+            "minimum": 0.3012039999011904,
+            "p95": 101.2614158000215,
+            "p99": 102.9623013600381
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1815,
+            "maximum": 34.41881799999999,
+            "mean": -1.6152089245179064,
+            "median": 2.2232329999999934,
+            "minimum": -98.770947,
+            "p95": 3.5258882000000025,
+            "p99": 7.905627059999992
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1815,
+            "maximum": 134.418818,
+            "mean": 98.3847910754821,
+            "median": 102.223233,
+            "minimum": 1.229053,
+            "p95": 103.52588820000001,
+            "p99": 107.90562706
+          },
+          "meanDepth": 5.971900826446281,
+          "meanNodes": 157304.13223140495,
+          "nodes": 285507000,
+          "requestMinusEngineCallMs": {
+            "count": 1815,
+            "maximum": 24.593341000001487,
+            "mean": 1.6791641272754372,
+            "median": 1.5289630000347216,
+            "minimum": 0.7695500000001232,
+            "p95": 2.444841099975134,
+            "p99": 5.423876080000452
+          },
+          "searches": 1815,
+          "stopReasons": {
+            "mate": 82,
+            "max-depth": 1,
+            "time-limit": 1732
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 1,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 268,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1732,
+            "maximum": 31.849696999997832,
+            "mean": 0.7848420588880992,
+            "median": 0.6854599999496713,
+            "minimum": 0.1496579999802634,
+            "p95": 1.2777786999620728,
+            "p99": 3.1089802300109395
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1732,
+            "maximum": 131.84969699999783,
+            "mean": 100.7848420588881,
+            "median": 100.68545999994967,
+            "minimum": 100.14965799998026,
+            "p95": 101.27777869996207,
+            "p99": 103.10898023001094
+          },
+          "timeLimitFraction": 0.9542699724517907,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1732,
+            "maximum": 34.41881799999999,
+            "mean": 2.467916771939954,
+            "median": 2.2643924999999996,
+            "minimum": 0.9833079999999939,
+            "p95": 3.5505498499999977,
+            "p99": 8.038043130000016
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1732,
+            "maximum": 134.418818,
+            "mean": 102.46791677193994,
+            "median": 102.2643925,
+            "minimum": 100.983308,
+            "p95": 103.55054985,
+            "p99": 108.03804313
+          },
+          "timeLimitStops": 1732
+        },
+        "candidate": {
+          "allStopsEngineCallAboveTwiceBudget": 0,
+          "allStopsRequestWallAboveTwiceBudget": 0,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1816,
+            "maximum": 36.67876999999862,
+            "mean": -3.433657508257875,
+            "median": 0.703731500019785,
+            "minimum": -99.71319799986668,
+            "p95": 1.2840015000256244,
+            "p99": 2.5161317999765704
+          },
+          "engineCallMsAllStops": {
+            "count": 1816,
+            "maximum": 136.67876999999862,
+            "mean": 96.56634249174212,
+            "median": 100.70373150001979,
+            "minimum": 0.2868020001333207,
+            "p95": 101.28400150002562,
+            "p99": 102.51613179997656
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1816,
+            "maximum": 37.754571999999996,
+            "mean": -1.7670577731277537,
+            "median": 2.265313000000006,
+            "minimum": -98.860473,
+            "p95": 3.4870462499999952,
+            "p99": 6.869182449999986
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1816,
+            "maximum": 137.754572,
+            "mean": 98.23294222687224,
+            "median": 102.265313,
+            "minimum": 1.139527,
+            "p95": 103.48704624999999,
+            "p99": 106.86918245
+          },
+          "meanDepth": 5.779185022026431,
+          "meanNodes": 143977.36398678413,
+          "nodes": 261462893,
+          "requestMinusEngineCallMs": {
+            "count": 1816,
+            "maximum": 26.837336999954147,
+            "mean": 1.6665997351301214,
+            "median": 1.5382350000226452,
+            "minimum": 0.7070950000767766,
+            "p95": 2.3991667499947447,
+            "p99": 4.743347049999738
+          },
+          "searches": 1816,
+          "stopReasons": {
+            "mate": 84,
+            "max-depth": 1,
+            "time-limit": 1731
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 1,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 350,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1731,
+            "maximum": 36.67876999999862,
+            "mean": 0.8100969381877644,
+            "median": 0.7218080000020564,
+            "minimum": 0.14839099999517202,
+            "p95": 1.302954999904614,
+            "p99": 2.5259273999487055
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1731,
+            "maximum": 136.67876999999862,
+            "mean": 100.81009693818775,
+            "median": 100.72180800000206,
+            "minimum": 100.14839099999517,
+            "p95": 101.30295499990461,
+            "p99": 102.5259273999487
+          },
+          "timeLimitFraction": 0.9531938325991189,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1731,
+            "maximum": 37.754571999999996,
+            "mean": 2.485886618139803,
+            "median": 2.290745000000001,
+            "minimum": 0.9910210000000035,
+            "p95": 3.527380000000001,
+            "p99": 6.9791401000000075
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1731,
+            "maximum": 137.754572,
+            "mean": 102.4858866181398,
+            "median": 102.290745,
+            "minimum": 100.991021,
+            "p95": 103.52738,
+            "p99": 106.97914010000002
+          },
+          "timeLimitStops": 1731
+        }
+      },
+      "timeLimitMedianCandidateOverBase": 1.000361005452549,
+      "timeMs": 100
+    },
+    {
+      "hardDeadlineGuarantee": false,
+      "registeredBroadRealizedTimePredicate": true,
+      "sides": {
+        "base": {
+          "allStopsEngineCallAboveTwiceBudget": 0,
+          "allStopsRequestWallAboveTwiceBudget": 0,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1738,
+            "maximum": 13.058344000019133,
+            "mean": -23.56953323590515,
+            "median": 0.6921105000074022,
+            "minimum": -399.7069880000781,
+            "p95": 1.252278200141154,
+            "p99": 2.2938020299514665
+          },
+          "engineCallMsAllStops": {
+            "count": 1738,
+            "maximum": 413.05834400001913,
+            "mean": 376.43046676409483,
+            "median": 400.6921105000074,
+            "minimum": 0.2930119999218732,
+            "p95": 401.2522782001412,
+            "p99": 402.29380202995145
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1738,
+            "maximum": 27.76607100000001,
+            "mean": -21.890119870540854,
+            "median": 2.2261150000000214,
+            "minimum": -398.781466,
+            "p95": 3.4922936000000218,
+            "p99": 7.492622100000012
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1738,
+            "maximum": 427.766071,
+            "mean": 378.1098801294591,
+            "median": 402.22611500000005,
+            "minimum": 1.218534,
+            "p95": 403.49229360000004,
+            "p99": 407.4926221
+          },
+          "meanDepth": 6.685845799769851,
+          "meanNodes": 593992.1875719217,
+          "nodes": 1032358422,
+          "requestMinusEngineCallMs": {
+            "count": 1738,
+            "maximum": 24.983793999979753,
+            "mean": 1.679413365364299,
+            "median": 1.539338999965679,
+            "minimum": 0.7475350000304957,
+            "p95": 2.58649010001039,
+            "p99": 5.131699979979615
+          },
+          "searches": 1738,
+          "stopReasons": {
+            "mate": 122,
+            "time-limit": 1616
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 0,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 289,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1616,
+            "maximum": 13.058344000019133,
+            "mean": 0.7807591844041889,
+            "median": 0.7159350000001723,
+            "minimum": 0.15110700007062405,
+            "p95": 1.275859500048682,
+            "p99": 2.4175928999495127
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1616,
+            "maximum": 413.05834400001913,
+            "mean": 400.78075918440425,
+            "median": 400.7159350000002,
+            "minimum": 400.1511070000706,
+            "p95": 401.2758595000487,
+            "p99": 402.4175928999495
+          },
+          "timeLimitFraction": 0.9298043728423475,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1616,
+            "maximum": 27.76607100000001,
+            "mean": 2.4607953855198015,
+            "median": 2.2716179999999895,
+            "minimum": 1.066757999999993,
+            "p95": 3.5300102499999895,
+            "p99": 7.550080950000012
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1616,
+            "maximum": 427.766071,
+            "mean": 402.46079538551976,
+            "median": 402.271618,
+            "minimum": 401.066758,
+            "p95": 403.53001025,
+            "p99": 407.55008095
+          },
+          "timeLimitStops": 1616
+        },
+        "candidate": {
+          "allStopsEngineCallAboveTwiceBudget": 0,
+          "allStopsRequestWallAboveTwiceBudget": 0,
+          "depthZeroSearches": 0,
+          "engineCallMinusBudgetMsAllStops": {
+            "count": 1733,
+            "maximum": 5.711127999937162,
+            "mean": -23.314832432195935,
+            "median": 0.7147659999318421,
+            "minimum": -399.71911700000055,
+            "p95": 1.3431680000328918,
+            "p99": 2.5441429999657013
+          },
+          "engineCallMsAllStops": {
+            "count": 1733,
+            "maximum": 405.71112799993716,
+            "mean": 376.68516756780406,
+            "median": 400.71476599993184,
+            "minimum": 0.28088299999944866,
+            "p95": 401.34316800003285,
+            "p99": 402.5441429999657
+          },
+          "fullRequestWallMinusBudgetMsAllStops": {
+            "count": 1733,
+            "maximum": 23.159132,
+            "mean": -21.6777803762262,
+            "median": 2.250893000000019,
+            "minimum": -398.962218,
+            "p95": 3.5840810000000145,
+            "p99": 5.787665320000031
+          },
+          "fullRequestWallMsAllStops": {
+            "count": 1733,
+            "maximum": 423.159132,
+            "mean": 378.32221962377383,
+            "median": 402.250893,
+            "minimum": 1.037782,
+            "p95": 403.58408099999997,
+            "p99": 405.7876653200001
+          },
+          "meanDepth": 6.631852279284478,
+          "meanNodes": 553907.2440854011,
+          "nodes": 959921254,
+          "requestMinusEngineCallMs": {
+            "count": 1733,
+            "maximum": 19.39128700009246,
+            "mean": 1.6370520559697372,
+            "median": 1.5285190000121816,
+            "minimum": 0.7420369999784953,
+            "p95": 2.397782599970891,
+            "p99": 4.387639759937703
+          },
+          "searches": 1733,
+          "stopReasons": {
+            "mate": 119,
+            "time-limit": 1614
+          },
+          "timeLimitEngineCallAbove110PercentBudget": 0,
+          "timeLimitEngineCallAboveBudgetPlus1Ms": 360,
+          "timeLimitEngineCallBelowBudget": 0,
+          "timeLimitEngineCallBelowBudgetByMoreThan0_01Ms": 0,
+          "timeLimitEngineCallMinusBudgetMs": {
+            "count": 1614,
+            "maximum": 5.711127999937162,
+            "mean": 0.8016314182183087,
+            "median": 0.7387325000017881,
+            "minimum": 0.1918310000328347,
+            "p95": 1.3540530499652959,
+            "p99": 2.5998445600146036
+          },
+          "timeLimitEngineCallMs": {
+            "count": 1614,
+            "maximum": 405.71112799993716,
+            "mean": 400.8016314182183,
+            "median": 400.7387325000018,
+            "minimum": 400.19183100003283,
+            "p95": 401.35405304996533,
+            "p99": 402.5998445600146
+          },
+          "timeLimitFraction": 0.93133294864397,
+          "timeLimitRequestWallMinusBudgetMs": {
+            "count": 1614,
+            "maximum": 23.159132,
+            "mean": 2.4370871226765796,
+            "median": 2.3020825000000116,
+            "minimum": 0.998896000000002,
+            "p95": 3.653786849999988,
+            "p99": 6.0406121399999915
+          },
+          "timeLimitRequestWallMs": {
+            "count": 1614,
+            "maximum": 423.159132,
+            "mean": 402.4370871226766,
+            "median": 402.3020825,
+            "minimum": 400.998896,
+            "p95": 403.65378684999996,
+            "p99": 406.04061214
+          },
+          "timeLimitStops": 1614
+        }
+      },
+      "timeLimitMedianCandidateOverBase": 1.0000568919227073,
+      "timeMs": 400
+    }
+  ],
+  "warmupRequestsVerified": 32
+}
