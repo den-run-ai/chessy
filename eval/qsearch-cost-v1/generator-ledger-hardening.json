@@ -1,0 +1,15 @@
+{
+  "schema": "chessy.qsearch-cost.generator-ledger-hardening.v1",
+  "previousPublishedCommit": "da6198c2bbfee0ef05e16dc22972ee831e7c9775",
+  "sources": {
+    "qsearch-cost.js": {
+      "snapshot": "pre-generator-capture-source.archive.json",
+      "sha256": "21946ab18484717a32456d7edf03a3e3a20566c2295eadbc62d46fd67a3495da"
+    },
+    "qsearch-bench.js": {
+      "snapshot": "pre-ledger-benchmark-source.archive.json",
+      "sha256": "343e47aae2eefe1a44494e6d0dffa360a4c26741799f2a1bbc9c77ad8b542d77"
+    }
+  },
+  "historicalRunsRerun": false
+}

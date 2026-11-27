@@ -1,0 +1,2225 @@
+{
+  "schema": "chessy.searched-board-hash.descriptive-summary.v1",
+  "resultSha256": "18673ea21fd3abaa5422c02215c2aee2b5d9c6655522dba1b3c5e37c1915a265",
+  "registrationSha256": "7501340b2a0d8e82e43999ab572aefbdf418d5d7cc6c69f3b789899150aaa39a",
+  "mode": "fixed",
+  "paidComputeUsd": 0,
+  "strengthClaimAllowed": false,
+  "conditionalMasterEligible": true,
+  "modules": [
+    {
+      "bytes": 37172,
+      "brotliBytes": 17690,
+      "memoryBytes": 26542080
+    },
+    {
+      "bytes": 38359,
+      "brotliBytes": 18114,
+      "memoryBytes": 26542080
+    }
+  ],
+  "buckets": [
+    {
+      "nodeLimit": 10000,
+      "pairs": 72,
+      "medianNpsRatio": 1.028719282152187,
+      "medianNodeRatio": 1,
+      "sameMovePairs": 72,
+      "phaseMedianNpsRatio": {
+        "opening": 1.006751745258822,
+        "middlegame": 0.9842318006941172,
+        "endgame": 1.1278829638929064
+      },
+      "observations": [
+        {
+          "position": 0,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 0.9419132484750563,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 0,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 0.9593896554948222,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 0,
+          "repetition": 2,
+          "phase": "opening",
+          "npsRatio": 0.9837478286103928,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 0,
+          "repetition": 3,
+          "phase": "opening",
+          "npsRatio": 0.7081528143256312,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 1,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 1.14174449857795,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 1,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.0320725071294707,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 1,
+          "repetition": 2,
+          "phase": "opening",
+          "npsRatio": 1.0297556619072512,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 1,
+          "repetition": 3,
+          "phase": "opening",
+          "npsRatio": 1.1709977899573663,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 2,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.9159979146549324,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 2,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9713102157824496,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 2,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.064153087505236,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 2,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.9857243855491314,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 3,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.9266603350476368,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9509270376194439,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9963207019396032,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.3241739503935475,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 4,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.7817704487880263,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 4,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9082649578015849,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 4,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0103547502063919,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 4,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.3029778601434607,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 5,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0276829023971228,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 5,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.7733577375707268,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 5,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0206019033074767,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 5,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.9419777201622821,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 6,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.9705036874892793,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 6,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0192096743266654,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 6,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9326915629322268,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 6,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.9379445108627319,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 7,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.044104580185884,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 7,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9923205024426073,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 7,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9292874849926082,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 7,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.996363399920572,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 1,
+          "candidateDepth": 1
+        },
+        {
+          "position": 8,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.0457980422534134,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 8,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.2850021136567795,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 8,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.148694345897109,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 8,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.1969183988092074,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 9,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1637960932497915,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 9,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.84741798881062,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 9,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0156060060671508,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 9,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.1120702520073629,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 10,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.5146626107958794,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 10,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0975069031349147,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 10,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.196735870384899,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 10,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.17211415734683,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 11,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.108927217258095,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 11,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0699117177825266,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 11,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.1082020107926107,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 11,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 0.5245145294330326,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 12,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.2746965953641471,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 12,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.1743171024790797,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 12,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.002838396498951,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 12,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.1275868318451636,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 13,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 0.9220801788716368,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 13,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.8570663488432446,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 13,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0333521627628655,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 13,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.0568230284793763,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 14,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.2628619279167588,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 14,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.2176618754749835,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 14,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.1281790959406492,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 14,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.2553695286055992,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 15,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1321998294814715,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 15,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.126249380621743,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 15,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.2164082090301236,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 15,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.2430470970647403,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 16,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.068552351460991,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 16,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0045439316715452,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 16,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9288245626293559,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 16,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.982739215839103,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.8010364771053228,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9964755269557564,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9778573633009564,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.2199013554585225,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        }
+      ]
+    },
+    {
+      "nodeLimit": 36000,
+      "pairs": 72,
+      "medianNpsRatio": 1.0455231610748177,
+      "medianNodeRatio": 1,
+      "sameMovePairs": 72,
+      "phaseMedianNpsRatio": {
+        "opening": 1.1262891845702645,
+        "middlegame": 1.0015960490456837,
+        "endgame": 1.0912833268782718
+      },
+      "observations": [
+        {
+          "position": 0,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 1.3505828452589386,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 0,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.5603702189059083,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 0,
+          "repetition": 2,
+          "phase": "opening",
+          "npsRatio": 1.288783394482843,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 0,
+          "repetition": 3,
+          "phase": "opening",
+          "npsRatio": 1.0726185771552135,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 1,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 1.0390073278591223,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 1,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.0452672640395422,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 1,
+          "repetition": 2,
+          "phase": "opening",
+          "npsRatio": 1.1126139039234257,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 1,
+          "repetition": 3,
+          "phase": "opening",
+          "npsRatio": 1.1399644652171033,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 2,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.944167882533936,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 2,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9396783177421444,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 2,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9334961763381259,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 2,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0067191523404553,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.1539774020117577,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0058992520198462,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.8099761653029109,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 3,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.9656819147295833,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 4,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.02636479715064,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 4,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9772978171457581,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 4,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9724418069703019,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 4,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.1138807672970203,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 5,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.9366150301803498,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 5,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.1425246412466008,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 5,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.1357198076261632,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 5,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.9215418374028175,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 6,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.102213077775024,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 6,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.9705318242172492,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 6,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9942862658180847,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 6,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0413749953210067,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 7,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0564902298850953,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 7,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0518056092770536,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 7,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.89854287527234,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 7,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.8892535427608214,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 2,
+          "candidateDepth": 2
+        },
+        {
+          "position": 8,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.0919912312409905,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 8,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.3731386264825404,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 8,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.1856675529566145,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 8,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 0.8805699336482784,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 9,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 0.9862068402685841,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 9,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.8297228241898295,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 9,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.1791451603277998,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 9,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.0465753972894611,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 7,
+          "candidateDepth": 7
+        },
+        {
+          "position": 10,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.0163144533908088,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 10,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0078121564198605,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 10,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.18751619411926,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 10,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.1595625014422533,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 11,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1714084265139222,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 11,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.9997281754553087,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 11,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.3556224222304403,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 11,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.0738493547103352,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 12,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.092760939660235,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 12,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.5200131016145393,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 12,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0457790581100932,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 12,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 0.925254844893376,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 13,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1053858654324942,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 13,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.090575422515553,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 13,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0290857156330329,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 13,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.1313322619140556,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 6,
+          "candidateDepth": 6
+        },
+        {
+          "position": 14,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.2507815908531672,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 14,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.9310971551657303,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 14,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.23152867519479,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 14,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 0.9086539014702792,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 15,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.2507373325577245,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 15,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.009590533464714,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 15,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.1947813558468299,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 15,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.9712782789227685,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 16,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.1394443568472419,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 16,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0025642782450228,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 16,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0646464401637672,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 16,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.093256616646097,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 17,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0006278198463445,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 0.7960732551100751,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9745866419318215,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        },
+        {
+          "position": 17,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0429851420127192,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 3,
+          "candidateDepth": 3
+        }
+      ]
+    },
+    {
+      "nodeLimit": 230000,
+      "pairs": 72,
+      "medianNpsRatio": 1.0738653008392758,
+      "medianNodeRatio": 1,
+      "sameMovePairs": 72,
+      "phaseMedianNpsRatio": {
+        "opening": 1.0617523247405019,
+        "middlegame": 1.0669536643472175,
+        "endgame": 1.1011407487840734
+      },
+      "observations": [
+        {
+          "position": 0,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 0.9860642144317324,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 0,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.0719995352859968,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 0,
+          "repetition": 2,
+          "phase": "opening",
+          "npsRatio": 0.9555971613040305,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 0,
+          "repetition": 3,
+          "phase": "opening",
+          "npsRatio": 1.0738130784239592,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 1,
+          "repetition": 0,
+          "phase": "opening",
+          "npsRatio": 1.088442416826677,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 1,
+          "repetition": 1,
+          "phase": "opening",
+          "npsRatio": 1.0739175232545923,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 1,
+          "repetition": 2,
+          "phase": "opening",
+          "npsRatio": 1.0515051141950071,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 1,
+          "repetition": 3,
+          "phase": "opening",
+          "npsRatio": 1.0383484888706471,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 2,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.111198511202651,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 2,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.06629574924511,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 2,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9819193465421667,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 2,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.1396333312219784,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 3,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.192782545815783,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 3,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0972233389994994,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 3,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0222112446930227,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 3,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.2260685412653352,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 4,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.1215964286123674,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 4,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0752537705442269,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 4,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0683908355132552,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 4,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0372969554472142,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 5,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.0963181784027252,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 5,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0057105031899563,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 5,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.1016661779626586,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 5,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0041589009148042,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 6,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.013667529574722,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 6,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.080582323198683,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 6,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0179300418794623,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 6,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 0.9494058679383377,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 7,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 1.044627511340599,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 7,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0814983506692553,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 7,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0676115794493253,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 7,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.029417385864218,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 8,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.012090536794021,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 8,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0861365958137807,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 8,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.056817907934731,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 8,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.0701237481540347,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 9,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.115059666955283,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 9,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 0.9727371357795943,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 9,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0510459491053874,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 9,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.2089108847747652,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 9,
+          "candidateDepth": 9
+        },
+        {
+          "position": 10,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.1380245715574624,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 10,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0399934581774917,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 10,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0478316635505556,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 10,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.163205070948133,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 11,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.101486802799962,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 11,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.207447856598435,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 11,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.312217828069133,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 11,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 0.9950573904481712,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 12,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 0.817565474565019,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 12,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.2484306949164803,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 12,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0585170460344553,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 12,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.3159633483225057,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 13,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.028655782842901,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 13,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.0417411874982117,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 13,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.0875811813033027,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 13,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.1249984579796704,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 8,
+          "candidateDepth": 8
+        },
+        {
+          "position": 14,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.0968895697494931,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 14,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.183943942837962,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 14,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.4038957382827106,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 14,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.265096341647866,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 15,
+          "repetition": 0,
+          "phase": "endgame",
+          "npsRatio": 1.3002087006931697,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 15,
+          "repetition": 1,
+          "phase": "endgame",
+          "npsRatio": 1.2786766301443406,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 15,
+          "repetition": 2,
+          "phase": "endgame",
+          "npsRatio": 1.180004239998846,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 15,
+          "repetition": 3,
+          "phase": "endgame",
+          "npsRatio": 1.100794694768185,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 13,
+          "candidateDepth": 13
+        },
+        {
+          "position": 16,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.96382702125387,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 16,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.166147517149082,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 16,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 1.0954046662919572,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 16,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0642253937253507,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 5,
+          "candidateDepth": 5
+        },
+        {
+          "position": 17,
+          "repetition": 0,
+          "phase": "middlegame",
+          "npsRatio": 0.9442008449219524,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 17,
+          "repetition": 1,
+          "phase": "middlegame",
+          "npsRatio": 1.0467091897307987,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 17,
+          "repetition": 2,
+          "phase": "middlegame",
+          "npsRatio": 0.9748289003163563,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        },
+        {
+          "position": 17,
+          "repetition": 3,
+          "phase": "middlegame",
+          "npsRatio": 1.0806972619450685,
+          "nodeRatio": 1,
+          "sameMove": true,
+          "baseDepth": 4,
+          "candidateDepth": 4
+        }
+      ]
+    }
+  ]
+}

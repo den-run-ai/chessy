@@ -1,0 +1,63 @@
+// Research-only searched-edge cache. Legality and quiet-check probes never
+// touch it; state/EP identity still follows the original canonical suffix.
+#[derive(Clone, Copy)]
+struct BoardHashSlot { h1: u32, h2: u32, valid: bool }
+static mut BOARD_HASH_SLOTS: [BoardHashSlot; MAX_PLY] =
+    [BoardHashSlot { h1: 0, h2: 0, valid: false }; MAX_PLY];
+unsafe fn board_hash_slot(ply: usize) -> *mut BoardHashSlot {
+    assert!(ply < MAX_PLY);
+    core::ptr::addr_of_mut!(BOARD_HASH_SLOTS).cast::<BoardHashSlot>().add(ply)
+}
+unsafe fn reset_board_hashes() {
+    for ply in 0..MAX_PLY { (*board_hash_slot(ply)).valid = false; }
+}
+#[inline]
+fn xor_board_piece(slot: &mut BoardHashSlot, piece: Piece, square: u8) {
+    if piece != Piece::Empty {
+        let index = piece_hash_index(piece) * 64 + square as usize;
+        slot.h1 ^= Z1[index]; slot.h2 ^= Z2[index];
+    }
+}
+// Called after a legal move is made and immediately before actual recursion.
+// Captures/pawn moves in quiescence do not need repetition hashes. If a later
+// quiet chain reaches the threshold, its first needed hash scans once.
+unsafe fn advance_board_hash(position: &Position, mv: Move, parent_ply: usize, needed: bool) {
+    let parent = *board_hash_slot(parent_ply);
+    let child = board_hash_slot(parent_ply + 1);
+    (*child).valid = false;
+    if !needed || !parent.valid { return; }
+    let mut next = parent;
+    let from = engine::move_from(mv); let to = engine::move_to(mv);
+    let mover = engine::opposite(position.turn);
+    xor_board_piece(&mut next, engine::move_piece(mv), from);
+    xor_board_piece(&mut next, position.board[to as usize], to);
+    let captured_square = if engine::move_is_en_passant(mv) {
+        if mover == Color::White { to + 8 } else { to - 8 }
+    } else { to };
+    xor_board_piece(&mut next, engine::move_captured(mv), captured_square);
+    if let Some(side) = engine::move_castle(mv) {
+        let home = if mover == Color::White { 56 } else { 0 };
+        let (rook_from, rook_to) = if side == engine::CastleSide::KingSide {
+            (home + 7, home + 5)
+        } else { (home, home + 3) };
+        let rook = position.board[rook_to as usize];
+        xor_board_piece(&mut next, rook, rook_from);
+        xor_board_piece(&mut next, rook, rook_to);
+    }
+    *child = next;
+}
+
+unsafe fn searched_hash(position: &mut Position, ply: usize) -> Hash {
+    let slot = board_hash_slot(ply);
+    if !(*slot).valid {
+        *slot = BoardHashSlot { h1: 0, h2: 0, valid: true };
+        for square in 0..64 { xor_board_piece(&mut *slot, position.board[square], square as u8); }
+    }
+    let result = finish_board_hash(position, (*slot).h1, (*slot).h2);
+    #[cfg(test)] {
+        let expected = hash_position(position);
+        assert_eq!((result.h1,result.h2,result.r1,result.r2),
+                   (expected.h1,expected.h2,expected.r1,expected.r2), "incremental board hash drift");
+    }
+    result
+}

@@ -1,0 +1,36 @@
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/ec6584e1ca6d/qsearch-checks-audited)
+warning: function `history_input_ptr` is never used
+    --> src/search.rs:1921:8
+     |
+1921 | pub fn history_input_ptr() -> *mut u8 {
+     |        ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `pv_ptr` is never used
+    --> src/search.rs:1925:8
+     |
+1925 | pub fn pv_ptr() -> u32 {
+     |        ^^^^^^
+
+warning: `chessy-ai-wasm` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.10s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/chessy_ai_wasm-4d6aae32629d7df2)
+
+running 11 tests
+test engine::qsearch_candidate_tests::geometric_check_prefilter_has_no_false_negatives ... positions 25600 quiet candidates 479197 rejected 341081 checks 27120
+ok
+test engine::tests::initial_position_perft_and_pseudo_ordering ... ok
+test engine::tests::kiwipete_en_passant_and_promotion_perft ... ok
+test engine::tests::make_and_unmake_restore_position_exactly ... ok
+test eval::tests::matches_shipped_javascript_reference_positions ... ok
+test search::qsearch_parity_tests::exact_search_budget_terminal_and_forced_root_parity ... 80 ordinary, 80 fixed, 192 shared-budget forced-root signatures equal
+ok
+test search::reference_search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+test search::reference_search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+test search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+test search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+test tests::abi_v2_layout_and_depth_guard_are_fixed ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.00s
+

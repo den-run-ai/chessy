@@ -1,0 +1,9 @@
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/ec6584e1ca6d/qsearch-checks-audited)
+    Finished `release` profile [optimized] target(s) in 1.48s
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/ec6584e1ca6d/qsearch-checks-audited)
+    Finished `small` profile [optimized] target(s) in 1.23s
+ 41399 /workspace/scratch/ec6584e1ca6d/qsearch-checks-audited/dist/chessy-ai-fast.raw.wasm
+ 37857 /workspace/scratch/ec6584e1ca6d/qsearch-checks-audited/dist/chessy-ai-fast.wasm
+ 29576 /workspace/scratch/ec6584e1ca6d/qsearch-checks-audited/dist/chessy-ai-small.raw.wasm
+ 26729 /workspace/scratch/ec6584e1ca6d/qsearch-checks-audited/dist/chessy-ai-small.wasm
+135561 total
