@@ -1,0 +1,22 @@
+{
+  "schema": "chessy.compact-hash-r86.compression-diagnostic.v1",
+  "authoritative": false,
+  "reason": "Local runtime differs from pinned authoritative Node22.23.2/Brotli1.1.0 size gate",
+  "node": "24.22.3",
+  "brotli": "1.2.1",
+  "quality": 11,
+  "baseline": {
+    "rawBytes": 37210,
+    "brotliBytes": 17729
+  },
+  "candidate": {
+    "rawBytes": 37934,
+    "brotliBytes": 17957
+  },
+  "rawLimit": 40960,
+  "brotliLimit": 20480,
+  "delta": {
+    "rawBytes": 724,
+    "brotliBytes": 228
+  }
+}

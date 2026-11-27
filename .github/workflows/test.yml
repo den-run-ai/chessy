@@ -180,23 +180,11 @@ jobs:
             "$CHESSY_COST_RUST" "$PWD/binaryen-version_131"
           node experiments/wasm/pawn-ranks/validate.js "$RUNNER_TEMP/pawn-ranks"
           node experiments/wasm/pawn-ranks/check-evidence.js "$RUNNER_TEMP/pawn-ranks"
-          # The archived experiment binds r82's exact sources and module.
-          # Reproduce that study without substituting the current runtime or
-          # rewriting any measured recipe, registration, or evidence bytes.
-          CHESSY_COMPACT_SNAPSHOT="$RUNNER_TEMP/compact-hash-source"
-          mkdir "$CHESSY_COMPACT_SNAPSHOT"
-          git --no-replace-objects archive f65224dece688f23d00429c148715262dd3c9b79 \
-            experiments/wasm/src experiments/wasm/Cargo.toml \
-            experiments/wasm/Cargo.lock experiments/wasm/rust-toolchain.toml \
-            experiments/wasm/build.sh assets/engine.js assets/wasm-engine.js \
-            assets/chessy-ai-fast.wasm test/fixtures/wasm-r69-signatures.json \
-            | tar -x -C "$CHESSY_COMPACT_SNAPSHOT"
-          git --no-replace-objects archive HEAD experiments/wasm/compact-hash \
-            | tar -x -C "$CHESSY_COMPACT_SNAPSHOT"
-          chmod -R a-w "$CHESSY_COMPACT_SNAPSHOT"
-          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/probe.test.js"
-          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/prepare.js" \
-            "$RUNNER_TEMP/compact-hash" threaded
+          # The v2 correctness adapters read r82's pinned Git objects themselves.
+          # Run them from the real checkout; measured recipes and receipts stay
+          # immutable, and the currently active runtime is not their baseline.
+          node experiments/wasm/compact-hash/probe.test.js
+          node experiments/wasm/compact-hash/prepare.js "$RUNNER_TEMP/compact-hash" threaded
           (cd "$RUNNER_TEMP/compact-hash" && \
             RUSTC="$CHESSY_COST_RUST/bin/rustc" \
             CARGO_TARGET_DIR="$RUNNER_TEMP/compact-hash-native" \
@@ -206,9 +194,9 @@ jobs:
             CHESSY_RUSTC_BIN="$CHESSY_COST_RUST/bin/rustc" \
             CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
             sh "$RUNNER_TEMP/compact-hash/build.sh"
-          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/validate.js" "$RUNNER_TEMP/compact-hash" \
+          node experiments/wasm/compact-hash/validate.js "$RUNNER_TEMP/compact-hash" \
             "$RUNNER_TEMP/compact-hash-validation.json"
-          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/probe.test.js" "$RUNNER_TEMP/compact-hash"
+          node experiments/wasm/compact-hash/probe.test.js "$RUNNER_TEMP/compact-hash"
           # Recheck research sizes with the pinned encoder. Historical receipt
           # verdicts stay separate from the current production download budget.
           node - "$RUNNER_TEMP/pawn-ranks/candidate/dist/chessy-ai-fast.wasm" \
@@ -228,6 +216,64 @@ jobs:
               productionIntegrationAllowed: false }));
           }
           NODE
+      - name: Reproduce seeded compact hashing without rerunning measurements
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          CHESSY_COMPACT_RUST=$(dirname "$(dirname "$(rustup which --toolchain "$RUST_VERSION" rustc)")")
+          probe="$RUNNER_TEMP/compact-hash-r86"
+          node experiments/wasm/compact-hash-r86/prepare.js "$probe"
+          cmp "$probe/source.json" experiments/wasm/compact-hash-r86/evidence/source.json
+          (cd "$probe" && env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
+            -u RUSTC_WRAPPER -u RUSTC_WORKSPACE_WRAPPER \
+            CARGO_HOME="$RUNNER_TEMP/compact-hash-r86-cargo" \
+            CARGO_TARGET_DIR="$RUNNER_TEMP/compact-hash-r86-native" \
+            RUSTC="$CHESSY_COMPACT_RUST/bin/rustc" \
+            "$CHESSY_COMPACT_RUST/bin/cargo" test --locked --offline)
+          env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
+            -u RUSTC_WRAPPER -u RUSTC_WORKSPACE_WRAPPER \
+            CARGO_HOME="$RUNNER_TEMP/compact-hash-r86-cargo" \
+            CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/compact-hash-r86-wasm" \
+            CHESSY_CARGO_BIN="$CHESSY_COMPACT_RUST/bin/cargo" \
+            CHESSY_RUSTC_BIN="$CHESSY_COMPACT_RUST/bin/rustc" \
+            CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+            sh "$probe/build.sh"
+          node experiments/wasm/compact-hash-r86/validate.js "$probe" \
+            "$RUNNER_TEMP/compact-hash-r86-validation.json"
+          cmp "$RUNNER_TEMP/compact-hash-r86-validation.json" \
+            experiments/wasm/compact-hash-r86/evidence/validation.json
+          node experiments/wasm/compact-hash-r86/probe.test.js "$probe"
+          node experiments/wasm/compact-hash-r86/verify-evidence.js
+          node experiments/wasm/compact-hash-r86/verify-evidence.test.js
+          node experiments/wasm/compact-hash-r86/resource-audit.js \
+            "$probe/dist/chessy-ai-fast.wasm" "$PWD/binaryen-version_131/bin/wasm-dis" \
+            > "$RUNNER_TEMP/compact-hash-r86-resources.json"
+          cmp "$RUNNER_TEMP/compact-hash-r86-resources.json" \
+            experiments/wasm/compact-hash-r86/resources.json
+          node - "$probe/dist/chessy-ai-fast.wasm" <<'NODE'
+          const fs = require('fs'), zlib = require('zlib'), assert = require('assert/strict');
+          assert.equal(process.versions.node, '22.23.2');
+          assert.equal(process.versions.brotli, '1.1.0');
+          const bytes = fs.readFileSync(process.argv[2]);
+          const brotli = zlib.brotliCompressSync(bytes, { params: {
+            [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }).length;
+          assert.ok(bytes.length <= 40960 && brotli <= 20480, 'combined candidate exceeds download budgets');
+          console.log(JSON.stringify({ raw: bytes.length, brotli,
+            node: process.versions.node, encoder: process.versions.brotli,
+            productionIntegrationAllowed: false }));
+          NODE
+      - name: Independently reproduce new unapproved signature proposals
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+          CHESSY_SIGNATURE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          node test/engine-signature-proposal.test.js
+          CHESSY_CARGO_BIN="$(command -v cargo)" \
+            CHESSY_RUSTC_BIN="$(command -v rustc)" \
+            CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+            node test/engine-signature-proposal.js "$PWD" "$CHESSY_SIGNATURE_TRUSTED_BASE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

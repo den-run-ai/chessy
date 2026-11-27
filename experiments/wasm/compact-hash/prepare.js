@@ -11,6 +11,7 @@ if (typeof __capturedCompactHash === 'undefined') {
     (require, module, module.exports, __filename, __dirname, files);
 } else {
   const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+  const cp = require('node:child_process');
   const ROOT = path.resolve(__dirname, '../../..');
   const BASE = 'f65224dece688f23d00429c148715262dd3c9b79';
   const FILES = {
@@ -23,8 +24,36 @@ if (typeof __capturedCompactHash === 'undefined') {
     'src/lib.rs': 'f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc',
     'src/search.rs': 'e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd'
   };
+  const BASELINE = {
+    'assets/engine.js': '897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa',
+    'assets/wasm-engine.js': '2a1cbf0c75b7b2ff3e5594d428bc0c85f6e661c88de56d30667e11a5c898a504',
+    'assets/chessy-ai-fast.wasm': '57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f',
+    'test/fixtures/wasm-r69-signatures.json': 'd500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b'
+  };
   const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
   const check = (ok, message) => { if (!ok) throw new Error(message); };
+  // Reproduction always starts at the measured historical base, even after
+  // production adopts a different search/module/loader. Retain the Git bytes
+  // that are checked here; never reopen the active checkout as a baseline.
+  function readBaseline(root = ROOT) {
+    const git = args => cp.execFileSync('git', ['--no-replace-objects', '-C', root, ...args],
+      { maxBuffer: 32 * 1024 * 1024 });
+    const tree = git(['ls-tree', '-r', '--name-only', BASE, '--', 'experiments/wasm/src/'])
+      .toString().trim().split('\n').sort();
+    const expected = Object.keys(FILES).filter(p => p.startsWith('src/'))
+      .map(p => 'experiments/wasm/' + p).sort();
+    check(JSON.stringify(tree) === JSON.stringify(expected), 'pinned Rust inventory changed');
+    const read = (file, digest) => {
+      const bytes = git(['show', BASE + ':' + file]);
+      check(sha(bytes) === digest, 'pinned historical input changed: ' + file);
+      return bytes;
+    };
+    const source = Object.fromEntries(Object.entries(FILES)
+      .map(([file, digest]) => [file, read('experiments/wasm/' + file, digest)]));
+    const runtime = Object.fromEntries(Object.entries(BASELINE)
+      .map(([file, digest]) => [file, read(file, digest)]));
+    return { source, runtime };
+  }
   function replace(source, before, after, count = 1) {
     check(source.split(before).length === count + 1, 'missing/ambiguous patch anchor: ' + before);
     return source.replaceAll(before, after);
@@ -80,28 +109,30 @@ if (typeof __capturedCompactHash === 'undefined') {
     const oracle = '\npub unsafe fn research_hash(p: &mut Position) -> (u32,u32,u32,u32) { let h=hash_position(p); (h.h1,h.h2,h.r1,h.r2) }\n';
     return out + pv + '\n#[cfg(test)] mod reference_search {\n' + original + pv + oracle + '\n}\n' + templates['parity.rs.in'];
   }
-  function prepare(destination, variant = 'threaded') {
+  function prepare(destination, variant = 'threaded', root = ROOT) {
     destination = path.resolve(destination);
     destination = path.join(fs.realpathSync(path.dirname(destination)), path.basename(destination));
-    check(destination !== ROOT && !destination.startsWith(ROOT + path.sep), 'generated crate must be outside repository');
-    const source = Object.fromEntries(Object.keys(FILES).map(p => [p, fs.readFileSync(path.join(ROOT, 'experiments/wasm', p))]));
-    for (const [p, bytes] of Object.entries(source)) check(sha(bytes) === FILES[p], 'pinned source changed: ' + p);
-    const unchanged = () => __capturedCompactHash.every(f => sha(fs.readFileSync(f.file)) === sha(f.bytes)) &&
-      Object.entries(source).every(([p, b]) => sha(fs.readFileSync(path.join(ROOT, 'experiments/wasm', p))) === sha(b));
-    check(unchanged(), 'captured source or recipe changed before generation');
+    root = fs.realpathSync(root);
+    check(destination !== root && !destination.startsWith(root + path.sep) &&
+      destination !== ROOT && !destination.startsWith(ROOT + path.sep), 'generated crate must be outside repository');
+    const { source, runtime } = readBaseline(root);
+    const unchanged = () => __capturedCompactHash.every(f => sha(fs.readFileSync(f.file)) === sha(f.bytes));
+    check(unchanged(), 'captured recipe changed before generation');
     const generated = { ...source, 'src/search.rs': Buffer.from(render(source['src/search.rs'].toString(), variant)) };
     fs.mkdirSync(destination); fs.mkdirSync(path.join(destination, 'src'));
     for (const [p, bytes] of Object.entries(generated)) fs.writeFileSync(path.join(destination, p), bytes, { flag: 'wx' });
-    check(unchanged(), 'captured source or recipe changed before receipt');
-    const receipt = { schema: 'chessy.compact-hash.source.v1', baseCommit: BASE, variant, researchOnly: true,
+    check(unchanged(), 'captured recipe changed before receipt');
+    const receipt = { schema: 'chessy.compact-hash.source.v2', purpose: 'historical-correctness-reproduction',
+      baseCommit: BASE, variant, researchOnly: true,
       productionIntegrationAllowed: false, timingPerformed: false, strengthClaimAllowed: false,
       source: Object.entries(source).map(([p,b]) => ({ path:p, sha256:sha(b) })),
       generated: Object.entries(generated).map(([p,b]) => ({ path:p, sha256:sha(b) })),
+      baseline: Object.entries(runtime).map(([p,b]) => ({ path:p, sha256:sha(b) })),
       recipe: __capturedCompactHash.map(f => ({ path:f.name, sha256:sha(f.bytes) })) };
     fs.writeFileSync(path.join(destination, 'source.json'), JSON.stringify(receipt, null, 2) + '\n', { flag:'wx' });
     return receipt;
   }
-  module.exports = { prepare, render, sha };
+  module.exports = { prepare, render, readBaseline, sha, BASE, ROOT };
   if (require.main === module) {
     check(process.argv.length === 3 || process.argv.length === 4, 'usage: node prepare.js /outside/new-crate [threaded|shared-update|proven-indices]');
     console.log(JSON.stringify(prepare(process.argv[2], process.argv[3]), null, 2));

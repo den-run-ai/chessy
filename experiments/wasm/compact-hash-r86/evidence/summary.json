@@ -1,0 +1,1389 @@
+{
+  "ratioMeaning": "baseline elapsed time divided by candidate elapsed time for paired equal-result searches; descriptive cost ratios, not Elo",
+  "budgets": {
+    "10000": {
+      "positions": [
+        {
+          "name": "opening (Ruy Lopez)",
+          "phase": "opening",
+          "rootSeed": null,
+          "ratios": [
+            0.9282038125903126,
+            1.3268711332108298,
+            1.172407397527438,
+            0.9495256326438634
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0609665150856507
+        },
+        {
+          "name": "opening (Ruy Lopez) (mirrored)",
+          "phase": "opening",
+          "rootSeed": null,
+          "ratios": [
+            1.1882884897192583,
+            0.8386324953024852,
+            0.9731077255085082,
+            0.9405111503080049
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.9568094379082566
+        },
+        {
+          "name": "open middlegame (Dragon)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.1364249417759458,
+            1.079841226228963,
+            1.157480550869827,
+            1.028946627430294
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1081330840024544
+        },
+        {
+          "name": "open middlegame (Dragon) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9828423993495815,
+            1.0453295910370806,
+            1.044272725479791,
+            1.0537093305362712
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0448011582584358
+        },
+        {
+          "name": "closed middlegame (KID)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.098414753023531,
+            1.4151834632740508,
+            1.3152419309643193,
+            0.9499808802776799
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.2068283419939252
+        },
+        {
+          "name": "closed middlegame (KID) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.1595282226630026,
+            1.0334143889971927,
+            1.0350088304097027,
+            1.1072005584357547
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0711046944227287
+        },
+        {
+          "name": "tactical middlegame (Kiwipete)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9371781017598139,
+            0.7689117727849097,
+            1.0763894963445555,
+            1.0754266951778613
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0063023984688375
+        },
+        {
+          "name": "tactical middlegame (Kiwipete) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9164821781492897,
+            0.7456849563151781,
+            0.8628799103776761,
+            1.0940618597209462
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.8896810442634828
+        },
+        {
+          "name": "rook ending (Lucena)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            0.9875676172655996,
+            1.06031070987868,
+            0.9172987560335104,
+            1.0862129961448197
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0239391635721398
+        },
+        {
+          "name": "rook ending (Lucena) (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.1606932412808488,
+            1.105546871856925,
+            1.1774283118718214,
+            1.0434102542497796
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1331200565688868
+        },
+        {
+          "name": "minor-piece ending",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            0.6829758587754797,
+            1.2189463706870172,
+            2.1481710160167067,
+            1.1569388990281346
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.187942634857576
+        },
+        {
+          "name": "minor-piece ending (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.065527892786362,
+            0.7847742556748243,
+            1.1647476196994322,
+            1.1715982053677036
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.115137756242897
+        },
+        {
+          "name": "promotion race",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            0.9622780149931588,
+            1.234910707812088,
+            0.7397975495171287,
+            1.196009727149905
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.079143871071532
+        },
+        {
+          "name": "promotion race (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.2167721242603555,
+            1.0623930060022646,
+            0.3264209835889508,
+            0.9822757032325033
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.022334354617384
+        },
+        {
+          "name": "pawn ending (zugzwang)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.1467988566616552,
+            1.5382263815181707,
+            1.2009350770543228,
+            1.197158084187609
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.199046580620966
+        },
+        {
+          "name": "pawn ending (zugzwang) (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.262985509502587,
+            1.155923357603561,
+            1.3419149534891943,
+            1.1840618291124207
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.2235236693075038
+        },
+        {
+          "name": "tactical defence (chessy202607240238)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0169759152377,
+            1.0605793929595555,
+            1.0961034640416942,
+            0.913047007743536
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0387776540986278
+        },
+        {
+          "name": "tactical defence (chessy202607240238) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0216483488537067,
+            1.1261488972983944,
+            1.0160179201648423,
+            1.0373694488939749
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0295088988738408
+        }
+      ],
+      "geomeanRatio": 1.0740636682469624,
+      "phaseMedians": {
+        "opening": 1.0088879764969536,
+        "middlegame": 1.0417894061785318,
+        "endgame": 1.124128906405892
+      },
+      "allDeclaredBudgetsFullyUsed": true
+    },
+    "36000": {
+      "positions": [
+        {
+          "name": "opening (Ruy Lopez)",
+          "phase": "opening",
+          "rootSeed": null,
+          "ratios": [
+            1.0433585635022316,
+            1.1266092406178636,
+            1.0327023477655755,
+            1.41954347431494
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0849839020600476
+        },
+        {
+          "name": "opening (Ruy Lopez) (mirrored)",
+          "phase": "opening",
+          "rootSeed": null,
+          "ratios": [
+            1.1086761000090866,
+            1.137260714818912,
+            1.1088762897565305,
+            1.0061765214026723
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1087761948828085
+        },
+        {
+          "name": "open middlegame (Dragon)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0512185928155053,
+            0.9763464848122528,
+            1.0065383817812108,
+            1.0044389674394694
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0054886746103402
+        },
+        {
+          "name": "open middlegame (Dragon) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9923106839189371,
+            0.8905124785020967,
+            1.0943347823388292,
+            1.0812845318152315
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0367976078670842
+        },
+        {
+          "name": "closed middlegame (KID)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.1264250640945193,
+            1.033054829708979,
+            0.9871996588832653,
+            1.027809529073131
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0304321793910551
+        },
+        {
+          "name": "closed middlegame (KID) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9949365264925044,
+            0.9524958348426927,
+            1.115119027729336,
+            0.9964111501038966
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.9956738382982004
+        },
+        {
+          "name": "tactical middlegame (Kiwipete)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9592863644481124,
+            1.082168078528785,
+            0.955382473383085,
+            0.3846472988578561
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.9573344189155988
+        },
+        {
+          "name": "tactical middlegame (Kiwipete) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.1309806487286318,
+            0.970278293316848,
+            0.9951248110534409,
+            0.950138081770135
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.9827015521851444
+        },
+        {
+          "name": "rook ending (Lucena)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.2039707475234143,
+            1.1052087953655692,
+            1.1181844872850646,
+            1.1591874427529687
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1386859650190166
+        },
+        {
+          "name": "rook ending (Lucena) (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            0.7006264029820516,
+            1.1498452933013559,
+            1.3193942538306211,
+            1.008405347411169
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0791253203562623
+        },
+        {
+          "name": "minor-piece ending",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.0201523105393264,
+            0.8189769446345391,
+            1.184406051879436,
+            1.2055629774600416
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.102279181209381
+        },
+        {
+          "name": "minor-piece ending (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.19105104312394,
+            1.4337316172518793,
+            1.3855643069210586,
+            1.2502315980117777
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.317897952466418
+        },
+        {
+          "name": "promotion race",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.248662522791598,
+            1.0605843466155314,
+            1.2603105629465765,
+            1.1137526817483216
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1812076022699598
+        },
+        {
+          "name": "promotion race (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.1044758551025846,
+            1.023996134696769,
+            0.7936117887443874,
+            1.1243728786086198
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.064235994899677
+        },
+        {
+          "name": "pawn ending (zugzwang)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.228609790563444,
+            1.2179014370916201,
+            1.088544472596925,
+            0.8450629846263639
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1532229548442725
+        },
+        {
+          "name": "pawn ending (zugzwang) (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.2645460549546714,
+            1.3419442396311254,
+            1.2666095234211014,
+            1.1154356643197814
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.2655777891878865
+        },
+        {
+          "name": "tactical defence (chessy202607240238)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            0.9920536195231683,
+            1.0146489459012535,
+            1.0950071078408115,
+            1.0448538741649838
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0297514100331187
+        },
+        {
+          "name": "tactical defence (chessy202607240238) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.425969044592279,
+            0.8745434462826259,
+            1.0400527519662364,
+            1.0599617178355736
+          ],
+          "nodeCounts": [
+            36000,
+            36000,
+            36000,
+            36000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0500072349009049
+        }
+      ],
+      "geomeanRatio": 1.084218190246296,
+      "phaseMedians": {
+        "opening": 1.096880048471428,
+        "middlegame": 1.0176200423217294,
+        "endgame": 1.1459544599316445
+      },
+      "allDeclaredBudgetsFullyUsed": true
+    },
+    "230000": {
+      "positions": [
+        {
+          "name": "opening (Ruy Lopez)",
+          "phase": "opening",
+          "rootSeed": null,
+          "ratios": [
+            1.0503244348201708,
+            0.8710413322196991,
+            1.01378726196195,
+            1.1820602191274925
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0320558483910602
+        },
+        {
+          "name": "opening (Ruy Lopez) (mirrored)",
+          "phase": "opening",
+          "rootSeed": null,
+          "ratios": [
+            1.1255283807696688,
+            0.9288882418747039,
+            1.3177651920265596,
+            0.984561248499138
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0550448146344034
+        },
+        {
+          "name": "open middlegame (Dragon)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0360970128371283,
+            1.3985513516322803,
+            1.091440442995175,
+            1.1165575573474655
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1039990001713202
+        },
+        {
+          "name": "open middlegame (Dragon) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0511621264412727,
+            1.041230660548141,
+            1.1400504138261882,
+            1.0546018545521474
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0528819904967102
+        },
+        {
+          "name": "closed middlegame (KID)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.044656111647426,
+            1.2469721645034186,
+            0.9109246365090081,
+            0.8780737937894081
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.977790374078217
+        },
+        {
+          "name": "closed middlegame (KID) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.2741669778512472,
+            0.9718348532638652,
+            1.4854017575819938,
+            1.0821077384682911
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1781373581597692
+        },
+        {
+          "name": "tactical middlegame (Kiwipete)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0085206725669764,
+            0.9657965669329979,
+            1.0646529945248524,
+            1.0052973238347849
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0069089982008808
+        },
+        {
+          "name": "tactical middlegame (Kiwipete) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.113906626457442,
+            1.006288971595067,
+            1.3973418613787068,
+            0.9235514209204341
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0600977990262543
+        },
+        {
+          "name": "rook ending (Lucena)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.1078740270907697,
+            1.080292855058964,
+            0.8404656540997603,
+            1.0496303611703537
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.064961608114659
+        },
+        {
+          "name": "rook ending (Lucena) (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            0.9288400190938486,
+            1.1441817374677907,
+            1.199402839989497,
+            1.003091053218137
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0736363953429637
+        },
+        {
+          "name": "minor-piece ending",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.2108165643885354,
+            1.1064007173568624,
+            1.377226112719038,
+            1.0710798535620203
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.158608640872699
+        },
+        {
+          "name": "minor-piece ending (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.1322779127698923,
+            1.0115667306213827,
+            1.725378077545394,
+            1.1722250145842754
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.152251463677084
+        },
+        {
+          "name": "promotion race",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            0.7853538262817811,
+            1.0027603421375924,
+            1.8616053585719547,
+            1.1904093902685513
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.096584866203072
+        },
+        {
+          "name": "promotion race (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.124918018232685,
+            1.0653508622383432,
+            1.0209479664422227,
+            1.323227385550066
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.095134440235514
+        },
+        {
+          "name": "pawn ending (zugzwang)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            2.910251592791622,
+            1.2868860209326547,
+            0.8975126319409473,
+            1.0360642926306025
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1614751567816286
+        },
+        {
+          "name": "pawn ending (zugzwang) (mirrored)",
+          "phase": "endgame",
+          "rootSeed": null,
+          "ratios": [
+            1.1079688682463877,
+            1.1748505542401002,
+            1.184759075736524,
+            1.1563177721887583
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1655841632144293
+        },
+        {
+          "name": "tactical defence (chessy202607240238)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0456039798298218,
+            1.0246639814408527,
+            1.04095448528152,
+            1.0299510862267904
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0354527857541553
+        },
+        {
+          "name": "tactical defence (chessy202607240238) (mirrored)",
+          "phase": "middlegame",
+          "rootSeed": null,
+          "ratios": [
+            1.0293137749944612,
+            1.0210220106735293,
+            1.1227939350435232,
+            1.0409417980103681
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0351277865024147
+        }
+      ],
+      "geomeanRatio": 1.082120750067849,
+      "phaseMedians": {
+        "opening": 1.0435503315127317,
+        "middlegame": 1.0441673881254327,
+        "endgame": 1.124418164940078
+      },
+      "allDeclaredBudgetsFullyUsed": true
+    }
+  },
+  "seededBudgets": {
+    "10000": {
+      "positions": [
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 0,
+          "ratios": [
+            1.0722871327913877,
+            0.8908000750713508,
+            1.1555053062418448,
+            1.0281986825374725
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0502429076644302
+        },
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 1,
+          "ratios": [
+            0.9987926462554838,
+            1.1644980179250304,
+            1.0728477325556045,
+            1.1126648803960462
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0927563064758252
+        },
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 12648430,
+          "ratios": [
+            1.0546719237031876,
+            0.8381803364533179,
+            1.036627429231029,
+            1.102292803330488
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0456496764671082
+        },
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 4294967295,
+          "ratios": [
+            1.3269184456565457,
+            1.021584341431933,
+            1.0933649913547367,
+            0.9047276255558157
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0574746663933348
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 0,
+          "ratios": [
+            1.1859675538623595,
+            1.10976535792214,
+            1.1507322649232175,
+            0.9639825345079749
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1302488114226787
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 1,
+          "ratios": [
+            1.1194033599900808,
+            1.041964477597363,
+            1.2275959848772984,
+            0.8946478343960087
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.080683918793722
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 12648430,
+          "ratios": [
+            1.1839875247809337,
+            1.0712668974134847,
+            1.0038721068788512,
+            1.0756813094083197
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.073474103410902
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 4294967295,
+          "ratios": [
+            1.0327739342070286,
+            0.9822400864551014,
+            0.9706306990990402,
+            0.7385665156003071
+          ],
+          "nodeCounts": [
+            10000,
+            10000,
+            10000,
+            10000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.9764353927770708
+        }
+      ],
+      "geomeanRatio": 1.0625445214466227,
+      "phaseMedians": {
+        "opening": 1.0654743849021184
+      },
+      "allDeclaredBudgetsFullyUsed": true
+    },
+    "230000": {
+      "positions": [
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 0,
+          "ratios": [
+            1.124576150866561,
+            1.7018782736684641,
+            1.0448545540973195,
+            1.062561128565994
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0935686397162776
+        },
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 1,
+          "ratios": [
+            1.0386466532213963,
+            1.3388560599952504,
+            1.0413163703189157,
+            1.0827976116715896
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0620569909952526
+        },
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 12648430,
+          "ratios": [
+            1.0220446398240026,
+            0.36000911049015494,
+            1.0495063737614327,
+            1.0171346992167096
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0195896695203561
+        },
+        {
+          "name": "initial position (White)",
+          "phase": "opening",
+          "rootSeed": 4294967295,
+          "ratios": [
+            1.153337350307335,
+            0.8646991699156906,
+            1.0799561591076914,
+            1.0675427450896318
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0737494520986615
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 0,
+          "ratios": [
+            0.5539965727616007,
+            0.6928795815813538,
+            1.024506133835148,
+            1.0828025070255614
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 0.8586928577082509
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 1,
+          "ratios": [
+            1.2463678946152967,
+            0.8210402147576827,
+            1.0527158510427244,
+            1.109732108438151
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0812239797404377
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 12648430,
+          "ratios": [
+            2.6694122202293213,
+            1.1438527277137853,
+            1.0865098827112993,
+            1.0546208536230883
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.1151813052125423
+        },
+        {
+          "name": "after 1.e4 (Black)",
+          "phase": "opening",
+          "rootSeed": 4294967295,
+          "ratios": [
+            1.1527900555749373,
+            0.9799230718360068,
+            1.054527142294266,
+            1.1161754418656193
+          ],
+          "nodeCounts": [
+            230000,
+            230000,
+            230000,
+            230000
+          ],
+          "declaredBudgetFullyUsed": true,
+          "medianRatio": 1.0853512920799426
+        }
+      ],
+      "geomeanRatio": 1.0456201583806817,
+      "phaseMedians": {
+        "opening": 1.0774867159195496
+      },
+      "allDeclaredBudgetsFullyUsed": true
+    }
+  },
+  "masterRoute": true
+}

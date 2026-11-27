@@ -1,0 +1,202 @@
+{
+  "schema": "chessy.compact-hash-r86.protocol.v1",
+  "baseCommit": "f27f05581c4be6bb35e230e1ffd01a62edf67541",
+  "sourceCommit": "173e06fd29f587f7de1ab9a84ad990760d7f23ae",
+  "candidate": "threaded checked compact hashing with unchanged seeded root order",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "strengthClaimAllowed": false,
+  "universalEquivalenceProven": false,
+  "purpose": "One prospectively frozen development cost comparison of the r85 full-scan engine and its compact-hash integration; this is a new source and module pair, not a repeat or relabeling of historical compact-hash measurements.",
+  "modules": [
+    {
+      "role": "baseline",
+      "sha256": "a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7",
+      "rawBytes": 37210
+    },
+    {
+      "role": "candidate",
+      "sha256": "4f63b8dd25b4ae6787d1720392417a60daab1066bef7d494060939cb2016f74c",
+      "rawBytes": 37934
+    }
+  ],
+  "candidateSearchSha256": "4db05a27ae42560d6f45920859f9916eb84d0df3d59ab3eca95a4e53ed75ffc4",
+  "positions": [
+    {
+      "name": "opening (Ruy Lopez)",
+      "fen": "r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 5",
+      "phase": "opening"
+    },
+    {
+      "name": "opening (Ruy Lopez) (mirrored)",
+      "fen": "rnbq1rk1/pppp1ppp/5n2/b3p3/4P3/P1N2N2/1PPP1PPP/R1BQKB1R w KQ - 3 5",
+      "phase": "opening"
+    },
+    {
+      "name": "open middlegame (Dragon)",
+      "fen": "r2q1rk1/pp1bppbp/2np1np1/8/3NP3/2N1B3/PPPQBPPP/R4RK1 w - - 0 1",
+      "phase": "middlegame"
+    },
+    {
+      "name": "open middlegame (Dragon) (mirrored)",
+      "fen": "r4rk1/pppqbppp/2n1b3/3np3/8/2NP1NP1/PP1BPPBP/R2Q1RK1 b - - 0 1",
+      "phase": "middlegame"
+    },
+    {
+      "name": "closed middlegame (KID)",
+      "fen": "r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1",
+      "phase": "middlegame"
+    },
+    {
+      "name": "closed middlegame (KID) (mirrored)",
+      "fen": "r1bq1rk1/pp3ppp/2n2n2/2p1p3/3pP3/3P2P1/PPP1N1BP/R1BQ1RK1 b - - 0 1",
+      "phase": "middlegame"
+    },
+    {
+      "name": "tactical middlegame (Kiwipete)",
+      "fen": "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "phase": "middlegame"
+    },
+    {
+      "name": "tactical middlegame (Kiwipete) (mirrored)",
+      "fen": "r3k2r/pppbbppp/2n2q1P/1P2p3/3pn3/BN2PNP1/P1PPQPB1/R3K2R b KQkq - 0 1",
+      "phase": "middlegame"
+    },
+    {
+      "name": "rook ending (Lucena)",
+      "fen": "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "rook ending (Lucena) (mirrored)",
+      "fen": "2r5/R7/8/8/8/8/1p6/1k1K4 b - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "minor-piece ending",
+      "fen": "8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "minor-piece ending (mirrored)",
+      "fen": "8/4k1p1/2b2p2/8/4N3/4P1P1/3K1P2/8 b - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "promotion race",
+      "fen": "8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "promotion race (mirrored)",
+      "fen": "8/1P3k2/8/8/8/8/1p3K2/8 b - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "pawn ending (zugzwang)",
+      "fen": "8/8/4k3/4p3/4P3/4K3/8/8 w - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "pawn ending (zugzwang) (mirrored)",
+      "fen": "8/8/4k3/4p3/4P3/4K3/8/8 b - - 0 1",
+      "phase": "endgame"
+    },
+    {
+      "name": "tactical defence (chessy202607240238)",
+      "fen": "r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27",
+      "phase": "middlegame"
+    },
+    {
+      "name": "tactical defence (chessy202607240238) (mirrored)",
+      "fen": "2r4k/p5p1/3b3p/1p5b/3Ppn1q/1B2N3/1PPQ1PP1/R3R1K1 w - - 0 27",
+      "phase": "middlegame"
+    }
+  ],
+  "fixed": {
+    "maxDepth": 111,
+    "nodeLimits": [
+      10000,
+      36000,
+      230000
+    ],
+    "timeMs": 0,
+    "quiesce": true,
+    "repetitions": 4
+  },
+  "warmup": {
+    "maxDepth": 111,
+    "nodeLimit": 10000,
+    "timeMs": 0,
+    "quiesce": true,
+    "rounds": 2
+  },
+  "order": "baseline first iff (position index + repetition) modulo 2 is zero",
+  "aggregation": "For each paired repetition use baseline elapsedMs / candidate elapsedMs; per-position median across four pairs; geometric mean across the eighteen position medians. Phase medians use those position medians at 230000 nodes.",
+  "master": {
+    "conditional": true,
+    "condition": {
+      "fixedNodeLimit": 230000,
+      "minGeometricSpeedRatio": 1.02,
+      "minEachPhaseMedianSpeedRatio": 1
+    },
+    "positionIndices": [
+      0,
+      8
+    ],
+    "maxDepth": 111,
+    "nodeLimit": 0,
+    "timeMs": 8000,
+    "quiesce": true,
+    "repetitions": 2
+  },
+  "seeded": {
+    "positions": [
+      {
+        "name": "initial position (White)",
+        "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "phase": "opening"
+      },
+      {
+        "name": "after 1.e4 (Black)",
+        "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        "phase": "opening"
+      }
+    ],
+    "seeds": [
+      0,
+      1,
+      12648430,
+      4294967295
+    ],
+    "fixed": {
+      "maxDepth": 111,
+      "nodeLimits": [
+        10000,
+        230000
+      ],
+      "timeMs": 0,
+      "quiesce": true,
+      "repetitions": 4
+    },
+    "warmup": {
+      "maxDepth": 111,
+      "nodeLimit": 10000,
+      "timeMs": 0,
+      "quiesce": true,
+      "rounds": 2
+    },
+    "order": "baseline first iff (seeded case index + repetition) modulo 2 is zero; seeded case index is position index times four plus seed index",
+    "aggregation": "Separate from the historical eighteen-position panel: pair baseline elapsedMs / candidate elapsedMs, median across four repetitions for each position and seed, geometric mean across eight case medians. Never contributes to the Master follow-up routing.",
+    "preflight": "Before registration, intercept actual WASM exports and require every rootSeed option to call search_seeded with that exact u32; require complete candidate/baseline parity, explicit historical-default seed parity with ordinary search, and at least one baseline full result to differ across the declared seeds. Retain all preflight results. If there is no seed effect, stop without timings or changing seeds."
+  },
+  "failure": "Retain all rows and errors; no retries, replacement samples, alternative variants, threshold changes or second run. A completed correctness mismatch is a failed run, never silently dropped.",
+  "rawLimit": 40960,
+  "brotliLimit": 20480,
+  "encoder": {
+    "node": "22.23.2",
+    "brotli": "1.1.0"
+  },
+  "admission": "Development evidence only. No result grants production admission, proves universal equivalence or strength, or replaces browser, fixed-memory, source-signature, or physical-device evidence.",
+  "sourceBaselineCommit": "3b32d2e7c23341d2245003c5324aa2ee6d07aa08"
+}

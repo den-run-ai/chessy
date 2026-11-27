@@ -1,0 +1,92 @@
+{
+  "schema": "chessy.compact-hash-r86.evidence-identity.v1",
+  "experimentIdentity": "efa6437b5cc9d5059c6538e5356ebed5d0b10da96d8aaa5e68fd7ddcc63e1ae5",
+  "protocolSha256": "d95ca16a88363445c3f96372b9b85342d0e35d8e7cf8ec55c9d33eb9970f6462",
+  "files": [
+    {
+      "path": "prepare.js",
+      "sha256": "7fc2769e8bb5832c0e9611d3c896eff1d9ff1375b48ec65c5c0e6b37d248fe98",
+      "bytes": 5434
+    },
+    {
+      "path": "seeded-parity.rs.in",
+      "sha256": "d46a64084f3aed87d713457cf9f5dbc0d2921c47355f5244a4c3a647798ee9d7",
+      "bytes": 4519
+    },
+    {
+      "path": "validate.js",
+      "sha256": "49e8f8df01ad6f67fd92543505bb6f113065db28d90404929651a1d21e9f2cc6",
+      "bytes": 14117
+    },
+    {
+      "path": "measure.js",
+      "sha256": "17fe571399e13ea43606d349261bc25954496913fde19a76f2da4e22007280ae",
+      "bytes": 15387
+    },
+    {
+      "path": "protocol.json",
+      "sha256": "d95ca16a88363445c3f96372b9b85342d0e35d8e7cf8ec55c9d33eb9970f6462",
+      "bytes": 6967
+    },
+    {
+      "path": "probe.test.js",
+      "sha256": "dd41993ad80687f64ef327402f10df730d697892e91cb9e2d928e13a78bfe799",
+      "bytes": 6457
+    },
+    {
+      "path": "evidence/source.json",
+      "sha256": "a4b0e75e80673ddc90299012d63651438809556c078d7c62728aa595a12396a2",
+      "bytes": 3071
+    },
+    {
+      "path": "evidence/validation.json",
+      "sha256": "92504e0c2c170bb7edfdc41d502005cca6d95fa2e804c6f7365684e824bb4380",
+      "bytes": 161692
+    },
+    {
+      "path": "evidence/registration.json",
+      "sha256": "c1e7fa466272b2b2a5723e8c9156557a3065c8e7f3090c478a182d89144e72e0",
+      "bytes": 10429
+    },
+    {
+      "path": "evidence/native.log",
+      "sha256": "b7620ce7569e08510bd4f751e2725744c3f84d201fa3ac5935463eaef49e970e",
+      "bytes": 2579
+    },
+    {
+      "path": "evidence/build.log",
+      "sha256": "3ec8d39bacbdbf9862dcd094d9f24cff50d99db1cff60e88efef62aca15ecdcd",
+      "bytes": 527
+    },
+    {
+      "path": "evidence/measurement.json",
+      "sha256": "1c1278d59c82f2176e4479c454c10a3e08847a626814820a8bf392fc68b2d015",
+      "bytes": 451025
+    },
+    {
+      "path": "evidence/rows.jsonl",
+      "sha256": "fd17d4ed124f9ad0042ffe9a7ee67d8de1f002b6aacbddb1dd94614cd9d91342",
+      "bytes": 254603
+    },
+    {
+      "path": "evidence/measurement.log",
+      "sha256": "0f4a5c39bbe4ec48cb3bf165f90286b8e33387b06f73ca167da6fca39c330bc7",
+      "bytes": 653
+    },
+    {
+      "path": "evidence/raw-logs.json",
+      "sha256": "35096b14a8488fbe9b81ba752bce9f0931af08488710f81f514c16e5713fdbb0",
+      "bytes": 4002
+    },
+    {
+      "path": "evidence/summary.json",
+      "sha256": "fd61628a51b2bbdf9bc340eec67f8f7e966d7f52eef29990fee5b3a418c712d1",
+      "bytes": 35947
+    },
+    {
+      "path": "evidence/compression-diagnostic.json",
+      "sha256": "457da892cb2591c311c9c97240759540dc17841e73f6a5c9c8c45184933010f5",
+      "bytes": 496
+    }
+  ]
+}
