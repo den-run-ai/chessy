@@ -229,6 +229,20 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 No fonts, images, or libraries are fetched from the network: pieces are
 Unicode glyphs, styling is system fonts, and the icons ship in the repo.
 
+## r83 analysis recovery
+
+Review and Train continue with a fresh analysis worker when an IndexedDB
+cache read has not completed within one second. That optional cache deadline
+is separate from the search watchdog; late cache results cannot replace,
+restart, or cancel the selected worker or a newer request. Cancelling the
+probe also retires its pending cache lookup.
+
+A synchronous failure to send a request to the worker now receives the same
+single fresh-worker retry as other worker failures. Both failed attempts end
+with a retryable analysis failure, leaving the position and saved evidence
+unchanged. The engine binary, evaluation, difficulty budgets, and coaching
+reflection gates remain unchanged.
+
 ## r82 correctness refresh
 
 This release fixes stale promotion choices and makes the WASM loader reject
@@ -244,10 +258,13 @@ budgets are unchanged; this refresh makes no new Elo claim.
 
 Two follow-up [search-cost prototypes](experiments/wasm/CHATARUNGA-REVIEW.md#follow-up-cost-prototypes)
 retain their complete development evidence. Compact hashing reduced elapsed
-time by 8.27% at 230k nodes in its local screen, but remains 713 raw bytes over
-the module ceiling. Pawn-rank masks produced smaller, uneven gains, slowed the
-endgame phase and remain 100 bytes over. Both preserve the measured fixed-node
-results; neither is activated. The [cost-admission proposal](experiments/wasm/SEARCH-COST-ADMISSION-PROPOSAL.md)
+time by 8.27% at 230k nodes in its local screen. Pawn-rank masks produced smaller,
+uneven gains and slowed the endgame phase. Both exceeded the historical raw
+ceiling; their recorded raw and independently reproduced compressed sizes fit the new
+**40 KiB raw / 20 KiB Brotli-11 download budgets**. The archived receipts retain
+the earlier limits and results. Both preserve the measured fixed-node results;
+neither is activated. The pinned Node 22.23.2 / Brotli 1.1.0 size gate and all
+other engine and device gates remain in force. The [cost-admission proposal](experiments/wasm/SEARCH-COST-ADMISSION-PROPOSAL.md)
 identifies the source, runtime and physical-device evidence still needed.
 
 ## Run it

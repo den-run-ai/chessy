@@ -86,7 +86,7 @@ with each experiment.
 
 | Candidate | Measured change | 230k-node elapsed ratio (baseline/candidate) | Raw WASM | Decision |
 | --- | --- | ---: | ---: | --- |
-| [Compact hashing](compact-hash/README.md) | Thread two unchanged Zobrist streams as one value through searched edges | 1.090172 (8.27% less elapsed time) | 37,885 bytes, +713 | Promising development result; size/device/admission gaps remain |
+| [Compact hashing](compact-hash/README.md) | Thread two unchanged Zobrist streams as one value through searched edges | 1.090172 (8.27% less elapsed time) | 37,885 bytes, +713 | Fits the new download budgets; resource/device/admission checks remain |
 | [Pawn-rank masks](pawn-ranks/README.md) | Replace repeated enemy-pawn scans with per-file rank masks | 1.012753 (1.26% less elapsed time) | 37,272 bytes, +100 | Small, uneven gain; longer diagnostic skipped under the frozen rule |
 
 Both screens used 18 positions, three node budgets and four balanced pairs per
@@ -99,14 +99,26 @@ statistics, not independent strength samples or proof on all positions.
 Compact hashing also met its predeclared routing condition for four paired
 eight-second searches on Ruy Lopez and Lucena. All four pairs kept the same
 move and completed depth while searching more nodes. It is 474 raw bytes
-smaller than #184's prototype, but still above the existing ceiling. Two
-size-directed alternatives were retained; the 15-byte saving from an unchecked
+smaller than #184's prototype and exceeded the historical 37,172-byte ceiling.
+Two size-directed alternatives were retained; the 15-byte saving from an unchecked
 private lookup was not selected over the checked implementation.
 
 Pawn masks missed the 1.02 ratio threshold at 230k nodes and had an endgame
 phase median of 0.984906, equivalent to about 1.53% longer elapsed time.
 Consequently its conditional Master follow-up did not run. Neither its
 small positive aggregate nor a faster result at 36k nodes waives that outcome.
+
+The subsequently authorized download-budget policy allows **40 KiB raw
+(40,960 bytes)** and **20 KiB Brotli-11 (20,480 bytes)**. Compact hashing's
+37,885 raw / 17,937 compressed bytes and pawn masks' 37,272 raw /
+17,739 compressed bytes fit those budgets. Compression in the local screens
+used Node 24.22.3 / Brotli 1.2.1; the independent
+[CI check](https://github.com/den-run-ai/chessy/actions/runs/45940247899/job/140312676492)
+reproduced those sizes with the authoritative Node 22.23.2 / Brotli 1.1.0 encoder.
+The archived protocols, experiment READMEs and size
+verdicts (including `rawGatePassed: false`) describe the historical limits and remain
+unchanged. The new size policy does not change the measured outcomes or
+authorize either candidate's activation.
 
 CI rebuilds the candidates with pinned tools, checks the exact measured module
 hashes, and repeats correctness and evidence checks. It does not rerun timing.
@@ -120,8 +132,9 @@ reviewed admission mechanism remain outstanding.
 
 Chatarunga embeds a **25,200,704-byte** network and uses native NEON/AVX2
 kernels. Its headline configuration also uses Lazy SMP. Chessy's production
-WASM has a 37,172-byte raw size ceiling and a 26,542,080-byte fixed memory
-ceiling, with no SIMD, threads, allocator, or external runtime dependencies.
+WASM now has a 40,960-byte raw download budget and an unchanged 26,542,080-byte
+fixed memory ceiling, with no SIMD, threads, allocator, or external runtime
+dependencies.
 The reference network alone nearly fills that entire memory allowance,
 before Chessy's existing TT and scratch state. A wholesale import therefore
 does not fit the present offline/mobile contract.

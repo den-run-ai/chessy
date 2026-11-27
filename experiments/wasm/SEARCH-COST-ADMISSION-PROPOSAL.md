@@ -82,7 +82,7 @@ search comparisons exercise its integration.
 | Source argument | A small reviewable transformation, the local invariant, all callers/state transitions, explicit assumptions and an independent review |
 | Local correctness | Exhaustive bounded-domain checks where practical; seeded legal walks, make/unmake, special moves and independently recomputed reference values |
 | Search correctness | Full unchanged frozen signatures plus ordinary/fixed/exact-root comparisons, history-sensitive draws, abort boundaries and legal PV replay; retain every mismatch |
-| Resource limits | Authoritative raw and pinned-encoder compressed size, fixed linear memory, stack bounds and unchanged offline/worker/ABI contracts; no implicit ceiling exception |
+| Resource limits | Current 40 KiB raw / 20 KiB Brotli-11 download budgets with the pinned Node 22.23.2 / Brotli 1.1.0 encoder, fixed linear memory, stack bounds and unchanged offline/worker/ABI contracts; no implicit ceiling exception |
 | Product runtime | A prospectively registered order-balanced schedule at current product budgets; complete rows including failures, cold/warm and total-delivery latency, completed depth and overshoot |
 | Physical targets | Authentic declared iOS/WebKit and Android/Chromium observations, sustained operation, battery/thermal/pressure limits, background/foreground and retry/PWA behavior under #84 |
 | Activation | Previously reviewed evidence and policy in the trusted base, followed by the separate [signature procedure](SIGNATURE-ROTATION.md), coherent release and full CI |
@@ -95,9 +95,16 @@ for routing research only and cannot fill this admission receipt retroactively.
 
 A counterexample invalidates the claimed local equivalence; preserve it and
 either correct the implementation under a new candidate identity or reclassify
-the work honestly. A size miss or device failure remains a failed prerequisite.
+the work honestly. A size miss under the applicable policy or device failure
+remains a failed prerequisite.
 Do not selectively rerun valid outcomes, omit positions or widen a ceiling in
 the measurement report to turn a candidate into a pass.
+
+The separately authorized 40 KiB / 20 KiB download-budget update is a current
+policy change. Historical size misses retain their original thresholds and
+verdicts; comparison with the new budgets is recorded separately. It does not
+supply physical-device evidence, alter this proposal's admission status or
+authorize production activation.
 
 ## What remains open
 

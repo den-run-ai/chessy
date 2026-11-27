@@ -1,0 +1,24 @@
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.70s
+     Running unittests src/lib.rs (/workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/native-target-baseline/debug/deps/chessy_ai_wasm-8ab5d9e90753b2a1)
+
+running 7 tests
+test eval::tests::matches_shipped_javascript_reference_positions ... ok
+test engine::tests::make_and_unmake_restore_position_exactly ... ok
+test search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+test search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+test tests::abi_v2_layout_and_depth_guard_are_fixed ... ok
+test engine::tests::initial_position_perft_and_pseudo_ordering ... ok
+test engine::tests::kiwipete_en_passant_and_promotion_perft ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline)
+    Finished `release` profile [optimized] target(s) in 2.05s
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline)
+    Finished `small` profile [optimized] target(s) in 1.61s
+ 40660 /workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline/dist/chessy-ai-fast.raw.wasm
+ 37172 /workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline/dist/chessy-ai-fast.wasm
+ 29021 /workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline/dist/chessy-ai-small.raw.wasm
+ 26215 /workspace/scratch/8a384797d3cd/chessy-tt-run-v1-complete/baseline/dist/chessy-ai-small.wasm
+133068 total

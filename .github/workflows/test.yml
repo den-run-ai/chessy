@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The isolated cost prototypes read their pinned base Git objects.
+          # Research prototypes rebuild pinned historical Git sources.
           fetch-depth: 0
       - name: Fetch pinned Rust and Binaryen toolchains
         run: |
@@ -86,6 +86,25 @@ jobs:
           sha256sum experiments/wasm/dist/*.wasm
       - name: Verify the committed production asset
         run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - name: Reproduce research-only TT correctness without rerunning timings
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          probe="$RUNNER_TEMP/chessy-tt-buckets"
+          node experiments/wasm/tt-buckets/probe.test.js
+          node experiments/wasm/tt-buckets/prepare.js "$probe"
+          for mode in baseline candidate; do
+            (cd "$probe/$mode" && \
+              CARGO_TARGET_DIR="$RUNNER_TEMP/tt-native-$mode" \
+              cargo test --locked --offline)
+            CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/tt-wasm-$mode" \
+              CHESSY_CARGO_BIN="$(command -v cargo)" \
+              CHESSY_RUSTC_BIN="$(command -v rustc)" \
+              CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+              sh "$probe/$mode/build.sh"
+          done
+          node experiments/wasm/tt-buckets/validate.js "$probe"
       - name: Build all optional incremental study variants before timing
         if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
         env:
@@ -175,10 +194,11 @@ jobs:
           node experiments/wasm/compact-hash/validate.js "$RUNNER_TEMP/compact-hash" \
             "$RUNNER_TEMP/compact-hash-validation.json"
           node experiments/wasm/compact-hash/probe.test.js "$RUNNER_TEMP/compact-hash"
-          # Check size with the pinned encoder, retaining expected research
-          # failures as observations. No ceiling or production asset changes.
+          # Recheck research sizes with the pinned encoder. Historical receipt
+          # verdicts stay separate from the current production download budget.
           node - "$RUNNER_TEMP/pawn-ranks/candidate/dist/chessy-ai-fast.wasm" \
-            "$RUNNER_TEMP/compact-hash/dist/chessy-ai-fast.wasm" <<'NODE'
+            "$RUNNER_TEMP/compact-hash/dist/chessy-ai-fast.wasm" \
+            "$RUNNER_TEMP/chessy-tt-buckets/candidate/dist/chessy-ai-fast.wasm" <<'NODE'
           const fs = require('fs'), crypto = require('crypto'), zlib = require('zlib');
           if (process.versions.node !== '22.23.2' || process.versions.brotli !== '1.1.0') {
             throw new Error('wrong research size encoder');
