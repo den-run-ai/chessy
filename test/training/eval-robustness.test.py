@@ -40,6 +40,17 @@ class RobustnessContracts(unittest.TestCase):
         self.assertNotEqual(recomputed["heldOut"]["hce"]["all"]["regretCp"],
                             saved["heldOut"]["hce"]["all"]["regretCp"])
 
+    def test_standpat_reports_reproduce_from_both_traced_trees(self):
+        for tree in ("hce", "nopawn"):
+            ledger = gzip.decompress((DATA / f"standpat-{tree}-events.json.gz").read_bytes())
+            report = json.loads((DATA / f"standpat-{tree}-results.json").read_bytes())
+            self.assertEqual(report["ledgerSha256"], fit.digest(ledger))
+            stored = json.loads(ledger)
+            self.assertEqual(len(stored["roots"]), report["wasmRootSignaturesChecked"])
+            for teacher, strata in report["results"].items():
+                for index, label in enumerate(("uniformVisits", "within50CpOfTracedCutoff")):
+                    self.assertEqual(standpat.summarize(stored["events"], teacher, index), strata[label])
+
     def test_cutoff_direction_and_one_sided_teacher_bounds(self):
         events = []
         for index, (turn, score, target, bounded) in enumerate((

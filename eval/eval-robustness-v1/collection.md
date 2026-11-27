@@ -54,3 +54,9 @@ python -m tools.eval_robustness.isolated_labels \
   eval/eval-robustness-v1/fit-exclusions.json \
   /tmp/chessy-isolated-siblings --workers 2
 ```
+
+Across the full isolated pass, 117 of the 2,007 searched child scores changed, with a maximum absolute shift of 86 cp. The best-scoring child set changed at 11 of 631 roots. All 631 isolated parent searches chose the originally sampled teacher move. The 32 independently repeated parents and 97 nonterminal children matched on every retained search field. `isolated-collection.jsonl.gz` contains the full corrected labels and `isolated-audit.json` records the comparison.
+
+The fitted continuous scale changed from 0.7404 to 0.7387. The integer export is 12/16 in both cases, and all three ablations also reproduced their exported numerators. On the same 78 held-out games the isolated labels yield mean regret of 207.84 cp for HCE, 167.96 cp for full, 177.56 cp for no-pawn and 184.03 cp for calibrated. The calibrated-minus-HCE difference is −23.81 cp, with a paired game-bootstrap 95% interval of −81.23 to +17.53 cp. `isolated-fit.json` retains the complete refit and `isolated-exclusions.json` binds the identical exclusion groups to the corrected labels.
+
+A second full pass ran with the roots in reverse order on four workers. The two complete passes produced byte-identical compressed labels, fits, exclusions and audit output. To reproduce this comparison, rerun the command with a separate output directory and `--workers 4 --reverse-order`, then compare both directories. `isolated-second-pass.json` records the full 631-parent and 2,007-child comparison.

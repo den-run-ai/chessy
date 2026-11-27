@@ -1,0 +1,164 @@
+{
+  "collectionSha256": "4fe57936989f2ed91b23034f1a91dc7ae94ef38e6f53c48dabbd9526e6571769",
+  "excludedGroups": {
+    "0c7f9288fd1de515afd8b21a313d5f8385b552654f228fefe6100cd3b628908a": [
+      "historicalQuarantine"
+    ],
+    "14f0f490ca8c80084a182c9508f9ca654f610ef6e68c1260bfc2862ff9646ed0": [
+      "train"
+    ],
+    "1882baea4c82b32ff2ea6730508cf67575ee600708162246fd2840a4d821dfad": [
+      "train"
+    ],
+    "3abc0ab9e798ee2e5ae4cc068f9423072925379c018882aa77678214f35d571e": [
+      "validation"
+    ],
+    "3b6cd1940e913ee4bcfe5bcfa6d5deb5e5392153b15702772174b8ca92a6c00a": [
+      "holdout",
+      "train"
+    ],
+    "45f86a656d5f92e6abe23c41a57d21859449907d4910ef8ecdf0ef3fb5e92d0f": [
+      "train"
+    ],
+    "4685c0325a57a5cd8a2c22c8601861054c59662860b64e14cd5a492b07fda015": [
+      "train"
+    ],
+    "4fc53d04d9940aaadd28be011a320bdbd4cd97884debf583d7056dfd0c39d69a": [
+      "train"
+    ],
+    "52ddc884e5f2b4d5b5f9e61d46941ab64afab6f7acde070990837a1f45f16a95": [
+      "train"
+    ],
+    "54ec3002047633c5851271fc1b75c80c8d47c53eacd43fe04205da2395da86ba": [
+      "train"
+    ],
+    "58d4bb1cccbdf7218b3b90e78231f514ce348d18cd2d42fcbf4d17deaa0ec2c6": [
+      "train"
+    ],
+    "5b2174616820c92d5f6aa2d41d10eee012265791c0652d2e1e46e983b7e161dd": [
+      "train"
+    ],
+    "625ad8126c829bfe2c435966978ff88af9aaa76c32a2949852af92bd3a90334c": [
+      "historicalQuarantine",
+      "train"
+    ],
+    "65712010ebf847daf57ec10e6dc73e234b305811cb8ba1c77e101acad4f73e87": [
+      "holdout"
+    ],
+    "6ea82f23016d24a261f15f93a17c5e7b7dc3ff8359f2057c2389ee6943f32eeb": [
+      "validation"
+    ],
+    "72c6d421e846bb0b5eb024e01b00fd23feeeb8183d117aca287aeb4b8e0dff92": [
+      "train"
+    ],
+    "84afcfc5e913cc223a29db62184d475d59eba217860495e3afd2dfe62a48558e": [
+      "holdout"
+    ],
+    "953b919da7752ad4d81a1f67fe08fb5bd158692e49fae2e8df45fc9ab5059d1e": [
+      "train"
+    ],
+    "9c5c9434261e265f53e22eb756fa38bfb6f1e9d543e8a8af819f3f6b4a693b50": [
+      "train",
+      "validation"
+    ],
+    "a17abf3593b09e55dc8a99522144cff3fc2c471a13f9a4a44e0b3ce71bfe9f8d": [
+      "train"
+    ],
+    "a78b938978811683b9b1f15b4e44fc04b516cdfc23a91b287a339e9b10630341": [
+      "train"
+    ],
+    "ab32f75d05e4377b6c35e1a8da8f77813dddf1e8f3755a282f3b02d9d3ceb0e5": [
+      "train"
+    ],
+    "ac590c6b220ac446820db87e1f8d72d5fb5344f7238d82c8e73e03b4fced3536": [
+      "holdout",
+      "train"
+    ],
+    "ccbebc6f53bfb2ac885f5d659816bb65c2b661a4f534953a3be98b9679ecc717": [
+      "train"
+    ],
+    "da4a9e0e8d798de3e8e1b42a36c334e8b315d22a4f47b6e5e5bb1c788c7a4549": [
+      "train"
+    ],
+    "e07792c670bd59c684c9b304eb638f0473cf49d348b379fa19725921893258ea": [
+      "train"
+    ],
+    "e5cdc6af2a3c657350fe5010350facb20717cb931e93fa55a641bc3461c1a958": [
+      "train"
+    ],
+    "e810a1ebaf268fba0f426162ef02dfe01a64e214eeeccea574f8bc9e643af7cc": [
+      "holdout"
+    ],
+    "e99bb117a26f02f282b40fa1f7706f8aa7faaec18d01ab5119f6a17cc860591e": [
+      "train",
+      "validation"
+    ],
+    "ec5373e482f92fc443f4edf51f9034b17e6c4907bf9f7d0317f72b21a94a0bc4": [
+      "train"
+    ],
+    "ef393bbd1c153d1ba980d6adf0d1c3bb6cf7f8e8a5f3c1ac5f1c789e47648d49": [
+      "train"
+    ],
+    "f1dd4eef68dc7807256bffb45865d830e34352e76874d9c16ee72a574e59d14c": [
+      "train"
+    ]
+  },
+  "method": "Exclude entire game if any root or chosen child matches a protected cluster or structural family, including file/color symmetry. Original labels unread.",
+  "originalRoleSha256": {
+    "holdout": "d06407e3fd1c55c93b5ee540a2312d2887ae17e1e54af74bd5c65f27e530f35f",
+    "train": "cff320775c81a2444949bb26c353c9db9a9ca600ebdcc5e0df7635f10963eeee",
+    "validation": "2f4c686bcf519287f2dfe8197bfb62d59c5c60f42151c198715c217f02d833d2"
+  },
+  "originalSelectionSha256": "2add1b46557117edd833bf493bc66c4264ad4700e0fa416ffa81a543a8b8a92f",
+  "quarantine": {
+    "clusterSha256": "9fd5346f2972017af0458410220f39607d0b38a191f0f77e95eb243617d1cde6",
+    "clusters": 2179,
+    "families": 1085,
+    "familySha256": "49350b19ee1be2b9acfbc5a829521d3508c0b1423e1a20301b0a32482d675292",
+    "files": [
+      {
+        "bytes": 73751,
+        "path": "eval/corpus/eval-v1.ndjson",
+        "sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27"
+      },
+      {
+        "bytes": 7409,
+        "path": "eval/corpus/sources/lichess-puzzles-v1.csv",
+        "sha256": "5fe613257220313a76f09435940b605d4c0c9139447a4ef89f357661c1533feb"
+      },
+      {
+        "bytes": 2061,
+        "path": "test/fixtures/master-incident-20260724.json",
+        "sha256": "5b753e57c8c17b58aa0190fb47d7a3fb30b287dcf47bec8e87f56d990e87cbbd"
+      },
+      {
+        "bytes": 3657,
+        "path": "test/fixtures/master-e4-regression-20260729.json",
+        "sha256": "d9f31040e24fe9b21d9ad0baa45b39aa6a6cfe493622d1b44ac8d2d99ee3c494"
+      },
+      {
+        "bytes": 7780,
+        "path": "test/fixtures/master-e4-regression-20260729.pgn",
+        "sha256": "98dd474bf8c4c7efc3fbfa67dfa1c91411877cb431f4ccb65f430371e8f34a4a"
+      },
+      {
+        "bytes": 5736,
+        "path": "test/ai-match-openings.js",
+        "sha256": "31128460a2c5406b7c92ab9c8c0455b322ca6437960f64a29cf6f7a6b8055a27"
+      },
+      {
+        "bytes": 519134,
+        "path": "eval/match-v2/openings.json",
+        "sha256": "bda65b3253951863f2b01187b2a44becb8d36d29a7917780f6d920a92f4d7dab"
+      },
+      {
+        "bytes": 56771,
+        "path": "test/fixtures/wasm-r69-signatures.json",
+        "sha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b"
+      }
+    ],
+    "incidentCrossSourceLineage": "unknown; not inferred",
+    "knownSourceGames": 40
+  },
+  "schema": "chessy.sparse-hard-position-family-exclusions.v1"
+}

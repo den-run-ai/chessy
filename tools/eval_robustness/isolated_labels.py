@@ -72,24 +72,7 @@ def top_moves(row):
     return {child["uci"] for child in row["children"] if child["teacher"] == best}
 
 
-def run(args):
-    teacher = args.teacher.resolve()
-    source = args.collection.read_bytes()
-    old_exclusions = json.loads(args.exclusions.read_bytes())
-    if sha(teacher.read_bytes()) != TEACHER or sha(source) != old_exclusions["collectionSha256"]:
-        raise ValueError("unknown teacher or source collection")
-    rows = list(map(json.loads, gzip.decompress(source).splitlines()))
-    args.output.mkdir(parents=True, exist_ok=False)
-    with ThreadPoolExecutor(max_workers=args.workers) as workers:
-        isolated = []
-        for row in workers.map(lambda row: relabel(row, teacher), rows):
-            isolated.append(row)
-            if len(isolated) % 50 == 0 or len(isolated) == len(rows):
-                print(f"Labelled {len(isolated)}/{len(rows)} roots", file=sys.stderr, flush=True)
-        # Choose the repeated roots by ID alone. Every replay uses a fresh process
-        # and a second independent invocation for all its nonterminal children.
-        sample = sorted(range(len(rows)), key=lambda i: sha(("audit:" + rows[i]["root"]).encode()))[:32]
-        repeated = list(workers.map(lambda i: relabel(rows[i], teacher), sample))
+def summarize(args, source, old_exclusions, rows, isolated, sample, repeated):
     # Expose every label in the exact order used for the common optimizer.
     payload = gzip.compress(b"".join((json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode()
                                      for row in isolated), mtime=0)
@@ -126,9 +109,35 @@ def run(args):
     write_json(args.output / "isolated-audit.json", output)
 
 
+def run(args):
+    teacher = args.teacher.resolve()
+    source = args.collection.read_bytes()
+    old_exclusions = json.loads(args.exclusions.read_bytes())
+    if sha(teacher.read_bytes()) != TEACHER or sha(source) != old_exclusions["collectionSha256"]:
+        raise ValueError("unknown teacher or source collection")
+    rows = list(map(json.loads, gzip.decompress(source).splitlines()))
+    args.output.mkdir(parents=True, exist_ok=False)
+    with ThreadPoolExecutor(max_workers=args.workers) as workers:
+        isolated = []
+        ordered = reversed(rows) if args.reverse_order else rows
+        for row in workers.map(lambda row: relabel(row, teacher), ordered):
+            isolated.append(row)
+            if len(isolated) % 50 == 0 or len(isolated) == len(rows):
+                print(f"Labelled {len(isolated)}/{len(rows)} roots", file=sys.stderr, flush=True)
+        if args.reverse_order:
+            isolated.reverse()
+        # Choose the repeated roots by ID alone. Every replay uses a fresh process
+        # and a second independent invocation for all its nonterminal children.
+        sample = sorted(range(len(rows)), key=lambda i: sha(("audit:" + rows[i]["root"]).encode()))[:32]
+        repeated = list(workers.map(lambda i: relabel(rows[i], teacher), sample))
+    summarize(args, source, old_exclusions, rows, isolated, sample, repeated)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     for key in ("collection", "teacher", "protocol", "exclusions", "output"):
         parser.add_argument(key, type=Path)
-    parser.add_argument("--workers", type=int, choices=[1, 2], default=1)
+    parser.add_argument("--workers", type=int, choices=range(1, 5), default=1)
+    parser.add_argument("--reverse-order", action="store_true",
+                        help="reverse the order of parent queries, then restore the canonical row order")
     run(parser.parse_args())

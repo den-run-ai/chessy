@@ -1,0 +1,187 @@
+{
+  "tracedEngine": "hce",
+  "roots": 85,
+  "games": 32,
+  "openings": 16,
+  "uniqueFens": 1007,
+  "events": 1012,
+  "wasmRootSignaturesChecked": 85,
+  "ledgerSha256": "46a4859074b0e54e66dc7189119e6fc3716e190abd84eb499b9bb42fd9cbbde2",
+  "modules": {
+    "hce": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5",
+    "full": "a84bca237b114d82be743747d9db14ad7721a996b14c7483c27d2369752f3039",
+    "nopawn": "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+  },
+  "teachers": {
+    "sf11": {
+      "sha256": "835cca1bae51344ab86bb9443bd46e886a1c0d07011a377b6c50056be3e43718",
+      "id": {
+        "name": "Stockfish 11 64 POPCNT",
+        "author": "T. Romstad, M. Costalba, J. Kiiski, G. Linscott"
+      }
+    },
+    "chatarunga": {
+      "sha256": "a3b3fe59985900655940c1088f3d24d2388d359b498a5d84664577fa46135e4a",
+      "id": {
+        "name": "Chatarunga 2.0",
+        "author": "Deedy Das"
+      }
+    }
+  },
+  "protocolSha256": "79001b8af218f29bbc0baf524c4eeba108433e31e777b35e765948c3047adb76",
+  "sourceSha256": {
+    "engine": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+    "eval": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+    "search": "9f8f2a798c26e7c4ff22cbc8b4605ed72fd17eadfc8bf9305747bf7ec40194b5",
+    "standpat": "6ba384389b4ba6d1ac3cba90b0e484b72441f065104c50a61cd2bfc6961d75d4"
+  },
+  "samplerSha256": "d9fe949ac9eeb2f834fe1e3fd8bffc9961ae434142a3d8272422d7937ffa3366",
+  "gameCorpusSha256": "7e2f25ee36c639d576b46ad567dfae6727e3054269bff3896c27facb51d5d91f",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "results": {
+    "sf11": {
+      "uniformVisits": {
+        "sampled": 510,
+        "bounded": 64,
+        "mate": 44,
+        "byModel": {
+          "hce": {
+            "adverseStop": 0.040196078431372545,
+            "cutoffDisagreement": 0.23294117647058823,
+            "errorAtLeast200": 0.7482142857142857,
+            "maeCp": 687.3720238095239,
+            "missedStop": 0.1927450980392157
+          },
+          "full": {
+            "adverseStop": 0.03588235294117647,
+            "cutoffDisagreement": 0.22745098039215686,
+            "errorAtLeast200": 0.7503968253968254,
+            "maeCp": 695.3117063492064,
+            "missedStop": 0.1915686274509804
+          },
+          "noPawn": {
+            "adverseStop": 0.03588235294117647,
+            "cutoffDisagreement": 0.22588235294117645,
+            "errorAtLeast200": 0.753968253968254,
+            "maeCp": 695.4722222222222,
+            "missedStop": 0.18999999999999997
+          },
+          "half": {
+            "adverseStop": 0.03862745098039216,
+            "cutoffDisagreement": 0.2431372549019608,
+            "errorAtLeast200": 0.7543650793650793,
+            "maeCp": 689.9724206349207,
+            "missedStop": 0.20450980392156862
+          }
+        }
+      },
+      "within50CpOfTracedCutoff": {
+        "sampled": 502,
+        "bounded": 47,
+        "mate": 43,
+        "byModel": {
+          "hce": {
+            "adverseStop": 0.07176470588235294,
+            "cutoffDisagreement": 0.4176470588235294,
+            "errorAtLeast200": 0.7032921810699588,
+            "maeCp": 716.2551440329217,
+            "missedStop": 0.3458823529411765
+          },
+          "full": {
+            "adverseStop": 0.07411764705882352,
+            "cutoffDisagreement": 0.49588235294117644,
+            "errorAtLeast200": 0.7135802469135802,
+            "maeCp": 726.1703703703704,
+            "missedStop": 0.42176470588235293
+          },
+          "noPawn": {
+            "adverseStop": 0.0780392156862745,
+            "cutoffDisagreement": 0.5041176470588236,
+            "errorAtLeast200": 0.7109053497942387,
+            "maeCp": 726.185596707819,
+            "missedStop": 0.426078431372549
+          },
+          "half": {
+            "adverseStop": 0.08,
+            "cutoffDisagreement": 0.49549019607843137,
+            "errorAtLeast200": 0.7032921810699588,
+            "maeCp": 719.9380658436214,
+            "missedStop": 0.41549019607843135
+          }
+        }
+      }
+    },
+    "chatarunga": {
+      "uniformVisits": {
+        "sampled": 510,
+        "bounded": 0,
+        "mate": 30,
+        "byModel": {
+          "hce": {
+            "adverseStop": 0.03529411764705882,
+            "cutoffDisagreement": 0.1980392156862745,
+            "errorAtLeast200": 0.5007843137254901,
+            "maeCp": 273.9329411764706,
+            "missedStop": 0.16274509803921566
+          },
+          "full": {
+            "adverseStop": 0.0392156862745098,
+            "cutoffDisagreement": 0.20588235294117646,
+            "errorAtLeast200": 0.4884313725490196,
+            "maeCp": 274.223137254902,
+            "missedStop": 0.16666666666666666
+          },
+          "noPawn": {
+            "adverseStop": 0.03529411764705882,
+            "cutoffDisagreement": 0.196078431372549,
+            "errorAtLeast200": 0.48647058823529415,
+            "maeCp": 274.58098039215685,
+            "missedStop": 0.16078431372549018
+          },
+          "half": {
+            "adverseStop": 0.03529411764705882,
+            "cutoffDisagreement": 0.20588235294117646,
+            "errorAtLeast200": 0.49980392156862746,
+            "maeCp": 271.6862745098039,
+            "missedStop": 0.17058823529411765
+          }
+        }
+      },
+      "within50CpOfTracedCutoff": {
+        "sampled": 502,
+        "bounded": 0,
+        "mate": 40,
+        "byModel": {
+          "hce": {
+            "adverseStop": 0.08235294117647059,
+            "cutoffDisagreement": 0.4215686274509804,
+            "errorAtLeast200": 0.5454365079365079,
+            "maeCp": 307.71230158730157,
+            "missedStop": 0.33921568627450976
+          },
+          "full": {
+            "adverseStop": 0.0784313725490196,
+            "cutoffDisagreement": 0.49215686274509807,
+            "errorAtLeast200": 0.5440476190476191,
+            "maeCp": 318.3436507936508,
+            "missedStop": 0.4137254901960784
+          },
+          "noPawn": {
+            "adverseStop": 0.08235294117647059,
+            "cutoffDisagreement": 0.4980392156862745,
+            "errorAtLeast200": 0.551984126984127,
+            "maeCp": 318.7422619047619,
+            "missedStop": 0.41568627450980394
+          },
+          "half": {
+            "adverseStop": 0.08431372549019607,
+            "cutoffDisagreement": 0.484313725490196,
+            "errorAtLeast200": 0.5291666666666667,
+            "maeCp": 310.5525793650794,
+            "missedStop": 0.4
+          }
+        }
+      }
+    }
+  }
+}

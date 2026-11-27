@@ -1,0 +1,23 @@
+{
+  "changedChildNodeCounts": 238,
+  "changedChildScores": 117,
+  "changedParentChoices": 0,
+  "changedRepeatChildren": [],
+  "changedRepeatParentSearches": 0,
+  "changedTopChildSets": 11,
+  "children": 2019,
+  "groups": 320,
+  "isolatedCollectionSha256": "4fe57936989f2ed91b23034f1a91dc7ae94ef38e6f53c48dabbd9526e6571769",
+  "isolation": "One new Chatarunga process per parent or nonterminal child, one thread, 16 MiB hash, complete game history, no prior search in that process.",
+  "maxAbsoluteChildScoreChange": 86,
+  "newParentChoiceOutsideFrozenSet": 0,
+  "nodeRequest": 12000,
+  "nonterminalChildren": 2007,
+  "originalCollectionSha256": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+  "repeatNonterminalChildren": 97,
+  "repeatRoots": 32,
+  "repeatedRootsSample": "Lowest 32 SHA-256('audit:' + root ID), selected independently of scores.",
+  "roots": 631,
+  "schema": "chessy.isolated-teacher-labels.v1",
+  "teacherSha256": "a3b3fe59985900655940c1088f3d24d2388d359b498a5d84664577fa46135e4a"
+}
