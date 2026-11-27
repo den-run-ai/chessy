@@ -1,0 +1,64 @@
+{
+  "schema": "chessy.eval-game-protocol-independent-audit.v1",
+  "result": "no execution blocker found in reviewed development protocol",
+  "researchOnly": true,
+  "productionAdmission": false,
+  "experimentId": "eval-production-v1-full-time-frontier",
+  "campaignDirectoryName": "eval-production-games-v1",
+  "reviewedSourceMatchesRetainedSnapshot": true,
+  "sourceSha256": {
+    "games.py": "ea448b556c4428358fe7b215652a8d827dc063cb1b4d47a57fd1dc277a682982",
+    "frontier.py": "8477fca47f9f0e0d55c09b84586bbba47ca95bac02fafcf88debc3050de1ffb6",
+    "host.mjs": "8f8bd93b16a32cef1d83f2ff1b3af5ebb4123a7a85f3ff9dff43306ee86298c6"
+  },
+  "openingSelection": {
+    "independentRecomputation": "pass",
+    "sourceSha256": "f26a1d26788092497093f46c017c134949134c800c8043a10dfe5a5fc743de55",
+    "sourceRows": 64,
+    "selectedPairs": 16,
+    "uniqueSelectedSourceGames": 16,
+    "rule": "Lowest sixteen SHA256(salt + NUL + sourceGameId), in hash order.",
+    "salt": "chessy-eval-production-v1-time-frontier-20261127",
+    "registeredOrderMatches": true,
+    "registeredClustersMatchSourcePly4Family": true,
+    "coarseClusters": 10,
+    "clusterSizesDescending": [5, 2, 2, 1, 1, 1, 1, 1, 1, 1],
+    "previouslyExposedDevelopmentBank": true,
+    "freshConfirmation": false
+  },
+  "scheduledGames": 128,
+  "timeControlsMs": [10, 25, 100, 400],
+  "nodeLimit": 0,
+  "postOpeningPlyCap": 180,
+  "codeReviewFindings": [
+    "Every game search receives the registered time budget with no fixed-node ceiling; node-bounded warmup is separate.",
+    "The schedule retains both candidate colors on the same opening at every time control and rotates budget/color order prospectively.",
+    "The bootstrap resamples complete coarse families and uses the same family draw across all time controls; its variable denominator correctly retains the declared opening-weighted estimand.",
+    "The four-budget Bonferroni percentile calculation uses 0.00625 and 0.99375 quantiles for the nominal simultaneous 95 percent bands.",
+    "Degenerate empirical bootstrap distributions receive [0,1], avoiding a zero-width certainty claim.",
+    "Runner and closed-ledger auditor reconstruct the complete legal opening and continuation histories. Every search request is reconstructed from that history, and final JavaScript replay plus PGN moves/results are checked.",
+    "Checkmate and natural rule draws are checked before the searched-ply cap; there is no score adjudication or resignation.",
+    "Audit requires the complete scheduled ledger, all games and PGNs, source identities, and completion seals before outcome analysis.",
+    "The analyzer does not enable production, interpolate a crossing threshold, or treat fixed-node cost as playing-strength admission."
+  ],
+  "timingInterpretation": {
+    "registeredCleanCheck": "Time-limit-stop median candidate/base ratio within [0.9,1.1] and each time-limit-stop p99 at most twice the requested budget.",
+    "productionDeadlineImplementation": "Captured r85 arms now_ms() + time_ms and checks the deadline at 1024-node intervals.",
+    "limitations": [
+      "The clean flag is not a hard per-request deadline guarantee.",
+      "Its predicate does not separately enforce an absolute lower duration, all-stop tail limits, or full-request latency equality.",
+      "After completion, inspect under-budget time-limit stops and report full-request distributions without changing the registered admission rule based on outcomes."
+    ]
+  },
+  "statisticalInterpretation": [
+    "Ten coarse clusters, including a cluster containing five of sixteen pairs, provide a small exploratory sample.",
+    "The nominal Bonferroni bootstrap bands are approximate descriptive intervals, not a verified coverage guarantee.",
+    "The source bank is already exposed development data; any candidate region needs a fresh separately registered confirmation campaign."
+  ],
+  "scope": [
+    "Read-only source and prospective registration/input review completed before observing any game outcomes.",
+    "The opening hash selection and cluster mapping were independently recomputed from the retained opening source.",
+    "No game engine, tests, timing experiment, or complete raw-game audit was executed for this review.",
+    "This protocol review does not certify the future game ledger; independent replay of the completely sealed campaign remains required."
+  ]
+}

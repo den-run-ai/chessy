@@ -1,0 +1,6 @@
+{
+  "schema": "chessy.sparse-ood-code-snapshot.v1",
+  "implementationSha256": "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b",
+  "sourcePath": "/workspace/scratch/dfb050648003/chessy/tools/sparse_eval/label_ood.py",
+  "snapshotPath": "/workspace/library-files/chessy-sparse-work/data/ood-code-v1/label_ood.py"
+}

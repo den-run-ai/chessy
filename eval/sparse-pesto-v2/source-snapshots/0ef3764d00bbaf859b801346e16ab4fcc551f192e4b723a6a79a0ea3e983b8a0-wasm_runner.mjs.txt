@@ -1,0 +1,306 @@
+#!/usr/bin/env node
+// Research-only Node host. Every non-built-in dependency is an explicit path.
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import readline from 'node:readline';
+import vm from 'node:vm';
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+
+const VARIANTS = Object.freeze({ hce: 0, compact: 1, fused: 2, cached: 3 });
+const NONE = 0xffffffff;
+const PROMOTIONS = ['', 'q', 'r', 'b', 'n'];
+const STOP_REASONS = ['unknown', 'max_depth', 'time_limit', 'node_limit', 'mate', 'game_over'];
+const encoder = new TextEncoder();
+const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+
+function unsigned(text, name, maximum = 0xffffffff) {
+  if (!/^(0|[1-9][0-9]*)$/.test(String(text))) throw new Error(`${name} must be an unsigned integer`);
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value > maximum) throw new Error(`${name} is outside its bound`);
+  return value;
+}
+
+function safeU64(view, offset) {
+  const value = view.getBigUint64(offset, true);
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('search counter is not safely representable');
+  return Number(value);
+}
+
+function squareName(square) {
+  return 'abcdefgh'[square & 7] + String(8 - (square >> 3));
+}
+
+function decodeMove(packed) {
+  if (packed === NONE) return null;
+  if ((packed & 0xffff8000) !== 0 || ((packed >>> 12) & 7) >= PROMOTIONS.length) {
+    throw new Error('invalid packed search move');
+  }
+  return squareName(packed & 63) + squareName((packed >>> 6) & 63) + PROMOTIONS[(packed >>> 12) & 7];
+}
+
+function strictFen(Chess, fen) {
+  if (typeof fen !== 'string' || fen.length > 180 || !/^[\x20-\x7e]+$/.test(fen)) {
+    throw new Error('FEN must be a bounded ASCII string');
+  }
+  const fields = fen.split(' ');
+  if (fields.length !== 6 || !['w', 'b'].includes(fields[1]) ||
+      !/^(?:-|K?Q?k?q?)$/.test(fields[2]) || !/^(?:-|[a-h][36])$/.test(fields[3]) ||
+      !/^(0|[1-9][0-9]*)$/.test(fields[4]) || !/^[1-9][0-9]*$/.test(fields[5])) {
+    throw new Error('FEN requires canonical six fields');
+  }
+  if (Number(fields[4]) > 65535 || Number(fields[5]) > 65535) throw new Error('FEN counter overflow');
+  const ranks = fields[0].split('/');
+  if (ranks.length !== 8 || ranks.some(rank => !/^[prnbqkPRNBQK1-8]+$/.test(rank) ||
+      [...rank].reduce((sum, c) => sum + (/^[1-8]$/.test(c) ? Number(c) : 1), 0) !== 8)) {
+    throw new Error('invalid FEN board');
+  }
+  const state = Chess.parseFen(fen);
+  if (state.board.filter(p => p === 'wK').length !== 1 ||
+      state.board.filter(p => p === 'bK').length !== 1 || Chess.toFen(state) !== fen) {
+    throw new Error('FEN kings or canonical form mismatch');
+  }
+  if (state.board.filter(Boolean).length > 32 ||
+      state.board.some((piece, square) => piece && piece[1] === 'P' && (square < 8 || square >= 56)) ||
+      Chess.inCheck(state, state.turn === 'w' ? 'b' : 'w')) {
+    throw new Error('structurally illegal FEN');
+  }
+  return state;
+}
+
+export function replayRequest(Chess, initialFen, expectedFen, movesText) {
+  let state = strictFen(Chess, initialFen);
+  strictFen(Chess, expectedFen);
+  const moves = movesText === '' ? [] : movesText.split(' ');
+  if (moves.length > 700 || moves.some(move => !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move))) {
+    throw new Error('invalid or excessive complete UCI history');
+  }
+  const fens = [initialFen];
+  for (let ply = 0; ply < moves.length; ++ply) {
+    const uci = moves[ply];
+    const from = Chess.sqIndex(uci.slice(0, 2));
+    const to = Chess.sqIndex(uci.slice(2, 4));
+    const promotion = uci.length === 5 ? uci[4].toUpperCase() : null;
+    const legal = Chess.legalMoves(state).filter(move =>
+      move.from === from && move.to === to && (move.promotion || null) === promotion);
+    if (legal.length !== 1) throw new Error(`history move ${ply + 1} is not uniquely legal`);
+    state = Chess.applyMove(state, legal[0]);
+    fens.push(Chess.toFen(state));
+  }
+  if (fens[fens.length - 1] !== expectedFen) throw new Error('replayed final FEN mismatch');
+  return { state, fens, plies: moves.length };
+}
+
+export class WasmEvaluator {
+  static async open(wasmPath, weightsPath, variantName, rulesPath) {
+    if (!Object.hasOwn(VARIANTS, variantName)) throw new Error('unknown evaluator variant');
+    // Hash and consume the same retained buffers, never a later reopened path.
+    const [wasmBytes, weightsBytes, rulesBytes] = await Promise.all([
+      fs.readFile(wasmPath), fs.readFile(weightsPath), fs.readFile(rulesPath),
+    ]);
+    const rulesContext = {};
+    vm.runInNewContext(rulesBytes.toString('utf8'), rulesContext, {
+      filename: 'authenticated-chess-rules.js', timeout: 1000,
+    });
+    const Chess = rulesContext.Chess;
+    if (!Chess || ['parseFen', 'toFen', 'legalMoves', 'applyMove', 'sqIndex', 'sqName', 'inCheck'].some(k => typeof Chess[k] !== 'function')) {
+      throw new Error('missing independent rules interface');
+    }
+    const module = await WebAssembly.compile(wasmBytes);
+    const imports = WebAssembly.Module.imports(module);
+    if (imports.some(i => i.module !== 'env' || i.name !== 'now_ms' || i.kind !== 'function')) {
+      throw new Error('research module has unexpected imports');
+    }
+    const instance = await WebAssembly.instantiate(module, { env: { now_ms: () => performance.now() } });
+    const e = instance.exports;
+    for (const name of ['research_abi_version', 'input_ptr', 'input_capacity', 'positions_capacity',
+      'positions_count', 'scores_ptr', 'result_ptr', 'load_model', 'load_positions', 'load_history',
+      'eval_positions', 'bench_positions', 'search_position', 'model_resident_bytes', 'model_coefficient_bytes',
+      'cache_resident_bytes', 'cache_hits', 'cache_misses', 'clear_cache', 'simd_compiled']) {
+      if (typeof e[name] !== 'function') throw new Error(`missing research export ${name}`);
+    }
+    if (!(e.memory instanceof WebAssembly.Memory) || e.research_abi_version() !== 1) {
+      throw new Error('unsupported research ABI');
+    }
+    const result = new WasmEvaluator(instance, Chess, variantName, {
+      moduleSha256: hash(wasmBytes), weightsSha256: hash(weightsBytes), rulesSha256: hash(rulesBytes),
+    });
+    result.writeInput(weightsBytes);
+    result.checked(e.load_model(weightsBytes.length), 'load_model');
+    return result;
+  }
+
+  constructor(instance, Chess, variantName, identities) {
+    this.instance = instance;
+    this.e = instance.exports;
+    this.Chess = Chess;
+    this.variantName = variantName;
+    this.variant = VARIANTS[variantName];
+    this.identities = Object.freeze(identities);
+  }
+
+  checked(status, operation) {
+    if (status !== 0) throw new Error(`${operation} rejected request with status ${status}`);
+  }
+
+  writeInput(bytes) {
+    if (bytes.length > this.e.input_capacity()) throw new Error('fixed input buffer capacity exceeded');
+    const pointer = this.e.input_ptr();
+    if (pointer + bytes.length > this.e.memory.buffer.byteLength) throw new Error('invalid input pointer');
+    new Uint8Array(this.e.memory.buffer, pointer, bytes.length).set(bytes);
+  }
+
+  info() {
+    return { schema: 'chessy.sparse-v2-wasm-host.v1', protocol: 'chessy.sparse-search-tsv.v1',
+      mode: 'ready', backend: 'wasm-node', researchOnly: true,
+      ...this.identities, nodeVersion: process.version, v8Version: process.versions.v8,
+      nodeArguments: [...process.execArgv],
+      platform: process.platform, architecture: process.arch, variant: this.variantName,
+      simdCompiled: this.e.simd_compiled() === 1, memoryBytes: this.e.memory.buffer.byteLength,
+      modelResidentBytes: this.e.model_resident_bytes(), coefficientPayloadBytes: this.e.model_coefficient_bytes(),
+      cacheResidentBytes: this.e.cache_resident_bytes(),
+      positionsCapacity: this.e.positions_capacity(), scorePov: 'white', rootSeedSupported: 0 };
+  }
+
+  loadPositions(fens) {
+    if (!Array.isArray(fens) || !fens.length || fens.length > this.e.positions_capacity()) {
+      throw new Error('invalid batch position count');
+    }
+    const bytes = encoder.encode(fens.join('\n') + '\n');
+    this.writeInput(bytes);
+    this.checked(this.e.load_positions(bytes.length), 'load_positions');
+    if (this.e.positions_count() !== fens.length) throw new Error('loaded position count mismatch');
+  }
+
+  loadHistory(fens) {
+    const bytes = encoder.encode(fens.join('\n') + (fens.length ? '\n' : ''));
+    this.writeInput(bytes);
+    this.checked(this.e.load_history(bytes.length), 'load_history');
+  }
+
+  evaluate(variant = this.variant) {
+    this.checked(this.e.eval_positions(variant), 'eval_positions');
+    return Array.from(new Int32Array(this.e.memory.buffer, this.e.scores_ptr(), this.e.positions_count()));
+  }
+
+  cacheStats() {
+    const hits = this.e.cache_hits(), misses = this.e.cache_misses();
+    if (hits > BigInt(Number.MAX_SAFE_INTEGER) || misses > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error('cache counters are not safely representable');
+    }
+    return { cacheHits: Number(hits), cacheMisses: Number(misses) };
+  }
+
+  clearCache() { this.checked(this.e.clear_cache(), 'clear_cache'); }
+
+  benchmark(passes, variant = this.variant) {
+    unsigned(passes, 'passes', 1_000_000);
+    if (!passes) throw new Error('positive passes required');
+    const start = process.hrtime.bigint();
+    const checksum = this.e.bench_positions(passes, variant);
+    const elapsedNs = process.hrtime.bigint() - start;
+    if (checksum === -(1n << 63n)) throw new Error('benchmark request rejected');
+    return { passes, positions: this.e.positions_count(), elapsed_ns: Number(elapsedNs),
+      checksum: checksum.toString(), variantCode: variant, ...this.cacheStats(),
+      parsingIncluded: false, perPositionHostCalls: false };
+  }
+
+  search({ index = 0, variant = this.variant, nodes = 0, timeMs = 0, depth = 64 } = {}) {
+    for (const [key, value] of Object.entries({ index, nodes, timeMs, depth })) unsigned(value, key);
+    const start = process.hrtime.bigint();
+    const status = this.e.search_position(index, variant, depth, nodes, timeMs);
+    const elapsedNs = process.hrtime.bigint() - start;
+    this.checked(status, 'search_position');
+    const view = new DataView(this.e.memory.buffer, this.e.result_ptr(), 64);
+    if (view.getUint32(0, true) !== 1 || view.getUint32(4, true) !== 64) throw new Error('search result ABI mismatch');
+    const attempted = view.getUint32(20, true);
+    const stop = view.getUint32(56, true);
+    if (stop >= STOP_REASONS.length) throw new Error('invalid stop reason');
+    return { move: decodeMove(view.getUint32(8, true)), score: view.getInt32(12, true), scorePov: 'white',
+      depth: view.getUint32(16, true), attempted_depth: attempted === NONE ? null : attempted,
+      nodes: safeU64(view, 24), qnodes: safeU64(view, 32), cutoffs: safeU64(view, 40),
+      researches: safeU64(view, 48), stop_reason: STOP_REASONS[stop], stop_reason_code: stop,
+      tt_saturated: (view.getUint32(60, true) & 1) !== 0, elapsed_ns: Number(elapsedNs), ...this.cacheStats() };
+  }
+
+  request(line) {
+    const started = process.hrtime.bigint();
+    const fields = line.split('\t');
+    const [command, id] = fields;
+    if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(id || '')) throw new Error('invalid request id');
+    if (command === 'INFO' && fields.length === 2) return { id, ready: true, ...this.info() };
+    if (command !== 'SEARCH' || fields.length !== 10) throw new Error('invalid line protocol');
+    const [, , mode, nodeText, timeText, depthText, seed, initial, expected, moves] = fields;
+    if (!['hce', 'candidate'].includes(mode) || seed !== '0') throw new Error('unsupported mode or root seed');
+    const nodes = unsigned(nodeText, 'nodes');
+    const timeMs = unsigned(timeText, 'time_ms', 60_000);
+    const depth = unsigned(depthText, 'maxdepth', 111);
+    if ((!nodes && !timeMs) || !depth) throw new Error('positive search budget/depth required');
+    const replay = replayRequest(this.Chess, initial, expected, moves);
+    this.loadPositions([expected]);
+    this.loadHistory(replay.fens);
+    const result = this.search({ nodes, timeMs, depth, variant: mode === 'hce' ? 0 : this.variant });
+    if (result.move !== null) {
+      const legal = this.Chess.legalMoves(replay.state).map(move =>
+        this.Chess.sqName(move.from) + this.Chess.sqName(move.to) + (move.promotion || '').toLowerCase());
+      if (!legal.includes(result.move)) throw new Error('WASM returned an illegal root move');
+    }
+    return { id, ...result, mode, variant: mode === 'hce' ? 'hce' : this.variantName,
+      verifiedFen: true, historyPlies: replay.plies, historyOccurrences: replay.fens.length,
+      request_elapsed_ns: Number(process.hrtime.bigint() - started), backend: 'wasm-node' };
+  }
+}
+
+async function main(args) {
+  const [command, wasm, weights, variant, rules, ...rest] = args;
+  if (!command || !wasm || !weights || !variant || !rules) {
+    throw new Error('usage: wasm_runner.mjs <serve|info|eval|bench|search> module.wasm weights variant rules.js [fens passes warmup|fens nodes depth]');
+  }
+  const evaluator = await WasmEvaluator.open(wasm, weights, variant, rules);
+  const emit = value => process.stdout.write(JSON.stringify(value) + '\n');
+  if (command === 'info' && rest.length === 0) { emit(evaluator.info()); return; }
+  if (command === 'serve' && rest.length === 0) {
+    const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+    for await (const line of lines) {
+      try { emit(evaluator.request(line)); }
+      catch (error) {
+        emit({ id: line.split('\t')[1] || null, error: String(error.message), verifiedFen: false });
+        // A trap may leave a static busy flag set; never continue that instance.
+        if (error instanceof WebAssembly.RuntimeError) { process.exitCode = 1; break; }
+      }
+    }
+    return;
+  }
+  if (!rest.length) throw new Error('a FEN file is required');
+  const fenBytes = await fs.readFile(rest[0]);
+  const fens = fenBytes.toString('utf8').split(/\r?\n/).filter(Boolean);
+  if (!fens.length) throw new Error('empty FEN input');
+  if (command === 'eval' && rest.length === 1) {
+    for (let start = 0; start < fens.length; start += evaluator.e.positions_capacity()) {
+      evaluator.loadPositions(fens.slice(start, start + evaluator.e.positions_capacity()));
+      const baseline = evaluator.evaluate(0), candidate = evaluator.evaluate();
+      for (let i = 0; i < baseline.length; ++i) process.stdout.write(`${baseline[i]} ${candidate[i]} ${candidate[i] - baseline[i]}\n`);
+    }
+    return;
+  }
+  evaluator.loadPositions(fens);
+  if (command === 'bench' && rest.length === 3) {
+    const passes = unsigned(rest[1], 'passes', 1_000_000), warmup = unsigned(rest[2], 'warmup', 1_000_000);
+    if (warmup) evaluator.benchmark(warmup);
+    emit({ ...evaluator.info(), ...evaluator.benchmark(passes), warmupPasses: warmup, fensSha256: hash(fenBytes) });
+    return;
+  }
+  if (command === 'search' && rest.length === 3) {
+    const nodes = unsigned(rest[1], 'nodes'), depth = unsigned(rest[2], 'depth', 111);
+    for (let index = 0; index < fens.length; ++index) {
+      evaluator.loadHistory([]);
+      emit({ row: index, ...evaluator.search({ index, nodes, depth }), variant, fensSha256: hash(fenBytes) });
+    }
+    return;
+  }
+  throw new Error('unsupported command or argument inventory');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main(process.argv.slice(2)).catch(error => { process.stderr.write(String(error.stack || error) + '\n'); process.exitCode = 1; });
+}

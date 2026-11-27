@@ -1,0 +1,43 @@
+{
+  "schema": "chessy.sparse-v2-cost.v1",
+  "researchOnly": true,
+  "packedManifestSha256": "06da0458290bbede70b5ea1a2ffc7ca57cefa5af9ff6c3ea38d2eefc7ea8a13a",
+  "fullWeightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+  "rootSalt": "chessy-sparse-pesto-v2-cost-roots-20261126",
+  "rootsPerPhase": 24,
+  "rootRule": "Lowest salted FEN SHA256 within each phase, unique validation family IDs, excluding all24 prior v1 profiling/timing roots. No teacher labels used. All roots disjoint from the fresh game bank because all primary-role families are quarantined there.",
+  "targets": ["native-scalar", "native-simd", "wasm-scalar", "wasm-simd"],
+  "variants": ["compact", "fused", "cached"],
+  "replicates": 3,
+  "nodeBudgets": [10000, 36000],
+  "maximumDepth": 30,
+  "staticPasses": 4000,
+  "staticWarmupPasses": 128,
+  "searchWarmupCycles": 4,
+  "searchWarmupNodes": 10000,
+  "warmupFens": [
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    "8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1",
+    "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"
+  ],
+  "nodeFlags": ["--no-liftoff", "--no-wasm-lazy-compilation"],
+  "order": "For replicate r rotate target+variant list left r*5 then reverse odd replicates; roots reverse on odd replicates; each root alternates baseline/candidate order by root ordinal plus replicate. Static order reverses on odd replicates. Entire complete grid is retained.",
+  "cpuPolicy": "One measured process at a time pinned to the first available CPU; no concurrent builds, label generation or games. Record CPU affinity and quota/throttling metadata. Compilation, process startup, parsing and warmup excluded from search/evaluator timers.",
+  "exactness": "Every full-model fixed-node signature must match across targets, variants and replicates: nodes,qnodes,depth,attempted_depth,score,move,stop_reason,cutoffs,researches,tt_saturated. HCE signatures checked separately. No timing or model is accepted on mismatch.",
+  "runtimeSelection": "Choose the WASM target+variant with minimum geometric-mean full-candidate elapsed time over both budgets and all measured roots/replicates. Ties within0.5% prefer scalar then compact,fused,cached. Native winner is descriptive only. Original model remains fixed.",
+  "pruningCost": {
+    "models": "All validation-eligible recipes, including full, in original frozen recipe order",
+    "sameTargetAndVariantAsFullWinner": true,
+    "wideFusedOnlyWhenRequired": true,
+    "rootsPerPhase": 12,
+    "rootSubset": "First12 selected roots in each phase, before replicate ordering",
+    "nodeBudgets": [36000],
+    "replicates": 3,
+    "order": "Eligible models start in frozen recipe order; rotate left by replicate, reverse odd replicates; roots and HCE/candidate order follow the full grid rule.",
+    "minimumNpsRatioToFull": 1.05,
+    "selection": "At most one nonfull candidate: highest paired actual NPS ratio to full; ties within0.5% use lower validation CE then lexicographicID. All must first pass the frozen quality guards. No game outcomes used."
+  },
+  "staticCacheInterpretation": "Cached repeated-position benchmark is a warm-cache microbenchmark, not cold evaluator latency. Runtime/model selection uses complete search only.",
+  "publication": "Freeze inputs, source snapshots, model bytes, native/modules and this configuration before observations; exclusive no-replace outputs and completion metadata last. Complete comparative screen exactly once; preserve failures and all configurations."
+}

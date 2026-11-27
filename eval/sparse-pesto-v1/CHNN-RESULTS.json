@@ -1,0 +1,175 @@
+{
+  "candidate": {
+    "changedWeights": 28,
+    "nearestTiesToEven": true,
+    "networkSha256": "7622c13da5deb02b7d4353f1ad68e626017c3798123cd1118b7408aca1049434",
+    "patchSha256": "82d20f45967e32cee3b042791c7dda188aac5a6e50a8bf716dbec4db569ba644",
+    "validationOpened": false
+  },
+  "elapsedSeconds": 9.284729674000118,
+  "frozen": {
+    "config": {
+      "coefficientRounding": "nearest ties to even; no post-validation correction",
+      "featureCost": "family-weighted training feature RMS; floor 1e-12",
+      "featureTransformerFrozen": true,
+      "floatingPreservationEpsilonCp": 5,
+      "holdoutOpened": false,
+      "integerPreservationGateCp": 5,
+      "l1": 0.01,
+      "maximumAbsoluteHeadWeightDelta": 2,
+      "nativeParityRowsPerSplit": 64,
+      "outputBiasesFrozen": true,
+      "playingStrengthMeasured": false,
+      "preservationRows": 2048,
+      "productionEligible": false,
+      "repairRows": 6144,
+      "repairWeight": "inverse admitted repair-prefix family frequency, normalized",
+      "schema": "chessy.chnn-head-screen-config.v1",
+      "solverTimeLimitSeconds": 120,
+      "sourceCommit": "4f389446c685e011bcc2550c682e26bdb9f7a96b",
+      "sourceNetBytes": 25200704,
+      "sourceNetSha256": "3877ab704904d8cee199be6a4d59c94ca13d945f08421f6cd31b3f92bafac0db",
+      "supportBudget": 128,
+      "supportRule": "descending absolute family-weighted training LAD derivative divided by family-weighted feature RMS; tie by index; exclude zero RMS",
+      "trainPrefixRows": 8192,
+      "validationPrefixRows": 4096,
+      "validationSelectionAllowed": false
+    },
+    "configSha256": "acb429098e024de7a38d42aa2538df2e7e4f4734f303a4488d3cb6c4519f7e48",
+    "datasetManifestSha256": "16676c7aca9ea410b8c0518594fb78527668d00f6b3f343fe6c5c6f70883723e",
+    "implementation": {
+      "tools/sparse_eval/chnn.py": "08e249010933d6964b05cb5913cbe1d071036c1a36449ebb75f36dd815566af0",
+      "tools/sparse_eval/chnn_experiment.py": "b3a1f81868bf5e5353e00d853ac761b0ac4de1d8a498613e4bd09f66f1314d0f",
+      "tools/sparse_eval/features.py": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709",
+      "tools/sparse_eval/wsp.py": "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06"
+    },
+    "nativeBinarySha256": "a3b3fe59985900655940c1088f3d24d2388d359b498a5d84664577fa46135e4a",
+    "nativePath": "/workspace/library-files/chessy-sparse-work/chnn/target/release/chatarunga",
+    "source": {
+      "editedLayer": "final-linear-output-weights-only",
+      "featureTransformerFrozen": true,
+      "format": "CHNN-v1-SCReLU",
+      "hidden": 1024,
+      "integerRounding": "trunc(sum/qa), then trunc((total*scale)/(qa*qb))",
+      "kingBuckets": 16,
+      "maximumSimdSafeHeadWeight": 128,
+      "outputBiasFrozen": true,
+      "outputBuckets": 8,
+      "productionEligible": false,
+      "qa": 255,
+      "qb": 64,
+      "scale": 160,
+      "sourceBytes": 25200704,
+      "sourceSha256": "3877ab704904d8cee199be6a4d59c94ca13d945f08421f6cd31b3f92bafac0db",
+      "upstreamSearchCalibrationIncluded": false
+    }
+  },
+  "holdoutOpened": false,
+  "integerPreservationPassed": false,
+  "maximumIntegerPreservationChangeCp": 8,
+  "nativeParity": {
+    "edited": {
+      "maximumDifferenceCp": 0,
+      "mismatches": 0,
+      "rows": 128,
+      "transcriptSha256": "701674c65820adb563fabae16d0cf2403deeb342f05f7fd7d3635d2e132a60da"
+    },
+    "source": {
+      "maximumDifferenceCp": 0,
+      "mismatches": 0,
+      "rows": 128,
+      "transcriptSha256": "406d448b7a38e88f56b5d7466eac180c4f89125b3132bf2f03287549cc9cfff7"
+    }
+  },
+  "optimization": {
+    "absoluteDualityGap": 0.0,
+    "baselineWeightedMaeCp": 95.09883126589466,
+    "dualObjective": 94.67282199951654,
+    "editedWeightedMaeCp": 94.5162421418936,
+    "features": 16384,
+    "fixedFeatureOptimizationIsConvex": true,
+    "implicitBias": false,
+    "l1": 0.01,
+    "l1Delta": 40.91330049667534,
+    "marginIsSoft": false,
+    "marginRows": 0,
+    "marginSlackSum": 0.0,
+    "maximumMarginShortfallCp": 0.0,
+    "maximumPreservationChangeCp": 5.000000000000012,
+    "maximumPreservationExcessCp": 1.2434497875801753e-14,
+    "maximumPrimalViolation": 1.1368683772161603e-13,
+    "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+    "nonzeroDelta": 72,
+    "objective": 94.67282199951654,
+    "playingStrengthMeasured": false,
+    "preservationIsSoft": false,
+    "preservationRows": 2048,
+    "preservationSlackSum": 0.0,
+    "productionEligible": false,
+    "rows": 6144,
+    "schema": "chessy.sparse-linear-edit.v1",
+    "solver": "scipy.optimize.linprog/highs",
+    "status": 0,
+    "success": true,
+    "supportSelectionIsConvex": false,
+    "supportSize": 128
+  },
+  "outcome": "quantized-candidate-failed-preservation-or-parity",
+  "outputBiasesFrozen": true,
+  "playingStrengthMeasured": false,
+  "preservation": {
+    "after": {
+      "maeCp": 93.31640625,
+      "maximumAbsoluteErrorCp": 1410.0,
+      "rmseCp": 184.74566554455345,
+      "rows": 2048
+    },
+    "before": {
+      "maeCp": 93.62109375,
+      "maximumAbsoluteErrorCp": 1410.0,
+      "rmseCp": 184.98116986094828,
+      "rows": 2048
+    }
+  },
+  "productionEligible": false,
+  "quantizedOptimizationIsConvex": false,
+  "repair": {
+    "after": {
+      "maeCp": 90.10074869791667,
+      "maximumAbsoluteErrorCp": 1608.0,
+      "rmseCp": 156.12389233911182,
+      "rows": 6144
+    },
+    "before": {
+      "maeCp": 90.54573567708333,
+      "maximumAbsoluteErrorCp": 1608.0,
+      "rmseCp": 156.44932962747208,
+      "rows": 6144
+    }
+  },
+  "researchOnly": true,
+  "schema": "chessy.chnn-head-screen.v1",
+  "sourceGameLineageAvailable": false,
+  "staticNetworkOnly": true,
+  "supportSelectionIsConvex": false,
+  "trainFamilies": 5019,
+  "trainRows": 8192,
+  "upstreamMaterialSearchCalibrationIncluded": false,
+  "validation": {
+    "after": {
+      "maeCp": 85.669677734375,
+      "maximumAbsoluteErrorCp": 1635.0,
+      "rmseCp": 153.321010547774,
+      "rows": 4096
+    },
+    "before": {
+      "maeCp": 85.942626953125,
+      "maximumAbsoluteErrorCp": 1635.0,
+      "rmseCp": 153.4971140239186,
+      "rows": 4096
+    },
+    "families": 2347,
+    "selectionUsesValidation": false
+  },
+  "validationOpened": true
+}

@@ -1,0 +1,70 @@
+{
+  "auditSource": {
+    "bytes": 3531,
+    "sha256": "fdc6b22b859657941816e227a578c9ca3a1ae94d497da18f3a2eb8e957028e57"
+  },
+  "models": [
+    {
+      "allScoresExact": true,
+      "command": [
+        "/workspace/scratch/6bfe86cd4820/refit-native-parity-v1/extractor",
+        "eval",
+        "/workspace/scratch/6bfe86cd4820/refit-native-parity-v1/refit-no-pawn.i16le"
+      ],
+      "id": "refit-no-pawn",
+      "nativeOutput": {
+        "bytes": 1088463,
+        "sha256": "9fdd4553eb24d9b450fdf14068a060472fd778a930a0f44c070950fe5b3b2a01"
+      },
+      "positions": 100164,
+      "registeredScoreFile": {
+        "bytes": 400656,
+        "sha256": "1d9d06f813ddf2e2c94f111d412d0562876b32bb374aa7e9d5b178f3d9339853"
+      },
+      "weights": {
+        "bytes": 34560,
+        "sha256": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2"
+      }
+    },
+    {
+      "allScoresExact": true,
+      "command": [
+        "/workspace/scratch/6bfe86cd4820/refit-native-parity-v1/extractor",
+        "eval",
+        "/workspace/scratch/6bfe86cd4820/refit-native-parity-v1/refit-no-ray.i16le"
+      ],
+      "id": "refit-no-ray",
+      "nativeOutput": {
+        "bytes": 1080594,
+        "sha256": "6efa47d95af7ac57aa887e7587d06b72fe109c246354d7ef82b86e036d7dc961"
+      },
+      "positions": 100164,
+      "registeredScoreFile": {
+        "bytes": 400656,
+        "sha256": "24d1c94e323040a26b3a0bc85b6f598cee1c2cf9403a9515e98bcc524059c129"
+      },
+      "weights": {
+        "bytes": 34560,
+        "sha256": "c14d4bf4bffa1be3034a2b1151c393615a654699236207b4901aefd2643ad872"
+      }
+    }
+  ],
+  "nativeExtractor": {
+    "bytes": 4477872,
+    "sha256": "70c8b583c4083e956ae550c196d59edf15bffce7dfb75742d41b5a9ee966431a"
+  },
+  "noHoldoutOpened": true,
+  "originalExtractorSourceSha256": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+  "passed": true,
+  "resultsManifest": {
+    "bytes": 25655,
+    "sha256": "3a703fb06361eacd4dfd120fc85492b5c33de8e1e01b987763be82ae8925bc1e"
+  },
+  "schema": "chessy.eval-pipeline-refit-native-parity.v1",
+  "strengthOrSpeedEvidence": false,
+  "totalScoreComparisons": 200328,
+  "validationFens": {
+    "bytes": 5760888,
+    "sha256": "1f5402d0b61d18f2c8c1dd791d99fc1bcecd2c44956b5bc28c8ed8bcf0c81900"
+  }
+}

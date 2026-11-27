@@ -1,0 +1,22 @@
+{
+  "schema": "chessy.sparse-runtime-config.v1",
+  "id": "sparse-pesto-v1-native-cost-2026-11",
+  "researchOnly": true,
+  "models": ["pst", "king", "full", "full-ridge", "full-sparse"],
+  "selectionRole": "validation",
+  "selection": "eight lowest SHA256(exact FEN UTF8) per phase, ties exact FEN; no teacher scores or model outputs",
+  "phaseOrder": ["opening", "middlegame", "endgame"],
+  "positionsPerPhase": 8,
+  "staticPasses": 6000,
+  "staticGroups": ["all", "opening", "middlegame", "endgame"],
+  "nodeBudgets": [10000, 36000],
+  "searchReplicates": 2,
+  "searchMaximumDepth": 64,
+  "replicateOrder": "selected order first; reverse order second, reversing each FEN's baseline/candidate ordering inside native paired search",
+  "parity": "every validation FEN, baseline and integer candidate, all five models, zero mismatches",
+  "modelSelectionByTiming": false,
+  "timingEnvironment": "single local native CPU experiment after fitting and OOD labelling finish; no competing experiment workload",
+  "statistics": "paired geometric mean baseline_ns/candidate_ns and candidate_NPS/baseline_NPS, all observations retained, per-phase breakdown, requested-node completion counts",
+  "claims": "native development cost only; changed search trees and possible early termination; no Elo, WASM, browser or physical-device claim",
+  "repeatPolicy": "one complete declared run; no selective rerun after a valid result"
+}

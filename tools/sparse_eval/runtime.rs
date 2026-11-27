@@ -1,0 +1,468 @@
+//! Standalone, native research bridge. Never linked into the shipped app.
+//!
+//! Build: rustc --edition=2021 -O tools/sparse_eval/runtime.rs -o /tmp/sparse-eval
+//! Cost-only pair-sweep variant: add --cfg sparse_fast to the same command.
+//! Input: one FEN per line. Commands:
+//!   baseline                 -> White-POV shipped HCE integer
+//!   features                 -> baseline phase base_id:integer_count ...
+//!   eval weights.i16le       -> baseline candidate correction
+//!   bench weights.i16le N    -> JSON static-evaluation timings, N passes
+//!   search weights.i16le N   -> JSON paired fixed-node search per FEN
+//!
+//! Weight storage accepts 17,280 little-endian i16 or strict SPV1 sparse bytes
+//! (magic, u32 count, sorted u16 ID/i16 nonzero pairs). Magic takes precedence
+//! over legacy dense length detection. MG IDs 0..8639, EG IDs 8640..17279.
+//! The baseline imports the exact r84 source snapshot under baseline/, whose
+//! manifest pins commit 5e3558378deab8ba21f648cc2cca98195b1beced. Fused
+//! own-king/PST tables are derived at load time, not fitted a second time.
+
+#![allow(dead_code)]
+
+#[path = "baseline/engine.rs"]
+mod engine;
+#[path = "baseline/eval.rs"]
+mod baseline;
+#[path = "baseline/search.rs"]
+mod search;
+
+use engine::{Piece, Position};
+use std::collections::BTreeMap;
+use std::io::{self, BufRead, Write};
+use std::sync::{atomic::{AtomicBool, Ordering}, OnceLock};
+use std::time::Instant;
+
+const BASE: usize = 8640;
+const TOTAL: usize = 17280;
+const PHASE: [i32; 6] = [0, 1, 1, 2, 4, 0];
+const RAYS: [(i32, i32); 8] = [
+    (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1),
+];
+static MODEL: OnceLock<Model> = OnceLock::new();
+static CANDIDATE: AtomicBool = AtomicBool::new(false);
+static CLOCK: OnceLock<Instant> = OnceLock::new();
+#[cfg(test)]
+pub static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[no_mangle]
+pub extern "C" fn now_ms() -> f64 {
+    CLOCK.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+mod eval {
+    pub fn evaluate(position: &crate::engine::Position) -> i32 {
+        let base = crate::baseline::evaluate(position);
+        if crate::CANDIDATE.load(std::sync::atomic::Ordering::Relaxed) {
+            base + crate::MODEL.get().expect("loaded model").correction(position)
+        } else {
+            base
+        }
+    }
+}
+
+struct Model {
+    weights: Vec<i16>,
+    fused: Vec<[i32; 2]>,
+    active: [bool; 5],
+    #[cfg(sparse_fast)]
+    paired_rays: Vec<[i32; 2]>,
+}
+
+impl Model {
+    fn load(path: &str) -> io::Result<Self> {
+        let bytes = std::fs::read(path)?;
+        if bytes.starts_with(b"SPV1") {
+            if bytes.len() < 8 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "truncated SPV1 header"));
+            }
+            let count = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+            if count > TOTAL || bytes.len() != 8 + count * 4 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "SPV1 count/length mismatch"));
+            }
+            let mut weights = vec![0_i16; TOTAL];
+            let mut previous: Option<usize> = None;
+            for record in bytes[8..].chunks_exact(4) {
+                let index = u16::from_le_bytes([record[0], record[1]]) as usize;
+                let value = i16::from_le_bytes([record[2], record[3]]);
+                if index >= TOTAL || value == 0 || previous.is_some_and(|last| index <= last) {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid SPV1 index/order/value"));
+                }
+                weights[index] = value;
+                previous = Some(index);
+            }
+            return Ok(Self::new(weights));
+        }
+        if bytes.len() != TOTAL * 2 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "expected 34560 weight bytes"));
+        }
+        let weights: Vec<i16> = bytes.chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+        Ok(Self::new(weights))
+    }
+
+    fn new(weights: Vec<i16>) -> Self {
+        assert_eq!(weights.len(), TOTAL);
+        let mut active = [false; 5];
+        for (group, &(start, end)) in [(0, 384), (384, 3456), (3456, 6528),
+                                      (6528, 8064), (8064, 8640)].iter().enumerate() {
+            active[group] = (start..end).any(|i| weights[i] != 0 || weights[i + BASE] != 0);
+        }
+        let fused = (0..3072).map(|i| {
+            let pst = i % 384;
+            [weights[pst] as i32 + weights[384 + i] as i32,
+             weights[BASE + pst] as i32 + weights[BASE + 384 + i] as i32]
+        }).collect();
+        #[cfg(sparse_fast)]
+        let paired_rays = pair_ray_weights(&weights);
+        Self {
+            weights, fused, active,
+            #[cfg(sparse_fast)]
+            paired_rays,
+        }
+    }
+
+    #[cfg(not(sparse_fast))]
+    fn correction(&self, position: &Position) -> i32 {
+        if !self.active.iter().any(|&v| v) { return 0; }
+        let mut mg = 0_i64;
+        let mut eg = 0_i64;
+        let mut phase = 0;
+        let attacks = if self.active[3] { pawn_attacks(position) } else { [0, 0] };
+        for internal in 0..64 {
+            let piece = position.board[internal];
+            if piece == Piece::Empty { continue; }
+            let color = engine::piece_color(piece).unwrap() as usize;
+            let kind = engine::piece_type(piece).unwrap() as usize;
+            let sign = if color == 0 { 1_i64 } else { -1_i64 };
+            let square = internal ^ 56; // production a8 -> feature a1
+            let oriented = square ^ if color == 0 { 0 } else { 56 };
+            let ps = kind * 64 + oriented;
+            phase += PHASE[kind];
+            if self.active[0] || self.active[1] {
+                let king = (position.king_sq[color] as usize ^ 56) ^ if color == 0 { 0 } else { 56 };
+                let pair = self.fused[bucket(king) * 384 + ps];
+                mg += sign * pair[0] as i64;
+                eg += sign * pair[1] as i64;
+            }
+            if self.active[2] {
+                let king = (position.king_sq[1 - color] as usize ^ 56) ^ if color == 0 { 0 } else { 56 };
+                let index = 3456 + bucket(king) * 384 + ps;
+                mg += sign * self.weights[index] as i64;
+                eg += sign * self.weights[index + BASE] as i64;
+            }
+            if self.active[3] {
+                let state = (((attacks[color] >> square) & 1)
+                    | (((attacks[1 - color] >> square) & 1) << 1)) as usize;
+                let index = 6528 + state * 384 + ps;
+                mg += sign * self.weights[index] as i64;
+                eg += sign * self.weights[index + BASE] as i64;
+            }
+            if self.active[4] {
+                visit_rays(position, square, color, kind, |index| {
+                    mg += sign * self.weights[index] as i64;
+                    eg += sign * self.weights[index + BASE] as i64;
+                });
+            }
+        }
+        phase = phase.min(24);
+        let numerator = mg * phase as i64 + eg * (24 - phase) as i64;
+        let rounded = (numerator.abs() + 12) / 24;
+        if numerator < 0 { -(rounded as i32) } else { rounded as i32 }
+    }
+
+    /// Exactly the original correction, enumerating each adjacent occupied
+    /// ray pair once. Sorted a1..h8 traversal links predecessors along ranks,
+    /// files, and both diagonals; the precomputed pair contains both directed
+    /// source contributions, including each source color's orientation/sign.
+    #[cfg(sparse_fast)]
+    fn correction(&self, position: &Position) -> i32 {
+        if !self.active.iter().any(|&value| value) { return 0; }
+        let attacks = if self.active[3] { pawn_attacks_fast(position) } else { [0, 0] };
+        let white_king = position.king_sq[0] as usize ^ 56;
+        let black_king = position.king_sq[1] as usize ^ 56;
+        let own_offsets = [bucket(white_king) * 384, bucket(black_king ^ 56) * 384];
+        let enemy_offsets = [3456 + bucket(black_king) * 384, 3456 + bucket(white_king ^ 56) * 384];
+        let mut previous_file = [0_usize; 8];
+        let mut previous_diagonal = [0_usize; 15];
+        let mut previous_antidiagonal = [0_usize; 15];
+        let mut mg = 0_i64;
+        let mut eg = 0_i64;
+        let mut phase = 0;
+        for rank in 0..8 {
+            let mut previous_rank = 0_usize;
+            for file in 0..8 {
+                let square = rank * 8 + file;
+                let piece = position.board[square ^ 56];
+                if piece == Piece::Empty { continue; }
+                let code = piece as usize;
+                let color = usize::from(code >= 7);
+                let kind = (code - 1) % 6;
+                let sign = if color == 0 { 1_i64 } else { -1_i64 };
+                let oriented = square ^ if color == 0 { 0 } else { 56 };
+                let ps = kind * 64 + oriented;
+                phase += PHASE[kind];
+                if self.active[0] || self.active[1] {
+                    let value = self.fused[own_offsets[color] + ps];
+                    mg += sign * value[0] as i64;
+                    eg += sign * value[1] as i64;
+                }
+                if self.active[2] {
+                    let index = enemy_offsets[color] + ps;
+                    mg += sign * self.weights[index] as i64;
+                    eg += sign * self.weights[index + BASE] as i64;
+                }
+                if self.active[3] {
+                    let state = (((attacks[color] >> square) & 1)
+                        | (((attacks[1 - color] >> square) & 1) << 1)) as usize;
+                    let index = 6528 + state * 384 + ps;
+                    mg += sign * self.weights[index] as i64;
+                    eg += sign * self.weights[index + BASE] as i64;
+                }
+                if self.active[4] {
+                    let diagonal = rank + 7 - file;
+                    let antidiagonal = rank + file;
+                    // Previous->current global directions: E, N, NE, NW.
+                    // A zero predecessor maps to an exactly zero table entry.
+                    let predecessors = [previous_rank, previous_file[file],
+                        previous_diagonal[diagonal], previous_antidiagonal[antidiagonal]];
+                    for (axis, previous) in predecessors.into_iter().enumerate() {
+                        let value = self.paired_rays[(previous * 13 + code) * 4 + axis];
+                        mg += value[0] as i64;
+                        eg += value[1] as i64;
+                    }
+                    previous_rank = code;
+                    previous_file[file] = code;
+                    previous_diagonal[diagonal] = code;
+                    previous_antidiagonal[antidiagonal] = code;
+                }
+            }
+        }
+        phase = phase.min(24);
+        let numerator = mg * phase as i64 + eg * (24 - phase) as i64;
+        let rounded = (numerator.abs() + 12) / 24;
+        if numerator < 0 { -(rounded as i32) } else { rounded as i32 }
+    }
+}
+
+/// Combine both directions of a nearest-occupied pair before evaluation.
+/// Entries with either empty piece are zero, so first-on-line handling needs
+/// no special branch. The 676 MG/EG pairs occupy 5,408 bytes in this prototype.
+#[cfg(sparse_fast)]
+fn pair_ray_weights(weights: &[i16]) -> Vec<[i32; 2]> {
+    let mut pairs = vec![[0_i32; 2]; 13 * 13 * 4];
+    const GLOBAL_DIRECTIONS: [usize; 4] = [2, 0, 1, 7];
+    const BLACK_DIRECTION: [usize; 8] = [4, 3, 2, 1, 0, 7, 6, 5];
+    for source in 1..13 {
+        let source_color = (source - 1) / 6;
+        let source_kind = (source - 1) % 6;
+        let source_sign = if source_color == 0 { 1 } else { -1 };
+        for target in 1..13 {
+            let target_color = (target - 1) / 6;
+            let target_kind = (target - 1) % 6;
+            let target_sign = if target_color == 0 { 1 } else { -1 };
+            let enemy = usize::from(source_color != target_color);
+            for (axis, global) in GLOBAL_DIRECTIONS.into_iter().enumerate() {
+                let reverse = (global + 4) % 8;
+                let source_direction = if source_color == 0 { global } else { BLACK_DIRECTION[global] };
+                let target_direction = if target_color == 0 { reverse } else { BLACK_DIRECTION[reverse] };
+                let source_id = 8064 + (((source_kind * 6 + target_kind) * 2 + enemy) * 8 + source_direction);
+                let target_id = 8064 + (((target_kind * 6 + source_kind) * 2 + enemy) * 8 + target_direction);
+                pairs[(source * 13 + target) * 4 + axis] = [
+                    source_sign * weights[source_id] as i32 + target_sign * weights[target_id] as i32,
+                    source_sign * weights[source_id + BASE] as i32 + target_sign * weights[target_id + BASE] as i32,
+                ];
+            }
+        }
+    }
+    pairs
+}
+
+#[cfg(sparse_fast)]
+fn pawn_attacks_fast(position: &Position) -> [u64; 2] {
+    let mut pawns = [0_u64; 2];
+    for internal in 0..64 {
+        match position.board[internal] {
+            Piece::WhitePawn => pawns[0] |= 1_u64 << (internal ^ 56),
+            Piece::BlackPawn => pawns[1] |= 1_u64 << (internal ^ 56),
+            _ => {},
+        }
+    }
+    const NOT_A_FILE: u64 = 0xfefefefefefefefe;
+    const NOT_H_FILE: u64 = 0x7f7f7f7f7f7f7f7f;
+    [((pawns[0] & NOT_A_FILE) << 7) | ((pawns[0] & NOT_H_FILE) << 9),
+     ((pawns[1] & NOT_A_FILE) >> 9) | ((pawns[1] & NOT_H_FILE) >> 7)]
+}
+
+fn bucket(square: usize) -> usize { (square / 32) * 4 + (square % 8) / 2 }
+
+fn pawn_attacks(position: &Position) -> [u64; 2] {
+    let mut attacked = [0_u64; 2];
+    for internal in 0..64 {
+        let piece = position.board[internal];
+        let color = match piece { Piece::WhitePawn => 0, Piece::BlackPawn => 1, _ => continue };
+        let square = internal ^ 56;
+        let rank = (square / 8) as i32;
+        let file = (square % 8) as i32;
+        let next_rank = rank + if color == 0 { 1 } else { -1 };
+        if !(0..8).contains(&next_rank) { continue; }
+        if file > 0 { attacked[color] |= 1_u64 << (next_rank * 8 + file - 1); }
+        if file < 7 { attacked[color] |= 1_u64 << (next_rank * 8 + file + 1); }
+    }
+    attacked
+}
+
+fn visit_rays<F: FnMut(usize)>(position: &Position, square: usize,
+                              color: usize, kind: usize, mut visit: F) {
+    let rank = (square / 8) as i32;
+    let file = (square % 8) as i32;
+    for (direction, &(oriented_dr, df)) in RAYS.iter().enumerate() {
+        let dr = if color == 0 { oriented_dr } else { -oriented_dr };
+        let (mut r, mut f) = (rank + dr, file + df);
+        while (0..8).contains(&r) && (0..8).contains(&f) {
+            let target = position.board[((r * 8 + f) as usize) ^ 56];
+            if target != Piece::Empty {
+                let target_color = engine::piece_color(target).unwrap() as usize;
+                let target_kind = engine::piece_type(target).unwrap() as usize;
+                let enemy = usize::from(target_color != color);
+                visit(8064 + (((kind * 6 + target_kind) * 2 + enemy) * 8 + direction));
+                break;
+            }
+            r += dr;
+            f += df;
+        }
+    }
+}
+
+fn extract_raw(position: &Position) -> (BTreeMap<usize, i32>, i32) {
+    let mut counts = BTreeMap::new();
+    let mut phase = 0;
+    let attacks = pawn_attacks(position);
+    let mut add = |index, sign| { *counts.entry(index).or_insert(0) += sign; };
+    for internal in 0..64 {
+        let piece = position.board[internal];
+        if piece == Piece::Empty { continue; }
+        let color = engine::piece_color(piece).unwrap() as usize;
+        let kind = engine::piece_type(piece).unwrap() as usize;
+        let sign = if color == 0 { 1 } else { -1 };
+        let flip = if color == 0 { 0 } else { 56 };
+        let square = internal ^ 56;
+        let oriented = square ^ flip;
+        let ps = kind * 64 + oriented;
+        phase += PHASE[kind];
+        add(ps, sign);
+        add(384 + bucket((position.king_sq[color] as usize ^ 56) ^ flip) * 384 + ps, sign);
+        add(3456 + bucket((position.king_sq[1 - color] as usize ^ 56) ^ flip) * 384 + ps, sign);
+        let state = (((attacks[color] >> square) & 1)
+            | (((attacks[1 - color] >> square) & 1) << 1)) as usize;
+        add(6528 + state * 384 + ps, sign);
+        visit_rays(position, square, color, kind, |index| add(index, sign));
+    }
+    counts.retain(|_, count| *count != 0);
+    (counts, phase.min(24))
+}
+
+fn position(line: &str) -> Result<Position, String> {
+    let position = engine::parse_fen(line.as_bytes()).ok_or("invalid FEN")?;
+    let kings = [Piece::WhiteKing, Piece::BlackKing];
+    if kings.iter().any(|king| position.board.iter().filter(|&&p| p == *king).count() != 1) {
+        return Err("exactly one king per color is required".into());
+    }
+    Ok(position)
+}
+
+fn move_uci(mv: Option<engine::Move>) -> String {
+    let Some(mv) = mv else { return "0000".to_string() };
+    let mut text = String::new();
+    for square in [engine::move_from(mv), engine::move_to(mv)] {
+        text.push((b'a' + (square % 8) as u8) as char);
+        text.push((b'8' - (square / 8) as u8) as char);
+    }
+    if let Some(kind) = engine::move_promotion(mv) {
+        text.push(match kind { engine::PieceType::Queen => 'q', engine::PieceType::Rook => 'r',
+            engine::PieceType::Bishop => 'b', engine::PieceType::Knight => 'n', _ => '?' });
+    }
+    text
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    let command = args.get(1).map(String::as_str).unwrap_or("features");
+    if !["baseline", "features", "eval", "bench", "search"].contains(&command) {
+        return Err("expected baseline, features, eval, bench or search".into());
+    }
+    if ["eval", "bench", "search"].contains(&command) {
+        let model = Model::load(args.get(2).ok_or("missing weights path")?)?;
+        MODEL.set(model).map_err(|_| "model already set")?;
+    }
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut output = io::BufWriter::new(stdout.lock());
+    let mut positions = Vec::new();
+    for (row, line) in stdin.lock().lines().enumerate() {
+        let line = line?;
+        if line.trim().is_empty() { continue; }
+        let pos = position(line.trim()).map_err(|e| format!("row {}: {}", row + 1, e))?;
+        if ["bench", "search"].contains(&command) { positions.push(pos); continue; }
+        let base = baseline::evaluate(&pos);
+        match command {
+            "baseline" => writeln!(output, "{base}")?,
+            "eval" => {
+                let correction = MODEL.get().unwrap().correction(&pos);
+                writeln!(output, "{} {} {}", base, base + correction, correction)?;
+            }
+            "features" => {
+                let (raw, phase) = extract_raw(&pos);
+                write!(output, "{base} {phase}")?;
+                for (id, count) in raw { write!(output, " {id}:{count}")?; }
+                writeln!(output)?;
+            }
+            _ => unreachable!(),
+        }
+    }
+    if command == "bench" {
+        let passes: usize = args.get(3).ok_or("missing passes")?.parse()?;
+        if passes == 0 || positions.is_empty() { return Err("nonempty positions and positive passes required".into()); }
+        // Warm both code paths without recording them; alternate order per pass.
+        for pos in &positions {
+            std::hint::black_box(baseline::evaluate(pos));
+            std::hint::black_box(MODEL.get().unwrap().correction(pos));
+        }
+        let mut timings = [0_u128; 2];
+        let mut checksums = [0_i64; 2];
+        for pass in 0..passes {
+            for ordinal in 0..2 {
+                let variant = (ordinal + pass) % 2;
+                let start = Instant::now();
+                for pos in &positions {
+                    let result = baseline::evaluate(std::hint::black_box(pos))
+                        + if variant == 1 { MODEL.get().unwrap().correction(pos) } else { 0 };
+                    checksums[variant] += std::hint::black_box(result) as i64;
+                }
+                timings[variant] += start.elapsed().as_nanos();
+            }
+        }
+        writeln!(output, "{{\"positions\":{},\"passes\":{},\"baseline_ns\":{},\"candidate_ns\":{},\"baseline_checksum\":{},\"candidate_checksum\":{}}}",
+                 positions.len(), passes, timings[0], timings[1], checksums[0], checksums[1])?;
+    }
+    if command == "search" {
+        let nodes: u32 = args.get(3).ok_or("missing node budget")?.parse()?;
+        if nodes == 0 || positions.is_empty() { return Err("nonempty positions and positive node budget required".into()); }
+        let depth: u32 = args.get(4).map(|s| s.parse()).transpose()?.unwrap_or(64);
+        if !(1..=search::MAX_SEARCH_DEPTH).contains(&depth) { return Err("invalid maximum depth".into()); }
+        for (row, pos) in positions.iter().enumerate() {
+            for ordinal in 0..2 {
+                let candidate = (row + ordinal) % 2 == 1;
+                CANDIDATE.store(candidate, Ordering::Relaxed);
+                let mut copied = *pos;
+                unsafe { search::clear_game_history(); }
+                let start = Instant::now();
+                let result = unsafe { search::run(&mut copied, depth, nodes, 0, true) };
+                let ns = start.elapsed().as_nanos();
+                writeln!(output, "{{\"row\":{},\"candidate\":{},\"requested_nodes\":{},\"nodes\":{},\"qnodes\":{},\"depth\":{},\"score\":{},\"move\":\"{}\",\"elapsed_ns\":{}}}",
+                         row, candidate, nodes, result.nodes, result.qnodes, result.depth,
+                         result.score, move_uci(result.mv), ns)?;
+            }
+        }
+    }
+    output.flush()?;
+    Ok(())
+}

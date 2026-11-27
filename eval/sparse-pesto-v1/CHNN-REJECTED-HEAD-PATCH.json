@@ -1,0 +1,149 @@
+{
+  "changes": [
+    {
+      "index": 199,
+      "new": 0,
+      "old": -1
+    },
+    {
+      "index": 203,
+      "new": -3,
+      "old": -2
+    },
+    {
+      "index": 317,
+      "new": 12,
+      "old": 14
+    },
+    {
+      "index": 395,
+      "new": -3,
+      "old": -4
+    },
+    {
+      "index": 433,
+      "new": 22,
+      "old": 23
+    },
+    {
+      "index": 444,
+      "new": 11,
+      "old": 13
+    },
+    {
+      "index": 581,
+      "new": 6,
+      "old": 7
+    },
+    {
+      "index": 595,
+      "new": 5,
+      "old": 6
+    },
+    {
+      "index": 723,
+      "new": -10,
+      "old": -9
+    },
+    {
+      "index": 870,
+      "new": -3,
+      "old": -4
+    },
+    {
+      "index": 1341,
+      "new": -7,
+      "old": -8
+    },
+    {
+      "index": 1468,
+      "new": -6,
+      "old": -8
+    },
+    {
+      "index": 1733,
+      "new": -3,
+      "old": -2
+    },
+    {
+      "index": 4875,
+      "new": 21,
+      "old": 19
+    },
+    {
+      "index": 5224,
+      "new": -4,
+      "old": -3
+    },
+    {
+      "index": 5899,
+      "new": -17,
+      "old": -16
+    },
+    {
+      "index": 8714,
+      "new": 1,
+      "old": 3
+    },
+    {
+      "index": 14375,
+      "new": -2,
+      "old": -3
+    },
+    {
+      "index": 14634,
+      "new": -2,
+      "old": -3
+    },
+    {
+      "index": 14726,
+      "new": -2,
+      "old": -1
+    },
+    {
+      "index": 15347,
+      "new": 2,
+      "old": 3
+    },
+    {
+      "index": 15415,
+      "new": -2,
+      "old": -3
+    },
+    {
+      "index": 15816,
+      "new": -3,
+      "old": -4
+    },
+    {
+      "index": 15848,
+      "new": -1,
+      "old": -2
+    },
+    {
+      "index": 15898,
+      "new": -2,
+      "old": -3
+    },
+    {
+      "index": 16156,
+      "new": -2,
+      "old": -3
+    },
+    {
+      "index": 16208,
+      "new": -3,
+      "old": -4
+    },
+    {
+      "index": 16241,
+      "new": 0,
+      "old": -1
+    }
+  ],
+  "outputWeightsOnly": true,
+  "resultSha256": "7622c13da5deb02b7d4353f1ad68e626017c3798123cd1118b7408aca1049434",
+  "schema": "chessy.chnn-output-patch.v1",
+  "sourceBytes": 25200704,
+  "sourceSha256": "3877ab704904d8cee199be6a4d59c94ca13d945f08421f6cd31b3f92bafac0db"
+}

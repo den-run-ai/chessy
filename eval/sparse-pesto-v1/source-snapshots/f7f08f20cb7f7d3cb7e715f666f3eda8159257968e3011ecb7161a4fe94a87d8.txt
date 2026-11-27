@@ -1,0 +1,50 @@
+import hashlib,json,os,collections
+from pathlib import Path
+import chess
+base=Path('/workspace/library-files/chessy-sparse-work/data')
+p=base/'ood-selection-v1/manifest.json';raw=p.read_bytes();manifest=json.loads(raw)
+def sha(x):return hashlib.sha256(x).hexdigest()
+def enc(x):return json.dumps(x,sort_keys=True,separators=(',',':')).encode()
+assert sha(raw)=='3180d17d7958f10b7ebd9830db3d64633fe706868b6323d6846489d4a654e1d2'
+def rows(root,item):
+ h=hashlib.sha256();size=n=0
+ with open(root/item['path'],'rb') as f:
+  for line in f:
+   h.update(line);size+=len(line);n+=1;yield json.loads(line)
+ assert (h.hexdigest(),size,n)==(item['sha256'],item['bytes'],item['rows'])
+primary_raw=(base/'eval-v1/manifest.json').read_bytes();primary=json.loads(primary_raw)
+assert sha(primary_raw)==manifest['primaryManifest']['sha256']
+families=set();clusters=set()
+for item in primary['files']:
+ for row in rows(base/'eval-v1',item):families.add(row['family']);clusters.add(row['cluster'])
+assert len(families)==549270 and len(clusters)==1000000
+natural_raw=(base/'pgn-v1/manifest.json').read_bytes();natural=json.loads(natural_raw)
+assert sha(natural_raw)==manifest['naturalManifest']['sha256']
+best={};eligible=excluded=0
+item=next(i for i in natural['files'] if i['path']=='positions.jsonl')
+for row in rows(base/'pgn-v1',item):
+ if row['family'] in families or row['cluster'] in clusters:excluded+=1;continue
+ eligible+=1
+ priority=sha(('chessy.sparse-ood.v1\0'+row['sourceGameId']).encode())
+ key=(row['phaseBucket'],row['family'])
+ candidate=(priority,row['sourceGameId'])
+ if key not in best or candidate<best[key]:best[key]=candidate
+quotas={'opening':1366,'middlegame':1365,'endgame':1365}
+expected=set()
+for phase,quota in quotas.items():
+ candidates=sorted((v[0],v[1],family) for (kind,family),v in best.items() if kind==phase)
+ expected.update(game for priority,game,family in candidates[:quota])
+chosen=list(rows(base/'ood-selection-v1',manifest['files'][0]))
+assert {r['sourceGameId'] for r in chosen}==expected
+assert len(chosen)==4096 and len({r['family'] for r in chosen})==4096 and len({r['sourceGameId'] for r in chosen})==4096
+assert dict(collections.Counter(r['phaseBucket'] for r in chosen))==quotas
+for row in chosen:
+ assert row['cpWhite'] is None and row['family'] not in families and row['cluster'] not in clusters
+ b=chess.Board()
+ for token in row['prefixUci']:
+  move=chess.Move.from_uci(token);assert move in b.legal_moves;b.push(move)
+ assert b.fen(en_passant='fen')==row['fen'];assert not b.is_check() and b.is_valid()
+ assert row['oodPriority']==sha(('chessy.sparse-ood.v1\0'+row['sourceGameId']).encode())
+report={'schema':'chessy.sparse-ood-independent-selection-audit.v1','status':'pass','selectionManifestSha256':sha(raw),'selectionRowsSha256':manifest['files'][0]['sha256'],'implementationSha256':sha(Path(__file__).read_bytes()),'selectedGames':len(chosen),'selectedFamilies':len(chosen),'phaseQuotas':quotas,'eligibleNaturalRows':eligible,'primaryOverlapExcluded':excluded,'allPrimaryRolesVerified':True,'zeroPrimaryFamilyOrClusterOverlap':True,'exactGamePrefixesReplayed':4096,'globalLowestPriorityPerPhaseFamilyRuleVerified':True,'teacherLabelsOrCandidatePerformanceInspected':False}
+with open(base/'ood-selection-v1/independent-audit.json','xb') as f:f.write(enc(report)+b'\n');f.flush();os.fsync(f.fileno())
+print(json.dumps(report))

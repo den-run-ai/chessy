@@ -1,0 +1,64 @@
+{
+  "schema": "chessy.eval-pipeline-cost-independent-audit.v1",
+  "result": "pass",
+  "researchOnly": true,
+  "productionAdmission": false,
+  "study": "eval-production-cost-final-v1",
+  "ledgerSha256": "36d08d277d9930eb3e2135a0fa9dd4e622e9d045a7cdafc54172320374d91524",
+  "ledgerBytes": 1935767,
+  "observations": 2592,
+  "roots": 72,
+  "rootsByPhase": {
+    "opening": 24,
+    "middlegame": 24,
+    "endgame": 24
+  },
+  "replicates": 3,
+  "nodeBudgets": [10000, 36000],
+  "variantCount": 6,
+  "scheduleOrderVerified": true,
+  "sameModelExactSignatureGroups": 288,
+  "exactNodeCapStops": 2592,
+  "selectedHce": "baseline-memory",
+  "selectedFull": "sparse-simd",
+  "geometricMeanEngineCallMs": {
+    "baseline": 14.325612298641188,
+    "baseline-memory": 14.24980590388885,
+    "hce-scalar": 15.226596512583537,
+    "hce-simd": 14.421621322932618,
+    "sparse-scalar": 16.779402284648988,
+    "sparse-simd": 15.95955825473835
+  },
+  "fullNpsRelativeToSelectedHce": 0.8928696945392034,
+  "fullElapsedTimeRelativeToSelectedHce": 1.119984255391359,
+  "fullNpsRelativeToSelectedHceByPhase": {
+    "opening": 0.8566986240339198,
+    "middlegame": 0.8827280328462379,
+    "endgame": 0.9412592551986194
+  },
+  "elapsedSpeedupOverMemoryMatchedHce": {
+    "baseline": 0.9947083312620764,
+    "baseline-memory": 1.0,
+    "hce-scalar": 0.9358497082465246,
+    "hce-simd": 0.9880862619260048,
+    "sparse-scalar": 0.8492439517303669,
+    "sparse-simd": 0.8928696945392034
+  },
+  "checks": [
+    "Independently reconstructed the complete rotated/reversed schedule from the registered configuration and roots.",
+    "Verified all 2592 keys are unique and present in exact scheduled order.",
+    "Recomputed material phase from each FEN and checked phase/root bindings.",
+    "Verified successful responses, positive finite call durations, call duration within recorded round-trip time, legal-list membership, and exact node caps.",
+    "Compared every non-timing search-result field within each evaluator/root/budget group across replicates and implementations.",
+    "Recomputed geometric mean latency, the prospective 0.5 percent implementation preference rule, matched NPS and elapsed ratios, and phase ratios.",
+    "Confirmed independently computed selections and metrics agree with the published cost result."
+  ],
+  "method": "Independent standard-library computation over the closed searches.jsonl, config.json and roots.json; no study analyzer imports, engine execution, or timing reruns.",
+  "scope": [
+    "This is a numerical and record-consistency audit of the closed cost ledger, not a second full binary/protocol provenance audit.",
+    "Legal-list membership was checked against retained host responses; no new chess-engine execution was performed.",
+    "All measurements are the original optimized desktop Node/V8 observations on exposed development roots.",
+    "The fused HCE implementations did not improve measured latency over the memory-matched original HCE.",
+    "Fixed-node throughput does not establish equal-time playing strength or production admission."
+  ]
+}

@@ -1,0 +1,318 @@
+{
+  "baseModelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+  "changes": [
+    {
+      "index": 9,
+      "new": -23,
+      "old": -22
+    },
+    {
+      "index": 11,
+      "new": -24,
+      "old": -25
+    },
+    {
+      "index": 15,
+      "new": -13,
+      "old": -11
+    },
+    {
+      "index": 65,
+      "new": -45,
+      "old": -47
+    },
+    {
+      "index": 70,
+      "new": -40,
+      "old": -42
+    },
+    {
+      "index": 76,
+      "new": -37,
+      "old": -38
+    },
+    {
+      "index": 80,
+      "new": -38,
+      "old": -40
+    },
+    {
+      "index": 82,
+      "new": -35,
+      "old": -36
+    },
+    {
+      "index": 92,
+      "new": -26,
+      "old": -25
+    },
+    {
+      "index": 130,
+      "new": -13,
+      "old": -14
+    },
+    {
+      "index": 133,
+      "new": -27,
+      "old": -28
+    },
+    {
+      "index": 140,
+      "new": -19,
+      "old": -20
+    },
+    {
+      "index": 142,
+      "new": -21,
+      "old": -20
+    },
+    {
+      "index": 192,
+      "new": -42,
+      "old": -43
+    },
+    {
+      "index": 194,
+      "new": -35,
+      "old": -37
+    },
+    {
+      "index": 195,
+      "new": -51,
+      "old": -54
+    },
+    {
+      "index": 196,
+      "new": -36,
+      "old": -37
+    },
+    {
+      "index": 267,
+      "new": -19,
+      "old": -20
+    },
+    {
+      "index": 275,
+      "new": -21,
+      "old": -20
+    },
+    {
+      "index": 324,
+      "new": -14,
+      "old": -12
+    },
+    {
+      "index": 1169,
+      "new": -28,
+      "old": -29
+    },
+    {
+      "index": 1172,
+      "new": 11,
+      "old": 10
+    },
+    {
+      "index": 1546,
+      "new": -28,
+      "old": -30
+    },
+    {
+      "index": 1550,
+      "new": 47,
+      "old": 48
+    },
+    {
+      "index": 1551,
+      "new": 69,
+      "old": 68
+    },
+    {
+      "index": 1552,
+      "new": -15,
+      "old": -16
+    },
+    {
+      "index": 1553,
+      "new": -46,
+      "old": -45
+    },
+    {
+      "index": 1559,
+      "new": 73,
+      "old": 74
+    },
+    {
+      "index": 1562,
+      "new": -19,
+      "old": -20
+    },
+    {
+      "index": 1563,
+      "new": -15,
+      "old": -14
+    },
+    {
+      "index": 1564,
+      "new": -15,
+      "old": -16
+    },
+    {
+      "index": 1567,
+      "new": 40,
+      "old": 44
+    },
+    {
+      "index": 1601,
+      "new": -18,
+      "old": -17
+    },
+    {
+      "index": 1673,
+      "new": -37,
+      "old": -35
+    },
+    {
+      "index": 1690,
+      "new": -26,
+      "old": -25
+    },
+    {
+      "index": 5385,
+      "new": -27,
+      "old": -29
+    },
+    {
+      "index": 5772,
+      "new": -26,
+      "old": -27
+    },
+    {
+      "index": 5773,
+      "new": -21,
+      "old": -20
+    },
+    {
+      "index": 5788,
+      "new": -30,
+      "old": -31
+    },
+    {
+      "index": 6152,
+      "new": 17,
+      "old": 15
+    },
+    {
+      "index": 6159,
+      "new": -24,
+      "old": -25
+    },
+    {
+      "index": 6934,
+      "new": 23,
+      "old": 24
+    },
+    {
+      "index": 6994,
+      "new": 21,
+      "old": 22
+    },
+    {
+      "index": 6997,
+      "new": 11,
+      "old": 10
+    },
+    {
+      "index": 8080,
+      "new": -12,
+      "old": -13
+    },
+    {
+      "index": 8212,
+      "new": -25,
+      "old": -24
+    },
+    {
+      "index": 8352,
+      "new": -33,
+      "old": -35
+    },
+    {
+      "index": 8384,
+      "new": -29,
+      "old": -28
+    },
+    {
+      "index": 8648,
+      "new": 30,
+      "old": 31
+    },
+    {
+      "index": 8654,
+      "new": 28,
+      "old": 30
+    },
+    {
+      "index": 8670,
+      "new": 33,
+      "old": 30
+    },
+    {
+      "index": 8674,
+      "new": 33,
+      "old": 34
+    },
+    {
+      "index": 8677,
+      "new": 45,
+      "old": 49
+    },
+    {
+      "index": 8678,
+      "new": 62,
+      "old": 58
+    },
+    {
+      "index": 8839,
+      "new": 29,
+      "old": 35
+    },
+    {
+      "index": 14428,
+      "new": 38,
+      "old": 39
+    },
+    {
+      "index": 14445,
+      "new": -68,
+      "old": -63
+    },
+    {
+      "index": 14823,
+      "new": -44,
+      "old": -42
+    },
+    {
+      "index": 15177,
+      "new": 23,
+      "old": 20
+    },
+    {
+      "index": 15181,
+      "new": 43,
+      "old": 44
+    },
+    {
+      "index": 15568,
+      "new": 32,
+      "old": 29
+    },
+    {
+      "index": 16704,
+      "new": -23,
+      "old": -24
+    }
+  ],
+  "productionEligible": false,
+  "resultModelSha256": "b257c4161cef230aed0f77a95285693557af2a6ddf6423b15aeb69a50a5117df",
+  "schema": "chessy.sparse-table-correction.v1"
+}

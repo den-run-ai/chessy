@@ -1,0 +1,65 @@
+from pathlib import Path
+import hashlib,json,statistics,os
+import numpy as np
+from scipy import sparse
+root=Path('/workspace/library-files/chessy-sparse-work/runtime-fast-v1');pack=root.parent/'packed-v1'
+def sha(x):return hashlib.sha256(x).hexdigest()
+def enc(x):return json.dumps(x,sort_keys=True,separators=(',',':')).encode()+b'\n'
+def bound(directory,item):
+ raw=(directory/item['path']).read_bytes();assert len(raw)==item['bytes'] and sha(raw)==item['sha256'];return raw
+raw=(root/'results.json').read_bytes();r=json.loads(raw);plan=r['plan'];config=plan['config']
+assert r['status']=='complete-research-only' and sha((root/'config.json').read_bytes())==plan['configSha256']
+assert sha((root.parent/'runtime-v1/results.json').read_bytes())==config['previousRuntimeResultsSha256']
+for name,digest in plan['nativeSha256'].items():assert sha((root/(name+'-native')).read_bytes())==digest
+packed=(pack/'manifest.json').read_bytes();assert sha(packed)==config['packedManifestSha256'];m=json.loads(packed)
+p=next(x for x in m['roles'] if x['role']=='validation');f=p['files']
+a={}
+for key,dtype in [('indices.i32','<i4'),('values.f32','<f4'),('indptr.i64','<i8'),('baseline.i32','<i4')]:a[key]=np.frombuffer(bound(pack,f[key]),dtype=dtype)
+x=sparse.csr_matrix((np.rint(a['values.f32'].astype(np.float64)*24).astype(np.int64),a['indices.i32'],a['indptr.i64']),shape=(p['rows'],17280))
+wraw=(root/'full.i16le').read_bytes();assert sha(wraw)==config['weightsSha256'];w=np.frombuffer(wraw,dtype='<i2').astype(np.int64)
+numerator=x@w;correction=np.sign(numerator)*((np.abs(numerator)+12)//24);pred=a['baseline.i32'].astype(np.int64)+correction
+for runtime in ('reference','fast'):
+ actual=np.array([list(map(int,line.split())) for line in (root/(runtime+'.parity.stdout')).read_text().splitlines()])
+ assert actual.shape==(100164,3) and np.array_equal(actual[:,0],a['baseline.i32']) and np.array_equal(actual[:,1],pred) and np.array_equal(actual[:,2],correction)
+positions=json.loads((root/'positions.json').read_bytes());assert sha((root/'positions.json').read_bytes())==config['positionsSha256']
+observations=[];static={}
+for invocation in r['rawFiles']:
+ assert invocation['returncode']==0
+ rawout=bound(root,invocation['stdout']);assert bound(root,invocation['stderr'])==b''
+ runtime=invocation['runtime'];name=invocation['stdout']['path']
+ if '.static.' in name:
+  rep=int(name.split('.')[2]);v=json.loads(rawout);indices=[p['validationIndex'] for p in positions]
+  assert v['positions']==24 and v['passes']==6000 and v['baseline_checksum']==int(a['baseline.i32'][indices].sum())*6000 and v['candidate_checksum']==int(pred[indices].sum())*6000
+  static[(runtime,rep)]=v
+ elif '.search.' in name:
+  _,_,nodes,rep,_=name.split('.');nodes=int(nodes);rep=int(rep);ordered=positions if rep==0 else list(reversed(positions))
+  lines=rawout.splitlines();assert len(lines)==48;seen=set()
+  for line in lines:
+   v=json.loads(line);position=ordered[v['row']];key=(v['row'],v['candidate']);assert key not in seen;seen.add(key)
+   assert v['nodes']==v['requested_nodes']==nodes and v['elapsed_ns']>0
+   observations.append(dict(v,model='full',replicate=rep,positionIndex=position['positionIndex'],phaseBucket=position['phaseBucket'],fenSha256=position['fenSha256'],consumedRequestedNodes=True,runtime=runtime))
+assert len(observations)==384 and len(static)==4
+assert observations==[json.loads(line) for line in bound(root,r['observations']).splitlines()]
+pairs={};hce={}
+for v in observations:
+ pairs.setdefault((v['requested_nodes'],v['replicate'],v['positionIndex'],v['candidate']),{})[v['runtime']]=v
+ hce.setdefault((v['runtime'],v['requested_nodes'],v['replicate'],v['positionIndex']),{})[v['candidate']]=v
+assert len(pairs)==192
+for p in pairs.values():
+ assert set(p)=={'reference','fast'}
+ assert all(p['reference'][k]==p['fast'][k] for k in ['nodes','qnodes','depth','score','move'])
+for item in r['search']:
+ nodes=item['requestedNodes'];phase=item['phaseBucket']
+ selected=[p for key,p in pairs.items() if key[0]==nodes and key[3] and (phase=='all' or p['reference']['phaseBucket']==phase)]
+ ratio=statistics.geometric_mean(p['reference']['elapsed_ns']/p['fast']['elapsed_ns'] for p in selected)
+ assert len(selected)==item['candidatePairs']==item['bothConsumedRequestedNodes']
+ assert abs(ratio-item['referenceOverFastTimeGeometricMean'])<1e-12
+ for runtime in ('reference','fast'):
+  selected=[p for key,p in hce.items() if key[0]==runtime and key[1]==nodes and (phase=='all' or p[False]['phaseBucket']==phase)]
+  ratio=statistics.geometric_mean((p[True]['nodes']/p[True]['elapsed_ns'])/(p[False]['nodes']/p[False]['elapsed_ns']) for p in selected)
+  assert abs(ratio-item[runtime+'CandidateOverHceNpsGeometricMean'])<1e-12
+ratio=statistics.geometric_mean(static[('reference',rep)]['candidate_ns']/static[('fast',rep)]['candidate_ns'] for rep in [0,1])
+assert abs(ratio-r['staticReferenceOverFastTimeGeometricMean'])<1e-12
+report={'schema':'chessy.sparse-fast-runtime-independent-audit.v1','status':'pass','resultsSha256':sha(raw),'implementationSha256':sha(Path(__file__).read_bytes()),'fullIntegerParityRows':200328,'rawSearchObservations':384,'referenceFastSignatureComparisons':192,'signatureMismatches':0,'allRequestedBudgetsReached':True,'staticBlocksVerified':4,'allReportedRatiosRecomputed':True,'originalRuntimeReportUnchanged':True,'holdoutRoleFilesRead':False,'searchesRerun':0,'scope':'independent exact integer parity, raw command joins, old/new search signatures, static checksums and paired timing arithmetic; same frozen full weights'}
+with open(root/'independent-audit.json','xb') as f:f.write(enc(report));f.flush();os.fsync(f.fileno())
+print(json.dumps(report))

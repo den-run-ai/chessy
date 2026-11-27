@@ -1,0 +1,36 @@
+{
+  "schema": "chessy.sparse-v2-instrumentation.v1",
+  "purpose": "profile-only-not-runtime-benchmark",
+  "sourceSha256": "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a",
+  "instrumentedSourceSha256": "cba776d5b5b9a515467b180edf972d62acc5ca6e1c3b8646f291b543f5ab6070",
+  "binarySha256": "ff2434c7e1e841ccf5b9d363d4ce223876f09001cf26b9403a62db7ddac464c5",
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "build": [
+    "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+    "--edition=2021",
+    "-O",
+    "--cfg",
+    "sparse_fast",
+    "/workspace/library-files/chessy-sparse-work/v2-instrumentation-v1/instrumented.rs",
+    "-o",
+    "/workspace/library-files/chessy-sparse-work/v2-instrumentation-v1/instrumented"
+  ],
+  "weightsSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+  "rootsSha256": "31de3c9558e860f0944a8b860633a7050330af666dede4ab902ea55fd7bd3400",
+  "positions": 24,
+  "nodesPerSearch": 10000,
+  "maximumDepth": 30,
+  "clearCacheEveryRoot": true,
+  "cacheVerifiedBoardBytes": 64,
+  "note": "Per-call clocks, locks and board copying distort whole-search timings; component timings include clock overhead.",
+  "counts": {
+    "calls": 143090,
+    "baseline_ns": 67987020,
+    "residual_ns": 61110592,
+    "piece_visits": 2563368,
+    "pawn_visits": 1372701,
+    "same_board_hits_unbounded": 48586,
+    "same_board_hits_direct1024": 31861
+  },
+  "searchSha256": "b171a0a8740ec2761ae0142fe4ff11dad7e3b1b3d7d828a9d940ceda86caf46d"
+}

@@ -1,0 +1,33 @@
+{
+  "dependencies": "runtime imports these three modules directly; production lib.rs and the WASM ABI are not compiled into this bridge",
+  "files": [
+    {
+      "bytes": 37233,
+      "gitBlob": "4123829d954e6c2f60a8fd1f88d2834a5fe9b41d",
+      "path": "engine.rs",
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+      "upstreamPath": "experiments/wasm/src/engine.rs"
+    },
+    {
+      "bytes": 15221,
+      "gitBlob": "2175d255e7ae569092373b833318c3a113b59239",
+      "path": "eval.rs",
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+      "upstreamPath": "experiments/wasm/src/eval.rs"
+    },
+    {
+      "bytes": 48406,
+      "gitBlob": "ebc895876d4e83bfab0d4dc92bfca0312692a6fa",
+      "path": "search.rs",
+      "sha256": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+      "upstreamPath": "experiments/wasm/src/search.rs"
+    }
+  ],
+  "licensing": "Repository LICENSE and THIRD_PARTY_NOTICES.md apply; source attribution is preserved.",
+  "purpose": "immutable measured baseline for the standalone sparse-evaluation research bridge",
+  "release": "r84",
+  "schema": "chessy.sparse-eval-baseline.v1",
+  "sourceModification": "none; exact git blob bytes",
+  "upstreamCommit": "5e3558378deab8ba21f648cc2cca98195b1beced",
+  "upstreamRepository": "https://github.com/den-run-ai/chessy"
+}

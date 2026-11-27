@@ -1,0 +1,13 @@
+{
+  "eval/sparse-pesto-v1/PLAN.md": "0206efc58b2e415645702f9baef9d8e26a20512b9b4bbd59d965a745fbec2bc5",
+  "tools/sparse_eval/__init__.py": "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58",
+  "tools/sparse_eval/features.py": "f4209aff52405bc0ffbb1b41bfdbb00e9c7a4a47e42e9efe4c0820cbf8bda709",
+  "tools/sparse_eval/runtime.rs": "88e1fb3d79a8048e0792a0968733166ea3dcad5ef97a6d96577ff5273ffd2663",
+  "tools/sparse_eval/fit.py": "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39",
+  "tools/sparse_eval/pipeline.py": "7425be72298740a7a3c6dd00febccfe45c4306e8bec3bcb26011fd5ef9064928",
+  "experiments/wasm/src/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+  "experiments/wasm/src/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+  "experiments/wasm/src/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd",
+  "binary_sha256": "b9827497e32a636b40bbfc9f15db814402c0f55a33b5c2e5f2a095fcafe88400",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n"
+}

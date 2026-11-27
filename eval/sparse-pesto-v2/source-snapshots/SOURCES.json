@@ -1,0 +1,550 @@
+{
+  "schema": "chessy.sparse-v2-source-inventory.v1",
+  "sources": {
+    "be09888e29247acfa70b9fddc0c68ee4986e6e3abdc03507104e2c582216a63d": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/runtime.rs",
+        "eval/sparse-pesto-v2/source-snapshots/be09888e29247acfa70b9fddc0c68ee4986e6e3abdc03507104e2c582216a63d-runtime.rs.txt"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "source-snapshots/HISTORICAL.json"
+      ],
+      "retainedPath": "eval/sparse-pesto-v2/source-snapshots/be09888e29247acfa70b9fddc0c68ee4986e6e3abdc03507104e2c582216a63d-runtime.rs.txt",
+      "bytes": 13290
+    },
+    "c606c2a7d32da71e331fc543f3bbadd3dfed75eb3328a3f434140bae9543fa40": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/core.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/core.rs",
+      "bytes": 25184
+    },
+    "71a20fedbb8ae4851a3c1e0df4eeb4c9453cbfceca9f754f46728a17eb1382a0": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/simd.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/simd.rs",
+      "bytes": 1756
+    },
+    "5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/hce_constants.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "eval/sparse-pesto-v2/source-snapshots/5dd15e15f0a8cedc6a1b0d404fcd36caea3b96e3d615cc2b01168255eb89eb5c-hce_constants.rs.txt",
+      "bytes": 4423
+    },
+    "a2c8fb69792d029724ad994379846c7d3083383ab3a19a6f357bde09065ca44a": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/generate_hce_constants.py"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "eval/sparse-pesto-v2/source-snapshots/a2c8fb69792d029724ad994379846c7d3083383ab3a19a6f357bde09065ca44a-generate_hce_constants.py.txt",
+      "bytes": 1536
+    },
+    "50ec984548e6d10e0642f6e9cf5a9b8479402810f412f81ee9f838a3040ebde7": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/build_native.py"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/build_native.py",
+      "bytes": 3608
+    },
+    "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103": {
+      "logicalPaths": [
+        "tools/sparse_eval/baseline/engine.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "pruning/plan.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval/baseline/engine.rs",
+      "bytes": 37233
+    },
+    "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7": {
+      "logicalPaths": [
+        "tools/sparse_eval/baseline/eval.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "pruning/plan.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval/baseline/eval.rs",
+      "bytes": 15221
+    },
+    "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd": {
+      "logicalPaths": [
+        "tools/sparse_eval/baseline/search.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "pruning/plan.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval/baseline/search.rs",
+      "bytes": 48406
+    },
+    "6b02dbd6857f3dcbcf592b50b6bc2de3b0ed95961be7a8d66bf4a25da6e9c728": {
+      "logicalPaths": [
+        "tools/sparse_eval/baseline/manifest.json"
+      ],
+      "stages": [
+        "builds/NATIVE-PARITY-NARROW.json",
+        "builds/WASM-WIDE.json",
+        "builds/NATIVE-PARITY-WIDE.json",
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "builds/WASM-NARROW.json",
+        "pruning/plan.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval/baseline/manifest.json",
+      "bytes": 1387
+    },
+    "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa": {
+      "logicalPaths": [
+        "assets/engine.js"
+      ],
+      "stages": [
+        "builds/WASM-WIDE.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json",
+        "GAME-REGISTRATION.json",
+        "PARALLEL-REGISTRATION.json"
+      ],
+      "retainedPath": "assets/engine.js",
+      "bytes": 23349
+    },
+    "0111a08b2181004edd6b4c6586c7e103a265f30bac580793aa59c1fc66d747ab": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/build_wasm.py"
+      ],
+      "stages": [
+        "builds/WASM-WIDE.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/build_wasm.py",
+      "bytes": 9267
+    },
+    "26a5f82767743687dad7100f0ad2046bdc051c906ec1e44e64f4c1eefb82081c": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/wasm.rs"
+      ],
+      "stages": [
+        "builds/WASM-WIDE.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/wasm.rs",
+      "bytes": 7586
+    },
+    "e0a49e3c71f8bdfbfd776d5d7a2b6bc57a1471d144545de56872177e05e71410": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/wasm_runner.mjs"
+      ],
+      "stages": [
+        "builds/WASM-WIDE.json",
+        "builds/WASM-NARROW.json",
+        "COST-REGISTRATION.json",
+        "GAME-REGISTRATION.json",
+        "PARALLEL-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/wasm_runner.mjs",
+      "bytes": 15986
+    },
+    "10f289a361c5a2809128dd6d3150d49b6949a1dd3cb84b96a894cf2cdc56ff09": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/runtime.rs"
+      ],
+      "stages": [
+        "builds/NATIVE-WIDE.json",
+        "builds/NATIVE-NARROW.json",
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/runtime.rs",
+      "bytes": 15041
+    },
+    "f34c0160b632d2d50bccc80b404d9401185903ff118ff03ffa0aef666e06ea58": {
+      "logicalPaths": [
+        "tools/sparse_eval/__init__.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/__init__.py",
+      "bytes": 78
+    },
+    "0a89f4fd8dc4ed54f8f6f4a62284844a85a43e4fe97a0b803db1dd1e3d17ff62": {
+      "logicalPaths": [
+        "tools/sparse_eval/chnn.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/chnn.py",
+      "bytes": 11766
+    },
+    "b3a1f81868bf5e5353e00d853ac761b0ac4de1d8a498613e4bd09f66f1314d0f": {
+      "logicalPaths": [
+        "tools/sparse_eval/chnn_experiment.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/chnn_experiment.py",
+      "bytes": 12000
+    },
+    "3ddb497915b4ba0af89e6edc02d51d7d33f7a75ecf065ee8e1ad331152de4269": {
+      "logicalPaths": [
+        "tools/sparse_eval/data.py"
+      ],
+      "stages": [
+        "pruning/plan.json",
+        "GAME-BANK.json"
+      ],
+      "retainedPath": "tools/sparse_eval/data.py",
+      "bytes": 33156
+    },
+    "d8f9eec3c4d9477718d71b9330d1ce048f33157129ea1047c14a498dc4a326f3": {
+      "logicalPaths": [
+        "tools/sparse_eval/evaluate_ood.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/evaluate_ood.py",
+      "bytes": 6406
+    },
+    "ea8a6face29e7c62806ff8d5b75767aa9e82331866337aec3bfc8e0e8c234dab": {
+      "logicalPaths": [
+        "tools/sparse_eval/export.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/export.py",
+      "bytes": 4111
+    },
+    "462b8f68ab65864833a86afc8236d86beecf8c39e05a81d938c2648b30260fb8": {
+      "logicalPaths": [
+        "tools/sparse_eval/features.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/features.py",
+      "bytes": 14471
+    },
+    "c5f414b55d194b647ffdaf81f07a7a1a467a7477e5a8f0c857ba08c53c155a39": {
+      "logicalPaths": [
+        "tools/sparse_eval/fit.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/fit.py",
+      "bytes": 8999
+    },
+    "0e1747b8b575d86cfd0ee4cdf18848cc5315033035a0e6a2db6fe2596117fe8b": {
+      "logicalPaths": [
+        "tools/sparse_eval/label_ood.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/label_ood.py",
+      "bytes": 26076
+    },
+    "63af3cda121b925e1e9e9cb06f8c2413b121cb10fc2622f767e5c0d0e66c58af": {
+      "logicalPaths": [
+        "tools/sparse_eval/measure.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/measure.py",
+      "bytes": 18537
+    },
+    "f0c3b51f071ce08322458fa2eb1f8e87076a77bfbd9e7fa1096594b5e779f319": {
+      "logicalPaths": [
+        "tools/sparse_eval/measure_fast.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/measure_fast.py",
+      "bytes": 15575
+    },
+    "f0bc0034509ce35ea093c2ee3232c13f04988843d52e747ad72793386c1e8c19": {
+      "logicalPaths": [
+        "tools/sparse_eval/pipeline.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/pipeline.py",
+      "bytes": 18198
+    },
+    "19c903074fc593de6190898427bd25a5283fb485db4f2cc2bb912896efc05909": {
+      "logicalPaths": [
+        "tools/sparse_eval/table_edit.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/table_edit.py",
+      "bytes": 14143
+    },
+    "31720f2c23cf81693dba115299fc6ac5850f8a6560d63207e9859f2f9aa28b06": {
+      "logicalPaths": [
+        "tools/sparse_eval/wsp.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval/wsp.py",
+      "bytes": 18073
+    },
+    "952d6c87490e025cdb1e137fe90739ffa867988b6e18ceaf4438082ebc2b8247": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/__init__.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/__init__.py",
+      "bytes": 81
+    },
+    "87650d7b3d5f695c92fdef0d9e0abfecd1299387c09e307f9833b9126e991a7a": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/prune.py"
+      ],
+      "stages": [
+        "pruning/plan.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/prune.py",
+      "bytes": 8495
+    },
+    "20d1bc9c36717c26c47d27fb2ee0e094ce5fb1e3e1d2c9766e1e5460214e4845": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/openings.py"
+      ],
+      "stages": [
+        "GAME-BANK.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/openings.py",
+      "bytes": 13434
+    },
+    "c6da1d235887c03a2def36f6677b25bab355ea06461437f7b78b78247615ef7c": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/cost.py"
+      ],
+      "stages": [
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/cost.py",
+      "bytes": 26868
+    },
+    "3dae73344eae241dd66679692bfeb1299da4d7eb775ca22e1ac072e35ae05c35": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/cost_target.mjs"
+      ],
+      "stages": [
+        "COST-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/cost_target.mjs",
+      "bytes": 2526
+    },
+    "a46ea45c879b5d50db95cf20259bccd00880fd7bd06a337e0daf86c19a143a20": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/audit_games.py"
+      ],
+      "stages": [
+        "GAME-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/audit_games.py",
+      "bytes": 23208
+    },
+    "51de07a892706791c0e5c80060343dfcae3555343dddf2c0eb2150f9f86a6ef1": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/audit_rules.js"
+      ],
+      "stages": [
+        "GAME-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/audit_rules.js",
+      "bytes": 2944
+    },
+    "f6e901884fc8f7610cdf64afed24f51038573955c36fbcfab2103d47fecd80b9": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/games.py"
+      ],
+      "stages": [
+        "GAME-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/games.py",
+      "bytes": 29531
+    },
+    "b3f6ac249b89d9cf4103da4b2fbb57e66a310a302fa1ea6fb3fc477e15f99257": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/verify_native.py"
+      ],
+      "stages": [
+        "NATIVE-PARITY.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/verify_native.py",
+      "bytes": 7465
+    },
+    "7270edc5ad4e73ac8d8f0f7053b9cab59ed0cddc3aebf6145d5bdad995a2dc0a": {
+      "logicalPaths": [
+        "tools/sparse_eval/runtime.rs"
+      ],
+      "stages": [
+        "INSTRUMENTATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval/runtime.rs",
+      "bytes": 21767
+    },
+    "cba776d5b5b9a515467b180edf972d62acc5ca6e1c3b8646f291b543f5ab6070": {
+      "logicalPaths": [
+        "generated/instrumented.rs",
+        "eval/sparse-pesto-v2/source-snapshots/cba776d5b5b9a515467b180edf972d62acc5ca6e1c3b8646f291b543f5ab6070-instrumented.rs.txt"
+      ],
+      "stages": [
+        "INSTRUMENTATION.json",
+        "source-snapshots/HISTORICAL.json"
+      ],
+      "retainedPath": "eval/sparse-pesto-v2/source-snapshots/cba776d5b5b9a515467b180edf972d62acc5ca6e1c3b8646f291b543f5ab6070-instrumented.rs.txt",
+      "bytes": 23954
+    },
+    "0ef3764d00bbaf859b801346e16ab4fcc551f192e4b723a6a79a0ea3e983b8a0": {
+      "logicalPaths": [
+        "eval/sparse-pesto-v2/source-snapshots/0ef3764d00bbaf859b801346e16ab4fcc551f192e4b723a6a79a0ea3e983b8a0-wasm_runner.mjs.txt"
+      ],
+      "stages": [
+        "source-snapshots/HISTORICAL.json"
+      ],
+      "retainedPath": "eval/sparse-pesto-v2/source-snapshots/0ef3764d00bbaf859b801346e16ab4fcc551f192e4b723a6a79a0ea3e983b8a0-wasm_runner.mjs.txt",
+      "bytes": 15588
+    },
+    "43f255899ec2ec785fbbeaf5abde6ffceabd1c339ed9ceea9f1e2e51eea8eff0": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/audit_cost.py"
+      ],
+      "stages": [
+        "COST-AUDIT.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/audit_cost.py",
+      "bytes": 28638
+    },
+    "bc3191554003a594a6235609c28e38b6a0930c04291a0920144fae8514b22e28": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/audit_parallel.py"
+      ],
+      "stages": [
+        "PARALLEL-AUDIT.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/audit_parallel.py",
+      "bytes": 20337
+    },
+    "b66d180b20d6fdd696aa4ba98dd838f8aa4849b698a897da77d3b4db9e603656": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/parallel.mjs"
+      ],
+      "stages": [
+        "PARALLEL-REGISTRATION.json"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/parallel.mjs",
+      "bytes": 35819
+    },
+    "7f7951097eeb56b406c35cb764c2dd362ecfe8091d81eb51cd87c400c5c942e5": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/hce_constants.rs"
+      ],
+      "stages": [
+        "packaging-whitespace-normalization"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/hce_constants.rs",
+      "bytes": 4422
+    },
+    "43465a6203a76a7432e89d15f8c38e5e6db17c9983a28dc134fd77b422ebeaee": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/generate_hce_constants.py"
+      ],
+      "stages": [
+        "packaging-whitespace-normalization"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/generate_hce_constants.py",
+      "bytes": 1552
+    },
+    "ecfc2e53945b20ecaa7e09c9f148fa3d93ff332255dd5f0474221c6e4e2faaa5": {
+      "logicalPaths": [
+        "tools/sparse_eval_v2/bundle.py"
+      ],
+      "stages": [
+        "bundle-create-and-verified-restore"
+      ],
+      "retainedPath": "tools/sparse_eval_v2/bundle.py",
+      "bytes": 18442
+    }
+  },
+  "allSourceVersionsResolved": true
+}
