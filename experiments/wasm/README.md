@@ -1,42 +1,53 @@
 # Chessy Rust/WASM engine
 
-This directory contains Chessy's production search engine. Rust owns position
-state, move generation, make/unmake, attack detection, tapered evaluation,
-quiescence, the fixed transposition table, move ordering, PVS, aspiration,
-iterative deepening, repetition-aware Play search, and exact-root coaching
-analysis.
+[Home](../../README.md) · [Development](../../docs/DEVELOPMENT.md) ·
+[Architecture](../../docs/ARCHITECTURE.md)
 
-JavaScript is limited to ABI transport, canonical SAN/PV formatting, UI, and
-worker lifecycle. There is no JavaScript search fallback.
+This directory contains the production engine used by Play and coaching.
+Rust owns search, evaluation, move generation, make/unmake, repetition handling,
+and exact-root analysis. JavaScript owns the independent rules layer, legal
+move/PV validation, SAN formatting, UI, storage, and worker lifecycle. Search
+runs only in Web Workers; there is no JavaScript search fallback.
+
+[Build](#reproducible-build) · [Tests](#tests) ·
+[Size limits](#size-limits) · [ABI reference](#raw-abi-version-2) ·
+[Workers](#worker-and-failure-model) · [Research](#research-and-historical-evidence)
 
 ## Reproducible build
 
-The build pins:
+Run commands from the repository root with these pinned tools installed:
 
-- Rust 1.97.1, rustc commit
-  `8bab26f4f68e0e26f0bb7960be334d5b520ea452`;
-- target `wasm32-unknown-unknown`;
-- Binaryen 131.
+| Tool | Required version |
+| --- | --- |
+| Rust and Cargo | 1.97.1 |
+| Rust target | `wasm32-unknown-unknown` |
+| Binaryen | 131 |
 
-`Cargo.lock` contains no third-party packages. The production CI job runs Rust
-tests, builds with those exact tools, and byte-compares the result with
-`assets/chessy-ai-fast.wasm`.
+The required rustc commit is
+`8bab26f4f68e0e26f0bb7960be334d5b520ea452`. [build.sh](build.sh)
+checks the versions and rejects ambient `RUSTFLAGS` or
+`CARGO_ENCODED_RUSTFLAGS`. [Cargo.lock](Cargo.lock) has no third-party packages.
 
 ```sh
 ./experiments/wasm/build.sh
+cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
 ```
 
-The script emits:
+| Output under `experiments/wasm/dist/` | Build |
+| --- | --- |
+| `chessy-ai-fast.wasm` | Cargo `release`, then `wasm-opt -O3 --converge`; production asset |
+| `chessy-ai-small.wasm` | Cargo `small`, then `wasm-opt -Oz --converge`; comparison build |
 
-- `dist/chessy-ai-fast.wasm`: Cargo `release` plus
-  `wasm-opt -O3 --converge`;
-- `dist/chessy-ai-small.wasm`: Cargo `small` plus
-  `wasm-opt -Oz --converge`.
+Both builds use `panic=abort`, one codegen unit, stripped symbols, and a
+one-MiB stack. Initial and maximum memory are fixed at 405 pages
+(26,542,080 bytes); linking fails if fixed storage exceeds that limit. There
+is no SIMD, threading, WASI, libc, allocator, garbage collector, `wasm-bindgen`,
+or per-node allocation.
 
-Both use `panic=abort`, one codegen unit, stripped symbols, a one-MiB stack, and
-an exact 405-page initial/maximum memory ceiling (26,542,080 bytes). Linking
-fails if fixed storage exceeds that limit. No SIMD, threads, WASI, libc,
-allocator, garbage collector, `wasm-bindgen`, or per-node allocation is used.
+[CI](../../.github/workflows/test.yml) runs Rust tests, rebuilds with the pinned
+tools, and compares the fast module byte for byte with the committed asset.
+A production engine change also needs a coherent app release and the evidence
+required by the [agent guide](../../CLAUDE.md#rustwasm-rules).
 
 ## Tests
 
@@ -49,58 +60,47 @@ node test/analysis-core.test.js
 node test/ai-tactics.js
 ```
 
-`test/wasm-size.test.js` limits the production download to **40 KiB raw
-(40,960 bytes)** and **20 KiB Brotli quality 11 (20,480 bytes)**. These explicit
-budgets provide modest room for reviewed engine improvements. The historical
-shipped measurements remain **37,172 raw / 17,690 Brotli-11 bytes**; they are
-retained as measurements, rather than relabeled as the new limits.
+Rust tests cover search invariants, repetition, exact roots, shared budgets,
+PV export, and malformed ABI input. The immutable
+[r69 signature fixture](../../test/fixtures/wasm-r69-signatures.json) records
+the accepted ABI-v1 behavior across 18 mirrored positions: move, score,
+completed/attempted depth, nodes, quiescence nodes, cutoffs, re-searches, and
+stop reason. See [signature rotation](SIGNATURE-ROTATION.md) before proposing
+a new behavioral baseline.
 
-Authoritative compression remains pinned to **Node 22.23.2 / Brotli 1.1.0**.
-The engine CI job pins that exact Node release, and the test verifies both
-runtime and encoder versions before issuing an authoritative verdict. This
-matches the successful PR #169 engine job; changing encoders requires a
-separate reviewed baseline comparison. On other local runtimes,
-`node test/wasm-size.test.js --diagnostic` reports a clearly non-authoritative
-measurement. The new download budgets leave fixed linear memory, the pinned
-toolchain, source reproduction, signatures, strength/cost admission and
-physical-device requirements unchanged. Fitting the budgets does not authorize
-candidate activation.
+### Size limits
 
-Archived experiment receipts preserve their original ceilings and verdicts.
-The compact-hash and pawn-rank prototypes exceeded the historical raw ceiling;
-their recorded sizes fit the new budgets. The independent
-[pinned-encoder CI check](https://github.com/den-run-ai/chessy/actions/runs/45940247899/job/140312676492)
-confirmed 17,937 Brotli bytes for compact hashing and 17,739 for pawn masks.
-Their old failures remain historical results. All remaining admission evidence
-is still required before release, and every future module must pass the size
-gate with the pinned encoder.
+[wasm-size.test.js](../../test/wasm-size.test.js) enforces these download limits:
 
-If reviewed strength or efficiency evidence justifies exceeding a current
-budget, keep the exception narrow and visible by setting
-exact `CHESSY_WASM_MAX_RAW_BYTES` and `CHESSY_WASM_MAX_BROTLI_BYTES` ceilings
-plus a concrete `CHESSY_WASM_SIZE_OVERRIDE_REASON` on this test's CI step.
-Both limits must be positive safe-integer byte counts, neither may fall below
-the current defaults, and at least one must increase. The rationale must contain
-at least 20 characters. Partial, unexplained, malformed, non-increasing or
-unbounded overrides fail closed. Record the
-tradeoff and benchmark evidence in the same pull request; do not use a
-repository secret or broad workflow environment to bypass the gate.
+| Measure | Current ceiling | Historical shipped measurement |
+| --- | ---: | ---: |
+| Raw WASM | 40 KiB (40,960 bytes) | 37,172 bytes |
+| Brotli quality 11 | 20 KiB (20,480 bytes) | 17,690 bytes |
 
-The frozen `test/fixtures/wasm-r69-signatures.json` records the last accepted
-ABI-v1 production behavior before the JavaScript engine was removed. It keeps
-move, score, completed/attempted depth, nodes, quiescence nodes, cutoffs,
-re-searches, and stop reason pinned across the 18-position mirrored corpus.
-Rust unit tests cover internal search invariants, repetition, exact roots,
-shared budgets, PV export, and malformed ABI input.
+Authoritative compression uses Node 22.23.2 / Brotli 1.1.0, matching the
+successful PR #169 engine job. CI verifies both versions; an encoder change
+requires a reviewed baseline comparison. On another local runtime, use:
 
-Developer performance and match tools use the isolated ordinary-search loader
-in `bench.js`. It accepts only result ABI v1 or v2 because those versions share
-the same `input_ptr` / `load_position` / four-argument `search` surface and
-64-byte result record. That narrow compatibility window lets the formal
-efficiency gate and diagnostic deep-search workflow compare the frozen ABI-v1
-reference with an ABI-v2 candidate. It does not expose history or analysis
-operations, and it does not relax the production loader, which remains
-strictly ABI-v2.
+```sh
+node test/wasm-size.test.js --diagnostic
+```
+
+That command reports a non-authoritative measurement. Passing the size gate
+leaves source reproduction, signatures, strength/cost admission, fixed memory,
+and physical-device requirements in force.
+
+A reviewed size exception must set all three variables on this test's CI step:
+
+| Variable | Requirement |
+| --- | --- |
+| `CHESSY_WASM_MAX_RAW_BYTES` | Exact positive safe-integer byte ceiling, at least the default |
+| `CHESSY_WASM_MAX_BROTLI_BYTES` | Exact positive safe-integer byte ceiling, at least the default |
+| `CHESSY_WASM_SIZE_OVERRIDE_REASON` | Concrete rationale of at least 20 characters |
+
+At least one ceiling must increase. Partial, malformed, unexplained, or
+non-increasing overrides fail. Record the benchmark evidence and tradeoff in
+the same PR; do not set the override through a repository secret or broad
+workflow environment.
 
 ## Raw ABI, version 2
 
@@ -131,6 +131,18 @@ evaluate_loaded() -> i32
 fixed_search(depth: u32, nodeLimit: u32, quiesce: u32) -> i32
 ```
 
+The r85 module also exports optional seeded Play search:
+
+```text
+search_seeded(maxDepth: u32, nodeLimit: u32, timeMs: u32, quiesce: u32, rootSeed: u32) -> i32
+```
+
+The loader calls it when `rootSeed` is supplied. It varies the search order of
+equally prioritized legal roots without adding score noise. Omitting the seed
+uses the four-argument `search()` entry point and its historical fixed seed,
+preserving ordinary-search compatibility for analysis and comparison tools.
+Both entry points use the same ABI-v2 result record.
+
 JavaScript copies UTF-8 FEN bytes to the 1,024-byte input buffer.
 `load_position()` clears stale repetition history. It then copies
 newline-delimited repetition identities to the 64-KiB history buffer, one FEN
@@ -142,9 +154,9 @@ pawn move or capture and can never recur. Every relevant position is therefore
 inside the live game's sub-100-ply halfmove window, independent of how long the
 aggregate saved-game map has grown.
 
-Normal `search()` is the only Play entry point. A root that already occurred
-three times returns `game-over`; a child whose loaded count is at least two
-scores as a path-independent draw. Search-path cycles retain the engine's
+Both search entry points honor loaded repetition history. A root that already
+occurred three times returns `game-over`; a child whose loaded count is at least
+two scores as a path-independent draw. Search-path cycles retain the engine's
 separate path-dependent repetition treatment.
 
 Zero `nodeLimit` or `timeMs` means unlimited. `maxDepth` is limited to 111 so
@@ -169,8 +181,8 @@ Analysis status codes:
 | 4 | shared node budget exhausted |
 
 Status 4 preserves cumulative counters and attempted depth but exposes no PV.
-The JS analysis contract marks the overall result partial and never presents a
-budget-aborted root as exact.
+A budget-aborted root is never exact. Timed deep analysis may keep a completed
+shallower iteration; without one, the overall result is partial.
 
 ### Result record
 
@@ -199,19 +211,63 @@ out-of-bounds pointers, and counters outside JavaScript's safe-integer range.
 
 ## Worker and failure model
 
-Play and coaching analysis each own a dedicated Worker and instantiate one
-module per worker. Play retries a failed load/search once in a fresh worker
-against the exact unchanged FEN, then stops with a visible manual Retry action.
-It never substitutes another engine or performs search on the main thread.
+Play and coaching each own a dedicated Worker and instantiate one module per
+worker. Play retries a failed load/search once in a fresh worker with the exact
+unchanged request and position. A second failure leaves a visible manual Retry
+action and preserves the position.
 
-Coaching analysis uses a deterministic iterative scan to select a completed
-depth, then evaluates every legal root exactly at that depth. A separate
-one-ply-shallower phase supplies stability evidence. The JavaScript contract
-resolves every packed move through the rules engine before producing SAN or a
-persistable PV.
+During the first 12 plies, Play derives a root-ordering seed from the game UUID
+and current FEN. Retries, Undo, and reload preserve that seed for the same game
+and position; a new game supplies a new UUID. Later Play moves and coaching use
+ordinary unseeded search. Search budgets and evaluation weights are unchanged;
+finite search budgets can still produce different moves for different seeds.
 
-The earlier mobile feasibility/probe workflow was retired when the owner
-waived its Android memory/thermal acceptance gates and authorized the
-production cutover. The fixed-memory link ceiling, pinned byte-reproducible
-build, Chromium/WebKit browser suites, offline cache tests, and functional
-correctness gates remain active.
+The [analysis contract](../../assets/analysis-core.js) has two search profiles:
+
+- Quick requests use a fixed-node scan, verify every legal root at its completed
+  depth, then run a separate one-ply-shallower phase for stability.
+- Deep requests scan for up to 16 seconds with uncapped nodes, then spend at most
+  16 million nodes in one phase verifying every legal root at depths 1, 2, 3,
+  and onward. The scan depth caps verification, with a minimum cap of depth 3.
+
+Deep results report the deepest fully verified iteration; the preceding
+iteration supplies stability. A deeper scan that prefers a move ranked
+strictly below the verified best marks that best move unstable. If even depth 1
+cannot finish, the result is partial and may retain only the scan's best move.
+JavaScript validates packed moves through the rules engine before producing
+SAN or a stored PV. Node budgets cap work; device speed still affects elapsed
+time and completed depth.
+
+## Research and historical evidence
+
+Use the [evaluation guide](../../eval/README.md) for current admission status.
+Historical measurements retain their original ceilings, verdicts, and scope.
+
+| Reference | Purpose |
+| --- | --- |
+| [Chatarunga review](CHATARUNGA-REVIEW.md) | Reference paper, performance priorities, and follow-up prototypes |
+| [Compact hashing](compact-hash/README.md) | Isolated hashing-cost experiment |
+| [Pawn-rank masks](pawn-ranks/README.md) | Isolated evaluator-cost experiment |
+| [Search-cost admission proposal](SEARCH-COST-ADMISSION-PROPOSAL.md) | Evidence still needed for behavior-preserving cost changes |
+| [Original feasibility results](RESULTS.md) | Historical measurements from before the production cutover |
+
+Compact hashing and pawn masks exceeded the former raw-size ceiling. Their
+recorded sizes fit today's limits; the independent
+[pinned-encoder CI check](https://github.com/den-run-ai/chessy/actions/runs/45940247899/job/140312676492)
+confirmed 17,937 and 17,739 Brotli bytes respectively. This does not replace
+their remaining admission evidence or rewrite their historical verdicts.
+
+Developer comparisons use [bench.js](bench.js), an ordinary-search loader that
+accepts ABI v1 and v2 through their shared `input_ptr`, `load_position`,
+four-argument `search`, and 64-byte result record. It exposes no history or
+analysis operations. Production remains ABI-v2-only.
+
+The historical [WASM efficiency workflow](../../.github/workflows/wasm-efficiency.yml)
+is maintainer-label-gated and compares exact modules across that compatibility
+boundary. It is not a routine test or a new-candidate dispatch path; see the
+[evaluation protocols](../../eval/README.md) for its limits and successors.
+
+The earlier mobile feasibility workflow was retired after the owner waived
+its Android memory/thermal acceptance gates for the production cutover. The
+fixed-memory ceiling, pinned build, Chromium/WebKit suites, offline-cache tests,
+and functional correctness gates remain active.
