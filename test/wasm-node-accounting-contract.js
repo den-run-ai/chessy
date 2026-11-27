@@ -128,6 +128,7 @@ function maskRustNonCode(source) {
 }
 
 function extractFunction(source, name) {
+  source = withoutCfgTestItems(source);
   const masked = maskRustNonCode(source);
   const expression = new RegExp('\\bfn\\s+' + name + '\\s*\\(', 'g');
   const matches = Array.from(masked.matchAll(expression));
@@ -160,6 +161,7 @@ function extractFunction(source, name) {
 }
 
 function extractBracedItem(source, label, expression) {
+  source = withoutCfgTestItems(source);
   const masked = maskRustNonCode(source);
   const matches = Array.from(masked.matchAll(expression));
   if (matches.length !== 1) {
@@ -193,6 +195,7 @@ function extractBracedItem(source, label, expression) {
 }
 
 function extractAllBracedItems(source, expression) {
+  source = withoutCfgTestItems(source);
   const masked = maskRustNonCode(source);
   const items = [];
   for (const match of masked.matchAll(expression)) {
@@ -227,7 +230,7 @@ function extractAllBracedItems(source, expression) {
 }
 
 function functionDefinitions(source, file) {
-  const production = withoutCfgTestModules(source);
+  const production = withoutCfgTestItems(source);
   const masked = maskRustNonCode(production);
   const impls = [];
   for (const match of masked.matchAll(/\bimpl\b/g)) {
@@ -528,35 +531,88 @@ function prefixThrough(source, name, marker) {
   return fn.slice(0, first + marker.length);
 }
 
-function withoutCfgTestModules(source) {
+// Remove only explicitly test-only modules/functions. Other cfg expressions
+// stay visible: in particular, cfg(any(test, ...)) can enable production code.
+// Preserve offsets/newlines so mutation probes can alter production while
+// retaining an independent, byte-identical cfg(test) reference implementation.
+function withoutCfgTestItems(source) {
   const masked = maskRustNonCode(source);
   const output = source.split('');
-  const expression =
-    /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/g;
-  for (const match of masked.matchAll(expression)) {
-    const open = masked.indexOf('{', match.index);
+  const expression = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/g;
+  let ignoredThrough = 0;
+
+  function closeAt(open, left, right) {
     let depth = 0;
-    let end = -1;
     for (let index = open; index < masked.length; index++) {
-      if (masked[index] === '{') depth++;
-      if (masked[index] === '}') {
-        depth--;
-        if (depth === 0) {
-          end = index + 1;
+      if (masked[index] === left) depth++;
+      if (masked[index] === right && --depth === 0) return index;
+    }
+    fail('unbalanced #[cfg(test)] Rust item');
+  }
+
+  for (const match of masked.matchAll(expression)) {
+    if (match.index < ignoredThrough) continue;
+    let start = match.index;
+    // Attributes preceding cfg(test) belong to the removed item too. Leaving
+    // one behind could make it appear to decorate the next production item.
+    while (start > 0) {
+      let cursor = start;
+      while (cursor > 0 && /\s/.test(masked[cursor - 1])) cursor--;
+      if (masked[cursor - 1] !== ']') break;
+      let depth = 1;
+      let open = cursor - 2;
+      for (; open >= 0; open--) {
+        if (masked[open] === ']') depth++;
+        if (masked[open] === '[' && --depth === 0) break;
+      }
+      let hash = open - 1;
+      while (hash >= 0 && /\s/.test(masked[hash])) hash--;
+      if (open < 0 || masked[hash] !== '#') break;
+      start = hash;
+    }
+
+    let cursor = match.index + match[0].length;
+    while (true) {
+      const attribute = /^\s*#\s*\[/.exec(masked.slice(cursor));
+      if (!attribute) break;
+      const open = cursor + attribute[0].lastIndexOf('[');
+      cursor = closeAt(open, '[', ']') + 1;
+    }
+    const item = /^\s*(?:pub(?:\s*\([^)]*\))?\s+)?(?:(?:async|const|unsafe|extern)\s+)*(?:mod|fn)\s+[A-Za-z_][A-Za-z0-9_]*/.exec(masked.slice(cursor));
+    if (!item) continue;
+    cursor += item[0].length;
+    let parentheses = 0, brackets = 0, angles = 0;
+    let end = -1;
+    for (; cursor < masked.length; cursor++) {
+      const token = masked[cursor];
+      if (token === '(') parentheses++;
+      else if (token === ')') parentheses--;
+      else if (token === '[') brackets++;
+      else if (token === ']') brackets--;
+      else if (token === '<') angles++;
+      else if (token === '>' && angles > 0) angles--;
+      else if (parentheses === 0 && brackets === 0 && angles === 0) {
+        if (token === '{') {
+          end = closeAt(cursor, '{', '}') + 1;
+          break;
+        }
+        if (token === ';') {
+          end = cursor + 1;
           break;
         }
       }
     }
-    if (end === -1) fail('unbalanced #[cfg(test)] Rust module');
-    for (let index = match.index; index < end; index++) {
+    if (end === -1) fail('unbalanced #[cfg(test)] Rust item');
+    for (let index = start; index < end; index++) {
       if (output[index] !== '\n' && output[index] !== '\r') output[index] = ' ';
     }
+    ignoredThrough = end;
   }
   return output.join('');
 }
 
 function accountingLines(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const maskedLines = maskRustNonCode(source).split(/\r?\n/);
   const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
   return maskedLines.reduce(function (lines, masked, index) {
@@ -569,7 +625,7 @@ function accountingLines(source) {
 }
 
 function escapeLines(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const maskedLines = maskRustNonCode(source).split(/\r?\n/);
   const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
   return maskedLines.reduce(function (lines, masked, index) {
@@ -592,7 +648,7 @@ function escapeLines(source) {
 }
 
 function criticalUseProjection(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const tokens = maskRustNonCode(source).match(
     /[A-Za-z_][A-Za-z0-9_]*|::|->|=>|\+=|-=|\*=|\/=|%=|==|!=|<=|>=|&&|\|\||[^\s]/g
   ) || [];
@@ -620,7 +676,7 @@ function criticalUseProjection(source) {
 }
 
 function moduleLines(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const maskedLines = maskRustNonCode(source).split(/\r?\n/);
   const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
   return maskedLines.reduce(function (lines, masked, index) {
@@ -633,7 +689,7 @@ function moduleLines(source) {
 }
 
 function importLines(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const maskedLines = maskRustNonCode(source).split(/\r?\n/);
   const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
   return maskedLines.reduce(function (lines, masked, index) {
@@ -645,7 +701,7 @@ function importLines(source) {
 }
 
 function contextTypeLines(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const maskedLines = maskRustNonCode(source).split(/\r?\n/);
   const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
   return maskedLines.reduce(function (lines, masked, index) {
@@ -657,7 +713,7 @@ function contextTypeLines(source) {
 }
 
 function forbiddenMutationLines(source) {
-  source = withoutCfgTestModules(source);
+  source = withoutCfgTestItems(source);
   const maskedLines = maskRustNonCode(source).split(/\r?\n/);
   const sourceLines = source.replace(/\r\n/g, '\n').split('\n');
   return maskedLines.reduce(function (lines, masked, index) {
@@ -671,12 +727,12 @@ function forbiddenMutationLines(source) {
 }
 
 function checkBudgetCallCount(source) {
-  const masked = maskRustNonCode(withoutCfgTestModules(source));
+  const masked = maskRustNonCode(withoutCfgTestItems(source));
   return (masked.match(/\bcheck_budget\s*\(/g) || []).length;
 }
 
 function resetContextCallCount(source) {
-  const masked = maskRustNonCode(withoutCfgTestModules(source));
+  const masked = maskRustNonCode(withoutCfgTestItems(source));
   return (masked.match(/\breset_context\s*\(/g) || []).length;
 }
 
@@ -703,17 +759,39 @@ function projectFiles(files, projector) {
 }
 
 function validateSources(trusted, candidate) {
-  const trustedFiles = sourceFiles(trusted);
-  const candidateFiles = sourceFiles(candidate, trustedFiles);
+  const productionFiles = files => Object.fromEntries(Object.entries(files).map(
+    ([name, source]) => [name, withoutCfgTestItems(source)]));
+  const trustedFiles = productionFiles(sourceFiles(trusted));
+  const candidateFiles = productionFiles(sourceFiles(candidate, trustedFiles));
+  trusted = { lib: withoutCfgTestItems(trusted.lib), search: withoutCfgTestItems(trusted.search) };
+  candidate = { lib: withoutCfgTestItems(candidate.lib), search: withoutCfgTestItems(candidate.search) };
   compare('Rust source file set',
     JSON.stringify(Object.keys(trustedFiles).sort()),
     JSON.stringify(Object.keys(candidateFiles).sort()));
-  for (const name of ['search', 'check_budget', 'run']) {
+  for (const name of ['search', 'check_budget']) {
     const trustedSource = name === 'search' ? trusted.lib : trusted.search;
     const candidateSource = name === 'search' ? candidate.lib : candidate.search;
     compare(name + ' function',
       extractFunction(trustedSource, name),
       extractFunction(candidateSource, name));
+  }
+
+  // Newer runtimes delegate ordinary search through the optional seeded
+  // entry points. Freeze that entire budget-forwarding path as well as the
+  // legacy production runner; otherwise a wrapper-only comparison misses its
+  // callee. In seeded trees `run` is only a cfg(test) compatibility helper.
+  // Presence is compared against the trusted tree, so neither adding/removing
+  // a delegate nor using an older pre-seed baseline relaxes this contract.
+  for (const [name, file] of [['run', 'search'], ['search_seeded', 'lib'], ['run_seeded', 'search']]) {
+    const declaration = new RegExp('\\bfn\\s+' + name + '\\s*\\(');
+    const trustedHas = declaration.test(maskRustNonCode(trusted[file]));
+    const candidateHas = declaration.test(maskRustNonCode(candidate[file]));
+    compare(name + ' function presence', trustedHas, candidateHas);
+    if (trustedHas) {
+      compare(name + ' function',
+        extractFunction(trusted[file], name),
+        extractFunction(candidate[file], name));
+    }
   }
 
   for (const name of ['result_ptr']) {
@@ -794,17 +872,17 @@ function validateSources(trusted, candidate) {
   // the replacement vocabulary, and the import surface are frozen.
   compare('Context struct attributes',
     itemAttributePrefix(
-      withoutCfgTestModules(trusted.search), 'Context struct',
+      withoutCfgTestItems(trusted.search), 'Context struct',
       /\bstruct\s+Context\s*\{/g),
     itemAttributePrefix(
-      withoutCfgTestModules(candidate.search), 'Context struct',
+      withoutCfgTestItems(candidate.search), 'Context struct',
       /\bstruct\s+Context\s*\{/g));
   compare('Context impl headers',
     JSON.stringify(bracedItemHeaders(
-      withoutCfgTestModules(trusted.search),
+      withoutCfgTestItems(trusted.search),
       /\bimpl\b[^{;]*\bContext\b[^{;]*\{/g)),
     JSON.stringify(bracedItemHeaders(
-      withoutCfgTestModules(candidate.search),
+      withoutCfgTestItems(candidate.search),
       /\bimpl\b[^{;]*\bContext\b[^{;]*\{/g)));
   compare('Context type surface',
     JSON.stringify(projectFiles(trustedFiles, contextTypeLines)),
@@ -877,7 +955,8 @@ module.exports = Object.freeze({
   escapeLines: escapeLines,
   criticalUseProjection: criticalUseProjection,
   moduleLines: moduleLines,
-  withoutCfgTestModules: withoutCfgTestModules,
+  withoutCfgTestItems: withoutCfgTestItems,
+  withoutCfgTestModules: withoutCfgTestItems, // Historical caller alias.
   validateSources: validateSources,
   readSources: readSources
 });

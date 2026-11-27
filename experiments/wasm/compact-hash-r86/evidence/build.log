@@ -1,0 +1,9 @@
+   Compiling chessy-ai-wasm v0.1.0 (/tmp/chessy-hash-seeded-build)
+    Finished `release` profile [optimized] target(s) in 2.44s
+   Compiling chessy-ai-wasm v0.1.0 (/tmp/chessy-hash-seeded-build)
+    Finished `small` profile [optimized] target(s) in 1.98s
+ 41536 /tmp/chessy-hash-seeded-build/dist/chessy-ai-fast.raw.wasm
+ 37934 /tmp/chessy-hash-seeded-build/dist/chessy-ai-fast.wasm
+ 29415 /tmp/chessy-hash-seeded-build/dist/chessy-ai-small.raw.wasm
+ 26505 /tmp/chessy-hash-seeded-build/dist/chessy-ai-small.wasm
+135390 total

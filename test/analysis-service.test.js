@@ -67,6 +67,7 @@ FakeWorker.prototype.postMessage = function (msg) {
   this.posts.push(msg);
   const self = this;
   const b = this.behavior;
+  if (b.mode === 'throw') throw new Error('postMessage failed synchronously');
   if (b.mode === 'normal' || b.mode === 'wrongfp') {
     setTimeout(function () {
       if (self.terminated) return;
@@ -155,7 +156,9 @@ function gatedStore() {
     analysisKey: function (g, p, f, e, c) { return [g, p, f, e, c].join('|'); },
     getAnalysis: function () {
       const gate = {};
-      gate.promise = new Promise(function (r) { gate.release = r; });
+      gate.promise = new Promise(function (resolve, reject) {
+        gate.release = resolve; gate.reject = reject;
+      });
       gates.push(gate);
       return gate.promise;
     },
@@ -226,6 +229,7 @@ function reset(opts) {
   global.CoachStore = (opts && 'store' in opts) ? opts.store : undefined;
   global.CHESSY_ANALYSIS_WORKER_FACTORY = opts && opts.factory;
   global.CHESSY_ANALYSIS_WATCHDOG_MS = opts && opts.watchdog;
+  global.CHESSY_ANALYSIS_CACHE_TIMEOUT_MS = opts && opts.cacheTimeout;
 }
 
 const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opts: FAST };
@@ -265,6 +269,83 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const cachedSecond = await Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache' }));
   check(cachedFirst && cachedSecond && Svc.stats().dispatches === dHeld,
     'an immediate follow-up reuses the in-memory handoff without redispatch');
+
+  // A blocked cache read is also optional I/O. It must yield to one worker
+  // attempt instead of hanging before the computation watchdog even exists.
+  const heldReadStore = gatedStore();
+  reset({ factory: factoryOf({ mode: 'normal' }), store: heldReadStore, cacheTimeout: 15 });
+  const heldReadRun = Svc.analyse(Object.assign({}, REQ, { gameId: 'held-cache-read' }));
+  const heldReadResult = await Promise.race([
+    heldReadRun, delay(250).then(function () { return 'timed-out'; })
+  ]);
+  check(heldReadResult !== 'timed-out' && !!heldReadResult && made.length === 1,
+    'a never-settling cache lookup yields to one fresh worker after its separate deadline');
+  Svc.cancel();
+  await heldReadRun;
+
+  // Once that deadline chooses a worker, a late hit, miss, or rejection must
+  // neither settle its promise nor restart/retire the worker. A late hit is
+  // deliberately valid for this request, so validation cannot mask the race.
+  for (const outcome of ['hit', 'miss', 'reject']) {
+    const lateReadStore = gatedStore();
+    reset({ factory: factoryOf({ mode: 'stall' }), store: lateReadStore, cacheTimeout: 15 });
+    const lateReadReq = Object.assign({}, REQ, { gameId: 'late-cache-' + outcome });
+    const lateReadRun = Svc.analyse(lateReadReq);
+    let settledDuringWorker = false;
+    lateReadRun.then(function () { settledDuringWorker = true; });
+    for (let i = 0; i < 50 && !made.length; i++) await delay(2);
+    const chosenWorker = made[0];
+    let lateReadSafe = false;
+    if (chosenWorker) {
+      const stale = cloneJson(direct);
+      stale.elapsedMs = 987654;
+      const rec = recordFor(lateReadStore, lateReadReq, stale).rec;
+      if (outcome === 'reject') lateReadStore._gates[0].reject(new Error('late read failure'));
+      else lateReadStore._gates[0].release(outcome === 'hit' ? rec : null);
+      await delay(2);
+      lateReadSafe = !settledDuringWorker && made.length === 1 &&
+        !chosenWorker.terminated && lateReadStore._map.size === 0;
+      chosenWorker.deliver({
+        v: PROTOCOL, jobId: chosenWorker.posts[0].jobId, result: direct
+      });
+    } else {
+      Svc.cancel();
+    }
+    const chosenResult = await lateReadRun;
+    check(lateReadSafe && chosenResult === direct && lateReadStore._map.size === 1,
+      'a cache ' + outcome + ' after its deadline cannot replace or redispatch the chosen worker');
+  }
+
+  const cancelledReadStore = gatedStore();
+  reset({ factory: factoryOf({ mode: 'stall' }), store: cancelledReadStore, cacheTimeout: 15 });
+  const cancelledReadReq = Object.assign({}, REQ, { gameId: 'cancelled-cache-read' });
+  const cancelledRead = Svc.analyse(cancelledReadReq, 'cache-owner');
+  Svc.cancel('cache-owner');
+  const cancelledReadResult = await cancelledRead;
+  await delay(30);
+  cancelledReadStore._gates[0].release(recordFor(cancelledReadStore, cancelledReadReq, direct).rec);
+  await delay(2);
+  check(cancelledReadResult === null && made.length === 0 && cancelledReadStore._map.size === 0,
+    'cancelling a blocked cache read retires its deadline and late result without dispatch or persistence');
+
+  const replacedReadStore = gatedStore();
+  reset({ factory: factoryOf({ mode: 'stall' }), store: replacedReadStore, cacheTimeout: 15 });
+  const replacedReadReq = Object.assign({}, REQ, { gameId: 'replaced-cache-read' });
+  const replacedRead = Svc.analyse(replacedReadReq, 'old-cache-owner');
+  const successorRead = Svc.analyse(Object.assign({}, REQ, { gameId: 'successor-cache-read' }), 'new-cache-owner');
+  replacedReadStore._gates[1].release(null); // successor dispatches before the old deadline
+  await delay(2);
+  const successorCacheWorker = made[0];
+  replacedReadStore._gates[0].release(recordFor(replacedReadStore, replacedReadReq, direct).rec);
+  await delay(30);
+  const replacementSafe = made.length === 1 && successorCacheWorker && !successorCacheWorker.terminated;
+  if (successorCacheWorker) successorCacheWorker.deliver({
+    v: PROTOCOL, jobId: successorCacheWorker.posts[0].jobId, result: direct
+  });
+  else Svc.cancel();
+  check((await replacedRead) === null && (await successorRead) === direct && replacementSafe &&
+      replacedReadStore._map.size === 1,
+    'a superseded cache deadline and late hit cannot settle or restart the successor job');
 
   const failingStore = makeStore();
   failingStore.putAnalysis = function () { return Promise.reject(new Error('quota')); };
@@ -629,6 +710,59 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
     'retry progress never moves phase/root/elapsed backward and resumes only after catching the high-water');
   stopRetry();
 
+  // --- A timed retry may plan a different roots × depths schedule (its
+  //     wall-clock scan stopped at another depth). Its raw counts cannot be
+  //     published without moving the meter or derived depth backwards, so
+  //     public progress holds at the published high-water until the result. ---
+  reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }), watchdog: 25 });
+  const replanned = [];
+  const stopReplanned = Svc.subscribe('reflection', function (p) {
+    replanned.push(cloneJson(p));
+  });
+  const replanRun = Svc.analyse(
+    Object.assign({}, REQ, { gameId: 'progress-replan' }), 'reflection');
+  const replanW1 = made[0], replanId = replanW1.posts[0].jobId;
+  replanW1.deliver(progressReply(replanId, 'initial-scan', 0, 1, 0));
+  replanW1.deliver(progressReply(replanId, 'initial-scan', 1, 1, 1));
+  replanW1.deliver(progressReply(replanId, 'root-verification', 0, 60, 2));
+  replanW1.deliver(progressReply(replanId, 'root-verification', 30, 60, 150));
+  for (let i = 0; i < 50 && made.length < 2; i++) await delay(2);
+  const replanW2 = made[1];
+  let replanResumed = false;
+  if (replanW2) {
+    const offset = replanW2.posts[0].elapsedOffsetMs;
+    const before = replanned.length;
+    replanW2.deliver(progressReply(replanId, 'initial-scan', 0, 1, offset));
+    replanW2.deliver(progressReply(replanId, 'initial-scan', 1, 1, offset + 1));
+    replanW2.deliver(progressReply(replanId, 'root-verification', 0, 48, offset + 2));
+    replanW2.deliver(progressReply(replanId, 'root-verification', 24, 48, offset + 3));
+    // 36/48 passes the published 30/60 by fraction; 12/16 would too, with
+    // smaller raw counts. Neither may be published.
+    replanW2.deliver(progressReply(replanId, 'root-verification', 36, 48, offset + 120));
+    replanW2.deliver(progressReply(replanId, 'root-verification', 48, 48, offset + 240));
+    const heldBack = replanned.length === before;
+    replanW2.deliver({ v: PROTOCOL, jobId: replanId, result: goodResult });
+    replanResumed = heldBack && (await replanRun) !== null;
+  } else {
+    Svc.cancel('reflection');
+    await replanRun;
+  }
+  // Every published event is on one scale per phase, with raw counts that
+  // never decrease, so derived depth labels cannot move backwards.
+  let replanMonotone = replanned.length >= 4;
+  for (let i = 1; i < replanned.length; i++) {
+    const p = replanned[i - 1], n = replanned[i];
+    if (n.elapsedMs < p.elapsedMs || n.phase === 'initial-scan' &&
+        p.phase === 'root-verification' ||
+        n.phase === p.phase && (n.totalRoots !== p.totalRoots ||
+          n.completedRoots < p.completedRoots)) replanMonotone = false;
+  }
+  const lastPublished = replanned[replanned.length - 1];
+  check(replanResumed && replanMonotone && lastPublished &&
+      lastPublished.completedRoots === 30 && lastPublished.totalRoots === 60,
+    'a retry with a re-planned schedule holds public progress until its result, never backwards');
+  stopReplanned();
+
   // --- Watchdog: a wedged worker is retried once in a fresh worker ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'normal' }), watchdog: 25 });
   const recovered = await Svc.analyse(Object.assign({}, REQ, { gameId: 'W' }));
@@ -640,6 +774,44 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const afterCrash = await Svc.analyse(Object.assign({}, REQ, { gameId: 'X' }));
   check(afterCrash && afterCrash.turn === 'w' && made.length === 2,
     'a crashing worker is recovered by the single fresh-worker retry');
+
+  // postMessage throws before the worker can report a failure. It still owns
+  // one bounded attempt, and its retired callbacks must not harm the retry.
+  reset({ factory: factoryOf({ mode: 'throw' }, { mode: 'stall' }) });
+  const dispatchFailureReq = Object.assign({}, REQ, { gameId: 'dispatch-fails' });
+  const dispatchFailureRun = Svc.analyse(dispatchFailureReq).catch(function () { return 'rejected'; });
+  const failedDispatchWorker = made[0], retryDispatchWorker = made[1];
+  let dispatchRecoverySafe = false;
+  if (retryDispatchWorker) {
+    failedDispatchWorker.onmessage({ data: {
+      v: PROTOCOL, jobId: failedDispatchWorker.posts[0].jobId, result: goodResult
+    } });
+    failedDispatchWorker.onerror({});
+    dispatchRecoverySafe = failedDispatchWorker.terminated && !retryDispatchWorker.terminated &&
+      made.length === 2 &&
+      failedDispatchWorker.posts[0].fen === retryDispatchWorker.posts[0].fen &&
+      failedDispatchWorker.posts[0].jobId === retryDispatchWorker.posts[0].jobId &&
+      JSON.stringify(failedDispatchWorker.posts[0].opts) === JSON.stringify(retryDispatchWorker.posts[0].opts);
+    retryDispatchWorker.deliver({
+      v: PROTOCOL, jobId: retryDispatchWorker.posts[0].jobId, result: goodResult
+    });
+  } else {
+    Svc.cancel();
+  }
+  check((await dispatchFailureRun) === goodResult && dispatchRecoverySafe,
+    'a synchronous postMessage failure retires its worker and retries the exact request once');
+
+  const throwStore = makeStore();
+  reset({ factory: factoryOf({ mode: 'throw' }), store: throwStore });
+  // fresh bypasses the cache Promise so a broken dispatch cannot hide behind
+  // an unhandled getAnalysis continuation when this regression is mutated.
+  const repeatedDispatchFailure = await Svc.analyse(Object.assign({}, REQ, {
+    gameId: 'both-dispatches-fail', fresh: true
+  })).catch(function () { return 'rejected'; });
+  const bothRetired = made.length === 2 && made.every(function (w) { return w.terminated; });
+  Svc.cancel();
+  check(repeatedDispatchFailure === null && bothRetired && throwStore._map.size === 0,
+    'two synchronous dispatch failures resolve null, retire both attempts, and persist nothing');
 
   // --- Graceful final failure: repeated wedging exhausts the retry → null ---
   reset({ factory: factoryOf({ mode: 'stall' }, { mode: 'stall' }, { mode: 'stall' }), watchdog: 20 });
@@ -993,13 +1165,16 @@ const REQ = { gameId: 'g1', ply: 4, gameRev: 1, fen: START, positions: null, opt
   const budgeted = seamCalls.length >= 3 && seamCalls.every(function (call) {
     const declared = seamProfiles.some(function (prof) {
       return call.opts.nodeLimit === prof.nodeLimit && call.opts.nodeBudget === prof.nodeBudget &&
-        call.opts.maxDepth === prof.maxDepth && call.opts.multiPV === prof.multiPV;
+        call.opts.maxDepth === prof.maxDepth && call.opts.multiPV === prof.multiPV &&
+        call.opts.scanTimeMs === prof.scanTimeMs;
     });
     return declared && call.owner === 'moment-scan' && !!call.res &&
-      call.res.depth >= 1 && call.res.nodes <= call.opts.nodeLimit + 2 * call.opts.nodeBudget;
+      call.res.depth >= 1 && Number.isSafeInteger(call.res.nodes) && call.res.nodes > 0 &&
+      (call.opts.scanTimeMs > 0 ||
+        call.res.nodes <= call.opts.nodeLimit + 2 * call.opts.nodeBudget);
   });
   check(budgeted && sanitized,
-    'every scan request declares a shipped profile, every reply fits its budget, and public moments stay sanitized');
+    'every scan request declares a shipped node/time profile and public moments stay sanitized');
 
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);

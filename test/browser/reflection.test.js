@@ -11,7 +11,7 @@ require('./helper').run('reflection', async function (t) {
     await page.waitForFunction(function () {
       const el = document.getElementById('verifyResult');
       return el.textContent && el.textContent.indexOf('Analysing') === -1;
-    }, null, { timeout: 60000 });
+    }, null, { timeout: 150000 });
   }
   async function fillValidReflection(evaluation) {
     const values = await page.evaluate(function () {
@@ -442,6 +442,91 @@ require('./helper').run('reflection', async function (t) {
         afterCancel.cards === beforeCancel.cards &&
         afterCancel.result.includes('cancelled') && afterCancel.activityHidden,
     'cancelling during a source-read race removes the result and creates no verdict or lesson card');
+
+  // Timed deep verification counts root searches over depths 1..cap, so its
+  // totalRoots is legalRoots × cap. With cap > 1 Verify must name the depth
+  // being verified (not imply one pass over roots × depths), keep the meter's
+  // raw counts, mirror the text in aria-valuetext, and summarise completion.
+  await page.click('#reflectVerify');
+  await page.waitForFunction(function () {
+    return window.__cancelWorkers.length === 3 &&
+      window.__cancelWorkers[2].posts.length === 1;
+  });
+  const depthProgress = await page.evaluate(function () {
+    const review = CoachReview.current();
+    const roots = Chess.legalMoves(review.states[review.ply]).length;
+    const cap = 4;
+    const worker = window.__cancelWorkers[2];
+    const post = worker.posts[0];
+    const meter = document.getElementById('verifyProgress');
+    let elapsed = 0;
+    function send(phase, completed, total) {
+      elapsed += 10;
+      worker.onmessage({
+        data: {
+          v: ChessyAnalysisService.PROTOCOL,
+          jobId: post.jobId,
+          progress: {
+            phase: phase,
+            completedRoots: completed,
+            totalRoots: total,
+            elapsedMs: elapsed
+          }
+        }
+      });
+    }
+    function snapshot() {
+      return {
+        text: document.getElementById('verifyProgressText').textContent,
+        value: meter.value,
+        max: meter.max,
+        valueText: meter.getAttribute('aria-valuetext')
+      };
+    }
+    send('initial-scan', 0, 1);
+    send('initial-scan', 1, 1);
+    send('root-verification', 0, roots * cap);
+    const first = snapshot();
+    send('root-verification', roots, roots * cap);
+    const boundary = snapshot();
+    send('root-verification', roots + 7, roots * cap);
+    const mid = snapshot();
+    send('root-verification', roots * cap, roots * cap);
+    const done = snapshot();
+    return {
+      roots: roots, cap: cap, first: first, boundary: boundary, mid: mid, done: done
+    };
+  });
+  const dp = depthProgress;
+  const dpTotal = dp.roots * dp.cap;
+  check(dp.roots > 7 &&
+        dp.first.text === 'Depth 1 of up to ' + dp.cap + ': verified 0 of ' +
+          dp.roots + ' roots.' &&
+        dp.first.value === 0 && dp.first.max === dpTotal &&
+        dp.first.valueText === dp.first.text &&
+        dp.boundary.text === 'Depth 2 of up to ' + dp.cap + ': verified 0 of ' +
+          dp.roots + ' roots.' &&
+        dp.boundary.value === dp.roots && dp.boundary.max === dpTotal &&
+        dp.boundary.valueText === dp.boundary.text &&
+        dp.mid.text === 'Depth 2 of up to ' + dp.cap + ': verified 7 of ' +
+          dp.roots + ' roots.' &&
+        dp.mid.value === dp.roots + 7 && dp.mid.max === dpTotal &&
+        dp.mid.valueText === dp.mid.text,
+    'deep Verify names the depth being verified with exact meter counts (' +
+      dp.mid.text + ')');
+  check(dp.done.text === 'Verified all ' + dp.roots + ' roots through depth ' +
+          dp.cap + '.' &&
+        dp.done.value === dpTotal && dp.done.max === dpTotal &&
+        dp.done.valueText === dp.done.text,
+    'a completed deep schedule reports every root verified through the cap (' +
+      dp.done.text + ')');
+  await page.click('#cancelVerify');
+  await page.waitForSelector('#verifyActivity', { state: 'hidden' });
+  check(await page.evaluate(function () {
+    return window.__cancelWorkers[2].terminated &&
+      document.getElementById('verifyResult').textContent.indexOf('cancelled') !== -1;
+  }), 'the depth-progress Verify run cancels cleanly before the real probe');
+
   await page.evaluate(function () {
     ChessyAnalysisService.analyse = window.__cancelRealAnalyse;
     ChessyAnalysisService.cancel = window.__cancelRealCancel;
@@ -478,12 +563,23 @@ require('./helper').run('reflection', async function (t) {
       valueText: meter.getAttribute('aria-valuetext')
     };
   });
+  // A one-pass schedule completes as "Verified N of N roots."; a timed deep
+  // schedule over depths 1..cap completes as "Verified all N roots through
+  // depth C." with the meter at N × C. Either must account for every count.
+  const onePassDone = /^Verified (\d+) of (\d+) roots\.$/.exec(completedProgress.text);
+  const deepDone =
+    /^Verified all (\d+) roots through depth (\d+)\.$/.exec(completedProgress.text);
+  const truthfulCompletion = completedProgress.value === completedProgress.max && (
+    (!!onePassDone && Number(onePassDone[1]) === completedProgress.max &&
+      Number(onePassDone[2]) === completedProgress.max) ||
+    (!!deepDone && Number(deepDone[2]) > 1 &&
+      Number(deepDone[1]) * Number(deepDone[2]) === completedProgress.max));
   check(await page.locator('#verifyActivity').isHidden() &&
         await page.locator('#cancelVerify').isDisabled() &&
-        completedProgress.value === completedProgress.max &&
-        /^Verified \d+ of \d+ roots\.$/.test(completedProgress.text) &&
+        truthfulCompletion &&
         completedProgress.valueText === completedProgress.text,
-    'a completed Verify retires its activity controls after truthful root completion');
+    'a completed Verify retires its activity controls after truthful root completion (' +
+      completedProgress.text + ')');
   await page.waitForTimeout(250);
   check((await page.textContent('#verifyElapsed')) === completedClock,
     'the elapsed clock stays stopped after successful completion');

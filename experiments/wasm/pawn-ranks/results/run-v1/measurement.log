@@ -1,0 +1,7 @@
+Retained correctness passed: {"frozenCasesPerEngine":144,"pairedCompleteSignaturesAndRoots":144,"oracleChecksPerEngine":174}
+Completed balanced fixed-node repetition 1
+Completed balanced fixed-node repetition 2
+Completed balanced fixed-node repetition 3
+Completed balanced fixed-node repetition 4
+Fixed-node routing: {"master":false,"ratio230k":1.012752785226058,"phases":{"opening":1.0404292306699308,"middlegame":1.02896903832413,"endgame":0.9849063914925762}}
+{"status":"complete","moduleSizes":{"encoder":{"node":"v24.22.3","brotli":"1.2.1","zlib":"1.3.2.1-motley-285e94b","quality":11},"modules":{"baseline":{"raw":37172,"brotli":17690},"candidate":{"raw":37272,"brotli":17739}}},"masterRouting":{"run":false,"rule":{"budget":230000,"geomeanMinimum":1.02,"eachPhaseMedianMinimum":1},"descriptiveOnly":true}}

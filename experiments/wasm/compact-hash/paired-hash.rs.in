@@ -1,0 +1,80 @@
+// Research-only packed representation of the two unchanged Zobrist streams.
+// This changes no keys: the low/high halves are exactly Z1/Z2 respectively.
+const fn paired_zobrist() -> [u64; Z_SIZE] {
+    let mut result = [0; Z_SIZE];
+    let mut i = 0;
+    while i < Z_SIZE {
+        result[i] = Z1[i] as u64 | ((Z2[i] as u64) << 32);
+        i += 1;
+    }
+    result
+}
+const Z_PAIRS: [u64; Z_SIZE] = paired_zobrist();
+
+#[inline]
+fn board_piece_key(piece: Piece, square: u8) -> u64 {
+    if piece == Piece::Empty { 0 } else {
+        Z_PAIRS[piece_hash_index(piece) * 64 + square as usize]
+    }
+}
+
+fn scan_board_hash(position: &Position) -> u64 {
+    let mut result = 0;
+    for square in 0..64 {
+        result ^= board_piece_key(position.board[square], square as u8);
+    }
+    result
+}
+
+// The board hash is a value owned by its recursive call, never a mutable cache.
+// Called only after make_move and legality verification, before real recursion.
+// A PVS re-search reuses exactly the same child value. Parent restoration is
+// automatic on return: legality/EP/PV probes cannot modify this local value.
+fn advance_board_hash(position: &Position, mv: Move, mut value: u64) -> u64 {
+    let from = engine::move_from(mv);
+    let to = engine::move_to(mv);
+    value ^= board_piece_key(engine::move_piece(mv), from);
+    value ^= board_piece_key(position.board[to as usize], to);
+    let captured_square = if engine::move_is_en_passant(mv) {
+        if position.turn == Color::Black { to + 8 } else { to - 8 }
+    } else { to };
+    value ^= board_piece_key(engine::move_captured(mv), captured_square);
+    if let Some(side) = engine::move_castle(mv) {
+        let home = if position.turn == Color::Black { 56 } else { 0 };
+        let (rook_from, rook_to) = if side == engine::CastleSide::KingSide {
+            (home + 7, home + 5)
+        } else { (home, home + 3) };
+        let rook = position.board[rook_to as usize];
+        value ^= board_piece_key(rook, rook_from) ^ board_piece_key(rook, rook_to);
+    }
+    #[cfg(test)] assert_eq!(value, scan_board_hash(position), "searched edge hash drift");
+    value
+}
+
+unsafe fn finish_board_hash(position: &mut Position, mut value: u64) -> Hash {
+    #[cfg(test)] let before = *position;
+    if position.turn == Color::White { value ^= Z_PAIRS[Z_TURN]; }
+    let rights = [engine::CASTLE_WHITE_K, engine::CASTLE_WHITE_Q,
+                  engine::CASTLE_BLACK_K, engine::CASTLE_BLACK_Q];
+    for (offset, right) in rights.iter().enumerate() {
+        if position.castling & right != 0 { value ^= Z_PAIRS[Z_CASTLE + offset]; }
+    }
+    let mut table_value = value;
+    if position.ep != engine::NO_SQUARE {
+        let key = Z_PAIRS[Z_EP + engine::col_of(position.ep) as usize];
+        table_value ^= key;
+        if engine::has_legal_en_passant(position) { value ^= key; }
+    }
+    let result = Hash { h1: table_value as u32, h2: (table_value >> 32) as u32,
+                        r1: value as u32, r2: (value >> 32) as u32 };
+    #[cfg(test)] {
+        assert_eq!((result.h1, result.h2, result.r1, result.r2),
+                   reference_search::research_hash(position), "full hash oracle drift");
+        assert!(*position == before, "en-passant probe changed the position");
+    }
+    result
+}
+
+unsafe fn hash_position(position: &mut Position) -> Hash {
+    finish_board_hash(position, scan_board_hash(position))
+}

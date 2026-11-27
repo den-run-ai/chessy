@@ -235,3 +235,34 @@ and Master report tables, and checks source/build/log/signature hash links.
 Negative cases reject changed row values and summary arithmetic. Direct Node
 invocation and `require` load the containers only as data; renaming them to
 JavaScript causes a syntax error before any benchmark can launch.
+
+
+## Historical rebuild and adapter corrections
+
+Correctness reproduction now reads the original eight Rust/build inputs from
+immutable Git commit `dbf67181ab5d4e1c690617c14fe160b061191adb`, with replacement
+objects disabled and original SHA-256 checks. Current production source and ABI
+drift cannot silently change these candidates. Fresh schema-v3 source receipts
+identify the current generator and preserve the exact archived generated-source
+inventory; the original receipts and all measurements remain unchanged.
+
+CI uses the pinned Rust 1.97.1 / Binaryen 131 build to regenerate both candidates,
+run all native parity tests, build WASM, and compare the optimized fast modules
+with the original registered hashes. `tools/search/check-historical-build.js`
+performs those source/module identity checks. Mutation tests reject changed
+source bytes, module bytes, and changed generated inventory claims. This is a
+fresh correctness reproduction, with no timing or holdout rerun.
+
+Fresh schema-v4 registrations also retain a capability helper alongside the
+runner, adapter and fixture. The adapter executes in a separate null-prototype
+realm with string code generation disabled. Only narrow `fs`, `path`, `zlib`
+and `perf_hooks` shims are available, and the host bridge accepts and returns
+serialized values. Constructor escapes, unrestricted built-ins, process/module
+loaders, unretained file reads, and host byte/options objects are covered by
+negative tests. This is a local input-provenance boundary, not an OS sandbox.
+
+Finally, only the holder of an output-prefix lock may publish a failure record.
+A regression races two different scientific registrations on one prefix and
+checks that the loser leaves the owner's failure evidence intact. Both
+scientific reservations remain permanently spent. No historical data, result,
+registration or archived source bytes are reassigned to these new adapters.

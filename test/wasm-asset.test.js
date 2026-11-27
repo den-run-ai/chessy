@@ -2,7 +2,8 @@
  * Shipped Rust/WASM engine asset contract (#84/#113 flagged rollout).
  *
  * The committed assets/chessy-ai-fast.wasm must be byte-identical to the
- * canonical pinned-toolchain ABI-v2 build validated by PR #147 (Rust 1.97.1
+ * canonical pinned-toolchain ABI-v2 build with the reviewed optional opening
+ * seed export (Rust 1.97.1
  * commit 8bab26f4f, Binaryen 131), and the production loader
  * (assets/wasm-engine.js) must preserve the frozen r69 Rust/WASM signatures
  * for quiescent shipped Play and the legacy quiescence-off configuration
@@ -28,7 +29,7 @@ const WASM_PATH = path.join(ROOT, 'assets', 'chessy-ai-fast.wasm');
 // byte-reproducible CI builder. A drifted binary must never ship under this
 // release's provenance.
 const CANONICAL_SHA256 =
-  '57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f';
+  'a18affeb07590eaf5610c01a73701d745a05e1ed3f53a257ccc93c4176bd96d7';
 
 let passed = 0;
 let failed = 0;
@@ -184,6 +185,59 @@ async function main() {
       'frozen fixed-node (5000) signatures, quiesce ' +
       (quiesce ? 'on' : 'off') +
       ' (' + bench.POSITIONS.length + ' positions)');
+  }
+
+  // A full fixed TT (ABI status 2) is a deterministic node-count event, so an
+  // identical retry would fail forever. The loader keeps the completed
+  // iteration (never the aborted one) and does not call it a time limit.
+  {
+    // The production loader, not the bench harness's reference loader.
+    const production = require('./wasm-test-engine.js').engine;
+    const castles = 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1';
+    const full = production.search(castles,
+      { maxDepth: 111, quiesce: true, nodeLimit: 11000000, timeMs: 0 });
+    const state = globalThis.Chess.parseFen(castles);
+    const legal = globalThis.Chess.legalMoves(state).some(function (m) {
+      return full.move && m.from === full.move.from && m.to === full.move.to &&
+        (m.promotion || null) === (full.move.promotion || null);
+    });
+    check(full.ttSaturated === true && full.stopReason === 'unknown' &&
+        full.depth === 9 && full.attemptedDepth === 10 &&
+        full.nodes === 10355862 && legal,
+      'a TT-saturated search keeps its completed depth-9 move as an early stop',
+      JSON.stringify({ depth: full.depth, nodes: full.nodes, stop: full.stopReason }));
+    const ordinary = production.search(castles,
+      { maxDepth: 111, quiesce: true, nodeLimit: 100000, timeMs: 0 });
+    check(ordinary.ttSaturated === undefined && ordinary.stopReason === 'node-limit',
+      'an unsaturated search is unchanged and carries no saturation flag');
+
+    // Exact-root verification: the same full table surfaces as a tagged
+    // error carrying the phase's counters, below the declared node budget.
+    const WasmEngine = require('../assets/wasm-engine.js');
+    require('../assets/analysis-core.js');
+    production.beginAnalysis(castles, { nodeLimit: 16000000, quiesce: true });
+    let saturated = null;
+    let depthReached = 0;
+    for (let depth = 1; depth <= 20 && !saturated; depth++) {
+      for (const move of globalThis.Chess.legalMoves(state)) {
+        try {
+          const result = production.searchRoot(move, depth, 1);
+          if (!result.complete) throw new Error('budget ended before the TT filled');
+        } catch (error) {
+          saturated = error;
+          break;
+        }
+      }
+      if (!saturated) depthReached = depth;
+    }
+    check(!!saturated && saturated.code === WasmEngine.TT_SATURATED &&
+        saturated.code === globalThis.ChessyAnalysisCore.TT_SATURATED &&
+        saturated.result && saturated.result.nodes > 0 &&
+        saturated.result.nodes < 16000000 && depthReached === 8,
+      'searchRoot reports a full TT as the tagged error analysis-core stops on',
+      saturated && (saturated.message + ' ' + JSON.stringify({
+        code: saturated.code, nodes: saturated.result && saturated.result.nodes,
+        depthReached: depthReached })));
   }
 
   console.log(passed + ' passed, ' + failed + ' failed');

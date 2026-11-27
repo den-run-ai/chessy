@@ -15,6 +15,28 @@ const FILES=['Cargo.toml','Cargo.lock','rust-toolchain.toml','build.sh','src/eng
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const check=(v,m)=>{if(!v)throw Error(m);};
 const once=(s,a,b)=>{check(s.split(a).length===2,'missing/ambiguous anchor '+a);return s.replace(a,b);};
+// These are the original measured build inputs, before seeded r85 search.
+// Git replacements and ambient repository overrides must not rebaseline them.
+const BASELINE='dbf67181ab5d4e1c690617c14fe160b061191adb';
+const SOURCE_HASHES={
+  "Cargo.toml": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c",
+  "Cargo.lock": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32",
+  "rust-toolchain.toml": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9",
+  "build.sh": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489",
+  "src/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+  "src/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+  "src/lib.rs": "f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc",
+  "src/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+};
+function readBaseline(){
+  const env={PATH:process.env.PATH,LANG:'C',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'};
+  return Object.fromEntries(FILES.map(p=>{
+    const bytes=require('node:child_process').execFileSync('git',
+      ['--no-replace-objects','show',BASELINE+':experiments/wasm/'+p],{cwd:ROOT,env,stdio:['ignore','pipe','pipe']});
+    check(sha(bytes)===SOURCE_HASHES[p],'historical source hash mismatch: '+p);
+    return [p,bytes];
+  }));
+}
 function patchSearch(original,templates){
   const start=original.indexOf('unsafe fn hash_position('),end=original.indexOf('\n#[inline]\nfn history_start_index',start);
   check(start>=0&&end>start,'canonical hash anchors missing');
@@ -44,17 +66,17 @@ function patchSearch(original,templates){
 function prepare(destination){
   destination=path.resolve(destination);destination=path.join(fs.realpathSync(path.dirname(destination)),path.basename(destination));
   check(destination!==ROOT&&!destination.startsWith(ROOT+path.sep),'research output must be outside repository');
-  const files=Object.fromEntries(FILES.map(p=>[p,fs.readFileSync(path.join(ROOT,'experiments/wasm',p))]));
+  const files=readBaseline();
   const deps=captured.map(x=>x.name);
   const retained=Object.fromEntries(captured.map(x=>[x.name,x.bytes]));
   const templates=Object.fromEntries(Object.entries(retained).map(([p,b])=>[p,b.toString()]));
   const generated={...files,'src/search.rs':Buffer.from(patchSearch(files['src/search.rs'].toString(),templates))};
-  const unchanged=()=>captured.every(x=>sha(fs.readFileSync(x.path))===sha(x.bytes))
-    &&FILES.every(p=>sha(fs.readFileSync(path.join(ROOT,'experiments/wasm',p)))===sha(files[p]));
+  const unchanged=()=>{const current=readBaseline();return captured.every(x=>sha(fs.readFileSync(x.path))===sha(x.bytes))
+    &&FILES.every(p=>sha(current[p])===sha(files[p]));};
   check(unchanged(),'generator dependency changed after capture');
   fs.mkdirSync(destination);fs.mkdirSync(path.join(destination,'src'));
   for(const p of FILES)fs.writeFileSync(path.join(destination,p),generated[p],{flag:'wx'});
-  const manifest={schema:'chessy.searched-board-hash.source.v1',researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
+  const manifest={schema:'chessy.searched-board-hash.source.v2',baselineCommit:BASELINE,researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
     source:FILES.map(p=>({path:p,sha256:sha(files[p])})),generated:FILES.map(p=>({path:p,sha256:sha(generated[p])})),dependencies:deps.map(p=>({path:p,sha256:sha(retained[p])}))};
   check(unchanged(),'generator dependency changed before receipt publication');
   fs.writeFileSync(path.join(destination,'source.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});return manifest;

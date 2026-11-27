@@ -251,5 +251,71 @@ check(Core.configHashOf(Object.assign({ playedMove: pmA }, FAST)) !== a.engine.c
 check(Core.identity(rep3, FAST).positionFingerprint !== id.positionFingerprint,
   'identity fingerprint separates a repetition history from the bare position');
 
+// --- Timed deep analysis: iterative exact verification (real WASM) ---
+// A generous deadline with a small maxDepth makes the timed scan stop on its
+// depth cap, so the iterative result is deterministic and can be compared with
+// the fixed-node path at the same verification depth: every root score, PV
+// head, ranking, played rank, classification and stability must agree.
+function parityCase(fen, playedUci, depthCap) {
+  const s = Chess.parseFen(fen);
+  const playedMove = fromUci(s, playedUci);
+  const base = { maxDepth: depthCap, multiPV: 256, pvLen: 4, nodeBudget: 60000000,
+    playedMove: { from: playedMove.from, to: playedMove.to, promotion: playedMove.promotion || null } };
+  const timed = Core.analyse(s, Object.assign({ nodeLimit: 0, scanTimeMs: 60000 }, base));
+  const fixed = Core.analyse(s, Object.assign({ nodeLimit: 50000000 }, base));
+  const view = function (r) {
+    return JSON.stringify({
+      depth: r.depth, complete: r.complete, stability: r.stability,
+      lines: r.bestLines.map(function (l) { return [l.uci, l.scoreCpWhite, l.mate, l.pvUci[0]]; }),
+      played: r.playedLine && [r.playedLine.uci, r.playedLine.rank, r.playedLine.scoreCpWhite],
+      classification: r.classification
+    });
+  };
+  return { timed: timed, fixed: fixed, same: view(timed) === view(fixed),
+    detail: view(timed) + ' vs ' + view(fixed) };
+}
+[
+  ['r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 3 9', 'e1c1', 4],
+  ['r3k3/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1b1', 6],
+  ['r4rk1/ppp2ppp/2n5/2b1pb2/8/1P1P1N2/q1PBBPPP/1R1Q1RK1 b - - 0 11', 'c5d4', 4]
+].forEach(function (c) {
+  const p = parityCase(c[0], c[1], c[2]);
+  check(p.same && p.timed.complete === true && p.timed.depth === c[2] &&
+      p.timed.bestLines.length === Chess.legalMoves(Chess.parseFen(c[0])).length,
+    'iterative timed verification equals fixed-depth verification at depth ' + c[2] +
+      ' (' + c[0].split(' ')[0] + ')', p.detail);
+  check(p.timed.engine.configHash !== p.fixed.engine.configHash &&
+      p.timed.nodes > 0 && p.timed.qnodes <= p.timed.nodes,
+    'the timed iterative contract has its own identity and coherent counters');
+});
+
+// A budget that cuts the second iteration keeps the whole first iteration.
+{
+  const s = Chess.parseFen('r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 3 9');
+  const n = Chess.legalMoves(s).length;
+  const probe = Core.analyse(s, { maxDepth: 1, nodeLimit: 0, scanTimeMs: 60000,
+    nodeBudget: 60000000, multiPV: 3 });
+  const cut = Core.analyse(s, { maxDepth: 3, nodeLimit: 0, scanTimeMs: 60000,
+    nodeBudget: 1, multiPV: 3 });
+  check(probe.depth === 1 && probe.complete === true && probe.stability === null &&
+      cut.complete === false && cut.bestLines.length === 1 && cut.playedLine === null &&
+      cut.stability === null,
+    'no fully verified iteration leaves only an explicitly partial scan winner');
+  const events = [];
+  const cutTwo = Core.analyse(s, { maxDepth: 4, nodeLimit: 0, scanTimeMs: 60000,
+    nodeBudget: 200000, multiPV: 3,
+    onProgress: function (e) { events.push(e); } });
+  const roots = events.filter(function (e) { return e.phase === 'root-verification'; });
+  check(cutTwo.complete === true && cutTwo.depth >= 1 && cutTwo.depth < 4 &&
+      cutTwo.stability && cutTwo.stability.depths[1] === cutTwo.depth &&
+      cutTwo.bestLines.length === 3,
+    'a budget-cut deeper iteration is discarded whole; the last full iteration is complete',
+    JSON.stringify({ depth: cutTwo.depth, complete: cutTwo.complete }));
+  check(roots.length >= 2 && roots.every(function (e, i) {
+      return e.totalRoots === n * 4 && (!i || e.completedRoots >= roots[i - 1].completedRoots);
+    }) && roots[roots.length - 1].completedRoots < n * 4,
+    'iterative progress is monotonic over one fixed planned schedule and never claims unrun work');
+}
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

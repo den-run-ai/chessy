@@ -1,0 +1,32 @@
+// Research observer only. No evaluator state is read back from these counters.
+static mut PROFILE_EVAL_COUNTS: [u64; 25] = [0; 25];
+#[inline]
+unsafe fn profile_observe(phase: i32) {
+    assert!((0..=24).contains(&phase));
+    let p = core::ptr::addr_of_mut!(PROFILE_EVAL_COUNTS).cast::<u64>().add(phase as usize);
+    *p += 1;
+}
+#[no_mangle]
+pub unsafe extern "C" fn profile_reset() {
+    for i in 0..25 { *core::ptr::addr_of_mut!(PROFILE_EVAL_COUNTS).cast::<u64>().add(i) = 0; }
+}
+#[no_mangle]
+pub unsafe extern "C" fn profile_count(phase: u32) -> u64 {
+    assert!(phase <= 24);
+    *core::ptr::addr_of!(PROFILE_EVAL_COUNTS).cast::<u64>().add(phase as usize)
+}
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+    #[test]
+    fn reset_and_all_phase_bins_are_independent() {
+        let _guard = crate::TEST_LOCK.lock().unwrap();
+        unsafe {
+            profile_reset();
+            for p in 0..25 { for _ in 0..=p { profile_observe(p); } }
+            for p in 0..25 { assert_eq!(profile_count(p), p as u64 + 1); }
+            profile_reset();
+            for p in 0..25 { assert_eq!(profile_count(p), 0); }
+        }
+    }
+}

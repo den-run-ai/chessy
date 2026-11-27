@@ -3,7 +3,7 @@
 Status: both frozen runtime grids completed once. The prototype preserved every
 fixed-node signature and improved median throughput on this exposed host screen.
 
-The shipped HCE rebuilds its board Zobrist hash during search. This isolated
+The original measured HCE baseline rebuilds its board Zobrist hash during search. This isolated
 prototype caches only the board piece-square pair, updating actual searched
 edges after legality succeeds. It preserves the original separate raw EP
 transposition key and legal EP repetition key. It does not update HCE totals,
@@ -11,7 +11,7 @@ change transposition-table replacement, or change production code or assets.
 
 The existing pinned Rust 1.97.1 / Binaryen 131 build produced candidate SHA-256
 `509a1d8e1c3fe1c05c31e57923c8127d35094bd68a704fc241cc4e8444b8fa9e`
-(38,359 bytes), versus the unchanged shipped module
+(38,359 bytes), versus the original baseline module
 `57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f`
 (37,172 bytes). This adds 1,187 raw bytes. See `source.json` and `build.log`.
 
@@ -39,11 +39,13 @@ node test/search/hash-cost.test.js
 node tools/search/hash-cost.js prepare /tmp/chessy-hash-candidate
 (cd /tmp/chessy-hash-candidate && cargo test --locked --offline searched_hash_tests)
 sh /tmp/chessy-hash-candidate/build.sh
+node tools/search/check-historical-build.js hash /tmp/chessy-hash-candidate
 ```
 
 Use the repository-pinned Rust and Binaryen paths when running the build. CI
-runs the generated native oracle and differential search tests; it does not
-run this optional timing experiment or alter the committed production module.
+runs the native oracle and differential search tests, rebuilds all four fast/small
+raw/optimized WASM outputs, and compares them with the original execution
+snapshot. It performs no timing experiment or production asset changes.
 
 Pre-execution evidence hardening: the first registration and snapshot, retained
 as `*-unexecuted-v1.json`, were never executed. The replacement adds one explicit
@@ -106,13 +108,24 @@ raw data and executing registration are in `master-results.json`.
 This supports continued development of the one incremental-board-hash candidate.
 It does not establish a strength gain, equivalence on all chess positions,
 physical-device behavior, additive gains with the separate quiescence prototype,
-or release admission. The candidate is 38,359 raw bytes, 1,187 bytes above the
-shipped 37,172-byte raw ceiling; it does not pass the current size gate. The
-Node 24 Brotli difference is diagnostic only. Size, physical-device evidence and
-pure-cost admission remain open. Production code/assets remain unchanged. Pure-cost
+or release admission. At measurement time the candidate was 38,359 raw bytes,
+1,187 bytes above the then-current 37,172-byte raw ceiling. That historical size
+miss remains unchanged. The original Node 24 Brotli difference is diagnostic only.
+Production code/assets remain unchanged by this research archive. Pure-cost
 admission still needs the separate equivalence/runtime policy tracked in #175,
 and physical-device evidence remains open in #84. No additional candidate,
 fit, threshold search or timing rerun was performed. Paid compute: **$0**.
+
+## Current size policy comparison
+
+The repository now permits 40 KiB raw (40,960 bytes) and 20 KiB Brotli-11
+(20,480 bytes). The original 38,359-byte candidate fits the current raw ceiling
+with 2,601 bytes to spare. The correctness-only CI reproduction separately
+computes and checks its compressed size under the size gate's pinned
+Node 22.23.2 / Brotli 1.1.0 encoder. Its `currentPolicyComparison` output records
+both observed sizes and ceilings. This new comparison does not rewrite the
+historical measurements or their original size verdict, and does not authorize
+production activation, physical-device claims, or a strength claim.
 
 ## Reusable loader hardening after measurement
 
@@ -124,10 +137,14 @@ entrypoint; CI checks direct Node invocation and importing it load only data,
 while interpreting a renamed copy as JavaScript fails. Decoding is for source inspection and hashing, not execution.
 
 The reusable runner now applies the independently reviewed qsearch pattern:
-capture runner, benchmark and eager signature-fixture bytes once; compile the
-captured runner; authenticate the registration before evaluating the retained
-benchmark; and prevent uncaptured repository imports or input reads. Fresh
-registrations/results use schema v2. Synthetic tests replace cached modules,
+capture runner, benchmark, signature fixture and capability-helper bytes once;
+compile the captured runner; and authenticate the registration before evaluating
+the retained benchmark. The adapter runs in a separate null-prototype realm
+with string code generation disabled. Its only modules are narrow `fs`, `path`,
+`zlib` and `perf_hooks` shims. Fixture reads use retained text; clock, UTF-8 and
+compression operations exchange serialized values. No host function, object,
+module loader or process object is exposed to adapter code. Fresh
+registrations/results use schema v3. Synthetic tests replace cached modules,
 runner/benchmark/fixture path contents, and first failing observations without
 executing WASM. The original measurements were not rerun or reassigned to this
 new loader. Their medians and routing decision are unchanged.
@@ -135,7 +152,14 @@ new loader. Their medians and routing decision are unchanged.
 The source generator also captures and compiles its own bytes with both Rust
 templates before deriving the source receipt. Synthetic replacement tests prove
 that an earlier Node load cannot be credited to newer generator bytes and that
-post-capture changes fail before an output tree is created.
+post-capture changes fail before an output tree is created. The eight original
+Rust/build inputs now come from immutable Git commit
+`dbf67181ab5d4e1c690617c14fe160b061191adb`, with replacements disabled and each
+original SHA-256 checked. Current production search, ABI and asset changes do
+not rebaseline this historical candidate. The fresh source receipt uses schema
+v2 and records current generator hashes; its generated inventory must equal the
+unchanged historical receipt. New reproduction reports are not measured-run
+receipts. These local capability and provenance checks are not an OS sandbox.
 
 New experiments use a persistent per-account ledger under
 `~/.local/state/chessy-research/den-run-ai/chessy`. Its identity covers the protocol,
@@ -144,7 +168,9 @@ order. Position labels and phase metadata do not create a new experiment. Paths,
 timestamps, runtime metadata and implementation comments do not grant another
 attempt. Registration rejects a spent identity; execution atomically creates and
 fsyncs the ledger before engine instantiation, and never deletes it, including
-after failure. The output lock remains a secondary protection. Synthetic tests
+after failure. The output lock remains a secondary protection; only its owner
+may publish a failure record. A different registration losing the same prefix
+cannot create or replace the winner's evidence. Synthetic tests
 exercise concurrent starts, copied registrations, relocated module files,
 comment-only runner copies and failed-attempt retries without running WASM.
 
@@ -161,5 +187,9 @@ registrations. It recomputes the complete summaries, fixed-node parity and
 routing rule, Master depth/move/stop/overshoot totals, and checks their links to
 the independent audits, source receipt and execution snapshot. Mutation tests
 reject changed raw data, summary arithmetic, audit totals and cross-file hashes.
+The complete 21-file execution-snapshot bytes are pinned, including every raw
+and small WASM output and the measured summary implementation. Each path and
+hash has a negative case. Fresh rebuild validation also rejects changed build
+inputs, outputs, and coherently changed generated-source receipt claims.
 These are arithmetic and preservation checks; they perform no engine searches,
 new timing measurements or physical-device validation.

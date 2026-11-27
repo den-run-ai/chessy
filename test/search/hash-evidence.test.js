@@ -14,7 +14,9 @@ const frozen={fixed:{registration:'7501340b2a0d8e82e43999ab572aefbdf418d5d7cc6c6
   master:{registration:'f0089baace9e9012a247f5210019187c78cae740649098d95949578811c11332',
     results:'1ea8608264401a20e6a4e1316345d0bda0795933fa7bb4575fadf562928e8afa'}};
 const near=(a,b)=>assert(Math.abs(a-b)<=1e-12,`arithmetic differs: ${a} versus ${b}`);
+const snapshotSha256='a0934dfc76d3fac2a39bbe792c631be657339014452166a7662971ae9b383ae9';
 function validate(retained){
+  assert.equal(sha(retained['execution-snapshot']),snapshotSha256,'complete archived execution snapshot changed');
   const data=Object.fromEntries(Object.entries(retained).map(([n,b])=>[n,JSON.parse(b)]));
   const source=data.source,snapshot=data['execution-snapshot'],parity=data['wasm-parity'],provenance=data['provenance-hardening'];
   assert.equal(snapshot.files.length,21);assert.equal(new Set(snapshot.files.map(f=>f.path)).size,21);
@@ -104,5 +106,10 @@ mutate('master-independent-audit',x=>x.completedDepthPairs.same++);
 mutate('master-independent-audit',x=>x.maxWallTimeOvershootMsByEngine[1]++);
 mutate('source',x=>x.generated[0].sha256='0'.repeat(64));
 mutate('execution-snapshot',x=>x.files.pop());
+// Every path/hash, including raw/small modules and summary code, is pinned.
+for(let index=0;index<21;index++){
+  mutate('execution-snapshot',x=>x.files[index].sha256='0'.repeat(64));
+  mutate('execution-snapshot',x=>x.files[index].path+='-changed');
+}
 mutate('provenance-hardening',x=>x.fixedResultSha256='0'.repeat(64));
 console.log('Hash committed 504 observations, summaries, audits and source/registration links PASS (no WASM/search)');

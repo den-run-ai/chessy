@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
-const vm=require('node:vm'),{isBuiltin}=require('node:module');
+const vm=require('node:vm');
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 const ROOT=path.resolve(__dirname,'../..');
 const check=(v,m)=>{if(!v)throw Error(m);};
@@ -10,7 +10,7 @@ const encode=x=>JSON.stringify(x,null,2)+'\n';
 // are hashed below. No repository module is loaded through require/cache.
 if(typeof __hashCaptured==='undefined'){
   const captured=[__filename,path.join(ROOT,'experiments/wasm/bench.js'),
-    path.join(ROOT,'test/fixtures/wasm-r69-signatures.json')]
+    path.join(ROOT,'test/fixtures/wasm-r69-signatures.json'),path.join(__dirname,'captured-adapter.js')]
     .map(file=>({path:file,bytes:Buffer.from(fs.readFileSync(file))}));
   const compiled=vm.compileFunction(captured[0].bytes.toString('utf8').replace(/^#![^\n]*/,''),
     ['require','module','exports','__filename','__dirname','__hashCaptured'],{filename:__filename});
@@ -22,20 +22,11 @@ const sourcesUnchanged=()=>captured.every(x=>sha(fs.readFileSync(x.path))===sha(
 let bench;
 function getBench(){
   if(bench)return bench;
-  const source=captured[1],loaded={exports:{}};
-  const builtinRequire=id=>{
-    check(isBuiltin(id),'benchmark may import only built-in modules');
-    const name=id.replace(/^node:/,'');
-    if(name==='fs')return Object.freeze({readFileSync(file,encoding){
-      check(file===captured[2].path&&encoding==='utf8','benchmark attempted an uncaptured file read');
-      return captured[2].bytes.toString('utf8');
-    }});
-    return require('node:'+name);
-  };
-  vm.compileFunction(source.bytes.toString('utf8'),
-    ['require','module','exports','__filename','__dirname'],{filename:source.path})
-    (builtinRequire,loaded,loaded.exports,source.path,path.dirname(source.path));
-  bench=loaded.exports;return bench;
+  const helper=captured[3],loaded={exports:{}};
+  vm.compileFunction(helper.bytes.toString('utf8'),
+    ['require','module','exports','__filename','__dirname'],{filename:helper.path})
+    (require,loaded,loaded.exports,helper.path,path.dirname(helper.path));
+  bench=loaded.exports.createAdapter(captured[1],captured[2]);return bench;
 }
 const runtime=()=>({node:process.version,versions:process.versions,platform:os.platform(),arch:os.arch(),cpu:os.cpus()[0].model});
 const options=mode=>mode==='fixed'?{maxDepth:111,nodeLimits:[10000,36000,230000],timeMs:0,quiesce:true,repetitions:4}
@@ -83,7 +74,7 @@ function register(file,mode,modules){
   check(Array.isArray(modules)&&modules.length===2,'exactly one reference and one frozen candidate required');
   const identities=modules.map(p=>({path:fs.realpathSync(p),sha256:sha(fs.readFileSync(p))}));
   validateModules(identities);
-  const plan={schema:'chessy.searched-board-hash.benchmark.v2',mode,created:new Date().toISOString(),researchOnly:true,
+  const plan={schema:'chessy.searched-board-hash.benchmark.v3',mode,created:new Date().toISOString(),researchOnly:true,
     productionIntegrationAllowed:false,strengthClaimAllowed:false,selectionAllowed:mode==='fixed',
     positions:positions(),options:options(mode),warmup:{...warmup},runtime:runtime(),
     order,
@@ -95,9 +86,9 @@ function register(file,mode,modules){
 }
 async function run(file,out){
   const planBytes=fs.readFileSync(file),plan=JSON.parse(planBytes);
-  check(plan&&plan.schema==='chessy.searched-board-hash.benchmark.v2'&&JSON.stringify(plan.dependencies)===JSON.stringify(dependencies()),'benchmark dependency changed after registration');
+  check(plan&&plan.schema==='chessy.searched-board-hash.benchmark.v3'&&JSON.stringify(plan.dependencies)===JSON.stringify(dependencies()),'benchmark dependency changed after registration');
   validateModules(plan.modules);
-  check(plan.schema==='chessy.searched-board-hash.benchmark.v2'&&plan.researchOnly===true&&plan.productionIntegrationAllowed===false&&plan.strengthClaimAllowed===false,'invalid plan');
+  check(plan.schema==='chessy.searched-board-hash.benchmark.v3'&&plan.researchOnly===true&&plan.productionIntegrationAllowed===false&&plan.strengthClaimAllowed===false,'invalid plan');
   check(['fixed','master'].includes(plan.mode)&&plan.modules.length===2,'invalid mode/modules');
   check(JSON.stringify(plan.options)===JSON.stringify(options(plan.mode))&&JSON.stringify(plan.positions)===JSON.stringify(positions())&&JSON.stringify(plan.warmup)===JSON.stringify(warmup),'registered budget or positions changed');
   check(plan.order===order&&plan.selectionAllowed===(plan.mode==='fixed'),'invalid order or selection contract');
@@ -138,12 +129,12 @@ async function run(file,out){
     check(sourcesUnchanged(),'benchmark dependency changed while running');
     check(sha(fs.readFileSync(attempt.path))===sha(attempt.bytes),'experiment reservation changed while running');
     check(sha(fs.readFileSync(plan.sourceReceipt.path))===plan.sourceReceipt.sha256,'generated source receipt changed while running');
-    const report={schema:'chessy.searched-board-hash.benchmark-results.v2',attempt:attempt.entry,ledgerPath:attempt.path,registrationSha256:sha(planBytes),registration:plan,
+    const report={schema:'chessy.searched-board-hash.benchmark-results.v3',attempt:attempt.entry,ledgerPath:attempt.path,registrationSha256:sha(planBytes),registration:plan,
       runtime:runtime(),
       modules:engines.map(e=>({bytes:e.binaryBytes,brotliBytes:e.brotliBytes,memoryBytes:e.memoryBytes()})),
       complete:true,exactFixedNodeParity:plan.mode==='fixed',rows};
     fs.writeFileSync(out,encode(report),{flag:'wx'});return report;
-  }catch(error){fs.writeFileSync(out+'.failure.json',encode({error:String(error),attempt:attempt.entry,ledgerPath:attempt.path,rows}),{flag:'wx'});throw error;}
+  }catch(error){if(lock!==undefined)fs.writeFileSync(out+'.failure.json',encode({error:String(error),attempt:attempt.entry,ledgerPath:attempt.path,rows}),{flag:'wx'});throw error;}
   finally{if(lock!==undefined)fs.closeSync(lock);}
 }
 if(require.main===module){

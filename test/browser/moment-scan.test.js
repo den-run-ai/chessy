@@ -46,7 +46,8 @@ require('./helper').run('moment-scan', async function (t) {
     // notation policy and durable summary boundary run unchanged.
     const realAnalyse = ChessyAnalysisService.analyse;
     ChessyAnalysisService.analyse = function (req, owner) {
-      calls.push({ ply: req.ply, nodeLimit: req.opts.nodeLimit, owner: owner });
+      calls.push({ ply: req.ply, nodeLimit: req.opts.nodeLimit,
+        scanTimeMs: req.opts.scanTimeMs, owner: owner });
       const state = Chess.parseFen(req.fen);
       const legal = Chess.legalMoves(state);
       const played = req.opts.playedMove;
@@ -81,7 +82,7 @@ require('./helper').run('moment-scan', async function (t) {
         complete: true,
         turn: state.turn,
         wdl: null,
-        depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+        depth: req.opts.nodeLimit === 0 ? 4 : 2,
         nodes: 100,
         qnodes: 20,
         elapsedMs: 1,
@@ -98,7 +99,7 @@ require('./helper').run('moment-scan', async function (t) {
         playedLine: line(played, 100 - loss, 2, false),
         classification: 'unknown-equivalence',
         internalScore: 999,
-        stability: req.opts.nodeLimit === 80000
+        stability: req.opts.nodeLimit === 0
           ? { depths: [3, 4], bestMoveStable: true } : null
       });
     };
@@ -114,8 +115,10 @@ require('./helper').run('moment-scan', async function (t) {
         !!ChessyAnalysisNotation && !!ChessyMomentScan,
       doneState: done.state,
       callPlies: calls.map(function (c) { return c.ply; }).join(','),
-      quickCalls: calls.filter(function (c) { return c.nodeLimit !== 80000; }).length,
-      deepCalls: calls.filter(function (c) { return c.nodeLimit === 80000; }).length,
+      quickCalls: calls.filter(function (c) { return c.nodeLimit !== 0; }).length,
+      deepCalls: calls.filter(function (c) { return c.nodeLimit === 0; }).length,
+      deepDeadlines: calls.filter(function (c) { return c.nodeLimit === 0; })
+        .every(function (c) { return c.scanTimeMs === 16000; }),
       owners: calls.every(function (c) { return c.owner === 'moment-scan'; }),
       storedState: stored && stored.state,
       storedSchema: stored && stored.schema,
@@ -141,6 +144,7 @@ require('./helper').run('moment-scan', async function (t) {
     };
   });
 
+  check(outcome.deepDeadlines, 'selected-moment scan forwards the deep time budget');
   check(outcome.loaded, 'analysis, notation and scan modules load in release order');
   check(outcome.doneState === 'done' && outcome.storedState === 'done',
     'a completed scan is durably checkpointed in analysisJobs');

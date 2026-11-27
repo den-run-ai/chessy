@@ -23,6 +23,9 @@
  *     healthy-but-slow phone finishes rather than being killed. A wedged or
  *     crashed worker is retried ONCE in a fresh worker, then the probe resolves
  *     gracefully (null). There is NO synchronous main-thread fallback.
+ *   - Persistent cache reads get at most one second before search starts.
+ *     A blocked IndexedDB lookup cannot hold the interactive lane forever,
+ *     and its late completion cannot replace or restart the chosen worker.
  *   - Cache identity folds game revision, ply, the halfmove-and-repetition-aware
  *     position fingerprint, the engine version and the config hash. A stored
  *     result is persisted only when it VALIDATES against the originating
@@ -48,6 +51,7 @@
   var PROTOCOL = 2;            // must match assets/analysis-worker.js
   var MAX_ATTEMPTS = 2;        // initial worker + one fresh-worker retry
   var DEFAULT_WATCHDOG_MS = 20000;
+  var CACHE_LOOKUP_MS = 1000;
 
   var worker = null;
   var active = null;
@@ -70,27 +74,35 @@
 
   function nowMs() { return (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0; }
 
+  function cacheLookupMs() {
+    var override = global.CHESSY_ANALYSIS_CACHE_TIMEOUT_MS;
+    return typeof override === 'number' && Number.isFinite(override) && override > 0
+      ? override : CACHE_LOOKUP_MS;
+  }
+
   // The watchdog rescues only a genuinely WEDGED worker, so it sits above
-  // realistic completion. The contract self-bounds at scanNodes (the scan) plus
-  // the deep and shallow verification budgets, so worst-case runtime is bounded;
-  // dividing that node ceiling by a deliberately CONSERVATIVE slow-device rate
-  // yields a deadline a healthy slow phone beats. Overridable to a tiny value so
-  // a test can exercise the timeout path without a multi-second wait.
+  // realistic completion. A timed scan has its own ceiling. Fixed-node
+  // requests verify in two node-capped phases; a timed request's single
+  // iterative phase is capped by one budget, so counting two over-approximates
+  // it in the safe direction. Divide bounded node work by a conservative
+  // slow-device rate and add any scan time allowance. Overridable to a tiny
+  // value so a test can exercise the timeout path without a multi-second wait.
   //
   // The 18k-NPS floor is deliberately far below the hosted Rust/WASM
   // measurements and retained as a conservative slow-device allowance, not a
   // performance claim. A healthy device that legitimately needs the full node
-  // budget should finish before the deadline rather than being killed,
-  // retried, and finally failing. Erring long here only delays detection of a
-  // truly wedged background coaching worker, which is the safe direction.
+  // budget is given substantial slack rather than a Play-sized watchdog.
+  // The five-minute ceiling remains a fail-safe, NOT a guarantee that any
+  // supported phone can complete arbitrarily large node budgets.
   function watchdogMs(opts) {
     var override = global.CHESSY_ANALYSIS_WATCHDOG_MS;
     if (typeof override === 'number' && override > 0) return override;
-    var scanNodes = (opts && opts.nodeLimit) || 150000;
+    var scan = ChessyAnalysisCore.scanConfig(opts || {});
+    var scanNodes = scan.nodeLimit;
     var nodeBudget = (opts && opts.nodeBudget) || 8000000;
-    var workNodes = scanNodes + 2 * nodeBudget; // scan + deep-verify + shallow-verify
+    var workNodes = scanNodes + 2 * nodeBudget; // scan + at most two verify phases
     var SLOW_NPS = 18000;                         // conservative Rust/WASM floor
-    var ms = Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
+    var ms = scan.timeMs + Math.ceil(workNodes / SLOW_NPS * 1000) + 5000; // + fixed startup slack
     return Math.min(Math.max(ms, DEFAULT_WATCHDOG_MS), 300000);
   }
 
@@ -159,6 +171,12 @@
 
   function clearWatch(job) { if (job.watchdog) { clearTimeout(job.watchdog); job.watchdog = null; } }
 
+  function clearCacheLookup(job) {
+    if (job.cacheWatchdog) clearTimeout(job.cacheWatchdog);
+    job.cacheWatchdog = null;
+    job.cacheLookup = null;
+  }
+
   function finiteInteger(n) {
     return typeof n === 'number' && Number.isFinite(n) &&
       n >= 0 && Math.floor(n) === n;
@@ -218,10 +236,20 @@
       var nextOrder = phaseOrder(event.phase);
       if (nextOrder < prevOrder || event.elapsedMs < published.elapsedMs) return null;
       if (nextOrder === prevOrder) {
-        if (event.totalRoots !== published.totalRoots ||
-            event.completedRoots < published.completedRoots) return null;
-        if (event.completedRoots === published.completedRoots &&
-            event.elapsedMs === published.elapsedMs) return null;
+        if (event.totalRoots !== published.totalRoots) {
+          // A fresh attempt of a timed request may plan another schedule
+          // (its wall-clock scan can stop at a different depth). Its raw
+          // counts are not comparable with the published ones, and Reflection
+          // and Train derive the verified depth from them, so publishing them
+          // (or projecting them onto the old scale) could move the meter or
+          // the announced depth backwards. Hold public progress until the
+          // result instead.
+          return null;
+        } else {
+          if (event.completedRoots < published.completedRoots) return null;
+          if (event.completedRoots === published.completedRoots &&
+              event.elapsedMs === published.elapsedMs) return null;
+        }
       }
     }
     return event;
@@ -245,6 +273,7 @@
     if (job.done) return;
     job.done = true;
     clearWatch(job);
+    clearCacheLookup(job);
     if (active === job) active = null;
     job.resolve(value);
   }
@@ -348,11 +377,19 @@
     if (job.publishedProgress) {
       elapsedOffset = Math.max(elapsedOffset, job.publishedProgress.elapsedMs);
     }
-    worker.postMessage({
-      v: PROTOCOL, jobId: job.id, fen: job.req.fen,
-      positions: job.req.positions || undefined, opts: job.opts,
-      elapsedOffsetMs: elapsedOffset
-    });
+    try {
+      worker.postMessage({
+        v: PROTOCOL, jobId: job.id, fen: job.req.fen,
+        positions: job.req.positions || undefined, opts: job.opts,
+        elapsedOffsetMs: elapsedOffset
+      });
+    } catch (e) {
+      // postMessage can fail synchronously (for example, a structured-clone
+      // failure). Retire this exact attempt and use the same bounded recovery
+      // path as an error reply or watchdog, rather than rejecting analyse()
+      // while leaving its worker/watchdog alive.
+      recover(job);
+    }
   }
 
   function persist(job, result) {
@@ -425,8 +462,15 @@
       var lookup;
       try { lookup = store.getAnalysis(job.key); } catch (e) { lookup = null; }
       if (lookup && typeof lookup.then === 'function') {
-        lookup.then(function (rec) {
-          if (job !== active || job.done) return;          // superseded during lookup
+        // Optional cache I/O has its own short deadline, separate from the
+        // computation watchdog. Exactly one path owns the handoff: a cache
+        // hit, a miss/error, or the deadline. A late read cannot settle an
+        // in-flight worker, consume a retry, or affect a successor request.
+        var pendingLookup = {};
+        job.cacheLookup = pendingLookup;
+        function finishLookup(rec) {
+          if (job !== active || job.done || job.cacheLookup !== pendingLookup) return;
+          clearCacheLookup(job);
           // A persisted record outlives the session that validated it, so a
           // served payload must re-pass the SAME gate as a live worker reply
           // (validMatch): a corrupted or mismatched row under a correct key is
@@ -438,7 +482,11 @@
           } else {
             dispatch(job);
           }
-        }, function () { if (job === active && !job.done) dispatch(job); });
+        }
+        job.cacheWatchdog = setTimeout(function () {
+          finishLookup(null);
+        }, cacheLookupMs());
+        lookup.then(finishLookup, function () { finishLookup(null); });
         return;
       }
     }
@@ -451,7 +499,7 @@
     abandon(); // one active job: kill any predecessor before starting
     var job = {
       id: ++seq, req: req || {}, owner: owner || null,
-      attempts: 0, done: false, watchdog: null,
+      attempts: 0, done: false, watchdog: null, cacheWatchdog: null, cacheLookup: null,
       startedAt: nowMs(), attemptProgress: null, publishedProgress: null
     };
     return new Promise(function (resolve) {

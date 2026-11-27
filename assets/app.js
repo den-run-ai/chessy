@@ -66,6 +66,7 @@
 
   let state = Chess.newGameState();
   let selected = null;        // selected square index
+  let promotionPending = null; // owns one picker for one exact live position
   let flipped = false;
   let aiThinking = false;
   // Rules-independent endings are semantic and validated, never an arbitrary
@@ -133,12 +134,11 @@
 
   // Record think time and remaining clocks on the entry for the move that
   // was just played (state has already advanced, so the mover is the side
-  // NOT to move now). If the flag had already fallen during the think —
-  // a suspended tab or the tick gap can delay detection — the move stands
-  // on the board but the game ends on time: no increment is awarded.
-  function punchClock() {
+  // NOT to move now). Callers admit the move before changing the board and
+  // pass that same instant here: applying the move must not charge a later
+  // clock reading or turn an on-time move into a flag.
+  function punchClock(now) {
     if (clocks.wMs === null) return;
-    const now = Date.now();
     const mover = state.turn === 'w' ? 'b' : 'w';
     const key = mover + 'Ms';
     const elapsed = Math.max(0, now - turnStartedAt);
@@ -180,11 +180,11 @@
     else renderClocks();
   }
 
-  function liveRemaining(color) {
+  function liveRemaining(color, now) {
     const stored = color === 'w' ? clocks.wMs : clocks.bMs;
     if (stored === null) return null;
     if (turnStartedAt === null || fullStatus().over || color !== state.turn) return stored;
-    return stored - Math.max(0, Date.now() - turnStartedAt);
+    return stored - Math.max(0, (now === undefined ? Date.now() : now) - turnStartedAt);
   }
 
   function manualEndingStatus(value) {
@@ -227,6 +227,7 @@
   function isViewing() { return viewPly !== null && viewPly < state.history.length; }
 
   function setViewPly(k) {
+    cancelPromotion();
     viewPly = (k === null || k >= state.history.length) ? null : Math.max(0, k);
     selected = null;
     render();
@@ -657,7 +658,14 @@
     }
   }
 
+  function cancelPromotion() {
+    promotionPending = null;
+    if (promotionDialog.open) promotionDialog.close();
+  }
+
   function choosePromotion(color, cb) {
+    const pending = { gameId: gameId, state: state };
+    promotionPending = pending;
     promotionChoices.innerHTML = '';
     ['Q', 'R', 'B', 'N'].forEach(function (type) {
       const btn = document.createElement('button');
@@ -668,7 +676,26 @@
       // piece color — name the action explicitly instead.
       btn.setAttribute('aria-label', 'Promote to ' + PIECE_NAMES[type]);
       btn.addEventListener('click', function () {
-        promotionDialog.close();
+        // The clock keeps running while this modal is open. A flag, Undo,
+        // replay, or New Game can retire it before a queued click arrives;
+        // an old button must neither move a piece nor close a newer picker.
+        if (promotionPending !== pending) return;
+        if (!promotionDialog.open || gameId !== pending.gameId ||
+            state !== pending.state || fullStatus().over || aiThinking ||
+            archiveRetractionActive || checkpointAttempt || endAttempt ||
+            isViewing()) {
+          cancelPromotion();
+          return;
+        }
+        const remaining = liveRemaining(state.turn);
+        cancelPromotion();
+        // Check before committing: the next 200 ms ticker may not have
+        // observed the flag yet. An expired choice must not alter the board,
+        // win an increment, or change the archived terminal position.
+        if (remaining !== null && remaining <= 0) {
+          flag(state.turn);
+          return;
+        }
         cb(type);
       });
       promotionChoices.appendChild(btn);
@@ -676,9 +703,21 @@
     promotionDialog.showModal();
   }
 
+  promotionDialog.addEventListener('cancel', function () {
+    promotionPending = null;
+    selected = null;
+    render();
+  });
+
   function commitMove(move) {
+    const moveTime = Date.now();
+    const remaining = liveRemaining(state.turn, moveTime);
+    if (remaining !== null && remaining <= 0) {
+      flag(state.turn);
+      return;
+    }
     state = Chess.playMove(state, move);
-    punchClock();
+    punchClock(moveTime);
     selected = null;
     viewPly = null;
     render();
@@ -688,10 +727,27 @@
   }
 
   // Every level uses the same quiescent Rust/WASM engine. Easy through Expert
-  // stop on a deterministic node budget; their five-second clock is a safety
-  // ceiling for a slow device. Master spends the full product time budget.
-  function aiConfig() {
-    return AI_LEVELS[settings.difficulty] || AI_LEVELS[2];
+  // stop on deterministic node targets (Easy also at depth 2); Master has no
+  // artificial node cap.
+  // Timed games reserve clock for move delivery and an identical-request retry.
+  function aiConfig(remaining) {
+    const tc = tcParts();
+    return ChessyLevelPresets.forClock(settings.difficulty,
+      remaining, tc ? tc.incMs : 0);
+  }
+
+  function openingSeed(fen) {
+    if (state.history.length >= 12) return null;
+    // A fresh game UUID supplies variety; the exact position makes retries,
+    // Undo and reload reproducible without adding a new save format. Keep
+    // the signed 32-bit telemetry representation used by older saved games;
+    // dispatch converts the same bits to the WASM API's unsigned seed.
+    const identity = gameId + '\n' + fen;
+    let seed = 2166136261;
+    for (let i = 0; i < identity.length; i++) {
+      seed = Math.imul(seed ^ identity.charCodeAt(i), 16777619);
+    }
+    return seed | 0;
   }
 
   function maybeAiMove() {
@@ -699,19 +755,23 @@
         state.turn !== aiColor() || fullStatus().over) return;
     clearAiFailure(true);
     aiThinking = true;
-    const cfg = aiConfig();
+    // Read the clock once: a second read could cross zero and hand the
+    // budget a negative remainder after this check passed.
+    const remaining = liveRemaining(state.turn);
+    if (remaining !== null && remaining <= 0) { flag(state.turn); return; }
+    const cfg = aiConfig(remaining);
+    const fen = Chess.toFen(state);
+    const seed = openingSeed(fen);
     aiPending = {
       id: ++aiRequestId,
-      fen: Chess.toFen(state),
+      fen: fen,
       attempts: 0,
       depth: cfg.maxDepth,
       quiesce: cfg.quiesce,
       timeMs: cfg.timeMs,
       nodeLimit: cfg.nodeLimit,
-      // The raw WASM ABI owns a fixed deterministic root order; it accepts no
-      // page-provided seed/randomize controls.
-      seed: null,
-      randomize: null,
+      seed: seed,
+      randomize: seed !== null,
       release: currentRelease(),
       started: Date.now()
     };
@@ -755,6 +815,7 @@
         timeMs: pending.timeMs,
         nodeLimit: pending.nodeLimit,
         quiesce: pending.quiesce,
+        rootSeed: pending.randomize ? pending.seed >>> 0 : null,
         positions: state.positions,
         wasmUrl: 'chessy-ai-fast.wasm' +
           (window.CHESSY_RELEASE ? '?r=' + window.CHESSY_RELEASE : '')
@@ -812,11 +873,17 @@
       recoverAiSearch(aiWorker, 'wasm-search-error');
       return;
     }
+    const moveTime = Date.now();
+    const remaining = liveRemaining(state.turn, moveTime);
+    if (remaining !== null && remaining <= 0) {
+      flag(state.turn);
+      return;
+    }
     clearTimeout(aiWatchdog);
     aiThinking = false;
     viewPly = null;
     state = Chess.playMove(state, local);
-    punchClock();
+    punchClock(moveTime);
     if (aiPending) {
       const totalMs = Date.now() - aiPending.started;
       // Record enough evidence to reproduce or explain a Master incident.
@@ -848,6 +915,7 @@
         rootOrderUci: result.rootOrderUci,
         pvSource: result.pvSource,
         stopReason: result.stopReason,
+        ttSaturated: result.ttSaturated === true,
         source: 'worker',
         fallbackReason: null,
         engine: 'wasm',
@@ -861,6 +929,7 @@
   }
 
   function showGameOver(status) {
+    cancelPromotion();
     const title = status.result === '1-0' ? 'White wins!' :
                   status.result === '0-1' ? 'Black wins!' : 'Draw';
     document.getElementById('gameOverTitle').textContent = title;
@@ -1048,6 +1117,7 @@
 
   function openEndPrompt(kind) {
     if (endAttempt || fullStatus().over || isViewing()) return;
+    cancelPromotion();
     const frozen = freezeEndClock();
     if (!frozen.ok) {
       flag(state.turn);
@@ -1109,6 +1179,7 @@
   }
 
   function startNewGame() {
+    cancelPromotion();
     checkpointAttempt = null;
     endAttempt = null;
     manualEnding = null;
@@ -1345,6 +1416,7 @@
   // replaced; a failed checkpoint keeps the game unless the player explicitly
   // chooses "Start without saving".
   document.getElementById('newGame').addEventListener('click', function () {
+    cancelPromotion();
     freshStartSeq++; // invalidate a pending Rematch/start request
     setChoice('mode', settings.mode);
     setChoice('difficulty', settings.difficulty);
@@ -1405,6 +1477,7 @@
 
   undoEl.addEventListener('click', function () {
     if (archiveRetractionActive) return;
+    cancelPromotion();
     // Editing the game voids any queued Review-game handoff: the ending
     // it would open is being taken back (see movedOnSeq).
     movedOnSeq++;
@@ -1784,9 +1857,13 @@
       // into a genuinely fresh game, not its otherwise-valid board snapshot.
       state = s;
       manualEnding = restoredManualEnding ? Object.assign({}, data.manualEnding) : null;
-      settings.mode = MODE_LABELS[data.mode] ? data.mode : 'ai-b';
-      settings.difficulty = DIFF_LABELS[data.difficulty] ? String(data.difficulty) : '2';
-      settings.timeControl = TIME_CONTROLS[data.timeControl] ? data.timeControl : 'none';
+      settings.mode = typeof data.mode === 'string' &&
+        Object.prototype.hasOwnProperty.call(MODE_LABELS, data.mode)
+        ? data.mode : 'ai-b';
+      settings.difficulty = ChessyLevelPresets.get(data.difficulty) ? String(data.difficulty) : '2';
+      settings.timeControl = typeof data.timeControl === 'string' &&
+        Object.prototype.hasOwnProperty.call(TIME_CONTROLS, data.timeControl)
+        ? data.timeControl : 'none';
       const tc = tcParts();
       if (tc) {
         clocks.wMs = data.clocks && isFinite(data.clocks.wMs)

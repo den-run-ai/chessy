@@ -1,235 +1,245 @@
-# Chessy Evaluation v1 — license-clean corpus & release-gate scorecards
+# Evaluation and research
 
-Chessy's existing harness (fixed-node tactics, `ai-bench`, and the 800-game
-paired match) answers one question well: *did this engine change win?* This
-directory adds the **separate scorecards** the strength match cannot provide —
-**correctness**, position quality, level calibration, and analysis/coaching —
-each measured on a **frozen, license-clean corpus** and reported as a **score
-vector, not one headline Elo number**.
+[Home](../README.md) · [Development](../docs/DEVELOPMENT.md) ·
+[Training research](training/README.md)
 
-Tracker: [#87](https://github.com/den-run-ai/chessy/issues/87) — *Evaluation v1
-— license-clean corpus and release gates*. Shipped so far: **E1** (corpus +
-provenance + frozen PR shard), the **correctness scorecard** (**E2**), and the
-**analysis/coaching scorecard** (**E3**). The strength and level-calibration
-baselines (**E4**) are deliberately deferred until the active engine changes in
-#72 settle.
+This directory measures Chessy's rules correctness, analysis quality, playing
+strength, and level calibration. These are separate claims: a correct result,
+a better puzzle score, and a stronger match result need different evidence.
 
-## Online eval, offline app
+The correctness and analysis scorecards run in CI. Difficulty labels remain
+provisional, and research candidates have their own admission requirements.
+Start with [running the scorecards](#run-the-scorecards), then see
+[calibration and matches](#calibration-and-matches) or the
+[research index](#research-index).
 
-Only the **shipped Chessy PWA** is offline — the **eval harness and CI are
-not**. So the corpus is built from *real* public-domain (CC0) chess data in two
-steps:
+## Run the scorecards
 
-1. **`fetch-corpus.js` (online, manual / nightly)** downloads a compact, frozen
-   CC0 sample — stratified Lichess Open Database puzzles and the lichess
-   `chess-openings` classification — into `corpus/sources/` with full
-   provenance.
-2. **`gen-corpus.js` (offline, deterministic — runs in PR CI)** derives the
-   corpus from those *committed* sources plus engine-generated fixtures, with no
-   network. Same committed sources → identical corpus, so CI is reproducible.
-
-## What's here
-
-| Path | Purpose |
-| --- | --- |
-| `corpus/sources/` | Frozen raw CC0 samples (`lichess-puzzles-v1.csv`, `openings-v1.tsv`) + `PROVENANCE.json` (source URLs, licenses, dump date, sha256) |
-| `corpus/eval-v1.ndjson` | The frozen corpus — one JSON record per line, full provenance schema |
-| `corpus/manifest.json` | Counts, split policy, shared `analyse` opts, generator version, corpus + source sha256 |
-| `BASELINE.md` / `BASELINE.json` | The first published correctness baseline (human + machine) |
-| `ANALYSIS-BASELINE.md` / `.json` | The first published **analysis/coaching** baseline (the E3 slice) |
-| `FULL-BASELINE.json` | Reviewed r73 correctness vector over all 117 cases |
-| `ANALYSIS-FULL-BASELINE.json` | Reviewed r73 analysis/coaching vector over all 103 live cases |
-| `LICENSE-REPORT.md` | Per-source license provenance and the explicit exclusion list |
-| `../test/eval/fetch-corpus.js` | **Online** fetcher: commits the frozen CC0 sample under `corpus/sources/` |
-| `../test/eval/gen-corpus.js` | **Offline** deterministic, self-validating generator that derives the corpus |
-| `../test/eval/scorecard.js` | Correctness score-vector runner (frozen 64-case PR shard + full mode) |
-| `../test/eval/analysis-scorecard.js` | **Analysis/coaching** score-vector runner (frozen 34-case train/val PR shard + full mode) |
-| `../.github/workflows/full-eval.yml` | Manual + weekly full-corpus baseline gate; uploads both score vectors |
-
-## Run it
+Run these commands from the repository root. `chess.js` is an independent
+rules oracle used only by development tools and CI; it is never bundled with
+the offline app.
 
 ```sh
-node test/eval/scorecard.js            # frozen 64-case PR shard (runs in CI, <1s)
-node test/eval/scorecard.js --full     # the whole 117-case committed corpus
+npm install --no-save chess.js@1.4.0
+node test/eval/scorecard.js --baseline eval/BASELINE.json
+node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json
+```
+
+The PR checks use a frozen 64-case correctness shard and a 34-case analysis
+shard. The weekly/manual [Full evaluation workflow](../.github/workflows/full-eval.yml)
+runs the complete baselines:
+
+```sh
 node test/eval/scorecard.js --full --baseline eval/FULL-BASELINE.json
-node test/eval/scorecard.js --json --out run.json          # machine-readable vector
-node test/eval/scorecard.js --baseline eval/BASELINE.json   # before/after vs the baseline
-node test/eval/gen-corpus.js           # regenerate the corpus offline from committed sources
-node test/eval/fetch-corpus.js         # (online) refresh the frozen CC0 sample under corpus/sources/
-
-node test/eval/analysis-scorecard.js   # E3 analysis vector — frozen 34-case train/val shard (runs in CI, ~9s)
-node test/eval/analysis-scorecard.js --full   # all 103 live cases (weekly / pre-release)
 node test/eval/analysis-scorecard.js --full --baseline eval/ANALYSIS-FULL-BASELINE.json
-node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json   # strict gate + quality ratchet
-node test/eval/analysis-scorecard.js --self-test    # prove the strict gate turns red
 ```
 
-These four tools are **development/build-time Node tools** (they use
-`node:crypto`, and the fetcher shells out to `curl`); they are never loaded by
-the browser app.
+For machine-readable output or fault checks:
 
-The full baselines are deterministic score vectors generated from release
-**r73**, commit `07b29d39c07761bd9e1cec242ac16e0435e15f7a`, and corpus digest
+```sh
+node test/eval/scorecard.js --json --out run.json
+node test/eval/analysis-scorecard.js --self-test
+```
+
+Omitting `--baseline` reports the selected score vector. Baseline comparison
+also guards coverage and configuration, so dropping cases cannot improve a
+reported result. Do not commit npm manifests, lockfiles, or local outputs
+created by these commands.
+
+## Files and baselines
+
+| Path | Contents |
+| --- | --- |
+| [corpus/sources/](corpus/sources/) | Frozen CC0 puzzle/opening samples and source provenance |
+| [corpus/eval-v1.ndjson](corpus/eval-v1.ndjson) | Frozen position records with provenance |
+| [corpus/manifest.json](corpus/manifest.json) | Counts, split policy, analysis options, generator version, and hashes |
+| [BASELINE.md](BASELINE.md) / [BASELINE.json](BASELINE.json) | Correctness PR baseline |
+| [ANALYSIS-BASELINE.md](ANALYSIS-BASELINE.md) / [ANALYSIS-BASELINE.json](ANALYSIS-BASELINE.json) | Analysis PR baseline and fault inventory |
+| [FULL-BASELINE.json](FULL-BASELINE.json) | Full correctness baseline |
+| [ANALYSIS-FULL-BASELINE.json](ANALYSIS-FULL-BASELINE.json) | Full analysis baseline |
+| [LICENSE-REPORT.md](LICENSE-REPORT.md) | Source licenses, exclusions, and planned corpus additions |
+
+The full baselines were generated from r73 commit
+`07b29d39c07761bd9e1cec242ac16e0435e15f7a`, with corpus SHA-256
 `34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27`.
-The reviewed correctness vector is 310/310 strict checks over 117 cases. The
-reviewed 103-case analysis vector has 103/103 complete-root and 40/40
-played-rank checks, 27/40 puzzle top-1, 34/40 recall@3, 53/80 PV stability,
-68/103 budget stability, median/p90/p99 regret 0/17/440 cp, zero catastrophic
-misses, and 40 exact accepted-move fixtures. Quality misses establish the
-ratchet; only strict failures or a regression from these reviewed values make
-the full baseline gate fail.
+They are reviewed reference values, not claims about an unmeasured candidate.
 
-## The corpus (eval-v1)
+| Full-baseline measure | Reviewed value |
+| --- | --- |
+| Strict correctness | 310/310 checks over 117 cases |
+| Complete legal roots / played-move rank | 103/103 and 40/40 |
+| Puzzle top-1 / recall@3 | 27/40 and 34/40 |
+| Principal-variation stability / budget stability | 53/80 and 68/103 |
+| Regret, median / p90 / p99 | 0 / 17 / 440 centipawns |
+| Catastrophic misses | 0 |
+| Exact accepted-move fixtures | 40 |
 
-A compact, frozen set carrying the tracker's provenance schema on every record:
+## Corpus and provenance
 
-```
+`eval-v1` contains 117 cases: 80 from CC0 sources and 37 authored MIT fixtures.
+
+| Source | Cases | Coverage |
+| --- | ---: | --- |
+| Lichess Open Database puzzles | 40 | Five difficulty bands: <1000, 1000–1399, 1400–1799, 1800–2199, 2200+ |
+| Lichess `chess-openings` | 40 | ECO/name/line samples across all five ECO volumes |
+| Chessy-authored fixtures | 37 | Special-move availability and restraint, terminal states, repetition, fifty-move boundaries, dead positions, and endgame line replay |
+
+Lichess puzzle FENs precede the opponent's setup move. The corpus uses the
+position after that move and retains `source_fen`, `setup_move`, and the
+labelled key move. Opening positions are derived by replaying their source
+lines through Chessy's rules engine.
+
+Every record carries the provenance and expectation fields below; `?` marks
+an optional field:
+
+```text
 id, source_url, source_id, license, retrieval_date, source_sha,
 fen, source_fen?, setup_move?, move_history?, expected_moves?, phase, themes,
 rating_band, branching, split_group, generator_version, seed?, assert
 ```
 
-**117 cases (80 CC0 + 37 MIT):**
+The deterministic train/validation/test split is 70/15/15. Puzzles are grouped
+by source game before extraction. The 64-case correctness PR shard includes
+all correctness-critical authored fixtures, then fills by round-robin across
+ECO volumes and puzzle bands. Strict correctness may include test-tagged
+records; routine analysis-quality feedback uses train/validation only.
 
-- **Puzzles (40, `CC0-1.0`)** — real Lichess Open Database puzzles, stratified
-  across five puzzle-difficulty bands (`<1000`, `1000–1399`, `1400–1799`,
-  `1800–2199`, `2200+`). Per the Lichess convention the source FEN precedes the
-  opponent's setup move, so the corpus stores the position **after** the setup
-  move (`fen`), keeps the labelled key move (`expected_moves`), and records
-  `source_fen` / `setup_move` for reproducibility.
-- **Openings (40, `CC0-1.0`)** — real ECO/name/line rows sampled across all five
-  ECO volumes from the CC0 lichess `chess-openings` project; each FEN is derived
-  by replaying the line through Chessy's own engine.
-- **Stateful / adversarial + endgame fixtures (37, `MIT`)** — original positions
-  authored for this repository (`chessy-eval-generator`) covering en passant
-  (incl. restraint: no-square and pin-illegal), castling rights (and restraint),
-  promotion (and restraint), stalemate, checkmate, mate-in-1 score boundaries,
-  the fifty-move boundary, threefold repetition, insufficient material / dead
-  positions, and long-range endgame legality (with multi-ply PV replay).
+The full corpus was consulted when selecting accepted-move criterion v1.
+Its test-tagged records therefore serve as compatibility evidence for that
+criterion, not an untouched holdout. A fresh non-overlapping lockbox is tracked
+in [#112](https://github.com/den-run-ai/chessy/issues/112). Syzygy exact-WDL
+fixtures and a later-month out-of-distribution sample remain planned in the
+[license report](LICENSE-REPORT.md).
 
-Only a **compact frozen sample** of each CC0 database is committed — never the
-multi-million-row dumps. `split_group` assigns a deterministic **70/15/15
-train/val/test** split (puzzles hashed by *game id* so same-game puzzles share a
-split — split-before-extract). Test-tagged records are excluded from routine PR
-analysis-quality feedback (strict correctness coverage may still include
-test-tagged shard records). The frozen **64-case PR shard** (`shard: true`: every
-correctness-critical generated case, then a fill stratified round-robin across
-ECO volumes and puzzle rating bands) runs on every PR; the full corpus is used
-by the manual + weekly Full evaluation workflow and for pre-release runs. The
-Syzygy exact-WDL fixtures and the rotating
-later-month OOD sample are staged for later E1 work — see `LICENSE-REPORT.md`.
-Historical exception: the full
-`eval-v1` metrics were already consulted when selecting accepted-move criterion
-v1, so its test-tagged records are now compatibility evidence for that
-criterion, not an untouched holdout. A new non-overlapping one-shot lockbox is
-tracked in [#112](https://github.com/den-run-ai/chessy/issues/112).
+### Regenerate or refresh
 
-## The correctness scorecard (a score vector)
+The app is offline; development and corpus acquisition may use the network.
+Only compact source samples belong in Git, not full database dumps.
 
-| Axis | What it checks | Gate |
+```sh
+# Deterministic regeneration from the committed sources; also runs in PR CI.
+node test/eval/gen-corpus.js
+
+# Intentional online refresh of the frozen source sample and provenance.
+node test/eval/fetch-corpus.js
+```
+
+The fetcher downloads CC0 sources into `corpus/sources/`. The generator reads
+those committed bytes offline, validates expectations, and produces identical
+output for identical inputs. Both are Node development tools; the fetcher
+also uses `curl`.
+
+## Correctness scorecard
+
+Every correctness check must pass. The runner authenticates the corpus against
+its manifest, and baseline comparison rejects lost coverage, vacuous axes,
+or changed analysis configuration.
+
+| Axis | Check |
+| --- | --- |
+| `legalRoot` | Legal-move set against `chess.js`, plus pseudo-move derivation, unique SAN round-trip, and a nonempty set exactly when live |
+| `terminalStatus` | Checkmate, stalemate, fifty-move, repetition, dead-position, and live-state expectations |
+| `specialMoves` | Castling, en passant, and promotion availability and restraint |
+| `expectedLegal` | Legality of every corpus-labelled move |
+| `pvReplay` | Legal replay of every reported principal variation |
+| `perspectiveMate` | Correct mate distance and winning side |
+| `symmetry` | Best-move invariance under color/rank mirroring |
+| `determinism` | Identical repeated analysis results |
+
+[`chess.js`](https://github.com/jhlywa/chess.js) is a separate BSD-2-Clause
+rules implementation. Without it, `legalRoot` falls back to self-consistency
+checks. Installing the oracle strengthens validation but never changes the
+generated records. Correctness does not depend on playing strength.
+
+## Analysis scorecard
+
+The analysis scorecard checks the output consumed by coaching. It separates
+strict result contracts, directional quality measures, and an exact semantic
+fixture.
+
+| Axis | Requirement | Meaning |
 | --- | --- | --- |
-| `legalRoot` | Differential legal-move set — an **independent oracle** (chess.js, a separate rules implementation) when available, plus pseudo-move re-derivation + unique SAN round-trip; non-empty iff live | strict |
-| `terminalStatus` | checkmate / stalemate / fifty-move / threefold / insufficient-material verdict **and** live-position (`notTerminal`) expectations | strict |
-| `specialMoves` | en-passant / castling / promotion availability **and restraint** (absent where forbidden) | strict |
-| `expectedLegal` | every corpus-labelled move (e.g. a puzzle's key move) is legal in its position | strict |
-| `pvReplay` | every reported MultiPV line replays legally, move by move | strict |
-| `perspectiveMate` | `analyse()` mate distance **and** winning side match | strict |
-| `symmetry` | best move is invariant under colour/rank mirroring | strict |
-| `determinism` | `analyse()` is bit-identical across repeated runs | strict |
+| `rootComplete` | Strict | The shipped result validator accepts the whole object, and `bestLines` covers every legal root |
+| `playedRank` | Strict | Rank and classification match all legal roots at the shipped candidate width |
+| `puzzleTop1` | Quality ratchet | The Lichess key move ranks first |
+| `puzzleRecall3` | Quality ratchet | The key move ranks in the top three |
+| `pvStability` | Quality ratchet | An independent search one ply shallower retains the best move |
+| `budgetStability` | Quality ratchet | The best line survives ¼× budget; full mode also checks 4× |
+| `regret` | Quality ratchet | Full-depth regret of the quick-scan choice: median, p90, p99, and catastrophic-miss count |
+| `equivalence` | Exact fixture | Criterion identity and each puzzle's accepted-move verdict/reason match the reviewed baseline |
 
-**Correctness is strict: any failed check exits non-zero (100%, no tolerated
-regression).** This axis is *version-independent* — a correct engine scores 100%
-regardless of its playing strength — so it is safe to gate now, before the
-strength baselines. The generator validates every committed expectation against
-the engine at build time, and the scorecard verifies the corpus sha256 against
-the manifest before running, so a corrupted fixture fails loudly rather than
-passing silently.
+Strict axes require 100%. Quality may improve but cannot regress against the
+matching PR or full baseline. The ratchet is exact because analysis is
+deterministic; an unsolved puzzle establishes the measured level. Checked
+counts and regret sample size are part of the gate and cannot shrink.
 
-**Independent oracle.** `legalRoot` cross-checks Chessy's legal-move set against
-[`chess.js`](https://github.com/jhlywa/chess.js) (BSD-2-Clause) — a *separate*
-rules implementation — so a bug in Chessy's own move-gen can't pass by agreeing
-with itself. It is a **dev/CI-only** tool (CI runs `npm install --no-save
-chess.js`), never bundled into the offline app; when it is absent the check
-degrades to the self-consistency form and the corpus regenerates identically
-(the oracle only validates, it never alters records).
+Whole-object validation uses `ChessyAnalysisResult.validate` with an
+independently derived request identity. It covers provenance, completeness,
+depth/stability, evaluations, resolved lines, ordering, and duplicates. E3 adds
+complete legal-root coverage. The ¼×/4× results must pass the same validator;
+an unusable tier counts as a quality miss. Candidate width comes from
+`assets/reflection.js` at runtime.
 
-**Baseline gates in CI.** The PR job runs `scorecard.js --baseline
-eval/BASELINE.json`, so a lost check, a vacuous axis, or a changed analysis
-config fails the gate — not just a new assertion failure. The Full evaluation
-workflow applies the same compatibility rules to all 117 cases against
-`FULL-BASELINE.json`.
+The equivalence fixture preserves honest `unknown` and `not-equivalent`
+results. A changed criterion, missing case, or changed verdict/reason requires
+an explicit reviewed rebaseline; opposite changes cannot cancel in an
+aggregate. The PR fixture covers 12 puzzles and the full fixture covers 40.
+Comparisons use accepted-move sets, overlap, stability, and regret, rather
+than requiring exact external-engine centipawn scores or lines.
 
-## The analysis scorecard (the E3 slice)
+`--self-test` exercises 18 cases: 13 strict engine faults, one unusable
+auxiliary tier, one misleading stability self-report, and three exact-fixture
+changes. See [ANALYSIS-BASELINE.md](ANALYSIS-BASELINE.md) for the inventory.
+Cache, progress, cancellation, and worker recovery are tested by the runtime
+service/browser suites, outside this pure-core scorecard.
 
-`analysis-scorecard.js` grades the **quality** of what the coaching panel shows,
-on the same frozen corpus. Its axes use strict contracts, directional quality
-ratchets, and one exact semantic fixture so those different claims cannot be
-silently conflated:
+## Calibration and matches
 
-| Axis | Class | What it checks |
-| --- | --- | --- |
-| `rootComplete` | **strict** | The whole result passes the shipped `ChessyAnalysisResult.validate` (provenance, `complete`, depth/stability, top-level and per-line evaluations, full line resolution, ordering, duplicates), **and** `bestLines` covers every legal root — a true MultiPV, not a shortlist |
-| `playedRank` | **strict** | The played-move `rank` matches its true rank over all roots, and `classification` matches that rank at the **shipped** candidate width (equivalent-move recognition) |
-| `puzzleTop1` | ratchet | The CC0 Lichess key move is the engine's #1 line |
-| `puzzleRecall3` | ratchet | The key move is within the top 3 |
-| `pvStability` | ratchet | Best move unchanged one ply shallower — **measured independently**, not read off the engine's own stability flag |
-| `budgetStability` | ratchet | Best line unchanged at ¼× budget (`--full` adds the 4× tier); a tier rejected by the shipped validator scores as a miss |
-| `regret` | ratchet | Median / p90 / p99 cp regret of the quick-scan pick re-scored at full depth, plus a catastrophic-miss count |
-| `equivalence` | **exact fixture** | The shipped `ChessyEquivalence` verdict/reason for each puzzle key in the selected mode through the shipped-width `playedMove` path; criterion identity, per-case outcome, and coverage must match the mode's reviewed baseline |
+The displayed 1500–2300+ bands are provisional targets on an external engine
+scale. They are not certified FIDE, Chess.com, or Lichess ratings.
 
-**Strict axes gate at 100%; quality axes ratchet** — they may improve but never
-regress against the matching shard or full baseline. An unsolved puzzle is a
-measured quality level, not a broken build; determinism (proven by the E2 axis) makes
-the ratchet **exact**, with no tolerance band. Coverage is part of the score:
-the fraction axes' `checked` counts and the regret sample `n` fail the ratchet
-when they shrink, so an engine can never look better by measuring less. Per the
-tracker, oracle comparison avoids exact centipawn/PV equality — acceptable-move
-sets, set overlap, budget invariance and a regret tail distribution, never a
-single Elo number.
+| Evidence | Scope and status |
+| --- | --- |
+| [E4-v1 opening freeze](e4/README.md) | Pinned historical r71 baseline; exploration and certification manifests remain pending |
+| [r80 level screen](level-screen-r80/README.md) | Exploratory Stockfish 18 comparison that informed the preset relabel; no certification |
+| [Easy depth comparison](easy-depth-screen-2026-09-25/README.md) | 200-game development screen that retained depth-2 Easy |
+| [Play/analysis recalibration](PLAY-ANALYSIS-RECALIBRATION-2026-09.md) | Budget and analysis-profile rationale |
+| [v2 manifest](match-v2/PROVENANCE.md) and [execution](match-v2/EXECUTION.md) | Frozen 400-endpoint CC0 bank; exact commits, modules, budgets, both colors, and 20 complete shards; diagnostic only |
+| [Fresh finite-bank contract](match-formal/CONTRACT.md) | Separate formal protocol with randomized sampling and authenticated prerequisites; no admitted campaign |
+| [Admission proposal](match-v2/ADMISSION-PROPOSAL.md) | Exposure limits and dependency map for future admission |
+| [Historical v1 protocols](MATCH-HISTORY.md) | Archived strength, efficiency, and equal-time contracts; do not dispatch for a new candidate |
 
-The `equivalence` fixture is intentionally different from a directional
-quality score: `unknown` and `not-equivalent` are honest measured states, not
-automatic build failures. What fails is an unreviewed semantic change. The
-baseline embeds the exact criterion identity and per-case
-`id → verdict/reason`, so opposite shifts cannot cancel in an aggregate count;
-identity drift, a missing case, or any changed outcome requires a conscious
-same-change re-baseline. The committed shard baseline covers 12 puzzle cases;
-`ANALYSIS-FULL-BASELINE.json` covers all 40 puzzle cases for the manual and
-weekly full-corpus gate.
+The v2 profiles remain distinct: `evaluator-easy` uses 10,000 nodes and an
+endpoint lower bound above 50%; `selective-hard` uses 230,000 nodes and a bound
+above 49%. These protocol IDs predate r80 and do not name current Play levels
+(230,000 nodes is Expert). Unique endpoints do not establish independent
+opening families. No candidate has been measured on that manifest.
 
-The strict axes delegate whole-object validation to the shipped
-`ChessyAnalysisResult.validate` (against an independently derived identity), so
-the gate can never be laxer than the coaching path consuming the same output;
-E3 adds only the full-MultiPV coverage requirement on top — and the auxiliary
-¼×/4× tiers must pass the same validator before they are graded. The shipped
-candidate width is derived from `assets/reflection.js` at run time, never
-duplicated. The PR shard grades **train/validation records only** — the
-test-tagged records are reserved for `--full`. They remain outside routine PR
-feedback, but are not represented as untouched validation for criterion v1
-because its full-corpus metrics were already consulted; see #112 for the fresh
-lockbox protocol.
-`--self-test` simulates eighteen gate failures: thirteen engine faults must
-turn the strict gate red, an unusable auxiliary tier must be fully visible to
-the ratchet, a flattering self-report must leave `pvStability` unmoved
-(immunity), and verdict drift, missing fixture coverage, and criterion-identity
-drift must each turn the exact baseline gate red — see
-[`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md) for the fault list and the
-published numbers.
+The formal [registry](match-formal/registry.json) has no campaign. Fresh-bank,
+candidate, correctness, reproduction, and device prerequisites remain open in
+[#175](https://github.com/den-run-ai/chessy/issues/175). The conservative
+selective-search profile cannot admit an exactly behavior-preserving cost
+optimization; those changes need the separately reviewed equivalence/runtime
+policy described in the contract.
 
-## Roadmap (per the tracker)
+## Research index
 
-- **E1** — corpus & provenance, frozen 64-case PR shard *(this slice: online
-  fetcher + offline generator, real CC0 Lichess puzzles + openings committed;
-  the Syzygy exact-WDL and rotating OOD tranches are staged next)*.
-- **E2** — correctness runner *(this slice: differential legality, PV replay,
-  stateful cases, deterministic search signature)*.
-- **E3** — analysis scorecard *(this slice: acceptable-move sets, top-3 recall,
-  regret quantiles, stability at ¼×/1×/4× node budget, complete-MultiPV and
-  played-move-rank contracts, and exact accepted-move criterion fixtures — see
-  [`ANALYSIS-BASELINE.md`](./ANALYSIS-BASELINE.md).
-  Still open: the **cache / progress / cancel** runtime tests, which live in the
-  analysis **service worker** rather than the pure core graded here)*.
-- **E4** — level & match calibration: the 400-opening manifest, adjacent-level
-  ladder, paired opening-cluster statistics.
-- **E5** — tuning protocol: grouped splits, locked-test workflow, corrected
-  K-fit, fresh post-selection paired match.
+These reports retain experimental results and limitations. They do not, by
+themselves, change the shipped evaluator or certify strength.
+
+| Topic | Reference |
+| --- | --- |
+| Expanded PeSTO evaluation | [Pilot](PESTO-PILOT-2026-09.md) |
+| Natural-game follow-up | [50,000-position experiment and 80-game development screen](NATURAL-PILOT-2026-09.md) |
+| Compact neural evaluation | [Original H4](neural-h4/REPORT.md), [residual repair](neural-h4-v2/REPORT.md), [phase/width](neural-h4-v3/REPORT.md), [factorial and budget screen](neural-h4-v4/REPORT.md) |
+| Compiled neural cost | [Storage, module, memory, and runtime](training/nnue-phase-runtime-results-2026-09.md) |
+| Incremental accumulation | [Direct evaluation and aggregate-search comparison](training/nnue-incremental-results-2026-09.md) |
+| Training foundation | [HCE R3 and NNUE guide](training/README.md) |
+| Engine signatures | [Versioned evidence and activation](../experiments/wasm/SIGNATURE-ROTATION.md) |
+| Search-cost experiments | [WASM engine guide](../experiments/wasm/README.md) |
+
+The evaluation tracker is [#87](https://github.com/den-run-ai/chessy/issues/87).
+E1 covers corpus/provenance, E2 correctness, E3 analysis quality, E4 level and
+match calibration, and E5 tuning with grouped splits and locked tests. Corpus
+generation, correctness, and analysis checks run in CI; certification and
+tuning admission remain separate work.

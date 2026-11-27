@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+'use strict';
+// Only built-ins run before this bootstrap captures and executes its own bytes.
+if (typeof __compactMeasure === 'undefined') {
+  const fs=require('node:fs'),path=require('node:path'),root=path.resolve(__dirname,'../../..');
+  const files=[__filename,path.join(__dirname,'protocol.json'),...['assets/engine.js','assets/wasm-engine.js'].map(p=>path.join(root,p))]
+    .map(file=>({file,bytes:Buffer.from(fs.readFileSync(file))}));
+  require('node:vm').compileFunction(files[0].bytes.toString().replace(/^#![^\n]*/,''),
+    ['require','module','exports','__filename','__dirname','__compactMeasure'],{filename:__filename})
+    (require,module,module.exports,__filename,__dirname,files);
+} else {
+  const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
+  const crypto=require('node:crypto'),assert=require('node:assert/strict'),{performance}=require('node:perf_hooks');
+  const ROOT=path.resolve(__dirname,'../../..'), captured=__compactMeasure;
+  const sha=b=>crypto.createHash('sha256').update(b).digest('hex'), json=x=>JSON.stringify(x,null,2)+'\n';
+  const plain=x=>JSON.parse(JSON.stringify(x));
+  const get=suffix=>captured.find(f=>f.file.endsWith('/'+suffix)).bytes;
+  const protocol=JSON.parse(get('protocol.json'));
+  const inventory=()=>captured.map(r=>({path:path.relative(ROOT,r.file),sha256:sha(r.bytes)}));
+  const same=(a,b,m)=>assert.equal(JSON.stringify(a),JSON.stringify(b),m);
+  const runtime=()=>({versions:process.versions,platform:process.platform,arch:process.arch,cpus:os.cpus().map(c=>c.model)});
+  const unchanged=()=>captured.forEach(r=>assert.equal(sha(fs.readFileSync(r.file)),sha(r.bytes),'implementation changed'));
+  const median=values=>{const a=values.slice().sort((x,y)=>x-y),n=a.length;assert.ok(n);return n%2?a[n>>1]:(a[n/2-1]+a[n/2])/2;};
+  const geomean=values=>Math.exp(values.reduce((sum,x)=>sum+Math.log(x),0)/values.length);
+  const identity=modules=>sha(json({protocol:'chessy.compact-hash.one-shot.v1',modules:modules.map(m=>m.sha256),positions:protocol.positions,
+    fixed:protocol.fixed,warmup:protocol.warmup,order:protocol.order,master:protocol.master}));
+  const ledgerFile=id=>path.join(fs.realpathSync(os.homedir()),'.local/state/chessy-research/den-run-ai/chessy',id+'.started.json');
+  function summary(rows) {
+    const budgets={};
+    for(const nodeLimit of protocol.fixed.nodeLimits){
+      const positions=protocol.positions.map((position,index)=>{
+        const ratios=[];
+        for(let repetition=0;repetition<protocol.fixed.repetitions;repetition++){
+          const pair=rows.filter(r=>r.position===index&&r.repetition===repetition&&r.nodeLimit===nodeLimit);
+          assert.equal(pair.length,2);const a=pair.find(r=>r.engine===0),b=pair.find(r=>r.engine===1);
+          same(a.result,b.result,'timed complete signature mismatch');ratios.push(a.elapsedMs/b.elapsedMs);
+        }
+        return {name:position.name,phase:position.phase,ratios,medianRatio:median(ratios)};
+      });
+      const phaseMedians=Object.fromEntries(['opening','middlegame','endgame'].map(phase=>[phase,median(positions.filter(p=>p.phase===phase).map(p=>p.medianRatio))]));
+      budgets[nodeLimit]={positions,geomeanRatio:geomean(positions.map(p=>p.medianRatio)),phaseMedians};
+    }
+    const condition=protocol.master.condition,routing=budgets[condition.fixedNodeLimit];
+    return {budgets,masterRoute:routing.geomeanRatio>=condition.minGeometricSpeedRatio&&Object.values(routing.phaseMedians).every(x=>x>=condition.minEachPhaseMedianSpeedRatio)};
+  }
+  function register(file,directory,validationFile) {
+    directory=fs.realpathSync(directory);validationFile=fs.realpathSync(validationFile);
+    const validationBytes=fs.readFileSync(validationFile),validation=JSON.parse(validationBytes);
+    assert.equal(validation.complete,true);assert.equal(validation.exactFiniteParity,true);assert.equal(validation.signatureCases,144);
+    const sourceFile=path.join(directory,'source.json'),sourceBytes=fs.readFileSync(sourceFile);
+    assert.equal(sha(sourceBytes),validation.sourceReceiptSha256);
+    assert.equal(JSON.parse(sourceBytes).variant,'threaded');
+    const modules=[path.join(ROOT,'assets/chessy-ai-fast.wasm'),path.join(directory,'dist/chessy-ai-fast.wasm')].map(file=>{
+      file=fs.realpathSync(file);const bytes=fs.readFileSync(file);return {path:file,sha256:sha(bytes),rawBytes:bytes.length};
+    });
+    same(modules.map(m=>m.sha256),validation.modules.map(m=>m.sha256),'validated module changed');
+    assert.notEqual(modules[0].sha256,modules[1].sha256);
+    const experimentIdentity=identity(modules);assert.equal(fs.existsSync(ledgerFile(experimentIdentity)),false,'experiment already started; no rerun');
+    const registration={schema:'chessy.compact-hash.registration.v1',created:new Date().toISOString(),researchOnly:true,
+      productionIntegrationAllowed:false,strengthClaimAllowed:false,protocol,experimentIdentity,modules,runtime:runtime(),dependencies:inventory(),
+      sourceReceipt:{path:sourceFile,sha256:sha(sourceBytes)},validation:{path:validationFile,sha256:sha(validationBytes)},
+      rawGatePassed:validation.rawGatePassed};
+    unchanged();fs.writeFileSync(file,json(registration),{flag:'wx'});return registration;
+  }
+  function run(file,output) {
+    file=fs.realpathSync(file);const registrationBytes=fs.readFileSync(file),plan=JSON.parse(registrationBytes);
+    assert.equal(plan.schema,'chessy.compact-hash.registration.v1');
+    assert.equal(plan.researchOnly,true);assert.equal(plan.productionIntegrationAllowed,false);assert.equal(plan.strengthClaimAllowed,false);
+    same(plan.protocol,protocol,'registered protocol drift');same(plan.dependencies,inventory(),'registered runner drift');same(plan.runtime,runtime(),'runtime drift');
+    assert.equal(plan.experimentIdentity,identity(plan.modules));
+    const retained=plan.modules.map(m=>{assert.equal(fs.realpathSync(m.path),m.path);const bytes=fs.readFileSync(m.path);assert.equal(sha(bytes),m.sha256);return bytes;});
+    const sourceBytes=fs.readFileSync(plan.sourceReceipt.path),validationBytes=fs.readFileSync(plan.validation.path);
+    assert.equal(sha(sourceBytes),plan.sourceReceipt.sha256);assert.equal(sha(validationBytes),plan.validation.sha256);
+    const generated=JSON.parse(sourceBytes).generated.map(entry=>{
+      const file=path.join(path.dirname(plan.sourceReceipt.path),entry.path),bytes=fs.readFileSync(file);
+      assert.equal(sha(bytes),entry.sha256,'generated source changed');return {file,bytes};
+    });
+    assert.equal(fs.existsSync(output),false,'output already exists');
+    const reservation=ledgerFile(plan.experimentIdentity);fs.mkdirSync(path.dirname(reservation),{recursive:true});
+    const receipt={schema:'chessy.research-started.v1',experimentIdentity:plan.experimentIdentity,registrationSha256:sha(registrationBytes),started:new Date().toISOString(),pid:process.pid};
+    const fd=fs.openSync(reservation,'wx',0o600);try{fs.writeFileSync(fd,json(receipt));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+    const parent=fs.openSync(path.dirname(reservation),'r');try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}
+    fs.mkdirSync(output);const journal=fs.openSync(path.join(output,'rows.jsonl'),'wx');
+    const report={schema:'chessy.compact-hash.measurement.v1',researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
+      registration:plan,registrationSha256:sha(registrationBytes),reservation:receipt,status:'started',warmups:[],fixed:[],master:[]};
+    const append=(phase,row)=>{report[phase].push(row);fs.writeSync(journal,JSON.stringify({stage:phase,...row})+'\n');fs.fsyncSync(journal);};
+    try {
+      const context={WebAssembly,TextEncoder,performance,console,module:{exports:{}}};vm.createContext(context);
+      vm.runInContext(get('assets/engine.js').toString(),context,{filename:'retained-engine.js'});
+      vm.runInContext(get('assets/wasm-engine.js').toString(),context,{filename:'retained-wasm-engine.js'});
+      const engines=retained.map(bytes=>context.module.exports.loadSync(bytes));engines.forEach(e=>assert.equal(e.memoryBytes(),26542080));
+      function think(phase,position,repetition,engine,options){
+        const start=performance.now(),result=engines[engine].search(protocol.positions[position].fen,options),elapsedMs=performance.now()-start;
+        assert.ok(Number.isFinite(elapsedMs)&&elapsedMs>0);
+        const row={position,name:protocol.positions[position].name,phase:protocol.positions[position].phase,repetition,engine,nodeLimit:options.nodeLimit,elapsedMs,result:plain(result)};
+        append(phase,row);return row;
+      }
+      for(let repetition=0;repetition<protocol.warmup.rounds;repetition++)for(let position=0;position<protocol.positions.length;position++){
+        const first=(position+repetition)%2;think('warmups',position,repetition,first,protocol.warmup);think('warmups',position,repetition,1-first,protocol.warmup);
+      }
+      for(let repetition=0;repetition<protocol.fixed.repetitions;repetition++){
+        for(let position=0;position<protocol.positions.length;position++)for(const nodeLimit of protocol.fixed.nodeLimits){
+          const first=(position+repetition)%2,options={...protocol.fixed,nodeLimit};
+          const a=think('fixed',position,repetition,first,options),b=think('fixed',position,repetition,1-first,options);
+          same(a.result,b.result,'timed complete signature mismatch');
+        }
+        console.log('Completed fixed-node repetition '+(repetition+1));
+      }
+      assert.equal(report.fixed.length,432);report.summary=summary(report.fixed);
+      console.log('Fixed-node routing '+JSON.stringify({master:report.summary.masterRoute,at230k:report.summary.budgets[230000].geomeanRatio,phases:report.summary.budgets[230000].phaseMedians}));
+      if(report.summary.masterRoute)for(const position of protocol.master.positionIndices)for(let repetition=0;repetition<protocol.master.repetitions;repetition++){
+        const first=(position+repetition)%2;think('master',position,repetition,first,protocol.master);think('master',position,repetition,1-first,protocol.master);
+        console.log('Completed Master pair '+position+'/'+repetition);
+      }
+      assert.equal(report.master.length,report.summary.masterRoute?8:0);
+      engines.forEach(e=>assert.equal(e.memoryBytes(),26542080));unchanged();
+      assert.equal(sha(fs.readFileSync(file)),sha(registrationBytes));assert.equal(sha(fs.readFileSync(plan.sourceReceipt.path)),sha(sourceBytes));
+      assert.equal(sha(fs.readFileSync(plan.validation.path)),sha(validationBytes));same(JSON.parse(fs.readFileSync(reservation)),receipt);
+      generated.forEach(r=>assert.equal(sha(fs.readFileSync(r.file)),sha(r.bytes),'generated source changed during run'));
+      for(let i=0;i<retained.length;i++)assert.equal(sha(fs.readFileSync(plan.modules[i].path)),sha(retained[i]));
+      report.status='complete';
+    } catch(error) {report.status='failed';report.error=String(error.stack||error);throw error;}
+    finally {fs.closeSync(journal);fs.writeFileSync(path.join(output,'report.json'),json(report),{flag:'wx'});}
+    return report;
+  }
+  module.exports={register,run,summary,median,geomean};
+  if(require.main===module){
+    try{const [command,...args]=process.argv.slice(2);let result;
+      if(command==='register'&&args.length===3)result=register(...args);
+      else if(command==='run'&&args.length===2)result=run(...args);
+      else throw Error('usage: measure.js register PLAN GENERATED_CRATE VALIDATION | run PLAN NEW_OUTPUT_DIR');
+      console.log(json({status:result.status||'registered',experimentIdentity:result.experimentIdentity||result.registration.experimentIdentity}));
+    }catch(error){console.error(error.stack||error);process.exitCode=1;}
+  }
+}

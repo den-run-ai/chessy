@@ -10,6 +10,7 @@
 require('../assets/engine.js');
 require('../assets/calculation.js');
 require('../assets/analysis-result.js');
+require('../assets/analysis-core.js');
 
 const Chess = globalThis.Chess;
 const ChessyAnalysisResult = globalThis.ChessyAnalysisResult;
@@ -106,6 +107,7 @@ globalThis.CoachStore = {
 };
 
 globalThis.ChessyAnalysisCore = {
+  PROFILES: globalThis.ChessyAnalysisCore.PROFILES,
   identity: function (state, opts) {
     return {
       engineId: 'test',
@@ -222,7 +224,7 @@ function completeResult(req, supplied) {
     loss: loss,
     turn: turn,
     wdl: null,
-    depth: req.opts.nodeLimit === 80000 ? 4 : 2,
+    depth: req.opts.nodeLimit === 0 ? 4 : 2,
     nodes: 100,
     qnodes: 20,
     elapsedMs: 1,
@@ -258,7 +260,7 @@ function completeResult(req, supplied) {
       amongCandidates: false
     },
     classification: 'unknown-equivalence',
-    stability: req.opts.nodeLimit === 80000
+    stability: req.opts.nodeLimit === 0
       ? { depths: [3, 4], bestMoveStable: true } : null
   };
   return Object.assign(base, supplied);
@@ -359,6 +361,7 @@ function manualDeepResult(review, ply, supplied) {
     opts: {
       playedMove: review.gs.history[ply].move,
       maxDepth: profile.maxDepth,
+      scanTimeMs: profile.scanTimeMs,
       nodeLimit: profile.nodeLimit,
       nodeBudget: profile.nodeBudget,
       multiPV: profile.multiPV,
@@ -378,10 +381,10 @@ function manualDeepResult(review, ply, supplied) {
   const black = autoReview('black-first', 4, 'b', blackStart);
   const done = await Scan.start(black, { restart: true });
   const quickPlies = requests.filter(function (r) {
-    return r.opts.nodeLimit !== 80000;
+    return r.opts.nodeLimit !== 0;
   }).map(function (r) { return r.ply; });
   const deepPlies = requests.filter(function (r) {
-    return r.opts.nodeLimit === 80000;
+    return r.opts.nodeLimit === 0;
   }).map(function (r) { return r.ply; });
   check(quickPlies.join(',') === '0,1,2,3',
     'the quick pass scores every nonterminal move in game order',
@@ -390,9 +393,10 @@ function manualDeepResult(review, ply, supplied) {
     'only shortlisted chosen-side decisions receive the exact deep profile');
   check(done.state === 'done' && done.checked === 4 && done.total === 4,
     'a finished two-pass scan persists exact all-move progress');
-  check(requests.filter(function (r) { return r.opts.nodeLimit === 80000; })
+  check(requests.filter(function (r) { return r.opts.nodeLimit === 0; })
     .every(function (r) {
-      return r.opts.maxDepth === 10 && r.opts.nodeBudget === 1200000 &&
+      return r.opts.maxDepth === 111 && r.opts.nodeBudget === 16000000 &&
+        r.opts.scanTimeMs === 16000 &&
         r.opts.multiPV === 3 && r.opts.pvLen === 6;
     }), 'deep verification is byte-aligned with the manual reflection profile');
   const pub = Scan.state();
@@ -730,7 +734,7 @@ function manualDeepResult(review, ply, supplied) {
   replies = [];
   const genuineResumed = await Scan.resume(genuineReview);
   const resumedQuickPlies = requests.filter(function (req) {
-    return req.opts.nodeLimit !== 80000;
+    return req.opts.nodeLimit !== 0;
   }).map(function (req) { return req.ply; });
   check(resumedQuickPlies.join(',') === '1,2,3' &&
       genuineResumed.state === 'done' &&
@@ -950,11 +954,13 @@ function manualDeepResult(review, ply, supplied) {
       rewoundDeepFailure.verifyIndex === 0 &&
       rewoundDeepFailure.moments.length === 0 && requests.length === 0 &&
       rewoundDeepJob.deepResults.length === 0 &&
-      rewoundDeepJob.unresolved.length === 0 &&
+      rewoundDeepJob.unresolved.length === 1 &&
+      rewoundDeepJob.unresolved[0].ply === forgedDeepFailure.shortlist[0].ply &&
+      rewoundDeepJob.unresolved[0].phase === 'deep' &&
       rewoundDeepJob.moveSummaries.find(function (summary) {
         return summary.ply === forgedDeepFailure.shortlist[0].ply;
       }).profile.indexOf('quick') === 0,
-    'a forged deep failure rewinds instead of suppressing a required suggestion');
+    'a forged deep failure retains only retry authority and cannot suppress a required suggestion');
   const downgradedAcceptance = clone(passTwoCheckpoint);
   downgradedAcceptance.moveSummaries.find(function (summary) {
     return summary.ply === downgradedAcceptance.shortlist[0].ply;
@@ -994,7 +1000,7 @@ function manualDeepResult(review, ply, supplied) {
   requests = [];
   replies = [];
   const passTwoResumed = await Scan.resume(passTwoResumeReview);
-  check(requests.length === 1 && requests[0].opts.nodeLimit === 80000 &&
+  check(requests.length === 1 && requests[0].opts.nodeLimit === 0 &&
       requests[0].ply === remainingDeepPly &&
       passTwoResumed.state === 'done' && passTwoResumed.moments.length === 2,
     'pass-two reload dispatches only the remaining canonical shortlist slot');
@@ -1065,12 +1071,148 @@ function manualDeepResult(review, ply, supplied) {
   replies = [];
   const deepUnresolvedResumed = await Scan.resume(deepUnresolvedReview);
   check(requests.length === 2 && requests.every(function (request) {
-        return request.opts.nodeLimit === 80000;
+        return request.opts.nodeLimit === 0;
       }) &&
       requests[0].ply === deepUnresolvedCheckpoint.shortlist[0].ply &&
       requests[1].ply === deepUnresolvedCheckpoint.shortlist[1].ply &&
       deepUnresolvedResumed.state === 'done',
     'deep-unresolved reload retries the unproved slot before its suffix');
+  // A cached, wall-clock-dependent deep row that was unusable must be
+  // recomputed on resume; the untouched suffix slot may use the cache.
+  check(requests[0].fresh === true && requests[1].fresh === false,
+    'the retried deep slot bypasses the analysis cache; the next slot does not',
+    JSON.stringify(requests.map(function (r) { return [r.ply, r.fresh]; })));
+
+  // An interrupted fresh retry (null reply) must not lose the slot's failure:
+  // a later reload and a same-session Resume both recompute it again rather
+  // than serving the cached unusable row.
+  reset();
+  const interruptedReview = autoReview('deep-interrupted', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 160 },
+    { valid: true, complete: true, loss: 150 },
+    { valid: true, complete: true, loss: 140 },
+    { valid: true, complete: true, loss: 130 },
+    { valid: false, complete: true, reason: 'deep-unusable' }
+  ];
+  await Scan.start(interruptedReview, { restart: true });
+  const interruptedSlot = clone(jobs.get('deep-interrupted')).unresolved[0];
+  const interruptedRuns = [];
+  for (const reload of [true, true, false]) {
+    if (reload) Scan.invalidate();
+    requests = [];
+    replies = reload ? [null] : [];
+    const state = await Scan.resume(interruptedReview);
+    const saved = clone(jobs.get('deep-interrupted'));
+    interruptedRuns.push({
+      reload: reload,
+      firstPly: requests[0] && requests[0].ply,
+      firstFresh: requests[0] && requests[0].fresh,
+      state: state.state,
+      durable: saved.unresolved.some(function (item) {
+        return item.phase === 'deep' && item.ply === interruptedSlot.ply &&
+          item.reason === interruptedSlot.reason;
+      })
+    });
+  }
+  check(interruptedSlot && interruptedSlot.phase === 'deep' &&
+      interruptedRuns.every(function (run) {
+        return run.firstPly === interruptedSlot.ply && run.firstFresh === true;
+      }) &&
+      interruptedRuns[0].state === 'paused' && interruptedRuns[0].durable &&
+      interruptedRuns[1].state === 'paused' && interruptedRuns[1].durable &&
+      interruptedRuns[2].state === 'done' && !interruptedRuns[2].durable,
+    'an interrupted fresh deep retry keeps its durable failure until a usable result',
+    JSON.stringify(interruptedRuns));
+
+  // Reopening Review writes its normalized paused job before Resume. A
+  // pending failure must survive that write and a second reload, even when
+  // no worker has run yet to restore the marker from its null reply.
+  reset();
+  const pausedRetryReview = autoReview('paused-deep-retry', 4, 'both');
+  replies = [
+    { valid: true, complete: true, loss: 160 },
+    { valid: true, complete: true, loss: 150 },
+    { valid: true, complete: true, loss: 140 },
+    { valid: true, complete: true, loss: 130 },
+    { valid: false, complete: true, reason: 'deep-unusable' }
+  ];
+  await Scan.start(pausedRetryReview, { restart: true });
+  const pendingRetryCheckpoint = clone(jobs.get('paused-deep-retry'));
+  const pendingSlot = clone(jobs.get('paused-deep-retry')).unresolved[0];
+  function durablePendingSlot() {
+    return jobs.get('paused-deep-retry').unresolved.some(function (item) {
+      return item.phase === 'deep' && item.ply === pendingSlot.ply &&
+        item.reason === pendingSlot.reason;
+    });
+  }
+  const loadKeepsRetry = [];
+  for (let i = 0; i < 2; i++) {
+    Scan.invalidate();
+    requests = [];
+    const loaded = await Scan.load(pausedRetryReview);
+    loadKeepsRetry.push(loaded.state === 'paused' &&
+      loaded.verifyIndex === 0 && loaded.report === undefined &&
+      requests.length === 0 && durablePendingSlot());
+  }
+  check(loadKeepsRetry.every(Boolean),
+    'opening Review across two reloads preserves the pending deep retry without dispatch or disclosure');
+
+  requests = [];
+  const pausedDeep = deferred();
+  replies = [pausedDeep];
+  const pendingResume = Scan.resume(pausedRetryReview);
+  for (let i = 0; i < 100 && requests.length === 0; i++) await Promise.resolve();
+  const beforePause = requests[0] && requests[0].fresh === true &&
+    requests[0].ply === pendingSlot.ply && durablePendingSlot();
+  await Scan.pause();
+  // The real service resolves cancellation null AFTER ownership is retired.
+  // That stale continuation must not be responsible for saving the marker.
+  pausedDeep.resolve(null);
+  await pendingResume;
+  const afterPause = durablePendingSlot();
+  Scan.invalidate();
+  requests = [];
+  replies = [];
+  const afterPauseResume = await Scan.resume(pausedRetryReview);
+  check(beforePause && afterPause && requests.length === 2 &&
+      requests[0].ply === pendingSlot.ply && requests[0].fresh === true &&
+      requests[1].fresh === false && afterPauseResume.state === 'done' &&
+      !durablePendingSlot(),
+    'Pause during a fresh deep retry survives reload and retires its marker only after usable replacement');
+
+  // Manual Verify can also fill the failed shortlist slot. Its accepted
+  // result must retire the same pending marker before checkpointing, without
+  // granting score access or clearing the untouched suffix's work.
+  Scan.invalidate();
+  const manualRetryCheckpoint = clone(pendingRetryCheckpoint);
+  const pendingSuffix = manualRetryCheckpoint.shortlist[1].ply;
+  manualRetryCheckpoint.unresolved.push({
+    ply: pendingSuffix, phase: 'deep', reason: 'suffix-unusable'
+  });
+  jobs.set('paused-deep-retry', manualRetryCheckpoint);
+  await Scan.load(pausedRetryReview);
+  const badManualRetry = await Scan.recordVerifiedSummary(pausedRetryReview,
+    pendingSlot.ply, { valid: false, complete: true });
+  check(badManualRetry === false && durablePendingSlot(),
+    'an invalid manual replacement cannot retire the pending deep retry');
+  const manualRetry = await Scan.recordVerifiedSummary(pausedRetryReview,
+    pendingSlot.ply, manualDeepResult(pausedRetryReview, pendingSlot.ply));
+  const manualCleared = !durablePendingSlot();
+  Scan.invalidate();
+  const loadedManualRetry = await Scan.load(pausedRetryReview);
+  const manualCheckpoint = clone(jobs.get('paused-deep-retry'));
+  requests = [];
+  replies = [];
+  await Scan.resume(pausedRetryReview);
+  check(manualRetry === true && manualCleared &&
+      loadedManualRetry.verifyIndex === 1 && loadedManualRetry.report === undefined &&
+      manualCheckpoint.deepResults.length === 1 &&
+      manualCheckpoint.deepResults[0].ply === pendingSlot.ply &&
+      manualCheckpoint.unresolved.length === 1 &&
+      manualCheckpoint.unresolved[0].ply === pendingSuffix &&
+      requests.length === 1 && requests[0].ply === pendingSuffix && requests[0].fresh === true,
+    'a usable manual replacement retires its pending retry across reload and resumes only the suffix');
 
   // Even coordinated corruption of every compact/derived field cannot create
   // circular proof. The full quick result remains genuinely subthreshold,

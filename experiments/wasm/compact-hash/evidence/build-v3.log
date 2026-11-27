@@ -1,0 +1,9 @@
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-compact-hash-v3)
+    Finished `release` profile [optimized] target(s) in 2.17s
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-compact-hash-v3)
+    Finished `small` profile [optimized] target(s) in 1.53s
+ 41460 /workspace/scratch/8a384797d3cd/chessy-compact-hash-v3/dist/chessy-ai-fast.raw.wasm
+ 37870 /workspace/scratch/8a384797d3cd/chessy-compact-hash-v3/dist/chessy-ai-fast.wasm
+ 29347 /workspace/scratch/8a384797d3cd/chessy-compact-hash-v3/dist/chessy-ai-small.raw.wasm
+ 26453 /workspace/scratch/8a384797d3cd/chessy-compact-hash-v3/dist/chessy-ai-small.wasm
+135130 total

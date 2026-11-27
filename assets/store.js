@@ -1164,6 +1164,12 @@
       if (v.score !== undefined && v.score !== null && !Number.isFinite(v.score)) return false;
       if (v.scorePov !== undefined && v.scorePov !== null && v.scorePov !== 'white') return false;
       if (v.stopReason !== undefined && !reasons[v.stopReason]) return false;
+      if (v.ttSaturated !== undefined && v.ttSaturated !== null &&
+          typeof v.ttSaturated !== 'boolean') return false;
+      // The loader flags a full TT only on a completed WASM iteration, whose
+      // stop reason is always unknown.
+      if (v.ttSaturated === true && (v.engine !== 'wasm' ||
+          v.stopReason !== 'unknown' || v.depth < 1)) return false;
       if (v.source !== undefined && !sources[v.source]) return false;
       if (v.fallbackReason !== undefined && v.fallbackReason !== null &&
           !fallbacks[v.fallbackReason]) return false;

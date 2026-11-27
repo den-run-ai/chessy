@@ -2,10 +2,16 @@
  * Production loader for the Rust/WASM engine module's raw ABI (version 2).
  *
  * The ordinary `search` entry point serves Play and the deterministic
- * analysis scan. Coaching analysis then uses a stateful exact-root API:
+ * analysis scan. Play may supply a per-request rootSeed through the optional
+ * `search_seeded` export; omitted seeds retain deterministic ordinary search.
+ * Coaching analysis then uses a stateful exact-root API:
  * `beginAnalysis` starts one shared-budget phase and `searchRoot` scores one
  * forced legal root under a full window, copying its PV before a later phase
  * resets the module's transposition table.
+ *
+ * A full fixed transposition table (ABI status 2) is not a corrupt module:
+ * `search` keeps the deepest completed iteration as an early stop, and
+ * `searchRoot` throws a `tt-saturated` error carrying its counters.
  *
  * Game-prefix repetition history is loaded after every position. The ABI
  * accepts newline-delimited FENs, one line per occurrence; counts above three
@@ -26,6 +32,10 @@
   const STOP_REASONS = ['unknown', 'max-depth', 'time-limit', 'node-limit', 'mate', 'game-over'];
   const PROMOTIONS = [null, 'Q', 'R', 'B', 'N'];
   const PROMOTION_CODES = { Q: 1, R: 2, B: 3, N: 4 };
+  // Error code for ABI status 2 (fixed transposition table full). `search`
+  // keeps a completed iteration instead; analysis-core stops iterative
+  // verification on it.
+  const TT_SATURATED = 'tt-saturated';
 
   function safeCounter(view, offset, label) {
     const value = view.getBigUint64(offset, true);
@@ -84,6 +94,9 @@
       throw new Error('WASM result struct is ' + bytes +
         ' bytes; loader requires exactly ' + RESULT_BYTES);
     }
+    if (view.getUint32(60, true) !== 0) {
+      throw new Error('WASM result has a non-zero reserved field');
+    }
     const attempted = view.getUint32(20, true);
     const stopCode = view.getUint32(56, true);
     if (stopCode >= STOP_REASONS.length) {
@@ -140,6 +153,10 @@
     const analysisBegin = requiredFunction(exports, 'analysis_begin');
     const analysisRoot = requiredFunction(exports, 'analysis_root');
     const encoder = new TextEncoder();
+    // A failed load can leave the raw module's previous position/phase intact.
+    // Own readiness here as well: rejected replacement input must never make
+    // that previous phase available as evidence for the new request.
+    let analysisReady = false;
 
     function writeBytes(pointerFunction, bytes, capacity, label) {
       if (bytes.byteLength > capacity) {
@@ -211,6 +228,7 @@
     }
 
     function setHistory(positions, currentFen) {
+      analysisReady = false;
       const lines = [];
       const currentSignature = irreversibleSignature(currentFen);
       if (positions != null) {
@@ -243,6 +261,7 @@
     }
 
     function prepare(fen, positions) {
+      analysisReady = false;
       // load_position deliberately clears stale history, so this order is part
       // of ABI v2 rather than an interchangeable implementation detail.
       loadFen(fen);
@@ -299,21 +318,44 @@
         return evaluateLoaded();
       },
       search: function (fen, opts) {
+        analysisReady = false;
         opts = opts || {};
         const maxDepth = checkedDepth(opts.maxDepth, 'maxDepth');
+        const seeded = opts.rootSeed != null;
+        const rootSeed = seeded ? checkedU32(opts.rootSeed, 'rootSeed') : null;
+        const runSearch = seeded ? requiredFunction(exports, 'search_seeded') : searchExport;
         prepare(fen, opts.positions || null);
-        const status = searchExport(
+        const status = runSearch(
           maxDepth,
           checkedU32(opts.nodeLimit, 'nodeLimit'),
           checkedU32(opts.timeMs, 'timeMs'),
-          opts.quiesce ? 1 : 0
+          opts.quiesce ? 1 : 0,
+          rootSeed
         );
+        if (status === 2) {
+          // The fixed 1M-entry TT filled during an uncapped search. The
+          // stored result is still the deepest iteration COMPLETED before
+          // that point (Rust mislabels the stop as a time limit). Keep it as an
+          // ordinary early stop when one exists; a deterministic node-count
+          // failure would otherwise repeat on every identical retry.
+          const saturated = decodeResult(exports.memory, resultPointer());
+          if (saturated.depth >= 1 && saturated.move) {
+            saturated.stopReason = 'unknown';
+            saturated.ttSaturated = true;
+            return saturated;
+          }
+          const error = new Error('search() failed with status 2');
+          error.code = TT_SATURATED;
+          error.result = saturated;
+          throw error;
+        }
         if (status !== 0) {
           throw new Error('search() failed with status ' + status);
         }
         return decodeResult(exports.memory, resultPointer());
       },
       fixedSearch: function (fen, opts) {
+        analysisReady = false;
         opts = opts || {};
         const depth = checkedFixedDepth(opts.depth, 'fixed search depth');
         prepare(fen, opts.positions || null);
@@ -330,6 +372,7 @@
         return result;
       },
       beginAnalysis: function (fen, opts) {
+        analysisReady = false;
         opts = opts || {};
         prepare(fen, opts.positions || null);
         const status = analysisBegin(
@@ -339,12 +382,24 @@
         if (status !== 0) {
           throw new Error('analysis_begin() failed with status ' + status);
         }
+        analysisReady = true;
       },
       searchRoot: function (move, totalDepth, pvLen) {
+        if (!analysisReady) {
+          throw new Error('analysis phase is not ready; call beginAnalysis() first');
+        }
         const packed = packMove(move);
         const depth = checkedDepth(totalDepth, 'analysis totalDepth');
         const maxPv = checkedDepth(pvLen, 'analysis pvLen');
         const status = analysisRoot(packed, depth, maxPv);
+        if (status === 2) {
+          // The phase's fixed TT is full. Tag it (with the cumulative
+          // counters) so a caller may keep only previously completed roots.
+          const saturated = new Error('analysis_root() failed with status 2');
+          saturated.code = TT_SATURATED;
+          saturated.result = decodeResult(exports.memory, resultPointer());
+          throw saturated;
+        }
         if (status !== 0 && status !== 4) {
           throw new Error('analysis_root() failed with status ' + status);
         }
@@ -386,6 +441,7 @@
     RESULT_BYTES: RESULT_BYTES,
     HISTORY_BYTES: HISTORY_BYTES,
     HISTORY_OCCURRENCES: HISTORY_OCCURRENCES,
-    STOP_REASONS: STOP_REASONS
+    STOP_REASONS: STOP_REASONS,
+    TT_SATURATED: TT_SATURATED
   };
 });

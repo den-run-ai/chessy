@@ -20,7 +20,8 @@ require('./helper').run('wasm-engine', async function (t) {
   await page.evaluate(function () {
     localStorage.setItem('chessy-wasm-engine-v1', 'off');
   });
-  await t.newGame({ mode: 'ai-w', difficulty: '1' });
+  // Medium: the 10k-node, depth-30 budget always stops on its node target.
+  await t.newGame({ mode: 'ai-w', difficulty: '2' });
   await waitForFirstAiMove();
   const run = await page.evaluate(function () {
     return {
@@ -41,7 +42,7 @@ require('./helper').run('wasm-engine', async function (t) {
       run.ai.depth >= 1 &&
       run.ai.attemptedDepth === run.ai.depth + 1 &&
       run.ai.scorePov === 'white',
-    'WASM telemetry carries the Easy budget and counters');
+    'WASM telemetry carries the Medium budget and counters');
   check(Array.isArray(run.ai.pvUci) && run.ai.pvUci.length === 0 &&
       !Object.prototype.hasOwnProperty.call(run.ai, 'rootOrderUci'),
     'the v2 Play result honestly omits PV and captured root order');

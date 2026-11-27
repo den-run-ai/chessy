@@ -7,6 +7,8 @@ try {
   const r=H.prepare(dest),after=fs.readFileSync(path.join(dest,'src/search.rs'),'utf8');
   assert.deepEqual(fs.readFileSync(path.join(root,'experiments/wasm/src/search.rs')),before);
   assert.equal(r.productionIntegrationAllowed,false);
+  assert.equal(r.baselineCommit,'dbf67181ab5d4e1c690617c14fe160b061191adb');
+  assert.deepEqual(r.generated,require('../../eval/hash-cost-v1/source.json').generated);
   assert.equal(r.source.filter(x=>x.sha256!==r.generated.find(y=>y.path===x.path).sha256).map(x=>x.path).join(','),'src/search.rs');
   assert.match(after,/unsafe fn hash_position\(position: &mut Position\)/);
   assert.equal(after.split('advance_board_hash(position, mv, ply, true);').length,2);
@@ -55,11 +57,13 @@ try {
       ...['Cargo.toml','Cargo.lock','rust-toolchain.toml','build.sh','src/engine.rs','src/eval.rs','src/lib.rs','src/search.rs'].map(p=>'experiments/wasm/'+p)]){
       fs.mkdirSync(path.dirname(path.join(copy,rel)),{recursive:true});fs.copyFileSync(path.join(root,rel),path.join(copy,rel));
     }
+    require('node:child_process').execFileSync('git',['clone','--shared','--no-checkout','--quiet',root,copy+'-history']);
+    fs.renameSync(path.join(copy+'-history','.git'),path.join(copy,'.git'));fs.rmdirSync(copy+'-history');
     return entry;
   }
   const read=fs.readFileSync;
   try{
-    const entry=generator('swapped-self'),next=fs.readFileSync(entry,'utf8').replace('chessy.searched-board-hash.source.v1','chessy.searched-board-hash.source.test-v2');
+    const entry=generator('swapped-self'),next=fs.readFileSync(entry,'utf8').replace('chessy.searched-board-hash.source.v2','chessy.searched-board-hash.source.test-v2');
     let reads=0,loaded;
     fs.readFileSync=function(file,...args){const bytes=read.call(fs,file,...args);if(String(file)===entry&&++reads===1)fs.writeFileSync(file,next);return bytes;};
     try{loaded=require(entry);}finally{fs.readFileSync=read;}
@@ -76,10 +80,13 @@ try {
     assert.throws(()=>templateLoaded.prepare(path.join(directory,'bad-template')),/generator dependency changed after capture/);
     assert.equal(fs.existsSync(path.join(directory,'bad-template')),false);
     const sourceEntry=generator('swapped-source'),source=path.join(path.dirname(sourceEntry),'../../experiments/wasm/src/search.rs');
-    const sourceLoaded=require(sourceEntry);
-    fs.readFileSync=function(file,...args){const bytes=read.call(fs,file,...args);if(path.resolve(String(file))===path.resolve(source))fs.appendFileSync(file,'\n// changed source\n');return bytes;};
-    try{assert.throws(()=>sourceLoaded.prepare(path.join(directory,'bad-source')),/generator dependency changed after capture/);}finally{fs.readFileSync=read;}
-    assert.equal(fs.existsSync(path.join(directory,'bad-source')),false);
+    fs.writeFileSync(source,'changed live production source');
+    const sourceLoaded=require(sourceEntry),historical=sourceLoaded.prepare(path.join(directory,'historical-source'));
+    assert.deepEqual(historical.generated,require('../../eval/hash-cost-v1/source.json').generated);
+    const corruptEntry=generator('corrupt-anchor');
+    fs.writeFileSync(corruptEntry,fs.readFileSync(corruptEntry,'utf8').replace('e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd','0'.repeat(64)));
+    assert.throws(()=>require(corruptEntry).prepare(path.join(directory,'corrupt-output')),/historical source hash mismatch/);
+    assert.equal(fs.existsSync(path.join(directory,'corrupt-output')),false);
   }finally{fs.readFileSync=read;fs.rmSync(directory,{recursive:true,force:true});}
 }
 
@@ -101,6 +108,7 @@ require('./hash-evidence.test');
     for(const file of [runner,benchmark,frozen])fs.mkdirSync(path.dirname(file),{recursive:true});
     fs.writeFileSync(runner,runnerSource.toString().replace(ledgerLiteral,JSON.stringify(ledger)));fs.writeFileSync(benchmark,source);
     fs.copyFileSync(path.join(root,'test/fixtures/wasm-r69-signatures.json'),frozen);
+    fs.copyFileSync(path.join(root,'tools/search/captured-adapter.js'),path.join(study,'tools/search/captured-adapter.js'));
     return {runner,benchmark,frozen};
   }
   try {
@@ -127,7 +135,7 @@ require('./hash-evidence.test');
     const cached=fixture('cached');require.cache[cached.benchmark]={exports:{POSITIONS:[]}};
     const retained=require(cached.runner),planPath=path.join(dir,'cached.plan.json');
     const plan=retained.register(planPath,'fixed',[base,candidate]);
-    assert.deepEqual(plan.positions,B.positions());assert.equal(plan.dependencies.length,3);
+    assert.deepEqual(plan.positions,B.positions());assert.equal(plan.dependencies.length,4);
     assert.throws(()=>retained.register(path.join(dir,'duplicate.plan.json'),'fixed',[base,base]),/distinct module/);
     const sameBytes=path.join(dir,'same.wasm');fs.copyFileSync(base,sameBytes);
     assert.throws(()=>retained.register(path.join(dir,'same.plan.json'),'fixed',[base,sameBytes]),/distinct module/);
@@ -169,7 +177,7 @@ require('./hash-evidence.test');
     await assert.rejects(require(unauthenticated.runner).run(planPath,output),/dependency changed after registration/);
     assert.equal(fs.existsSync(output+'.lock'),false);
     const imported=fixture('imported',Buffer.concat([benchmarkSource,Buffer.from("\nrequire('./uncaptured');")]));
-    assert.throws(()=>require(imported.runner).positions(),/only built-in modules/);
+    assert.throws(()=>require(imported.runner).positions(),/only captured adapter built-ins/);
     const untracked=fixture('untracked',Buffer.concat([benchmarkSource,Buffer.from("\nrequire('fs').readFileSync(__filename,'utf8');")]));
     assert.throws(()=>require(untracked.runner).positions(),/uncaptured file read/);
     const sharedLedger=path.join(dir,'shared-ledger'),stub=Buffer.from(`module.exports={POSITIONS:${JSON.stringify(referencePositions)},async loadOrdinaryWasmBytes(){await Promise.resolve();throw Error('fixture engine load');}};`);
@@ -213,6 +221,20 @@ require('./hash-evidence.test');
     try{await assert.rejects(raceRunner.run(racePlan,path.join(dir,'raced-out.json')),/EEXIST/);}finally{fs.openSync=open;}
     assert.equal(fs.readFileSync(winningPath,'utf8'),'winning reservation\n');
     assert.equal(fs.existsSync(path.join(dir,'raced-out.json.lock')),false);
+    // Different scientific registrations may contend for the same output.
+    // The losing prefix writer must not poison the owner's failure record.
+    const prefix=fixture('prefix-contention',stub),prefixRunner=require(prefix.runner);
+    const alternative=path.join(dir,'candidate/dist/alternative.wasm');fs.writeFileSync(alternative,'different scientific candidate');
+    const ownerPlan=path.join(dir,'prefix-owner.json'),loserPlan=path.join(dir,'prefix-loser.json'),sharedOutput=path.join(dir,'shared-prefix.json');
+    const owner=prefixRunner.register(ownerPlan,'fixed',[base,candidate]);
+    const loser=prefixRunner.register(loserPlan,'fixed',[base,alternative]);
+    assert.notEqual(owner.experimentIdentity,loser.experimentIdentity);
+    const prefixResults=await Promise.allSettled([prefixRunner.run(ownerPlan,sharedOutput),prefixRunner.run(loserPlan,sharedOutput)]);
+    assert.match(String(prefixResults[0].reason),/fixture engine load/);
+    assert.match(String(prefixResults[1].reason),/EEXIST/);
+    const ownedFailure=JSON.parse(fs.readFileSync(sharedOutput+'.failure.json'));
+    assert.equal(ownedFailure.attempt.experimentIdentity,owner.experimentIdentity);
+    assert.match(ownedFailure.error,/fixture engine load/);assert.equal(fs.existsSync(sharedOutput),false);
     // Exact historical recipes are retired, while other scientific corpora are distinct.
     for(const mode of ['fixed','master']){
       const historical=JSON.parse(fs.readFileSync(path.join(root,'eval/hash-cost-v1',mode+'-registration.json')));
