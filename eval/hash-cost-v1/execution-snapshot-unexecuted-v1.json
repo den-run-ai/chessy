@@ -1,0 +1,87 @@
+{
+  "schema": "chessy.searched-board-hash.execution-snapshot.v1",
+  "path": "/workspace/scratch/ec6584e1ca6d/hash-execution-v1",
+  "registrationSha256": "890a6f18944df4b39f1c6234fc195cb4540fe6f4ee64e32a070fe914b3ffc2c4",
+  "files": [
+    {
+      "path": "assets/chessy-ai-fast.wasm",
+      "sha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+    },
+    {
+      "path": "candidate/Cargo.lock",
+      "sha256": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32"
+    },
+    {
+      "path": "candidate/Cargo.toml",
+      "sha256": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c"
+    },
+    {
+      "path": "candidate/build.sh",
+      "sha256": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489"
+    },
+    {
+      "path": "candidate/dist/chessy-ai-fast.raw.wasm",
+      "sha256": "b2583df105aca1f42889afbe65b081253c6aeb91edeba9c92aff74584ef0299e"
+    },
+    {
+      "path": "candidate/dist/chessy-ai-fast.wasm",
+      "sha256": "509a1d8e1c3fe1c05c31e57923c8127d35094bd68a704fc241cc4e8444b8fa9e"
+    },
+    {
+      "path": "candidate/dist/chessy-ai-small.raw.wasm",
+      "sha256": "9ced6ed6095ff8f5598315dcf8c18d1a1368efe08585a3ec5c66f1dd4fc9aae3"
+    },
+    {
+      "path": "candidate/dist/chessy-ai-small.wasm",
+      "sha256": "f791b2de23a4ebc87ac22009729bc91b1c9950939227c06bfd8a4aa70b63bce5"
+    },
+    {
+      "path": "candidate/rust-toolchain.toml",
+      "sha256": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9"
+    },
+    {
+      "path": "candidate/source.json",
+      "sha256": "90e20b7593956db90ad6eb20058da338e2f4103a2509787e2c4917c5740fad58"
+    },
+    {
+      "path": "candidate/src/engine.rs",
+      "sha256": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103"
+    },
+    {
+      "path": "candidate/src/eval.rs",
+      "sha256": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7"
+    },
+    {
+      "path": "candidate/src/lib.rs",
+      "sha256": "f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc"
+    },
+    {
+      "path": "candidate/src/search.rs",
+      "sha256": "afa289e8a7b92008fbe2bcb669a0ecb0a2b096a2911a6a3fb8683872d0d850ed"
+    },
+    {
+      "path": "experiments/wasm/bench.js",
+      "sha256": "4a6fe7b8c48dc4c4f710c944ab096edbe79f50c2e67c6642b0b34822177a1292"
+    },
+    {
+      "path": "test/fixtures/wasm-r69-signatures.json",
+      "sha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b"
+    },
+    {
+      "path": "tools/search/hash-bench.js",
+      "sha256": "1cf2e333492bf7cf686f13ee8dad47209505aaab37f11104014f46376084d2a2"
+    },
+    {
+      "path": "tools/search/hash-board.rs.in",
+      "sha256": "ff922fbe38b3c8bdd62d7a38d75704704ba60f676214b0a081ea27c0a84add3f"
+    },
+    {
+      "path": "tools/search/hash-cost.js",
+      "sha256": "eab62d46b08fc3df1c40d6228d0a0dc20ab744211396d6b75f6c28a959cce0c2"
+    },
+    {
+      "path": "tools/search/hash-parity.rs.in",
+      "sha256": "43e18fbe293b5a4930d64bf7d7857f52de336598890d3a774fe83dfa88a80b10"
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+{
+  "geomeanNpsGainPct": 2.412737368427731,
+  "geomeanNodeGainPct": 2.4133192074837773,
+  "deeper": 1,
+  "sameDepth": 34,
+  "shallower": 1,
+  "sameMove": 35,
+  "changedMove": 1,
+  "maxDeadlineOvershootMs": 4.514984999999797,
+  "stopsByEngine": {
+    "0": {
+      "time-limit": 36
+    },
+    "1": {
+      "time-limit": 36
+    }
+  },
+  "pairs": [
+    {
+      "position": 0,
+      "repetition": 0,
+      "npsRatio": 0.9984146137338844,
+      "nodeRatio": 0.9980870392472201,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 0,
+      "repetition": 1,
+      "npsRatio": 1.0165019771600439,
+      "nodeRatio": 1.0165457878871251,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 1,
+      "repetition": 0,
+      "npsRatio": 1.013501585191842,
+      "nodeRatio": 1.0134892115946623,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 1,
+      "repetition": 1,
+      "npsRatio": 1.0246993714690193,
+      "nodeRatio": 1.0246439122917297,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 2,
+      "repetition": 0,
+      "npsRatio": 1.076199764355656,
+      "nodeRatio": 1.0764119756272985,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 2,
+      "repetition": 1,
+      "npsRatio": 1.039178989738177,
+      "nodeRatio": 1.0388387677380313,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 3,
+      "repetition": 0,
+      "npsRatio": 1.0934425423749183,
+      "nodeRatio": 1.0934242364143156,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 3,
+      "repetition": 1,
+      "npsRatio": 1.0728872095900763,
+      "nodeRatio": 1.0728920550007186,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 4,
+      "repetition": 0,
+      "npsRatio": 1.0784573194195148,
+      "nodeRatio": 1.0784922564639898,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 4,
+      "repetition": 1,
+      "npsRatio": 1.0690275239117983,
+      "nodeRatio": 1.0688524737133867,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 5,
+      "repetition": 0,
+      "npsRatio": 1.0957634431465784,
+      "nodeRatio": 1.0957139892228942,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 5,
+      "repetition": 1,
+      "npsRatio": 1.0791452658308904,
+      "nodeRatio": 1.079064345546497,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 6,
+      "repetition": 0,
+      "npsRatio": 0.6150688694178057,
+      "nodeRatio": 0.6150309409454501,
+      "depthDelta": -1,
+      "sameMove": true
+    },
+    {
+      "position": 6,
+      "repetition": 1,
+      "npsRatio": 1.144476611285178,
+      "nodeRatio": 1.1445783580183269,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 7,
+      "repetition": 0,
+      "npsRatio": 1.016990814966784,
+      "nodeRatio": 1.0169964527138757,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 7,
+      "repetition": 1,
+      "npsRatio": 0.8493804914930545,
+      "nodeRatio": 0.849999965774671,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 8,
+      "repetition": 0,
+      "npsRatio": 1.2018493923279154,
+      "nodeRatio": 1.2019602312484092,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 8,
+      "repetition": 1,
+      "npsRatio": 1.0376834172974676,
+      "nodeRatio": 1.0376358040291922,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 9,
+      "repetition": 0,
+      "npsRatio": 1.0355023503652412,
+      "nodeRatio": 1.0354531707300645,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 9,
+      "repetition": 1,
+      "npsRatio": 1.0174016343684869,
+      "nodeRatio": 1.017386582040082,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 10,
+      "repetition": 0,
+      "npsRatio": 1.1442391740225768,
+      "nodeRatio": 1.1440793726847505,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 10,
+      "repetition": 1,
+      "npsRatio": 1.0391139512133134,
+      "nodeRatio": 1.039106770157783,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 11,
+      "repetition": 0,
+      "npsRatio": 0.9922894121550301,
+      "nodeRatio": 0.9922480610689857,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 11,
+      "repetition": 1,
+      "npsRatio": 1.005010596632367,
+      "nodeRatio": 1.0051173246377167,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 12,
+      "repetition": 0,
+      "npsRatio": 1.0233839693133377,
+      "nodeRatio": 1.023323279505296,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 12,
+      "repetition": 1,
+      "npsRatio": 1.0439494066348671,
+      "nodeRatio": 1.0438967186464658,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 13,
+      "repetition": 0,
+      "npsRatio": 0.984275365002092,
+      "nodeRatio": 0.9846411595924508,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 13,
+      "repetition": 1,
+      "npsRatio": 1.005852434299392,
+      "nodeRatio": 1.0059135155568457,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 14,
+      "repetition": 0,
+      "npsRatio": 1.0049985590450623,
+      "nodeRatio": 1.0049433226649163,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 14,
+      "repetition": 1,
+      "npsRatio": 1.0086533753000246,
+      "nodeRatio": 1.008608199813044,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 15,
+      "repetition": 0,
+      "npsRatio": 1.0380810260351876,
+      "nodeRatio": 1.0380920865517806,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 15,
+      "repetition": 1,
+      "npsRatio": 0.994409303892549,
+      "nodeRatio": 0.9944116233867636,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 16,
+      "repetition": 0,
+      "npsRatio": 1.0769418045251236,
+      "nodeRatio": 1.0770751153422633,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 16,
+      "repetition": 1,
+      "npsRatio": 1.043496323100905,
+      "nodeRatio": 1.0436387413408508,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 17,
+      "repetition": 0,
+      "npsRatio": 0.9726041124063565,
+      "nodeRatio": 0.9725738333841148,
+      "depthDelta": 0,
+      "sameMove": true
+    },
+    {
+      "position": 17,
+      "repetition": 1,
+      "npsRatio": 1.0919222922767766,
+      "nodeRatio": 1.0917270906216539,
+      "depthDelta": 1,
+      "sameMove": false
+    }
+  ]
+}

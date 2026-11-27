@@ -1,0 +1,10 @@
+{
+  "schema": "chessy.searched-board-hash.wasm-parity.v1",
+  "baseSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+  "candidateSha256": "509a1d8e1c3fe1c05c31e57923c8127d35094bd68a704fc241cc4e8444b8fa9e",
+  "baseBytes": 37172,
+  "candidateBytes": 38359,
+  "cases": 144,
+  "completeFixedSignaturesAndRootPvEqual": true,
+  "paidComputeUsd": 0
+}

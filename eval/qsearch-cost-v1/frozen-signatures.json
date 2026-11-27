@@ -1,0 +1,19 @@
+{
+  "schema": "chessy.qsearch-cost.frozen-signatures.v1",
+  "rows": [
+    {
+      "variant": "checks",
+      "moduleSha256": "54c29d8592a1deefc49618fa99bc3dda496b08100ab16fa8d437241967d79dc0",
+      "r69FixtureSha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b",
+      "cases": 144,
+      "matched": true
+    },
+    {
+      "variant": "tactical",
+      "moduleSha256": "1a8b8bffe0bc07179829a24d5520828bfb8643da4a9e3ba40cb17b862de0b3c5",
+      "r69FixtureSha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b",
+      "cases": 144,
+      "matched": true
+    }
+  ]
+}

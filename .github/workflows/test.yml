@@ -197,6 +197,40 @@ jobs:
         with:
           # Match the production compressed-size encoder for these new probes.
           node-version: '22.23.2'
+      - name: Reproduce archived hash and quiescence candidates without timings
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          CHESSY_HISTORY_RUST=$(dirname "$(dirname "$(rustup which --toolchain "$RUST_VERSION" rustc)")")
+          node test/search/captured-adapter.test.js
+          node test/search/hash-cost.test.js
+          for variant in hash checks tactical; do
+            CHESSY_HISTORY_CRATE="$RUNNER_TEMP/historical-$variant"
+            if [ "$variant" = hash ]; then
+              node tools/search/hash-cost.js prepare "$CHESSY_HISTORY_CRATE"
+            else
+              node tools/search/qsearch-cost.js prepare "$CHESSY_HISTORY_CRATE" "$variant"
+            fi
+            (cd "$CHESSY_HISTORY_CRATE" && env -i \
+              PATH="$CHESSY_HISTORY_RUST/bin:/usr/bin:/bin" \
+              CARGO_HOME="$RUNNER_TEMP/historical-cargo-$variant" \
+              CARGO_TARGET_DIR="$RUNNER_TEMP/historical-native-$variant" \
+              RUSTC="$CHESSY_HISTORY_RUST/bin/rustc" \
+              "$CHESSY_HISTORY_RUST/bin/cargo" test --locked --offline -- --test-threads=1)
+            env -i PATH="$CHESSY_HISTORY_RUST/bin:/usr/bin:/bin" \
+              CARGO_HOME="$RUNNER_TEMP/historical-cargo-$variant" \
+              CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/historical-wasm-$variant" \
+              CHESSY_CARGO_BIN="$CHESSY_HISTORY_RUST/bin/cargo" \
+              CHESSY_RUSTC_BIN="$CHESSY_HISTORY_RUST/bin/rustc" \
+              CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+              /bin/sh "$CHESSY_HISTORY_CRATE/build.sh"
+            node tools/search/check-historical-build.js "$variant" "$CHESSY_HISTORY_CRATE"
+          done
+          node test/search/historical-rebuild.test.js \
+            "$RUNNER_TEMP/historical-hash" "$RUNNER_TEMP/historical-checks" "$RUNNER_TEMP/historical-tactical"
+          # Current size policy is separate from the original historical miss.
+          node tools/search/check-historical-build.js hash "$RUNNER_TEMP/historical-hash" --current-sizes
       - name: Reproduce isolated search-cost candidates and correctness evidence
         env:
           RUSTUP_HOME: ${{ runner.temp }}/rustup-home
@@ -497,6 +531,8 @@ jobs:
         env:
           CHESSY_SIGNATURE_TRUSTED_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: node test/wasm-signatures.test.js
+      - name: Quiescence research source isolation and benchmark registration
+        run: node test/search/qsearch-cost.test.js
       - name: Validate governed engine-signature mechanism
         run: node test/engine-signatures-v2.test.js
       - name: Verify recalibrated difficulty presets
