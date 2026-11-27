@@ -17,12 +17,16 @@ observations.
 | Candidate search source SHA-256 | `4db05a27ae42560d6f45920859f9916eb84d0df3d59ab3eca95a4e53ed75ffc4` |
 | Reviewed signature generator | `5e3558378deab8ba21f648cc2cca98195b1beced` |
 | Signature bundle SHA-256 | `fbd74c91e12209d8c3ee6281b254a2d837b44e6b34eeef87f3b33ece4f9ea46b` |
-| Raw download | 37,934 bytes; current ceiling 40,960 bytes |
+| Download | 37,934 raw / 17,957 Brotli-11 bytes; current ceilings 40,960 / 20,480 bytes |
 | Fixed linear memory | 26,542,080 bytes |
 
-The source snapshot is a preparation artifact, not a deployment. Keep it
-reachable while its evidence is retained. A later UI release may have a higher
-number without changing this historical source-release identity. The generator
+The source snapshot is a preparation artifact, not a deployment. The evidence
+commit retains it as an additional merge parent, so a fresh checkout of the
+merged history does not need a separate source branch. The evidence commit's
+production tree and active pointer still select r85. Preserve that ancestry
+with a merge commit; a squash/rebase merge would discard the retention edge.
+A later UI release may have a higher number without changing this historical
+source-release identity. The generator
 is an ancestor of reviewed main; its five implementation inputs are unchanged
 through the r85 baseline.
 
@@ -65,6 +69,8 @@ observations and a local source argument, not a universal proof of equivalence.
 
 - [x] Exact checked source and unchanged Rust 1.97.1 / Binaryen 131 build.
 - [x] Native differential tests and independent signature reproduction.
+- [x] [Pinned CI size reproduction](https://github.com/den-run-ai/chessy/actions/runs/45950801056/job/140345930212)
+  with Node 22.23.2 / Brotli 1.1.0: 37,934 raw / 17,957 Brotli-11 bytes.
 - [x] Source-bound [static resource audit](RESOURCES.md): the same conservative
   8,352-byte linear-stack allowance and fixed memory for baseline and candidate.
 - [x] One prospectively frozen development comparison, with every raw row,
