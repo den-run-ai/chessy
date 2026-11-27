@@ -39,7 +39,7 @@ require('./helper').run('provenance', async function (t) {
     'live telemetry records node counts and an explicit score POV');
   check(ai.timeMs === 5000 && ai.nodeLimit === 10000 &&
       ai.nodes === ai.nodeLimit && ai.quiesce === true &&
-      ai.seed === null && ai.randomize === null &&
+      Number.isInteger(ai.seed) && ai.randomize === true &&
       ai.engine === 'wasm' && ai.engineFallback === null,
     'live telemetry records the effective Play search config');
   check(Number.isFinite(ai.elapsedMs) && Number.isFinite(ai.searchMs) &&

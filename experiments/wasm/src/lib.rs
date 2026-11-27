@@ -159,6 +159,20 @@ pub unsafe extern "C" fn search(
     time_ms: u32,
     quiesce: u32,
 ) -> i32 {
+    search_seeded(max_depth, node_limit, time_ms, quiesce, 0x00C0FFEE)
+}
+
+/// Optional Play root ordering. A per-request seed varies the order in which
+/// equally prioritized legal roots are searched, without adding score noise.
+/// `search` retains its historical fixed seed for reproducible analysis.
+#[no_mangle]
+pub unsafe extern "C" fn search_seeded(
+    max_depth: u32,
+    node_limit: u32,
+    time_ms: u32,
+    quiesce: u32,
+    root_seed: u32,
+) -> i32 {
     if max_depth > search::MAX_SEARCH_DEPTH || SEARCH_ACTIVE {
         return 3;
     }
@@ -168,7 +182,9 @@ pub unsafe extern "C" fn search(
     let mut position = ROOT_POSITION;
     ANALYSIS_READY = false;
     SEARCH_ACTIVE = true;
-    let search_result = search::run(&mut position, max_depth, node_limit, time_ms, quiesce != 0);
+    let search_result = search::run_seeded(
+        &mut position, max_depth, node_limit, time_ms, quiesce != 0, root_seed,
+    );
     SEARCH_ACTIVE = false;
     store_result(&search_result);
     if search_result.tt_saturated {
@@ -272,6 +288,10 @@ mod tests {
         unsafe {
             assert_eq!(
                 super::search(super::search::MAX_SEARCH_DEPTH + 1, 0, 0, 1),
+                3
+            );
+            assert_eq!(
+                super::search_seeded(super::search::MAX_SEARCH_DEPTH + 1, 0, 0, 1, 0),
                 3
             );
         }

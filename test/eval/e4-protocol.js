@@ -12,6 +12,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const TrainingCorpus = require('../training/corpus.js');
@@ -27,6 +28,8 @@ const PATHS = Object.freeze({
   certification: path.join(E4_DIR, 'certification-manifest.template.json'),
   explorationSchema: path.join(E4_DIR, 'exploration-manifest.schema.json'),
   certificationSchema: path.join(E4_DIR, 'certification-manifest.schema.json'),
+  // This is the active app asset, not authority for the historical E4-v1
+  // baseline. Any E4 execution must consume loadFrozenWasm()'s verified bytes.
   wasm: path.join(ROOT, 'assets', 'chessy-ai-fast.wasm')
 });
 
@@ -1046,6 +1049,23 @@ function validateManifestSet(exploration, certification) {
   return true;
 }
 
+// E4-v1 is a frozen study of one historical engine. A later reviewed runtime
+// rotation must neither relabel that study nor make its data contracts stale.
+// Return the exact authenticated bytes so future E4 execution cannot validate
+// an old identity and then accidentally reopen the current production asset.
+function loadFrozenWasm(root) {
+  const bytes = childProcess.execFileSync('git', [
+    '--no-replace-objects', '-C', root || ROOT, 'show',
+    EXPECTED.commit + ':' + EXPECTED.wasmAsset
+  ], { maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert(sha256(bytes) === EXPECTED.wasmSha256,
+    'frozen r71 WASM bytes drifted');
+  const blob = crypto.createHash('sha1')
+    .update('blob ' + bytes.length + '\0').update(bytes).digest('hex');
+  assert(blob === EXPECTED.wasmGitBlob, 'frozen r71 WASM Git blob drifted');
+  return bytes;
+}
+
 function validateRepository(root) {
   const repositoryRoot = root || ROOT;
   const e4 = path.join(repositoryRoot, 'eval', 'e4');
@@ -1054,8 +1074,7 @@ function validateRepository(root) {
     protocol: path.join(e4, 'protocol-v1.json'),
     statistics: path.join(e4, 'stats-v1.json'),
     exploration: path.join(e4, 'exploration-manifest.template.json'),
-    certification: path.join(e4, 'certification-manifest.template.json'),
-    wasm: path.join(repositoryRoot, EXPECTED.wasmAsset)
+    certification: path.join(e4, 'certification-manifest.template.json')
   };
   const adapterBytes = fs.readFileSync(files.adapter);
   const protocolBytes = fs.readFileSync(files.protocol);
@@ -1065,8 +1084,7 @@ function validateRepository(root) {
     'frozen E4-v1 protocol file SHA-256 drifted');
   assert(sha256(fs.readFileSync(files.statistics)) === EXPECTED.statsSha256,
     'frozen E4-v1 statistics contract SHA-256 drifted');
-  assert(sha256(fs.readFileSync(files.wasm)) === EXPECTED.wasmSha256,
-    'checked-in r71 WASM bytes drifted');
+  loadFrozenWasm(repositoryRoot);
   const adapter = JSON.parse(adapterBytes.toString('utf8'));
   const protocol = JSON.parse(protocolBytes.toString('utf8'));
   const exploration = readJson(files.exploration);
@@ -1094,6 +1112,7 @@ module.exports = Object.freeze({
   validateExplorationManifest,
   validateCertificationManifest,
   validateManifestSet,
+  loadFrozenWasm,
   validateRepository
 });
 
