@@ -2,7 +2,9 @@
 
 This directory builds production-compatible candidates and measures their
 strength at equal wall-clock budgets. It does not choose a production default.
-See the [prospective study plan](../../eval/eval-production-v1/PLAN.md),
+See the [completed report](../../eval/eval-production-v1/REPORT.md),
+[retained evidence](../../eval/eval-production-v1/EVIDENCE.md),
+[prospective study plan](../../eval/eval-production-v1/PLAN.md),
 [historical timing evidence](../../eval/eval-production-v1/HISTORY.md), and
 [build/export contract](BUILD.md).
 

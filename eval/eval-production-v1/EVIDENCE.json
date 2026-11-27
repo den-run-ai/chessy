@@ -1,0 +1,50 @@
+{
+  "archive": {
+    "archive": "chessy-eval-production-v1-evidence.tar.zst",
+    "bytes": 60335251,
+    "files": 1532,
+    "rawBytes": 304167966,
+    "rawFiles": 713,
+    "referencedBytes": 14238008,
+    "repoReferences": 819,
+    "restoreManifestSha256": "54e527fc00c58a175701ba70915b5178f0c0064699df8264e5bfe0146791e06a",
+    "sha256": "2c79993643d3ea7f38c44b5d2e46cf7dbe81b8924b3378ce993df3bb7e4b0979"
+  },
+  "dataPrerequisite": {
+    "archive": "chessy-sparse-pesto-data-and-evidence.tar.zst",
+    "bytes": 456904369,
+    "finalRefitInventoryFiles": 49,
+    "omittedFiles": 18,
+    "restorationVerified": true,
+    "sha256": "d921612ff1c062a635092def504a1505460ffdb7c47774752e8dd53c72d3a638"
+  },
+  "productionAdmission": false,
+  "restore": {
+    "archiveSha256": "2c79993643d3ea7f38c44b5d2e46cf7dbe81b8924b3378ce993df3bb7e4b0979",
+    "fileCount": 1532,
+    "rawFiles": 713,
+    "repoReferences": 819,
+    "restoredBytes": 318405974,
+    "schema": "chessy.sparse-evidence-bundle.v1.restored",
+    "status": "complete"
+  },
+  "restoredGameAudit": {
+    "auditSha256": "4ab74a44e647904aac2ac099afdd14cf0d5720b77afbf81a5d2e95f9d2eba177",
+    "completeGameAuditByteIdentical": true,
+    "games": 128,
+    "passed": true,
+    "registrationSha256": "5bbc44937c218e24a934a9cbe9de7478fda74972f12fc797bc4447920229f80b",
+    "retainedSourceSha256": "ea448b556c4428358fe7b215652a8d827dc063cb1b4d47a57fd1dc277a682982",
+    "schema": "chessy.eval-production-bundle-reaudit.v1",
+    "searchedPlies": 13590,
+    "searchesRerun": 0
+  },
+  "retainedBrowserCI": {
+    "allSixModulesMatchMeasuredBuild": true,
+    "head": "637ce8d82fc9ca5dafd48f27a1179427ff44f8bd",
+    "runId": 46022918601
+  },
+  "schema": "chessy.eval-production-delivery.v1",
+  "scope": "Complete game/cost runtime evidence and a thin refit study; the original train/validation archive is a separate prerequisite.",
+  "sourceCommit": "02623d2bac34d039dd9c5487e3e01ba9687f5062"
+}

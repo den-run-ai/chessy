@@ -252,6 +252,10 @@ and a reversible HCE fallback. No default or runtime policy changes here.
 
 ## Reproduction, retained identities, and limits
 
+The delivered 60.3 MB [evidence archive](EVIDENCE.md) restored all 1,532 files
+to their recorded hashes. A second audit from the restored game snapshot
+reproduced the published complete result byte for byte. [Delivery receipt](EVIDENCE.json).
+
 [Pipeline commands](../../tools/eval_pipeline/README.md) cover preparation,
 cost registration/execution/audit, complete games, and audited plots.
 [Build instructions](../../tools/eval_pipeline/BUILD.md) describe pinned tools,
