@@ -1,0 +1,134 @@
+{
+  "schema": "chessy.compact-hash.sizing.v1",
+  "baseCommit": "f65224dece688f23d00429c148715262dd3c9b79",
+  "researchOnly": true,
+  "productionIntegrationAllowed": false,
+  "rawLimit": 37172,
+  "variants": [
+    {
+      "key": "v1",
+      "variant": "threaded",
+      "selectedForTiming": false,
+      "sourceReceiptSha256": "11766b7a59f53f7b3ae64f728f21b196bf6e4180e58d753e61ed7887a11ae6de",
+      "artifacts": [
+        {
+          "name": "fast.raw",
+          "bytes": 41485,
+          "sha256": "9fd52917cc91adb6a305df0bb30aa25dc3924a7f4f9aff47d13764a091758c58"
+        },
+        {
+          "name": "fast",
+          "bytes": 37885,
+          "sha256": "7d1f2f9046dc46ca754445577a74a50e34f1eaaf6360fce9a1b07ddd9ff94a79"
+        },
+        {
+          "name": "small.raw",
+          "bytes": 29373,
+          "sha256": "7c73c9dc9ea71f57835162f91cb165359a9f3be65f1871539874dd69e5a1eab1"
+        },
+        {
+          "name": "small",
+          "bytes": 26465,
+          "sha256": "fc14a57da793d79d9d1b6d72f71bbeefe2c9b97787c483e26bec9df69c54f146"
+        }
+      ],
+      "rawGatePassed": false,
+      "rawExcess": 713,
+      "tests": "native12"
+    },
+    {
+      "key": "v2",
+      "variant": "shared-update",
+      "selectedForTiming": false,
+      "sourceReceiptSha256": "8f0c4fa13fb84437a0ee92376aa87d91a9da47863892927b804f452a103dfd09",
+      "artifacts": [
+        {
+          "name": "fast.raw",
+          "bytes": 41485,
+          "sha256": "9fd52917cc91adb6a305df0bb30aa25dc3924a7f4f9aff47d13764a091758c58"
+        },
+        {
+          "name": "fast",
+          "bytes": 37885,
+          "sha256": "7d1f2f9046dc46ca754445577a74a50e34f1eaaf6360fce9a1b07ddd9ff94a79"
+        },
+        {
+          "name": "small.raw",
+          "bytes": 29373,
+          "sha256": "7c73c9dc9ea71f57835162f91cb165359a9f3be65f1871539874dd69e5a1eab1"
+        },
+        {
+          "name": "small",
+          "bytes": 26465,
+          "sha256": "fc14a57da793d79d9d1b6d72f71bbeefe2c9b97787c483e26bec9df69c54f146"
+        }
+      ],
+      "rawGatePassed": false,
+      "rawExcess": 713,
+      "tests": "byte-identical fast module; no separate native run"
+    },
+    {
+      "key": "v3",
+      "variant": "proven-indices",
+      "selectedForTiming": false,
+      "sourceReceiptSha256": "bc6d9b9afff9cc366cd7660d00244fee3d415393f23d328ad89458592785dfa5",
+      "artifacts": [
+        {
+          "name": "fast.raw",
+          "bytes": 41460,
+          "sha256": "053a6c8834c39c9952784c67d72f8b751084ecca259acea304e402e21ed55fd3"
+        },
+        {
+          "name": "fast",
+          "bytes": 37870,
+          "sha256": "264b872062d4ba11d8f96c7cceff903f23183a0ac90ba841c6d26d12df20161e"
+        },
+        {
+          "name": "small.raw",
+          "bytes": 29347,
+          "sha256": "e586249af10f7ea7036c4ecda2a036b606cbbd853e68faa47e0986f565928273"
+        },
+        {
+          "name": "small",
+          "bytes": 26453,
+          "sha256": "02eb9cd223c2d7e95295d6d7993bc73c4fbf40c18f6dc5dca762e6112abd4b8d"
+        }
+      ],
+      "rawGatePassed": false,
+      "rawExcess": 698,
+      "tests": "size-only; unselected; no correctness or timing claim"
+    },
+    {
+      "key": "final",
+      "variant": "threaded",
+      "selectedForTiming": true,
+      "sourceReceiptSha256": "faaaef0352a3d1b9fd96a7e2a81fa65d7bd1b074276f183ad652d15c04228873",
+      "artifacts": [
+        {
+          "name": "fast.raw",
+          "bytes": 41485,
+          "sha256": "9fd52917cc91adb6a305df0bb30aa25dc3924a7f4f9aff47d13764a091758c58"
+        },
+        {
+          "name": "fast",
+          "bytes": 37885,
+          "sha256": "7d1f2f9046dc46ca754445577a74a50e34f1eaaf6360fce9a1b07ddd9ff94a79"
+        },
+        {
+          "name": "small.raw",
+          "bytes": 29373,
+          "sha256": "7c73c9dc9ea71f57835162f91cb165359a9f3be65f1871539874dd69e5a1eab1"
+        },
+        {
+          "name": "small",
+          "bytes": 26465,
+          "sha256": "fc14a57da793d79d9d1b6d72f71bbeefe2c9b97787c483e26bec9df69c54f146"
+        }
+      ],
+      "rawGatePassed": false,
+      "rawExcess": 713,
+      "tests": "native12+144Wasm+2history"
+    }
+  ],
+  "selectionReason": "The private unchecked lookup saved only15bytes and still missed the raw ceiling; retain the checked threaded design. Shared-update was byte-identical. No further size tuning."
+}

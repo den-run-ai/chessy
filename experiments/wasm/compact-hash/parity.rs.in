@@ -1,0 +1,111 @@
+#[cfg(test)]
+mod compact_hash_tests {
+    use super::*;
+    fn signature(r:&SearchResult)->(Option<Move>,i32,u32,Option<u32>,u64,u64,u64,u64,u32,bool){
+        (r.mv,r.score,r.depth,r.attempted_depth,r.nodes,r.qnodes,r.cutoffs,r.researches,r.stop_reason as u32,r.tt_saturated)
+    }
+    fn reference_signature(r:&reference_search::SearchResult)->(Option<Move>,i32,u32,Option<u32>,u64,u64,u64,u64,u32,bool){
+        (r.mv,r.score,r.depth,r.attempted_depth,r.nodes,r.qnodes,r.cutoffs,r.researches,r.stop_reason as u32,r.tt_saturated)
+    }
+    const FENS:&[&[u8]]=&[
+        b"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        b"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        b"r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27",
+        b"r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 4 1",
+        b"r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 4 1",
+        b"8/1P3k2/8/8/8/8/1p3K2/8 w - - 0 1",
+        b"1r2k3/P7/8/8/8/8/7p/4K1R1 w - - 0 1",
+        b"4k1r1/7P/8/8/8/8/p7/1R2K3 b - - 0 1",
+        b"8/1P3k2/8/8/8/8/1p3K2/8 b - - 0 1",
+        b"4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+        b"4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1",
+        b"k7/8/8/4KPpr/8/8/8/8 w - g6 0 1",
+        b"k7/8/1QK5/8/8/8/8/8 b - - 0 1",
+        b"k7/1Q6/2K5/8/8/8/8/8 b - - 100 1",
+        b"k7/8/8/8/8/8/4R3/4K3 w - - 99 1",
+    ];
+    unsafe fn walk(position:&mut Position, board_hash:u64, remaining:usize, edges:&mut usize) {
+        finish_board_hash(position,board_hash); // cfg(test) checks the unchanged two-stream oracle.
+        let initial=*position; let mut moves=[0;MAX_MOVES];let n=engine::generate_legal(position,&mut moves);
+        for &mv in &moves[..n] {
+            let undo=engine::make_move(position,mv);
+            let child_hash=advance_board_hash(position,mv,board_hash);finish_board_hash(position,child_hash);*edges+=1;
+            if remaining>0 {walk(position,child_hash,remaining-1,edges);}
+            engine::unmake_move(position,mv,undo);assert!(*position==initial);finish_board_hash(position,board_hash);
+        }
+    }
+    #[test]
+    fn every_authored_legal_edge_matches_full_scan_and_restores_parent(){
+        let _guard=crate::TEST_LOCK.lock().unwrap();let mut edges=0;
+        unsafe { for &fen in FENS {let mut p=engine::parse_fen(fen).unwrap();let hash=scan_board_hash(&p);walk(&mut p,hash,1,&mut edges);} }
+        println!("{} authored legal edges match board/full hash with parent restoration",edges);
+    }
+
+    #[test]
+    fn random_legal_sequences_and_all_sibling_hashes_match_oracle() {
+        let _guard=crate::TEST_LOCK.lock().unwrap();
+        let mut seed=0x18318482u32;
+        let mut checked=0;
+        unsafe {
+            for game in 0..32 {
+                let mut position=engine::parse_fen(FENS[game%FENS.len()]).unwrap();
+                let mut hash=scan_board_hash(&position);
+                for _ply in 0..80 {
+                    finish_board_hash(&mut position,hash);
+                    let initial=position;
+                    let mut moves=[0;MAX_MOVES];
+                    let count=engine::generate_legal(&mut position,&mut moves);
+                    assert!(position==initial);
+                    if count==0 {break;}
+                    for &mv in &moves[..count] {
+                        let undo=engine::make_move(&mut position,mv);
+                        let child=advance_board_hash(&position,mv,hash);
+                        finish_board_hash(&mut position,child);
+                        engine::unmake_move(&mut position,mv,undo);
+                        assert!(position==initial);
+                        finish_board_hash(&mut position,hash);
+                        checked+=1;
+                    }
+                    seed=seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                    let mv=moves[seed as usize%count];
+                    engine::make_move(&mut position,mv);
+                    hash=advance_board_hash(&position,mv,hash);
+                }
+            }
+        }
+        println!("{} seeded legal sibling edges match both original hash streams",checked);
+    }
+    #[test]
+    fn exact_search_abort_repetition_forced_root_and_pv_parity(){
+        let _guard=crate::TEST_LOCK.lock().unwrap();
+        unsafe {
+            clear_game_history();reference_search::clear_game_history();
+            let mut ordinary=0;let mut direct=0;let mut forced=0;
+            for &fen in FENS {for budget in [1,64,1024,10000] {for q in [false,true] {
+                let mut a=engine::parse_fen(fen).unwrap();let mut b=a;let initial=a;
+                let actual=run(&mut a,6,budget,0,q);let expected=reference_search::run(&mut b,6,budget,0,q);
+                assert_eq!(signature(&actual),reference_signature(&expected));assert!(a==initial&&b==initial);ordinary+=1;
+                let actual=run_fixed(&mut a,2,budget,q);let expected=reference_search::run_fixed(&mut b,2,budget,q);
+                assert_eq!(signature(&actual),reference_signature(&expected));assert!(a==initial&&b==initial);direct+=1;
+                let mut moves=[0;MAX_MOVES];let n=engine::generate_legal(&mut a,&mut moves);
+                begin_analysis(budget,q);reference_search::begin_analysis(budget,q);
+                for &mv in &moves[..n.min(3)] {
+                    let actual=analyse_root(&mut a,abi_move(mv),3,16);
+                    let expected=reference_search::analyse_root(&mut b,reference_search::abi_move(mv),3,16);
+                    assert_eq!(actual.status as u32,expected.status as u32);
+                    assert_eq!(signature(&actual.result),reference_signature(&expected.result));
+                    assert_eq!(research_pv(),reference_search::research_pv());assert!(a==initial&&b==initial);forced+=1;
+                }
+            }}}
+            for count in [2,3] {
+                let fen=b"4k1n1/8/8/8/8/8/8/4K1N1 w - - 8 5";
+                let history=[fen.as_slice(),b"\n"].concat().repeat(count);
+                load_game_history(&history).unwrap();reference_search::load_game_history(&history).unwrap();
+                let mut a=engine::parse_fen(fen).unwrap();let mut b=a;
+                assert_eq!(signature(&run(&mut a,5,10000,0,true)),reference_signature(&reference_search::run(&mut b,5,10000,0,true)));
+            }
+            clear_game_history();reference_search::clear_game_history();
+            println!("{} ordinary, {} fixed, {} shared-budget forced-root/PV cases plus repeated-history parity",ordinary,direct,forced);
+        }
+    }
+}

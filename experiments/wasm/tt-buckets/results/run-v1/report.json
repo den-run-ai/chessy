@@ -1,0 +1,1159 @@
+{
+  "registrationSha256": "5dfa4cd9637b30c3b3406127df1b3404c58b4a5d4cce37178b18e8fe65159ace",
+  "status": "complete",
+  "fixedNodes": [
+    {
+      "position": "Ruy Lopez",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 279.91407099999924,
+      "result": {
+        "move": {
+          "from": 9,
+          "to": 25,
+          "promotion": null
+        },
+        "score": -26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161778,
+        "cutoffs": 20095,
+        "researches": 51,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 285.94484099999863,
+      "result": {
+        "move": {
+          "from": 9,
+          "to": 25,
+          "promotion": null
+        },
+        "score": -26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161778,
+        "cutoffs": 20095,
+        "researches": 51,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez mirrored",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 294.92335000000094,
+      "result": {
+        "move": {
+          "from": 49,
+          "to": 33,
+          "promotion": null
+        },
+        "score": 26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160126,
+        "cutoffs": 19227,
+        "researches": 54,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez mirrored",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 285.8720950000006,
+      "result": {
+        "move": {
+          "from": 49,
+          "to": 33,
+          "promotion": null
+        },
+        "score": 26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160126,
+        "cutoffs": 19227,
+        "researches": 54,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 245.04798500000106,
+      "result": {
+        "move": {
+          "from": 35,
+          "to": 18,
+          "promotion": null
+        },
+        "score": 34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 150865,
+        "cutoffs": 10773,
+        "researches": 65,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 249.76960599999984,
+      "result": {
+        "move": {
+          "from": 35,
+          "to": 18,
+          "promotion": null
+        },
+        "score": 34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 150865,
+        "cutoffs": 10773,
+        "researches": 65,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon mirrored",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 230.4035449999992,
+      "result": {
+        "move": {
+          "from": 27,
+          "to": 42,
+          "promotion": null
+        },
+        "score": -34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 145610,
+        "cutoffs": 10670,
+        "researches": 69,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon mirrored",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 230.87529799999902,
+      "result": {
+        "move": {
+          "from": 27,
+          "to": 42,
+          "promotion": null
+        },
+        "score": -34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 145610,
+        "cutoffs": 10670,
+        "researches": 69,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 275.5388440000006,
+      "result": {
+        "move": {
+          "from": 45,
+          "to": 30,
+          "promotion": null
+        },
+        "score": 173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161646,
+        "cutoffs": 13293,
+        "researches": 25,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 271.07258300000103,
+      "result": {
+        "move": {
+          "from": 45,
+          "to": 30,
+          "promotion": null
+        },
+        "score": 173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161646,
+        "cutoffs": 13293,
+        "researches": 25,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian mirrored",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 294.5823249999994,
+      "result": {
+        "move": {
+          "from": 21,
+          "to": 38,
+          "promotion": null
+        },
+        "score": -173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160637,
+        "cutoffs": 11869,
+        "researches": 27,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian mirrored",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 310.24915899999905,
+      "result": {
+        "move": {
+          "from": 21,
+          "to": 38,
+          "promotion": null
+        },
+        "score": -173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160637,
+        "cutoffs": 11869,
+        "researches": 27,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 335.76898600000095,
+      "result": {
+        "move": {
+          "from": 52,
+          "to": 16,
+          "promotion": null
+        },
+        "score": -23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 191538,
+        "cutoffs": 6658,
+        "researches": 10,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 348.80070800000067,
+      "result": {
+        "move": {
+          "from": 52,
+          "to": 16,
+          "promotion": null
+        },
+        "score": -23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 191538,
+        "cutoffs": 6658,
+        "researches": 10,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete mirrored",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 309.6604189999998,
+      "result": {
+        "move": {
+          "from": 12,
+          "to": 40,
+          "promotion": null
+        },
+        "score": 23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 190736,
+        "cutoffs": 6439,
+        "researches": 8,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete mirrored",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 308.65951399999904,
+      "result": {
+        "move": {
+          "from": 12,
+          "to": 40,
+          "promotion": null
+        },
+        "score": 23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 190736,
+        "cutoffs": 6439,
+        "researches": 8,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 162.90944300000046,
+      "result": {
+        "move": {
+          "from": 58,
+          "to": 26,
+          "promotion": null
+        },
+        "score": 370,
+        "scorePov": "white",
+        "depth": 8,
+        "attemptedDepth": 9,
+        "nodes": 250000,
+        "qnodes": 119293,
+        "cutoffs": 51819,
+        "researches": 84,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 222.23810199999934,
+      "result": {
+        "move": {
+          "from": 58,
+          "to": 26,
+          "promotion": null
+        },
+        "score": 370,
+        "scorePov": "white",
+        "depth": 8,
+        "attemptedDepth": 9,
+        "nodes": 250000,
+        "qnodes": 119293,
+        "cutoffs": 51819,
+        "researches": 84,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena mirrored",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 220.11781699999847,
+      "result": {
+        "move": {
+          "from": 2,
+          "to": 3,
+          "promotion": null
+        },
+        "score": -368,
+        "scorePov": "white",
+        "depth": 9,
+        "attemptedDepth": 10,
+        "nodes": 250000,
+        "qnodes": 121881,
+        "cutoffs": 52194,
+        "researches": 43,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena mirrored",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 208.0571400000008,
+      "result": {
+        "move": {
+          "from": 2,
+          "to": 3,
+          "promotion": null
+        },
+        "score": -368,
+        "scorePov": "white",
+        "depth": 9,
+        "attemptedDepth": 10,
+        "nodes": 250000,
+        "qnodes": 121881,
+        "cutoffs": 52194,
+        "researches": 43,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 352.5071309999985,
+      "result": {
+        "move": {
+          "from": 14,
+          "to": 22,
+          "promotion": null
+        },
+        "score": -65,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 169847,
+        "cutoffs": 10132,
+        "researches": 24,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 326.80890799999906,
+      "result": {
+        "move": {
+          "from": 14,
+          "to": 22,
+          "promotion": null
+        },
+        "score": -65,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 169847,
+        "cutoffs": 10132,
+        "researches": 24,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence mirrored",
+      "repeat": 0,
+      "engine": "candidate",
+      "elapsedMs": 327.3878149999982,
+      "result": {
+        "move": {
+          "from": 56,
+          "to": 8,
+          "promotion": null
+        },
+        "score": 194,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 250000,
+        "qnodes": 171283,
+        "cutoffs": 8445,
+        "researches": 26,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence mirrored",
+      "repeat": 0,
+      "engine": "baseline",
+      "elapsedMs": 309.5679829999972,
+      "result": {
+        "move": {
+          "from": 56,
+          "to": 8,
+          "promotion": null
+        },
+        "score": 194,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 250000,
+        "qnodes": 171283,
+        "cutoffs": 8445,
+        "researches": 26,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 367.2401839999984,
+      "result": {
+        "move": {
+          "from": 9,
+          "to": 25,
+          "promotion": null
+        },
+        "score": -26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161778,
+        "cutoffs": 20095,
+        "researches": 51,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 310.91630799999984,
+      "result": {
+        "move": {
+          "from": 9,
+          "to": 25,
+          "promotion": null
+        },
+        "score": -26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161778,
+        "cutoffs": 20095,
+        "researches": 51,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez mirrored",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 299.21679199999926,
+      "result": {
+        "move": {
+          "from": 49,
+          "to": 33,
+          "promotion": null
+        },
+        "score": 26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160126,
+        "cutoffs": 19227,
+        "researches": 54,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez mirrored",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 291.66020500000013,
+      "result": {
+        "move": {
+          "from": 49,
+          "to": 33,
+          "promotion": null
+        },
+        "score": 26,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160126,
+        "cutoffs": 19227,
+        "researches": 54,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 248.2275359999985,
+      "result": {
+        "move": {
+          "from": 35,
+          "to": 18,
+          "promotion": null
+        },
+        "score": 34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 150865,
+        "cutoffs": 10773,
+        "researches": 65,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 258.67223100000047,
+      "result": {
+        "move": {
+          "from": 35,
+          "to": 18,
+          "promotion": null
+        },
+        "score": 34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 150865,
+        "cutoffs": 10773,
+        "researches": 65,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon mirrored",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 249.9326460000011,
+      "result": {
+        "move": {
+          "from": 27,
+          "to": 42,
+          "promotion": null
+        },
+        "score": -34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 145610,
+        "cutoffs": 10670,
+        "researches": 69,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Dragon mirrored",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 240.94775700000173,
+      "result": {
+        "move": {
+          "from": 27,
+          "to": 42,
+          "promotion": null
+        },
+        "score": -34,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 145610,
+        "cutoffs": 10670,
+        "researches": 69,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 348.30827099999806,
+      "result": {
+        "move": {
+          "from": 45,
+          "to": 30,
+          "promotion": null
+        },
+        "score": 173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161646,
+        "cutoffs": 13293,
+        "researches": 25,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 311.6661899999999,
+      "result": {
+        "move": {
+          "from": 45,
+          "to": 30,
+          "promotion": null
+        },
+        "score": 173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 161646,
+        "cutoffs": 13293,
+        "researches": 25,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian mirrored",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 367.3488870000001,
+      "result": {
+        "move": {
+          "from": 21,
+          "to": 38,
+          "promotion": null
+        },
+        "score": -173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160637,
+        "cutoffs": 11869,
+        "researches": 27,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "King's Indian mirrored",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 318.0174649999972,
+      "result": {
+        "move": {
+          "from": 21,
+          "to": 38,
+          "promotion": null
+        },
+        "score": -173,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 160637,
+        "cutoffs": 11869,
+        "researches": 27,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 455.3743680000007,
+      "result": {
+        "move": {
+          "from": 52,
+          "to": 16,
+          "promotion": null
+        },
+        "score": -23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 191538,
+        "cutoffs": 6658,
+        "researches": 10,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 597.2757859999983,
+      "result": {
+        "move": {
+          "from": 52,
+          "to": 16,
+          "promotion": null
+        },
+        "score": -23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 191538,
+        "cutoffs": 6658,
+        "researches": 10,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete mirrored",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 501.15325200000007,
+      "result": {
+        "move": {
+          "from": 12,
+          "to": 40,
+          "promotion": null
+        },
+        "score": 23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 190736,
+        "cutoffs": 6439,
+        "researches": 8,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Kiwipete mirrored",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 642.260632999998,
+      "result": {
+        "move": {
+          "from": 12,
+          "to": 40,
+          "promotion": null
+        },
+        "score": 23,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 190736,
+        "cutoffs": 6439,
+        "researches": 8,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 266.5038569999997,
+      "result": {
+        "move": {
+          "from": 58,
+          "to": 26,
+          "promotion": null
+        },
+        "score": 370,
+        "scorePov": "white",
+        "depth": 8,
+        "attemptedDepth": 9,
+        "nodes": 250000,
+        "qnodes": 119293,
+        "cutoffs": 51819,
+        "researches": 84,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 195.05610100000195,
+      "result": {
+        "move": {
+          "from": 58,
+          "to": 26,
+          "promotion": null
+        },
+        "score": 370,
+        "scorePov": "white",
+        "depth": 8,
+        "attemptedDepth": 9,
+        "nodes": 250000,
+        "qnodes": 119293,
+        "cutoffs": 51819,
+        "researches": 84,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena mirrored",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 190.92427399999724,
+      "result": {
+        "move": {
+          "from": 2,
+          "to": 3,
+          "promotion": null
+        },
+        "score": -368,
+        "scorePov": "white",
+        "depth": 9,
+        "attemptedDepth": 10,
+        "nodes": 250000,
+        "qnodes": 121881,
+        "cutoffs": 52194,
+        "researches": 43,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Lucena mirrored",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 266.08238100000017,
+      "result": {
+        "move": {
+          "from": 2,
+          "to": 3,
+          "promotion": null
+        },
+        "score": -368,
+        "scorePov": "white",
+        "depth": 9,
+        "attemptedDepth": 10,
+        "nodes": 250000,
+        "qnodes": 121881,
+        "cutoffs": 52194,
+        "researches": 43,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 383.39431200000035,
+      "result": {
+        "move": {
+          "from": 14,
+          "to": 22,
+          "promotion": null
+        },
+        "score": -65,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 169847,
+        "cutoffs": 10132,
+        "researches": 24,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 444.9566879999984,
+      "result": {
+        "move": {
+          "from": 14,
+          "to": 22,
+          "promotion": null
+        },
+        "score": -65,
+        "scorePov": "white",
+        "depth": 5,
+        "attemptedDepth": 6,
+        "nodes": 250000,
+        "qnodes": 169847,
+        "cutoffs": 10132,
+        "researches": 24,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence mirrored",
+      "repeat": 1,
+      "engine": "baseline",
+      "elapsedMs": 421.0522020000026,
+      "result": {
+        "move": {
+          "from": 56,
+          "to": 8,
+          "promotion": null
+        },
+        "score": 194,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 250000,
+        "qnodes": 171283,
+        "cutoffs": 8445,
+        "researches": 26,
+        "stopReason": "node-limit"
+      }
+    },
+    {
+      "position": "Tactical defence mirrored",
+      "repeat": 1,
+      "engine": "candidate",
+      "elapsedMs": 453.176105999999,
+      "result": {
+        "move": {
+          "from": 56,
+          "to": 8,
+          "promotion": null
+        },
+        "score": 194,
+        "scorePov": "white",
+        "depth": 4,
+        "attemptedDepth": 5,
+        "nodes": 250000,
+        "qnodes": 171283,
+        "cutoffs": 8445,
+        "researches": 26,
+        "stopReason": "node-limit"
+      }
+    }
+  ],
+  "pressure": [
+    {
+      "position": "Ruy Lopez",
+      "engine": "baseline",
+      "elapsedMs": 8001.362258999998,
+      "result": {
+        "move": {
+          "from": 5,
+          "to": 19,
+          "promotion": null
+        },
+        "score": 0,
+        "scorePov": "white",
+        "depth": 8,
+        "attemptedDepth": 9,
+        "nodes": 5935103,
+        "qnodes": 3732386,
+        "cutoffs": 528208,
+        "researches": 140,
+        "stopReason": "time-limit"
+      }
+    },
+    {
+      "position": "Ruy Lopez",
+      "engine": "candidate",
+      "elapsedMs": 8000.903459000001,
+      "result": {
+        "move": {
+          "from": 5,
+          "to": 19,
+          "promotion": null
+        },
+        "score": 0,
+        "scorePov": "white",
+        "depth": 8,
+        "attemptedDepth": 9,
+        "nodes": 6116351,
+        "qnodes": 3834541,
+        "cutoffs": 536022,
+        "researches": 140,
+        "stopReason": "time-limit"
+      }
+    },
+    {
+      "position": "King's Indian",
+      "engine": "candidate",
+      "elapsedMs": 8000.797827000002,
+      "result": {
+        "move": {
+          "from": 55,
+          "to": 47,
+          "promotion": null
+        },
+        "score": 160,
+        "scorePov": "white",
+        "depth": 7,
+        "attemptedDepth": 8,
+        "nodes": 6926335,
+        "qnodes": 4382361,
+        "cutoffs": 444920,
+        "researches": 100,
+        "stopReason": "time-limit"
+      }
+    },
+    {
+      "position": "King's Indian",
+      "engine": "baseline",
+      "elapsedMs": 8000.846085999998,
+      "result": {
+        "move": {
+          "from": 55,
+          "to": 47,
+          "promotion": null
+        },
+        "score": 160,
+        "scorePov": "white",
+        "depth": 7,
+        "attemptedDepth": 8,
+        "nodes": 7033855,
+        "qnodes": 4456692,
+        "cutoffs": 461568,
+        "researches": 100,
+        "stopReason": "time-limit"
+      }
+    }
+  ],
+  "correctness": {
+    "oracleComparisons": 144,
+    "fullWindowComparisons": 12,
+    "exactRoots": 140,
+    "budgetChecks": 4
+  },
+  "fixedNodeElapsedRatioGeomean": 0.9605748763861565,
+  "moduleBytes": {
+    "baseline": 37172,
+    "candidate": 37192
+  }
+}

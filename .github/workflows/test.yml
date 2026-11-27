@@ -54,6 +54,9 @@ jobs:
       BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Research prototypes rebuild pinned historical Git sources.
+          fetch-depth: 0
       - name: Fetch pinned Rust and Binaryen toolchains
         run: |
           export RUSTUP_HOME="$RUNNER_TEMP/rustup-home"
@@ -83,6 +86,25 @@ jobs:
           sha256sum experiments/wasm/dist/*.wasm
       - name: Verify the committed production asset
         run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - name: Reproduce research-only TT correctness without rerunning timings
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          probe="$RUNNER_TEMP/chessy-tt-buckets"
+          node experiments/wasm/tt-buckets/probe.test.js
+          node experiments/wasm/tt-buckets/prepare.js "$probe"
+          for mode in baseline candidate; do
+            (cd "$probe/$mode" && \
+              CARGO_TARGET_DIR="$RUNNER_TEMP/tt-native-$mode" \
+              cargo test --locked --offline)
+            CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/tt-wasm-$mode" \
+              CHESSY_CARGO_BIN="$(command -v cargo)" \
+              CHESSY_RUSTC_BIN="$(command -v rustc)" \
+              CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+              sh "$probe/$mode/build.sh"
+          done
+          node experiments/wasm/tt-buckets/validate.js "$probe"
       - name: Build all optional incremental study variants before timing
         if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
         env:
@@ -142,6 +164,55 @@ jobs:
         with:
           name: nnue-synthetic-probes
           path: ${{ runner.temp }}/nnue-probe-results/
+      - uses: actions/setup-node@v4
+        with:
+          # Match the production compressed-size encoder for these new probes.
+          node-version: '22.23.2'
+      - name: Reproduce isolated search-cost candidates and correctness evidence
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          CHESSY_COST_RUST=$(dirname "$(dirname "$(rustup which --toolchain "$RUST_VERSION" rustc)")")
+          node experiments/wasm/pawn-ranks/probe.test.js
+          node experiments/wasm/pawn-ranks/prepare.js "$RUNNER_TEMP/pawn-ranks"
+          node experiments/wasm/pawn-ranks/build.js "$RUNNER_TEMP/pawn-ranks" \
+            "$CHESSY_COST_RUST" "$PWD/binaryen-version_131"
+          node experiments/wasm/pawn-ranks/validate.js "$RUNNER_TEMP/pawn-ranks"
+          node experiments/wasm/pawn-ranks/check-evidence.js "$RUNNER_TEMP/pawn-ranks"
+          node experiments/wasm/compact-hash/probe.test.js
+          node experiments/wasm/compact-hash/prepare.js "$RUNNER_TEMP/compact-hash" threaded
+          (cd "$RUNNER_TEMP/compact-hash" && \
+            RUSTC="$CHESSY_COST_RUST/bin/rustc" \
+            CARGO_TARGET_DIR="$RUNNER_TEMP/compact-hash-native" \
+            "$CHESSY_COST_RUST/bin/cargo" test --locked --offline)
+          CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/compact-hash-target" \
+            CHESSY_CARGO_BIN="$CHESSY_COST_RUST/bin/cargo" \
+            CHESSY_RUSTC_BIN="$CHESSY_COST_RUST/bin/rustc" \
+            CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+            sh "$RUNNER_TEMP/compact-hash/build.sh"
+          node experiments/wasm/compact-hash/validate.js "$RUNNER_TEMP/compact-hash" \
+            "$RUNNER_TEMP/compact-hash-validation.json"
+          node experiments/wasm/compact-hash/probe.test.js "$RUNNER_TEMP/compact-hash"
+          # Recheck research sizes with the pinned encoder. Historical receipt
+          # verdicts stay separate from the current production download budget.
+          node - "$RUNNER_TEMP/pawn-ranks/candidate/dist/chessy-ai-fast.wasm" \
+            "$RUNNER_TEMP/compact-hash/dist/chessy-ai-fast.wasm" \
+            "$RUNNER_TEMP/chessy-tt-buckets/candidate/dist/chessy-ai-fast.wasm" <<'NODE'
+          const fs = require('fs'), crypto = require('crypto'), zlib = require('zlib');
+          if (process.versions.node !== '22.23.2' || process.versions.brotli !== '1.1.0') {
+            throw new Error('wrong research size encoder');
+          }
+          for (const file of process.argv.slice(2)) {
+            const bytes = fs.readFileSync(file);
+            console.log(JSON.stringify({ file, raw: bytes.length,
+              brotli: zlib.brotliCompressSync(bytes, { params: {
+                [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }).length,
+              sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+              node: process.versions.node, encoder: process.versions.brotli,
+              productionIntegrationAllowed: false }));
+          }
+          NODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,0 +1,22 @@
+{
+  "id": "chessy-tt-buckets-diagnostic-v1",
+  "candidate": "four entries per bucket; same-h1 overwrite; shallowest victim; first-slot tie break",
+  "claim": "correctness and bounded local mechanism diagnostic only; no strength or release admission",
+  "oracleDepths": [0, 1, 2, 3],
+  "completedComparisonDepth": 4,
+  "completedComparisonNodeLimit": 2000000,
+  "warmupNodeLimit": 5000,
+  "fixedNodeLimit": 250000,
+  "fixedNodeRepetitions": 2,
+  "pressureTimeMs": 8000,
+  "pressureFamilyIndices": [0, 2],
+  "maxDepth": 111,
+  "families": [
+    ["Ruy Lopez", "r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 5"],
+    ["Dragon", "r2q1rk1/pp1bppbp/2np1np1/8/3NP3/2N1B3/PPPQBPPP/R4RK1 w - - 0 1"],
+    ["King's Indian", "r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1"],
+    ["Kiwipete", "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"],
+    ["Lucena", "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1"],
+    ["Tactical defence", "r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27"]
+  ]
+}

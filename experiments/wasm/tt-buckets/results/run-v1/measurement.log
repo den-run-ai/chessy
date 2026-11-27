@@ -1,0 +1,8 @@
+Correctness passed: {"oracleComparisons":144,"fullWindowComparisons":12,"exactRoots":140,"budgetChecks":4}
+Completed fixed-node repetition 1
+Completed fixed-node repetition 2
+Completed pressure search: Ruy Lopez baseline 8 5935103 false
+Completed pressure search: Ruy Lopez candidate 8 6116351 false
+Completed pressure search: King's Indian candidate 7 6926335 false
+Completed pressure search: King's Indian baseline 7 7033855 false
+{"status":"complete","correctness":{"oracleComparisons":144,"fullWindowComparisons":12,"exactRoots":140,"budgetChecks":4},"elapsedRatio":0.9605748763861565}

@@ -49,19 +49,40 @@ node test/analysis-core.test.js
 node test/ai-tactics.js
 ```
 
-`test/wasm-size.test.js` ratchets the production download at **37,172 raw
-bytes** and **17,690 bytes with Node 22.23.2 / Brotli 1.1.0 quality 11**.
+`test/wasm-size.test.js` limits the production download to **40 KiB raw
+(40,960 bytes)** and **20 KiB Brotli quality 11 (20,480 bytes)**. These explicit
+budgets provide modest room for reviewed engine improvements. The historical
+shipped measurements remain **37,172 raw / 17,690 Brotli-11 bytes**; they are
+retained as measurements, rather than relabeled as the new limits.
+
+Authoritative compression remains pinned to **Node 22.23.2 / Brotli 1.1.0**.
 The engine CI job pins that exact Node release, and the test verifies both
 runtime and encoder versions before issuing an authoritative verdict. This
 matches the successful PR #169 engine job; changing encoders requires a
 separate reviewed baseline comparison. On other local runtimes,
 `node test/wasm-size.test.js --diagnostic` reports a clearly non-authoritative
-measurement. A smaller module
-passes without rebaselining. If reviewed strength or efficiency evidence
-justifies a larger module, keep the exception narrow and visible by setting
+measurement. The new download budgets leave fixed linear memory, the pinned
+toolchain, source reproduction, signatures, strength/cost admission and
+physical-device requirements unchanged. Fitting the budgets does not authorize
+candidate activation.
+
+Archived experiment receipts preserve their original ceilings and verdicts.
+The compact-hash and pawn-rank prototypes exceeded the historical raw ceiling;
+their recorded sizes fit the new budgets. The independent
+[pinned-encoder CI check](https://github.com/den-run-ai/chessy/actions/runs/45940247899/job/140312676492)
+confirmed 17,937 Brotli bytes for compact hashing and 17,739 for pawn masks.
+Their old failures remain historical results. All remaining admission evidence
+is still required before release, and every future module must pass the size
+gate with the pinned encoder.
+
+If reviewed strength or efficiency evidence justifies exceeding a current
+budget, keep the exception narrow and visible by setting
 exact `CHESSY_WASM_MAX_RAW_BYTES` and `CHESSY_WASM_MAX_BROTLI_BYTES` ceilings
 plus a concrete `CHESSY_WASM_SIZE_OVERRIDE_REASON` on this test's CI step.
-Partial, unexplained, malformed, or unbounded overrides fail closed. Record the
+Both limits must be positive safe-integer byte counts, neither may fall below
+the current defaults, and at least one must increase. The rationale must contain
+at least 20 characters. Partial, unexplained, malformed, non-increasing or
+unbounded overrides fail closed. Record the
 tradeoff and benchmark evidence in the same pull request; do not use a
 repository secret or broad workflow environment to bypass the gate.
 

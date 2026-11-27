@@ -256,6 +256,17 @@ reference paper, the most useful performance directions, and their existing
 Chessy experiments. The production engine bytes, evaluation, and difficulty
 budgets are unchanged; this refresh makes no new Elo claim.
 
+Two follow-up [search-cost prototypes](experiments/wasm/CHATARUNGA-REVIEW.md#follow-up-cost-prototypes)
+retain their complete development evidence. Compact hashing reduced elapsed
+time by 8.27% at 230k nodes in its local screen. Pawn-rank masks produced smaller,
+uneven gains and slowed the endgame phase. Both exceeded the historical raw
+ceiling; their recorded raw and independently reproduced compressed sizes fit the new
+**40 KiB raw / 20 KiB Brotli-11 download budgets**. The archived receipts retain
+the earlier limits and results. Both preserve the measured fixed-node results;
+neither is activated. The pinned Node 22.23.2 / Brotli 1.1.0 size gate and all
+other engine and device gates remain in force. The [cost-admission proposal](experiments/wasm/SEARCH-COST-ADMISSION-PROPOSAL.md)
+identifies the source, runtime and physical-device evidence still needed.
+
 ## Run it
 
 Serve the directory with any static file server and open it in a browser:

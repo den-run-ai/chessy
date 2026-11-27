@@ -1,0 +1,37 @@
+   Compiling chessy-ai-wasm v0.1.0 (/workspace/scratch/8a384797d3cd/chessy-compact-hash-final)
+warning: function `history_input_ptr` is never used
+    --> src/search.rs:1960:8
+     |
+1960 | pub fn history_input_ptr() -> *mut u8 {
+     |        ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `pv_ptr` is never used
+    --> src/search.rs:1964:8
+     |
+1964 | pub fn pv_ptr() -> u32 {
+     |        ^^^^^^
+
+warning: `chessy-ai-wasm` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.91s
+     Running unittests src/lib.rs (/workspace/scratch/8a384797d3cd/chessy-compact-hash-native-final/debug/deps/chessy_ai_wasm-8ab5d9e90753b2a1)
+
+running 12 tests
+test eval::tests::matches_shipped_javascript_reference_positions ... ok
+test engine::tests::make_and_unmake_restore_position_exactly ... ok
+test search::reference_search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+test search::tests::full_table_short_circuits_before_an_unknown_probe ... ok
+7097 authored legal edges match board/full hash with parent restoration
+test search::compact_hash_tests::every_authored_legal_edge_matches_full_scan_and_restores_parent ... ok
+test engine::tests::initial_position_perft_and_pseudo_ordering ... ok
+test engine::tests::kiwipete_en_passant_and_promotion_perft ... ok
+120 ordinary, 120 fixed, 312 shared-budget forced-root/PV cases plus repeated-history parity
+test search::compact_hash_tests::exact_search_abort_repetition_forced_root_and_pv_parity ... ok
+38622 seeded legal sibling edges match both original hash streams
+test search::compact_hash_tests::random_legal_sequences_and_all_sibling_hashes_match_oracle ... ok
+test search::reference_search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+test search::tests::abi_v2_history_exact_roots_budget_and_pv ... ok
+test tests::abi_v2_layout_and_depth_guard_are_fixed ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.34s
