@@ -1,0 +1,64 @@
+{
+  "abiVersion": 2,
+  "baseCommit": "2cf89b6e2ff7c7f2f11c2bf39e4c9b7bc99d28e0",
+  "candidate": {
+    "bytes": 57183,
+    "sha256": "1d955d4ca88310454aa14f0ead19c52de99718c4bf1db2b5fb1c568b0e6ea50e"
+  },
+  "denominator": 16,
+  "matchedControl": {
+    "bytes": 37210,
+    "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+  },
+  "model": {
+    "bytes": 34560,
+    "coefficientBytes": 13640,
+    "id": "eval-pipeline/refit-no-pawn",
+    "sha256": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2"
+  },
+  "modifiedCore": {
+    "bytes": 19399,
+    "sha256": "17eed45124c07b8f8e2e4bd39fce55cc0ea95227d344a668c18819da897abde5"
+  },
+  "numerator": 8,
+  "rounding": "toward zero after the original integer residual interpolation",
+  "tools": {
+    "cargo": {
+      "bytes": 42839824,
+      "sha256": "828980723df339d62434390e9fb8ef8831036583343ae2316b7ab5646b5c1953"
+    },
+    "rustc": {
+      "bytes": 645000,
+      "sha256": "d3a664c970a9fd8361b64194861bebc1ae37b9054e5ee3400dc1c9e691797eea"
+    },
+    "wasm-opt": {
+      "bytes": 18342880,
+      "sha256": "bad4b6524b2c8e4b27b9aa69bde1a4b9a05ec8887c77ef0d34300f5825acd97c"
+    }
+  },
+  "unscaledCandidate": {
+    "bytes": 57175,
+    "sha256": "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+  },
+  "loader": {
+    "bytes": 18203,
+    "sha256": "39e52ff72c81c6c0340e0f593addfec3a23b1047baadc02a5888bbb0484e3b52"
+  },
+  "memoryBytes": 26607616,
+  "validationFens": {
+    "bytes": 5760888,
+    "sha256": "1f5402d0b61d18f2c8c1dd791d99fc1bcecd2c44956b5bc28c8ed8bcf0c81900"
+  },
+  "hceScores": {
+    "bytes": 400656,
+    "sha256": "a7b08bcbb6bb2dc60d9d866ee5b18ee6dbff9e2e76c5e3f3aaae002e42f3351e"
+  },
+  "learnedScores": {
+    "bytes": 400656,
+    "sha256": "1d9d06f813ddf2e2c94f111d412d0562876b32bb374aa7e9d5b178f3d9339853"
+  },
+  "positions": 100164,
+  "negativeFraction": 21966,
+  "positiveFraction": 28430,
+  "mismatches": 0
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "chessy.eval-robustness-family-calibration.v1",
+  "status": "Exploratory follow-up chosen after seeing the primary decision results. No substitution into the frozen match.",
+  "input": "Use the frozen sibling labels, historical family exclusions, group split and decision diagnostics from fit.py. The secondary fit consumes only the original fitting games. Use all eight families even when the fitted scale is at a boundary.",
+  "model": "For each of PST, own-king, enemy-king, and ray terms in each of the midgame and endgame tables, fit one multiplier of the prior no-pawn integer weights. Keep the HCE offset fixed. Use continuous tapered contributions during optimization.",
+  "objective": "Use identical per-game/per-root weighting as the primary fit, including 75% pairwise soft-target CE at 120 cp and 25% pointwise CE at 250 cp. Add 0.0025 times the mean of the eight squared scales and 0.01 times their population variance. The variance penalty shrinks family differences towards their shared mean.",
+  "optimization": "One recipe only. Fit bounded [0,1] scales by L-BFGS-B with analytic derivatives, starting all at 0.75. No quiet anchors or validation-based selection.",
+  "export": "Multiply each original signed integer table coefficient by its fitted family/phase scale and round half away from zero. The existing no-pawn evaluator layout, separate HCE rounding and integer interpolation apply. Verify the production narrow-table ranges and all new child scores against an independent native extractor.",
+  "metrics": "Report group-weighted teacher move regret and mixed CE on the already seen held-out sibling set; compare HCE, full, no-pawn, frozen scalar and exported family fit. A paired bootstrap resamples source games. Record transfer to the previously exposed 100164 quiet validation rows. No new game-strength inference from these static diagnostics."
+}

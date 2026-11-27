@@ -1,0 +1,17 @@
+{
+  "children": 263,
+  "collectionSha256": "ed3b8fe0e444533071c3cfb9a96f853159ca49b0cbe62badf37991d14a5e83a0",
+  "engineId": {
+    "author": "T. Romstad, M. Costalba, J. Kiiski, G. Linscott",
+    "name": "Stockfish 11 64 POPCNT"
+  },
+  "executableSha256": "835cca1bae51344ab86bb9443bd46e886a1c0d07011a377b6c50056be3e43718",
+  "hashMiB": 16,
+  "labelsGzSha256": "3c01180f74a3d2597017de197c5013adc234fbaf678726cd4d07032daa270625",
+  "nodesRequested": 30000,
+  "protocolSha256": "9985a9b5f0714f63d7fd77da71d5093bd8fe0bb98e901ee32aa5ff8535eb0da0",
+  "pythonChess": "1.11.2",
+  "roots": 83,
+  "sampleIdSha256": "3a2cf1dc3f15ee3dec93f524adc8f36aa1ef8437f568fdd78c2fc65c864c62f3",
+  "threads": 1
+}

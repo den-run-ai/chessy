@@ -1,0 +1,48 @@
+{
+  "bankSha256": "c05964d834fead222e24c18f5acc9f7eb9c7c65a9a458e113e38151e639edbc5",
+  "directMatchBetweenModels": false,
+  "fittedPgnSha256": "e62d5e4ea96fe030bbbc31517b7cb0fd083e3e12b1c457788fa9fd17d1232de5",
+  "fourPlyFamilies": 100,
+  "gamesPerModel": 256,
+  "largestFamily": 2,
+  "models": {
+    "fittedMinusUnscaledVsHce": {
+      "marginal95": [
+        -0.05708661417322835,
+        0.08984375
+      ],
+      "point": 0.017578125,
+      "simultaneous95": [
+        -0.07356842930970839,
+        0.10543247767857156
+      ]
+    },
+    "fittedVsHce": {
+      "marginal95": [
+        0.46,
+        0.559428669008587
+      ],
+      "point": 0.509765625,
+      "simultaneous95": [
+        0.4497571942446043,
+        0.5699244186046514
+      ]
+    },
+    "unscaledVsHce": {
+      "marginal95": [
+        0.43554529989919355,
+        0.5492125984251969
+      ],
+      "point": 0.4921875,
+      "simultaneous95": [
+        0.423883984375,
+        0.560546875
+      ]
+    }
+  },
+  "note": "Paired difference in game scores against HCE across two successive measurement periods.",
+  "openingPairs": 128,
+  "protocolSha256": "cec4f852022989c31162169d798936d3c5b5d0b7456b1b5d815076c59a40d539",
+  "sameStartAndColor": true,
+  "unscaledPgnSha256": "4d533302be0eaad6c16ad1f8a0e31db5c739fd70c6ff45341a06883c250c96f5"
+}

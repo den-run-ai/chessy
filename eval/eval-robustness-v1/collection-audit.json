@@ -1,0 +1,37 @@
+{
+  "checkedWasmScores": 6057,
+  "children": 2019,
+  "distinctClusters": 2650,
+  "groups": 320,
+  "inputSha256": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+  "matchGameOverlap": 0,
+  "matchedOpeningGroups": 64,
+  "primaryOverlap": {
+    "holdout.jsonl": {
+      "matchedClusters": 0,
+      "newFitClusters": 0,
+      "newHeldoutClusters": 0,
+      "rows": 100691
+    },
+    "train.jsonl": {
+      "matchedClusters": 1,
+      "newFitClusters": 1,
+      "newHeldoutClusters": 0,
+      "rows": 799145
+    },
+    "validation.jsonl": {
+      "matchedClusters": 0,
+      "newFitClusters": 0,
+      "newHeldoutClusters": 0,
+      "rows": 100164
+    }
+  },
+  "roots": 631,
+  "scoreMismatches": 0,
+  "symmetryClustersSharedAcrossNewGroups": 0,
+  "wasmSha256": [
+    "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5",
+    "a84bca237b114d82be743747d9db14ad7721a996b14c7483c27d2369752f3039",
+    "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+  ]
+}

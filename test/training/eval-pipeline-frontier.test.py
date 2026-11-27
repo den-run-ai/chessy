@@ -59,6 +59,16 @@ class ScheduleContracts(unittest.TestCase):
         self.assertEqual([row["candidateColor"] for row in scheduled[8:10]], ["black", "white"])
         self.assertEqual(f.validate_records(self.cfg, reversed(self.rows)), self.rows)
 
+    def test_explicit_single_budget_supports_paired_screen(self):
+        cfg = config(4)
+        cfg.update(timeControlsMs=[25], singleBudgetScreen=True, minimumWorthwhileScore=.55)
+        report = f.analyze(cfg, records(cfg, {25: [0, .5, .75, 1]}))
+        self.assertEqual(report["games"], 8)
+        self.assertEqual(report["profiles"][0]["candidateScore"], .5625)
+        self.assertAlmostEqual(report["bootstrap"]["marginalTailProbability"], .025)
+        self.assertFalse(report["policy"]["pointEstimateTransitions"])
+        self.assertFalse(report["productionAdmission"])
+
     def test_config_rejects_posthoc_or_non_time_schedules(self):
         mutations = [lambda c: c.update(productionAdmission=True),
                      lambda c: c.update(researchOnly=False),

@@ -1,0 +1,331 @@
+{
+  "base": {
+    "id": "r85-hce-memory",
+    "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+  },
+  "bootstrap": {
+    "clusterCount": 29,
+    "confidence": 0.95,
+    "degeneratePolicy": "report [0,1], never infer strength from a zero-variance bootstrap",
+    "degenerateTimesMs": [],
+    "estimand": "opening-weighted mean of two-color pair scores",
+    "largestCluster": 2,
+    "marginalTailProbability": 0.025000000000000022,
+    "method": "paired-cluster-bootstrap-bonferroni-percentile",
+    "openingCount": 32,
+    "replicates": 10000,
+    "rng": "Python random.Random (MT19937)",
+    "sameClusterDrawAcrossTimeGrid": true,
+    "scope": "nominal simultaneous descriptive intervals over this fixed time grid; approximate, not a coverage guarantee",
+    "seed": 20261127
+  },
+  "campaignAudit": {
+    "auditorSha256": "ea448b556c4428358fe7b215652a8d827dc063cb1b4d47a57fd1dc277a682982",
+    "completionSha256": "c5e08f42eb42029bb1cf4d650d26d4206ea2543651509e06bca6173a234a9255",
+    "fullHistoryVerified": true,
+    "gamesReplayed": 64,
+    "hostInfo": {
+      "abiVersion": 2,
+      "engines": {
+        "base": {
+          "bytes": 37210,
+          "loadMs": 54.05171200000001,
+          "memoryBytes": 26607616,
+          "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+        },
+        "candidate": {
+          "bytes": 57195,
+          "loadMs": 55.38047399999999,
+          "memoryBytes": 26607616,
+          "sha256": "e397d4153179c2585fc6ccb38db4459fdc6d40075b67918e87e71f87df1ce884"
+        }
+      },
+      "execArgv": [
+        "--no-liftoff",
+        "--no-wasm-lazy-compilation"
+      ],
+      "loaderSha256": "39e52ff72c81c6c0340e0f593addfec3a23b1047baadc02a5888bbb0484e3b52",
+      "nodeVersion": "v24.22.3",
+      "rulesSha256": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+      "v8Version": "13.6.233.17-node.63"
+    },
+    "javascriptRulesReplayVerified": true,
+    "movesReplayed": 5930,
+    "pgnsVerified": 64,
+    "registrationSha256": "278fa302f74b046e026389be81b1c291395d7cdd21b5e8a65cbfa224692e0bc6",
+    "schema": "chessy.eval-game-campaign.v1.audit",
+    "searchesRerun": 0,
+    "status": "pass"
+  },
+  "candidate": {
+    "id": "r85-no-pawn-ratio-12-16",
+    "sha256": "e397d4153179c2585fc6ccb38db4459fdc6d40075b67918e87e71f87df1ce884"
+  },
+  "completeSchedule": true,
+  "configSha256": "8c2417d4f6b3e3b7786deaea4b8466feb180a9a411f655413c3aee44ef319ec1",
+  "experimentId": "sparse-robustness-fitted-n12",
+  "formalPass": false,
+  "games": 64,
+  "implementationSha256": "44e5f09ec70e90ce93556221ae189bc06f735778fa906c771b3d9e5dd2aaf48d",
+  "limitations": [
+    "Separate full-history legal replay and measured-budget audit are required before interpreting scores.",
+    "Opening/family dependence may remain beyond the declared clusters; these intervals are exploratory.",
+    "Time-limited execution varies across runs, hardware, compiler tiers and thermal conditions.",
+    "Relative Elo is a score transform for this opponent and budget, not a human or universal rating.",
+    "No inference about intermediate times, unmeasured models/devices, or a universal saturation curve.",
+    "Ply-cap draws remain draws and are reported separately; no result-based exclusions or retries."
+  ],
+  "policy": {
+    "candidateConfirmationTimesMs": [],
+    "crossingStatus": "not-established",
+    "nextStep": "No budget qualifies for confirmation on this screen; retain HCE and improve the candidate before a new registered comparison.",
+    "noAutomaticActivationFromPointCrossing": true,
+    "noInterpolationOrExtrapolation": true,
+    "noMonotoneCurveFit": true,
+    "pointEstimateTransitions": [],
+    "productionEnable": false,
+    "requiresFreshConfirmation": true,
+    "selectionRule": "confirm only preregistered product budgets whose simultaneous lower score exceeds the minimum worthwhile score",
+    "supportedGridBrackets": [],
+    "timingAuditFailedTimesMs": []
+  },
+  "productionAdmission": false,
+  "profiles": [
+    {
+      "candidateScore": 0.609375,
+      "descriptiveClassification": "inconclusive",
+      "draws": 12,
+      "games": 64,
+      "losses": 19,
+      "openingPairs": 32,
+      "pairedScores": [
+        {
+          "openingId": "69ff64d810327d00629f7b1ee75b54534c8e044eb61a91d093964e8360518ca5",
+          "score": 0.5
+        },
+        {
+          "openingId": "080907313739fbd1afe8e1271e6dc0fd9e1342dea13e6de6db06b3bc42ce68b4",
+          "score": 1.0
+        },
+        {
+          "openingId": "17d790e5d9ba9422bb84b218d5573ca0e43f8bbf041ffda43814b7a4076c95ce",
+          "score": 0.75
+        },
+        {
+          "openingId": "ff74d98a7ee37df06182815ce5cb4f6cc1270e5e2cee9fd312237e6b8da6df88",
+          "score": 0.5
+        },
+        {
+          "openingId": "5aa02cd86299b60bff97f443171ef1cbbe7aa9c8265ec5c28627405546e93321",
+          "score": 0.25
+        },
+        {
+          "openingId": "b351cb1bbfe285f5ac36ff4e251e0989f644d78fc6d2f5235900d6221a799157",
+          "score": 1.0
+        },
+        {
+          "openingId": "ae2b807ee36bbabb16c57954cc544acb74db669d19e7df1e6e310d0f987bede5",
+          "score": 0.5
+        },
+        {
+          "openingId": "81a553566092c45e435ef9e89e8e8c3bbfeb30c07ca85a85cf254b0e65b87aaa",
+          "score": 0.75
+        },
+        {
+          "openingId": "1bc8bf57b019d79a10c7cae1b1d851cdc8cc5a6dac66e043d33766cb257c1134",
+          "score": 1.0
+        },
+        {
+          "openingId": "1bf6bcb24733fd4e8e69423e1b53f577596630b54ad696f50adca538576e99e2",
+          "score": 0.5
+        },
+        {
+          "openingId": "d4b017d6f60eb67d9bce76685392a9ca23d94c363a551f20652d4b0fac72280e",
+          "score": 1.0
+        },
+        {
+          "openingId": "a8f326f60cd671a9c073064412eea5bb9592e4053797c976be53e5bb8f54de0b",
+          "score": 0.25
+        },
+        {
+          "openingId": "efaf94760575a57d8947b92fdf48c1b7a396d85f373fa5936a563d2128fc1038",
+          "score": 0.5
+        },
+        {
+          "openingId": "cad82410762ba20dbfd5accb65bfc70ce3ea2b8e352fc23dbb74361ffa467925",
+          "score": 0.5
+        },
+        {
+          "openingId": "97d9402cbaaac8f99e7d6c0ee8da3d0bd1e494301fd9e0153a9276bbe8042bdc",
+          "score": 0.75
+        },
+        {
+          "openingId": "ea0121c81e3c7ca25981396e55b79253401e2ded18af6912c98905527c71eba3",
+          "score": 1.0
+        },
+        {
+          "openingId": "37c4d5cca7f391ac9a111a2bb9d60bf509688fa0c3330e809503e49d420d2ddb",
+          "score": 0.5
+        },
+        {
+          "openingId": "afb891c5dd223f60c2693e1f8fd34dd6cb1a6fa8703706688f5da0fde5cfa2aa",
+          "score": 0.25
+        },
+        {
+          "openingId": "0f13c4297436cebc9a251d69542e8b990d32edf6cee65923c31e60c0d7c50075",
+          "score": 0.5
+        },
+        {
+          "openingId": "3a9d2b466cdac8d4e883ad52f615da6a7f38e72ec943fdc457750ff1539a4d2a",
+          "score": 0.5
+        },
+        {
+          "openingId": "04222be947c82f17396e0d08f023906b7bb28481aabc71da58d49d98546322a6",
+          "score": 0.5
+        },
+        {
+          "openingId": "9021736a261856237564ea9d272dea48dd281e89cfd6b736349d0b5960a3ee60",
+          "score": 1.0
+        },
+        {
+          "openingId": "f50dcb9525771b4e20e6dffd0cb45461e2f22c8276163d00b93cb0dc65701ef9",
+          "score": 1.0
+        },
+        {
+          "openingId": "7ceabf257325e09722543236c86deec0667424306f4bceed2a631f579a58e027",
+          "score": 0.75
+        },
+        {
+          "openingId": "041a084d34e6ecee4b405cb8ed314130d2f54af3e61d118c8b02a34a14c89034",
+          "score": 0.0
+        },
+        {
+          "openingId": "792005be7030fd56d81a8faec83ba85cadeb6dd8cf5bf6da0edfe7c0adf313cd",
+          "score": 0.0
+        },
+        {
+          "openingId": "fd1f4c908e8960aa1d68fc075e6ba96c2a5cbbe3fd082ced03f1c1c521a17281",
+          "score": 0.75
+        },
+        {
+          "openingId": "8c3e6cbb2bf4e11c515ca4eab2e8fd2755d083328f318c2584ea7955202d6118",
+          "score": 0.5
+        },
+        {
+          "openingId": "b42c384e420dbbc14458adcd1cf3c3adcda1afbd377844e3893947639a6c62f1",
+          "score": 1.0
+        },
+        {
+          "openingId": "8ada4687898f7ab8149afa8eb2e0d3fb7c6610ea42604f592759cb18f5cfe3b0",
+          "score": 0.5
+        },
+        {
+          "openingId": "5ad80670d0a3b025ea206eb007883a41027fbcd2aced945672dbb6d1ea668f81",
+          "score": 0.25
+        },
+        {
+          "openingId": "4dbd9d29190cdb9bbcff4a34bc79da9ad04dd8372687b3f35be35805617aa245",
+          "score": 0.75
+        }
+      ],
+      "relativeElo": {
+        "interval": [
+          0.0,
+          162.9941306313072
+        ],
+        "lowerUnbounded": false,
+        "point": 77.24983934178465,
+        "scope": "relative logistic score transform against this exact base at this time; not calibrated Elo",
+        "upperUnbounded": false
+      },
+      "simultaneousInterval": [
+        0.5,
+        0.71875
+      ],
+      "terminationCounts": {
+        "checkmate": 52,
+        "current-threefold": 7,
+        "ply-cap": 5
+      },
+      "timeMs": 25,
+      "wins": 33
+    }
+  ],
+  "recordsSha256": "2a81a8ebed835ebbf82352391e53bee59cabe479eb34fbb25db6e5b47850cce3",
+  "researchOnly": true,
+  "restoredArchive": {
+    "bytes": 1681953,
+    "filename": "chessy-robustness-match-fitted.tar.zst",
+    "restoredAuditMatched": true,
+    "sha256": "3bd2f5df86a71aee1dbba90b7c743452b2c1010c82aaa4d0673cb3b861cd7d37"
+  },
+  "rulesReplayPerformedByAnalyzer": false,
+  "scheduleSha256": "bffa96d2f87af0f909be4d6931b69f5e1d31b7868943c097a84d38eac84f44f6",
+  "schema": "chessy.eval-frontier.v1.report",
+  "status": "complete-development-screen",
+  "timing": [
+    {
+      "cleanRealizedEqualTime": true,
+      "medianRatioRange": [
+        0.9,
+        1.1
+      ],
+      "p99LimitMultiplier": 2,
+      "scope": "loader/WASM call duration and full request wall time; not browser UI or CPU-time equality",
+      "telemetry": {
+        "base": {
+          "engineCallSeconds": 74.24429819100034,
+          "meanDepth": 4.379729729729729,
+          "meanEngineCallMs": 25.08253317263525,
+          "meanNodes": 31002.255743243244,
+          "meanRequestWallMs": 27.01481331824324,
+          "medianDepth": 4.0,
+          "medianEngineCallMs": 25.726708000001963,
+          "nodes": 91766677,
+          "nodesPerEngineCallSecond": 1236009.7574620708,
+          "p95EngineCallMs": 28.75359974999564,
+          "p99EngineCallMs": 31.798322570007233,
+          "p99RequestWallMs": 37.68499665999995,
+          "qnodes": 59354463,
+          "requestWallSeconds": 79.963847422,
+          "searches": 2960,
+          "stopReasons": {
+            "mate": 133,
+            "time-limit": 2827
+          },
+          "timeLimitFraction": 0.9550675675675676,
+          "timeLimitMedianMs": 25.74958799997694,
+          "timeLimitP99Ms": 31.850057140004512,
+          "timeLimitStops": 2827
+        },
+        "candidate": {
+          "engineCallSeconds": 74.36460838299979,
+          "meanDepth": 4.301346801346801,
+          "meanEngineCallMs": 25.038588681144713,
+          "meanNodes": 29705.419528619528,
+          "meanRequestWallMs": 26.951076573737375,
+          "medianDepth": 4.0,
+          "medianEngineCallMs": 25.728950999993003,
+          "nodes": 88225096,
+          "nodesPerEngineCallSecond": 1186385.5390135935,
+          "p95EngineCallMs": 28.492042500001116,
+          "p99EngineCallMs": 31.40988030999986,
+          "p99RequestWallMs": 39.07434735,
+          "qnodes": 57201143,
+          "requestWallSeconds": 80.04469742399999,
+          "searches": 2970,
+          "stopReasons": {
+            "mate": 141,
+            "time-limit": 2829
+          },
+          "timeLimitFraction": 0.9525252525252526,
+          "timeLimitMedianMs": 25.755952999999863,
+          "timeLimitP99Ms": 31.431991239999768,
+          "timeLimitStops": 2829
+        }
+      },
+      "timeLimitMedianCandidateOverBase": 1.0002471884219246,
+      "timeMs": 25
+    }
+  ]
+}

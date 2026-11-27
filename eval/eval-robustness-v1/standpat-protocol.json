@@ -1,0 +1,19 @@
+{
+  "source": "#202 exposed development games at 25 ms, both colors; roots at 8, 32 and 64 searched plies from the book exit when the game is still live",
+  "tree": "Both r85 HCE and unscaled no-pawn trees in separate runs, fixed 10000 nodes, full root game history, no deadline, 111 maximum depth, root seed 0xC0FFEE.",
+  "samples": "Two deterministic six-event reservoirs per root, one over all stand-pat visits, one restricted to the tree evaluator within 50 cp of its active cutoff bound. Keep repeated visits as visits; do not pool the strata.",
+  "comparators": [
+    "r85 HCE",
+    "#202 full",
+    "#202 no-pawn",
+    "half no-pawn, signed truncation toward zero"
+  ],
+  "teachers": [
+    "Stockfish 11",
+    "Chatarunga 2.0"
+  ],
+  "label": "Independent 12000-node UCI search per unique sampled leaf and teacher, fresh OS process, no earlier leaf history. For a searched mate use signed 3000 cp for threshold classification only; exclude mates from CP error. Exclude one-sided bound-only CP scores from both metrics and report coverage.",
+  "estimands": "Each root equally weighted within its stratum. Absolute error and error>=200cp over exact CP labels. Cutoff-proxy disagreement, adverse early stops and missed stops versus teacher sign of crossing the tree-specific bound. The deeper teacher may find tactical moves, so a missed stop denotes an opportunity only. No inference to strength or production frequency.",
+  "use": "Independent exploratory diagnosis, zero use in candidate fitting or selection.",
+  "exploratoryExtension": "Original HCE-only one-process-per-teacher pilot used UCI new-game and found larger apparent disagreement for the alternatives near HCE cutoffs. Its protocol SHA-256 was ed47f56733cd1c531e7cadbcc9ee0cb2bdd29f1efa04c3b4aa07c003c08bacf6. Registering the reciprocal no-pawn tree and isolating every teacher query tests sampling and state dependence. No model selected or edited from these results."
+}

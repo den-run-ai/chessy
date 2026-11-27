@@ -1,0 +1,35 @@
+# Sparse evaluator robustness against Chessy HCE
+
+Keep Chessy’s PeSTO-based HCE as the playing default. Across **960 complete games**, the two best-looking short screens and the Medium screen all lost most of their apparent advantage on a larger opening bank. The target in this study was **55% game score**, a 10% relative improvement over the 50% parity score. A draw earns half a point. No candidate established that margin.
+
+## Games at the same budget
+
+Every comparison uses production-compatible r85 WASM, the same search implementation for both sides, and each opening in both colors. The 256-game replication uses 128 openings from 100 four-ply families, distinct from the initial screens. The three replication rows reuse these openings for comparison across profiles. The table gives marginal, approximate 95% intervals from paired resampling by opening family.
+
+| Candidate against r85 HCE | Initial 64 games | Replication W / D / L | Replication score | 95% interval |
+|---|---:|---:|---:|---:|
+| No-pawn refit, 25 ms per move | 57.81% | 104 / 44 / 108 | **49.22%** | 43.55–54.92% |
+| No-pawn refit with ¾ correction, 25 ms per move | 60.94% | 110 / 41 / 105 | **50.98%** | 46.00–55.94% |
+| No-pawn refit, actual Medium preset without a game clock | 60.16% | 115 / 40 / 101 | **52.73%** | 48.24–57.32% |
+
+The timed comparison of ¾ strength against full-strength correction improved the point estimate by 1.76 percentage points. Its paired interval was −5.71 to +8.98 points. Both candidates played HCE in successive measurement periods. Correcting simultaneously for the two timed scores and their difference gives 42.39–56.05%, 44.98–56.99% and −7.36 to +10.54 points, respectively. All capped draws count. Every timed campaign passed its realized-time audit. [Game protocols](match-protocol.md) · [Matched comparison](match-joint-results.json)
+
+Medium uses 10,000 nodes, maximum depth 30, a five-second deadline and quiescence search. The harness followed the product’s root-seed policy at the sampled opening depths. The 25 ms experiments use a fixed explicit seed and no node ceiling. The Medium replication had zero deadline stops. Median full-request latency was 9.91 ms for no-pawn and 9.29 ms for HCE. At 25 ms, on the identical starting positions, the fitted evaluator averaged 21,262 nodes and depth 3.27 versus HCE’s 24,127 nodes and depth 3.41. These are warmed desktop Node measurements. Master and mobile remain untested here. [Medium policy, timing and raw archive restoration](medium.md) · [Matched timed root choices](match-fitted-replication-choices.json)
+
+## What regularization and harder training data changed
+
+The earlier full-model fitter converged, and both training and the independent Stockfish transfer test preferentially admitted quiet positions. Reopening all 344 previously excluded, reliably scored roots where Stockfish 18 preferred a tactical move gave 204.71 cp mean absolute error for HCE and 198.17 cp for the full model. The estimated 3.19% error reduction had a paired 95% interval of −0.99% to +7.29%. Both agreed with the sign of the teacher score on 86.34% of these positions. [Tactical audit and source exclusions](audit-tactical.md)
+
+We sampled 631 decisions and 2,019 legal alternatives from 320 identified natural games, including checks, recaptures, quiet moves and endgames. Whole-game splits and historical exclusions yielded 210 training and 78 held-out games. A convex fit on pairs of alternative moves and absolute child scores selected a **¾ multiplier** for the no-pawn correction. Among 153 held-out decisions, mean static move regret was 208.32 cp for HCE, 184.53 for the ¾ model and 168.49 for the full model. The ¾ model’s estimated 11.4% reduction versus HCE had a paired interval for the difference of −81.38 to +17.63 cp. Static regret measures how much teacher score the chosen move gives up among the supplied alternatives. [Data and teachers](collection.md) · [Fit and penalty ablations](fit-results.json) · [Independent Stockfish 11 comparison](cross-teacher-results.json)
+
+Increasing the fit penalty tenfold made mean regret worse at 192.62 cp. Allowing eight separately regularized midgame and endgame feature multipliers produced the lowest held-out mixed cross-entropy, 0.6893, but 191.47 cp of move regret. A scalar or family-specific penalty can improve the optimization metric without improving the move selected. The eight-weight comparison was exploratory and used already-exposed held-out metrics. All 100,164 integer WASM scores for the primary ¾ build agreed with the reference calculation. [Eight-weight refit and coefficient export](family-report.md) · [WASM parity](build-parity-n12.json)
+
+## Where the static improvement goes
+
+On the 75 held-out positions where all candidates finished the same three-ply searches, the full model cut static move regret against Stockfish 11 from 347 to 290 cp. After quiescence and three plies, HCE gave up 23.7 cp and the full model gave up 26.1 cp. The ¾ model and HCE picked the same move on 72 of 75 roots. One disputed move dominated the apparent ¾-model advantage with shallow Stockfish labels. Deeper Stockfish 11 and Chatarunga searches both preferred HCE’s **39…Be2** to the learned **39…Re2**. At a separate one-ply root, both preferred HCE’s **26.Qb8+** over the fitted **26.Qd6+**, by 926 and 591 cp. These positions supply repeatable tests for a future candidate. [Search comparison and positions](search-decisions.md) · [Deeper adjudication and PVs](search-decisions-deep.md) · [Stand-pat sampling](standpat.md)
+
+The next training target I would use is the move Chessy actually chooses under its search budget. Collect positions where HCE and the candidate disagree after quiescence, score both choices with deeper process-isolated teachers, and use agreement on severe losses to label training pairs. Keep a new, game-disjoint opening bank sealed for equal-time testing. This experiment supplies the held-out failure examples, parent/child histories, evaluator builds, and game runner for that work. Static loss alone would have favored a different model here.
+
+## Reproduction and scope
+
+The compact PGNs and per-study analyses are in this directory. `chessy-evaluator-robustness-evidence.zip` contains the six raw game archives with frozen binaries, requests, histories, PGNs and hashes. Its SHA-256 is `9df37a6f1b61cf6bf7aebf785c2a8add031b76f1b567268e3b9891a08507503b`. The authenticated #200/#202 inputs are needed to rerun collection from its original sources. The older primary evaluation dump omits game identities, which limits claims about historical overlap even after exact/symmetry and structural-family exclusions. Production search, presets and deployed assets were unchanged.

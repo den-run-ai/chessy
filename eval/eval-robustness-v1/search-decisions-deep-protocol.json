@@ -1,0 +1,8 @@
+{
+  "selection": "Three depth-3 changes between HCE and the fitted model on the common roots, plus the largest Stockfish 11 adverse fitted-minus-HCE depth-1 regret. These four exposed cases are diagnostic.",
+  "rootPrefixAndHceFittedMoves": [["047f4c0e","c4e2","a2e2"],["03cc149b","e2g3","b1a3"],["0d34d914","e3c2","d3b1"],["0959f402","g3b8","g3d6"]],
+  "teachers": ["835cca1bae51344ab86bb9443bd46e886a1c0d07011a377b6c50056be3e43718", "a3b3fe59985900655940c1088f3d24d2388d359b498a5d84664577fa46135e4a"],
+  "primary": "One million requested nodes per child. Each search starts a fresh UCI process, one thread, 16 MiB hash, complete source-game move history including the tested child. Retain every score-bearing PV report and its depth/nodes, bound, score POV, and final bestmove. Validate every retained PV for legality.",
+  "fallback": "If either move's final primary report for a teacher is bounded, absent, or lacks agreement with the final bestmove, apply an independent exact-depth-17 run to both alternatives for that teacher and root. Preserve primary last exact reports separately. Expose failure to produce an unbounded, bestmove-consistent final score.",
+  "outcome": "Compare root-mover scores from the same budget/profile. Report centipawn gaps only for two CP reports, and retain forced-mate scores in moves. Describe agreement for these four roots without updating held-out metrics."
+}

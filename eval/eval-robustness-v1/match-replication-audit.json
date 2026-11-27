@@ -1,0 +1,108 @@
+{
+  "bootstrap": {
+    "clusterCount": 100,
+    "confidence": 0.95,
+    "degeneratePolicy": "report [0,1], never infer strength from a zero-variance bootstrap",
+    "degenerateTimesMs": [],
+    "estimand": "opening-weighted mean of two-color pair scores",
+    "largestCluster": 2,
+    "marginalTailProbability": 0.025000000000000022,
+    "method": "paired-cluster-bootstrap-bonferroni-percentile",
+    "openingCount": 128,
+    "replicates": 10000,
+    "rng": "Python random.Random (MT19937)",
+    "sameClusterDrawAcrossTimeGrid": true,
+    "scope": "nominal simultaneous descriptive intervals over this fixed time grid; approximate, not a coverage guarantee",
+    "seed": 20261127
+  },
+  "clusterInterval95": [
+    0.43554529989919355,
+    0.5492125984251969
+  ],
+  "draws": 44,
+  "games": 256,
+  "jointRegistrationSha256": "185ce5e668766270686e33e8ad3bdc437095a41a9797d51c921f6a67412a7781",
+  "losses": 108,
+  "models": {
+    "base": {
+      "id": "r85-hce-memory",
+      "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+    },
+    "candidate": {
+      "id": "r85-no-pawn-ratio-16-16",
+      "sha256": "1f7aa35c560e4b94d11c578b94a6be2d7fae4a34b45dd7356961888bc97992e4"
+    }
+  },
+  "moves": 25219,
+  "pairs": 128,
+  "restoredArchive": {
+    "bytes": 7221553,
+    "filename": "chessy-robustness-match-replication.tar.zst",
+    "restoredAuditMatched": true,
+    "sha256": "d0ccb66997797ba92696fe0d7a449b6cc4cfb3849a6aab2de55865ab20caa008"
+  },
+  "score": 0.4921875,
+  "shards": [
+    {
+      "auditSha256": "11c147cd0d6c39bde60dcb374a547f81c07006a8cb83e44d40400d6ebc9353d8",
+      "baseTimeLimitMedianMs": 25.72411949999514,
+      "candidateTimeLimitMedianMs": 25.75231200000053,
+      "cleanRealizedEqualTime": true,
+      "cpu": 0,
+      "draws": 13,
+      "losses": 33,
+      "moves": 6270,
+      "score": 0.3828125,
+      "shard": 0,
+      "wins": 18
+    },
+    {
+      "auditSha256": "ea02762f5dcadb5a21104173f8d1fb7e363a98da1de2b0e70e97b614d467619f",
+      "baseTimeLimitMedianMs": 25.71019800000795,
+      "candidateTimeLimitMedianMs": 25.72962149999512,
+      "cleanRealizedEqualTime": true,
+      "cpu": 1,
+      "draws": 8,
+      "losses": 30,
+      "moves": 5949,
+      "score": 0.46875,
+      "shard": 1,
+      "wins": 26
+    },
+    {
+      "auditSha256": "8e4da0612924643bf30c569fcb4b5f93190656af0cf40c2e43a6468744ae4d37",
+      "baseTimeLimitMedianMs": 25.72338400000001,
+      "candidateTimeLimitMedianMs": 25.755086000004667,
+      "cleanRealizedEqualTime": true,
+      "cpu": 6,
+      "draws": 14,
+      "losses": 20,
+      "moves": 6303,
+      "score": 0.578125,
+      "shard": 2,
+      "wins": 30
+    },
+    {
+      "auditSha256": "42a370fb4c3cd9150343b57d4cb97ef6cd4b11e65921c5b1c12854fff52640e7",
+      "baseTimeLimitMedianMs": 25.706162000002223,
+      "candidateTimeLimitMedianMs": 25.728015000000596,
+      "cleanRealizedEqualTime": true,
+      "cpu": 7,
+      "draws": 9,
+      "losses": 25,
+      "moves": 6697,
+      "score": 0.5390625,
+      "shard": 3,
+      "wins": 30
+    }
+  ],
+  "targetScore": 0.55,
+  "terminations": {
+    "checkmate": 212,
+    "current-threefold": 15,
+    "insufficient-material": 3,
+    "ply-cap": 25,
+    "stalemate": 1
+  },
+  "wins": 104
+}

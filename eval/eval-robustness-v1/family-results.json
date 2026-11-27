@@ -1,0 +1,306 @@
+{
+  "collectionSha256": "f30049c899dd1a8b2f12d5c18c8442aaf4ff2d999b40e6fd5803676aa2a8b981",
+  "convergence": {
+    "iterations": 11,
+    "loss": 0.6653080058008958,
+    "projectedGradient": 9.728419181342929e-10,
+    "solver": "L-BFGS-B"
+  },
+  "exclusionsSha256": "6f053095d2355e2f8d8d6a4cebc47f24887fb128e362edc83a72ed0a854414e0",
+  "familyMinusControlRegretCp": {
+    "full": {
+      "groups": 78,
+      "mean": 22.974358974358974,
+      "percentile95": [
+        6.076923076923077,
+        43.93589743589744
+      ]
+    },
+    "hce": {
+      "groups": 78,
+      "mean": -16.852564102564102,
+      "percentile95": [
+        -73.12179487179488,
+        23.916666666666668
+      ]
+    },
+    "noPawn": {
+      "groups": 78,
+      "mean": 13.41025641025641,
+      "percentile95": [
+        0.6410256410256411,
+        30.55128205128205
+      ]
+    },
+    "scalar": {
+      "groups": 78,
+      "mean": 6.9423076923076925,
+      "percentile95": [
+        -8.14102564102564,
+        24.634615384615383
+      ]
+    }
+  },
+  "fitGroups": 210,
+  "heldoutGroups": 78,
+  "holdout": {
+    "family": {
+      "all": {
+        "childMaeCp": 335.6768162393163,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6086538461538462,
+        "quietChildMaeCp": 302.5811965811966,
+        "regretCp": 191.46794871794873,
+        "roots": 153,
+        "severe150Rate": 0.3269230769230769,
+        "tacticalChildMaeCp": 413.5655555555556,
+        "topAgreement": 0.46794871794871795
+      },
+      "mixedCE": 0.6893158051969451,
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 310.84583333333336,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8097222222222222,
+        "quietChildMaeCp": 312.9791666666667,
+        "regretCp": 50.516666666666666,
+        "roots": 69,
+        "severe150Rate": 0.08333333333333333,
+        "tacticalChildMaeCp": 307.51666666666665,
+        "topAgreement": 0.8166666666666667
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 360.6584595959596,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.426010101010101,
+        "quietChildMaeCp": 301.79040404040404,
+        "regretCp": 328.1666666666667,
+        "roots": 84,
+        "severe150Rate": 0.5454545454545454,
+        "tacticalChildMaeCp": 578.0872093023256,
+        "topAgreement": 0.16666666666666666
+      }
+    },
+    "full": {
+      "all": {
+        "childMaeCp": 333.78418803418805,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6230769230769231,
+        "quietChildMaeCp": 304.88461538461536,
+        "regretCp": 168.49358974358975,
+        "roots": 153,
+        "severe150Rate": 0.28846153846153844,
+        "tacticalChildMaeCp": 407.0911111111111,
+        "topAgreement": 0.48717948717948717
+      },
+      "mixedCE": 0.696598961779535,
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 307.9506944444445,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.825,
+        "quietChildMaeCp": 317.8527777777778,
+        "regretCp": 46.458333333333336,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 299.06111111111113,
+        "topAgreement": 0.825
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 359.75,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4424242424242424,
+        "quietChildMaeCp": 302.1603535353535,
+        "regretCp": 292.1060606060606,
+        "roots": 84,
+        "severe150Rate": 0.48484848484848486,
+        "tacticalChildMaeCp": 577.1453488372093,
+        "topAgreement": 0.1893939393939394
+      }
+    },
+    "hce": {
+      "all": {
+        "childMaeCp": 345.61111111111114,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.5851495726495727,
+        "quietChildMaeCp": 311.4818376068376,
+        "regretCp": 208.32051282051282,
+        "roots": 153,
+        "severe150Rate": 0.33974358974358976,
+        "tacticalChildMaeCp": 428.8155555555556,
+        "topAgreement": 0.46794871794871795
+      },
+      "mixedCE": 0.7194328171967768,
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 315.6027777777778,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.7958333333333333,
+        "quietChildMaeCp": 319.65833333333336,
+        "regretCp": 86.14166666666667,
+        "roots": 69,
+        "severe150Rate": 0.11666666666666667,
+        "tacticalChildMaeCp": 312.7027777777778,
+        "topAgreement": 0.8
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 372.31439393939394,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4070707070707071,
+        "quietChildMaeCp": 309.66161616161617,
+        "regretCp": 305.75757575757575,
+        "roots": 84,
+        "severe150Rate": 0.5227272727272727,
+        "tacticalChildMaeCp": 607.8023255813954,
+        "topAgreement": 0.21212121212121213
+      }
+    },
+    "noPawn": {
+      "all": {
+        "childMaeCp": 334.2879273504273,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6204059829059829,
+        "quietChildMaeCp": 304.59722222222223,
+        "regretCp": 178.05769230769232,
+        "roots": 153,
+        "severe150Rate": 0.30128205128205127,
+        "tacticalChildMaeCp": 408.5211111111111,
+        "topAgreement": 0.48717948717948717
+      },
+      "mixedCE": 0.7004253761220541,
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 308.42569444444445,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8243055555555556,
+        "quietChildMaeCp": 317.5222222222222,
+        "regretCp": 46.458333333333336,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 299.93333333333334,
+        "topAgreement": 0.825
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 360.27588383838383,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.4424242424242424,
+        "quietChildMaeCp": 302.17676767676767,
+        "regretCp": 309.67424242424244,
+        "roots": 84,
+        "severe150Rate": 0.5075757575757576,
+        "tacticalChildMaeCp": 578.8895348837209,
+        "topAgreement": 0.1893939393939394
+      }
+    },
+    "scalar": {
+      "all": {
+        "childMaeCp": 334.71581196581195,
+        "children": 486,
+        "groups": 78,
+        "pairAccuracy": 0.6086538461538462,
+        "quietChildMaeCp": 303.0726495726496,
+        "regretCp": 184.52564102564102,
+        "roots": 153,
+        "severe150Rate": 0.3141025641025641,
+        "tacticalChildMaeCp": 412.02,
+        "topAgreement": 0.4935897435897436
+      },
+      "mixedCE": 0.7026901193453919,
+      "teacherBestIncludesTactical": {
+        "childMaeCp": 307.13888888888886,
+        "children": 217,
+        "groups": 60,
+        "pairAccuracy": 0.8125,
+        "quietChildMaeCp": 313.475,
+        "regretCp": 45.425,
+        "roots": 69,
+        "severe150Rate": 0.075,
+        "tacticalChildMaeCp": 300.93055555555554,
+        "topAgreement": 0.8416666666666667
+      },
+      "teacherBestOnlyQuiet": {
+        "childMaeCp": 361.61616161616166,
+        "children": 269,
+        "groups": 66,
+        "pairAccuracy": 0.426010101010101,
+        "quietChildMaeCp": 302.20328282828285,
+        "regretCp": 325.9015151515151,
+        "roots": 84,
+        "severe150Rate": 0.5378787878787878,
+        "tacticalChildMaeCp": 584.9825581395348,
+        "topAgreement": 0.1893939393939394
+      }
+    }
+  },
+  "modelSha256": "2a661881ac7a9d4d5508f44d4beccfe019ba46ba0ce5bcd770e58cf055e300cb",
+  "nativeParityChildren": 1812,
+  "nonzero": 1854,
+  "primaryFitSha256": "e31c1b21b70cfe62e1e44667afbc7473756ad3bfed22c1ded6ea79b4b49aad36",
+  "protocolSha256": "4cfc96b377698c55c94253c551c846c9059a12b4dc465583e948dd408232edd4",
+  "quietValidation": {
+    "endgame": {
+      "ce": 0.6610695011966529,
+      "maeCp": 229.45941219334466,
+      "p95AbsCp": 695.5999999999985,
+      "p99AbsCp": 1135.6399999999994,
+      "rmseCp": 331.89313622637667,
+      "rows": 20585,
+      "signAccuracy": 0.5872237065824629
+    },
+    "middlegame": {
+      "ce": 0.6612904992718747,
+      "maeCp": 140.4052302496463,
+      "p95AbsCp": 439.0,
+      "p99AbsCp": 727.9000000000015,
+      "rmseCp": 211.601749081864,
+      "rows": 21911,
+      "signAccuracy": 0.6793391447218292
+    },
+    "opening": {
+      "ce": 0.6877880248920198,
+      "maeCp": 89.53071027259486,
+      "p95AbsCp": 311.0,
+      "p99AbsCp": 549.0,
+      "rmseCp": 142.70925216951613,
+      "rows": 57668,
+      "signAccuracy": 0.6349275161267948
+    },
+    "overall": {
+      "ce": 0.676500655236933,
+      "maeCp": 129.41673655205463,
+      "p95AbsCp": 460.0,
+      "p99AbsCp": 785.0,
+      "rmseCp": 210.1378786844126,
+      "rows": 100164,
+      "signAccuracy": 0.6348388642626093
+    }
+  },
+  "researchOnly": true,
+  "scales": {
+    "enemy_king": {
+      "eg": 0.23838918508415557,
+      "mg": 0.4071222093789382
+    },
+    "own_king": {
+      "eg": 0.3177186260458558,
+      "mg": 0.3739258340734302
+    },
+    "pst": {
+      "eg": 0.0,
+      "mg": 0.6678250949605554
+    },
+    "ray": {
+      "eg": 0.0,
+      "mg": 1.0
+    }
+  },
+  "sourceModelSha256": "222e0157eefd08009477ecdc04986406844e29e7927c96f9662fd038eccfddf2"
+}
