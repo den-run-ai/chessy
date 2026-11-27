@@ -37,10 +37,10 @@
   if (typeof Chess === 'undefined') return;
 
   const ENGINE_ID = 'chessy-wasm';
-  // 2.0.0 changes the coaching provider from the JavaScript search/context to
-  // Rust/WASM ABI v2. Scores, depth reached, root ordering and PVs may change,
-  // so all earlier cached analyses must be kept under a different identity.
-  const ENGINE_VERSION = '2.0.0';
+  // 2.0.1 identifies compact hashing in the seeded Rust/WASM engine. Coaching
+  // still uses ordinary deterministic search and ABI v2, but timed scans can
+  // reach another depth. Earlier results and checkpoints keep their identity.
+  const ENGINE_VERSION = '2.0.1';
   const PROVIDER_ID = 'rust-wasm-abi-v2';
   const MATE = 1000000;
   const MATE_NEAR = MATE - 1000;
