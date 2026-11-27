@@ -1,0 +1,102 @@
+{
+  "base": {
+    "id": "r85-hce-baseline-memory",
+    "sha256": "fa3e1f4f64cc082e5ffc1ef64b802f5477041938ca8864f77f82518e859cffb5"
+  },
+  "baseCommit": "2cf89b6e2ff7c7f2f11c2bf39e4c9b7bc99d28e0",
+  "bootstrap": {
+    "confidence": 0.95,
+    "samples": 10000,
+    "seed": 20261127
+  },
+  "buildReceiptSha256": "1158e215ef121d44ea2c629e3055650159613fa79b330fc442e9db00177c0587",
+  "candidate": {
+    "id": "sparse-full-sparse-simd",
+    "modelSha256": "4d6f94bd3b13e77604c087b9cd41bd4f7f0a119cc6b3d57d381ca8bf6d6d9304",
+    "sha256": "a84bca237b114d82be743747d9db14ad7721a996b14c7483c27d2369752f3039"
+  },
+  "candidateMemoryBytes": 26607616,
+  "clusterByOpening": {
+    "17fa6212c9a5a038b5ee8e042202a0ea7966d8ee86e4f330751e492101e337cd": "4e0a65188e5e8b9e7cac9830233676d6bc1550187682dda469634c50f72d57c6",
+    "2a87fbc8f35e30c768fa8461fb42e40acedaf936e14d9524762e7cc95f2a0ca0": "3059fcec3dc2d496bcefe2cc89e6994890597263b60b0199ffb6003fe5354c27",
+    "33d3c8b3c40bbbf6d639bb6490659af4e901ae6e368ed8f3b306d1ed0006c13c": "4e0a65188e5e8b9e7cac9830233676d6bc1550187682dda469634c50f72d57c6",
+    "4328795f3ec0132a3e1575e13a1aac14d13708ddc35d0060b599d2895b32adf1": "4e0a65188e5e8b9e7cac9830233676d6bc1550187682dda469634c50f72d57c6",
+    "4abd1a6da27a784d0479a5364829281fe2e71eccf1ffc698125d2d3e0867c686": "79799375d99f975a4fd8ee6e64fd6ecbfc699a5ab4de08cf610b73a130ab1ee7",
+    "4f3a5c481d5384dd77ba50666d7eeaa338cc51fb1c45cceb07dc184550ef6a1b": "c9875b0374f4b6666795ae76a54a001e74388b02307507a35a372e443d975a85",
+    "50bbe60a1f8e7b17dabe4f556a9ddbb8992c50c9396e71d62fe53db136a9b0b8": "6e955b077fa73cc6ed90c08547e38edb638189230af9bf847477cbc8637a1952",
+    "69877c91f7eaa55fec842fa6cf3777201d7feb62e67c4cdf7c8f3ec56d2c0516": "f8642670c2f8f6a6b213a42fd02559a86f79dea032429e06bfd46f616a664422",
+    "85c00240b44f410019ef9525daa3cab66b1b0af7a6c3cdf0bb7c4f24cdc68a49": "4e0a65188e5e8b9e7cac9830233676d6bc1550187682dda469634c50f72d57c6",
+    "923428f6fbbe49921f4fd027db3ff04fdf1061cfe29f8df7e923e10b26cfca6f": "4e0a65188e5e8b9e7cac9830233676d6bc1550187682dda469634c50f72d57c6",
+    "9355fa1bec3b0cc316c02f45bac599f95f2f2468164afa3f986828c1bcfc0615": "c701b8d9417463235d9fb6e399196583995625bac6b2d9f480e6fa6feb862e85",
+    "9bc1974b50494988f75807341c2eda55208ada086d2edb344cf78007db3a2b10": "04cba6bf90fb748765e89f59cf73700461037f4d1585d1526a1e233c6b09361d",
+    "c3fa59310442acbdd09c0df43172b93755a6088ac7b8202d17e8fcd2d7ea2ff6": "0177b3a0d43227249b23471c0c58a7caa4f4032ae5bc9a0e6728eabcb149b2ee",
+    "dbc21d96751a36dc5ad5244130c81c7e275bf7a64aebaa9a09688742125ca3fd": "f8642670c2f8f6a6b213a42fd02559a86f79dea032429e06bfd46f616a664422",
+    "dc7e0206c9c6bbbbce03ae6ce1e9348d90aba085e1d7722ab165d3085fe9e70a": "747d8fe6d6623309cd04b8921205d2091f7a9365f801046a767e95e93aca2400",
+    "fc1affc8f04729075cf35db5fca0de14243644a93e51ba8181718c099c570eb5": "747d8fe6d6623309cd04b8921205d2091f7a9365f801046a767e95e93aca2400"
+  },
+  "completeHistoryRequired": true,
+  "costResultsSha256": "27acaab4a3329849a8d0abacd656800d5b133b745983dd3e884df096cc909f3f",
+  "executionOrder": "Opening outer; rotate time controls by opening ordinal; alternate first candidate color by opening ordinal.",
+  "experimentId": "eval-production-v1-full-time-frontier",
+  "maxDepth": 30,
+  "minimumWorthwhileScore": 0.5,
+  "nodeArguments": [
+    "--no-liftoff",
+    "--no-wasm-lazy-compilation"
+  ],
+  "nodeLimit": 0,
+  "nodeVersion": "v22.23.2",
+  "openingIds": [
+    "dbc21d96751a36dc5ad5244130c81c7e275bf7a64aebaa9a09688742125ca3fd",
+    "923428f6fbbe49921f4fd027db3ff04fdf1061cfe29f8df7e923e10b26cfca6f",
+    "2a87fbc8f35e30c768fa8461fb42e40acedaf936e14d9524762e7cc95f2a0ca0",
+    "fc1affc8f04729075cf35db5fca0de14243644a93e51ba8181718c099c570eb5",
+    "33d3c8b3c40bbbf6d639bb6490659af4e901ae6e368ed8f3b306d1ed0006c13c",
+    "dc7e0206c9c6bbbbce03ae6ce1e9348d90aba085e1d7722ab165d3085fe9e70a",
+    "4f3a5c481d5384dd77ba50666d7eeaa338cc51fb1c45cceb07dc184550ef6a1b",
+    "17fa6212c9a5a038b5ee8e042202a0ea7966d8ee86e4f330751e492101e337cd",
+    "9355fa1bec3b0cc316c02f45bac599f95f2f2468164afa3f986828c1bcfc0615",
+    "c3fa59310442acbdd09c0df43172b93755a6088ac7b8202d17e8fcd2d7ea2ff6",
+    "50bbe60a1f8e7b17dabe4f556a9ddbb8992c50c9396e71d62fe53db136a9b0b8",
+    "69877c91f7eaa55fec842fa6cf3777201d7feb62e67c4cdf7c8f3ec56d2c0516",
+    "9bc1974b50494988f75807341c2eda55208ada086d2edb344cf78007db3a2b10",
+    "4abd1a6da27a784d0479a5364829281fe2e71eccf1ffc698125d2d3e0867c686",
+    "4328795f3ec0132a3e1575e13a1aac14d13708ddc35d0060b599d2895b32adf1",
+    "85c00240b44f410019ef9525daa3cab66b1b0af7a6c3cdf0bb7c4f24cdc68a49"
+  ],
+  "openingSelection": {
+    "freshConfirmation": false,
+    "previouslyExposedDevelopmentBank": true,
+    "rule": "Lowest sixteen SHA256(salt+NUL+sourceGameId); no outcome filtering.",
+    "salt": "chessy-eval-production-v1-time-frontier-20261127",
+    "sourceSha256": "f26a1d26788092497093f46c017c134949134c800c8043a10dfe5a5fc743de55"
+  },
+  "postOpeningPlyCap": 180,
+  "preparedSha256": "704c999a9f36582e903f5172847c4ef96c7e5a208be4e576269be85ad509f2ec",
+  "productionAdmission": false,
+  "researchOnly": true,
+  "resignation": false,
+  "resultsSealedUntilComplete": true,
+  "rootSeed": 0,
+  "schema": "chessy.eval-frontier.v1",
+  "scoreAdjudication": false,
+  "timeControlsMs": [
+    10,
+    25,
+    100,
+    400
+  ],
+  "timeoutPerRequestSeconds": 10,
+  "timeoutWholeCampaignSeconds": 21600,
+  "warmup": {
+    "cycles": 4,
+    "fens": [
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "8/3k1p2/4p1p1/4n3/8/2B2P2/4K1P1/8 w - - 0 1",
+      "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"
+    ],
+    "nodeLimit": 10000,
+    "timeMs": 0
+  }
+}
