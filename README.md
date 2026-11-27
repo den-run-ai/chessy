@@ -229,6 +229,21 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 No fonts, images, or libraries are fetched from the network: pieces are
 Unicode glyphs, styling is system fonts, and the icons ship in the repo.
 
+## r84 mobile dialogs and game-state fixes
+
+New Game keeps Start and Cancel visible while its settings scroll, including
+short landscape phone windows. Import, game-over, and confirmation dialogs
+use the same layout. Action buttons remain at least 44px high; keyboard focus
+scrolls the selected radio option into view. Dialogs respect the current
+viewport and safe areas, and Import avoids narrow-screen file-input overflow
+and text-field focus zoom on iOS.
+
+Human moves and computer replies that arrive after the clock expires now flag
+from the original position, without adding a move to the board, save, or
+archive. An on-time move uses the same timestamp for admission and its clock
+increment. Invalid saved opponent/time-control names fall back to valid
+settings while preserving a legal saved game.
+
 ## r83 analysis recovery
 
 Review and Train continue with a fresh analysis worker when an IndexedDB

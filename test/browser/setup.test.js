@@ -127,6 +127,38 @@ require('./helper').run('setup', async function (t) {
   });
   check((await page.textContent('#status')).includes('to move'), 'garbage save rejected, app boots normally');
 
+  // Prototype names are not settings. Reject each malformed field without
+  // losing a legal saved position or leaving invalid clocks/turn ownership.
+  const settingsSave = await page.evaluate(function () {
+    let s = Chess.newGameState();
+    ['e2e4', 'e7e5'].forEach(function (uci) {
+      const move = Chess.legalMoves(s).find(function (m) {
+        return Chess.sqName(m.from) + Chess.sqName(m.to) === uci;
+      });
+      s = Chess.playMove(s, move);
+    });
+    return { fen: Chess.toFen(s), history: s.history,
+      mode: 'pvp', difficulty: '2', timeControl: 'none' };
+  });
+  for (const field of ['mode', 'timeControl']) {
+    for (const value of ['constructor', 'toString', '__proto__', {}]) {
+      await t.inject(function (saved) {
+        localStorage.setItem('chessy-game-v1', JSON.stringify(saved));
+      }, Object.assign({}, settingsSave, { [field]: value }));
+      const restored = await page.evaluate(function () {
+        const saved = JSON.parse(localStorage.getItem('chessy-game-v1'));
+        return { fen: saved.fen, plies: saved.history.length,
+          mode: saved.mode, timeControl: saved.timeControl,
+          clocksHidden: document.getElementById('clocks').hidden };
+      });
+      check(restored.fen === settingsSave.fen && restored.plies === 2 &&
+          restored.mode === (field === 'mode' ? 'ai-b' : 'pvp') &&
+          restored.timeControl === 'none' && restored.clocksHidden,
+        'invalid saved ' + field + ' ' + JSON.stringify(value) +
+          ' falls back safely while preserving the game');
+    }
+  }
+
   // A valid rootless legacy save (with AI metadata) is restored, including
   // settings. Missing rootOrderUci remains the backwards-compatible marker.
   await t.inject(function () {

@@ -2,7 +2,9 @@
  * Production loader for the Rust/WASM engine module's raw ABI (version 2).
  *
  * The ordinary `search` entry point serves Play and the deterministic
- * analysis scan. Coaching analysis then uses a stateful exact-root API:
+ * analysis scan. Play may supply a per-request rootSeed through the optional
+ * `search_seeded` export; omitted seeds retain deterministic ordinary search.
+ * Coaching analysis then uses a stateful exact-root API:
  * `beginAnalysis` starts one shared-budget phase and `searchRoot` scores one
  * forced legal root under a full window, copying its PV before a later phase
  * resets the module's transposition table.
@@ -319,12 +321,16 @@
         analysisReady = false;
         opts = opts || {};
         const maxDepth = checkedDepth(opts.maxDepth, 'maxDepth');
+        const seeded = opts.rootSeed != null;
+        const rootSeed = seeded ? checkedU32(opts.rootSeed, 'rootSeed') : null;
+        const runSearch = seeded ? requiredFunction(exports, 'search_seeded') : searchExport;
         prepare(fen, opts.positions || null);
-        const status = searchExport(
+        const status = runSearch(
           maxDepth,
           checkedU32(opts.nodeLimit, 'nodeLimit'),
           checkedU32(opts.timeMs, 'timeMs'),
-          opts.quiesce ? 1 : 0
+          opts.quiesce ? 1 : 0,
+          rootSeed
         );
         if (status === 2) {
           // The fixed 1M-entry TT filled during an uncapped search. The
