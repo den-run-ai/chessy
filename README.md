@@ -89,6 +89,9 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
   Resign and Offer draw controls use a confirmation that immediately freezes
   the clock and any computer search; resignation records the correct losing
   side, while the draw confirmation records an agreed result.
+  Promotion choices belong to the exact live position: a flag, cancellation,
+  Undo, replay, or New Game retires the picker. Choosing a piece after the
+  clock expires cannot commit a move or change the finished game.
 - **Accessibility** — the board is an ARIA grid (rows/gridcells) with a single
   roving tab stop: Tab enters the board once, arrow keys move square to square
   (directions follow the visual board, also when flipped), Home/End jump to
@@ -225,6 +228,19 @@ installable once loaded — deployed automatically from `main` by GitHub Actions
 
 No fonts, images, or libraries are fetched from the network: pieces are
 Unicode glyphs, styling is system fonts, and the icons ship in the repo.
+
+## r82 correctness refresh
+
+This release fixes stale promotion choices and makes the WASM loader reject
+an old analysis phase after a replacement request fails. It also validates the
+reserved ABI result field. CI now compares shallow Rust searches with a
+separate JavaScript-rules oracle and checks exact node-budget boundaries,
+completed-iteration fallback, forced-root PVs, and repetition counts.
+
+The [Chatarunga review](experiments/wasm/CHATARUNGA-REVIEW.md) records the
+reference paper, the most useful performance directions, and their existing
+Chessy experiments. The production engine bytes, evaluation, and difficulty
+budgets are unchanged; this refresh makes no new Elo claim.
 
 ## Run it
 
