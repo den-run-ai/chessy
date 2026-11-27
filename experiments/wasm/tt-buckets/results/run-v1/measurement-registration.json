@@ -1,0 +1,120 @@
+{
+  "source": {
+    "source": {
+      "version": "chessy-tt-buckets-prototype-v1",
+      "baseCommit": "dfbb97809d4cb103310a1a5d4b09043c6d4492ef",
+      "files": {
+        "Cargo.toml": "ce1d19882ccb2f19397ff0d35de49186a5e95b8fbe55764688479c32b86aec1c",
+        "Cargo.lock": "ea3c9270c862d324c05b5154683a064b19a165d69b38c905506e479de19a5a32",
+        "rust-toolchain.toml": "9cbeb062ec3a97a5b5b76aacde94f5dcb034ed98f32af151480764de2e03d6f9",
+        "build.sh": "68852d6684eb69c2dc6fd59947f6e88450aa298fb13be96d48f09e6c79612489",
+        "src/engine.rs": "7bd7126c39fad50fe4fa7527fe857996391e46378491a21171b3928cf3d60103",
+        "src/eval.rs": "3a107218a6d7a42f771022956fab04b28935a39867b74eaea911d27b2598a6b7",
+        "src/lib.rs": "f65850e8bf8064f90baad14c033a20db3fc94b326db608ce9959c397a81094bc",
+        "src/search.rs": "e13b53fdb744f8fb647ae9c74ebc5ea2289c6881ba676122336b3f93ec8671cd"
+      },
+      "shippedWasmSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f"
+    },
+    "candidateSearchSha256": "cbfc1b015a3a224ea362265b688f308c000c39b4f925833dd87e0475f8f78f1b",
+    "tableSha256": "d83917131ff3bedf1b30da3a55367708f905b67934b20e9e1a58fab5da744f4f",
+    "testsSha256": "79d8d2eea3ac90a5fa7fc7afd72dc31b7efcf0057d563ae88b4300904af8610d",
+    "harness": {
+      "engine.js": "897bf4047c301b125bebff1d587c9407b9a8a5b5501ea38254ceff028c9ca8fa",
+      "wasm-engine.js": "ce338ed49aef859aebb930e5895681b77dfa588d710f8b7131b4220ef903cf01"
+    }
+  },
+  "protocol": {
+    "id": "chessy-tt-buckets-diagnostic-v1",
+    "candidate": "four entries per bucket; same-h1 overwrite; shallowest victim; first-slot tie break",
+    "claim": "correctness and bounded local mechanism diagnostic only; no strength or release admission",
+    "oracleDepths": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "completedComparisonDepth": 4,
+    "completedComparisonNodeLimit": 2000000,
+    "warmupNodeLimit": 5000,
+    "fixedNodeLimit": 250000,
+    "fixedNodeRepetitions": 2,
+    "pressureTimeMs": 8000,
+    "pressureFamilyIndices": [
+      0,
+      2
+    ],
+    "maxDepth": 111,
+    "families": [
+      [
+        "Ruy Lopez",
+        "r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 5"
+      ],
+      [
+        "Dragon",
+        "r2q1rk1/pp1bppbp/2np1np1/8/3NP3/2N1B3/PPPQBPPP/R4RK1 w - - 0 1"
+      ],
+      [
+        "King's Indian",
+        "r1bq1rk1/ppp1n1bp/3p2p1/3Pp3/2P1P3/2N2N2/PP3PPP/R1BQ1RK1 w - - 0 1"
+      ],
+      [
+        "Kiwipete",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+      ],
+      [
+        "Lucena",
+        "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1"
+      ],
+      [
+        "Tactical defence",
+        "r3r1k1/1ppq1pp1/1b2n3/3pPN1Q/1P5B/3B3P/P5P1/2R4K b - - 0 27"
+      ]
+    ]
+  },
+  "implementationSha256": {
+    "probe.js": "34ebb5c83ab995ebefd7c71347bf256772a03b7bcdd6831a7ee0c14afcb2dcd3",
+    "prepare.js": "8d6d7f9916a4f46b41b356934feff419102cdb68d945051460dab3d07036fa37",
+    "candidate.js": "8eaf229112d2c3115ac787d79360790ab25434ffdcb37bb27d24867e8ca94919",
+    "source.json": "7f6758b0ae742555ba7ffd9a6579514e8ad46b529cf4c32e1052bbed918940c5",
+    "protocol.json": "265f69af4bb198e4c63d512abd3fffc28569ec79f9315de3a2a544993516d583",
+    "table.rs": "d83917131ff3bedf1b30da3a55367708f905b67934b20e9e1a58fab5da744f4f",
+    "tests.rs": "79d8d2eea3ac90a5fa7fc7afd72dc31b7efcf0057d563ae88b4300904af8610d"
+  },
+  "tools": {
+    "binaries": {
+      "cargo": "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/cargo",
+      "rustc": "/workspace/scratch/8a384797d3cd/chessy-tt-tools/rust/bin/rustc",
+      "wasmOpt": "/workspace/scratch/8a384797d3cd/chessy-tt-tools/binaryen-version_131/bin/wasm-opt"
+    },
+    "versions": {
+      "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6",
+      "wasmOpt": "wasm-opt version 131 (version_131)"
+    },
+    "sha256": {
+      "cargo": "828980723df339d62434390e9fb8ef8831036583343ae2316b7ab5646b5c1953",
+      "rustc": "d3a664c970a9fd8361b64194861bebc1ae37b9054e5ee3400dc1c9e691797eea",
+      "wasmOpt": "bad4b6524b2c8e4b27b9aa69bde1a4b9a05ec8887c77ef0d34300f5825acd97c"
+    }
+  },
+  "modules": {
+    "baseline": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
+    "candidate": "d3ce3ae838ce76dce13750d027037952910bcd8075955495d5b68937e42aa5b9"
+  },
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.22.3",
+    "cpus": [
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C",
+      "INTEL(R) XEON(R) PLATINUM 8573C"
+    ]
+  }
+}

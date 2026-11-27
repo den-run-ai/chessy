@@ -54,6 +54,9 @@ jobs:
       BINARYEN_SHA256: b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The research prototype rebuilds an immutable historical source.
+          fetch-depth: 0
       - name: Fetch pinned Rust and Binaryen toolchains
         run: |
           export RUSTUP_HOME="$RUNNER_TEMP/rustup-home"
@@ -83,6 +86,25 @@ jobs:
           sha256sum experiments/wasm/dist/*.wasm
       - name: Verify the committed production asset
         run: cmp experiments/wasm/dist/chessy-ai-fast.wasm assets/chessy-ai-fast.wasm
+      - name: Reproduce research-only TT correctness without rerunning timings
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup-home
+          CARGO_HOME: ${{ runner.temp }}/cargo-home
+        run: |
+          probe="$RUNNER_TEMP/chessy-tt-buckets"
+          node experiments/wasm/tt-buckets/probe.test.js
+          node experiments/wasm/tt-buckets/prepare.js "$probe"
+          for mode in baseline candidate; do
+            (cd "$probe/$mode" && \
+              CARGO_TARGET_DIR="$RUNNER_TEMP/tt-native-$mode" \
+              cargo test --locked --offline)
+            CHESSY_CARGO_TARGET_DIR="$RUNNER_TEMP/tt-wasm-$mode" \
+              CHESSY_CARGO_BIN="$(command -v cargo)" \
+              CHESSY_RUSTC_BIN="$(command -v rustc)" \
+              CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
+              sh "$probe/$mode/build.sh"
+          done
+          node experiments/wasm/tt-buckets/validate.js "$probe"
       - name: Build all optional incremental study variants before timing
         if: (github.event_name == 'workflow_dispatch' && inputs.nnue_incremental_probe) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'nnue-incremental-probe'))
         env:
