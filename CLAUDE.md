@@ -230,8 +230,9 @@ genuinely new candidate and its required formal evidence.
   treating unsolved positions as infrastructure failures. Coverage counts are
   part of the result.
 - The current v1 fixed-node runners encode 100 openings × 4 seed slots × both
-  colors. Rust/WASM search has no seed input, so the four slots are deterministic
-  repeats: existing clustered results contain 100 independent opening clusters,
+  colors. These historical runners do not pass the optional Play root-order
+  seed, so the four slots remain deterministic repeats: existing clustered
+  results contain 100 independent opening clusters,
   not 400. They are not automatically invalid, but v1 wastes 75% of its games;
   do not dispatch it for a new candidate.
 - Replace v1 under a new manifest hash and protocol identity with 400 distinct

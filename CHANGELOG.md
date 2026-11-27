@@ -6,6 +6,20 @@
 Selected recent app changes, newest first. Earlier behavior and calibration
 studies are linked below; this is not a complete release history.
 
+## r85: Calculated opening variety
+
+Computer Play varies its initial move-search order during the first six full
+moves. Each game derives a seed from its saved ID and exact position, preserving
+that seed across retries, Undo, and reloads. Move telemetry and debug PGNs
+retain the seed. Later moves and coaching analysis use ordinary fixed ordering.
+
+Moves still come from Rust/WASM search with the same evaluation, strict
+improving-score selection, and difficulty budgets. A seed can change the search
+path and completed depth under a finite budget; it neither adds score noise
+nor chooses an unevaluated move. It may still select the same move. This release
+makes no new strength claim and preserves historical unseeded signatures under
+separately reviewed engine evidence.
+
 ## r84: Mobile dialogs and game state
 
 New game keeps Start game and Cancel visible while settings scroll, including in

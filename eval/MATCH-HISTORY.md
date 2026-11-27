@@ -4,8 +4,8 @@ These contracts are retained for reproducing archived evidence. New candidates
 must use the current [admission path](README.md#calibration-and-matches).
 
 The v1 fixed-node schedule used 100 openings × four seed slots × both colors:
-800 games, but only 100 opening clusters. The historical Rust/WASM search
-ignored those seed slots, making them deterministic repeats. Existing
+800 games, but only 100 opening clusters. These runners do not pass Play's
+optional root-order seed, so the seed slots remain deterministic repeats. Existing
 clustered results retain that interpretation; the repeats do not create 400
 independent openings. Do not dispatch v1 for new candidates or relabel its
 artifacts as v2.

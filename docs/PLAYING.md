@@ -29,6 +29,11 @@ when the computer's clock is low. Device speed and the position can affect
 how deeply the engine searches. See [engine details](ARCHITECTURE.md) for budgets
 and [calibration evidence](../eval/README.md) for rating limits.
 
+Computer openings can vary between games. During the first six full moves,
+Chessy varies the order in which it searches legal moves, then plays a move
+selected by that search. Undo, retries, and reloads of the same position keep
+the same seed. Variety does not guarantee a different move or a stronger one.
+
 ## Move, undo, and replay
 
 Tap or click a piece, then a highlighted legal destination. Chessy supports

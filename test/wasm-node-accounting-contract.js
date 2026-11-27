@@ -716,6 +716,23 @@ function validateSources(trusted, candidate) {
       extractFunction(candidateSource, name));
   }
 
+  // Newer runtimes delegate ordinary search through the optional seeded
+  // entry points. Freeze that entire budget-forwarding path as well as the
+  // legacy wrappers; otherwise a wrapper-only comparison misses its callee.
+  // Presence is compared against the trusted tree, so neither adding/removing
+  // a delegate nor using an older pre-seed baseline relaxes this contract.
+  for (const [name, file] of [['search_seeded', 'lib'], ['run_seeded', 'search']]) {
+    const declaration = new RegExp('\\bfn\\s+' + name + '\\s*\\(');
+    const trustedHas = declaration.test(maskRustNonCode(trusted[file]));
+    const candidateHas = declaration.test(maskRustNonCode(candidate[file]));
+    compare(name + ' function presence', trustedHas, candidateHas);
+    if (trustedHas) {
+      compare(name + ' function',
+        extractFunction(trusted[file], name),
+        extractFunction(candidate[file], name));
+    }
+  }
+
   for (const name of ['result_ptr']) {
     compare(name + ' function',
       extractFunction(trusted.lib, name),

@@ -4,6 +4,16 @@
 require('./helper').run('dialog-layout', async function (t) {
   const page = t.page, check = t.check;
 
+  async function closeNewGameWithEscape() {
+    await page.keyboard.press('Escape');
+    // Key dispatch can return before WebKit runs the dialog's native cancel
+    // task. Wait for actual closure, then assert focus separately: polling
+    // for the desired focus would hide an incorrect restoration.
+    await page.waitForFunction(function () {
+      return !document.getElementById('newGameDialog').open;
+    });
+  }
+
   async function visibleActions(dialogId, label) {
     const layout = await page.evaluate(function (id) {
       const dialog = document.getElementById(id);
@@ -53,7 +63,7 @@ require('./helper').run('dialog-layout', async function (t) {
       content.scrollTop = content.scrollHeight;
     });
     await visibleActions('newGameDialog', label + ' after scrolling settings');
-    await page.keyboard.press('Escape');
+    await closeNewGameWithEscape();
     check(await page.evaluate(function () { return document.activeElement.id === 'newGame'; }),
       label + ': Escape returns focus to New game');
   }
@@ -64,7 +74,7 @@ require('./helper').run('dialog-layout', async function (t) {
   await page.click('#newGame');
   await page.setViewportSize({ width: 667, height: 320 });
   await visibleActions('newGameDialog', 'open dialog after rotation');
-  await page.keyboard.press('Escape');
+  await closeNewGameWithEscape();
 
   // A failed checkpoint offers a third, longer action. None may disappear
   // behind the bottom edge when its explanation grows or text is enlarged.
@@ -96,7 +106,7 @@ require('./helper').run('dialog-layout', async function (t) {
   await page.keyboard.press('Tab');
   check(await page.evaluate(function () { return document.activeElement.id === 'newGameStart'; }),
     'Tab reaches Start from the final radio group');
-  await page.keyboard.press('Escape');
+  await closeNewGameWithEscape();
   await page.evaluate(function () { document.documentElement.style.fontSize = ''; });
 
   // Import shares the long-content failure. Keep its native form submission

@@ -35,6 +35,7 @@ list; this guide is a practical subset.
 ```sh
 node test/engine.test.js
 node test/ai-tactics.js
+node test/opening-variety.test.js
 node test/level-presets.test.js
 node test/ai-telemetry.test.js
 ```

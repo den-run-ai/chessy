@@ -180,8 +180,23 @@ jobs:
             "$CHESSY_COST_RUST" "$PWD/binaryen-version_131"
           node experiments/wasm/pawn-ranks/validate.js "$RUNNER_TEMP/pawn-ranks"
           node experiments/wasm/pawn-ranks/check-evidence.js "$RUNNER_TEMP/pawn-ranks"
-          node experiments/wasm/compact-hash/probe.test.js
-          node experiments/wasm/compact-hash/prepare.js "$RUNNER_TEMP/compact-hash" threaded
+          # The archived experiment binds r82's exact sources and module.
+          # Reproduce that study without substituting the current runtime or
+          # rewriting any measured recipe, registration, or evidence bytes.
+          CHESSY_COMPACT_SNAPSHOT="$RUNNER_TEMP/compact-hash-source"
+          mkdir "$CHESSY_COMPACT_SNAPSHOT"
+          git --no-replace-objects archive f65224dece688f23d00429c148715262dd3c9b79 \
+            experiments/wasm/src experiments/wasm/Cargo.toml \
+            experiments/wasm/Cargo.lock experiments/wasm/rust-toolchain.toml \
+            experiments/wasm/build.sh assets/engine.js assets/wasm-engine.js \
+            assets/chessy-ai-fast.wasm test/fixtures/wasm-r69-signatures.json \
+            | tar -x -C "$CHESSY_COMPACT_SNAPSHOT"
+          git --no-replace-objects archive HEAD experiments/wasm/compact-hash \
+            | tar -x -C "$CHESSY_COMPACT_SNAPSHOT"
+          chmod -R a-w "$CHESSY_COMPACT_SNAPSHOT"
+          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/probe.test.js"
+          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/prepare.js" \
+            "$RUNNER_TEMP/compact-hash" threaded
           (cd "$RUNNER_TEMP/compact-hash" && \
             RUSTC="$CHESSY_COST_RUST/bin/rustc" \
             CARGO_TARGET_DIR="$RUNNER_TEMP/compact-hash-native" \
@@ -191,9 +206,9 @@ jobs:
             CHESSY_RUSTC_BIN="$CHESSY_COST_RUST/bin/rustc" \
             CHESSY_WASM_OPT_BIN="$PWD/binaryen-version_131/bin/wasm-opt" \
             sh "$RUNNER_TEMP/compact-hash/build.sh"
-          node experiments/wasm/compact-hash/validate.js "$RUNNER_TEMP/compact-hash" \
+          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/validate.js" "$RUNNER_TEMP/compact-hash" \
             "$RUNNER_TEMP/compact-hash-validation.json"
-          node experiments/wasm/compact-hash/probe.test.js "$RUNNER_TEMP/compact-hash"
+          node "$CHESSY_COMPACT_SNAPSHOT/experiments/wasm/compact-hash/probe.test.js" "$RUNNER_TEMP/compact-hash"
           # Recheck research sizes with the pinned encoder. Historical receipt
           # verdicts stay separate from the current production download budget.
           node - "$RUNNER_TEMP/pawn-ranks/candidate/dist/chessy-ai-fast.wasm" \
@@ -379,6 +394,8 @@ jobs:
         run: node test/wasm-asset.test.js
       - name: Verify WASM loader phase ownership and reserved ABI fields
         run: node test/wasm-loader.test.js
+      - name: Verify calculated opening variety and reproducible seeds
+        run: node test/opening-variety.test.js
       - name: Compare WASM search with independent rules and budget oracles
         run: node test/wasm-search-oracle.test.js
       - name: Enforce the production WASM download-size ratchet

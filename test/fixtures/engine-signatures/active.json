@@ -1,8 +1,9 @@
 {
   "schema": 1,
-  "kind": "legacy-r69-behavior",
-  "fixture": "test/fixtures/wasm-r69-signatures.json",
-  "fixtureSha256": "d500dece3ed9bfc83da5139cabf075734c1f1f465f295f9c8be7be23eccc6b6b",
-  "moduleSha256": "57166b29d8887627f659c2a012216c9879f20084451fe343692034a5c5baec5f",
-  "note": "No ABI-v2 candidate has been admitted; retain the immutable r69 ordinary-search behavior."
+  "kind": "reviewed-abi-v2",
+  "evidence": "test/fixtures/engine-signatures/wasm-v2-bb37a54957d1acb3956932c9e477b8b4b3d9ffb7ab9416ccad92cbaccbdd3362.json",
+  "evidenceSha256": "bb37a54957d1acb3956932c9e477b8b4b3d9ffb7ab9416ccad92cbaccbdd3362",
+  "sourceCommit": "29b804c73864c57493c98b55a9f425a87e90f243",
+  "sourceRelease": "r85",
+  "abi": 2
 }

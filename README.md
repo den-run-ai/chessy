@@ -18,7 +18,7 @@ needs no build step, external libraries, analytics, or remote chess service.
 
 | View | What you can do |
 | --- | --- |
-| Play | Face five computer levels or a local opponent. Choose either color, use optional clocks, undo moves, and replay the game. |
+| Play | Face five computer levels with varied openings or a local opponent. Choose either color, use optional clocks, undo moves, and replay the game. |
 | Review | Browse saved or imported games, find critical moments, and reflect before revealing engine analysis. |
 | Train | Practice your lesson cards on a spaced review schedule. |
 | Progress | See game and practice counts, due cards, and storage usage. |

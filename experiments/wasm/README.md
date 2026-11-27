@@ -131,6 +131,18 @@ evaluate_loaded() -> i32
 fixed_search(depth: u32, nodeLimit: u32, quiesce: u32) -> i32
 ```
 
+The r85 module also exports optional seeded Play search:
+
+```text
+search_seeded(maxDepth: u32, nodeLimit: u32, timeMs: u32, quiesce: u32, rootSeed: u32) -> i32
+```
+
+The loader calls it when `rootSeed` is supplied. It varies the search order of
+equally prioritized legal roots without adding score noise. Omitting the seed
+uses the four-argument `search()` entry point and its historical fixed seed,
+preserving ordinary-search compatibility for analysis and comparison tools.
+Both entry points use the same ABI-v2 result record.
+
 JavaScript copies UTF-8 FEN bytes to the 1,024-byte input buffer.
 `load_position()` clears stale repetition history. It then copies
 newline-delimited repetition identities to the 64-KiB history buffer, one FEN
@@ -142,9 +154,9 @@ pawn move or capture and can never recur. Every relevant position is therefore
 inside the live game's sub-100-ply halfmove window, independent of how long the
 aggregate saved-game map has grown.
 
-Normal `search()` is the only Play entry point. A root that already occurred
-three times returns `game-over`; a child whose loaded count is at least two
-scores as a path-independent draw. Search-path cycles retain the engine's
+Both search entry points honor loaded repetition history. A root that already
+occurred three times returns `game-over`; a child whose loaded count is at least
+two scores as a path-independent draw. Search-path cycles retain the engine's
 separate path-dependent repetition treatment.
 
 Zero `nodeLimit` or `timeMs` means unlimited. `maxDepth` is limited to 111 so
@@ -203,6 +215,12 @@ Play and coaching each own a dedicated Worker and instantiate one module per
 worker. Play retries a failed load/search once in a fresh worker with the exact
 unchanged request and position. A second failure leaves a visible manual Retry
 action and preserves the position.
+
+During the first 12 plies, Play derives a root-ordering seed from the game UUID
+and current FEN. Retries, Undo, and reload preserve that seed for the same game
+and position; a new game supplies a new UUID. Later Play moves and coaching use
+ordinary unseeded search. Search budgets and evaluation weights are unchanged;
+finite search budgets can still produce different moves for different seeds.
 
 The [analysis contract](../../assets/analysis-core.js) has two search profiles:
 

@@ -35,6 +35,13 @@ Search accounts for game-history repetitions, search-path cycles, and dead
 positions. The JavaScript rules layer validates moves independently before
 committing them to the live game.
 
+During the first 12 plies, Play varies the initial root ordering with a seed
+derived from the saved game ID and exact position. The same position retains
+its seed across retries, Undo, and reloads. Evaluation, strict improving-score
+selection, and difficulty budgets remain unchanged; finite-budget search can
+still follow a different path or complete a different depth. Later Play moves
+and all coaching analysis use ordinary fixed ordering.
+
 ### Difficulty budgets
 
 The shipped presets are defined in [level-presets.js](../assets/level-presets.js).
@@ -66,9 +73,9 @@ After a second failure, it stops visibly and offers a manual Retry action.
 There is no alternate search engine or main-thread search fallback.
 
 Each computer move retains the release, engine identity, effective search
-configuration, completed and attempted depth, counters, score from White's
-point of view, and stop reason. PGN debug exports include this evidence and
-the position before each move. Historical JavaScript-search provenance remains
+configuration, opening seed when used, completed and attempted depth, counters,
+score from White's point of view, and stop reason. PGN debug exports include
+this evidence and the position before each move. Historical JavaScript-search provenance remains
 readable for old records but is not executable.
 
 ## Coaching analysis
