@@ -334,8 +334,25 @@ test('legacy fixed-node analysis keeps canonical root order and no scan fallback
     mockEngine({ stopAt: function () { return true; } }));
   assert.equal(partial.complete, false);
   assert.equal(partial.bestLines.length, 0);
-  // Fixed-node cache identities are exactly r79's (literal, not derived).
-  assert.equal(Core.configHashOf(Core.PROFILES.quick), 'd3984af1');
-  assert.equal(Core.configHashOf(Core.PROFILES.quickFallback), 'c0c102dc');
+});
+
+test('fixed-node cache identities preserve 2.0.0 history and separate provider 2.0.1', function () {
+  assert.equal(Core.ENGINE_VERSION, '2.0.1');
+  // Keep r79's 2.0.0 literals as witnesses for the unchanged quick budgets.
+  // Compact hashing intentionally uses a new provider identity, even when
+  // a fixed-node result is identical; old cache entries must not be reused.
+  for (const [name, previous, current] of [
+    ['quick', 'd3984af1', '330c5572'],
+    ['quickFallback', 'c0c102dc', 'eb65d7d']
+  ]) {
+    const profile = Core.PROFILES[name];
+    const oldHash = Core.configHashOf(Object.assign({}, profile, { engineVersion: '2.0.0' }));
+    const newHash = Core.configHashOf(profile);
+    assert.equal(oldHash, previous, name + ': historical provider identity');
+    assert.equal(newHash, current, name + ': current provider identity');
+    assert.equal(Core.configHashOf(Object.assign({}, profile, { engineVersion: '2.0.1' })),
+      current, name + ': explicit current version matches the default');
+    assert.notEqual(newHash, oldHash, name + ': provider cache identities remain separate');
+  }
 });
 console.log(passed + ' search-policy tests passed');

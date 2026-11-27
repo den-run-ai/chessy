@@ -4,7 +4,7 @@ const Phase=require('../../tools/training/nnue-phase-runtime'),Runtime=require('
 const Mechanism=require('../../tools/training/hybrid-runtime-fused'),Baseline=require('./hce-r3-baseline');
 const ROOT=path.resolve(__dirname,'../..'),tmp=fs.mkdtempSync(path.join(os.tmpdir(),'chessy-hybrid-fused-test-'));
 try {
-  const engine=fs.readFileSync(path.join(ROOT,'experiments/wasm/src/engine.rs'),'utf8');
+  const engine=Runtime.historicalInput('experiments/wasm/src/engine.rs').toString('utf8');
   const patched=Mechanism.patchEngine(engine);
   assert(patched.includes('pub hybrid_material_phase: i16,'));assert(patched.includes('hybrid_material_phase: 0,'));
   assert.equal((patched.match(/hybrid_replace_square\(/g)||[]).length,17);
@@ -12,7 +12,7 @@ try {
   assert(!patched.includes('.clamp('));assert(!patched.includes('nnue_acc'));
   assert.throws(()=>Mechanism.patchEngine(engine.replace('position.board[square] = piece;','position.board[square] = piece;\nposition.board[square] = piece;')),/16-write/);
   assert.throws(()=>Mechanism.patchEngine(engine.replace('    pub board: [Piece; BOARD_SQUARES],','')),/anchor/);
-  const fixture=Phase.synthetic(8),source=fs.readFileSync(path.join(ROOT,'experiments/wasm/src/eval.rs'),'utf8');
+  const fixture=Phase.synthetic(8),source=Runtime.historicalInput('experiments/wasm/src/eval.rs').toString('utf8');
   const weights=Baseline.baselineCenter(Baseline.parseRustEvaluator(source));weights[753]=7;weights[754]=13;
   const put=(name,value)=>{const filename=path.join(tmp,name),bytes=Buffer.isBuffer(value)?value:Buffer.from(JSON.stringify(value));fs.writeFileSync(filename,bytes);return {path:filename,sha256:Phase.sha(bytes)};};
   const manifest={schema:'chessy.hybrid-runtime-input.v1',researchOnly:true,productionIntegrationAllowed:false,strengthClaimAllowed:false,
@@ -20,8 +20,14 @@ try {
     expandedSelection:put('selection.json',{researchWeights:weights}),expandedWeightsSha256:Phase.sha(JSON.stringify(weights))};
   const input=put('input.json',manifest),prior=path.join(tmp,'prior'),target=path.join(tmp,'mechanisms');Runtime.prepare(prior,input.path);
   const before=Phase.sha(fs.readFileSync(path.join(prior,'hybrid/src/eval.rs')));
-  const receipt=Mechanism.prepare(target,prior);assert.equal(receipt.modelSelectionAllowed,false);
-  assert.deepEqual(receipt.emitted.map(x=>x.variant),['original','cached','fused']);Mechanism.verifyPrepared(target);
+  const read=fs.readFileSync;let receipt;
+  fs.readFileSync=function(file,...args){const absolute=path.resolve(String(file));
+    if(absolute.startsWith(path.join(ROOT,'experiments/wasm')+path.sep)||absolute===path.join(ROOT,'assets/chessy-ai-fast.wasm'))
+      throw Error('mechanism reproduction attempted a live production read');
+    return read.call(fs,file,...args);};
+  try{receipt=Mechanism.prepare(target,prior);Mechanism.verifyPrepared(target);}finally{fs.readFileSync=read;}
+  assert.equal(receipt.modelSelectionAllowed,false);
+  assert.deepEqual(receipt.emitted.map(x=>x.variant),['original','cached','fused']);
   assert(fs.readFileSync(path.join(target,'original/src/eval.rs')).equals(fs.readFileSync(path.join(prior,'hybrid/src/eval.rs'))));
   const cached=fs.readFileSync(path.join(target,'cached/src/eval.rs'),'utf8');assert(cached.includes('position.hybrid_material_phase as i32'));
   const fused=fs.readFileSync(path.join(target,'fused/src/eval.rs'),'utf8');assert(fused.includes('let blend = phase > 6 && phase < 12;'));
