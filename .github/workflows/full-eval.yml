@@ -33,6 +33,8 @@ jobs:
             git --no-pager diff --stat -- eval/corpus/
             exit 1
           fi
+      - name: Verify the retained E3 provider-version transition
+        run: node test/eval/analysis-baseline-transition.test.js
       - name: Run both full-corpus baseline gates
         run: |
           mkdir -p full-eval-results
@@ -42,7 +44,7 @@ jobs:
             --out full-eval-results/correctness.json
           correctness_status=$?
           node test/eval/analysis-scorecard.js --full \
-            --baseline eval/ANALYSIS-FULL-BASELINE.json \
+            --baseline eval/ANALYSIS-FULL-BASELINE-v2.0.1.json \
             --out full-eval-results/analysis.json
           analysis_status=$?
           set -e

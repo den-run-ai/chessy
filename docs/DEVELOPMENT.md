@@ -83,8 +83,15 @@ The independent legal-move oracle is a development dependency:
 ```sh
 npm install --no-save chess.js@1.4.0
 node test/eval/scorecard.js --baseline eval/BASELINE.json
-node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json
+node test/eval/analysis-baseline-transition.test.js
+node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE-v2.0.1.json
 ```
+
+The [2.0.1 analysis fixtures](../eval/ANALYSIS-BASELINE-v2.0.1.md) preserve
+every measurement of the retained 2.0.0 shard and full baselines. Provider
+comparison remains strict; the new full JSON also omits the old archival
+release/commit annotations rather than relabeling them. The transition test
+pins all historical and new fixture bytes and checks those exact differences.
 
 See the [evaluation guide](../eval/README.md) for full-corpus checks, corpus
 reproduction, and the distinction between correctness, quality, and playing

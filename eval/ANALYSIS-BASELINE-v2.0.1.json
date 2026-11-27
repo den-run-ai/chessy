@@ -1,0 +1,240 @@
+{
+  "corpus": "eval-v1",
+  "generator_version": "eval-v1.0.0",
+  "ndjson_sha256": "34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27",
+  "scorecard": "analysis-v1",
+  "mode": "shard",
+  "analysis_engine": {
+    "id": "chessy-wasm",
+    "version": "2.0.1",
+    "provider": "rust-wasm-abi-v2"
+  },
+  "criterion": {
+    "id": "chessy-equivalence",
+    "version": 1,
+    "basis": "cp-mate-fallback",
+    "params": {
+      "cpTolerance": 30
+    }
+  },
+  "e3_opts": {
+    "ref": {
+      "nodeLimit": 2000,
+      "nodeBudget": 2000000,
+      "multiPV": 999,
+      "pvLen": 4,
+      "quiesce": true
+    },
+    "ship": {
+      "nodeLimit": 2000,
+      "nodeBudget": 2000000,
+      "multiPV": 3,
+      "pvLen": 4,
+      "quiesce": true
+    },
+    "quarter": {
+      "nodeLimit": 500,
+      "nodeBudget": 2000000,
+      "multiPV": 1,
+      "pvLen": 1,
+      "quiesce": true
+    },
+    "quad": {
+      "nodeLimit": 8000,
+      "nodeBudget": 2000000,
+      "multiPV": 1,
+      "pvLen": 1,
+      "quiesce": true
+    }
+  },
+  "cases": 34,
+  "axes": {
+    "rootComplete": {
+      "checked": 34,
+      "pass": 34,
+      "fail": 0
+    },
+    "playedRank": {
+      "checked": 12,
+      "pass": 12,
+      "fail": 0
+    },
+    "puzzleTop1": {
+      "checked": 12,
+      "pass": 9,
+      "fail": 3
+    },
+    "puzzleRecall3": {
+      "checked": 12,
+      "pass": 10,
+      "fail": 2
+    },
+    "pvStability": {
+      "checked": 26,
+      "pass": 16,
+      "fail": 10
+    },
+    "budgetStability": {
+      "checked": 34,
+      "pass": 26,
+      "fail": 8
+    },
+    "equivalence": {
+      "checked": 12,
+      "counts": {
+        "best": 9,
+        "equivalent": 2,
+        "not-equivalent": 0,
+        "unknown": 1,
+        "invalid": 0
+      },
+      "cases": [
+        {
+          "id": "puzzle-000o3",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000rZ",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": null,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0008Q",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0009B",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-00008",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0000D",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000Pw",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000h0",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000jr",
+          "verdict": "best",
+          "reason": "engine-best",
+          "rank": 1,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 1,
+          "gapCp": 0,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-000mr",
+          "verdict": "equivalent",
+          "reason": "within-tolerance",
+          "rank": 5,
+          "rankBasis": "provider-reported",
+          "rankLowerBound": 4,
+          "gapCp": 17,
+          "coverage": "candidates",
+          "coveredRootCount": 4
+        },
+        {
+          "id": "puzzle-000VW",
+          "verdict": "equivalent",
+          "reason": "within-tolerance",
+          "rank": 2,
+          "rankBasis": "candidate-index",
+          "rankLowerBound": 2,
+          "gapCp": 11,
+          "coverage": "candidates",
+          "coveredRootCount": 3
+        },
+        {
+          "id": "puzzle-0018S",
+          "verdict": "unknown",
+          "reason": "unstable-best",
+          "rank": 22,
+          "rankBasis": "provider-reported",
+          "rankLowerBound": 4,
+          "gapCp": 233,
+          "coverage": "candidates",
+          "coveredRootCount": 4
+        }
+      ]
+    }
+  },
+  "regret": {
+    "n": 34,
+    "median": 0,
+    "p90": 5,
+    "catastrophic": 0
+  },
+  "totals": {
+    "checks": 130,
+    "pass": 107,
+    "fail": 23,
+    "strictFail": 0
+  },
+  "gate": "PASS"
+}

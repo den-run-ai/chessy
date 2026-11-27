@@ -22,7 +22,8 @@ the offline app.
 ```sh
 npm install --no-save chess.js@1.4.0
 node test/eval/scorecard.js --baseline eval/BASELINE.json
-node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json
+node test/eval/analysis-baseline-transition.test.js
+node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE-v2.0.1.json
 ```
 
 The PR checks use a frozen 64-case correctness shard and a 34-case analysis
@@ -31,7 +32,7 @@ runs the complete baselines:
 
 ```sh
 node test/eval/scorecard.js --full --baseline eval/FULL-BASELINE.json
-node test/eval/analysis-scorecard.js --full --baseline eval/ANALYSIS-FULL-BASELINE.json
+node test/eval/analysis-scorecard.js --full --baseline eval/ANALYSIS-FULL-BASELINE-v2.0.1.json
 ```
 
 For machine-readable output or fault checks:
@@ -54,15 +55,21 @@ created by these commands.
 | [corpus/eval-v1.ndjson](corpus/eval-v1.ndjson) | Frozen position records with provenance |
 | [corpus/manifest.json](corpus/manifest.json) | Counts, split policy, analysis options, generator version, and hashes |
 | [BASELINE.md](BASELINE.md) / [BASELINE.json](BASELINE.json) | Correctness PR baseline |
-| [ANALYSIS-BASELINE.md](ANALYSIS-BASELINE.md) / [ANALYSIS-BASELINE.json](ANALYSIS-BASELINE.json) | Analysis PR baseline and fault inventory |
+| [ANALYSIS-BASELINE-v2.0.1.md](ANALYSIS-BASELINE-v2.0.1.md) / [ANALYSIS-BASELINE-v2.0.1.json](ANALYSIS-BASELINE-v2.0.1.json) | Active 2.0.1 analysis PR baseline; only provider version differs from 2.0.0 |
+| [ANALYSIS-BASELINE.md](ANALYSIS-BASELINE.md) / [ANALYSIS-BASELINE.json](ANALYSIS-BASELINE.json) | Preserved 2.0.0 analysis PR baseline and fault inventory |
 | [FULL-BASELINE.json](FULL-BASELINE.json) | Full correctness baseline |
-| [ANALYSIS-FULL-BASELINE.json](ANALYSIS-FULL-BASELINE.json) | Full analysis baseline |
+| [ANALYSIS-FULL-BASELINE-v2.0.1.json](ANALYSIS-FULL-BASELINE-v2.0.1.json) | Active 2.0.1 full analysis baseline, with every historical measurement preserved |
+| [ANALYSIS-FULL-BASELINE.json](ANALYSIS-FULL-BASELINE.json) | Preserved 2.0.0 full analysis baseline and original r73 annotations |
 | [LICENSE-REPORT.md](LICENSE-REPORT.md) | Source licenses, exclusions, and planned corpus additions |
 
-The full baselines were generated from r73 commit
+The original full baselines were generated from r73 commit
 `07b29d39c07761bd9e1cec242ac16e0435e15f7a`, with corpus SHA-256
 `34a47ea48ec5006332e791ec9a6428d63cc4d61d6b313060c1a8fd4bfaac3c27`.
-They are reviewed reference values, not claims about an unmeasured candidate.
+The original files retain that provenance unchanged. The
+[2.0.1 analysis transition](ANALYSIS-BASELINE-v2.0.1.md) separately measured
+the shard and full compact-hash outputs, preserving every metric and exact
+grading record. The new full JSON is exact CLI output and omits the old r73
+annotations; its source/module identity is documented in that transition.
 
 | Full-baseline measure | Reviewed value |
 | --- | --- |
@@ -172,6 +179,12 @@ Strict axes require 100%. Quality may improve but cannot regress against the
 matching PR or full baseline. The ratchet is exact because analysis is
 deterministic; an unsolved puzzle establishes the measured level. Checked
 counts and regret sample size are part of the gate and cannot shrink.
+
+Provider identity is also exact. The [2.0.1 transition](ANALYSIS-BASELINE-v2.0.1.md)
+retains the prior JSON files and report unchanged. Apart from the version and
+the full fixture's explicitly retained historical annotations, every field in
+the new measured fixtures is identical. The scorecard comparison still rejects
+a mismatched provider; no quality or equivalence gate is relaxed.
 
 Whole-object validation uses `ChessyAnalysisResult.validate` with an
 independently derived request identity. It covers provenance, completeness,

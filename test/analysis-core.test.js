@@ -237,6 +237,14 @@ check(id.configHash === a.engine.configHash && id.version === a.engine.version &
 check(Core.configHashOf(FAST) === a.engine.configHash &&
   Core.configHashOf(Object.assign({}, FAST, { multiPV: 2 })) !== a.engine.configHash,
   'configHashOf is pure and changes with an output-affecting option');
+const previousProvider = Object.assign({}, FAST, { engineVersion: '2.0.0' });
+check(Core.ENGINE_VERSION === '2.0.1' && id.version === Core.ENGINE_VERSION &&
+  Core.identity(start, previousProvider).configHash !== id.configHash,
+  'compact hashing has a distinct provider/cache identity from 2.0.0');
+const timedIdentity = { nodeLimit: 0, scanTimeMs: 16000 };
+check(Core.configHashOf(timedIdentity) !==
+  Core.configHashOf(Object.assign({ engineVersion: '2.0.0' }, timedIdentity)),
+  'the timed scan cannot reuse the prior engine version cache');
 // The played move under evaluation is output-affecting (it drives playedLine +
 // classification), so it MUST change the config identity — otherwise a cache
 // keyed on it would serve one move's verdict for another.

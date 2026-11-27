@@ -310,7 +310,8 @@ Evaluation-contract changes:
 ```sh
 npm install --no-save chess.js@1.4.0
 node test/eval/scorecard.js --baseline eval/BASELINE.json
-node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE.json
+node test/eval/analysis-baseline-transition.test.js
+node test/eval/analysis-scorecard.js --baseline eval/ANALYSIS-BASELINE-v2.0.1.json
 node test/eval/gen-corpus.js
 git diff --exit-code -- eval/corpus/
 ```

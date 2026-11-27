@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "kind": "reviewed-abi-v2",
-  "evidence": "test/fixtures/engine-signatures/wasm-v2-bb37a54957d1acb3956932c9e477b8b4b3d9ffb7ab9416ccad92cbaccbdd3362.json",
-  "evidenceSha256": "bb37a54957d1acb3956932c9e477b8b4b3d9ffb7ab9416ccad92cbaccbdd3362",
-  "sourceCommit": "29b804c73864c57493c98b55a9f425a87e90f243",
-  "sourceRelease": "r85",
+  "evidence": "test/fixtures/engine-signatures/wasm-v2-fbd74c91e12209d8c3ee6281b254a2d837b44e6b34eeef87f3b33ece4f9ea46b.json",
+  "evidenceSha256": "fbd74c91e12209d8c3ee6281b254a2d837b44e6b34eeef87f3b33ece4f9ea46b",
+  "sourceCommit": "173e06fd29f587f7de1ab9a84ad990760d7f23ae",
+  "sourceRelease": "r86",
   "abi": 2
 }
